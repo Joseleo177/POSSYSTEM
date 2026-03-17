@@ -4,13 +4,14 @@
 
 -- ── Tabla de diarios de pago ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS payment_journals (
-  id         SERIAL       PRIMARY KEY,
-  name       VARCHAR(200) NOT NULL,
-  type       VARCHAR(30)  NOT NULL DEFAULT 'efectivo',
-  bank       VARCHAR(200),
-  color      VARCHAR(7)   NOT NULL DEFAULT '#555555',
-  active     BOOLEAN      NOT NULL DEFAULT TRUE,
-  sort_order INTEGER      NOT NULL DEFAULT 0
+  id          SERIAL       PRIMARY KEY,
+  name        VARCHAR(200) NOT NULL,
+  type        VARCHAR(30)  NOT NULL DEFAULT 'efectivo',
+  bank        VARCHAR(200),
+  color       VARCHAR(7)   NOT NULL DEFAULT '#555555',
+  active      BOOLEAN      NOT NULL DEFAULT TRUE,
+  sort_order  INTEGER      NOT NULL DEFAULT 0,
+  currency_id INTEGER      REFERENCES currencies(id) ON DELETE SET NULL
 );
 
 -- ── Columna payment_journal_id en sales ──────────────────────

@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS customers (
   phone      VARCHAR(20),
   email      VARCHAR(150)  UNIQUE,
   address    TEXT,
-  rfc        VARCHAR(13)   UNIQUE,
+  rif        VARCHAR(13)   UNIQUE,
   tax_name   VARCHAR(200),           -- Razón social
   tax_regime VARCHAR(100),           -- Régimen fiscal
   notes      TEXT,
@@ -28,5 +28,5 @@ CREATE TRIGGER trg_customers_updated_at
 
 -- ── Índices ──────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_customers_name  ON customers(name);
-CREATE INDEX IF NOT EXISTS idx_customers_rfc   ON customers(rfc);
+CREATE INDEX IF NOT EXISTS idx_customers_rif   ON customers(rif);
 CREATE INDEX IF NOT EXISTS idx_sales_customer  ON sales(customer_id);

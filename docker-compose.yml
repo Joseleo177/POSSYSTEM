@@ -37,6 +37,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-supersecretkey_change_in_production}
     ports:
       - "4000:4000"
+    command: npm start
     depends_on:
       db:
         condition: service_healthy

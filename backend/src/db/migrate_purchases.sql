@@ -12,10 +12,12 @@ ALTER TABLE products
 -- ── Recibos de compra (cabecera) ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS purchases (
   id            SERIAL PRIMARY KEY,
+  supplier_id   INTEGER        REFERENCES customers(id) ON DELETE SET NULL,
   supplier_name VARCHAR(200),
   notes         TEXT,
   total         NUMERIC(10,2)  NOT NULL DEFAULT 0,
   employee_id   INTEGER        REFERENCES employees(id) ON DELETE SET NULL,
+  warehouse_id  INTEGER        REFERENCES warehouses(id) ON DELETE SET NULL,
   created_at    TIMESTAMPTZ    NOT NULL DEFAULT NOW()
 );
 
