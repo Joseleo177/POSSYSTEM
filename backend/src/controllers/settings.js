@@ -1,4 +1,4 @@
-const pool = require("../db/pool");
+const pool = require("../db/pool"); // settings is a key/value table, best served with raw queries
 const path = require("path");
 const fs   = require("fs");
 
@@ -7,7 +7,6 @@ const getAll = async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT key, value FROM settings ORDER BY key");
     const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-    // Agrega URL del logo si existe
     if (settings.logo_filename) {
       settings.logo_url = `${req.protocol}://${req.get("host")}/uploads/${settings.logo_filename}`;
     }
@@ -17,7 +16,7 @@ const getAll = async (req, res) => {
   }
 };
 
-// PUT /api/settings  — upsert múltiples keys a la vez
+// PUT /api/settings
 const update = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -40,12 +39,11 @@ const update = async (req, res) => {
   }
 };
 
-// POST /api/settings/logo  — subir logo
+// POST /api/settings/logo
 const uploadLogo = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ ok: false, message: "No se recibió imagen" });
 
-    // Borrar logo anterior
     const { rows } = await pool.query("SELECT value FROM settings WHERE key='logo_filename'");
     const old = rows[0]?.value;
     if (old) {

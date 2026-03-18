@@ -1,0 +1,88 @@
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const Sequelize = require('sequelize');
+const process = require('process');
+const basename = path.basename(__filename);
+const env = process.env.NODE_ENV || 'development';
+const config = require(__dirname + '/../config/config.js')[env];
+const db = {};
+
+let sequelize;
+if (config.use_env_variable) {
+  sequelize = new Sequelize(process.env[config.use_env_variable], config);
+} else {
+  sequelize = new Sequelize(config.database, config.username, config.password, config);
+}
+
+fs
+  .readdirSync(__dirname)
+  .filter(file => {
+    return (
+      file.indexOf('.') !== 0 &&
+      file !== basename &&
+      file.slice(-3) === '.js' &&
+      file.indexOf('.test.js') === -1
+    );
+  })
+  .forEach(file => {
+    const model = require(path.join(__dirname, file))(sequelize, Sequelize.DataTypes);
+    db[model.name] = model;
+  });
+
+Object.keys(db).forEach(modelName => {
+  if (db[modelName].associate) {
+    db[modelName].associate(db);
+  }
+});
+
+// Centralized associations
+const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem } = db;
+
+if(Employee && Role) {
+  Employee.belongsTo(Role, { foreignKey: 'role_id' });
+  Role.hasMany(Employee, { foreignKey: 'role_id' });
+}
+
+if(Product && Category) {
+  Product.belongsTo(Category, { foreignKey: 'category_id' });
+  Category.hasMany(Product, { foreignKey: 'category_id' });
+}
+
+if(PaymentJournal && Bank && Currency) {
+  PaymentJournal.belongsTo(Bank, { foreignKey: 'bank_id' });
+  Bank.hasMany(PaymentJournal, { foreignKey: 'bank_id' });
+  PaymentJournal.belongsTo(Currency, { foreignKey: 'currency_id' });
+  Currency.hasMany(PaymentJournal, { foreignKey: 'currency_id' });
+}
+
+if(Sale && Customer && Employee && Currency && PaymentJournal && Warehouse && PaymentMethod && SaleItem && Product) {
+  Sale.belongsTo(Customer, { foreignKey: 'customer_id' });
+  Customer.hasMany(Sale, { foreignKey: 'customer_id' });
+  Sale.belongsTo(Employee, { foreignKey: 'employee_id' });
+  Sale.belongsTo(Currency, { foreignKey: 'currency_id' });
+  Sale.belongsTo(PaymentJournal, { foreignKey: 'payment_journal_id' });
+  Sale.belongsTo(Warehouse, { foreignKey: 'warehouse_id' });
+  Sale.belongsTo(PaymentMethod, { foreignKey: 'payment_method_id' });
+
+  Sale.hasMany(SaleItem, { foreignKey: 'sale_id' });
+  SaleItem.belongsTo(Sale, { foreignKey: 'sale_id' });
+  SaleItem.belongsTo(Product, { foreignKey: 'product_id' });
+}
+
+if(Purchase && Customer && Employee && Warehouse && PurchaseItem && Product) {
+  Purchase.belongsTo(Customer, { foreignKey: 'supplier_id', as: 'Supplier' });
+  Customer.hasMany(Purchase, { foreignKey: 'supplier_id', as: 'SupplierPurchases' });
+  Purchase.belongsTo(Employee, { foreignKey: 'employee_id' });
+  Purchase.belongsTo(Warehouse, { foreignKey: 'warehouse_id' });
+
+  Purchase.hasMany(PurchaseItem, { foreignKey: 'purchase_id' });
+  PurchaseItem.belongsTo(Purchase, { foreignKey: 'purchase_id' });
+  PurchaseItem.belongsTo(Product, { foreignKey: 'product_id' });
+}
+
+db.sequelize = sequelize;
+db.Sequelize = Sequelize;
+
+module.exports = db;
