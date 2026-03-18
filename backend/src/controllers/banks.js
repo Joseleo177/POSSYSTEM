@@ -1,21 +1,22 @@
-const pool = require("../db/pool");
-
-// ══════════════════════════════════════════════════════════════
-//  BANCOS
-// ══════════════════════════════════════════════════════════════
+const { Sequelize, Bank, PaymentMethod, PaymentJournal, Sale } = require("../models");
 
 // GET /api/banks
 const getAllBanks = async (req, res) => {
   try {
-    const { rows } = await pool.query(`
-      SELECT b.*,
-             COUNT(pj.id)::int AS journals_count
-      FROM banks b
-      LEFT JOIN payment_journals pj ON pj.bank_id = b.id
-      GROUP BY b.id
-      ORDER BY b.sort_order, b.name
-    `);
-    res.json({ ok: true, data: rows });
+    const banks = await Bank.findAll({
+      attributes: {
+        include: [[Sequelize.fn("COUNT", Sequelize.col("PaymentJournals.id")), "journals_count"]]
+      },
+      include: [{ model: PaymentJournal, attributes: [] }],
+      group: ['Bank.id'],
+      order: [['sort_order', 'ASC'], ['name', 'ASC']],
+      raw: true
+    });
+    
+    // Convert count to int to match pg behavior
+    banks.forEach(b => b.journals_count = parseInt(b.journals_count || 0));
+    
+    res.json({ ok: true, data: banks });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener bancos" });
@@ -26,18 +27,12 @@ const getAllBanks = async (req, res) => {
 const createBank = async (req, res) => {
   try {
     const { name, code, sort_order = 0 } = req.body;
-    if (!name?.trim())
-      return res.status(400).json({ ok: false, message: "El nombre es requerido" });
+    if (!name?.trim()) return res.status(400).json({ ok: false, message: "El nombre es requerido" });
 
-    const { rows: [bank] } = await pool.query(`
-      INSERT INTO banks (name, code, sort_order)
-      VALUES ($1, $2, $3) RETURNING *
-    `, [name.trim(), code?.trim() || null, sort_order]);
-
+    const bank = await Bank.create({ name: name.trim(), code: code?.trim() || null, sort_order });
     res.status(201).json({ ok: true, data: bank });
   } catch (err) {
-    if (err.code === "23505")
-      return res.status(400).json({ ok: false, message: "Ya existe un banco con ese nombre" });
+    if (err.name === 'SequelizeUniqueConstraintError') return res.status(400).json({ ok: false, message: "Ya existe un banco con ese nombre" });
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al crear banco" });
   }
@@ -47,22 +42,15 @@ const createBank = async (req, res) => {
 const updateBank = async (req, res) => {
   try {
     const { name, code, active, sort_order } = req.body;
-    if (!name?.trim())
-      return res.status(400).json({ ok: false, message: "El nombre es requerido" });
+    if (!name?.trim()) return res.status(400).json({ ok: false, message: "El nombre es requerido" });
 
-    const { rows: [bank] } = await pool.query(`
-      UPDATE banks
-      SET name = $1, code = $2, active = $3, sort_order = $4
-      WHERE id = $5 RETURNING *
-    `, [name.trim(), code?.trim() || null, active ?? true, sort_order ?? 0, req.params.id]);
+    const bank = await Bank.findByPk(req.params.id);
+    if (!bank) return res.status(404).json({ ok: false, message: "Banco no encontrado" });
 
-    if (!bank)
-      return res.status(404).json({ ok: false, message: "Banco no encontrado" });
-
+    await bank.update({ name: name.trim(), code: code?.trim() || null, active: active ?? true, sort_order: sort_order ?? 0 });
     res.json({ ok: true, data: bank });
   } catch (err) {
-    if (err.code === "23505")
-      return res.status(400).json({ ok: false, message: "Ya existe un banco con ese nombre" });
+    if (err.name === 'SequelizeUniqueConstraintError') return res.status(400).json({ ok: false, message: "Ya existe un banco con ese nombre" });
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al actualizar banco" });
   }
@@ -71,23 +59,13 @@ const updateBank = async (req, res) => {
 // DELETE /api/banks/:id
 const deleteBank = async (req, res) => {
   try {
-    // Bloquear si tiene diarios asignados
-    const { rows: [{ count }] } = await pool.query(
-      "SELECT COUNT(*)::int AS count FROM payment_journals WHERE bank_id = $1",
-      [req.params.id]
-    );
-    if (count > 0)
-      return res.status(400).json({
-        ok: false,
-        message: `No se puede eliminar: ${count} diario(s) usan este banco. Desasígnalos primero.`
-      });
+    const count = await PaymentJournal.count({ where: { bank_id: req.params.id } });
+    if (count > 0) return res.status(400).json({ ok: false, message: `No se puede eliminar: ${count} diario(s) usan este banco. Desasígnalos primero.` });
 
-    const { rowCount } = await pool.query(
-      "DELETE FROM banks WHERE id = $1", [req.params.id]
-    );
-    if (!rowCount)
-      return res.status(404).json({ ok: false, message: "Banco no encontrado" });
+    const bank = await Bank.findByPk(req.params.id);
+    if (!bank) return res.status(404).json({ ok: false, message: "Banco no encontrado" });
 
+    await bank.destroy();
     res.json({ ok: true, message: "Banco eliminado" });
   } catch (err) {
     console.error(err);
@@ -95,22 +73,21 @@ const deleteBank = async (req, res) => {
   }
 };
 
-// ══════════════════════════════════════════════════════════════
-//  MÉTODOS DE PAGO
-// ══════════════════════════════════════════════════════════════
-
 // GET /api/payment-methods
 const getAllMethods = async (req, res) => {
   try {
-    const { rows } = await pool.query(`
-      SELECT pm.*,
-             COUNT(s.id)::int AS sales_count
-      FROM payment_methods pm
-      LEFT JOIN sales s ON s.payment_method_id = pm.id
-      GROUP BY pm.id
-      ORDER BY pm.sort_order, pm.name
-    `);
-    res.json({ ok: true, data: rows });
+    const methods = await PaymentMethod.findAll({
+      attributes: {
+        include: [[Sequelize.fn("COUNT", Sequelize.col("Sales.id")), "sales_count"]]
+      },
+      include: [{ model: Sale, attributes: [] }],
+      group: ['PaymentMethod.id'],
+      order: [['sort_order', 'ASC'], ['name', 'ASC']],
+      raw: true
+    });
+    
+    methods.forEach(m => m.sales_count = parseInt(m.sales_count || 0));
+    res.json({ ok: true, data: methods });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener métodos de pago" });
@@ -124,18 +101,11 @@ const createMethod = async (req, res) => {
     if (!name?.trim()) return res.status(400).json({ ok: false, message: "El nombre es requerido" });
     if (!code?.trim()) return res.status(400).json({ ok: false, message: "El código es requerido" });
 
-    // Normalizar código: minúsculas, sin espacios
     const normalizedCode = code.trim().toLowerCase().replace(/\s+/g, "_");
-
-    const { rows: [method] } = await pool.query(`
-      INSERT INTO payment_methods (name, code, icon, color, sort_order)
-      VALUES ($1, $2, $3, $4, $5) RETURNING *
-    `, [name.trim(), normalizedCode, icon, color, sort_order]);
-
+    const method = await PaymentMethod.create({ name: name.trim(), code: normalizedCode, icon, color, sort_order });
     res.status(201).json({ ok: true, data: method });
   } catch (err) {
-    if (err.code === "23505")
-      return res.status(400).json({ ok: false, message: "Ya existe un método con ese nombre o código" });
+    if (err.name === 'SequelizeUniqueConstraintError') return res.status(400).json({ ok: false, message: "Ya existe un método con ese nombre o código" });
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al crear método de pago" });
   }
@@ -145,23 +115,15 @@ const createMethod = async (req, res) => {
 const updateMethod = async (req, res) => {
   try {
     const { name, icon, color, active, sort_order } = req.body;
-    // Nota: el código NO se puede editar (es clave de integridad histórica)
-    if (!name?.trim())
-      return res.status(400).json({ ok: false, message: "El nombre es requerido" });
+    if (!name?.trim()) return res.status(400).json({ ok: false, message: "El nombre es requerido" });
 
-    const { rows: [method] } = await pool.query(`
-      UPDATE payment_methods
-      SET name = $1, icon = $2, color = $3, active = $4, sort_order = $5
-      WHERE id = $6 RETURNING *
-    `, [name.trim(), icon || "💳", color || "#555555", active ?? true, sort_order ?? 0, req.params.id]);
+    const method = await PaymentMethod.findByPk(req.params.id);
+    if (!method) return res.status(404).json({ ok: false, message: "Método de pago no encontrado" });
 
-    if (!method)
-      return res.status(404).json({ ok: false, message: "Método de pago no encontrado" });
-
+    await method.update({ name: name.trim(), icon: icon || "💳", color: color || "#555555", active: active ?? true, sort_order: sort_order ?? 0 });
     res.json({ ok: true, data: method });
   } catch (err) {
-    if (err.code === "23505")
-      return res.status(400).json({ ok: false, message: "Ya existe un método con ese nombre" });
+    if (err.name === 'SequelizeUniqueConstraintError') return res.status(400).json({ ok: false, message: "Ya existe un método con ese nombre" });
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al actualizar método de pago" });
   }
@@ -170,34 +132,16 @@ const updateMethod = async (req, res) => {
 // DELETE /api/payment-methods/:id
 const deleteMethod = async (req, res) => {
   try {
-    // Bloquear si tiene ventas registradas
-    const { rows: [{ count }] } = await pool.query(
-      "SELECT COUNT(*)::int AS count FROM sales WHERE payment_method_id = $1",
-      [req.params.id]
-    );
-    if (count > 0)
-      return res.status(400).json({
-        ok: false,
-        message: `No se puede eliminar: tiene ${count} venta(s) registrada(s). Solo puedes desactivarlo.`
-      });
+    const count = await Sale.count({ where: { payment_method_id: req.params.id } });
+    if (count > 0) return res.status(400).json({ ok: false, message: `No se puede eliminar: tiene ${count} venta(s) registrada(s). Solo puedes desactivarlo.` });
 
-    // Bloquear si tiene diarios asignados
-    const { rows: [{ jcount }] } = await pool.query(
-      "SELECT COUNT(*)::int AS jcount FROM payment_journals WHERE type = (SELECT code FROM payment_methods WHERE id = $1)",
-      [req.params.id]
-    );
-    if (jcount > 0)
-      return res.status(400).json({
-        ok: false,
-        message: `No se puede eliminar: ${jcount} diario(s) usan este método. Cámbialos primero.`
-      });
+    const method = await PaymentMethod.findByPk(req.params.id);
+    if (!method) return res.status(404).json({ ok: false, message: "Método de pago no encontrado" });
 
-    const { rowCount } = await pool.query(
-      "DELETE FROM payment_methods WHERE id = $1", [req.params.id]
-    );
-    if (!rowCount)
-      return res.status(404).json({ ok: false, message: "Método de pago no encontrado" });
+    const jcount = await PaymentJournal.count({ where: { type: method.code } });
+    if (jcount > 0) return res.status(400).json({ ok: false, message: `No se puede eliminar: ${jcount} diario(s) usan este método. Cámbialos primero.` });
 
+    await method.destroy();
     res.json({ ok: true, message: "Método de pago eliminado" });
   } catch (err) {
     console.error(err);
@@ -208,12 +152,9 @@ const deleteMethod = async (req, res) => {
 // PUT /api/payment-methods/:id/toggle
 const toggleMethod = async (req, res) => {
   try {
-    const { rows: [method] } = await pool.query(
-      "UPDATE payment_methods SET active = NOT active WHERE id = $1 RETURNING *",
-      [req.params.id]
-    );
-    if (!method)
-      return res.status(404).json({ ok: false, message: "Método no encontrado" });
+    const method = await PaymentMethod.findByPk(req.params.id);
+    if (!method) return res.status(404).json({ ok: false, message: "Método no encontrado" });
+    await method.update({ active: !method.active });
     res.json({ ok: true, data: method });
   } catch (err) {
     console.error(err);
@@ -224,12 +165,9 @@ const toggleMethod = async (req, res) => {
 // PUT /api/banks/:id/toggle
 const toggleBank = async (req, res) => {
   try {
-    const { rows: [bank] } = await pool.query(
-      "UPDATE banks SET active = NOT active WHERE id = $1 RETURNING *",
-      [req.params.id]
-    );
-    if (!bank)
-      return res.status(404).json({ ok: false, message: "Banco no encontrado" });
+    const bank = await Bank.findByPk(req.params.id);
+    if (!bank) return res.status(404).json({ ok: false, message: "Banco no encontrado" });
+    await bank.update({ active: !bank.active });
     res.json({ ok: true, data: bank });
   } catch (err) {
     console.error(err);

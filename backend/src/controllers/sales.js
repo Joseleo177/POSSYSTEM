@@ -1,8 +1,9 @@
 const pool = require("../db/pool");
+const { Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Warehouse } = require("../models");
 
 const PAYMENT_METHODS = ["efectivo", "transferencia", "pago_movil", "zelle", "punto_venta"];
 
-// GET /api/sales  — con filtros opcionales
+// GET /api/sales
 const getAll = async (req, res) => {
   try {
     const { limit = 50, offset = 0, date_from, date_to, payment_method } = req.query;
@@ -97,7 +98,7 @@ const getStats = async (req, res) => {
   }
 };
 
-// POST /api/sales
+// POST /api/sales — uses raw transactions for data integrity + stock locking
 const create = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -111,7 +112,6 @@ const create = async (req, res) => {
     if (paid == null)      return res.status(400).json({ ok: false, message: "paid es requerido" });
     if (!warehouse_id)     return res.status(400).json({ ok: false, message: "warehouse_id es requerido" });
 
-    // Resolver método de pago desde el diario si se envía
     let method = PAYMENT_METHODS.includes(payment_method) ? payment_method : "efectivo";
     if (payment_journal_id) {
       const { rows: jRows } = await pool.query(
@@ -130,7 +130,6 @@ const create = async (req, res) => {
     const enriched = [];
 
     for (const item of items) {
-      // Leer precio y nombre del producto
       const { rows: prodRows } = await client.query(
         "SELECT id, name, price FROM products WHERE id = $1 FOR UPDATE",
         [item.product_id]
@@ -138,7 +137,6 @@ const create = async (req, res) => {
       if (!prodRows.length) throw new Error(`Producto ${item.product_id} no encontrado`);
       const product = prodRows[0];
 
-      // ── Verificar stock en el almacén específico ──────────────
       const { rows: stockRows } = await client.query(
         "SELECT qty FROM product_stock WHERE warehouse_id = $1 AND product_id = $2 FOR UPDATE",
         [warehouse_id, item.product_id]
@@ -158,7 +156,6 @@ const create = async (req, res) => {
     if (paidBase < total - 0.01) throw new Error("Pago insuficiente");
     const change = parseFloat((paidBase - total).toFixed(2));
 
-    // Insertar venta con warehouse_id
     const { rows: [sale] } = await client.query(
       `INSERT INTO sales
          (total, paid, change, customer_id, employee_id, currency_id, exchange_rate,
@@ -169,59 +166,48 @@ const create = async (req, res) => {
     );
 
     for (const p of enriched) {
-      // Insertar línea de venta
       await client.query(
         "INSERT INTO sale_items (sale_id, product_id, name, price, quantity) VALUES ($1,$2,$3,$4,$5)",
         [sale.id, p.id, p.name, p.price, p.quantity]
       );
-
-      // ── Descontar de product_stock (almacén específico) ───────
       await client.query(
         "UPDATE product_stock SET qty = qty - $1 WHERE warehouse_id = $2 AND product_id = $3",
         [p.quantity, warehouse_id, p.id]
       );
-
-      // ── Sincronizar products.stock con suma total de almacenes ─
       await client.query(
-        `UPDATE products
-         SET stock = (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = $1)
-         WHERE id = $1`,
+        `UPDATE products SET stock = (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = $1) WHERE id = $1`,
         [p.id]
       );
     }
 
     await client.query("COMMIT");
 
-    // Retornar venta completa
-    const { rows: [fullSale] } = await pool.query(
-      `SELECT s.*,
-              c.name       AS customer_name,
-              e.full_name  AS employee_name,
-              cur.symbol   AS currency_symbol,
-              cur.code     AS currency_code,
-              pj.name      AS journal_name,
-              pj.color     AS journal_color,
-              w.name       AS warehouse_name,
-              json_agg(json_build_object(
-                'product_id', si.product_id,
-                'name',       si.name,
-                'price',      si.price,
-                'quantity',   si.quantity,
-                'subtotal',   si.subtotal
-              )) AS items
-       FROM sales s
-       LEFT JOIN customers        c   ON c.id   = s.customer_id
-       LEFT JOIN employees        e   ON e.id   = s.employee_id
-       LEFT JOIN currencies       cur ON cur.id = s.currency_id
-       LEFT JOIN payment_journals pj  ON pj.id  = s.payment_journal_id
-       LEFT JOIN warehouses       w   ON w.id   = s.warehouse_id
-       JOIN  sale_items si ON si.sale_id = s.id
-       WHERE s.id = $1
-       GROUP BY s.id, c.name, e.full_name, cur.symbol, cur.code, pj.name, pj.color, w.name`,
-      [sale.id]
-    );
+    // Use Sequelize for the enriched response
+    const fullSale = await Sale.findByPk(sale.id, {
+      include: [
+        { model: Customer, attributes: ['name'] },
+        { model: Employee, attributes: ['full_name'] },
+        { model: Currency, attributes: ['symbol', 'code'] },
+        { model: PaymentJournal, attributes: ['name', 'color'] },
+        { model: Warehouse, attributes: ['name'] },
+        { model: SaleItem }
+      ]
+    });
 
-    res.status(201).json({ ok: true, data: fullSale });
+    if (!fullSale) return res.status(201).json({ ok: true, data: sale });
+
+    const data = fullSale.toJSON();
+    data.customer_name   = data.Customer?.name ?? null;
+    data.employee_name   = data.Employee?.full_name ?? null;
+    data.currency_symbol = data.Currency?.symbol ?? null;
+    data.currency_code   = data.Currency?.code ?? null;
+    data.journal_name    = data.PaymentJournal?.name ?? null;
+    data.journal_color   = data.PaymentJournal?.color ?? null;
+    data.warehouse_name  = data.Warehouse?.name ?? null;
+    data.items = data.SaleItems ?? [];
+    ['Customer','Employee','Currency','PaymentJournal','Warehouse','SaleItems'].forEach(k => delete data[k]);
+
+    res.status(201).json({ ok: true, data });
   } catch (err) {
     await client.query("ROLLBACK");
     const status = /insuficiente|no encontrado/i.test(err.message) ? 400 : 500;
@@ -231,43 +217,30 @@ const create = async (req, res) => {
   }
 };
 
-// DELETE /api/sales/:id — anular venta y restaurar stock en el almacén original
+// DELETE /api/sales/:id
 const cancel = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-
-    const { rows: [sale] } = await client.query(
-      "SELECT id, warehouse_id FROM sales WHERE id = $1", [req.params.id]
-    );
+    const { rows: [sale] } = await client.query("SELECT id, warehouse_id FROM sales WHERE id = $1", [req.params.id]);
     if (!sale) {
       await client.query("ROLLBACK");
       return res.status(404).json({ ok: false, message: "Venta no encontrada" });
     }
 
-    const { rows: items } = await client.query(
-      "SELECT product_id, quantity FROM sale_items WHERE sale_id = $1", [req.params.id]
-    );
+    const { rows: items } = await client.query("SELECT product_id, quantity FROM sale_items WHERE sale_id = $1", [req.params.id]);
 
     for (const item of items) {
       if (!item.product_id) continue;
-
       if (sale.warehouse_id) {
-        // ── Restaurar en el almacén original ──────────────────
         await client.query(
-          `INSERT INTO product_stock (warehouse_id, product_id, qty)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (warehouse_id, product_id)
-           DO UPDATE SET qty = product_stock.qty + EXCLUDED.qty`,
+          `INSERT INTO product_stock (warehouse_id, product_id, qty) VALUES ($1, $2, $3)
+           ON CONFLICT (warehouse_id, product_id) DO UPDATE SET qty = product_stock.qty + EXCLUDED.qty`,
           [sale.warehouse_id, item.product_id, item.quantity]
         );
       }
-
-      // ── Sincronizar products.stock ─────────────────────────
       await client.query(
-        `UPDATE products
-         SET stock = (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = $1)
-         WHERE id = $1`,
+        `UPDATE products SET stock = (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = $1) WHERE id = $1`,
         [item.product_id]
       );
     }

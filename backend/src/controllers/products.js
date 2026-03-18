@@ -1,6 +1,7 @@
 const path = require("path");
 const fs   = require("fs");
-const pool = require("../db/pool");
+const { Product, Category, Sequelize } = require("../models");
+const Op = Sequelize.Op;
 
 const imageUrl = (filename) =>
   filename ? `/uploads/${filename}` : null;
@@ -15,30 +16,38 @@ const deleteOldImage = (filename) => {
 const getAll = async (req, res) => {
   try {
     const { search, category_id } = req.query;
-    let query = `
-      SELECT p.*, c.name AS category_name
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.id
-      WHERE 1=1
-    `;
-    const params = [];
+    const where = {};
 
+    if (category_id) where.category_id = category_id;
     if (search) {
-      params.push(`%${search}%`);
-      query += ` AND (p.name ILIKE $${params.length} OR c.name ILIKE $${params.length})`;
+      where[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } }
+      ];
     }
-    if (category_id) {
-      params.push(category_id);
-      query += ` AND p.category_id = $${params.length}`;
-    }
-    query += " ORDER BY p.name ASC";
 
-    const { rows } = await pool.query(query, params);
-    const data = rows.map((p) => ({
-      ...p,
-      image_url: imageUrl(p.image_filename),
-    }));
-    res.json({ ok: true, data });
+    const products = await Product.findAll({
+      where,
+      include: [{ model: Category, attributes: ['name'], required: false }],
+      order: [['name', 'ASC']]
+    });
+
+    const data = products.map(p => {
+      const prod = p.toJSON();
+      prod.category_name = prod.Category?.name ?? null;
+      delete prod.Category;
+      prod.image_url = imageUrl(prod.image_filename);
+      return prod;
+    });
+
+    // Also match category name in search
+    const filtered = search
+      ? data.filter(p =>
+          p.name?.toLowerCase().includes(search.toLowerCase()) ||
+          p.category_name?.toLowerCase().includes(search.toLowerCase())
+        )
+      : data;
+
+    res.json({ ok: true, data: filtered });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener productos" });
@@ -48,21 +57,23 @@ const getAll = async (req, res) => {
 // GET /api/products/:id
 const getOne = async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT p.*, c.name AS category_name
-       FROM products p LEFT JOIN categories c ON p.category_id = c.id
-       WHERE p.id = $1`,
-      [req.params.id]
-    );
-    if (!rows.length) return res.status(404).json({ ok: false, message: "Producto no encontrado" });
-    const p = rows[0];
-    res.json({ ok: true, data: { ...p, image_url: imageUrl(p.image_filename) } });
+    const product = await Product.findByPk(req.params.id, {
+      include: [{ model: Category, attributes: ['name'], required: false }]
+    });
+    if (!product) return res.status(404).json({ ok: false, message: "Producto no encontrado" });
+
+    const p = product.toJSON();
+    p.category_name = p.Category?.name ?? null;
+    delete p.Category;
+    p.image_url = imageUrl(p.image_filename);
+
+    res.json({ ok: true, data: p });
   } catch (err) {
     res.status(500).json({ ok: false, message: "Error al obtener producto" });
   }
 };
 
-// POST /api/products  — multipart/form-data
+// POST /api/products
 const create = async (req, res) => {
   try {
     const { name, price, stock, category_id, unit, qty_step,
@@ -74,16 +85,23 @@ const create = async (req, res) => {
 
     const filename = req.file ? req.file.filename : null;
 
-    const { rows } = await pool.query(
-      `INSERT INTO products (name, price, stock, category_id, image_filename, unit, qty_step,
-                             cost_price, profit_margin, package_size, package_unit)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-      [name, price, stock ?? 0, category_id || null, filename, unit || "unidad", qty_step || 1,
-       cost_price || null, profit_margin || null, package_size || null, package_unit || null]
-    );
+    const product = await Product.create({
+      name,
+      price,
+      stock: stock ?? 0,
+      category_id: category_id || null,
+      image_filename: filename,
+      unit: unit || "unidad",
+      qty_step: qty_step || 1,
+      cost_price: cost_price || null,
+      profit_margin: profit_margin || null,
+      package_size: package_size || null,
+      package_unit: package_unit || null
+    });
+
     res.status(201).json({
       ok: true,
-      data: { ...rows[0], image_url: imageUrl(filename) },
+      data: { ...product.toJSON(), image_url: imageUrl(filename) }
     });
   } catch (err) {
     if (req.file) deleteOldImage(req.file.filename);
@@ -92,19 +110,19 @@ const create = async (req, res) => {
   }
 };
 
-// PUT /api/products/:id  — multipart/form-data
+// PUT /api/products/:id
 const update = async (req, res) => {
   try {
-    const { name, price, stock, category_id, unit, qty_step,
+    const { name, price, category_id, unit, qty_step,
             cost_price, profit_margin, package_size, package_unit } = req.body;
 
-    const { rows: prev } = await pool.query("SELECT image_filename FROM products WHERE id=$1", [req.params.id]);
-    if (!prev.length) {
+    const product = await Product.findByPk(req.params.id);
+    if (!product) {
       if (req.file) deleteOldImage(req.file.filename);
       return res.status(404).json({ ok: false, message: "Producto no encontrado" });
     }
 
-    let filename = prev[0].image_filename;
+    let filename = product.image_filename;
 
     if (req.file) {
       deleteOldImage(filename);
@@ -114,18 +132,22 @@ const update = async (req, res) => {
       filename = null;
     }
 
-    const { rows } = await pool.query(
-      `UPDATE products
-       SET name=$1, price=$2, category_id=$3, image_filename=$4, unit=$5, qty_step=$6,
-           cost_price=$7, profit_margin=$8, package_size=$9, package_unit=$10
-       WHERE id=$11 RETURNING *`,
-      [name, price, category_id || null, filename, unit || "unidad", qty_step || 1,
-       cost_price || null, profit_margin || null, package_size || null, package_unit || null,
-       req.params.id]
-    );
+    await product.update({
+      name,
+      price,
+      category_id: category_id || null,
+      image_filename: filename,
+      unit: unit || "unidad",
+      qty_step: qty_step || 1,
+      cost_price: cost_price || null,
+      profit_margin: profit_margin || null,
+      package_size: package_size || null,
+      package_unit: package_unit || null
+    });
+
     res.json({
       ok: true,
-      data: { ...rows[0], image_url: imageUrl(filename) },
+      data: { ...product.toJSON(), image_url: imageUrl(filename) }
     });
   } catch (err) {
     if (req.file) deleteOldImage(req.file.filename);
@@ -137,9 +159,11 @@ const update = async (req, res) => {
 // DELETE /api/products/:id
 const remove = async (req, res) => {
   try {
-    const { rows } = await pool.query("DELETE FROM products WHERE id=$1 RETURNING image_filename", [req.params.id]);
-    if (!rows.length) return res.status(404).json({ ok: false, message: "Producto no encontrado" });
-    deleteOldImage(rows[0].image_filename);
+    const product = await Product.findByPk(req.params.id);
+    if (!product) return res.status(404).json({ ok: false, message: "Producto no encontrado" });
+
+    deleteOldImage(product.image_filename);
+    await product.destroy();
     res.json({ ok: true, message: "Producto eliminado" });
   } catch (err) {
     res.status(500).json({ ok: false, message: "Error al eliminar producto" });
