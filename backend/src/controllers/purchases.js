@@ -1,5 +1,4 @@
-const pool = require("../db/pool");
-const { Purchase, PurchaseItem, Employee, Warehouse, Customer, Product } = require("../models");
+const { Purchase, PurchaseItem, Employee, Warehouse, Customer, Product, ProductStock, Sequelize, sequelize } = require("../models");
 
 // GET /api/purchases
 const getAll = async (req, res) => {
@@ -9,10 +8,10 @@ const getAll = async (req, res) => {
         { model: Employee, attributes: ['full_name'], required: false },
         { model: Customer, as: 'Supplier', attributes: ['name', 'rif'], required: false },
         { model: Warehouse, attributes: ['name'], required: false },
-        { model: PurchaseItem, attributes: [] }
+        { model: PurchaseItem, attributes: [], required: false }
       ],
       attributes: {
-        include: [[require('sequelize').fn('COUNT', require('sequelize').col('PurchaseItems.id')), 'item_count']]
+        include: [[Sequelize.fn('COUNT', Sequelize.col('PurchaseItems.id')), 'item_count']]
       },
       group: ['Purchase.id', 'Employee.id', 'Supplier.id', 'Warehouse.id'],
       order: [['created_at', 'DESC']],
@@ -68,31 +67,36 @@ const getOne = async (req, res) => {
   }
 };
 
-// POST /api/purchases — uses raw transactions for integrity
+// POST /api/purchases
 const create = async (req, res) => {
-  const client = await pool.connect();
+  const transaction = await sequelize.transaction();
   try {
     const { supplier_id, supplier_name, notes, items, warehouse_id } = req.body;
 
-    if (!items || !items.length) return res.status(400).json({ ok: false, message: "Debe incluir al menos un producto" });
-    if (!warehouse_id)           return res.status(400).json({ ok: false, message: "warehouse_id es requerido" });
+    if (!items || !items.length) throw new Error("Debe incluir al menos un producto");
+    if (!warehouse_id)           throw new Error("warehouse_id es requerido");
 
-    const { rows: [warehouse] } = await pool.query("SELECT id FROM warehouses WHERE id = $1 AND active = TRUE", [warehouse_id]);
-    if (!warehouse) return res.status(400).json({ ok: false, message: "Almacén no encontrado o inactivo" });
-
-    await client.query("BEGIN");
+    const warehouse = await Warehouse.findByPk(warehouse_id, { transaction });
+    if (!warehouse || !warehouse.active) throw new Error("Almacén no encontrado o inactivo");
 
     let resolvedSupplierName = supplier_name || null;
     let resolvedSupplierId   = supplier_id ? parseInt(supplier_id) : null;
     if (resolvedSupplierId) {
-      const { rows: [sup] } = await client.query("SELECT name, tax_name FROM customers WHERE id=$1 AND type='proveedor'", [resolvedSupplierId]);
+      const sup = await Customer.findOne({ 
+        where: { id: resolvedSupplierId, type: 'proveedor' }, 
+        transaction 
+      });
       if (sup) resolvedSupplierName = sup.tax_name || sup.name;
     }
 
-    const { rows: [purchase] } = await client.query(
-      `INSERT INTO purchases (supplier_id, supplier_name, notes, total, employee_id, warehouse_id) VALUES ($1,$2,$3,0,$4,$5) RETURNING *`,
-      [resolvedSupplierId, resolvedSupplierName, notes || null, req.employee?.id || null, warehouse_id]
-    );
+    const purchase = await Purchase.create({
+      supplier_id: resolvedSupplierId,
+      supplier_name: resolvedSupplierName,
+      notes: notes || null,
+      total: 0,
+      employee_id: req.employee?.id || null,
+      warehouse_id
+    }, { transaction });
 
     let grandTotal = 0;
     for (const item of items) {
@@ -110,39 +114,53 @@ const create = async (req, res) => {
       const subtotal    = pkgQty * pkgPrice;
       grandTotal += subtotal;
 
-      const { rows: [prod] } = await client.query("SELECT name FROM products WHERE id=$1 FOR UPDATE", [product_id]);
-      if (!prod) throw new Error(`Producto ID ${product_id} no encontrado`);
+      const product = await Product.findByPk(product_id, { transaction, lock: true });
+      if (!product) throw new Error(`Producto ID ${product_id} no encontrado`);
 
-      await client.query(
-        `INSERT INTO purchase_items (purchase_id, product_id, product_name, package_unit, package_qty, package_size, package_price, unit_cost, profit_margin, sale_price, total_units, subtotal)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-        [purchase.id, product_id, prod.name, package_unit || "unidad", pkgQty, pkgSize, pkgPrice, unit_cost, margin, sale_price, total_units, subtotal]
-      );
+      await PurchaseItem.create({
+        purchase_id: purchase.id,
+        product_id,
+        product_name: product.name,
+        package_unit: package_unit || "unidad",
+        package_qty: pkgQty,
+        package_size: pkgSize,
+        package_price: pkgPrice,
+        unit_cost,
+        profit_margin: margin,
+        sale_price,
+        total_units,
+        subtotal
+      }, { transaction });
 
-      await client.query(
-        `INSERT INTO product_stock (warehouse_id, product_id, qty) VALUES ($1,$2,$3) ON CONFLICT (warehouse_id, product_id) DO UPDATE SET qty = product_stock.qty + EXCLUDED.qty`,
-        [warehouse_id, product_id, total_units]
-      );
+      // Incrementar stock en almacén
+      const [stockEntry] = await ProductStock.findOrCreate({
+        where: { warehouse_id, product_id },
+        defaults: { qty: 0 },
+        transaction,
+        lock: true
+      });
+      await stockEntry.increment('qty', { by: total_units, transaction });
 
-      if (update_price) {
-        await client.query(
-          `UPDATE products SET cost_price=$1, profit_margin=$2, package_size=$3, package_unit=$4, price=$5 WHERE id=$6`,
-          [unit_cost, margin, pkgSize, package_unit || "unidad", sale_price, product_id]
-        );
-      } else {
-        await client.query(
-          `UPDATE products SET cost_price=$1, profit_margin=$2, package_size=$3, package_unit=$4 WHERE id=$5`,
-          [unit_cost, margin, pkgSize, package_unit || "unidad", product_id]
-        );
-      }
+      // Actualizar datos del producto
+      const updateData = {
+        cost_price: unit_cost,
+        profit_margin: margin,
+        package_size: pkgSize,
+        package_unit: package_unit || "unidad"
+      };
+      if (update_price) updateData.price = sale_price;
+      
+      await product.update(updateData, { transaction });
 
-      await client.query(`UPDATE products SET stock = (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id=$1) WHERE id=$1`, [product_id]);
+      // Sincronizar stock total
+      const totalStock = await ProductStock.sum('qty', { where: { product_id }, transaction });
+      await product.update({ stock: totalStock }, { transaction });
     }
 
-    await client.query("UPDATE purchases SET total=$1 WHERE id=$2", [grandTotal, purchase.id]);
-    await client.query("COMMIT");
+    await purchase.update({ total: grandTotal }, { transaction });
+    await transaction.commit();
 
-    // Use Sequelize for the enriched response
+    // Respuesta enriquecida
     const fullPurchase = await Purchase.findByPk(purchase.id, {
       include: [
         { model: Employee, attributes: ['full_name'], required: false },
@@ -150,51 +168,57 @@ const create = async (req, res) => {
         { model: PurchaseItem }
       ]
     });
-    const data = fullPurchase.toJSON();
-    data.employee_name  = data.Employee?.full_name ?? null;
-    data.warehouse_name = data.Warehouse?.name     ?? null;
-    data.items = data.PurchaseItems ?? [];
-    ['Employee','Warehouse','PurchaseItems'].forEach(k => delete data[k]);
+    const resultData = fullPurchase.toJSON();
+    resultData.employee_name  = resultData.Employee?.full_name ?? null;
+    resultData.warehouse_name = resultData.Warehouse?.name     ?? null;
+    resultData.items = resultData.PurchaseItems ?? [];
+    ['Employee','Warehouse','PurchaseItems'].forEach(k => delete resultData[k]);
 
-    res.status(201).json({ ok: true, data });
+    res.status(201).json({ ok: true, data: resultData });
   } catch (err) {
-    await client.query("ROLLBACK");
+    if (transaction) await transaction.rollback();
     console.error(err);
     res.status(500).json({ ok: false, message: err.message || "Error al crear compra" });
-  } finally {
-    client.release();
   }
 };
 
 // DELETE /api/purchases/:id
 const remove = async (req, res) => {
-  const client = await pool.connect();
+  const transaction = await sequelize.transaction();
   try {
-    await client.query("BEGIN");
-    const { rows: [purchase] } = await client.query("SELECT id, warehouse_id FROM purchases WHERE id=$1", [req.params.id]);
-    if (!purchase) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ ok: false, message: "Compra no encontrada" });
-    }
-    const { rows: items } = await client.query("SELECT * FROM purchase_items WHERE purchase_id=$1", [req.params.id]);
+    const purchase = await Purchase.findByPk(req.params.id, { 
+      include: [{ model: PurchaseItem }], 
+      transaction, 
+      lock: true 
+    });
+    
+    if (!purchase) throw new Error("Compra no encontrada");
 
-    for (const item of items) {
+    for (const item of purchase.PurchaseItems) {
       if (!item.product_id) continue;
-      if (purchase.warehouse_id) {
-        await client.query(`UPDATE product_stock SET qty = GREATEST(0, qty - $1) WHERE warehouse_id = $2 AND product_id = $3`, [item.total_units, purchase.warehouse_id, item.product_id]);
+      
+      // Restar del almacén
+      const stockEntry = await ProductStock.findOne({
+        where: { warehouse_id: purchase.warehouse_id, product_id: item.product_id },
+        transaction,
+        lock: true
+      });
+      if (stockEntry) {
+        await stockEntry.decrement('qty', { by: item.total_units, transaction });
       }
-      await client.query(`UPDATE products SET stock = (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id=$1) WHERE id=$1`, [item.product_id]);
+
+      // Sincronizar stock total
+      const totalStock = await ProductStock.sum('qty', { where: { product_id: item.product_id }, transaction });
+      await Product.update({ stock: totalStock }, { where: { id: item.product_id }, transaction });
     }
 
-    await client.query("DELETE FROM purchases WHERE id=$1", [req.params.id]);
-    await client.query("COMMIT");
+    await purchase.destroy({ transaction });
+    await transaction.commit();
     res.json({ ok: true, message: "Compra anulada y stock revertido" });
   } catch (err) {
-    await client.query("ROLLBACK");
+    if (transaction) await transaction.rollback();
     console.error(err);
-    res.status(500).json({ ok: false, message: "Error al anular compra" });
-  } finally {
-    client.release();
+    res.status(500).json({ ok: false, message: err.message || "Error al anular compra" });
   }
 };
 

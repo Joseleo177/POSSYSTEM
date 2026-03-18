@@ -1,25 +1,57 @@
-const pool = require("../db/pool");
-const { Warehouse, Product, Category } = require("../models");
+const { 
+  Warehouse, Product, Category, ProductStock, EmployeeWarehouse, StockTransfer, Employee, Sequelize, sequelize 
+} = require("../models");
+const { Op } = Sequelize;
 
 // GET /api/warehouses
 const getAll = async (req, res) => {
   try {
-    // Uses raw query for complex aggregations (json_agg, COUNT, SUM)
-    const { rows } = await pool.query(`
-      SELECT
-        w.*,
-        COUNT(DISTINCT ps.product_id)::int        AS product_count,
-        COALESCE(SUM(ps.qty), 0)                  AS total_stock,
-        json_agg(
-          json_build_object('employee_id', ew.employee_id)
-        ) FILTER (WHERE ew.employee_id IS NOT NULL) AS assigned_employees
-      FROM warehouses w
-      LEFT JOIN product_stock       ps ON ps.warehouse_id = w.id
-      LEFT JOIN employee_warehouses ew ON ew.warehouse_id = w.id
-      GROUP BY w.id
-      ORDER BY w.sort_order, w.name
-    `);
-    res.json({ ok: true, data: rows });
+    const warehouses = await Warehouse.findAll({
+      attributes: [
+        'id', 'name', 'description', 'active', 'sort_order', 'created_at',
+        [Sequelize.fn('COUNT', Sequelize.distinct(Sequelize.col('ProductStocks.product_id'))), 'product_count'],
+        [Sequelize.fn('COALESCE', Sequelize.fn('SUM', Sequelize.col('ProductStocks.qty')), 0), 'total_stock']
+      ],
+      include: [
+        { model: ProductStock, attributes: [], required: false },
+        { model: EmployeeWarehouse, attributes: ['employee_id'], required: false }
+      ],
+      group: ['Warehouse.id', 'EmployeeWarehouses.employee_id', 'EmployeeWarehouses.warehouse_id'],
+      order: [['sort_order', 'ASC'], ['name', 'ASC']],
+      subQuery: false
+    });
+
+    // Procesar para agrupar empleados asignados (Sequelize agrupa por cada fila de la asociación en el group by)
+    const processed = [];
+    const map = new Map();
+
+    warehouses.forEach(w => {
+      const id = w.id;
+      if (!map.has(id)) {
+        const item = w.toJSON();
+        item.assigned_employees = [];
+        if (w.EmployeeWarehouses && w.EmployeeWarehouses.length) {
+          item.assigned_employees = w.EmployeeWarehouses.map(ew => ({ employee_id: ew.employee_id }));
+        }
+        item.product_count = parseInt(item.product_count || 0);
+        item.total_stock   = parseFloat(item.total_stock || 0);
+        delete item.EmployeeWarehouses;
+        map.set(id, item);
+        processed.push(item);
+      } else {
+        // Si ya existe (por múltiples empleados), añadir el empleado si no está
+        const item = map.get(id);
+        if (w.EmployeeWarehouses && w.EmployeeWarehouses.length) {
+          w.EmployeeWarehouses.forEach(ew => {
+            if (!item.assigned_employees.find(e => e.employee_id === ew.employee_id)) {
+              item.assigned_employees.push({ employee_id: ew.employee_id });
+            }
+          });
+        }
+      }
+    });
+
+    res.json({ ok: true, data: processed });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener almacenes" });
@@ -29,16 +61,30 @@ const getAll = async (req, res) => {
 // GET /api/warehouses/:id/stock
 const getStock = async (req, res) => {
   try {
-    const { rows } = await pool.query(`
-      SELECT ps.product_id, ps.qty, p.name AS product_name, p.unit, p.price,
-             p.cost_price, p.image_filename, c.name AS category_name
-      FROM product_stock ps
-      JOIN products    p ON p.id = ps.product_id
-      LEFT JOIN categories c ON c.id = p.category_id
-      WHERE ps.warehouse_id = $1
-      ORDER BY c.name, p.name
-    `, [req.params.id]);
-    res.json({ ok: true, data: rows });
+    const stocks = await ProductStock.findAll({
+      where: { warehouse_id: req.params.id },
+      include: [
+        { 
+          model: Product, 
+          attributes: ['name', 'unit', 'price', 'cost_price', 'image_filename'],
+          include: [{ model: Category, attributes: ['name'] }]
+        }
+      ],
+      order: [[Product, Category, 'name', 'ASC'], [Product, 'name', 'ASC']]
+    });
+
+    const data = stocks.map(s => ({
+      product_id: s.product_id,
+      qty: parseFloat(s.qty),
+      product_name: s.Product?.name,
+      unit: s.Product?.unit,
+      price: parseFloat(s.Product?.price || 0),
+      cost_price: parseFloat(s.Product?.cost_price || 0),
+      image_filename: s.Product?.image_filename,
+      category_name: s.Product?.Category?.name ?? 'Sin Categoría'
+    }));
+
+    res.json({ ok: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener stock" });
@@ -48,13 +94,16 @@ const getStock = async (req, res) => {
 // GET /api/warehouses/employee/:employeeId
 const getByEmployee = async (req, res) => {
   try {
-    const { rows } = await pool.query(`
-      SELECT w.* FROM warehouses w
-      JOIN employee_warehouses ew ON ew.warehouse_id = w.id
-      WHERE ew.employee_id = $1 AND w.active = TRUE
-      ORDER BY w.sort_order, w.name
-    `, [req.params.employeeId]);
-    res.json({ ok: true, data: rows });
+    const warehouses = await Warehouse.findAll({
+      include: [{
+        model: EmployeeWarehouse,
+        where: { employee_id: req.params.employeeId },
+        attributes: []
+      }],
+      where: { active: true },
+      order: [['sort_order', 'ASC'], ['name', 'ASC']]
+    });
+    res.json({ ok: true, data: warehouses });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener almacenes del empleado" });
@@ -97,8 +146,8 @@ const update = async (req, res) => {
 // DELETE /api/warehouses/:id
 const remove = async (req, res) => {
   try {
-    const { rows: [{ total }] } = await pool.query("SELECT COALESCE(SUM(qty), 0) AS total FROM product_stock WHERE warehouse_id = $1", [req.params.id]);
-    if (parseFloat(total) > 0) return res.status(400).json({ ok: false, message: "No se puede eliminar un almacén con stock. Transfiere o ajusta el stock primero." });
+    const total = await ProductStock.sum('qty', { where: { warehouse_id: req.params.id } });
+    if (parseFloat(total || 0) > 0) return res.status(400).json({ ok: false, message: "No se puede eliminar un almacén con stock. Transfiere o ajusta el stock primero." });
 
     const warehouse = await Warehouse.findByPk(req.params.id);
     if (!warehouse) return res.status(404).json({ ok: false, message: "Almacén no encontrado" });
@@ -111,46 +160,59 @@ const remove = async (req, res) => {
   }
 };
 
-// POST /api/warehouses/transfer — raw SQL for transactional integrity
+// POST /api/warehouses/transfer
 const transfer = async (req, res) => {
-  const client = await pool.connect();
+  const transaction = await sequelize.transaction();
   try {
     const { from_warehouse_id, to_warehouse_id, product_id, qty, note } = req.body;
-    if (!to_warehouse_id || !product_id || !qty) return res.status(400).json({ ok: false, message: "to_warehouse_id, product_id y qty son requeridos" });
-    if (from_warehouse_id && parseInt(from_warehouse_id) === parseInt(to_warehouse_id)) return res.status(400).json({ ok: false, message: "El almacén origen y destino deben ser distintos" });
+    if (!to_warehouse_id || !product_id || !qty) throw new Error("to_warehouse_id, product_id y qty son requeridos");
+    if (from_warehouse_id && parseInt(from_warehouse_id) === parseInt(to_warehouse_id)) throw new Error("El almacén origen y destino deben ser distintos");
 
     const parsedQty = parseFloat(qty);
-    if (isNaN(parsedQty) || parsedQty <= 0) return res.status(400).json({ ok: false, message: "La cantidad debe ser mayor a 0" });
+    if (isNaN(parsedQty) || parsedQty <= 0) throw new Error("La cantidad debe ser mayor a 0");
 
-    await client.query("BEGIN");
-
-    const { rows: [product] } = await client.query("SELECT name FROM products WHERE id = $1", [product_id]);
+    const product = await Product.findByPk(product_id, { transaction, lock: true });
     if (!product) throw new Error("Producto no encontrado");
 
     if (from_warehouse_id) {
-      const { rows: [stockRow] } = await client.query("SELECT qty FROM product_stock WHERE warehouse_id=$1 AND product_id=$2 FOR UPDATE", [from_warehouse_id, product_id]);
-      const available = parseFloat(stockRow?.qty || 0);
+      const fromStock = await ProductStock.findOne({
+        where: { warehouse_id: from_warehouse_id, product_id },
+        transaction,
+        lock: true
+      });
+      const available = parseFloat(fromStock?.qty || 0);
       if (available < parsedQty) throw new Error(`Stock insuficiente en el almacén origen. Disponible: ${available}`);
-      await client.query("UPDATE product_stock SET qty = qty - $1 WHERE warehouse_id=$2 AND product_id=$3", [parsedQty, from_warehouse_id, product_id]);
+      await fromStock.decrement('qty', { by: parsedQty, transaction });
     }
 
-    await client.query(`INSERT INTO product_stock (warehouse_id, product_id, qty) VALUES ($1,$2,$3) ON CONFLICT (warehouse_id, product_id) DO UPDATE SET qty = product_stock.qty + EXCLUDED.qty`, [to_warehouse_id, product_id, parsedQty]);
+    const [toStock] = await ProductStock.findOrCreate({
+      where: { warehouse_id: to_warehouse_id, product_id },
+      defaults: { qty: 0 },
+      transaction,
+      lock: true
+    });
+    await toStock.increment('qty', { by: parsedQty, transaction });
 
-    const { rows: [transferRow] } = await client.query(
-      `INSERT INTO stock_transfers (from_warehouse_id, to_warehouse_id, product_id, product_name, qty, note, employee_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [from_warehouse_id || null, to_warehouse_id, product_id, product.name, parsedQty, note || null, req.employee?.id || null]
-    );
+    const transferRow = await StockTransfer.create({
+      from_warehouse_id: from_warehouse_id || null,
+      to_warehouse_id,
+      product_id,
+      product_name: product.name,
+      qty: parsedQty,
+      note: note || null,
+      employee_id: req.employee?.id || null
+    }, { transaction });
 
-    await client.query(`UPDATE products SET stock = (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id=$1) WHERE id=$1`, [product_id]);
+    // Sincronizar stock total
+    const totalStock = await ProductStock.sum('qty', { where: { product_id }, transaction });
+    await product.update({ stock: totalStock }, { transaction });
 
-    await client.query("COMMIT");
+    await transaction.commit();
     res.status(201).json({ ok: true, data: transferRow });
   } catch (err) {
-    await client.query("ROLLBACK");
+    if (transaction) await transaction.rollback();
     const status = /insuficiente|no encontrado/i.test(err.message) ? 400 : 500;
     res.status(status).json({ ok: false, message: err.message });
-  } finally {
-    client.release();
   }
 };
 
@@ -158,25 +220,39 @@ const transfer = async (req, res) => {
 const getTransfers = async (req, res) => {
   try {
     const { warehouse_id, product_id, limit = 50 } = req.query;
-    let where = "WHERE 1=1";
-    const params = [];
+    
+    const where = {};
+    if (warehouse_id) {
+      where[Op.or] = [
+        { from_warehouse_id: warehouse_id },
+        { to_warehouse_id: warehouse_id }
+      ];
+    }
+    if (product_id) where.product_id = product_id;
 
-    if (warehouse_id) { params.push(warehouse_id); where += ` AND (st.from_warehouse_id = $${params.length} OR st.to_warehouse_id = $${params.length})`; }
-    if (product_id) { params.push(product_id); where += ` AND st.product_id = $${params.length}`; }
-    params.push(limit);
+    const transfers = await StockTransfer.findAll({
+      where,
+      include: [
+        { model: Warehouse, as: 'FromWarehouse', attributes: ['name'], required: false },
+        { model: Warehouse, as: 'ToWarehouse', attributes: ['name'], required: false },
+        { model: Employee, attributes: ['full_name'], required: false }
+      ],
+      order: [['created_at', 'DESC']],
+      limit: parseInt(limit)
+    });
 
-    const { rows } = await pool.query(`
-      SELECT st.*, wf.name AS from_warehouse_name, wt.name AS to_warehouse_name, e.full_name AS employee_name
-      FROM stock_transfers st
-      LEFT JOIN warehouses wf ON wf.id = st.from_warehouse_id
-      LEFT JOIN warehouses wt ON wt.id = st.to_warehouse_id
-      LEFT JOIN employees  e  ON e.id  = st.employee_id
-      ${where}
-      ORDER BY st.created_at DESC
-      LIMIT $${params.length}
-    `, params);
+    const data = transfers.map(t => {
+      const item = t.toJSON();
+      item.from_warehouse_name = item.FromWarehouse?.name ?? null;
+      item.to_warehouse_name   = item.ToWarehouse?.name   ?? null;
+      item.employee_name       = item.Employee?.full_name ?? null;
+      delete item.FromWarehouse;
+      delete item.ToWarehouse;
+      delete item.Employee;
+      return item;
+    });
 
-    res.json({ ok: true, data: rows });
+    res.json({ ok: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener transferencias" });
@@ -185,46 +261,59 @@ const getTransfers = async (req, res) => {
 
 // PUT /api/warehouses/:id/employees
 const assignEmployees = async (req, res) => {
-  const client = await pool.connect();
+  const transaction = await sequelize.transaction();
   try {
     const { employee_ids = [] } = req.body;
     const warehouseId = req.params.id;
-    await client.query("BEGIN");
-    await client.query("DELETE FROM employee_warehouses WHERE warehouse_id = $1", [warehouseId]);
+
+    await EmployeeWarehouse.destroy({ where: { warehouse_id: warehouseId }, transaction });
+    
     for (const empId of employee_ids) {
-      await client.query("INSERT INTO employee_warehouses (employee_id, warehouse_id) VALUES ($1,$2) ON CONFLICT DO NOTHING", [empId, warehouseId]);
+      await EmployeeWarehouse.create({ employee_id: empId, warehouse_id: warehouseId }, { transaction });
     }
-    await client.query("COMMIT");
+
+    await transaction.commit();
     res.json({ ok: true, message: "Empleados asignados correctamente" });
   } catch (err) {
-    await client.query("ROLLBACK");
+    if (transaction) await transaction.rollback();
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al asignar empleados" });
-  } finally {
-    client.release();
   }
 };
 
 // POST /api/warehouses/:id/stock
 const addStock = async (req, res) => {
+  const transaction = await sequelize.transaction();
   try {
     const { product_id, qty } = req.body;
     const warehouseId = parseInt(req.params.id);
-    if (!product_id || qty == null) return res.status(400).json({ ok: false, message: "product_id y qty son requeridos" });
+    if (!product_id || qty == null) throw new Error("product_id y qty son requeridos");
 
     const parsedQty = parseFloat(qty);
-    if (isNaN(parsedQty) || parsedQty < 0) return res.status(400).json({ ok: false, message: "La cantidad debe ser mayor o igual a 0" });
+    if (isNaN(parsedQty) || parsedQty < 0) throw new Error("La cantidad debe ser mayor o igual a 0");
 
-    const product = await Product.findByPk(product_id, { attributes: ['id', 'name'] });
-    if (!product) return res.status(404).json({ ok: false, message: "Producto no encontrado" });
+    const product = await Product.findByPk(product_id, { transaction, lock: true });
+    if (!product) throw new Error("Producto no encontrado");
 
-    await pool.query(`INSERT INTO product_stock (warehouse_id, product_id, qty) VALUES ($1,$2,$3) ON CONFLICT (warehouse_id, product_id) DO UPDATE SET qty = EXCLUDED.qty`, [warehouseId, product_id, parsedQty]);
-    await pool.query(`UPDATE products SET stock = (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id=$1) WHERE id=$1`, [product_id]);
+    const [stockEntry] = await ProductStock.findOrCreate({
+      where: { warehouse_id: warehouseId, product_id },
+      defaults: { qty: 0 },
+      transaction,
+      lock: true
+    });
+    
+    await stockEntry.update({ qty: parsedQty }, { transaction });
 
+    // Sincronizar stock total
+    const totalStock = await ProductStock.sum('qty', { where: { product_id }, transaction });
+    await product.update({ stock: totalStock }, { transaction });
+
+    await transaction.commit();
     res.json({ ok: true, message: `${product.name} agregado al almacén con ${parsedQty} unidades` });
   } catch (err) {
+    if (transaction) await transaction.rollback();
     console.error(err);
-    res.status(500).json({ ok: false, message: "Error al agregar producto al almacén" });
+    res.status(500).json({ ok: false, message: err.message || "Error al agregar producto al almacén" });
   }
 };
 
@@ -232,26 +321,42 @@ const addStock = async (req, res) => {
 const getProducts = async (req, res) => {
   try {
     const { search } = req.query;
-    let where = "WHERE ps.warehouse_id = $1";
-    const params = [req.params.id];
-
+    
+    const productWhere = {};
     if (search) {
-      params.push(`%${search}%`);
-      where += ` AND (p.name ILIKE $${params.length} OR c.name ILIKE $${params.length})`;
+      productWhere[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { '$Category.name$': { [Op.iLike]: `%${search}%` } }
+      ];
     }
 
-    const { rows } = await pool.query(`
-      SELECT p.id, p.name, p.price, p.unit, p.qty_step, p.image_filename, p.cost_price,
-             ps.qty AS stock, c.name AS category_name, c.id AS category_id,
-             CASE WHEN p.image_filename IS NOT NULL THEN '/uploads/' || p.image_filename ELSE NULL END AS image_url
-      FROM product_stock ps
-      JOIN products    p ON p.id = ps.product_id
-      LEFT JOIN categories c ON c.id = p.category_id
-      ${where}
-      ORDER BY c.name, p.name
-    `, params);
+    const stocks = await ProductStock.findAll({
+      where: { warehouse_id: req.params.id },
+      include: [
+        { 
+          model: Product, 
+          where: productWhere,
+          include: [{ model: Category, attributes: ['name', 'id'] }]
+        }
+      ],
+      order: [[Product, Category, 'name', 'ASC'], [Product, 'name', 'ASC']]
+    });
 
-    res.json({ ok: true, data: rows });
+    const data = stocks.map(ps => ({
+      id: ps.Product.id,
+      name: ps.Product.name,
+      price: parseFloat(ps.Product.price),
+      unit: ps.Product.unit,
+      qty_step: parseFloat(ps.Product.qty_step),
+      image_filename: ps.Product.image_filename,
+      cost_price: parseFloat(ps.Product.cost_price || 0),
+      stock: parseFloat(ps.qty),
+      category_name: ps.Product.Category?.name,
+      category_id: ps.Product.Category?.id,
+      image_url: ps.Product.image_filename ? `/uploads/${ps.Product.image_filename}` : null
+    }));
+
+    res.json({ ok: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener productos del almacén" });

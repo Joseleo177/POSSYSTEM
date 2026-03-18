@@ -1,5 +1,7 @@
-const pool = require("../db/pool");
-const { Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Warehouse } = require("../models");
+const { 
+  Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Warehouse, Product, ProductStock, Sequelize, sequelize 
+} = require("../models");
+const { Op } = Sequelize;
 
 const PAYMENT_METHODS = ["efectivo", "transferencia", "pago_movil", "zelle", "punto_venta"];
 
@@ -7,56 +9,48 @@ const PAYMENT_METHODS = ["efectivo", "transferencia", "pago_movil", "zelle", "pu
 const getAll = async (req, res) => {
   try {
     const { limit = 50, offset = 0, date_from, date_to, payment_method } = req.query;
-    let where = "WHERE 1=1";
-    const params = [];
-
-    if (date_from) { params.push(date_from); where += ` AND s.created_at >= $${params.length}::date`; }
-    if (date_to)   { params.push(date_to);   where += ` AND s.created_at <  ($${params.length}::date + INTERVAL '1 day')`; }
+    
+    const where = {};
+    if (date_from || date_to) {
+      where.created_at = {};
+      if (date_from) where.created_at[Op.gte] = date_from;
+      if (date_to)   where.created_at[Op.lt]  = Sequelize.literal(`('${date_to}'::date + INTERVAL '1 day')`);
+    }
     if (payment_method && PAYMENT_METHODS.includes(payment_method)) {
-      params.push(payment_method); where += ` AND s.payment_method = $${params.length}`;
+      where.payment_method = payment_method;
     }
 
-    params.push(limit);  const limitIdx  = params.length;
-    params.push(offset); const offsetIdx = params.length;
+    const { count, rows: sales } = await Sale.findAndCountAll({
+      where,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [['created_at', 'DESC']],
+      include: [
+        { model: Customer, attributes: ['name'], required: false },
+        { model: Employee, attributes: ['full_name'], required: false },
+        { model: Currency, attributes: ['symbol', 'code'], required: false },
+        { model: PaymentJournal, attributes: ['name', 'color'], required: false },
+        { model: Warehouse, attributes: ['name'], required: false },
+        { model: SaleItem, required: true }
+      ],
+      distinct: true // Necesario para contar cabeceras correctamente con includes de items
+    });
 
-    const { rows: sales } = await pool.query(
-      `SELECT s.*,
-              c.name        AS customer_name,
-              e.full_name   AS employee_name,
-              cur.symbol    AS currency_symbol,
-              cur.code      AS currency_code,
-              pj.name       AS journal_name,
-              pj.color      AS journal_color,
-              w.name        AS warehouse_name,
-              json_agg(json_build_object(
-                'id',         si.id,
-                'product_id', si.product_id,
-                'name',       si.name,
-                'price',      si.price,
-                'quantity',   si.quantity,
-                'discount',   si.discount,
-                'subtotal',   si.subtotal
-              ) ORDER BY si.id) AS items
-       FROM sales s
-       LEFT JOIN customers        c   ON c.id   = s.customer_id
-       LEFT JOIN employees        e   ON e.id   = s.employee_id
-       LEFT JOIN currencies       cur ON cur.id = s.currency_id
-       LEFT JOIN payment_journals pj  ON pj.id  = s.payment_journal_id
-       LEFT JOIN warehouses       w   ON w.id   = s.warehouse_id
-       JOIN  sale_items si ON si.sale_id = s.id
-       ${where}
-       GROUP BY s.id, c.name, e.full_name, cur.symbol, cur.code, pj.name, pj.color, w.name
-       ORDER BY s.created_at DESC
-       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
-      params
-    );
+    const data = sales.map(s => {
+      const item = s.toJSON();
+      item.customer_name   = item.Customer?.name ?? null;
+      item.employee_name   = item.Employee?.full_name ?? null;
+      item.currency_symbol = item.Currency?.symbol ?? null;
+      item.currency_code   = item.Currency?.code ?? null;
+      item.journal_name    = item.PaymentJournal?.name ?? null;
+      item.journal_color   = item.PaymentJournal?.color ?? null;
+      item.warehouse_name  = item.Warehouse?.name ?? null;
+      item.items = item.SaleItems ?? [];
+      ['Customer','Employee','Currency','PaymentJournal','Warehouse','SaleItems'].forEach(k => delete item[k]);
+      return item;
+    });
 
-    const countParams = params.slice(0, params.length - 2);
-    const { rows: [{ count }] } = await pool.query(
-      `SELECT COUNT(DISTINCT s.id) FROM sales s ${where}`, countParams
-    );
-
-    res.json({ ok: true, data: sales, total: parseInt(count) });
+    res.json({ ok: true, data, total: count });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener ventas" });
@@ -67,40 +61,58 @@ const getAll = async (req, res) => {
 const getStats = async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    let where = "WHERE 1=1";
-    const params = [];
-    if (date_from) { params.push(date_from); where += ` AND created_at >= $${params.length}::date`; }
-    if (date_to)   { params.push(date_to);   where += ` AND created_at <  ($${params.length}::date + INTERVAL '1 day')`; }
+    const where = {};
+    if (date_from || date_to) {
+      where.created_at = {};
+      if (date_from) where.created_at[Op.gte] = date_from;
+      if (date_to)   where.created_at[Op.lt]  = Sequelize.literal(`('${date_to}'::date + INTERVAL '1 day')`);
+    }
 
-    const { rows: [summary] } = await pool.query(`
-      SELECT
-        COUNT(*)                        AS total_sales,
-        COALESCE(SUM(total), 0)         AS total_revenue,
-        COALESCE(AVG(total), 0)         AS avg_sale,
-        COALESCE(MAX(total), 0)         AS max_sale,
-        COUNT(CASE WHEN created_at >= CURRENT_DATE THEN 1 END)  AS sales_today,
-        COALESCE(SUM(CASE WHEN created_at >= CURRENT_DATE THEN total ELSE 0 END), 0) AS revenue_today
-      FROM sales ${where}
-    `, params);
+    // Resumen general
+    const stats = await Sale.findOne({
+      where,
+      attributes: [
+        [Sequelize.fn('COUNT', Sequelize.col('id')), 'total_sales'],
+        [Sequelize.fn('SUM', Sequelize.col('total')), 'total_revenue'],
+        [Sequelize.fn('AVG', Sequelize.col('total')), 'avg_sale'],
+        [Sequelize.fn('MAX', Sequelize.col('total')), 'max_sale'],
+        [Sequelize.literal(`COUNT(CASE WHEN "created_at" >= CURRENT_DATE THEN 1 END)`), 'sales_today'],
+        [Sequelize.literal(`COALESCE(SUM(CASE WHEN "created_at" >= CURRENT_DATE THEN total ELSE 0 END), 0)`), 'revenue_today']
+      ],
+      raw: true
+    });
 
-    const { rows: byMethod } = await pool.query(`
-      SELECT payment_method,
-             COUNT(*)                AS count,
-             COALESCE(SUM(total), 0) AS total
-      FROM sales ${where}
-      GROUP BY payment_method
-      ORDER BY total DESC
-    `, params);
+    // Por método de pago
+    const byMethod = await Sale.findAll({
+      where,
+      attributes: [
+        'payment_method',
+        [Sequelize.fn('COUNT', Sequelize.col('id')), 'count'],
+        [Sequelize.fn('SUM', Sequelize.col('total')), 'total']
+      ],
+      group: ['payment_method'],
+      order: [[Sequelize.literal('total'), 'DESC']],
+      raw: true
+    });
 
-    res.json({ ok: true, data: { ...summary, by_method: byMethod } });
+    res.json({ ok: true, data: { 
+      total_sales: parseInt(stats.total_sales || 0),
+      total_revenue: parseFloat(stats.total_revenue || 0),
+      avg_sale: parseFloat(stats.avg_sale || 0),
+      max_sale: parseFloat(stats.max_sale || 0),
+      sales_today: parseInt(stats.sales_today || 0),
+      revenue_today: parseFloat(stats.revenue_today || 0),
+      by_method: byMethod 
+    } });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener estadísticas" });
   }
 };
 
-// POST /api/sales — uses raw transactions for data integrity + stock locking
+// POST /api/sales
 const create = async (req, res) => {
-  const client = await pool.connect();
+  const transaction = await sequelize.transaction();
   try {
     const {
       items, paid, customer_id, employee_id, currency_id,
@@ -108,45 +120,45 @@ const create = async (req, res) => {
       discount_amount, warehouse_id,
     } = req.body;
 
-    if (!items?.length)    return res.status(400).json({ ok: false, message: "items es requerido" });
-    if (paid == null)      return res.status(400).json({ ok: false, message: "paid es requerido" });
-    if (!warehouse_id)     return res.status(400).json({ ok: false, message: "warehouse_id es requerido" });
+    if (!items?.length)    throw new Error("items es requerido");
+    if (paid == null)      throw new Error("paid es requerido");
+    if (!warehouse_id)     throw new Error("warehouse_id es requerido");
 
     let method = PAYMENT_METHODS.includes(payment_method) ? payment_method : "efectivo";
     if (payment_journal_id) {
-      const { rows: jRows } = await pool.query(
-        "SELECT type FROM payment_journals WHERE id=$1", [payment_journal_id]
-      );
-      if (jRows.length) method = jRows[0].type;
+      const journal = await PaymentJournal.findByPk(payment_journal_id, { transaction });
+      if (journal) method = journal.type;
     }
 
     const discAmt   = parseFloat(discount_amount) || 0;
     const rate      = parseFloat(exchange_rate)   || 1;
-    const journalId = payment_journal_id ? parseInt(payment_journal_id) : null;
-
-    await client.query("BEGIN");
 
     let total = 0;
-    const enriched = [];
+    const enrichedItems = [];
 
     for (const item of items) {
-      const { rows: prodRows } = await client.query(
-        "SELECT id, name, price FROM products WHERE id = $1 FOR UPDATE",
-        [item.product_id]
-      );
-      if (!prodRows.length) throw new Error(`Producto ${item.product_id} no encontrado`);
-      const product = prodRows[0];
+      // Bloquear producto para asegurar integridad de stock global (opcional pero recomendado)
+      const product = await Product.findByPk(item.product_id, { transaction, lock: true });
+      if (!product) throw new Error(`Producto ${item.product_id} no encontrado`);
 
-      const { rows: stockRows } = await client.query(
-        "SELECT qty FROM product_stock WHERE warehouse_id = $1 AND product_id = $2 FOR UPDATE",
-        [warehouse_id, item.product_id]
-      );
-      const availableQty = parseFloat(stockRows[0]?.qty || 0);
-      if (availableQty < item.quantity)
-        throw new Error(`Stock insuficiente para "${product.name}" en este almacén. Disponible: ${availableQty}`);
+      // Bloquear stock específico en el almacén
+      const stockEntry = await ProductStock.findOne({
+        where: { warehouse_id, product_id: product.id },
+        transaction,
+        lock: true
+      });
+
+      const currentQty = parseFloat(stockEntry?.qty || 0);
+      if (currentQty < item.quantity) {
+        throw new Error(`Stock insuficiente para "${product.name}" en este almacén. Disponible: ${currentQty}`);
+      }
 
       total += parseFloat(product.price) * item.quantity;
-      enriched.push({ ...product, quantity: item.quantity });
+      enrichedItems.push({ 
+        product, 
+        qty: item.quantity,
+        stockEntry 
+      });
     }
 
     total = parseFloat((total - discAmt).toFixed(2));
@@ -156,33 +168,45 @@ const create = async (req, res) => {
     if (paidBase < total - 0.01) throw new Error("Pago insuficiente");
     const change = parseFloat((paidBase - total).toFixed(2));
 
-    const { rows: [sale] } = await client.query(
-      `INSERT INTO sales
-         (total, paid, change, customer_id, employee_id, currency_id, exchange_rate,
-          discount_amount, payment_method, payment_journal_id, warehouse_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [total, paidBase, change, customer_id||null, employee_id||null, currency_id||null,
-       rate, discAmt, method, journalId, warehouse_id]
-    );
+    const sale = await Sale.create({
+      total,
+      paid: paidBase,
+      change,
+      customer_id: customer_id || null,
+      employee_id: employee_id || null,
+      currency_id: currency_id || null,
+      exchange_rate: rate,
+      discount_amount: discAmt,
+      payment_method: method,
+      payment_journal_id: payment_journal_id || null,
+      warehouse_id
+    }, { transaction });
 
-    for (const p of enriched) {
-      await client.query(
-        "INSERT INTO sale_items (sale_id, product_id, name, price, quantity) VALUES ($1,$2,$3,$4,$5)",
-        [sale.id, p.id, p.name, p.price, p.quantity]
-      );
-      await client.query(
-        "UPDATE product_stock SET qty = qty - $1 WHERE warehouse_id = $2 AND product_id = $3",
-        [p.quantity, warehouse_id, p.id]
-      );
-      await client.query(
-        `UPDATE products SET stock = (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = $1) WHERE id = $1`,
-        [p.id]
-      );
+    for (const entry of enrichedItems) {
+      // Crear línea de venta
+      await SaleItem.create({
+        sale_id: sale.id,
+        product_id: entry.product.id,
+        name: entry.product.name,
+        price: entry.product.price,
+        quantity: entry.qty,
+        discount: 0 // Simplificación, expandible si hay descuentos por item
+      }, { transaction });
+
+      // Descontar del almacén
+      await entry.stockEntry.decrement('qty', { by: entry.qty, transaction });
+
+      // Sincronizar stock total del producto
+      const totalStock = await ProductStock.sum('qty', { 
+        where: { product_id: entry.product.id }, 
+        transaction 
+      });
+      await entry.product.update({ stock: totalStock }, { transaction });
     }
 
-    await client.query("COMMIT");
+    await transaction.commit();
 
-    // Use Sequelize for the enriched response
+    // Obtener venta completa para respuesta
     const fullSale = await Sale.findByPk(sale.id, {
       include: [
         { model: Customer, attributes: ['name'] },
@@ -193,8 +217,6 @@ const create = async (req, res) => {
         { model: SaleItem }
       ]
     });
-
-    if (!fullSale) return res.status(201).json({ ok: true, data: sale });
 
     const data = fullSale.toJSON();
     data.customer_name   = data.Customer?.name ?? null;
@@ -209,50 +231,51 @@ const create = async (req, res) => {
 
     res.status(201).json({ ok: true, data });
   } catch (err) {
-    await client.query("ROLLBACK");
+    if (transaction) await transaction.rollback();
     const status = /insuficiente|no encontrado/i.test(err.message) ? 400 : 500;
     res.status(status).json({ ok: false, message: err.message });
-  } finally {
-    client.release();
   }
 };
 
 // DELETE /api/sales/:id
 const cancel = async (req, res) => {
-  const client = await pool.connect();
+  const transaction = await sequelize.transaction();
   try {
-    await client.query("BEGIN");
-    const { rows: [sale] } = await client.query("SELECT id, warehouse_id FROM sales WHERE id = $1", [req.params.id]);
-    if (!sale) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ ok: false, message: "Venta no encontrada" });
-    }
+    const sale = await Sale.findByPk(req.params.id, { 
+      include: [{ model: SaleItem }],
+      transaction,
+      lock: true 
+    });
+    
+    if (!sale) throw new Error("Venta no encontrada");
 
-    const { rows: items } = await client.query("SELECT product_id, quantity FROM sale_items WHERE sale_id = $1", [req.params.id]);
-
-    for (const item of items) {
+    for (const item of sale.SaleItems) {
       if (!item.product_id) continue;
-      if (sale.warehouse_id) {
-        await client.query(
-          `INSERT INTO product_stock (warehouse_id, product_id, qty) VALUES ($1, $2, $3)
-           ON CONFLICT (warehouse_id, product_id) DO UPDATE SET qty = product_stock.qty + EXCLUDED.qty`,
-          [sale.warehouse_id, item.product_id, item.quantity]
-        );
-      }
-      await client.query(
-        `UPDATE products SET stock = (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = $1) WHERE id = $1`,
-        [item.product_id]
-      );
+      
+      // Restaurar en almacén
+      const [stockEntry] = await ProductStock.findOrCreate({
+        where: { warehouse_id: sale.warehouse_id, product_id: item.product_id },
+        defaults: { qty: 0 },
+        transaction,
+        lock: true
+      });
+      await stockEntry.increment('qty', { by: item.quantity, transaction });
+
+      // Sincronizar stock total de producto
+      const totalStock = await ProductStock.sum('qty', { 
+        where: { product_id: item.product_id }, 
+        transaction 
+      });
+      await Product.update({ stock: totalStock }, { where: { id: item.product_id }, transaction });
     }
 
-    await client.query("DELETE FROM sales WHERE id = $1", [req.params.id]);
-    await client.query("COMMIT");
+    await sale.destroy({ transaction });
+    await transaction.commit();
     res.json({ ok: true, message: "Venta anulada y stock restaurado" });
   } catch (err) {
-    await client.query("ROLLBACK");
-    res.status(500).json({ ok: false, message: err.message });
-  } finally {
-    client.release();
+    if (transaction) await transaction.rollback();
+    const status = /no encontrada/i.test(err.message) ? 404 : 500;
+    res.status(status).json({ ok: false, message: err.message });
   }
 };
 

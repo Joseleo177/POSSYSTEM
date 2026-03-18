@@ -1,6 +1,6 @@
 const bcrypt = require("bcrypt");
 const jwt    = require("jsonwebtoken");
-const pool   = require("../db/pool");
+const { Employee, Role } = require("../models");
 
 const SECRET  = process.env.JWT_SECRET || "supersecretkey_change_in_production";
 const EXPIRES = "12h";
@@ -12,14 +12,11 @@ const login = async (req, res) => {
     if (!username || !password)
       return res.status(400).json({ ok: false, message: "Usuario y contraseña requeridos" });
 
-    const { rows } = await pool.query(
-      `SELECT e.*, r.name AS role_name, r.label AS role_label, r.permissions
-       FROM employees e JOIN roles r ON r.id = e.role_id
-       WHERE e.username = $1`,
-      [username]
-    );
+    const emp = await Employee.findOne({
+      where: { username },
+      include: [{ model: Role, attributes: ['name', 'label', 'permissions'] }]
+    });
 
-    const emp = rows[0];
     if (!emp || !emp.active)
       return res.status(401).json({ ok: false, message: "Usuario no encontrado o inactivo" });
 
@@ -31,9 +28,9 @@ const login = async (req, res) => {
       id:          emp.id,
       username:    emp.username,
       full_name:   emp.full_name,
-      role:        emp.role_name,
-      role_label:  emp.role_label,
-      permissions: emp.permissions,
+      role:        emp.Role?.name  ?? null,
+      role_label:  emp.Role?.label ?? null,
+      permissions: emp.Role?.permissions ?? {},
     };
 
     const token = jwt.sign(payload, SECRET, { expiresIn: EXPIRES });
@@ -58,14 +55,18 @@ const changePassword = async (req, res) => {
     if (new_password.length < 6)
       return res.status(400).json({ ok: false, message: "La contraseña debe tener al menos 6 caracteres" });
 
-    const { rows } = await pool.query("SELECT password_hash FROM employees WHERE id=$1", [req.employee.id]);
-    const valid = await bcrypt.compare(current_password, rows[0].password_hash);
+    const emp = await Employee.findByPk(req.employee.id);
+    if (!emp) return res.status(404).json({ ok: false, message: "Empleado no encontrado" });
+
+    const valid = await bcrypt.compare(current_password, emp.password_hash);
     if (!valid) return res.status(401).json({ ok: false, message: "Contraseña actual incorrecta" });
 
     const hash = await bcrypt.hash(new_password, 10);
-    await pool.query("UPDATE employees SET password_hash=$1 WHERE id=$2", [hash, req.employee.id]);
+    await emp.update({ password_hash: hash });
+    
     res.json({ ok: true, message: "Contraseña actualizada" });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ ok: false, message: "Error al cambiar contraseña" });
   }
 };

@@ -38,7 +38,7 @@ Object.keys(db).forEach(modelName => {
 });
 
 // Centralized associations
-const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem } = db;
+const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse } = db;
 
 if(Employee && Role) {
   Employee.belongsTo(Role, { foreignKey: 'role_id' });
@@ -81,6 +81,29 @@ if(Purchase && Customer && Employee && Warehouse && PurchaseItem && Product) {
   PurchaseItem.belongsTo(Purchase, { foreignKey: 'purchase_id' });
   PurchaseItem.belongsTo(Product, { foreignKey: 'product_id' });
 }
+
+if(Product && Warehouse && ProductStock) {
+  Product.belongsToMany(Warehouse, { through: ProductStock, foreignKey: 'product_id' });
+  Warehouse.belongsToMany(Product, { through: ProductStock, foreignKey: 'warehouse_id' });
+  Product.hasMany(ProductStock, { foreignKey: 'product_id' });
+  Warehouse.hasMany(ProductStock, { foreignKey: 'warehouse_id' });
+}
+
+if(Employee && Warehouse && EmployeeWarehouse) {
+  Employee.belongsToMany(Warehouse, { through: EmployeeWarehouse, foreignKey: 'employee_id' });
+  Warehouse.belongsToMany(Employee, { through: EmployeeWarehouse, foreignKey: 'warehouse_id' });
+  Employee.hasMany(EmployeeWarehouse, { foreignKey: 'employee_id' });
+  Warehouse.hasMany(EmployeeWarehouse, { foreignKey: 'warehouse_id' });
+}
+
+if(StockTransfer && Warehouse && Product && Employee) {
+  StockTransfer.belongsTo(Warehouse, { as: 'FromWarehouse', foreignKey: 'from_warehouse_id' });
+  StockTransfer.belongsTo(Warehouse, { as: 'ToWarehouse', foreignKey: 'to_warehouse_id' });
+  StockTransfer.belongsTo(Product, { foreignKey: 'product_id' });
+  StockTransfer.belongsTo(Employee, { foreignKey: 'employee_id' });
+}
+
+const { Setting } = db;
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;

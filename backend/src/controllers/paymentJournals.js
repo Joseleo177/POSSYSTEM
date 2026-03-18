@@ -94,34 +94,55 @@ const remove = async (req, res) => {
 };
 
 // GET /api/payment-journals/summary
-// This query uses complex CASE/SUM logic — kept as a Raw Query for performance
-const rawPool = require("../db/pool");
-
 const summary = async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    let dateFilter = "";
-    const params = [];
-    if (date_from) { params.push(date_from); dateFilter += ` AND s.created_at >= $${params.length}::date`; }
-    if (date_to)   { params.push(date_to);   dateFilter += ` AND s.created_at <  ($${params.length}::date + INTERVAL '1 day')`; }
+    
+    // Filtros de fecha dinámicos
+    const saleWhere = {};
+    if (date_from || date_to) {
+      saleWhere.created_at = {};
+      if (date_from) saleWhere.created_at[Op.gte] = date_from;
+      if (date_to)   saleWhere.created_at[Op.lt]  = Sequelize.literal(`('${date_to}'::date + INTERVAL '1 day')`);
+    }
 
-    const { rows } = await rawPool.query(`
-      SELECT
-        pj.id, pj.name, pj.type, pj.bank_id, b.name AS bank_name, pj.color,
-        pj.currency_id, cur.code AS currency_code, cur.symbol AS currency_symbol, cur.is_base AS currency_is_base,
-        COUNT(s.id) AS tx_count,
-        COALESCE(SUM(CASE WHEN cur.id IS NULL OR cur.is_base = TRUE THEN s.total ELSE s.total * s.exchange_rate END), 0) AS total_ingresos,
-        COALESCE(SUM(CASE WHEN s.created_at >= CURRENT_DATE THEN CASE WHEN cur.id IS NULL OR cur.is_base = TRUE THEN s.total ELSE s.total * s.exchange_rate END END), 0) AS ingresos_hoy
-      FROM payment_journals pj
-      LEFT JOIN currencies cur ON cur.id = pj.currency_id
-      LEFT JOIN banks b ON b.id = pj.bank_id
-      LEFT JOIN sales s ON s.payment_journal_id = pj.id ${dateFilter}
-      WHERE pj.active = TRUE
-      GROUP BY pj.id, cur.id, cur.code, cur.symbol, cur.is_base, b.name
-      ORDER BY pj.sort_order, pj.id
-    `, params);
+    const journals = await PaymentJournal.findAll({
+      attributes: [
+        'id', 'name', 'type', 'bank_id', 'color', 'currency_id',
+        [Sequelize.fn('COUNT', Sequelize.col('Sales.id')), 'tx_count'],
+        // Total histórico o filtrado por parámetros
+        [Sequelize.literal(`COALESCE(SUM(CASE WHEN "Currency"."is_base" = TRUE OR "Currency"."id" IS NULL THEN "Sales"."total" ELSE "Sales"."total" * "Sales"."exchange_rate" END), 0)`), 'total_ingresos'],
+        // Ingresos de HOY (independiente del filtro global de la petición)
+        [Sequelize.literal(`COALESCE(SUM(CASE WHEN "Sales"."created_at" >= CURRENT_DATE THEN CASE WHEN "Currency"."is_base" = TRUE OR "Currency"."id" IS NULL THEN "Sales"."total" ELSE "Sales"."total" * "Sales"."exchange_rate" END END), 0)`), 'ingresos_hoy']
+      ],
+      include: [
+        { model: Currency, attributes: ['code', 'symbol', 'is_base'], required: false },
+        { model: Bank, attributes: ['name'], required: false },
+        { model: Sale, attributes: [], required: false, where: saleWhere }
+      ],
+      where: { active: true },
+      group: [
+        'PaymentJournal.id', 
+        'Currency.id', 'Currency.code', 'Currency.symbol', 'Currency.is_base',
+        'Bank.id', 'Bank.name'
+      ],
+      order: [['sort_order', 'ASC'], ['id', 'ASC']],
+      subQuery: false // Importante para que el LIMIT/OFFSET no rompa las agregaciones
+    });
 
-    res.json({ ok: true, data: rows });
+    // Aplanar resultado para mantener compatibilidad con el frontend
+    const data = journals.map(j => {
+      const jj = j.get({ plain: true });
+      jj.bank_name        = jj.Bank?.name        ?? null;
+      jj.currency_code    = jj.Currency?.code    ?? null;
+      jj.currency_symbol  = jj.Currency?.symbol  ?? null;
+      jj.currency_is_base = jj.Currency?.is_base ?? null;
+      delete jj.Bank;
+      delete jj.Currency;
+      return jj;
+    });
+
+    res.json({ ok: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener resumen" });
