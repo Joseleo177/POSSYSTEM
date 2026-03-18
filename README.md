@@ -15,17 +15,13 @@ pos-system/
 │   ├── package.json
 │   └── src/
 │       ├── index.js            ← Entrada Express
+│       ├── config/             ← Configuración de Sequelize
 │       ├── db/
-│       │   ├── pool.js         ← Conexión PostgreSQL
-│       │   └── init.sql        ← Tablas + datos de ejemplo
-│       ├── controllers/
-│       │   ├── products.js
-│       │   ├── sales.js
-│       │   └── categories.js
-│       └── routes/
-│           ├── products.js
-│           ├── sales.js
-│           └── categories.js
+│       │   ├── pool.js         ← Conexión Raw para transacciones críticas
+│       │   └── init.sql        ← Tablas (18) + datos iniciales (Unificado)
+│       ├── models/             ← Modelos Sequelize ORM
+│       ├── controllers/        ← Controladores refactorizados a ORM
+│       └── routes/             ← Definición de rutas API
 └── frontend/
     ├── Dockerfile
     ├── package.json
@@ -35,7 +31,7 @@ pos-system/
         ├── main.jsx
         ├── App.jsx             ← UI principal
         └── services/
-            └── api.js          ← Capa de comunicación con el backend
+            └── api.js          ← Comunicación con el backend
 ```
 
 ---
@@ -103,16 +99,22 @@ docker compose up --build
 
 ---
 
-## 🗄️ Base de Datos
+## 🗄️ Base de Datos y ORM
 
-Tablas principales:
+El sistema utiliza **Sequelize ORM** para la mayoría de las operaciones, garantizando un código limpio y escalable. Para operaciones críticas de stock, se utilizan transacciones SQL puras.
 
-- **`categories`** — Categorías de productos
-- **`products`** — Productos con precio y stock
-- **`sales`** — Cabecera de cada venta
-- **`sale_items`** — Líneas de detalle por venta (con snapshot de precio)
+Tablas principales (18 en total):
 
-El stock se descuenta automáticamente en cada venta usando una **transacción PostgreSQL**.
+- **`products`** — Maestro de productos con costos y márgenes.
+- **`warehouses` & `product_stock`** — Gestión multi-almacén.
+- **`sales` & `sale_items`** — Ventas y detalle.
+- **`purchases` & `purchase_items`** — Compras a proveedores.
+- **`customers`** — Clientes y proveedores.
+- **`banks` & `payment_methods`** — Finanzas dinámicas.
+- **`currencies`** — Manejo de multimoneda y tasas de cambio.
+- **`employees` & `roles`** — Gestión de usuarios y permisos.
+
+El stock se gestiona automáticamente mediante transacciones PostgreSQL para evitar inconsistencias.
 
 ---
 
