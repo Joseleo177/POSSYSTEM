@@ -1,4 +1,4 @@
-const { Sequelize, Customer, Sale, SaleItem } = require("../models");
+const { Sequelize, Customer, Sale, Purchase } = require("../models");
 
 // GET /api/customers
 const getAll = async (req, res) => {
@@ -172,13 +172,21 @@ const update = async (req, res) => {
 const remove = async (req, res) => {
   try {
     const customer = await Customer.findByPk(req.params.id);
-    if (!customer) return res.status(404).json({ ok: false, message: "Cliente no encontrado" });
+    if (!customer) return res.status(404).json({ ok: false, message: "Registro no encontrado" });
     
+    // Verificar si tiene ventas (como cliente)
+    const saleCount = await Sale.count({ where: { customer_id: req.params.id } });
+    if (saleCount > 0) return res.status(400).json({ ok: false, message: "No se puede eliminar: tiene ventas asociadas" });
+
+    // Verificar si tiene compras (como proveedor)
+    const purchaseCount = await Purchase.count({ where: { supplier_id: req.params.id } });
+    if (purchaseCount > 0) return res.status(400).json({ ok: false, message: "No se puede eliminar: tiene compras asociadas" });
+
     await customer.destroy();
-    res.json({ ok: true, message: "Cliente eliminado" });
+    res.json({ ok: true, message: "Registro eliminado exitosamente" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ ok: false, message: "Error al eliminar cliente" });
+    res.status(500).json({ ok: false, message: "Error al eliminar registro" });
   }
 };
 

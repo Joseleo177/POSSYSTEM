@@ -7,8 +7,9 @@ function getToken() {
 async function request(path, options = {}) {
   const isFormData = options.body instanceof FormData;
   const token = getToken();
+  const method = options.method || "GET";
   const headers = {
-    ...(isFormData ? {} : { "Content-Type": "application/json" }),
+    ...(isFormData || ["GET", "DELETE"].includes(method) ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };

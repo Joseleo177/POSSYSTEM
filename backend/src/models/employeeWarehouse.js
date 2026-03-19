@@ -4,8 +4,7 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class EmployeeWarehouse extends Model {
     static associate(models) {
-      EmployeeWarehouse.belongsTo(models.Employee, { foreignKey: 'employee_id' });
-      EmployeeWarehouse.belongsTo(models.Warehouse, { foreignKey: 'warehouse_id' });
+      // Associations are managed in models/index.js
     }
   }
   EmployeeWarehouse.init({

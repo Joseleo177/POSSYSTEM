@@ -186,15 +186,21 @@ const create = async (req, res) => {
 const remove = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
+    // 1. Bloquear la compra (sin include para evitar error de PostgreSQL con outer join + FOR UPDATE)
     const purchase = await Purchase.findByPk(req.params.id, { 
-      include: [{ model: PurchaseItem }], 
       transaction, 
       lock: true 
     });
     
     if (!purchase) throw new Error("Compra no encontrada");
 
-    for (const item of purchase.PurchaseItems) {
+    // 2. Cargar los ítems por separado (o refrescar con include pero sin lock)
+    const items = await PurchaseItem.findAll({
+      where: { purchase_id: purchase.id },
+      transaction
+    });
+
+    for (const item of items) {
       if (!item.product_id) continue;
       
       // Restar del almacén
@@ -209,7 +215,7 @@ const remove = async (req, res) => {
 
       // Sincronizar stock total
       const totalStock = await ProductStock.sum('qty', { where: { product_id: item.product_id }, transaction });
-      await Product.update({ stock: totalStock }, { where: { id: item.product_id }, transaction });
+      await Product.update({ stock: totalStock || 0 }, { where: { id: item.product_id }, transaction });
     }
 
     await purchase.destroy({ transaction });

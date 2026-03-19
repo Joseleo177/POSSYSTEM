@@ -4,10 +4,7 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class StockTransfer extends Model {
     static associate(models) {
-      StockTransfer.belongsTo(models.Warehouse, { as: 'FromWarehouse', foreignKey: 'from_warehouse_id' });
-      StockTransfer.belongsTo(models.Warehouse, { as: 'ToWarehouse', foreignKey: 'to_warehouse_id' });
-      StockTransfer.belongsTo(models.Product, { foreignKey: 'product_id' });
-      StockTransfer.belongsTo(models.Employee, { foreignKey: 'employee_id' });
+      // Associations are managed in models/index.js
     }
   }
   StockTransfer.init({
@@ -18,11 +15,11 @@ module.exports = (sequelize, DataTypes) => {
     },
     product_id: DataTypes.INTEGER,
     product_name: {
-      type: DataTypes.VARCHAR(200),
+      type: DataTypes.STRING(200),
       allowNull: false
     },
     qty: {
-      type: DataTypes.NUMERIC(10, 3),
+      type: DataTypes.DECIMAL(10, 3),
       allowNull: false
     },
     note: DataTypes.TEXT,
@@ -31,6 +28,8 @@ module.exports = (sequelize, DataTypes) => {
     sequelize,
     tableName: 'stock_transfers',
     modelName: 'StockTransfer',
+    underscored: true,
+    createdAt: 'created_at',
     updatedAt: false
   });
   return StockTransfer;

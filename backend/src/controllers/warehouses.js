@@ -1,5 +1,5 @@
-const { 
-  Warehouse, Product, Category, ProductStock, EmployeeWarehouse, StockTransfer, Employee, Sequelize, sequelize 
+const {
+  Warehouse, Product, Category, ProductStock, EmployeeWarehouse, StockTransfer, Employee, Sale, Purchase, Sequelize, sequelize
 } = require("../models");
 const { Op } = Sequelize;
 
@@ -9,7 +9,7 @@ const getAll = async (req, res) => {
     const warehouses = await Warehouse.findAll({
       attributes: [
         'id', 'name', 'description', 'active', 'sort_order', 'created_at',
-        [Sequelize.fn('COUNT', Sequelize.distinct(Sequelize.col('ProductStocks.product_id'))), 'product_count'],
+        [Sequelize.fn('COUNT', Sequelize.literal('DISTINCT "ProductStocks"."product_id"')), 'product_count'],
         [Sequelize.fn('COALESCE', Sequelize.fn('SUM', Sequelize.col('ProductStocks.qty')), 0), 'total_stock']
       ],
       include: [
@@ -34,7 +34,7 @@ const getAll = async (req, res) => {
           item.assigned_employees = w.EmployeeWarehouses.map(ew => ({ employee_id: ew.employee_id }));
         }
         item.product_count = parseInt(item.product_count || 0);
-        item.total_stock   = parseFloat(item.total_stock || 0);
+        item.total_stock = parseFloat(item.total_stock || 0);
         delete item.EmployeeWarehouses;
         map.set(id, item);
         processed.push(item);
@@ -64,8 +64,8 @@ const getStock = async (req, res) => {
     const stocks = await ProductStock.findAll({
       where: { warehouse_id: req.params.id },
       include: [
-        { 
-          model: Product, 
+        {
+          model: Product,
           attributes: ['name', 'unit', 'price', 'cost_price', 'image_filename'],
           include: [{ model: Category, attributes: ['name'] }]
         }
@@ -145,16 +145,47 @@ const update = async (req, res) => {
 
 // DELETE /api/warehouses/:id
 const remove = async (req, res) => {
+  const transaction = await sequelize.transaction();
   try {
-    const total = await ProductStock.sum('qty', { where: { warehouse_id: req.params.id } });
-    if (parseFloat(total || 0) > 0) return res.status(400).json({ ok: false, message: "No se puede eliminar un almacén con stock. Transfiere o ajusta el stock primero." });
-
-    const warehouse = await Warehouse.findByPk(req.params.id);
+    const warehouseId = req.params.id;
+    const warehouse = await Warehouse.findByPk(warehouseId);
     if (!warehouse) return res.status(404).json({ ok: false, message: "Almacén no encontrado" });
 
-    await warehouse.destroy();
-    res.json({ ok: true, message: "Almacén eliminado" });
+    // 1. Verificar stock real (> 0)
+    const total = await ProductStock.sum('qty', { where: { warehouse_id: warehouseId } });
+    if (parseFloat(total || 0) > 0) {
+      return res.status(400).json({ ok: false, message: "No se puede eliminar un almacén con stock. Transfiere o ajusta el stock primero." });
+    }
+
+    // 2. Verificar historial de movimientos CRÍTICOS (Ventas y Compras)
+    const saleCount = await Sale.count({ where: { warehouse_id: warehouseId } });
+    const purchaseCount = await Purchase.count({ where: { warehouse_id: warehouseId } });
+    
+    if (saleCount > 0 || purchaseCount > 0) {
+      return res.status(400).json({
+        ok: false,
+        message: "No se puede eliminar físicamente el almacén porque tiene historial de VENTAS o COMPRAS. Intenta desactivarlo en su lugar."
+      });
+    }
+
+    // 3. Limpiar tablas asociadas (Transferencias, Stock y Empleados)
+    // Borramos transferencias donde el almacén participe
+    await StockTransfer.destroy({
+      where: {
+        [Op.or]: [{ from_warehouse_id: warehouseId }, { to_warehouse_id: warehouseId }]
+      },
+      transaction
+    });
+    await ProductStock.destroy({ where: { warehouse_id: warehouseId }, transaction });
+    await EmployeeWarehouse.destroy({ where: { warehouse_id: warehouseId }, transaction });
+
+    // 4. Eliminar el almacén
+    await warehouse.destroy({ transaction });
+
+    await transaction.commit();
+    res.json({ ok: true, message: "Almacén eliminado exitosamente" });
   } catch (err) {
+    if (transaction) await transaction.rollback();
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al eliminar almacén" });
   }
@@ -220,7 +251,7 @@ const transfer = async (req, res) => {
 const getTransfers = async (req, res) => {
   try {
     const { warehouse_id, product_id, limit = 50 } = req.query;
-    
+
     const where = {};
     if (warehouse_id) {
       where[Op.or] = [
@@ -244,8 +275,8 @@ const getTransfers = async (req, res) => {
     const data = transfers.map(t => {
       const item = t.toJSON();
       item.from_warehouse_name = item.FromWarehouse?.name ?? null;
-      item.to_warehouse_name   = item.ToWarehouse?.name   ?? null;
-      item.employee_name       = item.Employee?.full_name ?? null;
+      item.to_warehouse_name = item.ToWarehouse?.name ?? null;
+      item.employee_name = item.Employee?.full_name ?? null;
       delete item.FromWarehouse;
       delete item.ToWarehouse;
       delete item.Employee;
@@ -267,7 +298,7 @@ const assignEmployees = async (req, res) => {
     const warehouseId = req.params.id;
 
     await EmployeeWarehouse.destroy({ where: { warehouse_id: warehouseId }, transaction });
-    
+
     for (const empId of employee_ids) {
       await EmployeeWarehouse.create({ employee_id: empId, warehouse_id: warehouseId }, { transaction });
     }
@@ -301,7 +332,7 @@ const addStock = async (req, res) => {
       transaction,
       lock: true
     });
-    
+
     await stockEntry.update({ qty: parsedQty }, { transaction });
 
     // Sincronizar stock total
@@ -321,7 +352,7 @@ const addStock = async (req, res) => {
 const getProducts = async (req, res) => {
   try {
     const { search } = req.query;
-    
+
     const productWhere = {};
     if (search) {
       productWhere[Op.or] = [
@@ -333,8 +364,8 @@ const getProducts = async (req, res) => {
     const stocks = await ProductStock.findAll({
       where: { warehouse_id: req.params.id },
       include: [
-        { 
-          model: Product, 
+        {
+          model: Product,
           where: productWhere,
           include: [{ model: Category, attributes: ['name', 'id'] }]
         }

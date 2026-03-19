@@ -1,6 +1,6 @@
 const path = require("path");
 const fs   = require("fs");
-const { Product, Category, Sequelize } = require("../models");
+const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, Sequelize } = require("../models");
 const Op = Sequelize.Op;
 
 const imageUrl = (filename) =>
@@ -162,10 +162,40 @@ const remove = async (req, res) => {
     const product = await Product.findByPk(req.params.id);
     if (!product) return res.status(404).json({ ok: false, message: "Producto no encontrado" });
 
+    // 1. Verificar si tiene stock en algún almacén
+    const stockQty = await ProductStock.sum('qty', { where: { product_id: req.params.id } });
+    if (parseFloat(stockQty || 0) > 0) {
+      return res.status(400).json({ ok: false, message: "No se puede eliminar: el producto tiene existencias en inventario" });
+    }
+
+    // 2. Verificar si tiene historial de ventas
+    const saleCount = await SaleItem.count({ where: { product_id: req.params.id } });
+    if (saleCount > 0) {
+      return res.status(400).json({ ok: false, message: "No se puede eliminar: tiene historial de ventas asociadas" });
+    }
+
+    // 3. Verificar si tiene historial de compras
+    const purchaseCount = await PurchaseItem.count({ where: { product_id: req.params.id } });
+    if (purchaseCount > 0) {
+      return res.status(400).json({ ok: false, message: "No se puede eliminar: tiene historial de compras asociadas" });
+    }
+
+    // 4. Verificar si tiene transferencias
+    const transferCount = await StockTransfer.count({ where: { product_id: req.params.id } });
+    if (transferCount > 0) {
+      return res.status(400).json({ ok: false, message: "No se puede eliminar: tiene historial de transferencias" });
+    }
+
+    // Si todo está limpio, borrar imagen y registro
     deleteOldImage(product.image_filename);
+    
+    // También borrar registros de Stock con qty 0
+    await ProductStock.destroy({ where: { product_id: req.params.id } });
+
     await product.destroy();
-    res.json({ ok: true, message: "Producto eliminado" });
+    res.json({ ok: true, message: "Producto eliminado exitosamente" });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ ok: false, message: "Error al eliminar producto" });
   }
 };

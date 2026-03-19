@@ -65,6 +65,10 @@ if(Sale && Customer && Employee && Currency && PaymentJournal && Warehouse && Pa
   Sale.belongsTo(PaymentJournal, { foreignKey: 'payment_journal_id' });
   Sale.belongsTo(Warehouse, { foreignKey: 'warehouse_id' });
   Sale.belongsTo(PaymentMethod, { foreignKey: 'payment_method_id' });
+  PaymentMethod.hasMany(Sale, { foreignKey: 'payment_method_id' });
+
+  // Inversa necesaria para el summary de diarios de pago
+  PaymentJournal.hasMany(Sale, { foreignKey: 'payment_journal_id' });
 
   Sale.hasMany(SaleItem, { foreignKey: 'sale_id' });
   SaleItem.belongsTo(Sale, { foreignKey: 'sale_id' });
@@ -87,6 +91,9 @@ if(Product && Warehouse && ProductStock) {
   Warehouse.belongsToMany(Product, { through: ProductStock, foreignKey: 'warehouse_id' });
   Product.hasMany(ProductStock, { foreignKey: 'product_id' });
   Warehouse.hasMany(ProductStock, { foreignKey: 'warehouse_id' });
+  // Inversas necesarias para eager loading desde ProductStock
+  ProductStock.belongsTo(Product, { foreignKey: 'product_id' });
+  ProductStock.belongsTo(Warehouse, { foreignKey: 'warehouse_id' });
 }
 
 if(Employee && Warehouse && EmployeeWarehouse) {

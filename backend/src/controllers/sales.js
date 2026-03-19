@@ -241,15 +241,21 @@ const create = async (req, res) => {
 const cancel = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
+    // 1. Bloquear la venta (sin include para evitar error de PostgreSQL con outer join + FOR UPDATE)
     const sale = await Sale.findByPk(req.params.id, { 
-      include: [{ model: SaleItem }],
-      transaction,
+      transaction, 
       lock: true 
     });
     
     if (!sale) throw new Error("Venta no encontrada");
 
-    for (const item of sale.SaleItems) {
+    // 2. Cargar los ítems por separado
+    const items = await SaleItem.findAll({
+      where: { sale_id: sale.id },
+      transaction
+    });
+
+    for (const item of items) {
       if (!item.product_id) continue;
       
       // Restaurar en almacén
@@ -266,7 +272,7 @@ const cancel = async (req, res) => {
         where: { product_id: item.product_id }, 
         transaction 
       });
-      await Product.update({ stock: totalStock }, { where: { id: item.product_id }, transaction });
+      await Product.update({ stock: totalStock || 0 }, { where: { id: item.product_id }, transaction });
     }
 
     await sale.destroy({ transaction });

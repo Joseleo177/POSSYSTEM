@@ -4,8 +4,7 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class ProductStock extends Model {
     static associate(models) {
-      ProductStock.belongsTo(models.Warehouse, { foreignKey: 'warehouse_id' });
-      ProductStock.belongsTo(models.Product, { foreignKey: 'product_id' });
+      // Associations are managed in models/index.js
     }
   }
   ProductStock.init({
@@ -20,7 +19,7 @@ module.exports = (sequelize, DataTypes) => {
       references: { model: 'products', key: 'id' }
     },
     qty: {
-      type: DataTypes.NUMERIC(10, 3),
+      type: DataTypes.DECIMAL(10, 3),
       allowNull: false,
       defaultValue: 0
     }
