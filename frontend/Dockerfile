@@ -3,7 +3,10 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+
+# Cache de npm entre builds — solo re-descarga si cambia package.json
+RUN --mount=type=cache,target=/root/.npm \
+    npm install
 
 COPY . .
 

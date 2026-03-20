@@ -1,0 +1,100 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-size: 16px;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-surface-2 text-content dark:bg-surface-dark dark:text-content-dark;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  * {
+    @apply border-border dark:border-border-dark;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar        { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track  { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb  { @apply bg-border dark:bg-border-dark rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-content-subtle dark:bg-content-dark-muted; }
+}
+
+@layer components {
+  /* ── Botones ── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 font-medium rounded-md
+           transition-all duration-150 cursor-pointer select-none
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-1;
+  }
+  .btn-sm  { @apply btn px-3 py-1.5 text-sm; }
+  .btn-md  { @apply btn px-4 py-2 text-base; }
+  .btn-lg  { @apply btn px-5 py-2.5 text-lg; }
+
+  .btn-primary {
+    @apply bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700
+           dark:bg-brand-500 dark:hover:bg-brand-400;
+  }
+  .btn-secondary {
+    @apply bg-surface-3 text-content border border-border hover:bg-border
+           dark:bg-surface-dark-3 dark:text-content-dark dark:border-border-dark dark:hover:bg-surface-dark-2;
+  }
+  .btn-danger {
+    @apply bg-danger text-white hover:bg-red-600 active:bg-red-700;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-content-muted hover:bg-surface-3 hover:text-content
+           dark:hover:bg-surface-dark-3 dark:text-content-dark-muted dark:hover:text-content-dark;
+  }
+  .btn-success {
+    @apply bg-success text-white hover:bg-emerald-600 active:bg-emerald-700;
+  }
+
+  /* ── Inputs ── */
+  .input {
+    @apply w-full px-3 py-2 text-base rounded-md
+           bg-white border border-border text-content placeholder-content-subtle
+           transition-colors duration-150
+           focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400
+           disabled:opacity-50 disabled:cursor-not-allowed
+           dark:bg-surface-dark-2 dark:border-border-dark dark:text-content-dark
+           dark:placeholder-content-dark-muted dark:focus:border-brand-400;
+  }
+  .input-sm { @apply input text-sm px-2.5 py-1.5; }
+
+  /* ── Cards ── */
+  .card {
+    @apply bg-white rounded-lg border border-border shadow-card p-4
+           dark:bg-surface-dark-2 dark:border-border-dark dark:shadow-card-dark;
+  }
+  .card-md { @apply card shadow-card-md dark:shadow-card-dark-md; }
+
+  /* ── Badges de estado ── */
+  .badge { @apply inline-flex items-center px-2 py-0.5 rounded text-2xs font-semibold uppercase tracking-wide; }
+  .badge-success { @apply badge bg-success/15 text-emerald-700 dark:bg-success/20 dark:text-emerald-400; }
+  .badge-warning { @apply badge bg-warning/15 text-amber-700 dark:bg-warning/20 dark:text-amber-400; }
+  .badge-danger  { @apply badge bg-danger/15 text-red-700 dark:bg-danger/20 dark:text-red-400; }
+  .badge-info    { @apply badge bg-info/15 text-blue-700 dark:bg-info/20 dark:text-blue-400; }
+  .badge-neutral { @apply badge bg-surface-3 text-content-muted dark:bg-surface-dark-3 dark:text-content-dark-muted; }
+
+  /* ── Labels de formulario ── */
+  .label { @apply block text-xs font-medium text-content-muted dark:text-content-dark-muted mb-1 uppercase tracking-wide; }
+
+  /* ── Divisor ── */
+  .divider { @apply border-t border-border dark:border-border-dark my-4; }
+
+  /* ── Tabla ── */
+  .table-pos { @apply w-full text-sm border-collapse; }
+  .table-pos th { @apply text-left text-2xs font-semibold text-content-muted dark:text-content-dark-muted uppercase tracking-wide py-2 px-3 border-b border-border dark:border-border-dark; }
+  .table-pos td { @apply py-2.5 px-3 border-b border-border/60 dark:border-border-dark/60 text-content dark:text-content-dark; }
+  .table-pos tr:last-child td { @apply border-b-0; }
+  .table-pos tr:hover td { @apply bg-surface-2 dark:bg-surface-dark-3; }
+}

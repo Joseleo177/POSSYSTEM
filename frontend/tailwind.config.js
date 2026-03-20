@@ -1,0 +1,75 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        surface: {
+          DEFAULT: "#ffffff",
+          2:       "#f8f9fb",
+          3:       "#f1f3f6",
+          dark:    "#0f1117",
+          "dark-2":"#161b27",
+          "dark-3":"#1c2333",
+        },
+        border: {
+          DEFAULT: "#e2e6ed",
+          dark:    "#252d3d",
+        },
+        content: {
+          DEFAULT:  "#1a2234",
+          muted:    "#6b7a99",
+          subtle:   "#9ba8c0",
+          dark:     "#e8edf5",
+          "dark-muted": "#8896b3",
+        },
+        brand: {
+          50:  "#edfafa",
+          100: "#d5f5f6",
+          200: "#aaeaea",
+          300: "#5ed0d3",
+          400: "#2cb8be",
+          500: "#0d9da4",
+          600: "#0b8a90",
+          700: "#0a737a",
+          800: "#085d63",
+          900: "#064b50",
+        },
+        success: { DEFAULT: "#10b981", light: "#d1fae5", dark: "#065f46" },
+        warning: { DEFAULT: "#f59e0b", light: "#fef3c7", dark: "#78350f" },
+        danger:  { DEFAULT: "#ef4444", light: "#fee2e2", dark: "#7f1d1d" },
+        info:    { DEFAULT: "#3b82f6", light: "#dbeafe", dark: "#1e3a8a" },
+      },
+      fontFamily: {
+        sans: ["Inter", "system-ui", "sans-serif"],
+        mono: ["'JetBrains Mono'", "'Fira Code'", "monospace"],
+      },
+      fontSize: {
+        "2xs": ["0.75rem",  { lineHeight: "1.125rem" }],
+        xs:    ["0.8125rem",{ lineHeight: "1.25rem" }],
+        sm:    ["0.875rem", { lineHeight: "1.375rem" }],
+        base:  ["1rem",     { lineHeight: "1.5rem" }],
+        lg:    ["1.125rem", { lineHeight: "1.75rem" }],
+        xl:    ["1.25rem",  { lineHeight: "1.875rem" }],
+        "2xl": ["1.5rem",   { lineHeight: "2rem" }],
+        "3xl": ["1.875rem", { lineHeight: "2.25rem" }],
+      },
+      boxShadow: {
+        card:        "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+        "card-md":   "0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04)",
+        "card-lg":   "0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.05)",
+        "card-dark":    "0 1px 3px rgba(0,0,0,0.4)",
+        "card-dark-md": "0 4px 12px rgba(0,0,0,0.5)",
+      },
+      borderRadius: {
+        DEFAULT: "0.5rem",
+        sm: "0.375rem",
+        md: "0.5rem",
+        lg: "0.75rem",
+        xl: "1rem",
+      },
+    },
+  },
+  plugins: [],
+};
