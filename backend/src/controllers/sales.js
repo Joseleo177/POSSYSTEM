@@ -1,5 +1,5 @@
-const { 
-  Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Warehouse, Product, ProductStock, Sequelize, sequelize 
+const {
+  Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Warehouse, Product, ProductStock, Serie, SerieRange, Sequelize, sequelize
 } = require("../models");
 const { Op } = Sequelize;
 
@@ -8,45 +8,52 @@ const PAYMENT_METHODS = ["efectivo", "transferencia", "pago_movil", "zelle", "pu
 // GET /api/sales
 const getAll = async (req, res) => {
   try {
-    const { limit = 50, offset = 0, date_from, date_to, payment_method } = req.query;
-    
+    const { limit = 50, offset = 0, date_from, date_to, payment_method, status, serie_id } = req.query;
+
     const where = {};
     if (date_from || date_to) {
       where.created_at = {};
       if (date_from) where.created_at[Op.gte] = date_from;
       if (date_to)   where.created_at[Op.lt]  = Sequelize.literal(`('${date_to}'::date + INTERVAL '1 day')`);
     }
-    if (payment_method && PAYMENT_METHODS.includes(payment_method)) {
-      where.payment_method = payment_method;
-    }
+    if (payment_method && PAYMENT_METHODS.includes(payment_method)) where.payment_method = payment_method;
+    if (status)   where.status   = status;
+    if (serie_id) where.serie_id = parseInt(serie_id);
 
     const { count, rows: sales } = await Sale.findAndCountAll({
       where,
       limit: parseInt(limit),
       offset: parseInt(offset),
       order: [['created_at', 'DESC']],
+      attributes: {
+        include: [
+          [Sequelize.literal(`(SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = "Sale"."id")`), 'amount_paid'],
+          [Sequelize.literal(`(SELECT exchange_rate FROM payments WHERE sale_id = "Sale"."id" ORDER BY created_at DESC LIMIT 1)`), 'final_payment_rate'],
+        ]
+      },
       include: [
-        { model: Customer, attributes: ['name'], required: false },
-        { model: Employee, attributes: ['full_name'], required: false },
-        { model: Currency, attributes: ['symbol', 'code'], required: false },
-        { model: PaymentJournal, attributes: ['name', 'color'], required: false },
-        { model: Warehouse, attributes: ['name'], required: false },
-        { model: SaleItem, required: true }
+        { model: Customer,  attributes: ['name'],         required: false },
+        { model: Employee,  attributes: ['full_name'],    required: false },
+        { model: Currency,  attributes: ['symbol','code'],required: false },
+        { model: Warehouse, attributes: ['name'],         required: false },
+        { model: Serie,     attributes: ['name','prefix'],required: false },
+        { model: SaleItem,  required: true },
       ],
-      distinct: true // Necesario para contar cabeceras correctamente con includes de items
+      distinct: true
     });
 
     const data = sales.map(s => {
       const item = s.toJSON();
-      item.customer_name   = item.Customer?.name ?? null;
+      item.customer_name   = item.Customer?.name      ?? null;
       item.employee_name   = item.Employee?.full_name ?? null;
-      item.currency_symbol = item.Currency?.symbol ?? null;
-      item.currency_code   = item.Currency?.code ?? null;
-      item.journal_name    = item.PaymentJournal?.name ?? null;
-      item.journal_color   = item.PaymentJournal?.color ?? null;
-      item.warehouse_name  = item.Warehouse?.name ?? null;
-      item.items = item.SaleItems ?? [];
-      ['Customer','Employee','Currency','PaymentJournal','Warehouse','SaleItems'].forEach(k => delete item[k]);
+      item.currency_symbol = item.Currency?.symbol    ?? null;
+      item.currency_code   = item.Currency?.code      ?? null;
+      item.warehouse_name  = item.Warehouse?.name     ?? null;
+      item.serie_name      = item.Serie?.name         ?? null;
+      item.items           = item.SaleItems ?? [];
+      item.amount_paid     = parseFloat(item.amount_paid || 0);
+      item.balance         = parseFloat((parseFloat(item.total) - item.amount_paid).toFixed(2));
+      ['Customer','Employee','Currency','Warehouse','Serie','SaleItems'].forEach(k => delete item[k]);
       return item;
     });
 
@@ -116,19 +123,44 @@ const create = async (req, res) => {
   try {
     const {
       items, paid, customer_id, employee_id, currency_id,
-      exchange_rate, payment_method, payment_journal_id,
+      exchange_rate, payment_method, serie_id,
       discount_amount, warehouse_id,
     } = req.body;
 
-    if (!items?.length)    throw new Error("items es requerido");
-    if (paid == null)      throw new Error("paid es requerido");
-    if (!warehouse_id)     throw new Error("warehouse_id es requerido");
+    if (!items?.length) throw new Error("items es requerido");
+    if (paid == null)   throw new Error("paid es requerido");
+    if (!warehouse_id)  throw new Error("warehouse_id es requerido");
+    if (!serie_id)      throw new Error("La serie es requerida");
 
-    let method = PAYMENT_METHODS.includes(payment_method) ? payment_method : "efectivo";
-    if (payment_journal_id) {
-      const journal = await PaymentJournal.findByPk(payment_journal_id, { transaction });
-      if (journal) method = journal.type;
+    // Obtener rango activo de la serie (con bloqueo para evitar duplicados)
+    const serie = await Serie.findByPk(serie_id, { transaction });
+    if (!serie || !serie.active) throw new Error("Serie no encontrada o inactiva");
+
+    const activeRange = await SerieRange.findOne({
+      where: {
+        serie_id,
+        active: true,
+        current_number: { [Sequelize.Op.lte]: Sequelize.col('end_number') },
+      },
+      order: [['start_number', 'ASC']],
+      lock: true,
+      transaction,
+    });
+    if (!activeRange) throw new Error(`Serie "${serie.name}" agotada. Añade un nuevo rango en Contabilidad.`);
+
+    const correlativeNumber = activeRange.current_number;
+    const paddedNumber      = String(correlativeNumber).padStart(serie.padding, '0');
+    const invoiceNumber     = `${serie.prefix}-${paddedNumber}`;
+
+    // Avanzar correlativo
+    const nextNumber = correlativeNumber + 1;
+    if (nextNumber > activeRange.end_number) {
+      await activeRange.update({ current_number: nextNumber, active: false }, { transaction });
+    } else {
+      await activeRange.update({ current_number: nextNumber }, { transaction });
     }
+
+    const method = PAYMENT_METHODS.includes(payment_method) ? payment_method : "efectivo";
 
     const discAmt   = parseFloat(discount_amount) || 0;
     const rate      = parseFloat(exchange_rate)   || 1;
@@ -164,22 +196,24 @@ const create = async (req, res) => {
     total = parseFloat((total - discAmt).toFixed(2));
     if (total < 0) total = 0;
 
-    const paidBase = parseFloat(paid) / rate;
-    if (paidBase < total - 0.01) throw new Error("Pago insuficiente");
-    const change = parseFloat((paidBase - total).toFixed(2));
+    const paidBase = parseFloat(paid) || 0;
+    const change   = 0;
 
     const sale = await Sale.create({
       total,
-      paid: paidBase,
+      paid:               paidBase,
       change,
-      customer_id: customer_id || null,
-      employee_id: employee_id || null,
-      currency_id: currency_id || null,
-      exchange_rate: rate,
-      discount_amount: discAmt,
-      payment_method: method,
-      payment_journal_id: payment_journal_id || null,
-      warehouse_id
+      customer_id:        customer_id || null,
+      employee_id:        employee_id || null,
+      currency_id:        currency_id || null,
+      exchange_rate:      rate,
+      discount_amount:    discAmt,
+      payment_method:     method,
+      warehouse_id,
+      serie_id:           serie.id,
+      serie_range_id:     activeRange.id,
+      correlative_number: correlativeNumber,
+      invoice_number:     invoiceNumber,
     }, { transaction });
 
     for (const entry of enrichedItems) {
@@ -209,25 +243,24 @@ const create = async (req, res) => {
     // Obtener venta completa para respuesta
     const fullSale = await Sale.findByPk(sale.id, {
       include: [
-        { model: Customer, attributes: ['name'] },
-        { model: Employee, attributes: ['full_name'] },
-        { model: Currency, attributes: ['symbol', 'code'] },
-        { model: PaymentJournal, attributes: ['name', 'color'] },
+        { model: Customer,  attributes: ['name'] },
+        { model: Employee,  attributes: ['full_name'] },
+        { model: Currency,  attributes: ['symbol', 'code'] },
         { model: Warehouse, attributes: ['name'] },
-        { model: SaleItem }
+        { model: Serie,     attributes: ['name', 'prefix', 'padding'] },
+        { model: SaleItem },
       ]
     });
 
     const data = fullSale.toJSON();
-    data.customer_name   = data.Customer?.name ?? null;
-    data.employee_name   = data.Employee?.full_name ?? null;
-    data.currency_symbol = data.Currency?.symbol ?? null;
-    data.currency_code   = data.Currency?.code ?? null;
-    data.journal_name    = data.PaymentJournal?.name ?? null;
-    data.journal_color   = data.PaymentJournal?.color ?? null;
-    data.warehouse_name  = data.Warehouse?.name ?? null;
+    data.customer_name   = data.Customer?.name         ?? null;
+    data.employee_name   = data.Employee?.full_name    ?? null;
+    data.currency_symbol = data.Currency?.symbol       ?? null;
+    data.currency_code   = data.Currency?.code         ?? null;
+    data.warehouse_name  = data.Warehouse?.name        ?? null;
+    data.serie_name      = data.Serie?.name            ?? null;
     data.items = data.SaleItems ?? [];
-    ['Customer','Employee','Currency','PaymentJournal','Warehouse','SaleItems'].forEach(k => delete data[k]);
+    ['Customer','Employee','Currency','Warehouse','Serie','SaleItems'].forEach(k => delete data[k]);
 
     res.status(201).json({ ok: true, data });
   } catch (err) {

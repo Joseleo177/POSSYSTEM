@@ -8,7 +8,7 @@ const getAll = async (req, res) => {
     const rows = await Setting.findAll({ order: [['key', 'ASC']] });
     const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
     if (settings.logo_filename) {
-      settings.logo_url = `${req.protocol}://${req.get("host")}/uploads/${settings.logo_filename}`;
+      settings.logo_url = `/uploads/${settings.logo_filename}`;
     }
     res.json({ ok: true, data: settings });
   } catch (err) {
@@ -52,7 +52,7 @@ const uploadLogo = async (req, res) => {
 
     res.json({
       ok: true,
-      logo_url: `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`,
+      logo_url: `/uploads/${req.file.filename}`,
     });
   } catch (err) {
     console.error(err);

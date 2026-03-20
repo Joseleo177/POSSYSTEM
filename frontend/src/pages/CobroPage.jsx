@@ -3,6 +3,8 @@ import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
 import { api } from "../services/api";
 import CustomerModal from "../components/CustomerModal";
+import ReceiptModal from "../components/ReceiptModal";
+import PaymentFormModal from "../components/PaymentFormModal";
 
 const fmt = (n, symbol = "$") => `${symbol}${Number(n).toFixed(2)}`;
 
@@ -19,11 +21,10 @@ export default function CobroPage() {
 
   const {
     cart, addToCart, removeFromCart, changeQty, setQtyDirect,
-    totalBase, totalDisplay, paid, change,
-    payInput, setPayInput,
+    totalBase, totalDisplay,
     currentCurrency, setSelectedCurrency, exchangeRate,
     convertToDisplay,
-    selectedJournalId, selectJournal,
+    selectedSerieId, selectSerie, mySeries, loadMySeries,
     selectedCustomer, setSelectedCustomer,
     employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
     checkout, loading, receipt, setReceipt,
@@ -42,7 +43,7 @@ const loadProducts = useCallback(async (q = "") => {
   } catch (e) { notify(e.message, "err"); }
 }, [activeWarehouse]);
 
-useEffect(() => { loadEmployeeWarehouses(); }, []);
+useEffect(() => { loadEmployeeWarehouses(); loadMySeries(); }, []);
 useEffect(() => { if (activeWarehouse) loadProducts(search); }, [activeWarehouse, search]);
 
   // ── Clientes ───────────────────────────────────────────────
@@ -76,8 +77,14 @@ useEffect(() => { if (activeWarehouse) loadProducts(search); }, [activeWarehouse
     setSavingCustomer(false);
   };
 
-  const currSym = currentCurrency?.symbol || baseCurrency?.symbol || "$";
+  const currSym  = currentCurrency?.symbol || baseCurrency?.symbol || "$";
   const fmtPrice = (n) => fmt(n, baseCurrency?.symbol || "$");
+
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+
+  // ── Pago inmediato tras generar factura ───────────────────
+  const [saleBalance,   setSaleBalance]   = useState(null); // { amount_paid, balance, status }
+  const [showPayModal,  setShowPayModal]  = useState(false);
 
   // ── Sin almacén asignado ───────────────────────────────────
   if (employeeWarehouses.length === 0) return (
@@ -92,38 +99,94 @@ useEffect(() => { if (activeWarehouse) loadProducts(search); }, [activeWarehouse
     </div>
   );
 
+  // ── Helpers de moneda del receipt ─────────────────────────
+  const receiptRate    = parseFloat(receipt?.exchange_rate || 1);
+  const receiptIsBase  = !receipt?.currency || receipt.currency.is_base;
+  const receiptSym     = receiptIsBase ? (baseCurrency?.symbol || "$") : (receipt?.currency?.symbol || "Bs.");
+  const fmtSale        = (n) => fmt(receiptIsBase ? n : n * receiptRate, receiptSym);
+  const currentBalance = saleBalance?.balance ?? parseFloat(receipt?.total || 0);
+  const currentStatus  = saleBalance?.status  ?? "pendiente";
+
+
   // ── Receipt ────────────────────────────────────────────────
-  if (receipt) return (
-    <div style={{ maxWidth:420,margin:"0 auto",background:"#1a1a1a",border:"1px solid #f0a500",borderRadius:6,padding:28,textAlign:"center" }}>
-      <div style={{ fontSize:28,marginBottom:6 }}>✓</div>
-      <div style={{ color:"#f0a500",fontWeight:"bold",fontSize:16,letterSpacing:3,marginBottom:receipt.customerName?8:16 }}>VENTA COMPLETADA</div>
-      {receipt.customerName && <div style={{ fontSize:12,color:"#5dade2",marginBottom:6 }}>Cliente: <b>{receipt.customerName}</b></div>}
-      {receipt.warehouse_name && <div style={{ fontSize:11,color:"#555",marginBottom:6 }}>Almacén: {receipt.warehouse_name}</div>}
-      {receipt.journal && (
-        <div style={{ fontSize:12,marginBottom:6,display:"inline-flex",alignItems:"center",gap:5,background:(receipt.journal.color||"#555")+"22",border:`1px solid ${(receipt.journal.color||"#555")}44`,padding:"3px 10px",borderRadius:3,color:receipt.journal.color||"#888" }}>
-          <div style={{ width:7,height:7,borderRadius:"50%",background:receipt.journal.color }} />{receipt.journal.name}
+  if (receipt) {
+    const statusColor = currentStatus === 'pagado' ? "#27ae60" : currentStatus === 'parcial' ? "#f0a500" : "#e74c3c";
+    const statusLabel = currentStatus === 'pagado' ? "PAGADO" : currentStatus === 'parcial' ? "PARCIAL" : "PENDIENTE";
+
+    return (
+    <div style={{ maxWidth:460,margin:"0 auto" }}>
+      {/* Cabecera */}
+      <div style={{ background:"#1a1a1a",border:`1px solid ${statusColor}`,borderRadius:6,padding:"16px 20px",marginBottom:12,display:"flex",alignItems:"center",gap:12 }}>
+        <div style={{ fontSize:24 }}>{currentStatus === 'pagado' ? "✓" : "📄"}</div>
+        <div>
+          <div style={{ color:statusColor,fontWeight:"bold",fontSize:14,letterSpacing:2 }}>FACTURA {receipt.invoice_number || `#${receipt.id}`}</div>
+          <div style={{ fontSize:11,color:"#555" }}>{new Date(receipt.created_at).toLocaleString("es-VE")}</div>
+          {receipt.customerName && <div style={{ fontSize:12,color:"#5dade2",marginTop:2 }}>👤 {receipt.customerName}</div>}
+        </div>
+        <div style={{ marginLeft:"auto",textAlign:"right" }}>
+          <div style={{ fontSize:18,fontWeight:"bold",color:"#f0a500" }}>{fmtSale(receipt.total)}</div>
+          {!receiptIsBase && <div style={{ fontSize:10,color:"#555" }}>{fmtPrice(receipt.total)} {baseCurrency?.code}</div>}
+          <span style={{ fontSize:10,background:statusColor+"22",color:statusColor,border:`1px solid ${statusColor}44`,padding:"1px 7px",borderRadius:3,letterSpacing:1 }}>{statusLabel}</span>
+        </div>
+      </div>
+
+      {/* Balance si es parcial */}
+      {currentStatus === 'parcial' && saleBalance && (
+        <div style={{ background:"#1a1a1a",border:"1px solid #f0a50044",borderRadius:6,padding:"10px 16px",marginBottom:12,display:"flex",justifyContent:"space-between",fontSize:12 }}>
+          <div>
+            <div style={{ color:"#555",fontSize:10,marginBottom:2 }}>PAGADO</div>
+            <div style={{ color:"#27ae60",fontWeight:"bold" }}>{fmtSale(saleBalance.amount_paid)}</div>
+          </div>
+          <div style={{ textAlign:"right" }}>
+            <div style={{ color:"#555",fontSize:10,marginBottom:2 }}>SALDO PENDIENTE</div>
+            <div style={{ color:"#e74c3c",fontWeight:"bold",fontSize:15 }}>{fmtSale(saleBalance.balance)}</div>
+          </div>
         </div>
       )}
-      {receipt.currency && !receipt.currency.is_base && (
-        <div style={{ fontSize:11,color:"#888",marginBottom:10 }}>Cobrado en {receipt.currency.code} · Tipo de cambio: {parseFloat(receipt.exchangeRate).toFixed(4)}</div>
+
+      {/* Botón de pago — solo si no está pagado */}
+      {currentStatus !== 'pagado' && (
+        <div style={{ marginBottom:12 }}>
+          <button onClick={() => setShowPayModal(true)}
+            style={{ width:"100%",background:"#27ae60",color:"#fff",border:"none",padding:"14px",borderRadius:6,
+                     fontFamily:"inherit",fontWeight:"bold",letterSpacing:2,cursor:"pointer",fontSize:14 }}>
+            💳 {currentStatus === 'parcial' ? "REGISTRAR ABONO" : "REGISTRAR PAGO"}
+            {currentStatus === 'parcial' && saleBalance && (
+              <span style={{ fontSize:11,fontWeight:"normal",marginLeft:8,opacity:0.8 }}>
+                Saldo: {fmtSale(saleBalance.balance)}
+              </span>
+            )}
+          </button>
+        </div>
       )}
-      <div style={{ borderTop:"1px dashed #333",borderBottom:"1px dashed #333",padding:"14px 0",marginBottom:14 }}>
-        {receipt.items?.map((i,idx) => (
-          <div key={idx} style={{ display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4 }}>
-            <span>{i.name} x{i.quantity}</span><span>{fmtPrice(i.subtotal)}</span>
-          </div>
-        ))}
+
+      {/* Modal de pago unificado */}
+      {showPayModal && receipt && (
+        <PaymentFormModal
+          sale={{ ...receipt, balance: currentBalance, amount_paid: saleBalance?.amount_paid ?? 0 }}
+          onClose={() => setShowPayModal(false)}
+          onSuccess={(res) => {
+            setSaleBalance({ amount_paid: res.amount_paid, balance: res.balance, status: res.sale_status });
+            setShowPayModal(false);
+          }}
+        />
+      )}
+
+      {/* Acciones finales */}
+      <div style={{ display:"flex",gap:10 }}>
+        <button onClick={() => setShowReceiptModal(true)}
+          style={{ background:"transparent",color:"#f0a500",border:"1px solid #f0a500",padding:"10px 14px",borderRadius:4,fontFamily:"inherit",cursor:"pointer",fontSize:12 }}>
+          🧾 Ver factura
+        </button>
+        <button onClick={() => { setReceipt(null); setSaleBalance(null); setShowPayModal(false); }}
+          style={{ flex:1,background:"#f0a500",color:"#0f0f0f",border:"none",padding:"10px",borderRadius:4,fontFamily:"inherit",fontWeight:"bold",letterSpacing:2,cursor:"pointer",fontSize:13 }}>
+          NUEVA VENTA
+        </button>
       </div>
-      <div style={{ display:"flex",justifyContent:"space-between",fontSize:14,marginBottom:4 }}>
-        <span>Total</span><span style={{ color:"#f0a500",fontWeight:"bold" }}>{fmtPrice(receipt.total)}</span>
-      </div>
-      <div style={{ fontSize:11,color:"#555",marginBottom:20 }}>{new Date(receipt.created_at).toLocaleString("es-VE")}</div>
-      <button onClick={() => setReceipt(null)}
-        style={{ background:"#f0a500",color:"#0f0f0f",border:"none",padding:"10px 28px",borderRadius:4,fontFamily:"inherit",fontWeight:"bold",letterSpacing:2,cursor:"pointer",fontSize:13 }}>
-        NUEVA VENTA
-      </button>
+
+      <ReceiptModal open={showReceiptModal} onClose={() => setShowReceiptModal(false)} sale={receipt} />
     </div>
-  );
+  );}
 
   return (
     <div>
@@ -217,30 +280,37 @@ useEffect(() => { if (activeWarehouse) loadProducts(search); }, [activeWarehouse
           <div style={{ borderTop:"1px solid #2a2a2a",paddingTop:12 }}>
             {/* Cliente */}
             <div style={{ marginBottom:12 }}>
-              <div style={{ fontSize:11,color:"#888",marginBottom:6,letterSpacing:1 }}>CLIENTE (opcional)</div>
+              <div style={{ fontSize:11,color:"#e74c3c",marginBottom:6,letterSpacing:1 }}>CLIENTE <span style={{ color:"#e74c3c" }}>*</span></div>
               {selectedCustomer
                 ? <div style={{ background:"#0d1f2b",border:"1px solid #2980b9",borderRadius:4,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                     <div>
                       <div style={{ fontSize:12,fontWeight:"bold",color:"#5dade2" }}>{selectedCustomer.name}</div>
-                      {selectedCustomer.rif && <div style={{ fontSize:10,color:"#555" }}>RIF: {selectedCustomer.rif}</div>}
+                      {selectedCustomer.rif && <div style={{ fontSize:10,color:"#888" }}>CI/RIF: {selectedCustomer.rif}</div>}
+                      {selectedCustomer.phone && <div style={{ fontSize:10,color:"#555" }}>{selectedCustomer.phone}</div>}
                     </div>
                     <button onClick={() => { setSelectedCustomer(null); setCustSearch(""); }} style={{ ...btnSmall,color:"#e74c3c",borderColor:"#e74c3c" }}>✕</button>
                   </div>
                 : <div style={{ position:"relative" }}>
                     <input value={custSearch} onChange={e => setCustSearch(e.target.value)}
-                      placeholder="Buscar cliente..."
-                      style={{ width:"100%",background:"#0f0f0f",border:"1px solid #333",color:"#e8e0d0",padding:"7px 10px",borderRadius:4,fontFamily:"inherit",fontSize:12,boxSizing:"border-box" }} />
+                      placeholder="Nombre o cédula / RIF..."
+                      style={{ width:"100%",background:"#0f0f0f",border:"1px solid #e74c3c",color:"#e8e0d0",padding:"7px 10px",borderRadius:4,fontFamily:"inherit",fontSize:12,boxSizing:"border-box" }} />
                     {custSearch.trim().length > 0 && (
                       <div style={{ position:"absolute",top:"100%",left:0,right:0,background:"#1a1a1a",border:"1px solid #333",borderRadius:4,zIndex:10,maxHeight:180,overflowY:"auto" }}>
-                        {customers.map(c => (
-                          <div key={c.id} onClick={() => { setSelectedCustomer(c); setCustSearch(""); }}
-                            style={{ padding:"8px 10px",cursor:"pointer",fontSize:12,borderBottom:"1px solid #222" }}
-                            onMouseEnter={e => e.currentTarget.style.background="#222"}
-                            onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                            <div style={{ fontWeight:"bold" }}>{c.name}</div>
-                            <div style={{ color:"#555",fontSize:10 }}>{c.phone||""}</div>
-                          </div>
-                        ))}
+                        {customers.length === 0
+                          ? <div style={{ padding:"10px",fontSize:11,color:"#555",textAlign:"center" }}>Sin resultados</div>
+                          : customers.map(c => (
+                            <div key={c.id} onClick={() => { setSelectedCustomer(c); setCustSearch(""); }}
+                              style={{ padding:"8px 10px",cursor:"pointer",fontSize:12,borderBottom:"1px solid #222" }}
+                              onMouseEnter={e => e.currentTarget.style.background="#222"}
+                              onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                              <div style={{ fontWeight:"bold" }}>{c.name}</div>
+                              <div style={{ color:"#666",fontSize:10,display:"flex",gap:8 }}>
+                                {c.rif   && <span>CI/RIF: {c.rif}</span>}
+                                {c.phone && <span>{c.phone}</span>}
+                              </div>
+                            </div>
+                          ))
+                        }
                         <div onClick={() => { setCustomerEditData({ _newType:"cliente", _newName:custSearch, _fromCobro:true }); setCustomerModal(true); setCustSearch(""); }}
                           style={{ padding:"8px 10px",cursor:"pointer",fontSize:12,color:"#2980b9",display:"flex",alignItems:"center",gap:6 }}
                           onMouseEnter={e => e.currentTarget.style.background="#0d1f2b"}
@@ -264,44 +334,30 @@ useEffect(() => { if (activeWarehouse) loadProducts(search); }, [activeWarehouse
               </div>
             </div>
 
-            {/* Diario de pago */}
+            {/* Serie de facturación */}
             <div style={{ marginBottom:12 }}>
-              <div style={{ fontSize:11,color:"#888",marginBottom:6,letterSpacing:1 }}>DIARIO DE PAGO</div>
-              {activeJournals.length === 0
-                ? <div style={{ fontSize:11,color:"#555",fontStyle:"italic" }}>Configura diarios en Contabilidad → Diarios</div>
-                : <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,maxHeight:160,overflowY:"auto" }}>
-                    {activeJournals.map(j => (
-                      <button key={j.id} onClick={() => selectJournal(j.id, activeCurrencies)}
-                        style={{ background:selectedJournalId===j.id?(j.color||"#f0a500"):"#0f0f0f",color:selectedJournalId===j.id?"#fff":"#888",border:`1px solid ${selectedJournalId===j.id?(j.color||"#f0a500"):"#333"}`,padding:"6px 4px 6px 8px",borderRadius:4,fontFamily:"inherit",fontSize:11,cursor:"pointer",fontWeight:selectedJournalId===j.id?"bold":"normal",textAlign:"left" }}>
-                        <div style={{ display:"flex",alignItems:"center",gap:5 }}>
-                          <div style={{ width:8,height:8,borderRadius:"50%",background:selectedJournalId===j.id?"#fff":j.color,flexShrink:0 }} />
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontSize:11 }}>{j.name}</div>
-                            {j.bank_name && <div style={{ fontSize:9,opacity:.7 }}>{j.bank_name}</div>}
-                          </div>
-                          {j.currency_code && <span style={{ fontSize:9,opacity:.8,background:"#00000033",borderRadius:3,padding:"1px 4px" }}>{j.currency_code}</span>}
-                        </div>
+              <div style={{ fontSize:11,color:"#e74c3c",marginBottom:6,letterSpacing:1 }}>SERIE <span>*</span></div>
+              {mySeries.length === 0
+                ? <div style={{ fontSize:11,color:"#e74c3c",fontStyle:"italic" }}>No tienes series asignadas. Configúralas en Contabilidad → Series</div>
+                : <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,maxHeight:160,overflowY:"auto",border:selectedSerieId?"none":"1px solid #e74c3c44",borderRadius:4,padding:selectedSerieId?0:4 }}>
+                    {mySeries.map(s => (
+                      <button key={s.id} onClick={() => selectSerie(s.id)}
+                        style={{ background:selectedSerieId===s.id?"#f0a500":"#0f0f0f",color:selectedSerieId===s.id?"#000":"#888",border:`1px solid ${selectedSerieId===s.id?"#f0a500":"#333"}`,padding:"8px",borderRadius:4,fontFamily:"inherit",fontSize:11,cursor:"pointer",fontWeight:selectedSerieId===s.id?"bold":"normal",textAlign:"left" }}>
+                        <div style={{ fontWeight:"bold",fontSize:13 }}>{s.prefix}</div>
+                        <div style={{ fontSize:10,opacity:.8 }}>{s.name}</div>
                       </button>
                     ))}
                   </div>
               }
             </div>
 
-            {/* Monto a cobrar */}
-            <div style={{ marginBottom:8,fontSize:12,color:"#888" }}>MONTO A COBRAR EN {currentCurrency?.code||baseCurrency?.code||"USD"}</div>
-            <input value={payInput} onChange={e => setPayInput(e.target.value)} type="number" placeholder="0.00"
-              style={{ width:"100%",background:"#0f0f0f",border:"1px solid #444",color:"#e8e0d0",padding:"10px 12px",borderRadius:4,fontFamily:"inherit",fontSize:16,marginBottom:8,boxSizing:"border-box" }} />
-
-            {paid >= totalDisplay && paid > 0 && (
-              <div style={{ background:"#0d2b1a",border:"1px solid #27ae60",borderRadius:4,padding:"8px 12px",marginBottom:10,display:"flex",justifyContent:"space-between" }}>
-                <span style={{ fontSize:12,color:"#27ae60" }}>CAMBIO {currentCurrency?.code||""}</span>
-                <span style={{ fontWeight:"bold",color:"#27ae60" }}>{fmt(change, currSym)}</span>
-              </div>
-            )}
-
-            <button onClick={() => checkout(() => loadProducts())} disabled={loading||!activeWarehouse}
-              style={{ width:"100%",background:loading||!activeWarehouse?"#7a5200":"#f0a500",color:"#0f0f0f",border:"none",padding:12,borderRadius:4,fontFamily:"inherit",fontSize:14,fontWeight:"bold",letterSpacing:2,cursor:loading||!activeWarehouse?"not-allowed":"pointer" }}>
-              {loading?"PROCESANDO...":!activeWarehouse?"SELECCIONA ALMACÉN":"COBRAR"}
+            <button onClick={() => checkout(() => loadProducts())} disabled={loading||!activeWarehouse||!selectedCustomer||!selectedSerieId}
+              style={{ width:"100%",background:loading||!activeWarehouse||!selectedCustomer||!selectedSerieId?"#1a4a1a":"#27ae60",color:"#fff",border:"none",padding:14,borderRadius:4,fontFamily:"inherit",fontSize:14,fontWeight:"bold",letterSpacing:2,cursor:loading||!activeWarehouse||!selectedCustomer||!selectedSerieId?"not-allowed":"pointer" }}>
+              {loading?"GENERANDO..."
+                :!activeWarehouse?"SELECCIONA ALMACÉN"
+                :!selectedCustomer?"SELECCIONA CLIENTE"
+                :!selectedSerieId?"SELECCIONA SERIE"
+                :"GENERAR FACTURA"}
             </button>
           </div>
         </div>

@@ -121,6 +121,27 @@ export const api = {
     remove:  (id)        => request(`/banks/${id}`, { method: "DELETE" }),
   },
 
+  // ── Pagos clientes ──────────────────────────────────────────
+  payments: {
+    getAll:     (params={}) => request("/payments?"        + new URLSearchParams(params)),
+    getStats:   (params={}) => request("/payments/stats?"  + new URLSearchParams(params)),
+    getPending: (params={}) => request("/payments/pending?" + new URLSearchParams(params)),
+    create:     (body)      => request("/payments", { method: "POST", body: JSON.stringify(body) }),
+    remove:     (id)        => request(`/payments/${id}`, { method: "DELETE" }),
+  },
+
+  // ── Series de facturación ───────────────────────────────────
+  series: {
+    getAll:      ()          => request("/series"),
+    getMy:       ()          => request("/series/my"),
+    create:      (body)      => request("/series",                 { method: "POST",   body: JSON.stringify(body) }),
+    update:      (id, body)  => request(`/series/${id}`,           { method: "PUT",    body: JSON.stringify(body) }),
+    remove:      (id)        => request(`/series/${id}`,           { method: "DELETE" }),
+    addRange:    (id, body)  => request(`/series/${id}/ranges`,    { method: "POST",   body: JSON.stringify(body) }),
+    removeRange: (rangeId)   => request(`/series/ranges/${rangeId}`,{ method: "DELETE" }),
+    assignUsers: (id, body)  => request(`/series/${id}/users`,     { method: "PUT",    body: JSON.stringify(body) }),
+  },
+
   // ── Métodos de pago ─────────────────────────────────────────
   paymentMethods: {
     getAll:  ()          => request("/banks/methods"),

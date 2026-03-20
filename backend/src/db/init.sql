@@ -154,21 +154,52 @@ CREATE TABLE IF NOT EXISTS payment_journals (
   sort_order  INTEGER      NOT NULL DEFAULT 0
 );
 
--- ── 10. Sales ──────────────────────────────────────────────────
+-- ── 10. Invoice Series ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS series (
+  id         SERIAL PRIMARY KEY,
+  name       VARCHAR(100) NOT NULL,
+  prefix     VARCHAR(10)  NOT NULL,
+  padding    INT          NOT NULL DEFAULT 4,
+  active     BOOLEAN      NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS serie_ranges (
+  id             SERIAL PRIMARY KEY,
+  serie_id       INT     NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+  start_number   INT     NOT NULL,
+  end_number     INT     NOT NULL,
+  current_number INT     NOT NULL,
+  active         BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_series (
+  user_id  INT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  serie_id INT NOT NULL REFERENCES series(id)   ON DELETE CASCADE,
+  PRIMARY KEY (user_id, serie_id)
+);
+
+-- ── 11. Sales ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS sales (
   id                 SERIAL PRIMARY KEY,
   total              NUMERIC(10, 2) NOT NULL,
   paid               NUMERIC(10, 2) NOT NULL,
   change             NUMERIC(10, 2) NOT NULL,
-  customer_id        INTEGER        REFERENCES customers(id) ON DELETE SET NULL,
-  employee_id        INTEGER        REFERENCES employees(id) ON DELETE SET NULL,
-  currency_id        INTEGER        REFERENCES currencies(id) ON DELETE SET NULL,
+  status             VARCHAR(20)    NOT NULL DEFAULT 'pendiente',
+  customer_id        INTEGER        REFERENCES customers(id)        ON DELETE SET NULL,
+  employee_id        INTEGER        REFERENCES employees(id)        ON DELETE SET NULL,
+  currency_id        INTEGER        REFERENCES currencies(id)       ON DELETE SET NULL,
   exchange_rate      NUMERIC(12, 6) NOT NULL DEFAULT 1.0,
   discount_amount    NUMERIC(10, 2) NOT NULL DEFAULT 0,
   payment_method     VARCHAR(30)    NOT NULL DEFAULT 'efectivo',
-  payment_method_id  INTEGER        REFERENCES payment_methods(id) ON DELETE SET NULL,
+  payment_method_id  INTEGER        REFERENCES payment_methods(id)  ON DELETE SET NULL,
   payment_journal_id INTEGER        REFERENCES payment_journals(id) ON DELETE SET NULL,
-  warehouse_id       INTEGER        REFERENCES warehouses(id) ON DELETE SET NULL,
+  warehouse_id       INTEGER        REFERENCES warehouses(id)       ON DELETE SET NULL,
+  serie_id           INTEGER        REFERENCES series(id)           ON DELETE SET NULL,
+  serie_range_id     INTEGER        REFERENCES serie_ranges(id)     ON DELETE SET NULL,
+  correlative_number INTEGER,
+  invoice_number     VARCHAR(50),
   created_at         TIMESTAMPTZ    NOT NULL DEFAULT NOW()
 );
 
@@ -183,7 +214,27 @@ CREATE TABLE IF NOT EXISTS sale_items (
   subtotal    NUMERIC(10, 2) GENERATED ALWAYS AS ((price - discount) * quantity) STORED
 );
 
--- ── 11. Purchases ──────────────────────────────────────────────
+-- ── 12. Payments (cobros sobre facturas) ──────────────────────
+CREATE TABLE IF NOT EXISTS payments (
+  id                 SERIAL PRIMARY KEY,
+  sale_id            INTEGER        NOT NULL REFERENCES sales(id)            ON DELETE CASCADE,
+  customer_id        INTEGER        REFERENCES customers(id)                 ON DELETE SET NULL,
+  amount             NUMERIC(10, 2) NOT NULL CHECK (amount > 0),
+  currency_id        INTEGER        REFERENCES currencies(id)                ON DELETE SET NULL,
+  exchange_rate      NUMERIC(12, 6) NOT NULL DEFAULT 1.0,
+  payment_journal_id INTEGER        REFERENCES payment_journals(id)          ON DELETE SET NULL,
+  employee_id        INTEGER        REFERENCES employees(id)                 ON DELETE SET NULL,
+  reference_date     DATE,
+  reference_number   VARCHAR(100),
+  notes              TEXT,
+  created_at         TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_payments_sale_id    ON payments(sale_id);
+CREATE INDEX IF NOT EXISTS idx_payments_customer   ON payments(customer_id);
+CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at DESC);
+
+-- ── 13. Purchases ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS purchases (
   id            SERIAL PRIMARY KEY,
   supplier_id   INTEGER        REFERENCES customers(id) ON DELETE SET NULL,
@@ -211,7 +262,7 @@ CREATE TABLE IF NOT EXISTS purchase_items (
   subtotal       NUMERIC(10,2)  NOT NULL
 );
 
--- ── 12. Triggers & Functions ──────────────────────────────────
+-- ── 15. Triggers & Functions ──────────────────────────────────
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -225,7 +276,7 @@ CREATE TRIGGER trg_employees_updated_at BEFORE UPDATE ON employees  FOR EACH ROW
 CREATE TRIGGER trg_currencies_updated_at BEFORE UPDATE ON currencies FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_customers_updated_at BEFORE UPDATE ON customers   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- ── 13. Indices ────────────────────────────────────────────────
+-- ── 16. Indices ────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_products_category    ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale      ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sales_created_at     ON sales(created_at DESC);
@@ -241,7 +292,7 @@ CREATE INDEX IF NOT EXISTS idx_product_stock_product   ON product_stock(product_
 CREATE INDEX IF NOT EXISTS idx_product_stock_warehouse ON product_stock(warehouse_id);
 CREATE INDEX IF NOT EXISTS idx_transfers_created_at    ON stock_transfers(created_at DESC);
 
--- ── 14. Initial Data ──────────────────────────────────────────
+-- ── 17. Initial Data ──────────────────────────────────────────
 
 -- Roles
 INSERT INTO roles (name, label, permissions) VALUES

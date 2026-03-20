@@ -29,7 +29,9 @@ app.use("/api/settings",         require("./routes/settings"));         // auth 
 app.use("/api/payment-journals", require("./routes/paymentJournals"));  // auth dentro
 app.use("/api/purchases",        require("./routes/purchases"));        // auth dentro
 app.use("/api/warehouses",       require("./routes/warehouses"));       // auth dentro
-app.use("/api/banks",            require("./routes/banks"));            // auth dentro ← NUEVO
+app.use("/api/banks",            require("./routes/banks"));            // auth dentro
+app.use("/api/payments",         require("./routes/payments"));         // auth dentro
+app.use("/api/series",           require("./routes/series"));           // auth dentro
 
 // ── Health check ────────────────────────────────────────────
 app.get("/health", (req, res) => res.json({ ok: true, service: "pos-backend", uptime: process.uptime() }));

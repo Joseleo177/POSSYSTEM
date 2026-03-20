@@ -1,4 +1,4 @@
-const { PaymentJournal, Currency, Bank, Sale, Sequelize } = require("../models");
+const { PaymentJournal, Currency, Bank, Sale, Payment, Sequelize } = require("../models");
 const { Op } = Sequelize;
 
 // GET /api/payment-journals
@@ -94,51 +94,59 @@ const remove = async (req, res) => {
 };
 
 // GET /api/payment-journals/summary
+// Suma los PAGOS (tabla payments) agrupados por diario, convirtiendo a la moneda del diario
 const summary = async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    
-    // Filtros de fecha dinámicos
-    const saleWhere = {};
+
+    const payWhere = {};
     if (date_from || date_to) {
-      saleWhere.created_at = {};
-      if (date_from) saleWhere.created_at[Op.gte] = date_from;
-      if (date_to)   saleWhere.created_at[Op.lt]  = Sequelize.literal(`('${date_to}'::date + INTERVAL '1 day')`);
+      payWhere.created_at = {};
+      if (date_from) payWhere.created_at[Op.gte] = date_from;
+      if (date_to)   payWhere.created_at[Op.lt]  = Sequelize.literal(`('${date_to}'::date + INTERVAL '1 day')`);
     }
 
     const journals = await PaymentJournal.findAll({
       attributes: [
         'id', 'name', 'type', 'bank_id', 'color', 'currency_id',
-        [Sequelize.fn('COUNT', Sequelize.col('Sales.id')), 'tx_count'],
-        // Total histórico o filtrado por parámetros
-        [Sequelize.literal(`COALESCE(SUM(CASE WHEN "Currency"."is_base" = TRUE OR "Currency"."id" IS NULL THEN "Sales"."total" ELSE "Sales"."total" * "Sales"."exchange_rate" END), 0)`), 'total_ingresos'],
-        // Ingresos de HOY (independiente del filtro global de la petición)
-        [Sequelize.literal(`COALESCE(SUM(CASE WHEN "Sales"."created_at" >= CURRENT_DATE THEN CASE WHEN "Currency"."is_base" = TRUE OR "Currency"."id" IS NULL THEN "Sales"."total" ELSE "Sales"."total" * "Sales"."exchange_rate" END END), 0)`), 'ingresos_hoy']
+        // Cantidad de pagos
+        [Sequelize.fn('COUNT', Sequelize.col('Payments.id')), 'tx_count'],
+        // Total: payment.amount en USD × exchange_rate del cobro = monto original en la moneda cobrada
+        [Sequelize.literal(`
+          COALESCE(SUM(
+            "Payments"."amount" * COALESCE("Payments"."exchange_rate", 1)
+          ), 0)
+        `), 'total_ingresos'],
+        // Hoy
+        [Sequelize.literal(`
+          COALESCE(SUM(CASE WHEN "Payments"."created_at" >= CURRENT_DATE
+            THEN "Payments"."amount" * COALESCE("Payments"."exchange_rate", 1)
+          END), 0)
+        `), 'ingresos_hoy'],
       ],
       include: [
-        { model: Currency, attributes: ['code', 'symbol', 'is_base'], required: false },
-        { model: Bank, attributes: ['name'], required: false },
-        { model: Sale, attributes: [], required: false, where: saleWhere }
+        { model: Currency, attributes: ['code', 'symbol', 'is_base', 'exchange_rate'], required: false },
+        { model: Bank,     attributes: ['name'],                                        required: false },
+        { model: Payment,  attributes: [], required: false, where: payWhere },
       ],
       where: { active: true },
       group: [
-        'PaymentJournal.id', 
-        'Currency.id', 'Currency.code', 'Currency.symbol', 'Currency.is_base',
-        'Bank.id', 'Bank.name'
+        'PaymentJournal.id',
+        'Currency.id', 'Currency.code', 'Currency.symbol', 'Currency.is_base', 'Currency.exchange_rate',
+        'Bank.id', 'Bank.name',
       ],
       order: [['sort_order', 'ASC'], ['id', 'ASC']],
-      subQuery: false // Importante para que el LIMIT/OFFSET no rompa las agregaciones
+      subQuery: false,
     });
 
-    // Aplanar resultado para mantener compatibilidad con el frontend
     const data = journals.map(j => {
       const jj = j.get({ plain: true });
-      jj.bank_name        = jj.Bank?.name        ?? null;
-      jj.currency_code    = jj.Currency?.code    ?? null;
-      jj.currency_symbol  = jj.Currency?.symbol  ?? null;
-      jj.currency_is_base = jj.Currency?.is_base ?? null;
-      delete jj.Bank;
-      delete jj.Currency;
+      jj.bank_name        = jj.Bank?.name             ?? null;
+      jj.currency_code    = jj.Currency?.code         ?? null;
+      jj.currency_symbol  = jj.Currency?.symbol       ?? null;
+      jj.currency_is_base = jj.Currency?.is_base      ?? true;
+      jj.exchange_rate    = jj.Currency?.exchange_rate ?? 1;
+      delete jj.Bank; delete jj.Currency; delete jj.Payments;
       return jj;
     });
 

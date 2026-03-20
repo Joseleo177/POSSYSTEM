@@ -5,11 +5,10 @@ import { useApp } from "./AppContext";
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
-  const { employee, notify, baseCurrency, activeCurrencies, journals, activeJournals } = useApp();
+  const { employee, notify, baseCurrency, activeCurrencies } = useApp();
 
   // ── Carrito ────────────────────────────────────────────────
   const [cart, setCart]       = useState([]);
-  const [payInput, setPayInput] = useState("");
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -19,22 +18,21 @@ export function CartProvider({ children }) {
   const exchangeRate    = currentCurrency?.exchange_rate
     ? parseFloat(currentCurrency.exchange_rate) : 1;
 
-  // ── Diario seleccionado ────────────────────────────────────
-  const [selectedJournalId, setSelectedJournalId] = useState(null);
+  // ── Serie seleccionada ─────────────────────────────────────
+  const [selectedSerieId, setSelectedSerieId] = useState(null);
+  const [mySeries,        setMySeries]        = useState([]);
 
-  const selectJournal = useCallback((journalId, currencies) => {
-    const isDeselect = journalId === selectedJournalId;
-    setSelectedJournalId(isDeselect ? null : journalId);
-    if (isDeselect) {
-      setSelectedCurrency(null);
-      return;
-    }
-    const journal = activeJournals.find(j => j.id === journalId);
-    if (journal?.currency_id) {
-      const jCur = currencies.find(c => c.id === journal.currency_id);
-      setSelectedCurrency(jCur?.is_base ? null : jCur || null);
-    }
-  }, [selectedJournalId, activeJournals]);
+  const loadMySeries = useCallback(async () => {
+    if (!employee) return;
+    try {
+      const r = await api.series.getMy();
+      setMySeries(r.data || []);
+    } catch (e) { console.error(e); }
+  }, [employee]);
+
+  const selectSerie = useCallback((serieId) => {
+    setSelectedSerieId(prev => prev === serieId ? null : serieId);
+  }, []);
 
   // ── Cliente seleccionado ───────────────────────────────────
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -111,69 +109,66 @@ export function CartProvider({ children }) {
 
   const clearCart = useCallback(() => {
     setCart([]);
-    setPayInput("");
     setSelectedCustomer(null);
     setSelectedCurrency(null);
-    setSelectedJournalId(null);
+    setSelectedSerieId(null);
   }, []);
 
   // ── Totales ────────────────────────────────────────────────
   const totalBase    = cart.reduce((s, i) => s + parseFloat(i.price) * i.qty, 0);
   const totalDisplay = convertToDisplay(totalBase);
-  const paid         = parseFloat(payInput) || 0;
-  const change       = paid - totalDisplay;
 
-  // ── Checkout ───────────────────────────────────────────────
+  // ── Generar factura (sin pago aún) ─────────────────────────
   const checkout = useCallback(async (onSuccess) => {
-    if (!cart.length)        return notify("El carrito está vacío", "err");
-    if (!activeWarehouse)    return notify("Selecciona un almacén antes de cobrar", "err");
-    if (paid < totalDisplay) return notify("Pago insuficiente", "err");
+    if (!cart.length)      return notify("El carrito está vacío", "err");
+    if (!activeWarehouse)  return notify("Selecciona un almacén antes de continuar", "err");
+    if (!selectedCustomer) return notify("El cliente es requerido", "err");
+    if (!selectedSerieId)  return notify("La serie es requerida", "err");
 
     setLoading(true);
     try {
       const res = await api.sales.create({
-        items:              cart.map(i => ({ product_id: i.id, quantity: i.qty })),
-        paid,
-        customer_id:        selectedCustomer?.id   || null,
-        employee_id:        employee?.id           || null,
-        currency_id:        currentCurrency?.id    || null,
-        exchange_rate:      exchangeRate,
-        payment_journal_id: selectedJournalId,
-        warehouse_id:       activeWarehouse.id,
+        items:         cart.map(i => ({ product_id: i.id, quantity: i.qty })),
+        paid:          0,
+        customer_id:   selectedCustomer?.id || null,
+        employee_id:   employee?.id         || null,
+        currency_id:   currentCurrency?.id  || null,
+        exchange_rate: exchangeRate,
+        serie_id:      selectedSerieId,
+        warehouse_id:  activeWarehouse.id,
       });
 
-      const journal = activeJournals.find(j => j.id === selectedJournalId);
+      const serie = mySeries.find(s => s.id === selectedSerieId);
       setReceipt({
         ...res.data,
         customerName: selectedCustomer?.name || null,
         currency:     currentCurrency,
         exchangeRate,
-        journal,
+        serie,
       });
 
       clearCart();
-      notify("¡Venta registrada! ✓");
       onSuccess?.();
     } catch (e) {
       notify(e.message, "err");
     } finally {
       setLoading(false);
     }
-  }, [cart, activeWarehouse, paid, totalDisplay, selectedCustomer,
-      employee, currentCurrency, exchangeRate, selectedJournalId,
-      activeJournals, notify, clearCart]);
+  }, [cart, activeWarehouse, selectedCustomer, selectedSerieId,
+      employee, currentCurrency, exchangeRate,
+      mySeries, notify, clearCart]);
 
   return (
     <CartContext.Provider value={{
       // Carrito
       cart, addToCart, removeFromCart, changeQty, setQtyDirect, clearCart,
       // Totales
-      totalBase, totalDisplay, paid, change, payInput, setPayInput,
+      totalBase, totalDisplay,
       // Moneda
       selectedCurrency, setSelectedCurrency, currentCurrency, exchangeRate,
       convertToDisplay, convertToBase,
-      // Diario
-      selectedJournalId, setSelectedJournalId, selectJournal,
+      // Serie
+      selectedSerieId, setSelectedSerieId, selectSerie, mySeries, loadMySeries,
       // Cliente
       selectedCustomer, setSelectedCustomer,
       // Almacén

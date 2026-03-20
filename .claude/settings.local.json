@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose:*)",
+      "Bash(docker exec possystem-db-1 psql -U pos_user -d pos_db -c \":*)",
+      "Bash(docker ps:*)",
+      "Bash(docker exec pos_db psql -U pos_user -d pos_db -c \":*)",
+      "Bash(docker exec:*)",
+      "Bash(docker restart:*)"
+    ]
+  }
+}

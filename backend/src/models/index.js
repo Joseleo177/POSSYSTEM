@@ -38,7 +38,7 @@ Object.keys(db).forEach(modelName => {
 });
 
 // Centralized associations
-const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse } = db;
+const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie } = db;
 
 if(Employee && Role) {
   Employee.belongsTo(Role, { foreignKey: 'role_id' });
@@ -108,6 +108,29 @@ if(StockTransfer && Warehouse && Product && Employee) {
   StockTransfer.belongsTo(Warehouse, { as: 'ToWarehouse', foreignKey: 'to_warehouse_id' });
   StockTransfer.belongsTo(Product, { foreignKey: 'product_id' });
   StockTransfer.belongsTo(Employee, { foreignKey: 'employee_id' });
+}
+
+if(Payment && Sale && Customer && Employee && Currency && PaymentJournal) {
+  Payment.belongsTo(Sale,           { foreignKey: 'sale_id' });
+  Sale.hasMany(Payment,             { foreignKey: 'sale_id' });
+  Payment.belongsTo(Customer,       { foreignKey: 'customer_id' });
+  Payment.belongsTo(Employee,       { foreignKey: 'employee_id' });
+  Payment.belongsTo(Currency,       { foreignKey: 'currency_id' });
+  Payment.belongsTo(PaymentJournal, { foreignKey: 'payment_journal_id' });
+  PaymentJournal.hasMany(Payment,   { foreignKey: 'payment_journal_id' });
+}
+
+if (Serie && SerieRange && Employee && UserSerie) {
+  Serie.hasMany(SerieRange, { foreignKey: 'serie_id', onDelete: 'CASCADE' });
+  SerieRange.belongsTo(Serie, { foreignKey: 'serie_id' });
+
+  Serie.belongsToMany(Employee, { through: UserSerie, foreignKey: 'serie_id', otherKey: 'user_id' });
+  Employee.belongsToMany(Serie, { through: UserSerie, foreignKey: 'user_id', otherKey: 'serie_id' });
+}
+
+if (Sale && Serie && SerieRange) {
+  Sale.belongsTo(Serie,      { foreignKey: 'serie_id' });
+  Sale.belongsTo(SerieRange, { foreignKey: 'serie_range_id' });
 }
 
 const { Setting } = db;

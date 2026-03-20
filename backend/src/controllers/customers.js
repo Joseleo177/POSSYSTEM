@@ -1,4 +1,4 @@
-const { Sequelize, Customer, Sale, Purchase } = require("../models");
+const { Sequelize, Customer, Sale, SaleItem, Purchase, Payment, Currency } = require("../models");
 
 // GET /api/customers
 const getAll = async (req, res) => {
@@ -21,19 +21,26 @@ const getAll = async (req, res) => {
       attributes: {
         include: [
           [Sequelize.fn("COUNT", Sequelize.col("Sales.id")), "total_purchases"],
-          [Sequelize.fn("COALESCE", Sequelize.fn("SUM", Sequelize.col("Sales.total")), 0), "total_spent"]
+          [Sequelize.literal(`(
+            SELECT COALESCE(SUM(s.total), 0) FROM sales s
+            WHERE s.customer_id = "Customer"."id" AND s.status = 'pagado'
+          )`), "total_spent"],
+          [Sequelize.literal(`(
+            SELECT COALESCE(SUM(s.total - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.sale_id = s.id), 0)), 0)
+            FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('pendiente','parcial')
+          )`), "total_debt"],
         ]
       },
       include: [{ model: Sale, attributes: [] }],
       group: ['Customer.id'],
       order: [['name', 'ASC']],
-      // We use raw:false because group on non-raw queries in Sequelize requires raw output to map custom attributes properly, or we can use raw: true
       raw: true
     });
-    
+
     customers.forEach(c => {
       c.total_purchases = parseInt(c.total_purchases || 0);
-      c.total_spent = parseFloat(c.total_spent || 0);
+      c.total_spent     = parseFloat(c.total_spent  || 0);
+      c.total_debt      = parseFloat(c.total_debt   || 0);
     });
 
     res.json({ ok: true, data: customers });
@@ -51,19 +58,27 @@ const getOne = async (req, res) => {
       attributes: {
         include: [
           [Sequelize.fn("COUNT", Sequelize.col("Sales.id")), "total_purchases"],
-          [Sequelize.fn("COALESCE", Sequelize.fn("SUM", Sequelize.col("Sales.total")), 0), "total_spent"],
-          [Sequelize.fn("MAX", Sequelize.col("Sales.created_at")), "last_purchase_at"]
+          [Sequelize.literal(`(
+            SELECT COALESCE(SUM(s.total), 0) FROM sales s
+            WHERE s.customer_id = "Customer"."id" AND s.status = 'pagado'
+          )`), "total_spent"],
+          [Sequelize.fn("MAX", Sequelize.col("Sales.created_at")), "last_purchase_at"],
+          [Sequelize.literal(`(
+            SELECT COALESCE(SUM(s.total - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.sale_id = s.id), 0)), 0)
+            FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('pendiente','parcial')
+          )`), "total_debt"],
         ]
       },
       include: [{ model: Sale, attributes: [] }],
       group: ['Customer.id'],
       raw: true
     });
-    
+
     if (!customer) return res.status(404).json({ ok: false, message: "Cliente no encontrado" });
-    
+
     customer.total_purchases = parseInt(customer.total_purchases || 0);
-    customer.total_spent = parseFloat(customer.total_spent || 0);
+    customer.total_spent     = parseFloat(customer.total_spent  || 0);
+    customer.total_debt      = parseFloat(customer.total_debt   || 0);
     
     res.json({ ok: true, data: customer });
   } catch (err) {
@@ -82,21 +97,30 @@ const getPurchases = async (req, res) => {
 
     const { count, rows } = await Sale.findAndCountAll({
       where: { customer_id: req.params.id },
-      attributes: ['id', 'total', 'paid', 'change', 'created_at'],
-      include: [{
-        model: SaleItem,
-        attributes: ['name', 'price', 'quantity', 'subtotal']
-      }],
+      attributes: {
+        include: [
+          'id', 'total', 'status', 'currency_id', 'exchange_rate', 'created_at',
+          [Sequelize.literal(`(SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = "Sale"."id")`), 'amount_paid'],
+        ]
+      },
+      include: [
+        { model: SaleItem, attributes: ['name', 'price', 'quantity', 'subtotal'] },
+        { model: Currency,  attributes: ['symbol', 'code'], required: false },
+      ],
       order: [['created_at', 'DESC']],
       limit: parseInt(limit),
       offset: parseInt(offset)
     });
 
-    // Sequelize mapped automatically the 1:N relationship
     const data = rows.map(s => {
       const sale = s.toJSON();
-      sale.items = sale.SaleItems; // format expected by frontend
+      sale.items           = sale.SaleItems ?? [];
+      sale.currency_symbol = sale.Currency?.symbol ?? null;
+      sale.currency_code   = sale.Currency?.code   ?? null;
+      sale.amount_paid     = parseFloat(sale.amount_paid || 0);
+      sale.balance         = parseFloat((parseFloat(sale.total) - sale.amount_paid).toFixed(2));
       delete sale.SaleItems;
+      delete sale.Currency;
       return sale;
     });
 
