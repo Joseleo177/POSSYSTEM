@@ -4,18 +4,12 @@ import Modal from "./Modal";
 
 const EMPTY = { username: "", password: "", full_name: "", email: "", phone: "", role_id: "" };
 
-const btnSmall = {
-  background: "transparent", border: "1px solid #333", color: "#888",
-  padding: "3px 8px", borderRadius: 3, cursor: "pointer", fontFamily: "inherit", fontSize: 11,
+const ROLE_BADGE = {
+  admin:     "badge-danger",
+  manager:   "badge-warning",
+  cashier:   "badge-success",
+  warehouse: "badge-info",
 };
-
-const inp = {
-  width: "100%", background: "#0f0f0f", border: "1px solid #333",
-  color: "#e8e0d0", padding: "8px 10px", borderRadius: 4,
-  fontFamily: "inherit", fontSize: 13, boxSizing: "border-box",
-};
-
-const ROLE_COLORS = { admin: "#e74c3c", manager: "#f0a500", cashier: "#27ae60", warehouse: "#5dade2" };
 
 export default function EmployeesTab({ notify }) {
   const [employees, setEmployees] = useState([]);
@@ -66,42 +60,51 @@ export default function EmployeesTab({ notify }) {
   return (
     <div>
       {/* Cabecera */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-        <button onClick={openNew}
-          style={{ background: "#f0a500", color: "#0f0f0f", border: "none", padding: "8px 20px", borderRadius: 4, fontFamily: "inherit", fontWeight: "bold", cursor: "pointer", fontSize: 13 }}>
+      <div className="flex justify-end mb-4">
+        <button onClick={openNew} className="btn-sm btn-primary">
           + Nuevo empleado
         </button>
       </div>
 
       {/* Tabla */}
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <table className="table-pos">
         <thead>
-          <tr style={{ borderBottom: "2px solid #f0a500", color: "#f0a500" }}>
+          <tr>
             {["Nombre", "Usuario", "Rol", "Correo", "Estado", "Acciones"].map(h => (
-              <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, letterSpacing: 1 }}>{h}</th>
+              <th key={h}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {employees.map((e, i) => (
-            <tr key={e.id} style={{ background: i % 2 === 0 ? "#111" : "transparent", borderBottom: "1px solid #1e1e1e" }}>
-              <td style={{ padding: "10px 12px", fontWeight: "bold" }}>{e.full_name}</td>
-              <td style={{ padding: "10px 12px", color: "#888" }}>{e.username}</td>
-              <td style={{ padding: "10px 12px" }}>
-                <span style={{ background: ROLE_COLORS[e.role_name] + "22", color: ROLE_COLORS[e.role_name], border: `1px solid ${ROLE_COLORS[e.role_name]}44`, padding: "2px 8px", borderRadius: 3, fontSize: 11 }}>
+          {employees.map((e) => (
+            <tr key={e.id}>
+              <td className="font-semibold">{e.full_name}</td>
+              <td className="text-content-muted dark:text-content-dark-muted">{e.username}</td>
+              <td>
+                <span className={ROLE_BADGE[e.role_name] ?? "badge-neutral"}>
                   {e.role_label}
                 </span>
               </td>
-              <td style={{ padding: "10px 12px", color: "#666", fontSize: 11 }}>{e.email || "—"}</td>
-              <td style={{ padding: "10px 12px" }}>
-                <span style={{ color: e.active ? "#27ae60" : "#e74c3c", fontSize: 11 }}>
+              <td className="text-content-muted dark:text-content-dark-muted text-xs">{e.email || "—"}</td>
+              <td>
+                <span className={`text-xs font-medium ${e.active ? "text-success" : "text-danger"}`}>
                   {e.active ? "● Activo" : "○ Inactivo"}
                 </span>
               </td>
-              <td style={{ padding: "10px 12px" }}>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={() => openEdit(e)} style={{ ...btnSmall, color: "#f0a500", borderColor: "#f0a500" }}>Editar</button>
-                  <button onClick={() => del(e.id)} style={{ ...btnSmall, color: "#e74c3c", borderColor: "#e74c3c" }}>Eliminar</button>
+              <td>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => openEdit(e)}
+                    className="btn-sm border border-warning/60 text-warning bg-transparent hover:bg-warning/10 dark:hover:bg-warning/10"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => del(e.id)}
+                    className="btn-sm border border-danger/60 text-danger bg-transparent hover:bg-danger/10 dark:hover:bg-danger/10"
+                  >
+                    Eliminar
+                  </button>
                 </div>
               </td>
             </tr>
@@ -111,47 +114,77 @@ export default function EmployeesTab({ notify }) {
 
       {/* Modal */}
       <Modal open={modal} onClose={closeModal} title={editId ? "✏ EDITAR EMPLEADO" : "+ NUEVO EMPLEADO"} width={560}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+        <div className="grid grid-cols-2 gap-2.5 mb-2.5">
           {[["Nombre completo *", "full_name", "text"], ["Usuario *", "username", "text"]].map(([label, key, type]) => (
             <div key={key}>
-              <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>{label}</div>
-              <input value={form[key]} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} type={type} style={inp} autoFocus={key === "full_name"} />
+              <label className="label">{label}</label>
+              <input
+                value={form[key]}
+                onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
+                type={type}
+                className="input"
+                autoFocus={key === "full_name"}
+              />
             </div>
           ))}
         </div>
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>
+        <div className="mb-2.5">
+          <label className="label">
             {editId ? "Contraseña (dejar vacío = no cambiar)" : "Contraseña *"}
-          </div>
-          <input value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} type="password" style={inp} />
+          </label>
+          <input
+            value={form.password}
+            onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+            type="password"
+            className="input"
+          />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+        <div className="grid grid-cols-3 gap-2.5 mb-2.5">
           {[["Correo", "email", "email"], ["Teléfono", "phone", "text"]].map(([label, key, type]) => (
             <div key={key}>
-              <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>{label}</div>
-              <input value={form[key]} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} type={type} style={inp} />
+              <label className="label">{label}</label>
+              <input
+                value={form[key]}
+                onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
+                type={type}
+                className="input"
+              />
             </div>
           ))}
           <div>
-            <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Rol *</div>
-            <select value={form.role_id} onChange={e => setForm(p => ({ ...p, role_id: e.target.value }))} style={{ ...inp, padding: "8px 10px" }}>
+            <label className="label">Rol *</label>
+            <select
+              value={form.role_id}
+              onChange={e => setForm(p => ({ ...p, role_id: e.target.value }))}
+              className="input"
+            >
               <option value="">Seleccionar rol</option>
               {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
             </select>
           </div>
         </div>
         {editId && (
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
-              <input type="checkbox" checked={form.active ?? true} onChange={e => setForm(p => ({ ...p, active: e.target.checked }))} />
-              <span style={{ color: "#888" }}>Empleado activo</span>
+          <div className="mb-4">
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.active ?? true}
+                onChange={e => setForm(p => ({ ...p, active: e.target.checked }))}
+                className="rounded"
+              />
+              <span className="text-content-muted dark:text-content-dark-muted">Empleado activo</span>
             </label>
           </div>
         )}
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
-          <button onClick={closeModal} style={{ ...btnSmall, padding: "8px 18px", fontSize: 12 }}>Cancelar</button>
-          <button onClick={save} disabled={loading}
-            style={{ background: loading ? "#7a5200" : "#f0a500", color: "#0f0f0f", border: "none", padding: "8px 24px", borderRadius: 4, fontFamily: "inherit", fontWeight: "bold", cursor: loading ? "not-allowed" : "pointer", fontSize: 13 }}>
+        <div className="flex gap-2.5 justify-end mt-2">
+          <button onClick={closeModal} className="btn-sm btn-secondary">
+            Cancelar
+          </button>
+          <button
+            onClick={save}
+            disabled={loading}
+            className={`btn-sm btn-primary ${loading ? "opacity-60 cursor-not-allowed" : ""}`}
+          >
             {loading ? "Guardando..." : editId ? "Guardar" : "Crear empleado"}
           </button>
         </div>

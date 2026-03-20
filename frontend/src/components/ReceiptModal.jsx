@@ -165,117 +165,124 @@ export default function ReceiptModal({ open, onClose, sale }) {
   return (
     <Modal open={open} onClose={onClose} title={`FACTURA ${invoiceLabel}`} width={500}>
       {/* Encabezado empresa */}
-      <div style={{ textAlign:"center", marginBottom:16 }}>
-        <div style={{ fontSize:16, fontWeight:"bold", color:"#f0a500", letterSpacing:2 }}>{storeName}</div>
-        <div style={{ fontSize:11, color:"#555", letterSpacing:3, marginTop:2 }}>COMPROBANTE DE VENTA</div>
+      <div className="text-center mb-4">
+        <div className="text-base font-semibold text-content dark:text-content-dark tracking-widest">{storeName}</div>
+        <div className="text-xs text-content-muted dark:text-content-dark-muted tracking-[0.2em] mt-0.5">COMPROBANTE DE VENTA</div>
       </div>
 
       {/* Metadata */}
-      <div style={{ background:"#111", borderRadius:4, padding:"10px 14px", marginBottom:14, fontSize:12 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-          <span style={{ color:"#555" }}>Factura N°</span>
-          <span style={{ fontWeight:"bold", color:"#f0a500" }}>{invoiceLabel}</span>
+      <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-4 mb-4 space-y-2">
+        <div className="flex justify-between items-center py-1.5 text-sm">
+          <span className="text-content-muted dark:text-content-dark-muted">Factura N°</span>
+          <span className="text-content dark:text-content-dark font-medium">{invoiceLabel}</span>
         </div>
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-          <span style={{ color:"#555" }}>Fecha</span>
-          <span>{dateStr}</span>
+        <div className="flex justify-between items-center py-1.5 text-sm">
+          <span className="text-content-muted dark:text-content-dark-muted">Fecha</span>
+          <span className="text-content dark:text-content-dark font-medium">{dateStr}</span>
         </div>
         {s.employee_name && (
-          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-            <span style={{ color:"#555" }}>Vendedor</span>
-            <span>{s.employee_name}</span>
+          <div className="flex justify-between items-center py-1.5 text-sm">
+            <span className="text-content-muted dark:text-content-dark-muted">Vendedor</span>
+            <span className="text-content dark:text-content-dark font-medium">{s.employee_name}</span>
           </div>
         )}
         {s.warehouse_name && (
-          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-            <span style={{ color:"#555" }}>Almacén</span>
-            <span>{s.warehouse_name}</span>
+          <div className="flex justify-between items-center py-1.5 text-sm">
+            <span className="text-content-muted dark:text-content-dark-muted">Almacén</span>
+            <span className="text-content dark:text-content-dark font-medium">{s.warehouse_name}</span>
           </div>
         )}
         {s.journal_name && (
-          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-            <span style={{ color:"#555" }}>Diario</span>
-            <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}>
-              {s.journal_color && <span style={{ width:8, height:8, borderRadius:"50%", background:s.journal_color, display:"inline-block" }} />}
+          <div className="flex justify-between items-center py-1.5 text-sm">
+            <span className="text-content-muted dark:text-content-dark-muted">Diario</span>
+            <span className="text-content dark:text-content-dark font-medium inline-flex items-center gap-1.5">
+              {s.journal_color && (
+                <span
+                  className="inline-block w-2 h-2 rounded-full"
+                  style={{ background: s.journal_color }}
+                />
+              )}
               {s.journal_name}
             </span>
           </div>
         )}
         {!isBase && (
-          <div style={{ display:"flex", justifyContent:"space-between" }}>
-            <span style={{ color:"#555" }}>Moneda</span>
-            <span style={{ color:"#5dade2" }}>{displayCurrency?.code} · tasa {rate.toFixed(4)}</span>
+          <div className="flex justify-between items-center py-1.5 text-sm">
+            <span className="text-content-muted dark:text-content-dark-muted">Moneda</span>
+            <span className="text-content dark:text-content-dark font-medium">{displayCurrency?.code} · tasa {rate.toFixed(4)}</span>
           </div>
         )}
       </div>
 
       {/* Cliente */}
       {s.customer_name && (
-        <div style={{ background:"#0d1f2b", border:"1px solid #2980b9", borderRadius:4, padding:"8px 14px", marginBottom:14, fontSize:12 }}>
-          <span style={{ color:"#5dade2", fontSize:11, letterSpacing:1 }}>CLIENTE: </span>
-          <span style={{ fontWeight:"bold" }}>{s.customer_name}</span>
+        <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg px-4 py-2.5 mb-4 text-sm">
+          <span className="text-content-muted dark:text-content-dark-muted text-xs tracking-wider">CLIENTE: </span>
+          <span className="text-content dark:text-content-dark font-medium">{s.customer_name}</span>
         </div>
       )}
 
       {/* Items */}
-      <table style={{ width:"100%", borderCollapse:"collapse", marginBottom:14, fontSize:12 }}>
+      <table className="w-full border-collapse mb-4 text-sm">
         <thead>
-          <tr style={{ borderBottom:"1px solid #f0a500", color:"#f0a500", fontSize:11 }}>
-            <th style={{ textAlign:"left",  padding:"4px 6px" }}>Producto</th>
-            <th style={{ textAlign:"center",padding:"4px 6px" }}>Cant.</th>
-            <th style={{ textAlign:"right", padding:"4px 6px" }}>P.U.</th>
-            <th style={{ textAlign:"right", padding:"4px 6px" }}>Total</th>
+          <tr className="border-b border-border dark:border-border-dark text-content-muted dark:text-content-dark-muted text-xs">
+            <th className="text-left px-1.5 py-1">Producto</th>
+            <th className="text-center px-1.5 py-1">Cant.</th>
+            <th className="text-right px-1.5 py-1">P.U.</th>
+            <th className="text-right px-1.5 py-1">Total</th>
           </tr>
         </thead>
         <tbody>
           {s.items.map((item, idx) => (
-            <tr key={idx} style={{ borderBottom:"1px dashed #222" }}>
-              <td style={{ padding:"5px 6px" }}>{item.name}</td>
-              <td style={{ padding:"5px 6px", textAlign:"center", color:"#888" }}>{item.quantity}</td>
-              <td style={{ padding:"5px 6px", textAlign:"right", color:"#888" }}>{fmtP(item.price)}</td>
-              <td style={{ padding:"5px 6px", textAlign:"right", color:"#f0a500", fontWeight:"bold" }}>{fmtP(item.subtotal)}</td>
+            <tr key={idx} className="border-b border-dashed border-border dark:border-border-dark">
+              <td className="px-1.5 py-1.5 text-content dark:text-content-dark">{item.name}</td>
+              <td className="px-1.5 py-1.5 text-center text-content-muted dark:text-content-dark-muted">{item.quantity}</td>
+              <td className="px-1.5 py-1.5 text-right text-content-muted dark:text-content-dark-muted">{fmtP(item.price)}</td>
+              <td className="px-1.5 py-1.5 text-right text-content dark:text-content-dark font-medium">{fmtP(item.subtotal)}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
       {/* Totales */}
-      <div style={{ borderTop:"1px solid #333", paddingTop:10, marginBottom:14 }}>
+      <div className="border-t border-border dark:border-border-dark pt-2.5 mb-4">
         {s.discount > 0 && (
-          <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:4 }}>
-            <span style={{ color:"#555" }}>Descuento</span>
-            <span style={{ color:"#e74c3c" }}>-{fmtP(s.discount)}</span>
+          <div className="flex justify-between items-center py-1.5 text-sm">
+            <span className="text-content-muted dark:text-content-dark-muted">Descuento</span>
+            <span className="text-danger font-medium">-{fmtP(s.discount)}</span>
           </div>
         )}
-        <div style={{ display:"flex", justifyContent:"space-between", fontSize:15, fontWeight:"bold", borderTop:"1px solid #333", paddingTop:6, marginTop:4 }}>
-          <span>TOTAL</span>
-          <span style={{ color:"#f0a500" }}>{fmtP(s.total)}</span>
+        <div className="flex justify-between items-center py-1.5 border-t border-border dark:border-border-dark mt-1 pt-1.5">
+          <span className="text-content dark:text-content-dark font-semibold text-base">TOTAL</span>
+          <span className="text-content dark:text-content-dark font-bold text-base">{fmtP(s.total)}</span>
         </div>
       </div>
 
       {/* Pago */}
-      <div style={{ background:"#111", borderRadius:4, padding:"8px 14px", marginBottom:18, fontSize:12 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-          <span style={{ color:"#555" }}>Pagado</span>
-          <span style={{ color:"#27ae60" }}>{fmtP(s.paid)}</span>
+      <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-4 mb-4 space-y-2">
+        <div className="flex justify-between items-center py-1.5 text-sm">
+          <span className="text-content-muted dark:text-content-dark-muted">Pagado</span>
+          <span className="text-success font-medium">{fmtP(s.paid)}</span>
         </div>
-        <div style={{ display:"flex", justifyContent:"space-between" }}>
-          <span style={{ color:"#555" }}>Cambio</span>
-          <span>{fmtP(s.change)}</span>
+        <div className="flex justify-between items-center py-1.5 text-sm">
+          <span className="text-content-muted dark:text-content-dark-muted">Cambio</span>
+          <span className="text-content dark:text-content-dark font-medium">{fmtP(s.change)}</span>
         </div>
       </div>
 
       {/* Footer */}
-      <div style={{ textAlign:"center", fontSize:11, color:"#444", marginBottom:16 }}>¡Gracias por su compra!</div>
+      <div className="text-center text-xs text-content-muted dark:text-content-dark-muted mb-4">¡Gracias por su compra!</div>
 
       {/* Botones */}
-      <div style={{ display:"flex", gap:10 }}>
-        <button onClick={onClose}
-          style={{ flex:1, background:"transparent", border:"1px solid #333", color:"#888", padding:"10px", borderRadius:4, fontFamily:"inherit", cursor:"pointer", fontSize:12 }}>
+      <div className="flex gap-2.5">
+        <button onClick={onClose} className="btn-md btn-secondary w-full">
           CERRAR
         </button>
-        <button onClick={() => printReceipt(sale, storeName, displayCurrency)}
-          style={{ flex:2, background:"#f0a500", color:"#0f0f0f", border:"none", padding:"10px", borderRadius:4, fontFamily:"inherit", fontWeight:"bold", letterSpacing:2, cursor:"pointer", fontSize:13 }}>
+        <button
+          onClick={() => printReceipt(sale, storeName, displayCurrency)}
+          className="btn-md btn-primary w-full"
+          style={{ flex: 2 }}
+        >
           🖨 IMPRIMIR
         </button>
       </div>

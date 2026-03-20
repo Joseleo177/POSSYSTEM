@@ -8,22 +8,6 @@ const EMPTY = {
   package_unit: "", package_size: "", cost_price: "", profit_margin: "",
 };
 
-const inp = {
-  width: "100%", background: "#0f0f0f", border: "1px solid #333",
-  color: "#e8e0d0", padding: "8px 10px", borderRadius: 4,
-  fontFamily: "inherit", fontSize: 13, boxSizing: "border-box",
-};
-
-const btnSmall = {
-  background: "transparent", color: "#888", border: "1px solid #333",
-  padding: "3px 8px", borderRadius: 3, cursor: "pointer", fontFamily: "inherit", fontSize: 11,
-};
-
-const sectionLabel = {
-  fontSize: 10, color: "#555", letterSpacing: 2, marginBottom: 10, marginTop: 16,
-  borderBottom: "1px solid #1e1e1e", paddingBottom: 4,
-};
-
 export default function ProductModal({ open, onClose, onSave, editData, categories, loading }) {
   const [form, setForm]             = useState(EMPTY);
   const [imageFile, setImageFile]   = useState(null);
@@ -92,49 +76,45 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     <Modal open={open} onClose={onClose} title={isEdit ? "✏ EDITAR PRODUCTO" : "+ NUEVO PRODUCTO"} width={620}>
 
       {/* ── Imagen + campos básicos ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 18, alignItems: "start" }}>
+      <div className="grid grid-cols-[auto_1fr] gap-[18px] items-start">
         {/* Imagen */}
         <div>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 6 }}>IMAGEN</div>
-          <label style={{ display: "block", cursor: "pointer" }}>
-            <div
-              style={{ width: 110, height: 110, borderRadius: 6, overflow: "hidden", background: "#111", border: "2px dashed #333", display: "flex", alignItems: "center", justifyContent: "center", transition: "border-color .15s" }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = "#f0a500"}
-              onMouseLeave={e => e.currentTarget.style.borderColor = "#333"}
-            >
+          <div className="label">IMAGEN</div>
+          <label className="block cursor-pointer">
+            <div className="w-[110px] h-[110px] rounded-md overflow-hidden bg-surface-dark dark:bg-surface-dark border-2 border-dashed border-border dark:border-border-dark hover:border-brand-400 transition-colors flex items-center justify-center cursor-pointer">
               {imagePreview
-                ? <img src={imagePreview} alt="preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                : <div style={{ textAlign: "center", color: "#444" }}>
-                    <div style={{ fontSize: 28 }}>📷</div>
-                    <div style={{ fontSize: 10, marginTop: 4 }}>Subir</div>
+                ? <img src={imagePreview} alt="preview" className="w-full h-full object-cover" />
+                : <div className="text-center text-content-muted dark:text-content-dark-muted">
+                    <div className="text-[28px]">📷</div>
+                    <div className="text-[10px] mt-1">Subir</div>
                   </div>
               }
             </div>
-            <input type="file" accept="image/*" onChange={handleImageChange} style={{ display: "none" }} />
+            <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
           </label>
           {imagePreview && (
             <button
               onClick={() => { setImageFile(null); setImagePreview(null); }}
-              style={{ ...btnSmall, marginTop: 6, width: "100%", color: "#e74c3c", borderColor: "#444", padding: "4px 0" }}
+              className="btn-sm btn-danger mt-1.5 w-full"
             >Quitar</button>
           )}
         </div>
 
         {/* Campos básicos */}
         <div>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-            {[["Nombre *", "name", "text"], ["Precio venta *", "price", "number"], ["Stock", "stock", "number"]].map(([label, key, type]) => (
+          <div className="grid grid-cols-[2fr_1fr_1fr] gap-[10px] mb-[10px]">
+            {[["Nombre *", "name", "text"], ["Precio venta *", "price", "number"], ["Stock", "stock", "number"]].map(([lbl, key, type]) => (
               <div key={key}>
-                <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>{label}</div>
+                <label className="label">{lbl}</label>
                 {key === "stock" && editData?.id
-                  ? <div style={{ ...inp, background: "#080808", color: "#5dade2", cursor: "default" }}>
+                  ? <div className="input flex items-center bg-surface-dark-3 dark:bg-surface-dark-3 text-info cursor-default">
                       {form[key] ?? 0}
-                      <span style={{ fontSize: 10, color: "#555", marginLeft: 6 }}>— solo vía compras/ventas</span>
+                      <span className="text-[10px] text-content-muted dark:text-content-dark-muted ml-1.5">— solo vía compras/ventas</span>
                     </div>
                   : <input
                       value={form[key]}
                       onChange={e => set(key, e.target.value)}
-                      type={type} style={inp}
+                      type={type} className="input"
                       autoFocus={key === "name"}
                       step={key === "price" || key === "stock" ? "0.01" : undefined}
                     />
@@ -143,26 +123,26 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             ))}
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+          <div className="grid grid-cols-3 gap-[10px]">
             <div>
-              <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Categoría</div>
-              <select value={form.category_id} onChange={e => set("category_id", e.target.value)} style={inp}>
+              <label className="label">Categoría</label>
+              <select value={form.category_id} onChange={e => set("category_id", e.target.value)} className="input">
                 <option value="">Sin categoría</option>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Unidad</div>
-              <select value={form.unit} onChange={e => set("unit", e.target.value)} style={inp}>
+              <label className="label">Unidad</label>
+              <select value={form.unit} onChange={e => set("unit", e.target.value)} className="input">
                 {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Venta mínima</div>
+              <label className="label">Venta mínima</label>
               <input
                 value={form.qty_step}
                 onChange={e => set("qty_step", e.target.value)}
-                type="number" min="0.001" step="0.001" style={inp}
+                type="number" min="0.001" step="0.001" className="input"
               />
             </div>
           </div>
@@ -170,81 +150,92 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
       </div>
 
       {/* ── Sección: Paquete / Bulto ── */}
-      <div style={sectionLabel}>PAQUETE / BULTO (opcional)</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+      <div className="text-[10px] uppercase tracking-[2px] text-content-muted dark:text-content-dark-muted mt-4 mb-[10px] pb-1 border-b border-border dark:border-border-dark">
+        PAQUETE / BULTO (opcional)
+      </div>
+      <div className="grid grid-cols-2 gap-[10px] mb-[10px]">
         <div>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Nombre del paquete</div>
+          <label className="label">Nombre del paquete</label>
           <input
             list="pkg-units-list"
             value={form.package_unit}
             onChange={e => set("package_unit", e.target.value)}
             placeholder="ej. caja, bulto, docena..."
-            style={inp}
+            className="input"
           />
           <datalist id="pkg-units-list">
             {PKG_UNITS.map(u => <option key={u} value={u} />)}
           </datalist>
         </div>
         <div>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Unidades por paquete</div>
+          <label className="label">Unidades por paquete</label>
           <input
             value={form.package_size}
             onChange={e => set("package_size", e.target.value)}
             type="number" min="1" step="1"
             placeholder="ej. 12"
-            style={inp}
+            className="input"
           />
         </div>
       </div>
-      <div style={{ fontSize: 10, color: "#444" }}>
+      <div className="text-[10px] text-content-muted dark:text-content-dark-muted">
         Ej: "caja" de 12 unidades → al registrar una compra se calcula el precio unitario automáticamente.
       </div>
 
       {/* ── Sección: Costo y Margen ── */}
-      <div style={sectionLabel}>COSTO Y MARGEN DE GANANCIA (opcional)</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+      <div className="text-[10px] uppercase tracking-[2px] text-content-muted dark:text-content-dark-muted mt-4 mb-[10px] pb-1 border-b border-border dark:border-border-dark">
+        COSTO Y MARGEN DE GANANCIA (opcional)
+      </div>
+      <div className="grid grid-cols-3 gap-[10px]">
         <div>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Precio de costo (unitario)</div>
+          <label className="label">Precio de costo (unitario)</label>
           <input
             value={form.cost_price}
             onChange={e => handleCostOrMarginChange("cost_price", e.target.value)}
             type="number" min="0" step="0.01"
             placeholder="0.00"
-            style={inp}
+            className="input"
           />
         </div>
         <div>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Margen de ganancia (%)</div>
+          <label className="label">Margen de ganancia (%)</label>
           <input
             value={form.profit_margin}
             onChange={e => handleCostOrMarginChange("profit_margin", e.target.value)}
             type="number" min="0" step="0.1"
             placeholder="ej. 50"
-            style={inp}
+            className="input"
           />
         </div>
         <div>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Precio sugerido</div>
-          <div style={{
-            ...inp, display: "flex", alignItems: "center", justifyContent: "space-between",
-            color: suggestedPrice ? "#f0a500" : "#333", fontWeight: suggestedPrice ? "bold" : "normal",
-            cursor: suggestedPrice ? "pointer" : "default",
-          }}
+          <label className="label">Precio sugerido</label>
+          <div
+            className={[
+              "input flex items-center justify-between",
+              suggestedPrice
+                ? "text-warning font-bold cursor-pointer"
+                : "text-content-muted dark:text-content-dark-muted cursor-default",
+            ].join(" ")}
             title={suggestedPrice ? "Clic para aplicar al precio de venta" : ""}
             onClick={() => { if (suggestedPrice) set("price", suggestedPrice); }}
           >
             {suggestedPrice ? `$${suggestedPrice}` : "—"}
-            {suggestedPrice && <span style={{ fontSize: 9, color: "#888" }}>↑ aplicar</span>}
+            {suggestedPrice && <span className="text-[9px] text-content-muted dark:text-content-dark-muted">↑ aplicar</span>}
           </div>
         </div>
       </div>
 
       {/* Botones */}
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
-        <button onClick={onClose} style={{ ...btnSmall, padding: "8px 18px", fontSize: 12 }}>Cancelar</button>
+      <div className="flex gap-[10px] justify-end mt-5">
+        <button onClick={onClose} className="btn-sm btn-secondary">Cancelar</button>
         <button
           onClick={handleSave} disabled={loading}
-          style={{ background: loading ? "#7a5200" : "#f0a500", color: "#0f0f0f", border: "none", padding: "8px 24px", borderRadius: 4, fontFamily: "inherit", fontWeight: "bold", cursor: loading ? "not-allowed" : "pointer", fontSize: 13 }}
+          className={[
+            "btn-md font-bold border-none rounded",
+            loading
+              ? "opacity-60 cursor-not-allowed bg-warning/60 text-surface-dark"
+              : "bg-warning text-surface-dark hover:bg-amber-400 cursor-pointer",
+          ].join(" ")}
         >
           {loading ? "Guardando..." : isEdit ? "Guardar" : "Agregar"}
         </button>

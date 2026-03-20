@@ -11,46 +11,27 @@ export default function Modal({ open, onClose, title, children, width = 560 }) {
   if (!open) return null;
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 1000,
-        background: "rgba(0,0,0,0.75)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 20,
-      }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: "#1a1a1a", border: "1px solid #f0a500",
-          borderRadius: 8, width: "100%", maxWidth: width,
-          maxHeight: "90vh", overflowY: "auto",
-          fontFamily: "'Courier New', monospace",
-          boxShadow: "0 8px 40px rgba(0,0,0,0.8)",
-        }}
-      >
+    <div onClick={onClose}
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div onClick={e => e.stopPropagation()}
+        className="bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-xl shadow-card-lg w-full overflow-y-auto"
+        style={{ maxWidth: width, maxHeight: "90vh" }}>
+
         {/* Header */}
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "16px 20px", borderBottom: "1px solid #2a2a2a",
-        }}>
-          <div style={{ fontWeight: "bold", fontSize: 13, color: "#f0a500", letterSpacing: 2 }}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border dark:border-border-dark sticky top-0 bg-white dark:bg-surface-dark-2 z-10">
+          <h2 className="text-base font-semibold text-content dark:text-content-dark tracking-tight">
             {title}
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent", border: "none", color: "#555",
-              fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 4px",
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = "#e74c3c"}
-            onMouseLeave={e => e.currentTarget.style.color = "#555"}
-          >✕</button>
+          </h2>
+          <button onClick={onClose}
+            className="p-1.5 rounded-lg text-content-muted dark:text-content-dark-muted hover:text-danger hover:bg-danger/10 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
         </div>
 
         {/* Body */}
-        <div style={{ padding: "20px" }}>
+        <div className="p-5">
           {children}
         </div>
       </div>

@@ -3,16 +3,6 @@ import { api } from "../services/api";
 import CustomerModal from "./CustomerModal";
 import ProductModal from "./ProductModal";
 
-const inp = {
-  width: "100%", background: "#0f0f0f", border: "1px solid #333",
-  color: "#e8e0d0", padding: "8px 10px", borderRadius: 4,
-  fontFamily: "inherit", fontSize: 13, boxSizing: "border-box",
-};
-const btnSmall = {
-  background: "transparent", color: "#888", border: "1px solid #333",
-  padding: "4px 10px", borderRadius: 3, cursor: "pointer", fontFamily: "inherit", fontSize: 11,
-};
-const label11 = { fontSize: 11, color: "#888", marginBottom: 4, display: "block" };
 const PKG_UNITS = ["caja", "bulto", "paquete", "docena", "media caja", "fardo", "saco", "unidad"];
 
 const EMPTY_ITEM = {
@@ -236,50 +226,58 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
   // ═══════════════════════════════════════════════════════════════
   if (view === "list") return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <div style={{ fontSize: 13, color: "#555" }}>{purchases.length} recibo(s) registrado(s)</div>
-        <button onClick={() => setView("new")}
-          style={{ background: "#f0a500", color: "#0f0f0f", border: "none", padding: "10px 20px", borderRadius: 4, fontFamily: "inherit", fontWeight: "bold", cursor: "pointer", fontSize: 13 }}>
+      <div className="flex justify-between items-center mb-5">
+        <div className="text-sm text-content-muted dark:text-content-dark-muted">
+          {purchases.length} recibo(s) registrado(s)
+        </div>
+        <button onClick={() => setView("new")} className="btn-md btn-primary">
           + Nuevo recibo de compra
         </button>
       </div>
+
       {purchases.length === 0
-        ? <div style={{ textAlign: "center", color: "#444", padding: "60px 0", fontSize: 13 }}>
-          Aún no hay recibos de compra.<br />
-          <span style={{ color: "#555", fontSize: 11 }}>Registra tu primera compra para actualizar el inventario.</span>
-        </div>
-        : <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: "2px solid #f0a500", color: "#f0a500" }}>
-              {["#", "Almacén", "Proveedor", "Productos", "Total", "Empleado", "Fecha", ""].map(h =>
-                <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, letterSpacing: 1 }}>{h}</th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {purchases.map((p, i) => (
-              <tr key={p.id} style={{ background: i % 2 === 0 ? "#111" : "transparent", borderBottom: "1px solid #1e1e1e" }}>
-                <td style={{ padding: "10px 12px", color: "#555", fontSize: 11 }}>#{p.id}</td>
-                <td style={{ padding: "10px 12px" }}>
-                  {p.warehouse_name
-                    ? <span style={{ fontSize: 11, color: "#5dade2", border: "1px solid #2980b933", background: "#0d1f2b", padding: "2px 8px", borderRadius: 3 }}>📦 {p.warehouse_name}</span>
-                    : <span style={{ color: "#444" }}>—</span>}
-                </td>
-                <td style={{ padding: "10px 12px", fontWeight: "bold" }}>{p.supplier_name || <span style={{ color: "#444" }}>—</span>}</td>
-                <td style={{ padding: "10px 12px", color: "#888" }}>{p.item_count} ítem(s)</td>
-                <td style={{ padding: "10px 12px", color: "#f0a500", fontWeight: "bold" }}>${fmt2(p.total)}</td>
-                <td style={{ padding: "10px 12px", color: "#888" }}>{p.employee_name || "—"}</td>
-                <td style={{ padding: "10px 12px", color: "#555", fontSize: 11 }}>{new Date(p.created_at).toLocaleString("es-VE")}</td>
-                <td style={{ padding: "10px 12px" }}>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => openDetail(p)} style={{ ...btnSmall, color: "#5dade2", borderColor: "#2980b9" }}>Detalle</button>
-                    <button onClick={() => cancelPurchase(p.id)} style={{ ...btnSmall, color: "#e74c3c", borderColor: "#e74c3c" }}>Anular</button>
-                  </div>
-                </td>
+        ? <div className="text-center py-16 text-sm text-content-muted dark:text-content-dark-muted">
+            Aún no hay recibos de compra.<br />
+            <span className="text-xs">Registra tu primera compra para actualizar el inventario.</span>
+          </div>
+        : <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b-2 border-warning text-warning">
+                {["#", "Almacén", "Proveedor", "Productos", "Total", "Empleado", "Fecha", ""].map(h =>
+                  <th key={h} className="text-left px-3 py-2.5 text-[11px] tracking-widest">{h}</th>
+                )}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {purchases.map((p, i) => (
+                <tr key={p.id} className={`border-b border-border dark:border-border-dark ${i % 2 === 0 ? "bg-surface-2 dark:bg-surface-dark-2" : ""}`}>
+                  <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted text-[11px]">#{p.id}</td>
+                  <td className="px-3 py-2.5">
+                    {p.warehouse_name
+                      ? <span className="text-[11px] text-info border border-info/20 bg-info/5 dark:bg-info/10 px-2 py-0.5 rounded">
+                          📦 {p.warehouse_name}
+                        </span>
+                      : <span className="text-content-muted dark:text-content-dark-muted">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 font-bold text-content dark:text-content-dark">
+                    {p.supplier_name || <span className="text-content-muted dark:text-content-dark-muted font-normal">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted">{p.item_count} ítem(s)</td>
+                  <td className="px-3 py-2.5 text-warning font-bold">${fmt2(p.total)}</td>
+                  <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted">{p.employee_name || "—"}</td>
+                  <td className="px-3 py-2.5 text-[11px] text-content-muted dark:text-content-dark-muted">
+                    {new Date(p.created_at).toLocaleString("es-VE")}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex gap-1.5">
+                      <button onClick={() => openDetail(p)} className="btn-sm btn-ghost text-info border-info/50">Detalle</button>
+                      <button onClick={() => cancelPurchase(p.id)} className="btn-sm btn-danger">Anular</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
       }
     </div>
   );
@@ -289,51 +287,59 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
   // ═══════════════════════════════════════════════════════════════
   if (view === "detail" && detail) return (
     <div>
-      <button onClick={() => { setView("list"); setDetail(null); }}
-        style={{ ...btnSmall, marginBottom: 20, padding: "7px 16px", fontSize: 12, color: "#f0a500", borderColor: "#f0a500" }}>
+      <button
+        onClick={() => { setView("list"); setDetail(null); }}
+        className="btn-sm btn-ghost text-warning border-warning mb-5"
+      >
         ← Volver
       </button>
-      <div style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 6, padding: 20, marginBottom: 20, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+
+      <div className="bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-md p-5 mb-5 grid grid-cols-3 gap-4">
         <div>
-          <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>PROVEEDOR</div>
-          <div style={{ fontSize: 16, fontWeight: "bold", color: detail.supplier_name ? "#9b59b6" : "#444" }}>{detail.supplier_name || "—"}</div>
-          {detail.supplier_rif && <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{detail.supplier_rif}</div>}
-          {detail.notes && <div style={{ fontSize: 12, color: "#888", marginTop: 6 }}>{detail.notes}</div>}
+          <div className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-widest mb-1">PROVEEDOR</div>
+          <div className={`text-base font-bold ${detail.supplier_name ? "text-violet-600 dark:text-violet-400" : "text-content-muted dark:text-content-dark-muted"}`}>
+            {detail.supplier_name || "—"}
+          </div>
+          {detail.supplier_rif && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">{detail.supplier_rif}</div>}
+          {detail.notes && <div className="text-xs text-content-muted dark:text-content-dark-muted mt-1.5">{detail.notes}</div>}
         </div>
         <div>
-          <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>EMPLEADO</div>
-          <div style={{ fontSize: 13 }}>{detail.employee_name || "—"}</div>
+          <div className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-widest mb-1">EMPLEADO</div>
+          <div className="text-sm text-content dark:text-content-dark">{detail.employee_name || "—"}</div>
           {detail.warehouse_name && (
-            <div style={{ fontSize: 11, color: "#5dade2", marginTop: 6 }}>📦 Almacén: <b>{detail.warehouse_name}</b></div>
+            <div className="text-[11px] text-info mt-1.5">📦 Almacén: <b>{detail.warehouse_name}</b></div>
           )}
-          <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>{new Date(detail.created_at).toLocaleString("es-VE")}</div>
+          <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-1.5">
+            {new Date(detail.created_at).toLocaleString("es-VE")}
+          </div>
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>TOTAL COMPRA</div>
-          <div style={{ fontSize: 28, fontWeight: "bold", color: "#f0a500" }}>${fmt2(detail.total)}</div>
+        <div className="text-right">
+          <div className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-widest mb-1">TOTAL COMPRA</div>
+          <div className="text-3xl font-bold text-warning">${fmt2(detail.total)}</div>
         </div>
       </div>
-      <div style={{ fontWeight: "bold", fontSize: 11, color: "#f0a500", letterSpacing: 2, marginBottom: 12 }}>PRODUCTOS RECIBIDOS</div>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+
+      <div className="text-[11px] font-bold text-warning tracking-[0.15em] mb-3">PRODUCTOS RECIBIDOS</div>
+      <table className="w-full border-collapse text-xs">
         <thead>
-          <tr style={{ borderBottom: "1px solid #2a2a2a", color: "#555" }}>
+          <tr className="border-b border-border dark:border-border-dark text-content-muted dark:text-content-dark-muted">
             {["Producto", "Paquete", "Cant.", "Precio/paq.", "Costo unit.", "Margen", "P. venta", "Total uds.", "Subtotal"].map(h =>
-              <th key={h} style={{ textAlign: "left", padding: "8px 10px", fontSize: 10, letterSpacing: 1 }}>{h}</th>
+              <th key={h} className="text-left px-2.5 py-2 text-[10px] tracking-widest">{h}</th>
             )}
           </tr>
         </thead>
         <tbody>
           {detail.items.map((item, i) => (
-            <tr key={item.id} style={{ background: i % 2 === 0 ? "#111" : "transparent", borderBottom: "1px solid #1a1a1a" }}>
-              <td style={{ padding: "10px 10px", fontWeight: "bold" }}>{item.product_name}</td>
-              <td style={{ padding: "10px 10px", color: "#888" }}>{item.package_unit} × {item.package_size}</td>
-              <td style={{ padding: "10px 10px" }}>{item.package_qty}</td>
-              <td style={{ padding: "10px 10px", color: "#5dade2" }}>${fmt2(item.package_price)}</td>
-              <td style={{ padding: "10px 10px", color: "#888" }}>${fmt2(item.unit_cost)}</td>
-              <td style={{ padding: "10px 10px", color: "#888" }}>{item.profit_margin}%</td>
-              <td style={{ padding: "10px 10px", color: "#27ae60", fontWeight: "bold" }}>${fmt2(item.sale_price)}</td>
-              <td style={{ padding: "10px 10px", color: "#aaa" }}>{item.total_units}</td>
-              <td style={{ padding: "10px 10px", color: "#f0a500", fontWeight: "bold" }}>${fmt2(item.subtotal)}</td>
+            <tr key={item.id} className={`border-b border-border dark:border-border-dark ${i % 2 === 0 ? "bg-surface-2 dark:bg-surface-dark-2" : ""}`}>
+              <td className="px-2.5 py-2.5 font-bold text-content dark:text-content-dark">{item.product_name}</td>
+              <td className="px-2.5 py-2.5 text-content-muted dark:text-content-dark-muted">{item.package_unit} × {item.package_size}</td>
+              <td className="px-2.5 py-2.5 text-content dark:text-content-dark">{item.package_qty}</td>
+              <td className="px-2.5 py-2.5 text-info">${fmt2(item.package_price)}</td>
+              <td className="px-2.5 py-2.5 text-content-muted dark:text-content-dark-muted">${fmt2(item.unit_cost)}</td>
+              <td className="px-2.5 py-2.5 text-content-muted dark:text-content-dark-muted">{item.profit_margin}%</td>
+              <td className="px-2.5 py-2.5 text-success font-bold">${fmt2(item.sale_price)}</td>
+              <td className="px-2.5 py-2.5 text-content dark:text-content-dark">{item.total_units}</td>
+              <td className="px-2.5 py-2.5 text-warning font-bold">${fmt2(item.subtotal)}</td>
             </tr>
           ))}
         </tbody>
@@ -348,33 +354,36 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <button onClick={() => setView("list")} style={{ ...btnSmall, padding: "7px 16px", fontSize: 12, color: "#888", borderColor: "#444" }}>← Cancelar</button>
-        <div style={{ fontSize: 14, fontWeight: "bold", color: "#f0a500", letterSpacing: 2 }}>NUEVO RECIBO DE COMPRA</div>
+      <div className="flex items-center gap-3 mb-5">
+        <button onClick={() => setView("list")} className="btn-sm btn-secondary">← Cancelar</button>
+        <div className="text-sm font-bold text-warning tracking-[0.15em]">NUEVO RECIBO DE COMPRA</div>
       </div>
 
       {/* ── Cabecera del recibo ── */}
-      <div style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 6, padding: 16, marginBottom: 16 }}>
-        <div style={{ fontWeight: "bold", fontSize: 11, color: "#555", letterSpacing: 2, marginBottom: 12 }}>INFORMACIÓN DEL RECIBO</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+      <div className="bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-md p-4 mb-4">
+        <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-widest mb-3">INFORMACIÓN DEL RECIBO</div>
+        <div className="grid grid-cols-3 gap-3">
 
           {/* ── Selector de almacén destino ── */}
           <div>
-            <span style={label11}>Almacén destino *</span>
+            <label className="label">Almacén destino *</label>
             {warehouses.length === 0
-              ? <div style={{ ...inp, color: "#e74c3c", background: "#1a0000", border: "1px solid #e74c3c" }}>
-                Sin almacenes disponibles
-              </div>
-              : <select value={selectedWarehouseId} onChange={e => setSelectedWarehouseId(e.target.value)}
-                style={{ ...inp, cursor: "pointer" }}>
-                <option value="">— Seleccionar almacén</option>
-                {warehouses.map(w => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))}
-              </select>
+              ? <div className="input text-danger bg-danger/5 border-danger">
+                  Sin almacenes disponibles
+                </div>
+              : <select
+                  value={selectedWarehouseId}
+                  onChange={e => setSelectedWarehouseId(e.target.value)}
+                  className="input cursor-pointer"
+                >
+                  <option value="">— Seleccionar almacén</option>
+                  {warehouses.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
             }
             {selectedWarehouseId && (
-              <div style={{ fontSize: 10, color: "#27ae60", marginTop: 4 }}>
+              <div className="text-[10px] text-success mt-1">
                 ● El stock entrará a <b>{warehouses.find(w => String(w.id) === selectedWarehouseId)?.name}</b>
               </div>
             )}
@@ -382,200 +391,252 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
 
           {/* Selector de proveedor */}
           <div>
-            <span style={label11}>Proveedor</span>
+            <label className="label">Proveedor</label>
             {selectedSupplier
-              ? <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#0d1f2b", border: "1px solid #8e44ad", borderRadius: 4, padding: "8px 12px" }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: "bold", color: "#9b59b6" }}>{selectedSupplier.name}</div>
-                  {selectedSupplier.rif && <div style={{ fontSize: 10, color: "#555" }}>{selectedSupplier.rif}</div>}
-                </div>
-                <button onClick={() => { setSelectedSupplier(null); setSupplierSearch(""); }} style={{ ...btnSmall, color: "#e74c3c", borderColor: "#e74c3c" }}>✕</button>
-              </div>
-              : <div style={{ position: "relative" }}>
-                <input value={supplierSearch} onChange={e => setSupplierSearch(e.target.value)}
-                  placeholder="Buscar proveedor registrado..." style={inp} />
-                {supplierSearch.trim().length > 0 && (
-                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#1e1e1e", border: "1px solid #333", borderRadius: 4, zIndex: 20, maxHeight: 220, overflowY: "auto" }}>
-                    {supplierResults.map(s => (
-                      <div key={s.id} onClick={() => { setSelectedSupplier(s); setSupplierSearch(""); setSupplierResults([]); }}
-                        style={{ padding: "10px 12px", cursor: "pointer", borderBottom: "1px solid #222", fontSize: 13 }}
-                        onMouseEnter={e => e.currentTarget.style.background = "#2a2a2a"}
-                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                        <div style={{ fontWeight: "bold", color: "#9b59b6" }}>{s.name}</div>
-                        <div style={{ fontSize: 10, color: "#555" }}>{[s.rif, s.tax_name].filter(Boolean).join(" · ") || "Sin datos adicionales"}</div>
-                      </div>
-                    ))}
-                    <div onClick={() => openCreateSupplier(supplierSearch)}
-                      style={{ padding: "10px 12px", cursor: "pointer", fontSize: 13, color: "#8e44ad", borderTop: supplierResults.length > 0 ? "1px solid #2a2a2a" : "none", display: "flex", alignItems: "center", gap: 6 }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#1a0d2b"}
-                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                      <span style={{ fontSize: 15, fontWeight: "bold" }}>+</span> Crear "{supplierSearch}"
-                    </div>
+              ? <div className="flex items-center gap-2 bg-violet-600/10 dark:bg-violet-600/10 border border-violet-600/40 rounded px-3 py-2">
+                  <div className="flex-1">
+                    <div className="text-sm font-bold text-violet-600 dark:text-violet-400">{selectedSupplier.name}</div>
+                    {selectedSupplier.rif && <div className="text-[10px] text-content-muted dark:text-content-dark-muted">{selectedSupplier.rif}</div>}
                   </div>
-                )}
-              </div>
+                  <button
+                    onClick={() => { setSelectedSupplier(null); setSupplierSearch(""); }}
+                    className="btn-sm btn-danger"
+                  >✕</button>
+                </div>
+              : <div className="relative">
+                  <input
+                    value={supplierSearch}
+                    onChange={e => setSupplierSearch(e.target.value)}
+                    placeholder="Buscar proveedor registrado..."
+                    className="input"
+                  />
+                  {supplierSearch.trim().length > 0 && (
+                    <div className="absolute z-10 top-full left-0 right-0 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded mt-0.5 max-h-56 overflow-y-auto shadow-lg">
+                      {supplierResults.map(s => (
+                        <div
+                          key={s.id}
+                          onClick={() => { setSelectedSupplier(s); setSupplierSearch(""); setSupplierResults([]); }}
+                          className="px-3 py-2.5 cursor-pointer border-b border-border dark:border-border-dark text-sm hover:bg-surface-2 dark:hover:bg-surface-dark-3"
+                        >
+                          <div className="font-bold text-violet-600 dark:text-violet-400">{s.name}</div>
+                          <div className="text-[10px] text-content-muted dark:text-content-dark-muted">
+                            {[s.rif, s.tax_name].filter(Boolean).join(" · ") || "Sin datos adicionales"}
+                          </div>
+                        </div>
+                      ))}
+                      <div
+                        onClick={() => openCreateSupplier(supplierSearch)}
+                        className={`px-3 py-2.5 cursor-pointer text-sm text-violet-600 dark:text-violet-400 flex items-center gap-1.5 hover:bg-surface-2 dark:hover:bg-surface-dark-3 ${supplierResults.length > 0 ? "border-t border-border dark:border-border-dark" : ""}`}
+                      >
+                        <span className="text-base font-bold">+</span> Crear "{supplierSearch}"
+                      </div>
+                    </div>
+                  )}
+                </div>
             }
           </div>
 
           <div>
-            <span style={label11}>Notas (opcional)</span>
-            <input value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder="ej. Compra de la semana, pago contra entrega..." style={inp} />
+            <label className="label">Notas (opcional)</label>
+            <input
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="ej. Compra de la semana, pago contra entrega..."
+              className="input"
+            />
           </div>
         </div>
       </div>
 
       {/* ── Agregar producto ── */}
-      <div style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 6, padding: 16, marginBottom: 16 }}>
-        <div style={{ fontWeight: "bold", fontSize: 11, color: "#555", letterSpacing: 2, marginBottom: 14 }}>+ AGREGAR PRODUCTO AL RECIBO</div>
+      <div className="bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-md p-4 mb-4">
+        <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-widest mb-3.5">+ AGREGAR PRODUCTO AL RECIBO</div>
 
         {/* Búsqueda de producto */}
-        <div style={{ marginBottom: 14, position: "relative" }}>
-          <span style={label11}>Buscar producto</span>
+        <div className="mb-3.5 relative">
+          <label className="label">Buscar producto</label>
           {itemForm.product
-            ? <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#0d1f2b", border: "1px solid #2980b9", borderRadius: 4, padding: "8px 12px" }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: "bold", color: "#5dade2" }}>{itemForm.product.name}</div>
-                <div style={{ fontSize: 10, color: "#555" }}>Stock actual: {itemForm.product.stock} {itemForm.product.unit}</div>
-              </div>
-              <button onClick={() => setIF("product", null)} style={{ ...btnSmall, color: "#e74c3c", borderColor: "#e74c3c" }}>✕ Quitar</button>
-            </div>
-            : <>
-              <input value={productSearch} onChange={e => setProductSearch(e.target.value)}
-                placeholder="Escribe para buscar un producto..." style={inp} />
-              {searching && <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>Buscando...</div>}
-              {productSearch.trim().length > 0 && (
-                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#1e1e1e", border: "1px solid #333", borderRadius: 4, zIndex: 10, maxHeight: 220, overflowY: "auto" }}>
-                  {productResults.map(p => (
-                    <div key={p.id} onClick={() => selectProduct(p)}
-                      style={{ padding: "10px 12px", cursor: "pointer", borderBottom: "1px solid #222", fontSize: 13 }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#2a2a2a"}
-                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                      <div style={{ fontWeight: "bold" }}>{p.name}</div>
-                      <div style={{ fontSize: 10, color: "#555" }}>
-                        Stock: {p.stock} {p.unit}
-                        {p.package_unit && ` · Paquete: ${p.package_unit} x${p.package_size}`}
-                        {p.cost_price && ` · Costo: $${fmt2(p.cost_price)}`}
-                      </div>
-                    </div>
-                  ))}
-                  <div onClick={() => openCreateProduct(productSearch)}
-                    style={{ padding: "10px 12px", cursor: "pointer", fontSize: 13, color: "#f0a500", borderTop: productResults.length > 0 ? "1px solid #2a2a2a" : "none", display: "flex", alignItems: "center", gap: 6 }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#1a1500"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <span style={{ fontSize: 15, fontWeight: "bold" }}>+</span> Crear "{productSearch}"
+            ? <div className="flex items-center gap-2.5 bg-info/10 border border-info/40 rounded px-3 py-2">
+                <div className="flex-1">
+                  <div className="text-sm font-bold text-info">{itemForm.product.name}</div>
+                  <div className="text-[10px] text-content-muted dark:text-content-dark-muted">
+                    Stock actual: {itemForm.product.stock} {itemForm.product.unit}
                   </div>
                 </div>
-              )}
-            </>
+                <button onClick={() => setIF("product", null)} className="btn-sm btn-danger">✕ Quitar</button>
+              </div>
+            : <>
+                <input
+                  value={productSearch}
+                  onChange={e => setProductSearch(e.target.value)}
+                  placeholder="Escribe para buscar un producto..."
+                  className="input"
+                />
+                {searching && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-1">Buscando...</div>}
+                {productSearch.trim().length > 0 && (
+                  <div className="absolute z-10 top-full left-0 right-0 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded mt-0.5 max-h-56 overflow-y-auto shadow-lg">
+                    {productResults.map(p => (
+                      <div
+                        key={p.id}
+                        onClick={() => selectProduct(p)}
+                        className="px-3 py-2.5 cursor-pointer border-b border-border dark:border-border-dark text-sm hover:bg-surface-2 dark:hover:bg-surface-dark-3"
+                      >
+                        <div className="font-bold text-content dark:text-content-dark">{p.name}</div>
+                        <div className="text-[10px] text-content-muted dark:text-content-dark-muted">
+                          Stock: {p.stock} {p.unit}
+                          {p.package_unit && ` · Paquete: ${p.package_unit} x${p.package_size}`}
+                          {p.cost_price && ` · Costo: $${fmt2(p.cost_price)}`}
+                        </div>
+                      </div>
+                    ))}
+                    <div
+                      onClick={() => openCreateProduct(productSearch)}
+                      className={`px-3 py-2.5 cursor-pointer text-sm text-warning flex items-center gap-1.5 hover:bg-surface-2 dark:hover:bg-surface-dark-3 ${productResults.length > 0 ? "border-t border-border dark:border-border-dark" : ""}`}
+                    >
+                      <span className="text-base font-bold">+</span> Crear "{productSearch}"
+                    </div>
+                  </div>
+                )}
+              </>
           }
         </div>
 
         {/* Detalles del paquete */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+        <div className="grid grid-cols-4 gap-2.5 mb-2.5">
           <div>
-            <span style={label11}>Tipo de paquete</span>
-            <input list="pkg-list" value={itemForm.package_unit} onChange={e => setIF("package_unit", e.target.value)}
-              placeholder="caja, bulto..." style={inp} />
+            <label className="label">Tipo de paquete</label>
+            <input
+              list="pkg-list"
+              value={itemForm.package_unit}
+              onChange={e => setIF("package_unit", e.target.value)}
+              placeholder="caja, bulto..."
+              className="input"
+            />
             <datalist id="pkg-list">{PKG_UNITS.map(u => <option key={u} value={u} />)}</datalist>
           </div>
           <div>
-            <span style={label11}>Unidades por paquete</span>
-            <input type="number" min="1" step="1" value={itemForm.package_size}
-              onChange={e => setIF("package_size", e.target.value)} placeholder="ej. 12" style={inp} />
+            <label className="label">Unidades por paquete</label>
+            <input
+              type="number" min="1" step="1"
+              value={itemForm.package_size}
+              onChange={e => setIF("package_size", e.target.value)}
+              placeholder="ej. 12"
+              className="input"
+            />
           </div>
           <div>
-            <span style={label11}>Cantidad de paquetes</span>
-            <input type="number" min="1" step="1" value={itemForm.package_qty}
-              onChange={e => setIF("package_qty", e.target.value)} style={inp} />
+            <label className="label">Cantidad de paquetes</label>
+            <input
+              type="number" min="1" step="1"
+              value={itemForm.package_qty}
+              onChange={e => setIF("package_qty", e.target.value)}
+              className="input"
+            />
           </div>
           <div>
-            <span style={label11}>Precio por paquete ($)</span>
-            <input type="number" min="0" step="0.01" value={itemForm.package_price}
-              onChange={e => setIF("package_price", e.target.value)} placeholder="0.00" style={inp} />
+            <label className="label">Precio por paquete ($)</label>
+            <input
+              type="number" min="0" step="0.01"
+              value={itemForm.package_price}
+              onChange={e => setIF("package_price", e.target.value)}
+              placeholder="0.00"
+              className="input"
+            />
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
+        <div className="grid grid-cols-4 gap-2.5 mb-3.5">
           <div>
-            <span style={label11}>Margen de ganancia (%)</span>
-            <input type="number" min="0" step="0.1" value={itemForm.profit_margin}
-              onChange={e => setIF("profit_margin", e.target.value)} style={inp} />
+            <label className="label">Margen de ganancia (%)</label>
+            <input
+              type="number" min="0" step="0.1"
+              value={itemForm.profit_margin}
+              onChange={e => setIF("profit_margin", e.target.value)}
+              className="input"
+            />
           </div>
           <div>
-            <span style={label11}>Costo unitario (calc.)</span>
-            <div style={{ ...inp, color: calc.unit_cost ? "#5dade2" : "#333", background: "#080808" }}>
+            <label className="label">Costo unitario (calc.)</label>
+            <div className={`input bg-surface-3 dark:bg-surface-dark-3 ${calc.unit_cost ? "text-info" : "text-content-muted dark:text-content-dark-muted"}`}>
               {calc.unit_cost ? `$${fmt2(calc.unit_cost)}` : "—"}
             </div>
           </div>
           <div>
-            <span style={label11}>Precio de venta (calc.)</span>
-            <div style={{ ...inp, color: calc.sale_price ? "#27ae60" : "#333", background: "#080808", fontWeight: "bold" }}>
+            <label className="label">Precio de venta (calc.)</label>
+            <div className={`input bg-surface-3 dark:bg-surface-dark-3 font-bold ${calc.sale_price ? "text-success" : "text-content-muted dark:text-content-dark-muted"}`}>
               {calc.sale_price ? `$${fmt2(calc.sale_price)}` : "—"}
             </div>
           </div>
           <div>
-            <span style={label11}>Total unidades (calc.)</span>
-            <div style={{ ...inp, color: calc.total_units ? "#f0a500" : "#333", background: "#080808" }}>
+            <label className="label">Total unidades (calc.)</label>
+            <div className={`input bg-surface-3 dark:bg-surface-dark-3 ${calc.total_units ? "text-warning" : "text-content-muted dark:text-content-dark-muted"}`}>
               {calc.total_units ? calc.total_units : "—"}
             </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}>
-            <input type="checkbox" checked={itemForm.update_price} onChange={e => setIF("update_price", e.target.checked)}
-              style={{ width: 14, height: 14, accentColor: "#f0a500" }} />
-            <span style={{ color: "#aaa" }}>Actualizar precio de venta del producto al guardar</span>
-            {calc.sale_price > 0 && <span style={{ color: "#27ae60", fontSize: 11 }}>→ quedará en ${fmt2(calc.sale_price)}</span>}
+        <div className="flex items-center gap-2.5 mb-3.5">
+          <label className="flex items-center gap-2 cursor-pointer text-xs">
+            <input
+              type="checkbox"
+              checked={itemForm.update_price}
+              onChange={e => setIF("update_price", e.target.checked)}
+              className="w-3.5 h-3.5 accent-warning"
+            />
+            <span className="text-content dark:text-content-dark">Actualizar precio de venta del producto al guardar</span>
+            {calc.sale_price > 0 && (
+              <span className="text-success text-[11px]">→ quedará en ${fmt2(calc.sale_price)}</span>
+            )}
           </label>
         </div>
 
-        <button onClick={addItem}
-          style={{ background: "#1e3a1e", color: "#27ae60", border: "1px solid #27ae60", padding: "8px 20px", borderRadius: 4, fontFamily: "inherit", fontWeight: "bold", cursor: "pointer", fontSize: 12 }}>
+        <button onClick={addItem} className="btn-sm btn-success">
           + Agregar al recibo
         </button>
       </div>
 
       {/* ── Items agregados ── */}
       {items.length > 0 && (
-        <div style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 6, padding: 16, marginBottom: 16 }}>
-          <div style={{ fontWeight: "bold", fontSize: 11, color: "#555", letterSpacing: 2, marginBottom: 12 }}>PRODUCTOS EN ESTE RECIBO</div>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+        <div className="bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-md p-4 mb-4">
+          <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-widest mb-3">PRODUCTOS EN ESTE RECIBO</div>
+          <table className="w-full border-collapse text-xs">
             <thead>
-              <tr style={{ borderBottom: "1px solid #2a2a2a", color: "#555" }}>
+              <tr className="border-b border-border dark:border-border-dark text-content-muted dark:text-content-dark-muted">
                 {["Producto", "Paquete", "Cant.", "Precio/paq.", "Costo unit.", "Margen", "P. venta", "Total uds.", "Subtotal", ""].map(h =>
-                  <th key={h} style={{ textAlign: "left", padding: "6px 8px", fontSize: 10, letterSpacing: 1 }}>{h}</th>
+                  <th key={h} className="text-left px-2 py-1.5 text-[10px] tracking-widest">{h}</th>
                 )}
               </tr>
             </thead>
             <tbody>
               {items.map((item, i) => (
-                <tr key={item.key} style={{ background: i % 2 === 0 ? "#111" : "transparent", borderBottom: "1px solid #1a1a1a" }}>
-                  <td style={{ padding: "8px 8px", fontWeight: "bold" }}>{item.product?.name}</td>
-                  <td style={{ padding: "8px 8px", color: "#888" }}>{item.package_unit} × {item.package_size}</td>
-                  <td style={{ padding: "8px 8px" }}>{item.package_qty}</td>
-                  <td style={{ padding: "8px 8px", color: "#5dade2" }}>${fmt2(item.package_price)}</td>
-                  <td style={{ padding: "8px 8px", color: "#888" }}>${fmt2(item.unit_cost)}</td>
-                  <td style={{ padding: "8px 8px", color: "#888" }}>{item.profit_margin}%</td>
-                  <td style={{ padding: "8px 8px", color: "#27ae60", fontWeight: "bold" }}>${fmt2(item.sale_price)}</td>
-                  <td style={{ padding: "8px 8px", color: "#aaa" }}>{item.total_units}</td>
-                  <td style={{ padding: "8px 8px", color: "#f0a500", fontWeight: "bold" }}>${fmt2(item.subtotal)}</td>
-                  <td style={{ padding: "8px 8px" }}>
-                    <button onClick={() => removeItem(item.key)} style={{ ...btnSmall, color: "#e74c3c", borderColor: "#e74c3c" }}>✕</button>
+                <tr key={item.key} className={`border-b border-border dark:border-border-dark ${i % 2 === 0 ? "bg-surface-3 dark:bg-surface-dark-3" : ""}`}>
+                  <td className="px-2 py-2 font-bold text-content dark:text-content-dark">{item.product?.name}</td>
+                  <td className="px-2 py-2 text-content-muted dark:text-content-dark-muted">{item.package_unit} × {item.package_size}</td>
+                  <td className="px-2 py-2 text-content dark:text-content-dark">{item.package_qty}</td>
+                  <td className="px-2 py-2 text-info">${fmt2(item.package_price)}</td>
+                  <td className="px-2 py-2 text-content-muted dark:text-content-dark-muted">${fmt2(item.unit_cost)}</td>
+                  <td className="px-2 py-2 text-content-muted dark:text-content-dark-muted">{item.profit_margin}%</td>
+                  <td className="px-2 py-2 text-success font-bold">${fmt2(item.sale_price)}</td>
+                  <td className="px-2 py-2 text-content dark:text-content-dark">{item.total_units}</td>
+                  <td className="px-2 py-2 text-warning font-bold">${fmt2(item.subtotal)}</td>
+                  <td className="px-2 py-2">
+                    <button onClick={() => removeItem(item.key)} className="btn-sm btn-danger">✕</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 20, marginTop: 16, paddingTop: 12, borderTop: "1px solid #2a2a2a" }}>
+          <div className="flex justify-end items-center gap-5 mt-4 pt-3 border-t border-border dark:border-border-dark">
             <div>
-              <span style={{ fontSize: 11, color: "#555", letterSpacing: 1 }}>TOTAL COMPRA: </span>
-              <span style={{ fontSize: 20, fontWeight: "bold", color: "#f0a500" }}>${fmt2(grandTotal)}</span>
+              <span className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-widest">TOTAL COMPRA: </span>
+              <span className="text-xl font-bold text-warning">${fmt2(grandTotal)}</span>
             </div>
-            <button onClick={savePurchase} disabled={loading || !selectedWarehouseId}
-              style={{ background: loading || !selectedWarehouseId ? "#7a5200" : "#f0a500", color: "#0f0f0f", border: "none", padding: "10px 28px", borderRadius: 4, fontFamily: "inherit", fontWeight: "bold", cursor: loading || !selectedWarehouseId ? "not-allowed" : "pointer", fontSize: 14 }}>
+            <button
+              onClick={savePurchase}
+              disabled={loading || !selectedWarehouseId}
+              className={`btn-md ${loading || !selectedWarehouseId ? "btn-secondary opacity-60 cursor-not-allowed" : "btn-primary"}`}
+            >
               {loading ? "Guardando..." : !selectedWarehouseId ? "Selecciona almacén" : "Guardar recibo de compra"}
             </button>
           </div>
@@ -583,7 +644,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
       )}
 
       {items.length === 0 && (
-        <div style={{ textAlign: "center", color: "#444", padding: "30px 0", fontSize: 12 }}>
+        <div className="text-center py-8 text-xs text-content-muted dark:text-content-dark-muted">
           Agrega al menos un producto al recibo para poder guardarlo.
         </div>
       )}

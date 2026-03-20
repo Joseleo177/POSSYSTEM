@@ -9,12 +9,6 @@ const getEmpty = () => ({
   notes: "", payment_journal_id: "", pay_currency_id: "",
 });
 
-const inp = {
-  width: "100%", background: "#0f0f0f", border: "1px solid #444",
-  color: "#e8e0d0", padding: "10px 12px", borderRadius: 4,
-  fontFamily: "inherit", fontSize: 13, boxSizing: "border-box",
-};
-
 /**
  * Modal unificado para registrar pagos.
  *
@@ -73,36 +67,40 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
                    form.reference_date && form.reference_number?.trim();
 
   return (
-    <div onClick={onClose}
-      style={{ position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.82)",
-               display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}>
-      <div onClick={e => e.stopPropagation()}
-        style={{ background:"#1a1a1a",border:"1px solid #f0a500",borderRadius:8,
-                 width:"100%",maxWidth:460,fontFamily:"'Courier New',monospace",
-                 boxShadow:"0 8px 40px rgba(0,0,0,0.8)",maxHeight:"90vh",overflowY:"auto" }}>
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        className="bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-xl shadow-card-lg w-full overflow-y-auto"
+        style={{ maxWidth: 460, maxHeight: "90vh" }}
+      >
 
         {/* Header */}
-        <div style={{ padding:"14px 20px",borderBottom:"1px solid #2a2a2a",
-                      display:"flex",justifyContent:"space-between",alignItems:"center",
-                      position:"sticky",top:0,background:"#1a1a1a",zIndex:1 }}>
-          <div style={{ fontWeight:"bold",fontSize:13,color:"#f0a500",letterSpacing:2 }}>REGISTRAR PAGO</div>
-          <button onClick={onClose}
-            style={{ background:"transparent",border:"none",color:"#555",fontSize:18,cursor:"pointer" }}>✕</button>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border dark:border-border-dark sticky top-0 bg-white dark:bg-surface-dark-2 z-10">
+          <div className="text-base font-semibold text-content dark:text-content-dark">REGISTRAR PAGO</div>
+          <button
+            onClick={onClose}
+            className="bg-transparent border-none text-content-muted dark:text-content-dark-muted text-lg cursor-pointer hover:text-content dark:hover:text-content-dark"
+          >
+            ✕
+          </button>
         </div>
 
-        <div style={{ padding:20 }}>
+        <div className="p-5">
           {/* Info de la factura */}
-          <div style={{ background:"#111",borderRadius:4,padding:"10px 14px",marginBottom:16,fontSize:12 }}>
-            <div style={{ display:"flex",justifyContent:"space-between",marginBottom:4 }}>
-              <span style={{ color:"#555" }}>Factura</span>
-              <span style={{ color:"#f0a500",fontWeight:"bold" }}>
+          <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-4 mb-4 space-y-2">
+            <div className="flex justify-between items-center py-1.5 text-sm">
+              <span className="text-content-muted dark:text-content-dark-muted">Factura</span>
+              <span className="text-content dark:text-content-dark font-medium">
                 {sale.invoice_number || `#${sale.id}`}
               </span>
             </div>
             {sale.customer_name && (
-              <div style={{ display:"flex",justifyContent:"space-between",marginBottom:4 }}>
-                <span style={{ color:"#555" }}>Cliente</span>
-                <span style={{ color:"#5dade2" }}>{sale.customer_name}</span>
+              <div className="flex justify-between items-center py-1.5 text-sm">
+                <span className="text-content-muted dark:text-content-dark-muted">Cliente</span>
+                <span className="text-content dark:text-content-dark font-medium">{sale.customer_name}</span>
               </div>
             )}
             {(() => {
@@ -111,29 +109,29 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
               const infoSym  = form.pay_currency_id ? paySym  : defaultSym;
               const fmt = (usdAmt) => `${infoSym}${(Number(usdAmt || 0) * infoRate).toFixed(2)}`;
               return (<>
-                <div style={{ display:"flex",justifyContent:"space-between",marginBottom:4 }}>
-                  <span style={{ color:"#555" }}>Total</span>
-                  <span style={{ fontWeight:"bold" }}>{fmt(sale.total)}</span>
+                <div className="flex justify-between items-center py-1.5 text-sm">
+                  <span className="text-content-muted dark:text-content-dark-muted">Total</span>
+                  <span className="text-content dark:text-content-dark font-medium">{fmt(sale.total)}</span>
                 </div>
                 {(sale.amount_paid > 0) && (
-                  <div style={{ display:"flex",justifyContent:"space-between",marginBottom:4 }}>
-                    <span style={{ color:"#555" }}>Ya pagado</span>
-                    <span style={{ color:"#27ae60" }}>{fmt(sale.amount_paid)}</span>
+                  <div className="flex justify-between items-center py-1.5 text-sm">
+                    <span className="text-content-muted dark:text-content-dark-muted">Ya pagado</span>
+                    <span className="text-success font-medium">{fmt(sale.amount_paid)}</span>
                   </div>
                 )}
-                <div style={{ display:"flex",justifyContent:"space-between" }}>
-                  <span style={{ color:"#555" }}>Saldo pendiente</span>
-                  <span style={{ fontWeight:"bold",color:"#e74c3c" }}>{fmt(balanceUsd)}</span>
+                <div className="flex justify-between items-center py-1.5 text-sm">
+                  <span className="text-content-muted dark:text-content-dark-muted">Saldo pendiente</span>
+                  <span className="text-danger font-medium">{fmt(balanceUsd)}</span>
                 </div>
               </>);
             })()}
           </div>
 
-          <div style={{ display:"grid",gap:12 }}>
+          <div className="grid gap-3">
             {/* Método de pago (diario) */}
             <div>
-              <div style={{ fontSize:11,color:"#888",marginBottom:6 }}>MÉTODO DE PAGO *</div>
-              <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
+              <label className="label">MÉTODO DE PAGO *</label>
+              <div className="flex flex-wrap gap-1.5 mt-1">
                 {activeJournals.map(j => (
                   <button key={j.id}
                     onClick={() => {
@@ -142,11 +140,17 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
                       const newRate  = (!newCur || newCur.is_base) ? 1 : parseFloat(newCur.exchange_rate || 1);
                       setForm(p => ({ ...p, payment_journal_id: j.id, pay_currency_id: newCurId || p.pay_currency_id, amount: (balanceUsd * newRate).toFixed(2) }));
                     }}
-                    style={{ padding:"6px 12px",borderRadius:4,fontFamily:"inherit",fontSize:11,
-                             cursor:"pointer",fontWeight:"bold",letterSpacing:1,
-                             background: form.payment_journal_id === j.id ? j.color || "#f0a500" : "#1a1a1a",
-                             color:      form.payment_journal_id === j.id ? "#000" : "#888",
-                             border:     form.payment_journal_id === j.id ? `2px solid ${j.color || "#f0a500"}` : "1px solid #333" }}>
+                    className={
+                      form.payment_journal_id === j.id
+                        ? "px-3 py-2 rounded-lg text-sm font-semibold border-2 border-brand-500 bg-brand-500 text-white"
+                        : "px-3 py-2 rounded-lg text-sm font-semibold border border-border dark:border-border-dark text-content-muted dark:text-content-dark-muted hover:border-brand-400"
+                    }
+                    style={
+                      form.payment_journal_id === j.id && j.color
+                        ? { borderColor: j.color, backgroundColor: j.color, color: "#000" }
+                        : undefined
+                    }
+                  >
                     {j.name}
                   </button>
                 ))}
@@ -156,8 +160,8 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
                 const cur = activeCurrencies.find(c => c.id === parseInt(form.pay_currency_id));
                 if (!cur) return null;
                 return (
-                  <div style={{ fontSize:10,color:"#555",marginTop:5 }}>
-                    💱 Moneda: <b style={{ color:"#f0a500" }}>{cur.symbol} {cur.code}</b>
+                  <div className="text-xs text-content-muted dark:text-content-dark-muted mt-1">
+                    💱 Moneda: <b className="text-content dark:text-content-dark">{cur.symbol} {cur.code}</b>
                     {!cur.is_base ? ` · tasa ${parseFloat(cur.exchange_rate).toFixed(4)}` : ""}
                   </div>
                 );
@@ -166,15 +170,19 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
 
             {/* Monto */}
             <div>
-              <div style={{ fontSize:11,color:"#888",marginBottom:4 }}>MONTO *</div>
-              <input type="text" inputMode="decimal" value={form.amount}
+              <label className="label">MONTO *</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={form.amount}
                 onChange={e => {
                   const val = e.target.value.replace(/[^\d.,]/g, "");
                   setForm(p => ({ ...p, amount: val }));
                 }}
-                style={inp} />
+                className="input"
+              />
               {form.amount && !isNaN(parseFloat(String(form.amount).replace(",","."))) && payCur && !payCur.is_base && (
-                <div style={{ fontSize:11,color:"#27ae60",marginTop:4 }}>
+                <div className="text-xs text-success mt-1">
                   ≈ {baseCurrency?.symbol}
                   {(parseFloat(String(form.amount).replace(",",".")) / payRate).toFixed(2)} {baseCurrency?.code}
                   {" "}(tasa: {payRate})
@@ -184,42 +192,52 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
 
             {/* Fecha */}
             <div>
-              <div style={{ fontSize:11,color:"#888",marginBottom:4 }}>FECHA DE REFERENCIA *</div>
-              <input type="date" value={form.reference_date}
+              <label className="label">FECHA DE REFERENCIA *</label>
+              <input
+                type="date"
+                value={form.reference_date}
                 onChange={e => setForm(p => ({ ...p, reference_date: e.target.value }))}
-                style={inp} />
+                className="input"
+              />
             </div>
 
             {/* N° Referencia */}
             <div>
-              <div style={{ fontSize:11,color:"#888",marginBottom:4 }}>N° REFERENCIA *</div>
-              <input type="text" value={form.reference_number}
+              <label className="label">N° REFERENCIA *</label>
+              <input
+                type="text"
+                value={form.reference_number}
                 onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
                 placeholder="Ej: 000123456"
-                style={inp} />
+                className="input"
+              />
             </div>
 
             {/* Notas */}
             <div>
-              <div style={{ fontSize:11,color:"#888",marginBottom:4 }}>NOTAS</div>
-              <input type="text" value={form.notes}
+              <label className="label">NOTAS</label>
+              <input
+                type="text"
+                value={form.notes}
                 onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                 placeholder="Observaciones..."
-                style={inp} />
+                className="input"
+              />
             </div>
           </div>
 
           {/* Botones */}
-          <div style={{ display:"flex",gap:10,marginTop:20 }}>
-            <button onClick={onClose}
-              style={{ flex:1,background:"transparent",color:"#888",border:"1px solid #333",
-                       padding:"10px 0",borderRadius:4,cursor:"pointer",fontFamily:"inherit",fontSize:13 }}>
+          <div className="border-t border-border dark:border-border-dark my-4" />
+          <div className="flex gap-2.5">
+            <button onClick={onClose} className="btn-md btn-secondary w-full">
               Cancelar
             </button>
-            <button onClick={submit} disabled={!canSubmit}
-              style={{ flex:2,background:canSubmit?"#27ae60":"#1a4a2a",
-                       color:canSubmit?"#fff":"#555",border:"none",padding:"10px 0",borderRadius:4,
-                       cursor:canSubmit?"pointer":"not-allowed",fontFamily:"inherit",fontSize:13,fontWeight:"bold" }}>
+            <button
+              onClick={submit}
+              disabled={!canSubmit}
+              className="btn-md btn-success w-full"
+              style={{ flex: 2 }}
+            >
               {loading ? "Registrando..." : "✓ CONFIRMAR"}
             </button>
           </div>

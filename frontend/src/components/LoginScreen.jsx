@@ -161,10 +161,6 @@ export default function LoginScreen({ onLogin }) {
             </button>
           </div>
 
-          {/* Hint */}
-          <p className="mt-5 text-center text-xs text-content-subtle dark:text-content-dark-muted">
-            Por defecto: <span className="font-medium text-content-muted dark:text-content-dark-muted">admin</span> / <span className="font-medium text-content-muted dark:text-content-dark-muted">admin1234</span>
-          </p>
         </div>
 
         <p className="mt-6 text-center text-xs text-content-subtle dark:text-content-dark-muted">

@@ -4,17 +4,6 @@ import { api } from "../services/api";
 import CustomerModal from "../components/CustomerModal";
 import PaymentFormModal from "../components/PaymentFormModal";
 
-const btnSmall = {
-  background: "transparent", color: "#888", border: "1px solid #333",
-  padding: "3px 8px", borderRadius: 3, cursor: "pointer", fontFamily: "inherit", fontSize: 11,
-};
-const inp = {
-  width: "100%", background: "#0f0f0f", border: "1px solid #333",
-  color: "#e8e0d0", padding: "8px 10px", borderRadius: 4,
-  fontFamily: "inherit", fontSize: 13, boxSizing: "border-box",
-};
-
-
 export default function ClientesPage() {
   const { notify, baseCurrency } = useApp();
 
@@ -50,7 +39,7 @@ export default function ClientesPage() {
       const r = await api.customers.getAll(params);
       setCustomers(r.data);
     } catch (e) { notify(e.message, "err"); }
-  }, [customerSearch, typeFilter]);
+  }, [customerSearch, typeFilter, notify]);
 
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
 
@@ -129,102 +118,155 @@ export default function ClientesPage() {
 
   // ── Vista detalle ──────────────────────────────────────────
   if (customerDetail) return (
-    <div>
-      <button onClick={() => { setCustomerDetail(null); setPurchases([]); }}
-        style={{ ...btnSmall, marginBottom: 20, padding: "7px 16px", fontSize: 12, color: "#f0a500", borderColor: "#f0a500" }}>
-        ← Volver
+    <div className="animate-in fade-in slide-in-from-left-4 duration-300">
+      <button
+        onClick={() => { setCustomerDetail(null); setPurchases([]); }}
+        className="group flex items-center gap-2 text-warning font-bold text-xs uppercase tracking-widest hover:translate-x-[-4px] transition-all mb-6"
+      >
+        <span className="text-lg">←</span> Volver al listado
       </button>
 
       {/* Header cliente */}
-      <div style={{ background:"#1a1a1a",border:"1px solid #2980b9",borderRadius:6,padding:20,marginBottom:24,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16 }}>
-        <div>
-          <div style={{ fontSize:18,fontWeight:"bold",color:"#5dade2" }}>{customerDetail.name}</div>
-          {customerDetail.rif   && <div style={{ fontSize:12,color:"#888",marginTop:4 }}>🪪 {customerDetail.rif}</div>}
-          {customerDetail.phone && <div style={{ fontSize:12,color:"#888" }}>📞 {customerDetail.phone}</div>}
-          {customerDetail.email && <div style={{ fontSize:12,color:"#888" }}>✉ {customerDetail.email}</div>}
-        </div>
-        <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-          <div>
-            <div style={{ fontSize:11,color:"#555",marginBottom:2 }}>TOTAL COMPRAS</div>
-            <div style={{ fontSize:22,fontWeight:"bold",color:"#f0a500" }}>{customerDetail.total_purchases}</div>
+      <div className="bg-white dark:bg-surface-dark-2 rounded-2xl shadow-card border border-border dark:border-border-dark p-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+          <div className="flex items-start gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-info/10 text-info flex items-center justify-center text-2xl font-bold border border-info/20 shadow-sm">
+              {customerDetail.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-content dark:text-content-dark tracking-tight leading-tight uppercase">
+                {customerDetail.name}
+              </h2>
+              <div className="flex flex-wrap gap-2.5 mt-2.5">
+                {customerDetail.rif   && <span className="text-[10px] font-bold bg-surface-2 dark:bg-surface-dark px-2 py-0.5 rounded border border-border/50 dark:border-border-dark/50 text-content-muted">ID: {customerDetail.rif}</span>}
+                {customerDetail.phone && <span className="text-[10px] font-bold bg-surface-2 dark:bg-surface-dark px-2 py-0.5 rounded border border-border/50 dark:border-border-dark/50 text-content-muted">📞 {customerDetail.phone}</span>}
+                {customerDetail.email && <span className="text-[10px] font-bold bg-surface-2 dark:bg-surface-dark px-2 py-0.5 rounded border border-border/50 dark:border-border-dark/50 text-content-muted">✉ {customerDetail.email}</span>}
+              </div>
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize:11,color:"#555",marginBottom:2 }}>TOTAL COBRADO</div>
-            <div style={{ fontSize:16,fontWeight:"bold",color:"#27ae60" }}>{fmtPrice(customerDetail.total_spent)}</div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-1 gap-6">
+            <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-xl p-4 border border-border/30">
+              <div className="text-[10px] font-bold text-content-subtle dark:text-content-dark-muted uppercase tracking-[2px] mb-1">TOTAL TRANSACCIONES</div>
+              <div className="text-2xl font-black text-warning leading-none">{customerDetail.total_purchases}</div>
+            </div>
+            <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-xl p-4 border border-border/30">
+              <div className="text-[10px] font-bold text-content-subtle dark:text-content-dark-muted uppercase tracking-[2px] mb-1">TOTAL FACTURADO</div>
+              <div className="text-2xl font-black text-success leading-none">{fmtPrice(customerDetail.total_spent)}</div>
+            </div>
           </div>
-        </div>
-        <div style={{ textAlign:"right" }}>
-          <div style={{ fontSize:11,color:"#555",marginBottom:6,letterSpacing:1 }}>CUENTAS POR COBRAR</div>
-          {parseFloat(customerDetail.total_debt || 0) > 0
-            ? <div style={{ fontSize:28,fontWeight:"bold",color:"#e74c3c" }}>{fmtPrice(customerDetail.total_debt)}</div>
-            : <div style={{ fontSize:20,color:"#27ae60",fontWeight:"bold" }}>✓ Al día</div>
-          }
-          {pendingSales.length > 0 && (
-            <div style={{ fontSize:11,color:"#888",marginTop:4 }}>{pendingSales.length} factura{pendingSales.length>1?"s":""} pendiente{pendingSales.length>1?"s":""}</div>
-          )}
+
+          <div className="lg:text-right bg-gradient-to-br from-white to-surface-2 dark:from-surface-dark-2 dark:to-surface-dark-3 rounded-2xl p-6 border-2 border-border dark:border-border-dark shadow-card-md relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-danger/5 rounded-full -mr-12 -mt-12 transition-all group-hover:bg-danger/10"></div>
+            <div className="text-[11px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-[3px] mb-2 relative z-10">SALDO PENDIENTE</div>
+            {parseFloat(customerDetail.total_debt || 0) > 0
+              ? <div className="text-4xl font-black text-danger drop-shadow-sm relative z-10">{fmtPrice(customerDetail.total_debt)}</div>
+              : <div className="text-2xl font-black text-success flex items-center lg:justify-end gap-2 relative z-10">✓ SIN DEUDA</div>
+            }
+            {pendingSales.length > 0 && (
+              <div className="text-[10px] font-bold text-danger/70 dark:text-danger/50 mt-2 uppercase tracking-wider relative z-10">
+                {pendingSales.length} Factura{pendingSales.length > 1 ? "s" : ""} por cobrar
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Fiado activo */}
       {pendingSales.length > 0 && (
-        <div style={{ marginBottom:28 }}>
-          <div style={{ fontWeight:"bold",fontSize:13,color:"#e74c3c",letterSpacing:2,marginBottom:14 }}>CUENTAS PENDIENTES</div>
-          {pendingSales.map(sale => (
-            <div key={sale.id} style={{ background:"#1a1a1a",border:"1px solid #e74c3c44",borderRadius:6,padding:16,marginBottom:10 }}>
-              <div style={{ display:"flex",alignItems:"center",gap:10,flexWrap:"wrap" }}>
-                <span style={{ fontSize:11,color:"#555" }}>Factura #{sale.id}</span>
-                {sale.status === 'parcial'
-                  ? <span style={{ fontSize:9,background:"#f0a50022",color:"#f0a500",border:"1px solid #f0a50044",padding:"1px 6px",borderRadius:3,letterSpacing:1 }}>PARCIAL</span>
-                  : <span style={{ fontSize:9,background:"#e74c3c22",color:"#e74c3c",border:"1px solid #e74c3c44",padding:"1px 6px",borderRadius:3,letterSpacing:1 }}>PENDIENTE</span>
-                }
-                <span style={{ fontSize:11,color:"#666" }}>{new Date(sale.created_at).toLocaleDateString("es-VE")}</span>
-                <div style={{ flex:1 }} />
-                <div style={{ textAlign:"right" }}>
-                  <div style={{ fontSize:12,color:"#888" }}>Total: {fmtSale(sale, sale.total)}</div>
-                  {sale.amount_paid > 0 && <div style={{ fontSize:11,color:"#27ae60" }}>Pagado: {fmtSale(sale, sale.amount_paid)}</div>}
-                  <div style={{ fontSize:15,fontWeight:"bold",color:"#e74c3c" }}>Saldo: {fmtSale(sale, sale.balance)}</div>
+        <div className="mb-10">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="h-px flex-1 bg-danger/20"></div>
+            <h3 className="text-xs font-black text-danger uppercase tracking-[3px]">CUENTAS ABIERTAS</h3>
+            <div className="h-px flex-1 bg-danger/20"></div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pendingSales.map(sale => (
+              <div key={sale.id} className="group bg-white dark:bg-surface-dark-2 border border-danger/20 hover:border-danger/40 transition-all rounded-2xl p-5 shadow-sm hover:shadow-card-lg">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <div className="text-[10px] font-bold text-content-subtle mb-1 tracking-widest uppercase">Factura #{sale.id}</div>
+                    <div className="text-xs font-medium text-content-muted">
+                      🕒 {new Date(sale.created_at).toLocaleDateString("es-VE", { day: '2-digit', month: 'long', year: 'numeric' })}
+                    </div>
+                  </div>
+                  <div className={`px-2 py-1 rounded-md text-[9px] font-black tracking-widest border border-current ${
+                    sale.status === 'parcial' ? "text-warning bg-warning/5" : "text-danger bg-danger/5"
+                  }`}>
+                    {sale.status === 'parcial' ? "PAGO PARCIAL" : "POR COBRAR"}
+                  </div>
                 </div>
-                <button onClick={() => openPay(sale)}
-                  style={{ background:"#27ae60",color:"#fff",border:"none",padding:"8px 16px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:"bold",whiteSpace:"nowrap" }}>
-                  ✓ Registrar pago
+
+                <div className="flex items-end gap-4 border-t border-border/40 pt-4">
+                  <div className="flex-1">
+                    <div className="text-[9px] font-bold text-content-subtle uppercase tracking-widest mb-1.5 line-clamp-1">
+                      {sale.items?.map(i => i.name).join(", ") || "Sin items"}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div>
+                        <div className="text-[9px] text-content-subtle font-bold">CARGO</div>
+                        <div className="text-xs font-bold text-content-muted">{fmtSale(sale, sale.total)}</div>
+                      </div>
+                      {sale.amount_paid > 0 && (
+                        <div>
+                          <div className="text-[9px] text-success font-bold">ABONADO</div>
+                          <div className="text-xs font-bold text-success">{fmtSale(sale, sale.amount_paid)}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[9px] font-bold text-danger uppercase mb-1 tracking-widest">Saldo Restante</div>
+                    <div className="text-xl font-black text-danger">{fmtSale(sale, sale.balance)}</div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => openPay(sale)}
+                  className="w-full mt-5 py-2.5 rounded-xl bg-success text-white text-[11px] font-black uppercase tracking-[2px] shadow-sm hover:bg-emerald-600 hover:shadow-success/30 transition-all"
+                >
+                  Registrar Cobro
                 </button>
               </div>
-              {sale.items?.length > 0 && (
-                <div style={{ display:"flex",flexWrap:"wrap",gap:6,marginTop:10 }}>
-                  {sale.items.map((item,idx) => (
-                    <span key={idx} style={{ fontSize:11,background:"#111",border:"1px solid #2a2a2a",borderRadius:3,padding:"3px 8px",color:"#888" }}>
-                      {item.name} ×{item.quantity}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
       {/* Historial pagado */}
-      <div style={{ fontWeight:"bold",fontSize:13,color:"#f0a500",letterSpacing:2,marginBottom:14 }}>HISTORIAL DE COMPRAS</div>
-      {paidSales.length === 0
-        ? <div style={{ textAlign:"center",color:"#444",padding:"30px 0" }}>Sin compras pagadas</div>
-        : paidSales.map(sale => (
-          <div key={sale.id} style={{ background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:6,padding:16,marginBottom:10 }}>
-            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:8 }}>
-              <span style={{ fontSize:11,color:"#555" }}>Factura #{sale.id}</span>
-              <span style={{ fontSize:9,background:"#27ae6022",color:"#27ae60",border:"1px solid #27ae6044",padding:"1px 6px",borderRadius:3,letterSpacing:1 }}>PAGADO</span>
-              <span style={{ fontSize:11,color:"#666" }}>{new Date(sale.created_at).toLocaleString("es-VE")}</span>
-              <span style={{ fontWeight:"bold",color:"#f0a500" }}>{fmtSale(sale, sale.total)}</span>
+      <div className="flex items-center gap-3 mb-5">
+        <div className="h-px flex-1 bg-border/40"></div>
+        <h3 className="text-xs font-black text-content-subtle uppercase tracking-[3px]">HISTORIAL PAGADO</h3>
+        <div className="h-px flex-1 bg-border/40"></div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {paidSales.length === 0
+          ? <div className="col-span-full text-center text-content-subtle dark:text-content-dark-muted py-12 italic text-sm">Sin compras pagadas registradas</div>
+          : paidSales.map(sale => (
+            <div key={sale.id} className="bg-white dark:bg-surface-dark-3 border border-border dark:border-border-dark rounded-xl p-4 transition-all hover:bg-surface-2 dark:hover:bg-surface-dark group">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-[10px] font-bold text-content-subtle uppercase tracking-widest">Factura #{sale.id}</span>
+                <span className="text-[8px] font-black text-success border border-success/40 px-1.5 py-0.5 rounded tracking-tighter uppercase">PAGADO</span>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="text-xs font-bold text-content-muted line-clamp-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                  {sale.items?.map(i => i.name).join(", ") || "General"}
+                </div>
+                <div className="flex justify-between items-end mt-1">
+                  <div className="text-[10px] font-medium text-content-muted">
+                    {new Date(sale.created_at).toLocaleDateString("es-VE")}
+                  </div>
+                  <div className="text-sm font-black text-warning">
+                    {fmtSale(sale, sale.total)}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
-              {sale.items?.map((item,idx) => (
-                <span key={idx} style={{ fontSize:11,background:"#111",border:"1px solid #2a2a2a",borderRadius:3,padding:"3px 8px",color:"#888" }}>
-                  {item.name} ×{item.quantity}
-                </span>
-              ))}
-            </div>
-          </div>
-        ))
-      }
+          ))
+        }
+      </div>
 
       {/* Modal pago unificado */}
       {payModal && (
@@ -241,75 +283,145 @@ export default function ClientesPage() {
 
   // ── Vista lista ────────────────────────────────────────────
   return (
-    <div>
-      <div style={{ display:"flex",gap:10,alignItems:"center",marginBottom:16,flexWrap:"wrap" }}>
-        <div style={{ display:"flex",background:"#111",borderRadius:4,padding:3,flexShrink:0 }}>
-          {[["cliente","👤 Clientes"],["proveedor","🏭 Proveedores"]].map(([val,label]) => (
-            <button key={val} onClick={() => { setTypeFilter(val); setCustomerSearch(""); }}
-              style={{ background:typeFilter===val?(val==="cliente"?"#2980b9":"#8e44ad"):"transparent",color:typeFilter===val?"#fff":"#555",border:"none",padding:"6px 16px",borderRadius:3,fontFamily:"inherit",fontSize:11,fontWeight:"bold",cursor:"pointer" }}>
+    <div className="animate-in fade-in duration-500">
+      <div className="flex gap-4 items-center mb-8 flex-wrap">
+        {/* Toggle Clientes / Proveedores */}
+        <div className="flex bg-surface-2 dark:bg-surface-dark-3 rounded-xl p-1.5 shadow-inner border border-border/40 dark:border-border-dark/40 shrink-0">
+          {[["cliente", "👤 Clientes"], ["proveedor", "🏭 Proveedores"]].map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => { setTypeFilter(val); setCustomerSearch(""); }}
+              className={[
+                "px-6 py-2 rounded-lg text-xs font-black transition-all duration-200 cursor-pointer border-none uppercase tracking-widest",
+                typeFilter === val
+                  ? val === "cliente"
+                    ? "bg-info text-white shadow-md shadow-info/20"
+                    : "bg-violet-600 text-white shadow-md shadow-violet-600/20"
+                  : "bg-transparent text-content-muted dark:text-content-dark-muted hover:text-content dark:hover:text-content-dark",
+              ].join(" ")}
+            >
               {label}
             </button>
           ))}
         </div>
 
-        <input value={customerSearch} onChange={e => setCustomerSearch(e.target.value)}
-          placeholder={`🔍 Buscar ${isProveedor ? "proveedor" : "cliente"}...`}
-          style={{ flex:1,background:"#1a1a1a",border:"1px solid #333",color:"#e8e0d0",padding:"9px 14px",borderRadius:4,fontFamily:"inherit",fontSize:13,boxSizing:"border-box" }} />
+        {/* Buscador */}
+        <div className="relative flex-1 group">
+          <input
+            value={customerSearch}
+            onChange={e => setCustomerSearch(e.target.value)}
+            placeholder={`Buscar ${isProveedor ? "proveedor" : "cliente"} por nombre, ID o teléfono...`}
+            className="input-pos w-full pl-12 pr-4 py-3 bg-white dark:bg-surface-dark-2 rounded-xl border border-border dark:border-border-dark focus:ring-2 focus:ring-info/20 transition-all shadow-sm group-hover:shadow-md"
+          />
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-content-subtle group-focus-within:text-info transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          </div>
+        </div>
 
-        <button onClick={() => openNew(typeFilter)}
-          style={{ background:isProveedor?"#8e44ad":"#2980b9",color:"#fff",border:"none",padding:"10px 20px",borderRadius:4,fontFamily:"inherit",fontWeight:"bold",cursor:"pointer",fontSize:13,whiteSpace:"nowrap" }}>
-          + {isProveedor ? "Nuevo proveedor" : "Nuevo cliente"}
+        {/* Botón nuevo */}
+        <button
+          onClick={() => openNew(typeFilter)}
+          className={`px-8 py-3 rounded-xl text-white font-black text-xs uppercase tracking-[2px] border-none shadow-lg transition-all hover:-translate-y-0.5 active:translate-y-0 ${
+            isProveedor 
+              ? "bg-violet-600 hover:bg-violet-700 shadow-violet-600/30" 
+              : "bg-info hover:bg-blue-600 shadow-info/30"
+          }`}
+        >
+          + {isProveedor ? "Proveedor" : "Cliente"}
         </button>
       </div>
 
       {filteredList.length === 0
-        ? <div style={{ textAlign:"center",color:"#444",padding:"40px 0",fontSize:13 }}>
-            Sin {isProveedor?"proveedores":"clientes"} registrados.
+        ? <div className="bg-white dark:bg-surface-dark-2 rounded-2xl border-2 border-dashed border-border dark:border-border-dark py-24 text-center">
+            <div className="text-4xl mb-4">📭</div>
+            <div className="text-content-subtle font-bold uppercase tracking-widest text-xs">
+              Sin {isProveedor ? "proveedores" : "clientes"} registrados
+            </div>
           </div>
-        : <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-            <thead>
-              <tr style={{ borderBottom:`2px solid ${isProveedor?"#8e44ad":"#2980b9"}`,color:isProveedor?"#9b59b6":"#5dade2" }}>
-                {(isProveedor
-                  ? ["Nombre / Empresa","Teléfono","RIF / Cédula","Razón Social","Dirección","Acciones"]
-                  : ["Nombre","Teléfono","RIF / Cédula","Compras","Total cobrado","Ctas. pendientes","Acciones"]
-                ).map(h => <th key={h} style={{ textAlign:"left",padding:"10px 12px",fontSize:11,letterSpacing:1 }}>{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredList.map((c,i) => (
-                <tr key={c.id} style={{ background:i%2===0?"#111":"transparent",borderBottom:"1px solid #1e1e1e" }}>
-                  <td style={{ padding:"10px 12px",fontWeight:"bold" }}>{c.name}</td>
-                  <td style={{ padding:"10px 12px",color:"#888" }}>{c.phone||"—"}</td>
-                  <td style={{ padding:"10px 12px",color:"#888",fontSize:11 }}>{c.rif||"—"}</td>
-                  {isProveedor
-                    ? <>
-                        <td style={{ padding:"10px 12px",color:"#aaa",fontSize:12 }}>{c.tax_name||"—"}</td>
-                        <td style={{ padding:"10px 12px",color:"#666",fontSize:11 }}>{c.address||"—"}</td>
-                      </>
-                    : <>
-                        <td style={{ padding:"10px 12px",color:"#f0a500" }}>{c.total_purchases}</td>
-                        <td style={{ padding:"10px 12px",color:"#27ae60" }}>{fmtPrice(c.total_spent)}</td>
-                        <td style={{ padding:"10px 12px" }}>
-                          {parseFloat(c.total_debt||0) > 0
-                            ? <span style={{ color:"#e74c3c",fontWeight:"bold" }}>{fmtPrice(c.total_debt)}</span>
-                            : <span style={{ color:"#444",fontSize:11 }}>—</span>
-                          }
-                        </td>
-                      </>
-                  }
-                  <td style={{ padding:"10px 12px" }}>
-                    <div style={{ display:"flex",gap:6 }}>
-                      {!isProveedor && (
-                        <button onClick={() => openDetail(c)} style={{ ...btnSmall,color:"#5dade2",borderColor:"#2980b9" }}>Detalle</button>
-                      )}
-                      <button onClick={() => openEdit(c)} style={{ ...btnSmall,color:"#f0a500",borderColor:"#f0a500" }}>Editar</button>
-                      <button onClick={() => remove(c.id, c.type)} style={{ ...btnSmall,color:"#e74c3c",borderColor:"#e74c3c" }}>Eliminar</button>
-                    </div>
-                  </td>
+        : <div className="bg-white dark:bg-surface-dark-2 rounded-2xl shadow-card border border-border dark:border-border-dark overflow-hidden transition-all duration-300">
+            <table className="table-pos w-full border-collapse">
+              <thead>
+                <tr className={`border-b-2 ${isProveedor ? "border-violet-500/30 text-violet-600 dark:text-violet-400" : "border-info/30 text-info dark:text-blue-400"} bg-surface-2/50 dark:bg-surface-dark-3/50`}>
+                  {(isProveedor
+                    ? ["Nombre / Empresa", "Teléfono", "RIF / Cédula", "Razón Social", "Dirección", "Acciones"]
+                    : ["Nombre del Cliente", "Teléfono", "RIF / Cédula", "Transac.", "Cobrado", "Saldo Pendiente", "Acciones"]
+                  ).map(h => (
+                    <th key={h} className="text-left py-4 px-4 text-[10px] font-black uppercase tracking-[2px]">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border/40 dark:divide-border-dark/40">
+                {filteredList.map((c) => (
+                  <tr
+                    key={c.id}
+                    className="group hover:bg-surface-2 dark:hover:bg-surface-dark-3 transition-colors duration-150"
+                  >
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${isProveedor ? "bg-violet-100 text-violet-600 dark:bg-violet-900/20" : "bg-info/10 text-info dark:bg-blue-900/20"}`}>
+                          {c.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-bold text-content dark:text-content-dark tracking-tight uppercase text-xs">{c.name}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4 text-xs font-medium text-content-muted dark:text-content-dark-muted">{c.phone || "—"}</td>
+                    <td className="py-4 px-4">
+                      <span className="text-[10px] font-bold bg-surface-3 dark:bg-surface-dark px-2 py-1 rounded border border-border/50 dark:border-border-dark/50 text-content-muted">
+                        {c.rif || "S/N"}
+                      </span>
+                    </td>
+                    {isProveedor
+                      ? <>
+                          <td className="py-4 px-4 text-xs text-content dark:text-content-dark font-medium">{c.tax_name || "—"}</td>
+                          <td className="py-4 px-4 text-[11px] text-content-muted dark:text-content-dark-muted max-w-[200px] truncate" title={c.address}>{c.address || "—"}</td>
+                        </>
+                      : <>
+                          <td className="py-4 px-4">
+                            <span className="text-xs font-bold text-warning bg-warning/5 px-2 py-0.5 rounded-full border border-warning/10">{c.total_purchases}</span>
+                          </td>
+                          <td className="py-4 px-4 text-xs font-black text-success">{fmtPrice(c.total_spent)}</td>
+                          <td className="py-4 px-4">
+                            {parseFloat(c.total_debt || 0) > 0
+                              ? <span className="font-black text-danger bg-danger/5 px-2 py-1 rounded-lg border border-danger/10 animate-pulse">{fmtPrice(c.total_debt)}</span>
+                              : <span className="text-content-subtle dark:text-content-dark-muted text-[10px] font-bold tracking-widest uppercase opacity-40">● Al día</span>
+                            }
+                          </td>
+                        </>
+                    }
+                    <td className="py-4 px-4">
+                      <div className="flex gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
+                        {!isProveedor && (
+                          <button
+                            onClick={() => openDetail(c)}
+                            className="p-2 rounded-lg bg-info/10 text-info border border-info/20 hover:bg-info hover:text-white transition-all shadow-sm"
+                            title="Ver Detalle"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => openEdit(c)}
+                          className="p-2 rounded-lg bg-warning/10 text-warning border border-warning/20 hover:bg-warning hover:text-white transition-all shadow-sm"
+                          title="Editar"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                        </button>
+                        <button
+                          onClick={() => remove(c.id, c.type)}
+                          className="p-2 rounded-lg bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all shadow-sm"
+                          title="Eliminar"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
       }
 
       <CustomerModal open={customerModal} onClose={closeModal} onSave={save} editData={customerEditData} loading={saving} />

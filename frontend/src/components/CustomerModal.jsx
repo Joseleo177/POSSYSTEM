@@ -7,16 +7,6 @@ const EMPTY = {
   rif: "", tax_name: "", notes: "",
 };
 
-const inp = {
-  width: "100%", background: "#0f0f0f", border: "1px solid #333",
-  color: "#e8e0d0", padding: "8px 10px", borderRadius: 4,
-  fontFamily: "inherit", fontSize: 13, boxSizing: "border-box",
-};
-const btnSmall = {
-  background: "transparent", color: "#888", border: "1px solid #333",
-  padding: "3px 8px", borderRadius: 3, cursor: "pointer", fontFamily: "inherit", fontSize: 11,
-};
-
 export default function CustomerModal({ open, onClose, onSave, editData, loading }) {
   const [form, setForm] = useState(EMPTY);
 
@@ -54,89 +44,88 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
     <Modal open={open} onClose={onClose} title={modalTitle} width={600}>
 
       {/* ── Toggle tipo ── */}
-      <div style={{ display: "flex", gap: 0, marginBottom: 18, background: "#111", borderRadius: 4, padding: 3, width: "fit-content" }}>
+      <div className="flex gap-0 mb-[18px] bg-surface-dark dark:bg-surface-dark rounded p-[3px] w-fit">
         {[["cliente", "👤 Cliente"], ["proveedor", "🏭 Proveedor"]].map(([val, label]) => (
           <button
             key={val}
             onClick={() => setForm(p => ({ ...p, type: val }))}
-            style={{
-              background: form.type === val ? (val === "cliente" ? "#2980b9" : "#8e44ad") : "transparent",
-              color: form.type === val ? "#fff" : "#555",
-              border: "none", padding: "6px 20px", borderRadius: 3,
-              fontFamily: "inherit", fontSize: 12, fontWeight: "bold",
-              cursor: "pointer", transition: "all .15s",
-            }}
+            className={[
+              "px-5 py-1.5 rounded-sm text-xs font-bold cursor-pointer transition-all duration-150 border-none font-sans",
+              form.type === val
+                ? val === "cliente"
+                  ? "bg-info text-white"
+                  : "bg-violet-600 text-white"
+                : "bg-transparent text-content-muted dark:text-content-dark-muted",
+            ].join(" ")}
           >{label}</button>
         ))}
       </div>
 
       {/* ── Datos de contacto ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+      <div className="grid grid-cols-[2fr_1fr_1fr] gap-[10px] mb-[10px]">
         <div>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>
+          <label className="label">
             {isProveedor ? "Nombre o empresa *" : "Nombre *"}
-          </div>
-          <input value={form.name} onChange={set("name")} type="text" style={inp} autoFocus />
+          </label>
+          <input value={form.name} onChange={set("name")} type="text" className="input" autoFocus />
         </div>
         <div>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Teléfono</div>
-          <input value={form.phone} onChange={set("phone")} type="text" style={inp} />
+          <label className="label">Teléfono</label>
+          <input value={form.phone} onChange={set("phone")} type="text" className="input" />
         </div>
         <div>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Correo</div>
-          <input value={form.email} onChange={set("email")} type="email" style={inp} />
+          <label className="label">Correo</label>
+          <input value={form.email} onChange={set("email")} type="email" className="input" />
         </div>
       </div>
 
       {/* ── Dirección ── */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Dirección</div>
-        <input value={form.address} onChange={set("address")} type="text" style={inp} />
+      <div className="mb-[10px]">
+        <label className="label">Dirección</label>
+        <input value={form.address} onChange={set("address")} type="text" className="input" />
       </div>
 
       {/* ── Datos fiscales ── */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: isProveedor ? "1fr 1fr" : "1fr",
-        gap: 10, marginBottom: 10,
-      }}>
+      <div className={`grid gap-[10px] mb-[10px] ${isProveedor ? "grid-cols-2" : "grid-cols-1"}`}>
         <div>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>RIF / Cédula</div>
+          <label className="label">RIF / Cédula</label>
           <input
             value={form.rif} onChange={set("rif")} type="text"
             placeholder={isProveedor ? "J-12345678-9" : "V-12345678"}
-            style={inp}
+            className="input"
           />
         </div>
 
         {isProveedor && (
           <div>
-            <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Razón social</div>
-            <input value={form.tax_name} onChange={set("tax_name")} type="text" style={inp} />
+            <label className="label">Razón social</label>
+            <input value={form.tax_name} onChange={set("tax_name")} type="text" className="input" />
           </div>
         )}
       </div>
 
       {/* ── Notas ── */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Notas</div>
+      <div className="mb-5">
+        <label className="label">Notas</label>
         <textarea
           value={form.notes} onChange={set("notes")} rows={2}
-          style={{ ...inp, resize: "vertical", minHeight: 52 }}
+          className="input resize-y min-h-[52px]"
         />
       </div>
 
       {/* ── Botones ── */}
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-        <button onClick={onClose} style={{ ...btnSmall, padding: "8px 18px", fontSize: 12 }}>Cancelar</button>
+      <div className="flex gap-[10px] justify-end">
+        <button onClick={onClose} className="btn-sm btn-secondary">Cancelar</button>
         <button
           onClick={() => onSave(form)} disabled={loading}
-          style={{
-            background: loading ? "#444" : isProveedor ? "#8e44ad" : "#2980b9",
-            color: "#fff", border: "none", padding: "8px 24px", borderRadius: 4,
-            fontFamily: "inherit", fontWeight: "bold",
-            cursor: loading ? "not-allowed" : "pointer", fontSize: 13,
-          }}
+          className={[
+            "btn-md font-bold text-white border-none rounded",
+            loading
+              ? "opacity-60 cursor-not-allowed bg-surface-dark-3 dark:bg-surface-dark-3"
+              : isProveedor
+                ? "bg-violet-600 hover:bg-violet-700 cursor-pointer"
+                : "bg-info hover:bg-blue-600 cursor-pointer",
+          ].join(" ")}
         >
           {loading ? "Guardando..." : isEdit ? "Guardar" : `Registrar ${typeLabel}`}
         </button>
