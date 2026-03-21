@@ -196,8 +196,8 @@ const transfer = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
     const { from_warehouse_id, to_warehouse_id, product_id, qty, note } = req.body;
-    if (!to_warehouse_id || !product_id || !qty) throw new Error("to_warehouse_id, product_id y qty son requeridos");
-    if (from_warehouse_id && parseInt(from_warehouse_id) === parseInt(to_warehouse_id)) throw new Error("El almacén origen y destino deben ser distintos");
+    if (!from_warehouse_id || !to_warehouse_id || !product_id || !qty) throw new Error("Origen, destino, producto y cantidad son requeridos");
+    if (parseInt(from_warehouse_id) === parseInt(to_warehouse_id)) throw new Error("El almacén origen y destino deben ser distintos");
 
     const parsedQty = parseFloat(qty);
     if (isNaN(parsedQty) || parsedQty <= 0) throw new Error("La cantidad debe ser mayor a 0");
@@ -333,14 +333,15 @@ const addStock = async (req, res) => {
       lock: true
     });
 
-    await stockEntry.update({ qty: parsedQty }, { transaction });
+    await stockEntry.increment('qty', { by: parsedQty, transaction });
 
     // Sincronizar stock total
     const totalStock = await ProductStock.sum('qty', { where: { product_id }, transaction });
     await product.update({ stock: totalStock }, { transaction });
 
     await transaction.commit();
-    res.json({ ok: true, message: `${product.name} agregado al almacén con ${parsedQty} unidades` });
+    const newQty = parseFloat(stockEntry.qty) + parsedQty;
+    res.json({ ok: true, message: `${product.name}: +${parsedQty} unidades sumadas al almacén` });
   } catch (err) {
     if (transaction) await transaction.rollback();
     console.error(err);

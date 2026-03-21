@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
 
-const EMPTY_WAREHOUSE = { name: "", description: "", sort_order: 0 };
+const EMPTY_WAREHOUSE = { name: "", description: "", sort_order: 0, active: true };
 const EMPTY_ADD_STOCK = { product_id: "", qty: "" };
 
 export default function WarehousesTab({ notify, currentEmployee }) {
@@ -12,6 +12,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
   const [form, setForm]             = useState(EMPTY_WAREHOUSE);
   const [editId, setEditId]         = useState(null);
   const [loading, setLoading]       = useState(false);
+  const [warehouseModal, setWarehouseModal] = useState(false);
 
   // ── Stock ──────────────────────────────────────────────────
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
@@ -34,6 +35,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
     from_warehouse_id: "", to_warehouse_id: "", product_id: "", qty: "", note: "",
   });
   const [loadingTransfer, setLoadingTransfer] = useState(false);
+  const [transferModal, setTransferModal]     = useState(false);
 
   // ── Empleados ──────────────────────────────────────────────
   const [employees, setEmployees]           = useState([]);
@@ -91,7 +93,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
     try {
       if (editId) { await api.warehouses.update(editId, form); notify("Almacén actualizado ✓"); }
       else        { await api.warehouses.create(form);         notify("Almacén creado ✓"); }
-      setForm(EMPTY_WAREHOUSE); setEditId(null);
+      setForm(EMPTY_WAREHOUSE); setEditId(null); setWarehouseModal(false);
       await loadWarehouses();
     } catch (e) { notify(e.message, "err"); }
     finally { setLoading(false); }
@@ -103,8 +105,9 @@ export default function WarehousesTab({ notify, currentEmployee }) {
     catch (e) { notify(e.message, "err"); }
   };
 
-  const startEdit  = (w) => { setEditId(w.id); setForm({ name: w.name, description: w.description || "", sort_order: w.sort_order }); };
-  const cancelEdit = ()  => { setEditId(null); setForm(EMPTY_WAREHOUSE); };
+  const openNewWarehouse = () => { setEditId(null); setForm(EMPTY_WAREHOUSE); setWarehouseModal(true); };
+  const startEdit  = (w) => { setEditId(w.id); setForm({ name: w.name, description: w.description || "", sort_order: w.sort_order, active: w.active ?? true }); setWarehouseModal(true); };
+  const cancelEdit = ()  => { setEditId(null); setForm(EMPTY_WAREHOUSE); setWarehouseModal(false); };
 
   // ── Agregar producto manualmente ───────────────────────────
   const openAddStock = () => {
@@ -142,12 +145,12 @@ export default function WarehousesTab({ notify, currentEmployee }) {
   // ── Transferencias ─────────────────────────────────────────
   const doTransfer = async () => {
     const { from_warehouse_id, to_warehouse_id, product_id, qty, note } = transferForm;
-    if (!to_warehouse_id || !product_id || !qty)
-      return notify("Destino, producto y cantidad son requeridos", "err");
+    if (!from_warehouse_id || !to_warehouse_id || !product_id || !qty)
+      return notify("Origen, destino, producto y cantidad son requeridos", "err");
     setLoadingTransfer(true);
     try {
       await api.warehouses.transfer({
-        from_warehouse_id: from_warehouse_id || null,
+        from_warehouse_id: parseInt(from_warehouse_id),
         to_warehouse_id:   parseInt(to_warehouse_id),
         product_id:        parseInt(product_id),
         qty:               parseFloat(qty),
@@ -155,6 +158,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
       });
       notify("Transferencia registrada ✓");
       setTransferForm({ from_warehouse_id: "", to_warehouse_id: "", product_id: "", qty: "", note: "" });
+      setTransferModal(false);
       await loadTransfers(); await loadWarehouses();
     } catch (e) { notify(e.message, "err"); }
     finally { setLoadingTransfer(false); }
@@ -198,7 +202,14 @@ export default function WarehousesTab({ notify, currentEmployee }) {
       {/* ── ALMACENES ── */}
       {subTab === "almacenes" && (
         <div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-7">
+          {/* Botón nuevo almacén */}
+          <div className="flex justify-end mb-4">
+            <button onClick={openNewWarehouse} className="btn-md btn-primary">
+              + Nuevo Almacén
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {warehouses.map(w => (
               <div
                 key={w.id}
@@ -263,63 +274,6 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                 </div>
               </div>
             ))}
-          </div>
-
-          <div className="bg-surface-2 dark:bg-surface-dark-2 border border-surface-3 dark:border-surface-dark-3 rounded-md p-[18px] max-w-[600px]">
-            <div className="font-bold text-[13px] text-warning tracking-widest mb-4">
-              {editId ? "✏ EDITAR ALMACÉN" : "+ NUEVO ALMACÉN"}
-            </div>
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <div className="label mb-1">Nombre *</div>
-                <input
-                  value={form.name}
-                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="ej. Depósito Central"
-                  className="input"
-                />
-              </div>
-              <div>
-                <div className="label mb-1">Orden</div>
-                <input
-                  type="number"
-                  value={form.sort_order}
-                  onChange={e => setForm(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))}
-                  className="input"
-                />
-              </div>
-            </div>
-            <div className="mb-3.5">
-              <div className="label mb-1">Descripción</div>
-              <input
-                value={form.description}
-                onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                placeholder="ej. Almacén principal"
-                className="input"
-              />
-            </div>
-            {editId && (
-              <div className="mb-3.5">
-                <label className="flex items-center gap-2 text-[13px] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.active ?? true}
-                    onChange={e => setForm(p => ({ ...p, active: e.target.checked }))}
-                  />
-                  <span className="text-content-muted dark:text-content-dark-muted">Activo</span>
-                </label>
-              </div>
-            )}
-            <div className="flex gap-2.5">
-              <button onClick={saveWarehouse} disabled={loading} className="btn-md btn-primary">
-                {loading ? "Guardando..." : editId ? "Guardar cambios" : "Crear almacén"}
-              </button>
-              {editId && (
-                <button onClick={cancelEdit} className="btn-sm btn-secondary">
-                  Cancelar
-                </button>
-              )}
-            </div>
           </div>
         </div>
       )}
@@ -437,72 +391,10 @@ export default function WarehousesTab({ notify, currentEmployee }) {
       {/* ── TRANSFERENCIAS ── */}
       {subTab === "transferencias" && (
         <div>
-          <div className="bg-surface-2 dark:bg-surface-dark-2 border border-surface-3 dark:border-surface-dark-3 rounded-md p-5 mb-6 max-w-[700px]">
-            <div className="font-bold text-[13px] text-warning tracking-widest mb-4">NUEVA TRANSFERENCIA</div>
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <div className="label mb-1">Origen (opcional)</div>
-                <select
-                  value={transferForm.from_warehouse_id}
-                  onChange={e => setTransferForm(p => ({ ...p, from_warehouse_id: e.target.value }))}
-                  className="input"
-                >
-                  <option value="">— Entrada externa</option>
-                  {warehouses.filter(w => w.active).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <div className="label mb-1">Destino *</div>
-                <select
-                  value={transferForm.to_warehouse_id}
-                  onChange={e => setTransferForm(p => ({ ...p, to_warehouse_id: e.target.value }))}
-                  className="input"
-                >
-                  <option value="">— Seleccionar almacén</option>
-                  {warehouses.filter(w => w.active && w.id !== parseInt(transferForm.from_warehouse_id)).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-[2fr_1fr] gap-3 mb-3">
-              <div>
-                <div className="label mb-1">Producto *</div>
-                <select
-                  value={transferForm.product_id}
-                  onChange={e => setTransferForm(p => ({ ...p, product_id: e.target.value }))}
-                  className="input"
-                >
-                  <option value="">— Seleccionar producto</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <div className="label mb-1">Cantidad *</div>
-                <input
-                  type="number"
-                  min="0.001"
-                  step="0.001"
-                  value={transferForm.qty}
-                  onChange={e => setTransferForm(p => ({ ...p, qty: e.target.value }))}
-                  placeholder="0"
-                  className="input"
-                />
-              </div>
-            </div>
-            <div className="mb-4">
-              <div className="label mb-1">Nota (opcional)</div>
-              <input
-                value={transferForm.note}
-                onChange={e => setTransferForm(p => ({ ...p, note: e.target.value }))}
-                placeholder="ej. Reposición semanal de tienda"
-                className="input"
-              />
-            </div>
-            <button
-              onClick={doTransfer}
-              disabled={loadingTransfer}
-              className={`btn-md ${loadingTransfer ? "btn-secondary opacity-60 cursor-not-allowed" : "btn-primary"}`}
-            >
-              {loadingTransfer ? "Transfiriendo..." : "Registrar transferencia"}
+          {/* Botón nueva transferencia */}
+          <div className="flex justify-end mb-4">
+            <button onClick={() => setTransferModal(true)} className="btn-md btn-primary">
+              + Nueva Transferencia
             </button>
           </div>
 
@@ -552,6 +444,159 @@ export default function WarehousesTab({ notify, currentEmployee }) {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* ── MODAL: Nueva Transferencia ── */}
+      {transferModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-5">
+          <div className="bg-surface-2 dark:bg-surface-dark-2 border border-info rounded-md p-6 w-full max-w-[520px]">
+            <div className="font-bold text-sm text-info tracking-widest mb-5">
+              🔄 NUEVA TRANSFERENCIA
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <div className="label mb-1">Origen *</div>
+                <select
+                  value={transferForm.from_warehouse_id}
+                  onChange={e => setTransferForm(p => ({ ...p, from_warehouse_id: e.target.value, to_warehouse_id: p.to_warehouse_id === e.target.value ? "" : p.to_warehouse_id }))}
+                  className="input"
+                >
+                  <option value="">— Seleccionar origen</option>
+                  {warehouses.filter(w => w.active).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <div className="label mb-1">Destino *</div>
+                <select
+                  value={transferForm.to_warehouse_id}
+                  onChange={e => setTransferForm(p => ({ ...p, to_warehouse_id: e.target.value }))}
+                  className="input"
+                >
+                  <option value="">— Seleccionar destino</option>
+                  {warehouses.filter(w => w.active && w.id !== parseInt(transferForm.from_warehouse_id)).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[2fr_1fr] gap-3 mb-3">
+              <div>
+                <div className="label mb-1">Producto *</div>
+                <select
+                  value={transferForm.product_id}
+                  onChange={e => setTransferForm(p => ({ ...p, product_id: e.target.value }))}
+                  className="input"
+                >
+                  <option value="">— Seleccionar producto</option>
+                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <div className="label mb-1">Cantidad *</div>
+                <input
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  value={transferForm.qty}
+                  onChange={e => setTransferForm(p => ({ ...p, qty: e.target.value }))}
+                  placeholder="0"
+                  className="input"
+                />
+              </div>
+            </div>
+
+            <div className="mb-5">
+              <div className="label mb-1">Nota (opcional)</div>
+              <input
+                value={transferForm.note}
+                onChange={e => setTransferForm(p => ({ ...p, note: e.target.value }))}
+                placeholder="ej. Reposición semanal de tienda"
+                className="input"
+              />
+            </div>
+
+            <div className="flex gap-2.5">
+              <button
+                onClick={doTransfer}
+                disabled={loadingTransfer}
+                className={`btn-md ${loadingTransfer ? "btn-secondary opacity-60 cursor-not-allowed" : "btn-primary"}`}
+              >
+                {loadingTransfer ? "Transfiriendo..." : "Registrar transferencia"}
+              </button>
+              <button
+                onClick={() => { setTransferModal(false); setTransferForm({ from_warehouse_id: "", to_warehouse_id: "", product_id: "", qty: "", note: "" }); }}
+                className="btn-sm btn-secondary"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Crear / Editar Almacén ── */}
+      {warehouseModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-5">
+          <div className="bg-surface-2 dark:bg-surface-dark-2 border border-warning rounded-md p-6 w-full max-w-[480px]">
+            <div className="font-bold text-sm text-warning tracking-widest mb-5">
+              {editId ? "✏ EDITAR ALMACÉN" : "+ NUEVO ALMACÉN"}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <div className="label mb-1">Nombre *</div>
+                <input
+                  value={form.name}
+                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  placeholder="ej. Depósito Central"
+                  className="input"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <div className="label mb-1">Orden</div>
+                <input
+                  type="number"
+                  value={form.sort_order}
+                  onChange={e => setForm(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))}
+                  className="input"
+                />
+              </div>
+            </div>
+
+            <div className="mb-3.5">
+              <div className="label mb-1">Descripción</div>
+              <input
+                value={form.description}
+                onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                placeholder="ej. Almacén principal"
+                className="input"
+              />
+            </div>
+
+            {editId && (
+              <div className="mb-4">
+                <label className="flex items-center gap-2 text-[13px] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.active ?? true}
+                    onChange={e => setForm(p => ({ ...p, active: e.target.checked }))}
+                  />
+                  <span className="text-content-muted dark:text-content-dark-muted">Activo</span>
+                </label>
+              </div>
+            )}
+
+            <div className="flex gap-2.5">
+              <button onClick={saveWarehouse} disabled={loading} className="btn-md btn-primary">
+                {loading ? "Guardando..." : editId ? "Guardar cambios" : "Crear almacén"}
+              </button>
+              <button onClick={cancelEdit} className="btn-sm btn-secondary">
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
