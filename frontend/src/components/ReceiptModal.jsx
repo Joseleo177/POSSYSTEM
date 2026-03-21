@@ -38,7 +38,7 @@ function printReceipt(sale, storeName, displayCurrency) {
     ? parseFloat(s.final_payment_rate)
     : parseFloat(s.exchange_rate || 1);
   const rate = parseFloat(effectiveRate || displayCurrency?.exchange_rate || 1);
-  const sym  = displayCurrency?.symbol || "Bs.";
+  const sym  = displayCurrency?.symbol || "$";
   const code = displayCurrency?.code   || "VES";
   const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
   const dateStr = new Date(s.created_at).toLocaleString("es-VE");
@@ -155,7 +155,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
     ? parseFloat(s.final_payment_rate)
     : parseFloat(s.exchange_rate || 1);
   const rate = isBase ? 1 : parseFloat(effectiveRate || displayCurrency.exchange_rate || 1);
-  const sym    = isBase ? (baseCurrency?.symbol || "$") : (displayCurrency.symbol || "Bs.");
+  const sym    = isBase ? (baseCurrency?.symbol || "$") : (displayCurrency.symbol || "$");
 
   // Todos los montos vienen en USD base → multiplicar por tasa de display
   const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);

@@ -4,22 +4,62 @@ function getToken() {
   return localStorage.getItem("pos_token");
 }
 
+let isRefreshing = false;
+let refreshPromise = null;
+
 async function request(path, options = {}) {
   const isFormData = options.body instanceof FormData;
-  const token = getToken();
+  let token = getToken();
   const method = options.method || "GET";
   const headers = {
     ...(isFormData || ["GET", "DELETE"].includes(method) ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
-  const data = await res.json();
-  if (res.status === 401) {
-    localStorage.removeItem("pos_token");
-    window.location.reload();
-    return;
+  
+  let res = await fetch(`${BASE}${path}`, { ...options, headers });
+  
+  if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login') {
+    const refreshToken = localStorage.getItem("pos_refresh_token");
+    if (refreshToken) {
+      if (!isRefreshing) {
+        isRefreshing = true;
+        refreshPromise = fetch(`${BASE}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken })
+        }).then(async (r) => {
+          if (r.ok) {
+            const data = await r.json();
+            localStorage.setItem("pos_token", data.token);
+            localStorage.setItem("pos_refresh_token", data.refresh_token);
+            return data.token;
+          }
+          throw new Error("Refresh failed");
+        }).catch(() => {
+          localStorage.removeItem("pos_token");
+          localStorage.removeItem("pos_refresh_token");
+          window.location.reload();
+        }).finally(() => {
+          isRefreshing = false;
+        });
+      }
+      
+      const newToken = await refreshPromise;
+      if (newToken) {
+        headers.Authorization = `Bearer ${newToken}`;
+        res = await fetch(`${BASE}${path}`, { ...options, headers });
+      } else {
+        return; // Page reloading
+      }
+    } else {
+      localStorage.removeItem("pos_token");
+      window.location.reload();
+      return;
+    }
   }
+
+  const data = await res.json();
   if (!res.ok) throw new Error(data.message || "Error en la solicitud");
   return data;
 }
@@ -33,7 +73,12 @@ function buildProductForm(body, imageFile) {
 
 export const api = {
   auth: {
-    login:          (body)      => request("/auth/login", { method: "POST", body: JSON.stringify(body) }),
+    login: async (body) => {
+      const data = await request("/auth/login", { method: "POST", body: JSON.stringify(body) });
+      if (data.token) localStorage.setItem("pos_token", data.token);
+      if (data.refresh_token) localStorage.setItem("pos_refresh_token", data.refresh_token);
+      return data;
+    },
     me:             ()          => request("/auth/me"),
     changePassword: (body)      => request("/auth/change-password", { method: "POST", body: JSON.stringify(body) }),
   },
@@ -58,10 +103,13 @@ export const api = {
     remove:       (id)        => request(`/customers/${id}`, { method: "DELETE" }),
   },
   sales: {
-    getAll:   (params={}) => request("/sales?"       + new URLSearchParams(params)),
-    getStats: (params={}) => request("/sales/stats?" + new URLSearchParams(params)),
-    create:   (body)      => request("/sales",        { method: "POST",   body: JSON.stringify(body) }),
-    cancel:   (id)        => request(`/sales/${id}`,  { method: "DELETE" }),
+    getAll:      (params={}) => request("/sales?"       + new URLSearchParams(params)),
+    getStats:    (params={}) => request("/sales/stats?" + new URLSearchParams(params)),
+    create:      (body)      => request("/sales",        { method: "POST",   body: JSON.stringify(body) }),
+    cancel:      (id)        => request(`/sales/${id}`,  { method: "DELETE" }),
+    // Devoluciones
+    createReturn:  (id, body) => request(`/sales/${id}/return`,  { method: "POST", body: JSON.stringify(body) }),
+    getReturns:    (id)       => request(`/sales/${id}/returns`),
   },
   employees: {
     getAll:   ()          => request("/employees"),
@@ -100,6 +148,8 @@ export const api = {
   },
   warehouses: {
     addStock: (id, body) => request(`/warehouses/${id}/stock`, { method: "POST", body: JSON.stringify(body) }),
+    setStock: (id, productId, body) => request(`/warehouses/${id}/stock/${productId}`, { method: "PUT", body: JSON.stringify(body) }),
+    removeStock: (id, productId) => request(`/warehouses/${id}/stock/${productId}`, { method: "DELETE" }),
     getAll:          ()          => request("/warehouses"),
     create:          (body)      => request("/warehouses",             { method: "POST",   body: JSON.stringify(body) }),
     update:          (id, body)  => request(`/warehouses/${id}`,       { method: "PUT",    body: JSON.stringify(body) }),
@@ -149,5 +199,10 @@ export const api = {
     update:  (id, body)  => request(`/banks/methods/${id}`, { method: "PUT",    body: JSON.stringify(body) }),
     toggle:  (id)        => request(`/banks/methods/${id}/toggle`, { method: "PUT" }),
     remove:  (id)        => request(`/banks/methods/${id}`, { method: "DELETE" }),
+  },
+
+  // ── Dashboard ────────────────────────────────────────────────
+  dashboard: {
+    get: () => request("/dashboard"),
   },
 };

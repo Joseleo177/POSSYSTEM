@@ -34,7 +34,8 @@ const login = async (req, res) => {
     };
 
     const token = jwt.sign(payload, SECRET, { expiresIn: EXPIRES });
-    res.json({ ok: true, token, employee: payload });
+    const refresh_token = jwt.sign({ id: emp.id }, SECRET, { expiresIn: '7d' });
+    res.json({ ok: true, token, refresh_token, employee: payload });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error en el servidor" });
@@ -71,4 +72,35 @@ const changePassword = async (req, res) => {
   }
 };
 
-module.exports = { login, me, changePassword };
+// POST /api/auth/refresh
+const refresh = async (req, res) => {
+  try {
+    const { refresh_token } = req.body;
+    if (!refresh_token) return res.status(401).json({ ok: false, message: "Refresh token requerido" });
+
+    const decoded = jwt.verify(refresh_token, SECRET);
+    const emp = await Employee.findByPk(decoded.id, {
+      include: [{ model: Role, attributes: ['name', 'label', 'permissions'] }]
+    });
+
+    if (!emp || !emp.active) return res.status(401).json({ ok: false, message: "Usuario inválido o inactivo" });
+
+    const payload = {
+      id:          emp.id,
+      username:    emp.username,
+      full_name:   emp.full_name,
+      role:        emp.Role?.name  ?? null,
+      role_label:  emp.Role?.label ?? null,
+      permissions: emp.Role?.permissions ?? {},
+    };
+
+    const token = jwt.sign(payload, SECRET, { expiresIn: EXPIRES });
+    const new_refresh_token = jwt.sign({ id: emp.id }, SECRET, { expiresIn: '7d' });
+
+    res.json({ ok: true, token, refresh_token: new_refresh_token });
+  } catch (err) {
+    return res.status(401).json({ ok: false, message: "Refresh token inválido o expirado" });
+  }
+};
+
+module.exports = { login, me, changePassword, refresh };

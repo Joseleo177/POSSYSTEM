@@ -1,50 +1,100 @@
 require("dotenv").config();
-const express  = require("express");
-const cors     = require("cors");
-const morgan   = require("morgan");
-const path     = require("path");
+require("./config/envValidator"); // Joi env validation
+const express      = require("express");
+const cors         = require("cors");
+const path         = require("path");
+const rateLimit    = require("express-rate-limit");
+const logger       = require("./middleware/logger");
+const errorHandler = require("./middleware/errorHandler");
+const auditLog     = require("./middleware/auditLog");
 
 const app  = express();
 const PORT = process.env.PORT || 4000;
 
-// ── Middlewares ─────────────────────────────────────────────
-app.use(cors({ origin: "*" }));
-app.use(express.json());
-app.use(morgan("dev"));
+// ── CORS ─────────────────────────────────────────────────────
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",")
+  : ["*"];
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error("CORS: origen no permitido"));
+  },
+  credentials: true,
+}));
+
+// ── Rate limiting ─────────────────────────────────────────────
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,   // 15 min
+  max: 500,                     // 500 req / 15min por IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, message: "Demasiadas solicitudes. Intenta en 15 minutos." },
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,   // 15 min
+  max: 10,                      // 10 intentos de login / 15min
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, message: "Demasiados intentos de inicio de sesión. Intenta en 15 minutos." },
+});
+
+app.use(globalLimiter);
+
+// ── Body parsing + logging ────────────────────────────────────
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
+app.use((req, _res, next) => {
+  logger.info(`${req.method} ${req.path}`);
+  next();
+});
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
-// ── Public routes ────────────────────────────────────────────
+// ── Audit log (mutations) ─────────────────────────────────────
+app.use(auditLog);
+
+// ── Public routes ─────────────────────────────────────────────
+app.use("/api/auth/login", loginLimiter);   // strict limiter on login
 app.use("/api/auth",       require("./routes/auth"));
 
-// ── Protected routes ─────────────────────────────────────────
+// ── Protected routes ──────────────────────────────────────────
 const { auth } = require("./middleware/auth");
 
 app.use("/api/products",         auth, require("./routes/products"));
 app.use("/api/sales",            auth, require("./routes/sales"));
+app.use("/api/sales",            auth, require("./routes/returns"));   // devoluciones
 app.use("/api/categories",       auth, require("./routes/categories"));
 app.use("/api/customers",        auth, require("./routes/customers"));
-app.use("/api/employees",        require("./routes/employees"));        // auth dentro
-app.use("/api/currencies",       require("./routes/currencies"));       // auth dentro
-app.use("/api/settings",         require("./routes/settings"));         // auth dentro
+app.use("/api/dashboard",        auth, require("./routes/dashboard"));
+app.use("/api/employees",        require("./routes/employees"));        // auth+permit dentro
+app.use("/api/currencies",       require("./routes/currencies"));       // auth+permit dentro
+app.use("/api/settings",         require("./routes/settings"));         // auth+permit dentro
 app.use("/api/payment-journals", require("./routes/paymentJournals"));  // auth dentro
 app.use("/api/purchases",        require("./routes/purchases"));        // auth dentro
 app.use("/api/warehouses",       require("./routes/warehouses"));       // auth dentro
-app.use("/api/banks",            require("./routes/banks"));            // auth dentro
+app.use("/api/banks",            require("./routes/banks"));            // auth+permit dentro
 app.use("/api/payments",         require("./routes/payments"));         // auth dentro
-app.use("/api/series",           require("./routes/series"));           // auth dentro
+app.use("/api/series",           require("./routes/series"));           // auth+permit dentro
 
-// ── Health check ────────────────────────────────────────────
-app.get("/health", (req, res) => res.json({ ok: true, service: "pos-backend", uptime: process.uptime() }));
-
-// ── 404 ─────────────────────────────────────────────────────
-app.use((req, res) => res.status(404).json({ ok: false, message: "Ruta no encontrada" }));
-
-// ── Error handler ───────────────────────────────────────────
-app.use((err, req, res, _next) => {
-  console.error(err);
-  res.status(500).json({ ok: false, message: "Error interno del servidor" });
+// ── Health check ──────────────────────────────────────────────
+app.get("/health", async (req, res) => {
+  try {
+    const { sequelize } = require("./models");
+    await sequelize.authenticate();
+    res.json({ ok: true, service: "pos-backend", db: "connected", uptime: process.uptime() });
+  } catch {
+    res.status(503).json({ ok: false, service: "pos-backend", db: "disconnected" });
+  }
 });
 
+// ── 404 ───────────────────────────────────────────────────────
+app.use((req, res) => res.status(404).json({ ok: false, message: "Ruta no encontrada" }));
+
+// ── Centralized error handler ─────────────────────────────────
+app.use(errorHandler);
+
+// ── Start ─────────────────────────────────────────────────────
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅  Backend POS corriendo en http://0.0.0.0:${PORT}`);
+  logger.info(`✅  Backend POS corriendo en http://0.0.0.0:${PORT}`);
 });

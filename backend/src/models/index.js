@@ -38,7 +38,7 @@ Object.keys(db).forEach(modelName => {
 });
 
 // Centralized associations
-const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie } = db;
+const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem } = db;
 
 if(Employee && Role) {
   Employee.belongsTo(Role, { foreignKey: 'role_id' });
@@ -48,6 +48,11 @@ if(Employee && Role) {
 if(Product && Category) {
   Product.belongsTo(Category, { foreignKey: 'category_id' });
   Category.hasMany(Product, { foreignKey: 'category_id' });
+}
+
+if(Product && ProductComboItem) {
+  Product.hasMany(ProductComboItem, { as: 'comboItems', foreignKey: 'combo_id' });
+  ProductComboItem.belongsTo(Product, { as: 'ingredient', foreignKey: 'product_id' });
 }
 
 if(PaymentJournal && Bank && Currency) {

@@ -3,6 +3,7 @@ import { AppProvider, useApp } from "./context/AppContext";
 import { CartProvider, useCart } from "./context/CartContext";
 import { useTheme } from "./hooks/useTheme";
 import LoginScreen     from "./components/LoginScreen";
+import DashboardPage   from "./pages/DashboardPage";
 import EmpleadosPage   from "./pages/EmpleadosPage";
 import CobroPage       from "./pages/CobroPage";
 import CatalogPage     from "./pages/CatalogPage";
@@ -20,14 +21,15 @@ const ROLE_COLORS = {
 };
 
 const ALL_TABS = [
-  { key:"Cobro",         label:"Cobro",         icon:"🛒", perm:"sales"     },
-  { key:"Catálogo",      label:"Catálogo",       icon:"📦", perm:"products"  },
-  { key:"Compras",       label:"Compras",        icon:"🛍", perm:"products"  },
-  { key:"Inventario",    label:"Inventario",     icon:"🏭", perm:"inventory" },
-  { key:"Clientes",      label:"Clientes",       icon:"👥", perm:"customers" },
-  { key:"Contabilidad",  label:"Contabilidad",   icon:"📊", perm:"sales"     },
-  { key:"Empleados",     label:"Empleados",      icon:"👤", perm:"admin"     },
-  { key:"Configuración", label:"Configuración",  icon:"⚙️", perm:"config"    },
+  { key:"Dashboard",     label:"Dashboard",      icon:"📊", perm:"sales"     },
+  { key:"Cobro",         label:"Cobro",          icon:"🛒", perm:"sales"     },
+  { key:"Catálogo",      label:"Catálogo",        icon:"📦", perm:"products"  },
+  { key:"Compras",       label:"Compras",         icon:"🛍", perm:"products"  },
+  { key:"Inventario",    label:"Inventario",      icon:"🏭", perm:"inventory" },
+  { key:"Clientes",      label:"Clientes",        icon:"👥", perm:"customers" },
+  { key:"Contabilidad",  label:"Contabilidad",    icon:"💰", perm:"sales"     },
+  { key:"Empleados",     label:"Empleados",       icon:"👤", perm:"admin"     },
+  { key:"Configuración", label:"Configuración",   icon:"⚙️", perm:"config"    },
 ];
 
 function NavTab({ t, active, onGo }) {
@@ -51,7 +53,7 @@ function PosApp() {
   const { employee, authChecked, login, logout, can, notification, storeName, settings } = useApp();
   const { setReceipt } = useCart();
   const { dark, toggle } = useTheme();
-  const [tab, setTab] = useState("Cobro");
+  const [tab, setTab] = useState("Dashboard");
 
   const visibleTabs = ALL_TABS.filter(t => {
     if (t.perm === "admin")     return employee?.permissions?.all;
@@ -155,6 +157,7 @@ function PosApp() {
 
       {/* Contenido */}
       <main className={tab === "Cobro" ? "w-full" : "max-w-screen-2xl mx-auto px-4 py-5"}>
+        {tab === "Dashboard"      && <DashboardPage />}
         {tab === "Cobro"          && <CobroPage />}
         {tab === "Catálogo"       && <CatalogPage />}
         {tab === "Compras"        && <ComprasPage />}

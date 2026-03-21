@@ -1,27 +1,28 @@
-const router    = require("express").Router();
-const { auth }  = require("../middleware/auth");   // ← destructuring igual que el resto de routes
-const wh        = require("../controllers/warehouses");
+const router   = require("express").Router();
+const { auth, permit } = require("../middleware/auth");
+const wh       = require("../controllers/warehouses");
 
-// Todas las rutas requieren autenticación
 router.use(auth);
 
 // ── Almacenes ─────────────────────────────────────────────────
 router.get   ("/",                   wh.getAll);
-router.post  ("/",                   wh.create);
-router.put   ("/:id",                wh.update);
-router.delete("/:id",                wh.remove);
-router.post("/:id/stock", wh.addStock);
-router.get("/:id/products", wh.getProducts);
+router.post  ("/",                   permit("admin", "config"), wh.create);
+router.put   ("/:id",                permit("admin", "config"), wh.update);
+router.delete("/:id",                permit("admin"),           wh.remove);
 
-// ── Stock por almacén ─────────────────────────────────────────
-router.get("/:id/stock",             wh.getStock);
+// ── Stock ─────────────────────────────────────────────────────
+router.get  ("/:id/stock",           wh.getStock);
+router.post ("/:id/stock",           permit("inventory", "admin", "config"), wh.addStock);
+router.put  ("/:id/stock/:productId",permit("inventory", "admin", "config"), wh.setStock);
+router.delete("/:id/stock/:productId",permit("admin", "config"), wh.removeStock);
+router.get  ("/:id/products",        wh.getProducts);
 
 // ── Empleados por almacén ─────────────────────────────────────
-router.get("/employee/:employeeId",  wh.getByEmployee);
-router.put("/:id/employees",         wh.assignEmployees);
+router.get  ("/employee/:employeeId", wh.getByEmployee);
+router.put  ("/:id/employees",        permit("admin", "config"), wh.assignEmployees);
 
 // ── Transferencias ────────────────────────────────────────────
-router.post("/transfer",             wh.transfer);
-router.get ("/transfers",            wh.getTransfers);
+router.post ("/transfer",            permit("inventory", "admin", "config"), wh.transfer);
+router.get  ("/transfers",           wh.getTransfers);
 
 module.exports = router;

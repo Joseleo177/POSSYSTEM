@@ -98,3 +98,12 @@
   .table-pos tr:last-child td { @apply border-b-0; }
   .table-pos tr:hover td { @apply bg-surface-2 dark:bg-surface-dark-3; }
 }
+
+/* ── PRINT MEDIA QUERY ── */
+@media print {
+  aside, nav, .print-hidden, button, [role="button"] { display: none !important; }
+  body { background: white !important; color: black !important; }
+  * { box-shadow: none !important; border-color: #ddd !important; }
+  .print-avoid-break { page-break-inside: avoid; }
+  .print-force-break { page-break-before: always; }
+}

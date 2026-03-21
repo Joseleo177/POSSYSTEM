@@ -99,7 +99,7 @@ export default function CobroPage() {
   // ── Helpers de moneda del receipt ─────────────────────────
   const receiptRate    = parseFloat(receipt?.exchange_rate || 1);
   const receiptIsBase  = !receipt?.currency || receipt.currency.is_base;
-  const receiptSym     = receiptIsBase ? (baseCurrency?.symbol || "$") : (receipt?.currency?.symbol || "Bs.");
+  const receiptSym     = receiptIsBase ? (baseCurrency?.symbol || "$") : (receipt?.currency?.symbol || "$");
   const fmtSale        = (n) => fmt(receiptIsBase ? n : n * receiptRate, receiptSym);
   const currentBalance = saleBalance?.balance ?? parseFloat(receipt?.total || 0);
   const currentStatus  = saleBalance?.status  ?? "pendiente";

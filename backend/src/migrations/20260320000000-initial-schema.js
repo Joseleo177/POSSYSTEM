@@ -1,3 +1,11 @@
+const fs = require('fs');
+const path = require('path');
+
+module.exports = {
+  up: async (queryInterface, Sequelize) => {
+    try {
+      console.log('--- Ejecutando migración inicial desde string incrustado ---');
+      const rawSql = `
 -- ══════════════════════════════════════════════════════════════
 --  POS System — Master Database Initialization
 --  This script creates the entire schema at once.
@@ -63,6 +71,7 @@ CREATE TABLE IF NOT EXISTS products (
   image_filename   VARCHAR(255),
   cost_price       NUMERIC(10, 2)  DEFAULT NULL,
   profit_margin    NUMERIC(5,  2)  DEFAULT NULL,
+  min_stock        NUMERIC(10, 3)  NOT NULL DEFAULT 0,
   package_size     NUMERIC(10, 3)  DEFAULT NULL,
   package_unit     VARCHAR(50)     DEFAULT NULL,
   created_at       TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
@@ -271,12 +280,53 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_products_updated_at ON products;
 CREATE TRIGGER trg_products_updated_at  BEFORE UPDATE ON products   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS trg_employees_updated_at ON employees;
 CREATE TRIGGER trg_employees_updated_at BEFORE UPDATE ON employees  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS trg_currencies_updated_at ON currencies;
 CREATE TRIGGER trg_currencies_updated_at BEFORE UPDATE ON currencies FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS trg_customers_updated_at ON customers;
 CREATE TRIGGER trg_customers_updated_at BEFORE UPDATE ON customers   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- ── 16. Indices ────────────────────────────────────────────────
+-- ── 16. Ventas Devoluciones ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS returns (
+    id SERIAL PRIMARY KEY,
+    sale_id INTEGER NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+    employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+    reason VARCHAR(500),
+    total NUMERIC(12,2) NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS return_items (
+    id SERIAL PRIMARY KEY,
+    return_id INTEGER NOT NULL REFERENCES returns(id) ON DELETE CASCADE,
+    product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+    name VARCHAR(300) NOT NULL,
+    price NUMERIC(12,4) NOT NULL,
+    qty NUMERIC(10,3) NOT NULL,
+    subtotal NUMERIC(12,2) NOT NULL
+);
+
+-- ── 17. Audit Logs ──────────────────────────────
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id            SERIAL       PRIMARY KEY,
+  employee_id   INTEGER      REFERENCES employees(id) ON DELETE SET NULL,
+  employee_name VARCHAR(200),
+  method        VARCHAR(10)  NOT NULL,
+  path          VARCHAR(500) NOT NULL,
+  ip            VARCHAR(60),
+  status_code   INTEGER,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_audit_employee  ON audit_logs(employee_id);
+CREATE INDEX IF NOT EXISTS idx_audit_created    ON audit_logs(created_at DESC);
+
+-- ── 17. Indices ────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_products_category    ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale      ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sales_created_at     ON sales(created_at DESC);
@@ -306,7 +356,7 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO employees (username, password_hash, full_name, email, role_id)
 VALUES (
   'admin',
-  '$2b$10$eD2g3hjyAuWcR.nWxpwczeuW3IXDA4yUEUHyWGpzQGHcEU5t0j3G.',
+  '$$2b$$10$$eD2g3hjyAuWcR.nWxpwczeuW3IXDA4yUEUHyWGpzQGHcEU5t0j3G.',
   'Administrador',
   'admin@mitienda.com',
   (SELECT id FROM roles WHERE name = 'admin')
@@ -342,3 +392,18 @@ INSERT INTO payment_methods (name, code, icon, color, sort_order) VALUES
   ('Zelle', 'zelle', '💱', '#9b59b6', 3),
   ('Punto de Venta', 'punto_venta', '💳', '#e74c3c', 4)
 ON CONFLICT (code) DO NOTHING;
+      `;
+      
+      await queryInterface.sequelize.query(rawSql);
+      console.log('--- Migración de esquema completada ---');
+    } catch (error) {
+      console.error('Error aplicando la migración inicial:', error);
+      throw error;
+    }
+  },
+
+  down: async (queryInterface, Sequelize) => {
+    // Para simplificar, destrozamos el public schema para un eventual rollback completo.
+    await queryInterface.sequelize.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+  }
+};

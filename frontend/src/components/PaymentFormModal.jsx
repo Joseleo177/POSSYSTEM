@@ -25,7 +25,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   // Moneda de display por defecto (Bs) cuando no hay diario seleccionado aún
   const displayCur = activeCurrencies.find(c => !c.is_base) || baseCurrency;
   const defaultRate = (!displayCur || displayCur.is_base) ? 1 : parseFloat(displayCur.exchange_rate || 1);
-  const defaultSym  = displayCur?.symbol || baseCurrency?.symbol || "Bs.";
+  const defaultSym  = displayCur?.symbol || baseCurrency?.symbol || "$";
 
   // Moneda del pago (deriva del diario seleccionado)
   const payCur  = activeCurrencies.find(c => c.id === parseInt(form.pay_currency_id));

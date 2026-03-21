@@ -12,6 +12,7 @@ export default function PagosTab({
   const [payDateTo,      setPayDateTo]      = useState("");
   const [payDetail,      setPayDetail]      = useState(null);
   const [payModal,       setPayModal]       = useState(null);   // sale que se va a pagar
+  const [deleteDialog,   setDeleteDialog]   = useState(null);   // payId a eliminar
   
   // Odoo-style Search & Filters
   const [searchTerm,     setSearchTerm]     = useState("");
@@ -80,12 +81,17 @@ export default function PagosTab({
     return Object.entries(groups).map(([key, items]) => ({ key, items }));
   };
 
-  const removePayment = async (payId) => {
-    if (!window.confirm("¿Eliminar este pago? El estado de la factura se recalculará.")) return;
+  const removePayment = (payId) => {
+    setDeleteDialog(payId);
+  };
+
+  const confirmRemovePayment = async () => {
+    if (!deleteDialog) return;
     try {
-      await api.payments.remove(payId);
+      await api.payments.remove(deleteDialog);
       notify("Pago eliminado");
       loadPayments();
+      setDeleteDialog(null);
     } catch (e) { notify(e.message, "err"); }
   };
 
@@ -383,6 +389,27 @@ export default function PagosTab({
           </div>
         );
       })()}
+
+      {/* Modal Confirmar Eliminar Pago */}
+      {deleteDialog && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-5">
+          <div className="bg-surface-2 dark:bg-surface-dark-2 border border-danger/60 rounded-md p-6 w-full max-w-[340px]">
+             <div className="text-danger flex justify-center mb-3">
+               <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+             </div>
+             <div className="font-bold text-center text-sm mb-1.5 text-content dark:text-content-dark">
+               ¿Eliminar este pago?
+             </div>
+             <div className="text-center text-[12px] text-content-muted dark:text-content-dark-muted mb-5 leading-relaxed">
+               Estás a punto de eliminar este pago. El estado de la factura se recalculará automáticamente.
+             </div>
+             <div className="flex gap-2.5 justify-center">
+                <button onClick={confirmRemovePayment} className="btn-md btn-danger">Sí, eliminar</button>
+                <button onClick={() => setDeleteDialog(null)} className="btn-md btn-secondary">Cancelar</button>
+             </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

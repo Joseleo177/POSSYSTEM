@@ -18,6 +18,7 @@ module.exports = (sequelize, DataTypes) => {
     profit_margin: { type: DataTypes.DECIMAL(5, 2) },
     package_size: { type: DataTypes.DECIMAL(10, 3) },
     package_unit: { type: DataTypes.STRING(50) },
+    is_combo: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

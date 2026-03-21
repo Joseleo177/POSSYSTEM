@@ -3,20 +3,20 @@ const { Sequelize, Customer, Sale, SaleItem, Purchase, Payment, Currency } = req
 // GET /api/customers
 const getAll = async (req, res) => {
   try {
-    const { search, type } = req.query;
+    const { search, type, limit = 100, offset = 0 } = req.query;
     const where = {};
     if (type && ["cliente", "proveedor"].includes(type)) where.type = type;
     if (search) {
       where[Sequelize.Op.or] = [
-        { name: { [Sequelize.Op.iLike]: `%${search}%` } },
-        { phone: { [Sequelize.Op.iLike]: `%${search}%` } },
-        { email: { [Sequelize.Op.iLike]: `%${search}%` } },
-        { rif: { [Sequelize.Op.iLike]: `%${search}%` } },
+        { name:     { [Sequelize.Op.iLike]: `%${search}%` } },
+        { phone:    { [Sequelize.Op.iLike]: `%${search}%` } },
+        { email:    { [Sequelize.Op.iLike]: `%${search}%` } },
+        { rif:      { [Sequelize.Op.iLike]: `%${search}%` } },
         { tax_name: { [Sequelize.Op.iLike]: `%${search}%` } }
       ];
     }
 
-    const customers = await Customer.findAll({
+    const { count, rows: customers } = await Customer.findAndCountAll({
       where,
       attributes: {
         include: [
@@ -34,6 +34,10 @@ const getAll = async (req, res) => {
       include: [{ model: Sale, attributes: [] }],
       group: ['Customer.id'],
       order: [['name', 'ASC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      subQuery: false,
+      distinct: true,
       raw: true
     });
 
@@ -43,12 +47,13 @@ const getAll = async (req, res) => {
       c.total_debt      = parseFloat(c.total_debt   || 0);
     });
 
-    res.json({ ok: true, data: customers });
+    res.json({ ok: true, data: customers, total: count });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: err.message });
   }
 };
+
 
 // GET /api/customers/:id
 const getOne = async (req, res) => {

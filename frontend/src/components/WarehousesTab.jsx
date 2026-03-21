@@ -20,6 +20,11 @@ export default function WarehousesTab({ notify, currentEmployee }) {
   const [stockSearch, setStockSearch]   = useState("");
   const [loadingStock, setLoadingStock] = useState(false);
 
+  // ── Editar o Eliminar Stock (Modals) ───────────────────────
+  const [editStockModal, setEditStockModal]     = useState(null); // { product_id, product_name, qty }
+  const [deleteStockModal, setDeleteStockModal] = useState(null); // { product_id, product_name }
+  const [editStockValue, setEditStockValue]     = useState("");
+
   // ── Agregar producto al almacén manualmente ────────────────
   const [addStockModal, setAddStockModal]   = useState(false);
   const [addStockForm, setAddStockForm]     = useState(EMPTY_ADD_STOCK);
@@ -61,7 +66,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
   }, []);
 
   const loadProducts = useCallback(async () => {
-    try { const r = await api.products.getAll(); setProducts(r.data); }
+    try { const r = await api.products.getAll({ is_combo: false }); setProducts(r.data); }
     catch (e) {}
   }, []);
 
@@ -162,6 +167,45 @@ export default function WarehousesTab({ notify, currentEmployee }) {
       await loadTransfers(); await loadWarehouses();
     } catch (e) { notify(e.message, "err"); }
     finally { setLoadingTransfer(false); }
+  };
+
+  // ── Editar o Eliminar Stock manualmente ──────────────────────
+  const handleEditStock = (item) => {
+    if (item.is_combo) {
+      notify("El stock de un combo es calculado automáticamente y no puede editarse manualmente.", "warning");
+      return;
+    }
+    const currentQty = parseFloat(item.qty).toFixed(item.qty % 1 !== 0 ? 3 : 0);
+    setEditStockValue(currentQty);
+    setEditStockModal(item);
+  };
+
+  const submitEditStock = async (e) => {
+    e.preventDefault();
+    if (!editStockModal) return;
+    const qty = parseFloat(editStockValue);
+    if (isNaN(qty) || qty < 0) return notify("Cantidad inválida", "err");
+
+    try {
+      await api.warehouses.setStock(selectedWarehouse.id, editStockModal.product_id, { qty });
+      notify("Stock actualizado ✓");
+      loadStock(selectedWarehouse.id);
+      setEditStockModal(null);
+    } catch (err) { notify(err.message, "err"); }
+  };
+
+  const handleDeleteStock = (item) => {
+    setDeleteStockModal(item);
+  };
+
+  const confirmDeleteStock = async () => {
+    if (!deleteStockModal) return;
+    try {
+      await api.warehouses.removeStock(selectedWarehouse.id, deleteStockModal.product_id);
+      notify("Producto retirado del almacén ✓");
+      loadStock(selectedWarehouse.id);
+      setDeleteStockModal(null);
+    } catch (err) { notify(err.message, "err"); }
   };
 
   // ── Asignar empleados ──────────────────────────────────────
@@ -330,7 +374,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
               <table className="w-full border-collapse text-[13px]">
                 <thead>
                   <tr className="border-b-2 border-warning text-warning">
-                    {["Categoría","Producto","Stock","Unidad","Precio venta","Costo"].map(h => (
+                    {["Categoría","Producto","Stock","Unidad","Precio venta","Costo","Acciones"].map(h => (
                       <th key={h} className="text-left px-3 py-2 text-[11px] tracking-widest font-semibold">{h}</th>
                     ))}
                   </tr>
@@ -339,7 +383,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                   {filteredStock.length === 0
                     ? (
                       <tr>
-                        <td colSpan={6} className="text-center text-content-muted dark:text-content-dark-muted py-8 px-3">
+                        <td colSpan={7} className="text-center text-content-muted dark:text-content-dark-muted py-8 px-3">
                           Sin productos en este almacén —{" "}
                           <span
                             onClick={openAddStock}
@@ -361,12 +405,12 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                           <tr
                             key={s.product_id}
                             className={[
-                              "border-b border-surface-3 dark:border-surface-dark-3",
+                              "border-b border-surface-3 dark:border-surface-dark-3 hover:bg-surface-2 dark:hover:bg-surface-dark-2 transition-colors",
                               i % 2 === 0 ? "bg-surface-1 dark:bg-surface-dark-1" : "bg-transparent",
                             ].join(" ")}
                           >
                             <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted text-[11px]">{s.category_name || "—"}</td>
-                            <td className="px-3 py-2.5 font-bold text-content dark:text-content-dark">{s.product_name}</td>
+                            <td className="px-3 py-2.5 font-bold text-content dark:text-content-dark">{s.product_name} {s.is_combo && <span className="ml-1 text-[10px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded">Combo/Virtual</span>}</td>
                             <td className="px-3 py-2.5">
                               <span className={`${stockColorClass} font-bold text-[15px]`}>
                                 {parseFloat(s.qty).toFixed(s.qty % 1 !== 0 ? 3 : 0)}
@@ -375,7 +419,25 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                             <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted text-[11px]">{s.unit || "unidad"}</td>
                             <td className="px-3 py-2.5 text-warning">${parseFloat(s.price || 0).toFixed(2)}</td>
                             <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted">
-                              {s.cost_price ? `$${parseFloat(s.cost_price).toFixed(2)}` : "—"}
+                              {s.cost_price != null ? `$${parseFloat(s.cost_price).toFixed(2)}` : "—"}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleEditStock(s)}
+                                  className="text-[11px] text-info hover:text-info-dark transition-colors"
+                                  title="Editar cantidad"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteStock(s)}
+                                  className="text-[11px] text-danger hover:text-danger-dark transition-colors"
+                                  title="Retirar del almacén"
+                                >
+                                  ❌
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -729,6 +791,50 @@ export default function WarehousesTab({ notify, currentEmployee }) {
               <button onClick={saveAssign} className="btn-md btn-primary">Guardar</button>
               <button onClick={() => setAssignModal(null)} className="btn-sm btn-secondary">Cancelar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Editar Stock ── */}
+      {editStockModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-5">
+          <form onSubmit={submitEditStock} className="bg-surface-2 dark:bg-surface-dark-2 border border-warning rounded-md p-6 w-full max-w-[340px]">
+            <div className="font-bold text-sm text-warning tracking-widest mb-1.5">EDITAR STOCK</div>
+            <div className="text-[12px] text-content-muted dark:text-content-dark-muted mb-4.5">
+              Producto: <b className="text-content dark:text-content-dark">{editStockModal.product_name}</b>
+            </div>
+            
+            <div className="mb-5">
+               <label className="label mb-1">Nueva cantidad *</label>
+               <input autoFocus type="number" step="0.001" min="0" value={editStockValue} onChange={e => setEditStockValue(e.target.value)} required className="input w-full" />
+            </div>
+
+            <div className="flex gap-2.5">
+              <button type="submit" className="btn-md btn-primary">Guardar</button>
+              <button type="button" onClick={() => setEditStockModal(null)} className="btn-sm btn-secondary">Cancelar</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ── MODAL: Eliminar Stock ── */}
+      {deleteStockModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-5">
+          <div className="bg-surface-2 dark:bg-surface-dark-2 border border-danger/60 rounded-md p-6 w-full max-w-[340px]">
+             <div className="text-danger flex justify-center mb-3">
+               <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+             </div>
+             <div className="font-bold text-center text-sm mb-1.5 text-content dark:text-content-dark">
+               ¿Retirar producto?
+             </div>
+             <div className="text-center text-[12px] text-content-muted dark:text-content-dark-muted mb-5 leading-relaxed">
+               Estás a punto de retirar <b>{deleteStockModal.product_name}</b> de este almacén de forma permanente.
+             </div>
+             
+             <div className="flex gap-2.5 justify-center">
+                <button onClick={confirmDeleteStock} className="btn-md btn-danger">Sí, retirar</button>
+                <button onClick={() => setDeleteStockModal(null)} className="btn-md btn-secondary">Cancelar</button>
+             </div>
           </div>
         </div>
       )}

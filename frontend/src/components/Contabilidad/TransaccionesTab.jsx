@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../services/api";
+import { exportToCSV } from "../../utils/exportUtils";
+import ReturnModal from "../ReturnModal";
 
 export default function TransaccionesTab({ 
   notify, can, baseCurrency, allSeries, fmtPrice, fmtSale, setReceiptSale 
@@ -14,6 +16,7 @@ export default function TransaccionesTab({
   const [showFilterDrop, setShowFilterDrop] = useState(false);
   const [showGroupDrop,  setShowGroupDrop]  = useState(false);
   const [saleDetail,     setSaleDetail]     = useState(null);
+  const [returnSale,     setReturnSale]     = useState(null);
 
   const loadSales = useCallback(async () => {
     try {
@@ -74,11 +77,27 @@ export default function TransaccionesTab({
     catch (e) { notify(e.message, "err"); }
   };
 
+  const handleExportCSV = () => {
+    const headers = ['Factura', 'Fecha', 'Cliente', 'RIF', 'Estado', 'Serie', 'Total', 'Abonado', 'Pendiente'];
+    const rows = filteredSales.map(s => [
+      s.invoice_number || s.id,
+      new Date(s.created_at).toLocaleDateString(),
+      s.customer_name || 'Sin Cliente',
+      s.customer_rif || '',
+      s.status,
+      s.serie_name || '',
+      s.total,
+      s.amount_paid,
+      s.balance
+    ]);
+    exportToCSV('Historial_Ventas', rows, headers);
+  };
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       {/* ── BARRA DE BÚSQUEDA Y FILTROS (ODOO STYLE) ── */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 print-hidden">
         <div className="relative flex-1 group w-full lg:max-w-xl">
           <input 
             type="text" 
@@ -226,6 +245,16 @@ export default function TransaccionesTab({
               </>
             )}
           </div>
+
+          <div className="h-8 w-px bg-border/40 dark:bg-border-dark/40 shrink-0 hidden sm:block mx-1" />
+
+          <button onClick={handleExportCSV} className="w-full sm:w-auto px-4 py-3 bg-surface-2 dark:bg-surface-dark-3 border border-border dark:border-border-dark rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-surface-3 transition-all">
+            <span>📥 CSV</span>
+          </button>
+          
+          <button onClick={() => window.print()} className="w-full sm:w-auto px-4 py-3 bg-brand-500/10 text-brand-500 border border-brand-500/20 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-brand-500 hover:text-black transition-all">
+            <span>🖨️ Imprimir</span>
+          </button>
         </div>
       </div>
 
@@ -323,6 +352,16 @@ export default function TransaccionesTab({
                             🧾
                           </button>
 
+                          {sale.status !== 'anulado' && (
+                            <button
+                              onClick={() => setReturnSale(sale)}
+                              className="p-3.5 rounded-2xl bg-warning/10 text-warning border border-warning/20 hover:bg-warning hover:text-black transition-all shadow-sm text-lg"
+                              title="Registrar Devolución Parcial/Total"
+                            >
+                              ↩️
+                            </button>
+                          )}
+
                           {can("admin") && sale.status !== 'anulado' && (
                             <button 
                               onClick={() => cancelSale(sale.id)} 
@@ -395,6 +434,16 @@ export default function TransaccionesTab({
           ))
         )}
       </div>
+
+      {returnSale && (
+        <ReturnModal
+          open={!!returnSale}
+          onClose={() => setReturnSale(null)}
+          sale={returnSale}
+          onReturnSuccess={loadSales}
+          notify={notify}
+        />
+      )}
     </div>
   );
 }

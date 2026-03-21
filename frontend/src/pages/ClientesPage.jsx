@@ -3,6 +3,8 @@ import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 import CustomerModal from "../components/CustomerModal";
 import PaymentFormModal from "../components/PaymentFormModal";
+import { exportToCSV } from "../utils/exportUtils";
+import DataTable from "../components/DataTable";
 
 export default function ClientesPage() {
   const { notify, baseCurrency } = useApp();
@@ -11,13 +13,17 @@ export default function ClientesPage() {
   const fmtSale  = (sale, amount) => {
     const isBase = !sale.currency_id || sale.currency_id === baseCurrency?.id;
     if (isBase) return fmtPrice(amount);
-    const sym  = sale.currency_symbol || "Bs.";
+    const sym  = sale.currency_symbol || "$";
     const rate = parseFloat(sale.exchange_rate) || 1;
     return `${sym}${(parseFloat(amount || 0) * rate).toFixed(2)}`;
   };
 
   // ── State ──────────────────────────────────────────────────
   const [customers, setCustomers]           = useState([]);
+  const [totalCustomers, setTotalCustomers] = useState(0);
+  const [page, setPage]                     = useState(1);
+  const LIMIT = 50;
+
   const [customerSearch, setCustomerSearch] = useState("");
   const [typeFilter, setTypeFilter]         = useState("cliente");
   const [customerDetail, setCustomerDetail] = useState(null);
@@ -31,15 +37,23 @@ export default function ClientesPage() {
   // Pago de cuenta pendiente
   const [payModal, setPayModal] = useState(null);
 
+  // Reset pagina al cambiar filtros
+  useEffect(() => { setPage(1); }, [customerSearch, typeFilter]);
+
   // ── Loaders ────────────────────────────────────────────────
   const loadCustomers = useCallback(async () => {
     try {
-      const params = customerSearch ? { search: customerSearch } : {};
+      const params = {
+        limit: LIMIT,
+        offset: (page - 1) * LIMIT
+      };
+      if (customerSearch) params.search = customerSearch;
       if (typeFilter) params.type = typeFilter;
       const r = await api.customers.getAll(params);
       setCustomers(r.data);
+      setTotalCustomers(r.total || r.data.length);
     } catch (e) { notify(e.message, "err"); }
-  }, [customerSearch, typeFilter, notify]);
+  }, [customerSearch, typeFilter, page, notify]);
 
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
 
@@ -103,15 +117,69 @@ export default function ClientesPage() {
   // ── Pago de fiado ──────────────────────────────────────────
   const openPay = (sale) => setPayModal(sale);
 
+  const handleExportStatement = () => {
+    const headers = ['Factura', 'Fecha', 'Estado', 'Cargo', 'Abonado', 'Saldo'];
+    const rows = purchases.map(s => [
+      s.id,
+      new Date(s.created_at).toLocaleDateString("es-VE"),
+      s.status.toUpperCase(),
+      s.total,
+      s.amount_paid,
+      s.balance
+    ]);
+    exportToCSV(`Estado_Cuenta_${customerDetail.name.replace(/\s+/g, '_')}`, rows, headers);
+  };
+
   const isProveedor = typeFilter === "proveedor";
 
-  const filteredList = customers.filter(c =>
-    c.type === typeFilter &&
-    (!customerSearch ||
-      c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-      (c.phone||"").includes(customerSearch) ||
-      (c.rif||"").toLowerCase().includes(customerSearch.toLowerCase()))
+  const renderActions = (c) => (
+    <div className="flex gap-2">
+      {!isProveedor && (
+        <button onClick={() => openDetail(c)} className="p-2 rounded-lg bg-info/10 text-info border border-info/20 hover:bg-info hover:text-white transition-all shadow-sm" title="Ver Detalle">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+        </button>
+      )}
+      <button onClick={() => openEdit(c)} className="p-2 rounded-lg bg-warning/10 text-warning border border-warning/20 hover:bg-warning hover:text-white transition-all shadow-sm" title="Editar">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+      </button>
+      <button onClick={() => remove(c.id, c.type)} className="p-2 rounded-lg bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all shadow-sm" title="Eliminar">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+      </button>
+    </div>
   );
+
+  const columns = isProveedor
+    ? [
+        { key: 'name', label: 'Nombre / Empresa', render: (c) => (
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold bg-violet-100 text-violet-600 dark:bg-violet-900/20">
+                {c.name.charAt(0).toUpperCase()}
+              </div>
+              <span className="font-bold text-content dark:text-content-dark tracking-tight uppercase text-xs">{c.name}</span>
+            </div>
+        )},
+        { key: 'phone', label: 'Teléfono', render: c => <span className="text-xs font-medium text-content-muted dark:text-content-dark-muted">{c.phone || "—"}</span> },
+        { key: 'rif', label: 'RIF / Cédula', render: c => <span className="text-[10px] font-bold bg-surface-3 dark:bg-surface-dark px-2 py-1 rounded border border-border/50 dark:border-border-dark/50 text-content-muted">{c.rif || "S/N"}</span> },
+        { key: 'tax_name', label: 'Razón Social', render: c => <span className="text-xs text-content dark:text-content-dark font-medium">{c.tax_name || "—"}</span> },
+        { key: 'address', label: 'Dirección', render: c => <span className="text-[11px] text-content-muted dark:text-content-dark-muted max-w-[200px] truncate block" title={c.address}>{c.address || "—"}</span> },
+        { key: 'actions', label: 'Acciones', render: renderActions }
+      ]
+    : [
+        { key: 'name', label: 'Nombre del Cliente', render: (c) => (
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold bg-info/10 text-info dark:bg-blue-900/20">
+                {c.name.charAt(0).toUpperCase()}
+              </div>
+              <span className="font-bold text-content dark:text-content-dark tracking-tight uppercase text-xs">{c.name}</span>
+            </div>
+        )},
+        { key: 'phone', label: 'Teléfono', render: c => <span className="text-xs font-medium text-content-muted dark:text-content-dark-muted">{c.phone || "—"}</span> },
+        { key: 'rif', label: 'RIF / Cédula', render: c => <span className="text-[10px] font-bold bg-surface-3 dark:bg-surface-dark px-2 py-1 rounded border border-border/50 dark:border-border-dark/50 text-content-muted">{c.rif || "S/N"}</span> },
+        { key: 'total_purchases', label: 'Transac.', render: c => <span className="text-xs font-bold text-warning bg-warning/5 px-2 py-0.5 rounded-full border border-warning/10">{c.total_purchases}</span> },
+        { key: 'total_spent', label: 'Cobrado', render: c => <span className="text-xs font-black text-success">{fmtPrice(c.total_spent)}</span> },
+        { key: 'total_debt', label: 'Saldo Pendiente', render: c => parseFloat(c.total_debt || 0) > 0 ? <span className="font-black text-danger bg-danger/5 px-2 py-1 rounded-lg border border-danger/10 animate-pulse">{fmtPrice(c.total_debt)}</span> : <span className="text-content-subtle dark:text-content-dark-muted text-[10px] font-bold tracking-widest uppercase opacity-40">● Al día</span> },
+        { key: 'actions', label: 'Acciones', render: renderActions }
+      ];
 
   const pendingSales = purchases.filter(s => s.status === 'pendiente' || s.status === 'parcial');
   const paidSales    = purchases.filter(s => s.status === 'pagado');
@@ -119,12 +187,29 @@ export default function ClientesPage() {
   // ── Vista detalle ──────────────────────────────────────────
   if (customerDetail) return (
     <div className="animate-in fade-in slide-in-from-left-4 duration-300">
-      <button
-        onClick={() => { setCustomerDetail(null); setPurchases([]); }}
-        className="group flex items-center gap-2 text-warning font-bold text-xs uppercase tracking-widest hover:translate-x-[-4px] transition-all mb-6"
-      >
-        <span className="text-lg">←</span> Volver al listado
-      </button>
+      <div className="flex justify-between items-center mb-6 print-hidden">
+        <button
+          onClick={() => { setCustomerDetail(null); setPurchases([]); }}
+          className="group flex items-center gap-2 text-warning font-bold text-xs uppercase tracking-widest hover:translate-x-[-4px] transition-all"
+        >
+          <span className="text-lg">←</span> Volver al listado
+        </button>
+        <div className="flex gap-2">
+          <button onClick={handleExportStatement} className="px-4 py-2 bg-surface-2 dark:bg-surface-dark-3 rounded-lg text-xs font-black uppercase tracking-widest border border-border dark:border-border-dark flex items-center gap-2 hover:bg-surface-3 transition-colors">
+            📥 CSV
+          </button>
+          <button onClick={() => window.print()} className="px-4 py-2 bg-info/10 text-info border border-info/20 rounded-lg text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-info hover:text-white transition-colors">
+            🖨️ PDF
+          </button>
+        </div>
+      </div>
+
+      {/* Encabezado visible SOLO en impresión */}
+      <div className="hidden print-force-break mb-8 text-center text-black">
+        <h1 className="text-2xl font-black uppercase">Estado de Cuenta</h1>
+        <p className="text-sm mt-1 tracking-widest">{customerDetail.name} — RIF: {customerDetail.rif || 'S/N'}</p>
+        <p className="text-xs mt-1 text-content-muted">Fecha de emisión: {new Date().toLocaleDateString("es-VE")}</p>
+      </div>
 
       {/* Header cliente */}
       <div className="bg-white dark:bg-surface-dark-2 rounded-2xl shadow-card border border-border dark:border-border-dark p-6 mb-8">
@@ -331,98 +416,18 @@ export default function ClientesPage() {
         </button>
       </div>
 
-      {filteredList.length === 0
-        ? <div className="bg-white dark:bg-surface-dark-2 rounded-2xl border-2 border-dashed border-border dark:border-border-dark py-24 text-center">
-            <div className="text-4xl mb-4">📭</div>
-            <div className="text-content-subtle font-bold uppercase tracking-widest text-xs">
-              Sin {isProveedor ? "proveedores" : "clientes"} registrados
-            </div>
-          </div>
-        : <div className="bg-white dark:bg-surface-dark-2 rounded-2xl shadow-card border border-border dark:border-border-dark overflow-hidden transition-all duration-300">
-            <table className="table-pos w-full border-collapse">
-              <thead>
-                <tr className={`border-b-2 ${isProveedor ? "border-violet-500/30 text-violet-600 dark:text-violet-400" : "border-info/30 text-info dark:text-blue-400"} bg-surface-2/50 dark:bg-surface-dark-3/50`}>
-                  {(isProveedor
-                    ? ["Nombre / Empresa", "Teléfono", "RIF / Cédula", "Razón Social", "Dirección", "Acciones"]
-                    : ["Nombre del Cliente", "Teléfono", "RIF / Cédula", "Transac.", "Cobrado", "Saldo Pendiente", "Acciones"]
-                  ).map(h => (
-                    <th key={h} className="text-left py-4 px-4 text-[10px] font-black uppercase tracking-[2px]">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/40 dark:divide-border-dark/40">
-                {filteredList.map((c) => (
-                  <tr
-                    key={c.id}
-                    className="group hover:bg-surface-2 dark:hover:bg-surface-dark-3 transition-colors duration-150"
-                  >
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${isProveedor ? "bg-violet-100 text-violet-600 dark:bg-violet-900/20" : "bg-info/10 text-info dark:bg-blue-900/20"}`}>
-                          {c.name.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="font-bold text-content dark:text-content-dark tracking-tight uppercase text-xs">{c.name}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-xs font-medium text-content-muted dark:text-content-dark-muted">{c.phone || "—"}</td>
-                    <td className="py-4 px-4">
-                      <span className="text-[10px] font-bold bg-surface-3 dark:bg-surface-dark px-2 py-1 rounded border border-border/50 dark:border-border-dark/50 text-content-muted">
-                        {c.rif || "S/N"}
-                      </span>
-                    </td>
-                    {isProveedor
-                      ? <>
-                          <td className="py-4 px-4 text-xs text-content dark:text-content-dark font-medium">{c.tax_name || "—"}</td>
-                          <td className="py-4 px-4 text-[11px] text-content-muted dark:text-content-dark-muted max-w-[200px] truncate" title={c.address}>{c.address || "—"}</td>
-                        </>
-                      : <>
-                          <td className="py-4 px-4">
-                            <span className="text-xs font-bold text-warning bg-warning/5 px-2 py-0.5 rounded-full border border-warning/10">{c.total_purchases}</span>
-                          </td>
-                          <td className="py-4 px-4 text-xs font-black text-success">{fmtPrice(c.total_spent)}</td>
-                          <td className="py-4 px-4">
-                            {parseFloat(c.total_debt || 0) > 0
-                              ? <span className="font-black text-danger bg-danger/5 px-2 py-1 rounded-lg border border-danger/10 animate-pulse">{fmtPrice(c.total_debt)}</span>
-                              : <span className="text-content-subtle dark:text-content-dark-muted text-[10px] font-bold tracking-widest uppercase opacity-40">● Al día</span>
-                            }
-                          </td>
-                        </>
-                    }
-                    <td className="py-4 px-4">
-                      <div className="flex gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
-                        {!isProveedor && (
-                          <button
-                            onClick={() => openDetail(c)}
-                            className="p-2 rounded-lg bg-info/10 text-info border border-info/20 hover:bg-info hover:text-white transition-all shadow-sm"
-                            title="Ver Detalle"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                          </button>
-                        )}
-                        <button
-                          onClick={() => openEdit(c)}
-                          className="p-2 rounded-lg bg-warning/10 text-warning border border-warning/20 hover:bg-warning hover:text-white transition-all shadow-sm"
-                          title="Editar"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-                        </button>
-                        <button
-                          onClick={() => remove(c.id, c.type)}
-                          className="p-2 rounded-lg bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all shadow-sm"
-                          title="Eliminar"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-      }
+      <DataTable 
+        columns={columns}
+        data={customers}
+        emptyMessage={`Sin ${isProveedor ? "proveedores" : "clientes"} registrados`}
+        emptyIcon="📭"
+        pagination={{
+          page,
+          limit: LIMIT,
+          total: totalCustomers,
+          onPageChange: setPage
+        }}
+      />
 
       <CustomerModal open={customerModal} onClose={closeModal} onSave={save} editData={customerEditData} loading={saving} />
     </div>

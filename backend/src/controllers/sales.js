@@ -1,5 +1,5 @@
 const {
-  Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Warehouse, Product, ProductStock, Serie, SerieRange, Sequelize, sequelize
+  Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Warehouse, Product, ProductStock, Serie, SerieRange, ProductComboItem, Sequelize, sequelize
 } = require("../models");
 const { Op } = Sequelize;
 
@@ -173,24 +173,57 @@ const create = async (req, res) => {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
       if (!product) throw new Error(`Producto ${item.product_id} no encontrado`);
 
-      // Bloquear stock específico en el almacén
-      const stockEntry = await ProductStock.findOne({
-        where: { warehouse_id, product_id: product.id },
-        transaction,
-        lock: true
-      });
+      if (product.is_combo) {
+        const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
+        if (!comboItems || comboItems.length === 0) {
+          throw new Error(`El combo "${product.name}" no tiene ingredientes configurados`);
+        }
 
-      const currentQty = parseFloat(stockEntry?.qty || 0);
-      if (currentQty < item.quantity) {
-        throw new Error(`Stock insuficiente para "${product.name}" en este almacén. Disponible: ${currentQty}`);
+        const ingredientsData = [];
+        for (const cItem of comboItems) {
+          const ingredient = await Product.findByPk(cItem.product_id, { transaction, lock: true });
+          const qtyNeeded = item.quantity * parseFloat(cItem.quantity);
+          
+          const stockEntry = await ProductStock.findOne({
+            where: { warehouse_id, product_id: ingredient.id },
+            transaction,
+            lock: true
+          });
+          const currentQty = parseFloat(stockEntry?.qty || 0);
+          if (currentQty < qtyNeeded) {
+            throw new Error(`Stock insuficiente del ingrediente "${ingredient.name}" para el combo "${product.name}". Disponible: ${currentQty}, Requerido: ${qtyNeeded}`);
+          }
+          ingredientsData.push({ ingredient, qtyNeeded, stockEntry });
+        }
+
+        total += parseFloat(product.price) * item.quantity;
+        enrichedItems.push({
+          product,
+          qty: item.quantity,
+          isCombo: true,
+          ingredientsData
+        });
+      } else {
+        // Bloquear stock específico en el almacén
+        const stockEntry = await ProductStock.findOne({
+          where: { warehouse_id, product_id: product.id },
+          transaction,
+          lock: true
+        });
+
+        const currentQty = parseFloat(stockEntry?.qty || 0);
+        if (currentQty < item.quantity) {
+          throw new Error(`Stock insuficiente para "${product.name}" en este almacén. Disponible: ${currentQty}`);
+        }
+
+        total += parseFloat(product.price) * item.quantity;
+        enrichedItems.push({ 
+          product, 
+          qty: item.quantity,
+          isCombo: false,
+          stockEntry 
+        });
       }
-
-      total += parseFloat(product.price) * item.quantity;
-      enrichedItems.push({ 
-        product, 
-        qty: item.quantity,
-        stockEntry 
-      });
     }
 
     total = parseFloat((total - discAmt).toFixed(2));
@@ -227,15 +260,27 @@ const create = async (req, res) => {
         discount: 0 // Simplificación, expandible si hay descuentos por item
       }, { transaction });
 
-      // Descontar del almacén
-      await entry.stockEntry.decrement('qty', { by: entry.qty, transaction });
+      if (entry.isCombo) {
+        // Descontar del almacén por ingrediente
+        for (const ing of entry.ingredientsData) {
+          await ing.stockEntry.decrement('qty', { by: ing.qtyNeeded, transaction });
+          const totalStock = await ProductStock.sum('qty', { 
+            where: { product_id: ing.ingredient.id }, 
+            transaction 
+          });
+          await ing.ingredient.update({ stock: totalStock || 0 }, { transaction });
+        }
+      } else {
+        // Descontar del almacén directo
+        await entry.stockEntry.decrement('qty', { by: entry.qty, transaction });
 
-      // Sincronizar stock total del producto
-      const totalStock = await ProductStock.sum('qty', { 
-        where: { product_id: entry.product.id }, 
-        transaction 
-      });
-      await entry.product.update({ stock: totalStock }, { transaction });
+        // Sincronizar stock total del producto
+        const totalStock = await ProductStock.sum('qty', { 
+          where: { product_id: entry.product.id }, 
+          transaction 
+        });
+        await entry.product.update({ stock: totalStock || 0 }, { transaction });
+      }
     }
 
     await transaction.commit();
@@ -291,21 +336,43 @@ const cancel = async (req, res) => {
     for (const item of items) {
       if (!item.product_id) continue;
       
-      // Restaurar en almacén
-      const [stockEntry] = await ProductStock.findOrCreate({
-        where: { warehouse_id: sale.warehouse_id, product_id: item.product_id },
-        defaults: { qty: 0 },
-        transaction,
-        lock: true
-      });
-      await stockEntry.increment('qty', { by: item.quantity, transaction });
+      const product = await Product.findByPk(item.product_id, { transaction });
+      
+      if (product && product.is_combo) {
+        const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
+        for (const cItem of comboItems) {
+          const qtyToRestore = item.quantity * parseFloat(cItem.quantity);
+          const [stockEntry] = await ProductStock.findOrCreate({
+            where: { warehouse_id: sale.warehouse_id, product_id: cItem.product_id },
+            defaults: { qty: 0 },
+            transaction,
+            lock: true
+          });
+          await stockEntry.increment('qty', { by: qtyToRestore, transaction });
 
-      // Sincronizar stock total de producto
-      const totalStock = await ProductStock.sum('qty', { 
-        where: { product_id: item.product_id }, 
-        transaction 
-      });
-      await Product.update({ stock: totalStock || 0 }, { where: { id: item.product_id }, transaction });
+          const totalStock = await ProductStock.sum('qty', { 
+            where: { product_id: cItem.product_id }, 
+            transaction 
+          });
+          await Product.update({ stock: totalStock || 0 }, { where: { id: cItem.product_id }, transaction });
+        }
+      } else {
+        // Restaurar en almacén directo
+        const [stockEntry] = await ProductStock.findOrCreate({
+          where: { warehouse_id: sale.warehouse_id, product_id: item.product_id },
+          defaults: { qty: 0 },
+          transaction,
+          lock: true
+        });
+        await stockEntry.increment('qty', { by: item.quantity, transaction });
+
+        // Sincronizar stock total de producto
+        const totalStock = await ProductStock.sum('qty', { 
+          where: { product_id: item.product_id }, 
+          transaction 
+        });
+        await Product.update({ stock: totalStock || 0 }, { where: { id: item.product_id }, transaction });
+      }
     }
 
     await sale.destroy({ transaction });

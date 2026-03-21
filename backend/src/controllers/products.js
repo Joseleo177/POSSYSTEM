@@ -1,6 +1,6 @@
 const path = require("path");
 const fs   = require("fs");
-const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, Sequelize } = require("../models");
+const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, Sequelize, ProductComboItem, sequelize } = require("../models");
 const Op = Sequelize.Op;
 
 const imageUrl = (filename) =>
@@ -12,53 +12,99 @@ const deleteOldImage = (filename) => {
   if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
 };
 
+// Helper: Calcular stock virtual y costo de un combo basado en sus ingredientes
+const calculateComboStockAndCost = (comboItems) => {
+  if (!comboItems || comboItems.length === 0) return { stock: 0, cost: 0 };
+  let minStock = Infinity;
+  let totalCost = 0;
+  for (const item of comboItems) {
+    if (!item.ingredient) return { stock: 0, cost: 0 };
+    const ingStock = parseFloat(item.ingredient.stock) || 0;
+    const ingCost = parseFloat(item.ingredient.cost_price) || 0;
+    const reqQty = parseFloat(item.quantity) || 1;
+    
+    totalCost += ingCost * reqQty;
+    
+    const possible = Math.floor(ingStock / reqQty);
+    if (possible < minStock) minStock = possible;
+  }
+  return {
+    stock: minStock === Infinity ? 0 : minStock,
+    cost: totalCost
+  };
+};
+
 // GET /api/products
 const getAll = async (req, res) => {
   try {
-    const { search, category_id } = req.query;
+    const { search, category_id, is_combo, limit = 100, offset = 0 } = req.query;
     const where = {};
 
     if (category_id) where.category_id = category_id;
+    if (is_combo !== undefined) where.is_combo = is_combo === 'true';
     if (search) {
+      // Evitar problemas de Sequelize con subQuery, limit y outer joins buscando primero las categorías
+      const categories = await Category.findAll({
+        where: { name: { [Op.iLike]: `%${search}%` } },
+        attributes: ['id']
+      });
+      const catIds = categories.map(c => c.id);
+
       where[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } }
+        { name: { [Op.iLike]: `%${search}%` } },
+        ...(catIds.length > 0 ? [{ category_id: { [Op.in]: catIds } }] : [])
       ];
     }
 
-    const products = await Product.findAll({
+    const { count, rows } = await Product.findAndCountAll({
       where,
-      include: [{ model: Category, attributes: ['name'], required: false }],
-      order: [['name', 'ASC']]
+      include: [
+        { model: Category, attributes: ['name'], required: false },
+        { 
+          model: ProductComboItem, 
+          as: 'comboItems', 
+          include: [{ model: Product, as: 'ingredient', attributes: ['id', 'name', 'unit', 'price', 'cost_price', 'stock'] }] 
+        }
+      ],
+      order: [['name', 'ASC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      distinct: true, // required for count with includes that can duplicate rows
     });
 
-    const data = products.map(p => {
+    const data = rows.map(p => {
       const prod = p.toJSON();
       prod.category_name = prod.Category?.name ?? null;
       delete prod.Category;
       prod.image_url = imageUrl(prod.image_filename);
+      if (prod.is_combo) {
+        const stats = calculateComboStockAndCost(prod.comboItems);
+        prod.stock = stats.stock;
+        prod.cost_price = stats.cost;
+      }
       return prod;
     });
 
-    // Also match category name in search
-    const filtered = search
-      ? data.filter(p =>
-          p.name?.toLowerCase().includes(search.toLowerCase()) ||
-          p.category_name?.toLowerCase().includes(search.toLowerCase())
-        )
-      : data;
-
-    res.json({ ok: true, data: filtered });
+    res.json({ ok: true, data, total: count, limit: parseInt(limit), offset: parseInt(offset) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener productos" });
   }
 };
 
+
 // GET /api/products/:id
 const getOne = async (req, res) => {
   try {
     const product = await Product.findByPk(req.params.id, {
-      include: [{ model: Category, attributes: ['name'], required: false }]
+      include: [
+        { model: Category, attributes: ['name'], required: false },
+        { 
+          model: ProductComboItem, 
+          as: 'comboItems', 
+          include: [{ model: Product, as: 'ingredient', attributes: ['id', 'name', 'unit', 'price', 'cost_price', 'stock'] }] 
+        }
+      ]
     });
     if (!product) return res.status(404).json({ ok: false, message: "Producto no encontrado" });
 
@@ -66,6 +112,11 @@ const getOne = async (req, res) => {
     p.category_name = p.Category?.name ?? null;
     delete p.Category;
     p.image_url = imageUrl(p.image_filename);
+    if (p.is_combo) {
+      const stats = calculateComboStockAndCost(p.comboItems);
+      p.stock = stats.stock;
+      p.cost_price = stats.cost;
+    }
 
     res.json({ ok: true, data: p });
   } catch (err) {
@@ -75,35 +126,54 @@ const getOne = async (req, res) => {
 
 // POST /api/products
 const create = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     const { name, price, stock, category_id, unit, qty_step,
-            cost_price, profit_margin, package_size, package_unit } = req.body;
+            cost_price, profit_margin, package_size, package_unit, min_stock, is_combo, combo_items } = req.body;
+    
     if (!name || price == null) {
       if (req.file) deleteOldImage(req.file.filename);
+      await t.rollback();
       return res.status(400).json({ ok: false, message: "name y price son requeridos" });
     }
 
     const filename = req.file ? req.file.filename : null;
+    const isComboBool = is_combo === 'true' || is_combo === true;
 
     const product = await Product.create({
-      name,
-      price,
-      stock: stock ?? 0,
+      name, price,
+      stock: isComboBool ? 0 : (stock ?? 0),
       category_id: category_id || null,
       image_filename: filename,
       unit: unit || "unidad",
       qty_step: qty_step || 1,
-      cost_price: cost_price || null,
+      cost_price: isComboBool ? null : (cost_price || null),
       profit_margin: profit_margin || null,
       package_size: package_size || null,
-      package_unit: package_unit || null
-    });
+      package_unit: package_unit || null,
+      min_stock: parseFloat(min_stock) || 0,
+      is_combo: isComboBool,
+    }, { transaction: t });
 
+    if (isComboBool && combo_items) {
+      const parsedItems = typeof combo_items === 'string' ? JSON.parse(combo_items) : combo_items;
+      if (Array.isArray(parsedItems) && parsedItems.length > 0) {
+        const itemsToCreate = parsedItems.map(i => ({
+          combo_id: product.id,
+          product_id: i.product_id,
+          quantity: i.quantity
+        }));
+        await ProductComboItem.bulkCreate(itemsToCreate, { transaction: t });
+      }
+    }
+
+    await t.commit();
     res.status(201).json({
       ok: true,
       data: { ...product.toJSON(), image_url: imageUrl(filename) }
     });
   } catch (err) {
+    await t.rollback();
     if (req.file) deleteOldImage(req.file.filename);
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al crear producto" });
@@ -112,13 +182,15 @@ const create = async (req, res) => {
 
 // PUT /api/products/:id
 const update = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     const { name, price, category_id, unit, qty_step,
-            cost_price, profit_margin, package_size, package_unit } = req.body;
+            cost_price, profit_margin, package_size, package_unit, min_stock, is_combo, combo_items } = req.body;
 
-    const product = await Product.findByPk(req.params.id);
+    const product = await Product.findByPk(req.params.id, { transaction: t });
     if (!product) {
       if (req.file) deleteOldImage(req.file.filename);
+      await t.rollback();
       return res.status(404).json({ ok: false, message: "Producto no encontrado" });
     }
 
@@ -132,24 +204,45 @@ const update = async (req, res) => {
       filename = null;
     }
 
+    const isComboBool = is_combo === 'true' || is_combo === true || (is_combo === undefined ? product.is_combo : false);
+
     await product.update({
-      name,
-      price,
+      name, price,
       category_id: category_id || null,
       image_filename: filename,
       unit: unit || "unidad",
       qty_step: qty_step || 1,
-      cost_price: cost_price || null,
+      cost_price: isComboBool ? null : (cost_price || null),
       profit_margin: profit_margin || null,
       package_size: package_size || null,
-      package_unit: package_unit || null
-    });
+      package_unit: package_unit || null,
+      min_stock: parseFloat(min_stock) || 0,
+      is_combo: isComboBool,
+    }, { transaction: t });
 
+    if (isComboBool && combo_items !== undefined) {
+      await ProductComboItem.destroy({ where: { combo_id: product.id }, transaction: t });
+      
+      const parsedItems = typeof combo_items === 'string' ? (combo_items ? JSON.parse(combo_items) : []) : combo_items;
+      if (Array.isArray(parsedItems) && parsedItems.length > 0) {
+        const itemsToCreate = parsedItems.map(i => ({
+          combo_id: product.id,
+          product_id: i.product_id,
+          quantity: i.quantity
+        }));
+        await ProductComboItem.bulkCreate(itemsToCreate, { transaction: t });
+      }
+    } else if (!isComboBool) {
+      await ProductComboItem.destroy({ where: { combo_id: product.id }, transaction: t });
+    }
+
+    await t.commit();
     res.json({
       ok: true,
       data: { ...product.toJSON(), image_url: imageUrl(filename) }
     });
   } catch (err) {
+    await t.rollback();
     if (req.file) deleteOldImage(req.file.filename);
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al actualizar producto" });
@@ -172,6 +265,12 @@ const remove = async (req, res) => {
     const saleCount = await SaleItem.count({ where: { product_id: req.params.id } });
     if (saleCount > 0) {
       return res.status(400).json({ ok: false, message: "No se puede eliminar: tiene historial de ventas asociadas" });
+    }
+
+    // Usado en combos como ingrediente
+    const comboUsageCount = await ProductComboItem.count({ where: { product_id: req.params.id } });
+    if (comboUsageCount > 0) {
+      return res.status(400).json({ ok: false, message: "No se puede eliminar: es parte de uno o más combos (ingrediente)" });
     }
 
     // 3. Verificar si tiene historial de compras

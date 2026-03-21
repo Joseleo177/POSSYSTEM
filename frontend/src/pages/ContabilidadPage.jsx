@@ -55,7 +55,7 @@ export default function ContabilidadPage() {
   const fmtSale = (sale, amount) => {
     const isBase = !sale.currency_id || sale.currency_id === baseCurrency?.id;
     if (isBase) return fmtPrice(amount);
-    const sym  = sale.currency_symbol || "Bs.";
+    const sym  = sale.currency_symbol || "$";
     const rate = parseFloat(sale.exchange_rate) || 1;
     return `${sym}${(parseFloat(amount || 0) * rate).toFixed(2)}`;
   };
@@ -63,7 +63,7 @@ export default function ContabilidadPage() {
   const fmtPayment = pay => {
     const isBase = !pay.currency_code || pay.currency_code === baseCurrency?.code;
     if (isBase) return fmtPrice(pay.amount);
-    const sym  = pay.currency_symbol || "Bs.";
+    const sym  = pay.currency_symbol || "$";
     const rate = parseFloat(pay.exchange_rate) || 1;
     return `${sym}${(parseFloat(pay.amount || 0) * rate).toFixed(2)}`;
   };

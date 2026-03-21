@@ -61,33 +61,84 @@ const getAll = async (req, res) => {
 // GET /api/warehouses/:id/stock
 const getStock = async (req, res) => {
   try {
-    const stocks = await ProductStock.findAll({
-      where: { warehouse_id: req.params.id },
-      include: [
-        {
-          model: Product,
-          attributes: ['name', 'unit', 'price', 'cost_price', 'image_filename'],
-          include: [{ model: Category, attributes: ['name'] }]
-        }
-      ],
-      order: [[Product, Category, 'name', 'ASC'], [Product, 'name', 'ASC']]
-    });
+    const warehouseId = parseInt(req.params.id);
 
-    const data = stocks.map(s => ({
-      product_id: s.product_id,
-      qty: parseFloat(s.qty),
-      product_name: s.Product?.name,
-      unit: s.Product?.unit,
-      price: parseFloat(s.Product?.price || 0),
-      cost_price: parseFloat(s.Product?.cost_price || 0),
-      image_filename: s.Product?.image_filename,
-      category_name: s.Product?.Category?.name ?? 'Sin Categoría'
+    // 1. Obtener todos los productos y stock del almacén
+    const productsRaw = await sequelize.query(`
+      SELECT
+        p.id AS product_id, p.name AS product_name, p.price, p.unit, p.image_filename,
+        p.cost_price, p.is_combo,
+        c.name AS category_name,
+        ps.qty
+      FROM product_stock ps
+      JOIN products p ON p.id = ps.product_id
+      LEFT JOIN categories c ON c.id = p.category_id
+      WHERE ps.warehouse_id = :wid
+      ORDER BY c.name ASC NULLS LAST, p.name ASC
+    `, { replacements: { wid: warehouseId }, type: Sequelize.QueryTypes.SELECT });
+
+    if (productsRaw.length === 0) return res.json({ ok: true, data: [] });
+
+    // 2. Calcular stock virtual para combos
+    const comboIds = productsRaw.filter(p => p.is_combo).map(p => p.product_id);
+    const ingredientStockMap = {}; 
+    const comboCostMap = {};
+    if (comboIds.length > 0) {
+      const comboData = await sequelize.query(`
+        SELECT
+          pci.combo_id,
+          pci.quantity,
+          COALESCE(ps2.qty, 0) AS ingredient_stock,
+          p.cost_price AS ingredient_cost
+        FROM product_combo_items pci
+        JOIN products p ON p.id = pci.product_id
+        LEFT JOIN product_stock ps2
+          ON ps2.product_id = pci.product_id AND ps2.warehouse_id = :wid
+        WHERE pci.combo_id IN (:cids)
+      `, { replacements: { wid: warehouseId, cids: comboIds }, type: Sequelize.QueryTypes.SELECT });
+
+      const byCombo = {};
+      comboData.forEach(row => {
+        if (!byCombo[row.combo_id]) byCombo[row.combo_id] = [];
+        byCombo[row.combo_id].push(row);
+      });
+
+      comboIds.forEach(cid => {
+        const rows = byCombo[cid] || [];
+        if (rows.length === 0) { 
+          ingredientStockMap[cid] = 0; 
+          comboCostMap[cid] = 0;
+          return; 
+        }
+        let min = Infinity;
+        let totalCost = 0;
+        for (const r of rows) {
+          const ingQty = parseFloat(r.quantity) || 1;
+          const possible = Math.floor(parseFloat(r.ingredient_stock) / ingQty);
+          if (possible < min) min = possible;
+          totalCost += parseFloat(r.ingredient_cost || 0) * ingQty;
+        }
+        ingredientStockMap[cid] = min === Infinity ? 0 : min;
+        comboCostMap[cid] = totalCost;
+      });
+    }
+
+    const data = productsRaw.map(p => ({
+      product_id: p.product_id,
+      product_name: p.product_name,
+      is_combo: p.is_combo,
+      qty: p.is_combo ? (ingredientStockMap[p.product_id] ?? 0) : parseFloat(p.qty) || 0,
+      unit: p.unit,
+      price: parseFloat(p.price || 0),
+      cost_price: p.is_combo ? (comboCostMap[p.product_id] ?? 0) : parseFloat(p.cost_price || 0),
+      category_name: p.category_name,
+      image_url: p.image_filename ? `/uploads/${p.image_filename}` : null
     }));
 
     res.json({ ok: true, data });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ ok: false, message: "Error al obtener stock" });
+    res.status(500).json({ ok: false, message: "Error al obtener stock del almacén" });
   }
 };
 
@@ -250,7 +301,7 @@ const transfer = async (req, res) => {
 // GET /api/warehouses/transfers
 const getTransfers = async (req, res) => {
   try {
-    const { warehouse_id, product_id, limit = 50 } = req.query;
+    const { warehouse_id, product_id, limit = 50, offset = 0 } = req.query;
 
     const where = {};
     if (warehouse_id) {
@@ -261,7 +312,7 @@ const getTransfers = async (req, res) => {
     }
     if (product_id) where.product_id = product_id;
 
-    const transfers = await StockTransfer.findAll({
+    const { count, rows: transfers } = await StockTransfer.findAndCountAll({
       where,
       include: [
         { model: Warehouse, as: 'FromWarehouse', attributes: ['name'], required: false },
@@ -269,7 +320,8 @@ const getTransfers = async (req, res) => {
         { model: Employee, attributes: ['full_name'], required: false }
       ],
       order: [['created_at', 'DESC']],
-      limit: parseInt(limit)
+      limit: parseInt(limit),
+      offset: parseInt(offset)
     });
 
     const data = transfers.map(t => {
@@ -283,7 +335,7 @@ const getTransfers = async (req, res) => {
       return item;
     });
 
-    res.json({ ok: true, data });
+    res.json({ ok: true, data, total: count });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener transferencias" });
@@ -340,7 +392,6 @@ const addStock = async (req, res) => {
     await product.update({ stock: totalStock }, { transaction });
 
     await transaction.commit();
-    const newQty = parseFloat(stockEntry.qty) + parsedQty;
     res.json({ ok: true, message: `${product.name}: +${parsedQty} unidades sumadas al almacén` });
   } catch (err) {
     if (transaction) await transaction.rollback();
@@ -349,43 +400,174 @@ const addStock = async (req, res) => {
   }
 };
 
+// PUT /api/warehouses/:id/stock/:productId
+const setStock = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const warehouseId = parseInt(req.params.id);
+    const productId = parseInt(req.params.productId);
+    const { qty } = req.body;
+
+    const parsedQty = parseFloat(qty);
+    if (isNaN(parsedQty) || parsedQty < 0) throw new Error("La cantidad es inválida");
+
+    const product = await Product.findByPk(productId, { transaction, lock: true });
+    if (!product) throw new Error("Producto no encontrado");
+
+    if (product.is_combo) throw new Error("No se puede editar directamente el stock de un combo (es calculado).");
+
+    const stockEntry = await ProductStock.findOne({ where: { warehouse_id: warehouseId, product_id: productId }, transaction, lock: true });
+    if (!stockEntry) throw new Error("El producto no está asignado a este almacén");
+
+    await stockEntry.update({ qty: parsedQty }, { transaction });
+
+    // Sincronizar stock total
+    const totalStock = await ProductStock.sum('qty', { where: { product_id: productId }, transaction });
+    await product.update({ stock: totalStock || 0 }, { transaction });
+
+    await transaction.commit();
+    res.json({ ok: true, message: `Stock actualizado a ${parsedQty}` });
+  } catch (err) {
+    if (transaction) await transaction.rollback();
+    console.error(err);
+    res.status(500).json({ ok: false, message: err.message || "Error al actualizar stock" });
+  }
+};
+
+// DELETE /api/warehouses/:id/stock/:productId
+const removeStock = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const warehouseId = parseInt(req.params.id);
+    const productId = parseInt(req.params.productId);
+
+    const stockEntry = await ProductStock.findOne({ where: { warehouse_id: warehouseId, product_id: productId } });
+    if (!stockEntry) throw new Error("El producto no está en este almacén");
+
+    await stockEntry.destroy({ transaction });
+
+    // Sincronizar stock total
+    const totalStock = await ProductStock.sum('qty', { where: { product_id: productId }, transaction });
+    await Product.update({ stock: totalStock || 0 }, { where: { id: productId }, transaction });
+
+    await transaction.commit();
+    res.json({ ok: true, message: "Producto retirado del almacén" });
+  } catch (err) {
+    if (transaction) await transaction.rollback();
+    console.error(err);
+    res.status(500).json({ ok: false, message: err.message || "Error al retirar producto" });
+  }
+};
+
+// Helper: Calcular stock de un combo basado en sus ingredientes en este almacén
+const calculateWarehouseComboStock = (comboItems) => {
+  if (!comboItems || comboItems.length === 0) return 0;
+  let minStock = Infinity;
+  for (const item of comboItems) {
+    if (!item.ingredient) return 0;
+    // Buscamos el stock local del ingrediente (que viene cargado en ProductStocks)
+    const ingStocks = item.ingredient.ProductStocks || [];
+    const localStock = ingStocks.length > 0 ? parseFloat(ingStocks[0].qty) : 0;
+    
+    const reqQty = parseFloat(item.quantity) || 1;
+    const possible = Math.floor(localStock / reqQty);
+    if (possible < minStock) minStock = possible;
+  }
+  return minStock === Infinity ? 0 : minStock;
+};
+
 // GET /api/warehouses/:id/products
 const getProducts = async (req, res) => {
   try {
     const { search } = req.query;
+    const warehouseId = parseInt(req.params.id);
 
-    const productWhere = {};
-    if (search) {
-      productWhere[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { '$Category.name$': { [Op.iLike]: `%${search}%` } }
-      ];
+    // Construir filtro de búsqueda
+    let searchFilter = '';
+    const replacements = { wid: warehouseId };
+    if (search && search.trim()) {
+      searchFilter = `AND (p.name ILIKE :search OR c.name ILIKE :search)`;
+      replacements.search = `%${search.trim()}%`;
     }
 
-    const stocks = await ProductStock.findAll({
-      where: { warehouse_id: req.params.id },
-      include: [
-        {
-          model: Product,
-          where: productWhere,
-          include: [{ model: Category, attributes: ['name', 'id'] }]
-        }
-      ],
-      order: [[Product, Category, 'name', 'ASC'], [Product, 'name', 'ASC']]
-    });
+    // 1. Traer todos los productos del almacén con su stock y datos básicos
+    const productsRaw = await sequelize.query(`
+      SELECT
+        p.id, p.name, p.price, p.unit, p.qty_step, p.image_filename,
+        p.cost_price, p.is_combo, p.min_stock,
+        c.name AS category_name, c.id   AS category_id,
+        ps.qty,
+        COALESCE((SELECT SUM(quantity) FROM sale_items WHERE product_id = p.id), 0) AS total_sold
+      FROM product_stock ps
+      JOIN products  p ON p.id = ps.product_id
+      LEFT JOIN categories c ON c.id = p.category_id
+      WHERE ps.warehouse_id = :wid
+      ${searchFilter}
+      ORDER BY total_sold DESC, p.name ASC
+    `, { replacements, type: Sequelize.QueryTypes.SELECT });
 
-    const data = stocks.map(ps => ({
-      id: ps.Product.id,
-      name: ps.Product.name,
-      price: parseFloat(ps.Product.price),
-      unit: ps.Product.unit,
-      qty_step: parseFloat(ps.Product.qty_step),
-      image_filename: ps.Product.image_filename,
-      cost_price: parseFloat(ps.Product.cost_price || 0),
-      stock: parseFloat(ps.qty),
-      category_name: ps.Product.Category?.name,
-      category_id: ps.Product.Category?.id,
-      image_url: ps.Product.image_filename ? `/uploads/${ps.Product.image_filename}` : null
+    if (productsRaw.length === 0) return res.json({ ok: true, data: [] });
+
+    // 2. Para los que son combos, calcular stock virtual y costo
+    const comboIds = productsRaw.filter(p => p.is_combo).map(p => p.id);
+    const ingredientStockMap = {}; // combo_id => stock virtual
+    const comboCostMap = {}; // combo_id => costo calculado
+    
+    if (comboIds.length > 0) {
+      const comboData = await sequelize.query(`
+        SELECT
+          pci.combo_id,
+          pci.quantity,
+          COALESCE(ps2.qty, 0) AS ingredient_stock,
+          p.cost_price AS ingredient_cost
+        FROM product_combo_items pci
+        JOIN products p ON p.id = pci.product_id
+        LEFT JOIN product_stock ps2
+          ON ps2.product_id = pci.product_id AND ps2.warehouse_id = :wid
+        WHERE pci.combo_id IN (:cids)
+      `, { replacements: { wid: warehouseId, cids: comboIds }, type: Sequelize.QueryTypes.SELECT });
+
+      // Agrupar por combo y calcular el mínimo de kits posibles
+      const byCombo = {};
+      comboData.forEach(row => {
+        if (!byCombo[row.combo_id]) byCombo[row.combo_id] = [];
+        byCombo[row.combo_id].push(row);
+      });
+
+      comboIds.forEach(cid => {
+        const rows = byCombo[cid] || [];
+        if (rows.length === 0) { 
+          ingredientStockMap[cid] = 0; 
+          comboCostMap[cid] = 0;
+          return; 
+        }
+        let min = Infinity;
+        let totalCost = 0;
+        for (const r of rows) {
+          const ingQty = parseFloat(r.quantity) || 1;
+          const possible = Math.floor(parseFloat(r.ingredient_stock) / ingQty);
+          if (possible < min) min = possible;
+          totalCost += parseFloat(r.ingredient_cost || 0) * ingQty;
+        }
+        ingredientStockMap[cid] = min === Infinity ? 0 : min;
+        comboCostMap[cid] = totalCost;
+      });
+    }
+
+    const data = productsRaw.map(p => ({
+      id: p.id,
+      name: p.name,
+      price: parseFloat(p.price),
+      unit: p.unit,
+      qty_step: parseFloat(p.qty_step || 1),
+      image_filename: p.image_filename,
+      cost_price: p.is_combo ? (comboCostMap[p.id] ?? 0) : parseFloat(p.cost_price || 0),
+      stock: p.is_combo ? (ingredientStockMap[p.id] ?? 0) : (parseFloat(p.qty) || 0),
+      sales: parseFloat(p.total_sold),
+      category_name: p.category_name,
+      category_id: p.category_id,
+      is_combo: p.is_combo,
+      image_url: p.image_filename ? `/uploads/${p.image_filename}` : null
     }));
 
     res.json({ ok: true, data });
@@ -396,7 +578,6 @@ const getProducts = async (req, res) => {
 };
 
 module.exports = {
-  getAll, getStock, getByEmployee, getProducts,
-  create, update, remove,
-  transfer, getTransfers, assignEmployees, addStock,
+  getAll, getStock, getProducts, getTransfers, getByEmployee,
+  create, update, remove, assignEmployees, addStock, setStock, removeStock, transfer
 };

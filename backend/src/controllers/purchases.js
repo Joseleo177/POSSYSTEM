@@ -1,9 +1,10 @@
-const { Purchase, PurchaseItem, Employee, Warehouse, Customer, Product, ProductStock, Sequelize, sequelize } = require("../models");
+const { Purchase, PurchaseItem, Employee, Warehouse, Customer, Product, ProductStock, ProductComboItem, Sequelize, sequelize } = require("../models");
 
 // GET /api/purchases
 const getAll = async (req, res) => {
   try {
-    const purchases = await Purchase.findAll({
+    const { limit = 50, offset = 0 } = req.query;
+    const { count, rows: purchases } = await Purchase.findAndCountAll({
       include: [
         { model: Employee, attributes: ['full_name'], required: false },
         { model: Customer, as: 'Supplier', attributes: ['name', 'rif'], required: false },
@@ -15,8 +16,10 @@ const getAll = async (req, res) => {
       },
       group: ['Purchase.id', 'Employee.id', 'Supplier.id', 'Warehouse.id'],
       order: [['created_at', 'DESC']],
-      limit: 200,
-      subQuery: false
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      subQuery: false,
+      distinct: true
     });
 
     const data = purchases.map(p => {
@@ -30,7 +33,7 @@ const getAll = async (req, res) => {
       return pp;
     });
 
-    res.json({ ok: true, data });
+    res.json({ ok: true, data, total: count.length || count }); // when grouping count might be an array
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener compras" });
@@ -151,6 +154,46 @@ const create = async (req, res) => {
       if (update_price) updateData.price = sale_price;
       
       await product.update(updateData, { transaction });
+
+      // Auto-crear producto Combo si se compró en paquete/bulto y NO es "unidad"
+      const isUnidad = !package_unit || package_unit.toLowerCase().trim() === 'unidad';
+      if (pkgSize > 1 && !isUnidad) {
+        const pkgUnitName = package_unit.charAt(0).toUpperCase() + package_unit.slice(1);
+        const comboName = `${pkgUnitName} de ${product.name} (${pkgSize})`;
+        const comboSalePrice = pkgPrice * (1 + margin / 100);
+
+        const [comboProduct, createdCombo] = await Product.findOrCreate({
+          where: { name: comboName, is_combo: true },
+          defaults: {
+            price: comboSalePrice,
+            stock: 0,
+            unit: 'unidad',
+            category_id: product.category_id,
+            image_filename: product.image_filename,
+            is_combo: true
+          },
+          transaction,
+          lock: true
+        });
+
+        if (createdCombo) {
+          await ProductComboItem.create({
+            combo_id: comboProduct.id,
+            product_id: product.id,
+            quantity: pkgSize
+          }, { transaction });
+
+          // Ligar el Combo explicitamente al almacén de destino con stock físico 0
+          // (Su uso será virtual, pero necesita existir en la tabla para aparecer en el POS de este almacén)
+          await ProductStock.findOrCreate({
+            where: { warehouse_id, product_id: comboProduct.id },
+            defaults: { qty: 0 },
+            transaction
+          });
+        } else if (update_price) {
+          await comboProduct.update({ price: comboSalePrice }, { transaction });
+        }
+      }
 
       // Sincronizar stock total
       const totalStock = await ProductStock.sum('qty', { where: { product_id }, transaction });

@@ -137,7 +137,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     if (!productSearch.trim()) { setProductResults([]); return; }
     setSearching(true);
     const timer = setTimeout(async () => {
-      try { const r = await api.products.getAll({ search: productSearch }); setProductResults(r.data.slice(0, 8)); } catch { }
+      try { const r = await api.products.getAll({ search: productSearch, is_combo: false }); setProductResults(r.data.slice(0, 8)); } catch { }
       setSearching(false);
     }, 250);
     return () => clearTimeout(timer);
