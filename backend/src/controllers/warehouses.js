@@ -494,14 +494,14 @@ const getProducts = async (req, res) => {
     const productsRaw = await sequelize.query(`
       SELECT
         p.id, p.name, p.price, p.unit, p.qty_step, p.image_filename,
-        p.cost_price, p.is_combo, p.min_stock,
+        p.cost_price, p.is_combo, p.is_service, p.min_stock,
         c.name AS category_name, c.id   AS category_id,
         ps.qty,
         COALESCE((SELECT SUM(quantity) FROM sale_items WHERE product_id = p.id), 0) AS total_sold
-      FROM product_stock ps
-      JOIN products  p ON p.id = ps.product_id
+      FROM products p
+      LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = :wid
       LEFT JOIN categories c ON c.id = p.category_id
-      WHERE ps.warehouse_id = :wid
+      WHERE (p.is_service = true OR p.is_combo = true OR ps.product_id IS NOT NULL)
       ${searchFilter}
       ORDER BY total_sold DESC, p.name ASC
     `, { replacements, type: Sequelize.QueryTypes.SELECT });
@@ -567,6 +567,7 @@ const getProducts = async (req, res) => {
       category_name: p.category_name,
       category_id: p.category_id,
       is_combo: p.is_combo,
+      is_service: p.is_service,
       image_url: p.image_filename ? `/uploads/${p.image_filename}` : null
     }));
 

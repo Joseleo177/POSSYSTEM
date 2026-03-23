@@ -7,14 +7,14 @@ const PKG_UNITS = ["caja", "bulto", "paquete", "docena", "media caja", "fardo", 
 const EMPTY = {
   name: "", price: "", stock: "", category_id: "", unit: "unidad", qty_step: "1",
   package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
-  is_combo: false, combo_items: []
+  is_combo: false, combo_items: [], is_service: false
 };
 
 export default function ProductModal({ open, onClose, onSave, editData, categories, loading }) {
-  const [form, setForm]             = useState(EMPTY);
-  const [imageFile, setImageFile]   = useState(null);
+  const [form, setForm] = useState(EMPTY);
+  const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
-  
+
   // Combo states
   const [allProducts, setAllProducts] = useState([]);
   const [searchIngredient, setSearchIngredient] = useState("");
@@ -32,19 +32,20 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     if (open) {
       if (editData) {
         setForm({
-          name:          editData.name,
-          price:         editData.price,
-          stock:         editData.stock,
-          category_id:   editData.category_id || "",
-          unit:          editData.unit || "unidad",
-          qty_step:      editData.qty_step || "1",
-          package_unit:  editData.package_unit || "",
-          package_size:  editData.package_size || "",
-          cost_price:    editData.cost_price || "",
+          name: editData.name,
+          price: editData.price,
+          stock: editData.stock,
+          category_id: editData.category_id || "",
+          unit: editData.unit || "unidad",
+          qty_step: editData.qty_step || "1",
+          package_unit: editData.package_unit || "",
+          package_size: editData.package_size || "",
+          cost_price: editData.cost_price || "",
           profit_margin: editData.profit_margin || "",
-          min_stock:     editData.min_stock ?? "0",
-          is_combo:      editData.is_combo || false,
-          combo_items:   editData.comboItems ? editData.comboItems.map(c => ({
+          min_stock: editData.min_stock ?? "0",
+          is_combo: editData.is_combo || false,
+          is_service: editData.is_service || false,
+          combo_items: editData.comboItems ? editData.comboItems.map(c => ({
             product_id: c.ingredient.id,
             name: c.ingredient.name,
             unit: c.ingredient.unit || "uds",
@@ -76,7 +77,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
   const handleCostOrMarginChange = (key, val) => {
     const next = { ...form, [key]: val };
     const suggested = calcSalePrice(
-      key === "cost_price"    ? val : form.cost_price,
+      key === "cost_price" ? val : form.cost_price,
       key === "profit_margin" ? val : form.profit_margin
     );
     if (suggested !== null) next.price = suggested;
@@ -129,11 +130,11 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
         {/* ── Sección Principal: Imagen + Datos ── */}
         <div className="bg-white dark:bg-surface-dark-2 p-5 rounded-2xl border border-border/40 dark:border-border-dark/40 shadow-sm flex flex-col sm:flex-row gap-6">
-          
+
           {/* Imagen Subida Premium */}
           <div className="flex-shrink-0">
             <label className="block cursor-pointer relative group">
-              <div className="w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] rounded-2xl overflow-hidden bg-surface-2 dark:bg-surface-dark-3 border-2 border-dashed border-border dark:border-border-dark group-hover:border-brand-500/50 group-hover:bg-brand-500/5 transition-all duration-300 shadow-inner flex items-center justify-center">
+              <div className="w-[110px] h-[110px] rounded-lg overflow-hidden bg-surface-dark border-2 border-dashed border-border dark:border-border-dark flex items-center justify-center hover:border-brand-400 transition-colors">
                 {imagePreview ? (
                   <>
                     <img src={imagePreview} alt="preview" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
@@ -186,7 +187,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 </select>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4 items-end">
               <div>
                 <label className="block text-[10px] font-black tracking-widest uppercase text-content-muted dark:text-content-dark-muted mb-1.5 ml-1 flex items-center gap-1"> Precio Final <span className="text-danger">*</span></label>
@@ -198,7 +199,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 </div>
               </div>
 
-              {!form.is_combo && (
+              {!form.is_combo && !form.is_service && (
                 <div>
                   <label className="block text-[10px] font-black tracking-widest uppercase text-content-muted dark:text-content-dark-muted mb-1.5 ml-1"> Inventario Inicial </label>
                   {editData?.id ? (
@@ -213,96 +214,127 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
               )}
             </div>
 
-            {/* Toggle Combo */}
-            <div className="mt-2 bg-brand-500/5 dark:bg-brand-500/10 border border-brand-500/20 rounded-xl p-4 flex items-center justify-between">
-               <div>
+            {/* Toggle Servicio */}
+            <div className="mt-2 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <div className="text-[12px] font-bold text-amber-600 dark:text-amber-400">Es un Servicio (Sin Inventario)</div>
+                <div className="text-[10px] text-amber-500/70 dark:text-amber-400/70 mt-0.5">Ej: Corte de cabello, Consulta, Envío. No descuenta stock.</div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" className="sr-only peer" checked={form.is_service} onChange={e => set("is_service", e.target.checked)} />
+                <div className="w-11 h-6 bg-surface-3 dark:bg-surface-dark-2 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
+            </div>
+
+            {/* Toggle Combo — oculto si es servicio */}
+            {!form.is_service && (
+              <div className="mt-2 bg-brand-500/5 dark:bg-brand-500/10 border border-brand-500/20 rounded-xl p-4 flex items-center justify-between">
+                <div>
                   <div className="text-[12px] font-bold text-brand-600 dark:text-brand-400">Producto Compuesto (Kit / Receta)</div>
-                  <div className="text-[10px] text-brand-500/70 dark:text-brand-400/70 mt-0.5">Descuenta stock de sus ingredientes al venderse.</div>
-               </div>
-               <label className="relative inline-flex items-center cursor-pointer">
-                 <input type="checkbox" className="sr-only peer" checked={form.is_combo} onChange={e => set("is_combo", e.target.checked)} disabled={isEdit && form.combo_items.length > 0} />
-                 <div className="w-11 h-6 bg-surface-3 dark:bg-surface-dark-2 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
-               </label>
-            </div>
+                  <div className="text-[10px] text-brand-500/70 dark:text-brand-400/70 mt-0.5">Descuenta stock de sus componentes al venderse.</div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={form.is_combo} onChange={e => set("is_combo", e.target.checked)} disabled={isEdit && form.combo_items.length > 0} />
+                  <div className="w-11 h-6 bg-surface-3 dark:bg-surface-dark-2 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                </label>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* ── Si NO es combo: Mostrar Costo. Si es Combo: Mostrar Ingredientes ── */}
-        {!form.is_combo ? (
+        {/* ── Banner informativo si es servicio ── */}
+        {form.is_service && (
+          <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-2xl p-5 flex items-start gap-4 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <div>
+              <div className="font-black text-sm text-amber-700 dark:text-amber-400 mb-1">Producto de tipo Servicio</div>
+              <p className="text-[12px] text-amber-600/80 dark:text-amber-400/70 leading-relaxed">
+                Este ítem <strong>no gestiona inventario</strong>. Al venderlo no se descontará stock de ningún almacén. Ideal para servicios como cortes de cabello, consultas, envíos, garantías, etc.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Si NO es combo y NO es servicio: Mostrar Costos. Si es Combo: Mostrar Componentes ── */}
+        {!form.is_combo && !form.is_service ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* ── Costo y Rendimiento ── */}
-          <div className="bg-surface-1/50 dark:bg-surface-dark-2/50 rounded-2xl border border-border/40 dark:border-border-dark/40 p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-6 h-6 rounded-md bg-success/10 text-success flex items-center justify-center">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            {/* ── Costo y Rendimiento ── */}
+            <div className="bg-surface-1/50 dark:bg-surface-dark-2/50 rounded-2xl border border-border/40 dark:border-border-dark/40 p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-6 h-6 rounded-md bg-success/10 text-success flex items-center justify-center">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <h3 className="text-[11px] font-black tracking-widest uppercase text-content dark:text-content-dark">Rentabilidad</h3>
               </div>
-              <h3 className="text-[11px] font-black tracking-widest uppercase text-content dark:text-content-dark">Rentabilidad</h3>
+
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold tracking-widest uppercase text-content-muted mb-1.5 ml-1"> Costo Unitario </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle font-bold">$</span>
+                      <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.01" placeholder="0.00" className="w-full bg-white dark:bg-surface-dark-3 border border-border/60 dark:border-border-dark/60 rounded-xl pl-7 pr-3 py-2.5 text-sm focus:ring-2 focus:ring-success/30 transition-all outline-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold tracking-widest uppercase text-content-muted mb-1.5 ml-1"> Ganancia (%) </label>
+                    <div className="relative">
+                      <input value={form.profit_margin} onChange={e => handleCostOrMarginChange("profit_margin", e.target.value)} type="number" step="0.1" placeholder="0" className="w-full bg-white dark:bg-surface-dark-3 border border-border/60 dark:border-border-dark/60 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-success/30 transition-all outline-none" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle font-bold">%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`input flex justify-between items-center group ${suggestedPrice ? "cursor-pointer" : ""} hover:bg-success/10 transition-colors`} title={suggestedPrice ? "Clic para aplicar este precio como Precio Final" : ""} onClick={() => { if (suggestedPrice) set("price", suggestedPrice); }}>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-success opacity-80">Precio Sugerido</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-base font-black ${suggestedPrice ? "text-success" : "text-content-muted"}`}>{suggestedPrice ? `$${suggestedPrice}` : "—"}</span>
+                    {suggestedPrice && <span className="text-[9px] bg-success text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0 duration-200">Aplicar</span>}
+                  </div>
+                </div>
+              </div>
             </div>
-            
+
+            {/* ── Paquetes y Alertas ── */}
             <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                   <label className="block text-[10px] font-bold tracking-widest uppercase text-content-muted mb-1.5 ml-1"> Costo Unitario </label>
-                   <div className="relative">
-                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle font-bold">$</span>
-                     <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.01" placeholder="0.00" className="w-full bg-white dark:bg-surface-dark-3 border border-border/60 dark:border-border-dark/60 rounded-xl pl-7 pr-3 py-2.5 text-sm focus:ring-2 focus:ring-success/30 transition-all outline-none" />
-                   </div>
+              {/* Paquete */}
+              <div className="bg-surface-1/50 dark:bg-surface-dark-2/50 rounded-2xl border border-border/40 dark:border-border-dark/40 p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-6 h-6 rounded-md bg-info/10 text-info flex items-center justify-center">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                  </div>
+                  <h3 className="text-[11px] font-black tracking-widest uppercase text-content dark:text-content-dark">Venta al Mayor</h3>
                 </div>
-                <div>
-                   <label className="block text-[10px] font-bold tracking-widest uppercase text-content-muted mb-1.5 ml-1"> Ganancia (%) </label>
-                   <div className="relative">
-                     <input value={form.profit_margin} onChange={e => handleCostOrMarginChange("profit_margin", e.target.value)} type="number" step="0.1" placeholder="0" className="w-full bg-white dark:bg-surface-dark-3 border border-border/60 dark:border-border-dark/60 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-success/30 transition-all outline-none" />
-                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle font-bold">%</span>
-                   </div>
-                </div>
-              </div>
-              
-              <div className="bg-success/5 border border-success/10 rounded-xl p-3 flex justify-between items-center group cursor-pointer hover:bg-success/10 transition-colors" title={suggestedPrice ? "Clic para aplicar este precio como Precio Final" : ""} onClick={() => { if (suggestedPrice) set("price", suggestedPrice); }}>
-                <span className="text-[10px] font-black uppercase tracking-widest text-success opacity-80">Precio Sugerido</span>
-                <div className="flex items-center gap-2">
-                  <span className={`text-base font-black ${suggestedPrice ? "text-success" : "text-content-muted"}`}>{suggestedPrice ? `$${suggestedPrice}` : "—"}</span>
-                  {suggestedPrice && <span className="text-[9px] bg-success text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0 duration-200">Aplicar</span>}
+
+                <div className="grid grid-cols-5 gap-3">
+                  <div className="col-span-3">
+                    <input list="pkg-units-list" value={form.package_unit} onChange={e => set("package_unit", e.target.value)} placeholder="Agrupación (Ej. Caja)" className="w-full bg-white dark:bg-surface-dark-3 border border-border/60 dark:border-border-dark/60 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-info/30 transition-all outline-none" />
+                    <datalist id="pkg-units-list">{PKG_UNITS.map(u => <option key={u} value={u} />)}</datalist>
+                  </div>
+                  <div className="col-span-2 relative">
+                    <input value={form.package_size} onChange={e => set("package_size", e.target.value)} type="number" placeholder="Cant." className="w-full bg-white dark:bg-surface-dark-3 border border-border/60 dark:border-border-dark/60 rounded-xl pl-3 pr-8 py-2.5 text-sm focus:ring-2 focus:ring-info/30 transition-all outline-none" />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-content-subtle font-bold uppercase">uds</span>
+                  </div>
                 </div>
               </div>
+
+              {/* Alerta Stock (Solo si no es servicio) */}
+              {!form.is_service && (
+                <div className="bg-surface-1/50 dark:bg-surface-dark-2/50 rounded-2xl border border-border/40 dark:border-border-dark/40 p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-6 h-6 rounded-md bg-danger/10 text-danger flex items-center justify-center">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    </div>
+                    <h3 className="text-[11px] font-black tracking-widest uppercase text-content dark:text-content-dark">Alarma Mínima Stock</h3>
+                  </div>
+                  <input value={form.min_stock} onChange={e => set("min_stock", e.target.value)} type="number" step="1" placeholder="Cantidad donde saltará alerta" className="w-full bg-white dark:bg-surface-dark-3 border border-border/60 dark:border-border-dark/60 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-danger/30 transition-all outline-none" />
+                </div>
+              )}
             </div>
           </div>
-
-          {/* ── Paquetes y Alertas ── */}
-          <div className="flex flex-col gap-4">
-            {/* Paquete */}
-            <div className="bg-surface-1/50 dark:bg-surface-dark-2/50 rounded-2xl border border-border/40 dark:border-border-dark/40 p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-6 h-6 rounded-md bg-info/10 text-info flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                </div>
-                <h3 className="text-[11px] font-black tracking-widest uppercase text-content dark:text-content-dark">Venta al Mayor (Bulto)</h3>
-              </div>
-              
-              <div className="grid grid-cols-5 gap-3">
-                <div className="col-span-3">
-                  <input list="pkg-units-list" value={form.package_unit} onChange={e => set("package_unit", e.target.value)} placeholder="Agrupación (Ej. Caja)" className="w-full bg-white dark:bg-surface-dark-3 border border-border/60 dark:border-border-dark/60 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-info/30 transition-all outline-none" />
-                  <datalist id="pkg-units-list">{PKG_UNITS.map(u => <option key={u} value={u} />)}</datalist>
-                </div>
-                <div className="col-span-2 relative">
-                  <input value={form.package_size} onChange={e => set("package_size", e.target.value)} type="number" placeholder="Cant." className="w-full bg-white dark:bg-surface-dark-3 border border-border/60 dark:border-border-dark/60 rounded-xl pl-3 pr-8 py-2.5 text-sm focus:ring-2 focus:ring-info/30 transition-all outline-none" />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-content-subtle font-bold uppercase">uds</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Alerta Stock */}
-            <div className="bg-surface-1/50 dark:bg-surface-dark-2/50 rounded-2xl border border-border/40 dark:border-border-dark/40 p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-6 h-6 rounded-md bg-danger/10 text-danger flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                </div>
-                <h3 className="text-[11px] font-black tracking-widest uppercase text-content dark:text-content-dark">Alarma Mínima Stock</h3>
-              </div>
-              <input value={form.min_stock} onChange={e => set("min_stock", e.target.value)} type="number" step="1" placeholder="Cantidad donde saltará alerta global" className="w-full bg-white dark:bg-surface-dark-3 border border-border/60 dark:border-border-dark/60 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-danger/30 transition-all outline-none" />
-            </div>
-          </div>
-        </div>
-        ) : (
+        ) : form.is_combo ? (
           /* ── Interfaz de Ingredientes (Combo) ── */
           <div className="bg-surface-1/50 dark:bg-surface-dark-2/50 rounded-2xl border border-border/40 dark:border-border-dark/40 p-5">
             <div className="flex items-center gap-2 mb-4">
@@ -311,18 +343,18 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
               </div>
               <h3 className="text-[11px] font-black tracking-widest uppercase text-content dark:text-content-dark">Componentes del Producto</h3>
             </div>
-            
+
             <div className="flex flex-col gap-4">
               {/* Buscador */}
               <div className="relative" ref={ingredientRef}>
-                <input 
-                  value={searchIngredient} 
-                  onChange={e => { setSearchIngredient(e.target.value); setShowDropdown(true); }} 
+                <input
+                  value={searchIngredient}
+                  onChange={e => { setSearchIngredient(e.target.value); setShowDropdown(true); }}
                   onFocus={() => setShowDropdown(true)}
-                  placeholder="🔎 Buscar producto para agregar..." 
+                  placeholder="🔎 Buscar producto para agregar..."
                   className="w-full bg-white dark:bg-surface-dark-3 border border-border/60 dark:border-border-dark/60 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-500/30 transition-all outline-none shadow-sm"
                 />
-                
+
                 {showDropdown && searchIngredient.trim() !== "" && (
                   <div className="absolute z-10 w-full mt-1 bg-white dark:bg-surface-dark-1 border border-border/50 dark:border-border-dark/50 rounded-xl shadow-xl max-h-[200px] overflow-y-auto overflow-x-hidden animate-in slide-in-from-top-2">
                     {filteredProducts.length === 0 ? (
@@ -356,18 +388,18 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     <div key={idx} className="flex items-center gap-3 bg-white dark:bg-surface-dark-3 p-2 rounded-xl border border-border/40 shadow-sm animate-in fade-in">
                       <div className="flex-1 text-[12px] font-bold text-content dark:text-content-dark truncate px-1" title={item.name}>{item.name}</div>
                       <div className="flex items-center gap-1.5 w-28">
-                        <input 
-                          type="number" 
-                          step={item.unit === 'unidad' || item.unit === 'uds' ? "1" : "0.001"} 
-                          min={item.unit === 'unidad' || item.unit === 'uds' ? "1" : "0.001"} 
-                          value={item.quantity} 
-                          onChange={e => updateIngredientQty(item.product_id, e.target.value)} 
-                          className="flex-1 min-w-0 bg-surface-1 dark:bg-surface-dark-3 text-content dark:text-content-dark border border-border/60 dark:border-border-dark/60 rounded-lg px-2 py-1.5 text-center text-xs font-black focus:outline-none focus:ring-2 focus:ring-brand-500/40 transition-all shadow-sm" 
+                        <input
+                          type="number"
+                          step={item.unit === 'unidad' || item.unit === 'uds' ? "1" : "0.001"}
+                          min={item.unit === 'unidad' || item.unit === 'uds' ? "1" : "0.001"}
+                          value={item.quantity}
+                          onChange={e => updateIngredientQty(item.product_id, e.target.value)}
+                          className="flex-1 min-w-0 bg-surface-1 dark:bg-surface-dark-3 text-content dark:text-content-dark border border-border/60 dark:border-border-dark/60 rounded-lg px-2 py-1.5 text-center text-xs font-black focus:outline-none focus:ring-2 focus:ring-brand-500/40 transition-all shadow-sm"
                         />
                         <span className="text-[10px] text-content-subtle font-bold uppercase tracking-wider w-8 truncate" title={item.unit || "uds"}>{item.unit || "uds"}</span>
                       </div>
                       <button onClick={() => removeIngredient(item.product_id)} className="w-8 h-8 flex items-center justify-center text-danger hover:bg-danger/10 rounded-lg transition-colors">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
                     </div>
                   ))}
@@ -378,10 +410,10 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
               )}
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* ── Footer ── */}
-        <div className="flex gap-3 justify-end items-center pt-4 border-t border-border/40 dark:border-border-dark/40 mt-2">
+        <div className="flex gap-2.5 justify-end mt-5">
           <button onClick={onClose} className="px-6 py-2.5 rounded-xl text-sm font-bold text-content-muted dark:text-content-dark-muted hover:bg-surface-2 dark:hover:bg-surface-dark-3 transition-colors border-none bg-transparent">
             Cancelar
           </button>

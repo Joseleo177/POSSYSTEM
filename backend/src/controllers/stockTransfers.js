@@ -60,6 +60,7 @@ const create = async (req, res) => {
 
     const product = await Product.findByPk(product_id, { transaction, lock: true });
     if (!product) throw new Error("Producto no encontrado");
+    if (product.is_service) throw new Error("No se pueden realizar transferencias de productos de tipo servicio");
 
     // Bloquear y validar origen
     const fromStock = await ProductStock.findOne({

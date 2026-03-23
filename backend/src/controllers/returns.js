@@ -84,7 +84,9 @@ const createReturn = async (req, res) => {
       if (line.product_id) {
         const product = await Product.findByPk(line.product_id, { transaction });
         
-        if (product && product.is_combo) {
+        if (product && product.is_service) {
+          // No se restaura stock para servicios
+        } else if (product && product.is_combo) {
           const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
           for (const cItem of comboItems) {
             const qtyToRestore = line.qty * parseFloat(cItem.quantity);

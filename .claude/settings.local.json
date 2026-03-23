@@ -8,7 +8,9 @@
       "Bash(docker exec:*)",
       "Bash(docker restart:*)",
       "Bash(wc -l /c/Users/Usuario/Documents/pos-system-v3/POSSYSTEM/frontend/src/components/*.jsx)",
-      "Bash(DOCKER_BUILDKIT=1 docker compose up --build frontend -d)"
+      "Bash(DOCKER_BUILDKIT=1 docker compose up --build frontend -d)",
+      "Bash(find /c/Users/Usuario/Documents/pos-system-v3/POSSYSTEM/frontend/src -type f \\\\\\( -name \"*.jsx\" -o -name \"*.js\" \\\\\\) -exec wc -l {} +)",
+      "Bash(sort -k2)"
     ]
   }
 }

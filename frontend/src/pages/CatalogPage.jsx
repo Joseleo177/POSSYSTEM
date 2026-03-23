@@ -53,7 +53,7 @@ export default function CatalogPage() {
   const closeModal      = () => { setProductModal(false); setProductEditData(null); setEditId(null); };
 
   const saveProduct = async (form, imageFile) => {
-    const { name, price, stock, category_id, unit, qty_step, is_combo, combo_items } = form;
+    const { name, price, stock, category_id, unit, qty_step, is_combo, combo_items, is_service } = form;
     if (!name || !price) return notify("Nombre y precio son requeridos", "err");
     if (is_combo && combo_items.length === 0) return notify("Un combo debe tener al menos un ingrediente", "err");
     setLoading(true);
@@ -64,6 +64,7 @@ export default function CatalogPage() {
         unit: unit || "unidad",
         qty_step: +qty_step || 1,
         is_combo: !!is_combo,
+        is_service: !!is_service,
         combo_items: is_combo ? JSON.stringify(combo_items) : "[]",
       };
       if (editId !== null) { await api.products.update(editId, payload, imageFile); notify("Producto actualizado ✓"); }

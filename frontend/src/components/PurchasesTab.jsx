@@ -31,59 +31,50 @@ function calcItem(item) {
 const fmt2 = (n) => Number(n).toFixed(2);
 
 export default function PurchasesTab({ notify, onProductsUpdated }) {
-  const [view, setView] = useState("list"); // list | new | detail
+  const [view, setView] = useState("list");
   const [purchases, setPurchases] = useState([]);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // ── Almacenes ─────────────────────────────────────────────────
   const [warehouses, setWarehouses] = useState([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
 
-  // New receipt form
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [supplierSearch, setSupplierSearch] = useState("");
   const [supplierResults, setSupplierResults] = useState([]);
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState([]);
 
-  // Supplier creation modal
   const [supplierModal, setSupplierModal] = useState(false);
   const [supplierEditData, setSupplierEditData] = useState(null);
   const [savingSupplier, setSavingSupplier] = useState(false);
 
-  // Product creation modal
   const [productModal, setProductModal] = useState(false);
   const [productEditData, setProductEditData] = useState(null);
   const [savingProduct, setSavingProduct] = useState(false);
   const [categories, setCategories] = useState([]);
 
-  // Item being built
   const [itemForm, setItemForm] = useState(EMPTY_ITEM);
   const [productSearch, setProductSearch] = useState("");
   const [productResults, setProductResults] = useState([]);
   const [searching, setSearching] = useState(false);
 
-  // ── Load purchase list ────────────────────────────────────────
   const loadPurchases = useCallback(async () => {
     try { const r = await api.purchases.getAll(); setPurchases(r.data); }
     catch (e) { notify(e.message, "err"); }
   }, []);
 
-  // ── Load warehouses ───────────────────────────────────────────
   const loadWarehouses = useCallback(async () => {
     try {
       const r = await api.warehouses.getAll();
       const active = r.data.filter(w => w.active);
       setWarehouses(active);
-      // Auto-seleccionar el primero
       if (active.length === 1) setSelectedWarehouseId(String(active[0].id));
     } catch (e) { console.error(e); }
   }, []);
 
   useEffect(() => { loadPurchases(); loadWarehouses(); }, [loadPurchases, loadWarehouses]);
 
-  // ── Supplier creation ─────────────────────────────────────────
   const openCreateSupplier = (name = "") => {
     setSupplierEditData({ _newType: "proveedor", _newName: name });
     setSupplierModal(true);
@@ -102,7 +93,6 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     setSavingSupplier(false);
   };
 
-  // ── Product creation ──────────────────────────────────────────
   const openCreateProduct = (name = "") => {
     if (!categories.length) api.categories.getAll().then(r => setCategories(r.data)).catch(() => { });
     setProductEditData({ name });
@@ -123,7 +113,6 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     setSavingProduct(false);
   };
 
-  // ── Supplier search ───────────────────────────────────────────
   useEffect(() => {
     if (!supplierSearch.trim()) { setSupplierResults([]); return; }
     const timer = setTimeout(async () => {
@@ -132,32 +121,38 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     return () => clearTimeout(timer);
   }, [supplierSearch]);
 
-  // ── Product search ────────────────────────────────────────────
   useEffect(() => {
     if (!productSearch.trim()) { setProductResults([]); return; }
     setSearching(true);
     const timer = setTimeout(async () => {
-      try { const r = await api.products.getAll({ search: productSearch, is_combo: false }); setProductResults(r.data.slice(0, 8)); } catch { }
+      try { const r = await api.products.getAll({ search: productSearch, is_combo: false, is_service: false }); setProductResults(r.data.slice(0, 8)); } catch { }
       setSearching(false);
     }, 250);
     return () => clearTimeout(timer);
   }, [productSearch]);
 
-  // ── Select product ────────────────────────────────────────────
   const selectProduct = (p) => {
-    setItemForm(prev => ({
-      ...prev,
-      product: p,
-      package_unit: p.package_unit || prev.package_unit,
-      package_size: p.package_size != null ? String(p.package_size) : prev.package_size,
-      profit_margin: p.profit_margin != null ? String(p.profit_margin) : prev.profit_margin,
-    }));
+    setItemForm(prev => {
+      const pkgUnit = p.package_unit || prev.package_unit || "unidad";
+      return {
+        ...prev,
+        product: p,
+        package_unit: pkgUnit,
+        package_size: pkgUnit.toLowerCase() === "unidad" ? "1" : (p.package_size != null ? String(p.package_size) : prev.package_size),
+        profit_margin: p.profit_margin != null ? String(p.profit_margin) : prev.profit_margin,
+      };
+    });
     setProductSearch(""); setProductResults([]);
   };
 
-  const setIF = (key, val) => setItemForm(p => ({ ...p, [key]: val }));
+  const setIF = (key, val) => setItemForm(p => {
+    const newState = { ...p, [key]: val };
+    if (key === "package_unit" && val && val.toLowerCase() === "unidad") {
+      newState.package_size = "1";
+    }
+    return newState;
+  });
 
-  // ── Add item to receipt ───────────────────────────────────────
   const addItem = () => {
     if (!itemForm.product) return notify("Selecciona un producto", "err");
     if (!itemForm.package_size) return notify("Indica las unidades por paquete", "err");
@@ -171,7 +166,6 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
 
   const removeItem = (key) => setItems(prev => prev.filter(i => i.key !== key));
 
-  // ── Save purchase receipt ─────────────────────────────────────
   const savePurchase = async () => {
     if (!items.length) return notify("Agrega al menos un producto", "err");
     if (!selectedWarehouseId) return notify("Selecciona el almacén destino", "err");
@@ -181,7 +175,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
         supplier_id: selectedSupplier?.id || undefined,
         supplier_name: selectedSupplier?.name || undefined,
         notes: notes || undefined,
-        warehouse_id: parseInt(selectedWarehouseId),   // ← NUEVO
+        warehouse_id: parseInt(selectedWarehouseId),
         items: items.map(i => ({
           product_id: i.product.id,
           package_unit: i.package_unit,
@@ -202,7 +196,6 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     setLoading(false);
   };
 
-  // ── Cancel purchase ───────────────────────────────────────────
   const cancelPurchase = async (id) => {
     if (!confirm("¿Anular esta compra? Se revertirá el stock.")) return;
     try {
@@ -213,7 +206,6 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     } catch (e) { notify(e.message, "err"); }
   };
 
-  // ── Load detail ───────────────────────────────────────────────
   const openDetail = async (p) => {
     try { const r = await api.purchases.getOne(p.id); setDetail(r.data); setView("detail"); }
     catch (e) { notify(e.message, "err"); }
@@ -221,9 +213,6 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
 
   const grandTotal = items.reduce((s, i) => s + (i.subtotal || 0), 0);
 
-  // ═══════════════════════════════════════════════════════════════
-  // ── LIST VIEW
-  // ═══════════════════════════════════════════════════════════════
   if (view === "list") return (
     <div>
       <div className="flex justify-between items-center mb-5">
@@ -240,35 +229,35 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
             Aún no hay recibos de compra.<br />
             <span className="text-xs">Registra tu primera compra para actualizar el inventario.</span>
           </div>
-        : <table className="w-full border-collapse text-sm">
+        : <table className="table-pos">
             <thead>
-              <tr className="border-b-2 border-warning text-warning">
+              <tr>
                 {["#", "Almacén", "Proveedor", "Productos", "Total", "Empleado", "Fecha", ""].map(h =>
-                  <th key={h} className="text-left px-3 py-2.5 text-[11px] tracking-widest">{h}</th>
+                  <th key={h}>{h}</th>
                 )}
               </tr>
             </thead>
             <tbody>
-              {purchases.map((p, i) => (
-                <tr key={p.id} className={`border-b border-border dark:border-border-dark ${i % 2 === 0 ? "bg-surface-2 dark:bg-surface-dark-2" : ""}`}>
-                  <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted text-[11px]">#{p.id}</td>
-                  <td className="px-3 py-2.5">
+              {purchases.map((p) => (
+                <tr key={p.id}>
+                  <td className="text-content-muted dark:text-content-dark-muted text-[11px]">#{p.id}</td>
+                  <td>
                     {p.warehouse_name
                       ? <span className="text-[11px] text-info border border-info/20 bg-info/5 dark:bg-info/10 px-2 py-0.5 rounded">
                           📦 {p.warehouse_name}
                         </span>
                       : <span className="text-content-muted dark:text-content-dark-muted">—</span>}
                   </td>
-                  <td className="px-3 py-2.5 font-bold text-content dark:text-content-dark">
+                  <td className="font-bold text-content dark:text-content-dark">
                     {p.supplier_name || <span className="text-content-muted dark:text-content-dark-muted font-normal">—</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted">{p.item_count} ítem(s)</td>
-                  <td className="px-3 py-2.5 text-warning font-bold">${fmt2(p.total)}</td>
-                  <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted">{p.employee_name || "—"}</td>
-                  <td className="px-3 py-2.5 text-[11px] text-content-muted dark:text-content-dark-muted">
+                  <td className="text-content-muted dark:text-content-dark-muted">{p.item_count} ítem(s)</td>
+                  <td className="text-warning font-bold">${fmt2(p.total)}</td>
+                  <td className="text-content-muted dark:text-content-dark-muted">{p.employee_name || "—"}</td>
+                  <td className="text-[11px] text-content-muted dark:text-content-dark-muted">
                     {new Date(p.created_at).toLocaleString("es-VE")}
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td>
                     <div className="flex gap-1.5">
                       <button onClick={() => openDetail(p)} className="btn-sm btn-ghost text-info border-info/50">Detalle</button>
                       <button onClick={() => cancelPurchase(p.id)} className="btn-sm btn-danger">Anular</button>
@@ -282,9 +271,6 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     </div>
   );
 
-  // ═══════════════════════════════════════════════════════════════
-  // ── DETAIL VIEW
-  // ═══════════════════════════════════════════════════════════════
   if (view === "detail" && detail) return (
     <div>
       <button
@@ -294,10 +280,10 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
         ← Volver
       </button>
 
-      <div className="bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-md p-5 mb-5 grid grid-cols-3 gap-4">
+      <div className="card card-md mb-5 grid grid-cols-3 gap-4">
         <div>
           <div className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-widest mb-1">PROVEEDOR</div>
-          <div className={`text-base font-bold ${detail.supplier_name ? "text-violet-600 dark:text-violet-400" : "text-content-muted dark:text-content-dark-muted"}`}>
+          <div className={`text-base font-bold ${detail.supplier_name ? "text-brand-500 dark:text-brand-400" : "text-content-muted dark:text-content-dark-muted"}`}>
             {detail.supplier_name || "—"}
           </div>
           {detail.supplier_rif && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">{detail.supplier_rif}</div>}
@@ -320,26 +306,26 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
       </div>
 
       <div className="text-[11px] font-bold text-warning tracking-[0.15em] mb-3">PRODUCTOS RECIBIDOS</div>
-      <table className="w-full border-collapse text-xs">
+      <table className="table-pos text-xs">
         <thead>
-          <tr className="border-b border-border dark:border-border-dark text-content-muted dark:text-content-dark-muted">
+          <tr>
             {["Producto", "Paquete", "Cant.", "Precio/paq.", "Costo unit.", "Margen", "P. venta", "Total uds.", "Subtotal"].map(h =>
-              <th key={h} className="text-left px-2.5 py-2 text-[10px] tracking-widest">{h}</th>
+              <th key={h}>{h}</th>
             )}
           </tr>
         </thead>
         <tbody>
-          {detail.items.map((item, i) => (
-            <tr key={item.id} className={`border-b border-border dark:border-border-dark ${i % 2 === 0 ? "bg-surface-2 dark:bg-surface-dark-2" : ""}`}>
-              <td className="px-2.5 py-2.5 font-bold text-content dark:text-content-dark">{item.product_name}</td>
-              <td className="px-2.5 py-2.5 text-content-muted dark:text-content-dark-muted">{item.package_unit} × {item.package_size}</td>
-              <td className="px-2.5 py-2.5 text-content dark:text-content-dark">{item.package_qty}</td>
-              <td className="px-2.5 py-2.5 text-info">${fmt2(item.package_price)}</td>
-              <td className="px-2.5 py-2.5 text-content-muted dark:text-content-dark-muted">${fmt2(item.unit_cost)}</td>
-              <td className="px-2.5 py-2.5 text-content-muted dark:text-content-dark-muted">{item.profit_margin}%</td>
-              <td className="px-2.5 py-2.5 text-success font-bold">${fmt2(item.sale_price)}</td>
-              <td className="px-2.5 py-2.5 text-content dark:text-content-dark">{item.total_units}</td>
-              <td className="px-2.5 py-2.5 text-warning font-bold">${fmt2(item.subtotal)}</td>
+          {detail.items.map((item) => (
+            <tr key={item.id}>
+              <td className="font-bold text-content dark:text-content-dark">{item.product_name}</td>
+              <td className="text-content-muted dark:text-content-dark-muted">{item.package_unit} × {item.package_size}</td>
+              <td className="text-content dark:text-content-dark">{item.package_qty}</td>
+              <td className="text-info">${fmt2(item.package_price)}</td>
+              <td className="text-content-muted dark:text-content-dark-muted">${fmt2(item.unit_cost)}</td>
+              <td className="text-content-muted dark:text-content-dark-muted">{item.profit_margin}%</td>
+              <td className="text-success font-bold">${fmt2(item.sale_price)}</td>
+              <td className="text-content dark:text-content-dark">{item.total_units}</td>
+              <td className="text-warning font-bold">${fmt2(item.subtotal)}</td>
             </tr>
           ))}
         </tbody>
@@ -347,9 +333,6 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     </div>
   );
 
-  // ═══════════════════════════════════════════════════════════════
-  // ── NEW RECEIPT FORM
-  // ═══════════════════════════════════════════════════════════════
   const calc = calcItem(itemForm);
 
   return (
@@ -359,12 +342,10 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
         <div className="text-sm font-bold text-warning tracking-[0.15em]">NUEVO RECIBO DE COMPRA</div>
       </div>
 
-      {/* ── Cabecera del recibo ── */}
-      <div className="bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-md p-4 mb-4">
+      <div className="card card-md mb-4">
         <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-widest mb-3">INFORMACIÓN DEL RECIBO</div>
         <div className="grid grid-cols-3 gap-3">
 
-          {/* ── Selector de almacén destino ── */}
           <div>
             <label className="label">Almacén destino *</label>
             {warehouses.length === 0
@@ -389,13 +370,12 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
             )}
           </div>
 
-          {/* Selector de proveedor */}
           <div>
             <label className="label">Proveedor</label>
             {selectedSupplier
-              ? <div className="flex items-center gap-2 bg-violet-600/10 dark:bg-violet-600/10 border border-violet-600/40 rounded px-3 py-2">
+              ? <div className="flex items-center gap-2 bg-info/10 border border-info/30 rounded-lg p-2">
                   <div className="flex-1">
-                    <div className="text-sm font-bold text-violet-600 dark:text-violet-400">{selectedSupplier.name}</div>
+                    <div className="text-sm font-bold text-brand-500 dark:text-brand-400">{selectedSupplier.name}</div>
                     {selectedSupplier.rif && <div className="text-[10px] text-content-muted dark:text-content-dark-muted">{selectedSupplier.rif}</div>}
                   </div>
                   <button
@@ -411,14 +391,14 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                     className="input"
                   />
                   {supplierSearch.trim().length > 0 && (
-                    <div className="absolute z-10 top-full left-0 right-0 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded mt-0.5 max-h-56 overflow-y-auto shadow-lg">
+                    <div className="absolute top-full left-0 right-0 bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-lg z-10 shadow-xl max-h-48 overflow-y-auto">
                       {supplierResults.map(s => (
                         <div
                           key={s.id}
                           onClick={() => { setSelectedSupplier(s); setSupplierSearch(""); setSupplierResults([]); }}
-                          className="px-3 py-2.5 cursor-pointer border-b border-border dark:border-border-dark text-sm hover:bg-surface-2 dark:hover:bg-surface-dark-3"
+                          className="px-3 py-2.5 cursor-pointer border-b border-border dark:border-border-dark text-sm hover:bg-surface-3 dark:hover:bg-surface-dark-3"
                         >
-                          <div className="font-bold text-violet-600 dark:text-violet-400">{s.name}</div>
+                          <div className="font-bold text-brand-500 dark:text-brand-400">{s.name}</div>
                           <div className="text-[10px] text-content-muted dark:text-content-dark-muted">
                             {[s.rif, s.tax_name].filter(Boolean).join(" · ") || "Sin datos adicionales"}
                           </div>
@@ -426,7 +406,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                       ))}
                       <div
                         onClick={() => openCreateSupplier(supplierSearch)}
-                        className={`px-3 py-2.5 cursor-pointer text-sm text-violet-600 dark:text-violet-400 flex items-center gap-1.5 hover:bg-surface-2 dark:hover:bg-surface-dark-3 ${supplierResults.length > 0 ? "border-t border-border dark:border-border-dark" : ""}`}
+                        className={`px-3 py-2.5 cursor-pointer text-sm text-brand-500 dark:text-brand-400 flex items-center gap-1.5 hover:bg-surface-3 dark:hover:bg-surface-dark-3 ${supplierResults.length > 0 ? "border-t border-border dark:border-border-dark" : ""}`}
                       >
                         <span className="text-base font-bold">+</span> Crear "{supplierSearch}"
                       </div>
@@ -448,15 +428,13 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
         </div>
       </div>
 
-      {/* ── Agregar producto ── */}
-      <div className="bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-md p-4 mb-4">
+      <div className="card card-md mb-4">
         <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-widest mb-3.5">+ AGREGAR PRODUCTO AL RECIBO</div>
 
-        {/* Búsqueda de producto */}
         <div className="mb-3.5 relative">
           <label className="label">Buscar producto</label>
           {itemForm.product
-            ? <div className="flex items-center gap-2.5 bg-info/10 border border-info/40 rounded px-3 py-2">
+            ? <div className="flex items-center gap-2 bg-info/10 border border-info/30 rounded-lg p-2">
                 <div className="flex-1">
                   <div className="text-sm font-bold text-info">{itemForm.product.name}</div>
                   <div className="text-[10px] text-content-muted dark:text-content-dark-muted">
@@ -474,12 +452,12 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                 />
                 {searching && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-1">Buscando...</div>}
                 {productSearch.trim().length > 0 && (
-                  <div className="absolute z-10 top-full left-0 right-0 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded mt-0.5 max-h-56 overflow-y-auto shadow-lg">
+                  <div className="absolute top-full left-0 right-0 bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-lg z-10 shadow-xl max-h-48 overflow-y-auto">
                     {productResults.map(p => (
                       <div
                         key={p.id}
                         onClick={() => selectProduct(p)}
-                        className="px-3 py-2.5 cursor-pointer border-b border-border dark:border-border-dark text-sm hover:bg-surface-2 dark:hover:bg-surface-dark-3"
+                        className="px-3 py-2.5 cursor-pointer border-b border-border dark:border-border-dark text-sm hover:bg-surface-3 dark:hover:bg-surface-dark-3"
                       >
                         <div className="font-bold text-content dark:text-content-dark">{p.name}</div>
                         <div className="text-[10px] text-content-muted dark:text-content-dark-muted">
@@ -491,7 +469,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                     ))}
                     <div
                       onClick={() => openCreateProduct(productSearch)}
-                      className={`px-3 py-2.5 cursor-pointer text-sm text-warning flex items-center gap-1.5 hover:bg-surface-2 dark:hover:bg-surface-dark-3 ${productResults.length > 0 ? "border-t border-border dark:border-border-dark" : ""}`}
+                      className={`px-3 py-2.5 cursor-pointer text-sm text-warning flex items-center gap-1.5 hover:bg-surface-3 dark:hover:bg-surface-dark-3 ${productResults.length > 0 ? "border-t border-border dark:border-border-dark" : ""}`}
                     >
                       <span className="text-base font-bold">+</span> Crear "{productSearch}"
                     </div>
@@ -501,7 +479,6 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
           }
         </div>
 
-        {/* Detalles del paquete */}
         <div className="grid grid-cols-4 gap-2.5 mb-2.5">
           <div>
             <label className="label">Tipo de paquete</label>
@@ -520,8 +497,9 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
               type="number" min="1" step="1"
               value={itemForm.package_size}
               onChange={e => setIF("package_size", e.target.value)}
-              placeholder="ej. 12"
-              className="input"
+              disabled={itemForm.package_unit?.toLowerCase() === "unidad"}
+              placeholder={itemForm.package_unit?.toLowerCase() === "unidad" ? "1" : "ej. 12"}
+              className={`input transition-all ${itemForm.package_unit?.toLowerCase() === "unidad" ? "bg-surface-2 dark:bg-surface-dark-3 opacity-50 cursor-not-allowed" : ""}`}
             />
           </div>
           <div>
@@ -595,31 +573,30 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
         </button>
       </div>
 
-      {/* ── Items agregados ── */}
       {items.length > 0 && (
-        <div className="bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-md p-4 mb-4">
+        <div className="card card-md mb-4">
           <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-widest mb-3">PRODUCTOS EN ESTE RECIBO</div>
-          <table className="w-full border-collapse text-xs">
+          <table className="table-pos text-xs">
             <thead>
-              <tr className="border-b border-border dark:border-border-dark text-content-muted dark:text-content-dark-muted">
+              <tr>
                 {["Producto", "Paquete", "Cant.", "Precio/paq.", "Costo unit.", "Margen", "P. venta", "Total uds.", "Subtotal", ""].map(h =>
-                  <th key={h} className="text-left px-2 py-1.5 text-[10px] tracking-widest">{h}</th>
+                  <th key={h}>{h}</th>
                 )}
               </tr>
             </thead>
             <tbody>
-              {items.map((item, i) => (
-                <tr key={item.key} className={`border-b border-border dark:border-border-dark ${i % 2 === 0 ? "bg-surface-3 dark:bg-surface-dark-3" : ""}`}>
-                  <td className="px-2 py-2 font-bold text-content dark:text-content-dark">{item.product?.name}</td>
-                  <td className="px-2 py-2 text-content-muted dark:text-content-dark-muted">{item.package_unit} × {item.package_size}</td>
-                  <td className="px-2 py-2 text-content dark:text-content-dark">{item.package_qty}</td>
-                  <td className="px-2 py-2 text-info">${fmt2(item.package_price)}</td>
-                  <td className="px-2 py-2 text-content-muted dark:text-content-dark-muted">${fmt2(item.unit_cost)}</td>
-                  <td className="px-2 py-2 text-content-muted dark:text-content-dark-muted">{item.profit_margin}%</td>
-                  <td className="px-2 py-2 text-success font-bold">${fmt2(item.sale_price)}</td>
-                  <td className="px-2 py-2 text-content dark:text-content-dark">{item.total_units}</td>
-                  <td className="px-2 py-2 text-warning font-bold">${fmt2(item.subtotal)}</td>
-                  <td className="px-2 py-2">
+              {items.map((item) => (
+                <tr key={item.key}>
+                  <td className="font-bold text-content dark:text-content-dark">{item.product?.name}</td>
+                  <td className="text-content-muted dark:text-content-dark-muted">{item.package_unit} × {item.package_size}</td>
+                  <td className="text-content dark:text-content-dark">{item.package_qty}</td>
+                  <td className="text-info">${fmt2(item.package_price)}</td>
+                  <td className="text-content-muted dark:text-content-dark-muted">${fmt2(item.unit_cost)}</td>
+                  <td className="text-content-muted dark:text-content-dark-muted">{item.profit_margin}%</td>
+                  <td className="text-success font-bold">${fmt2(item.sale_price)}</td>
+                  <td className="text-content dark:text-content-dark">{item.total_units}</td>
+                  <td className="text-warning font-bold">${fmt2(item.subtotal)}</td>
+                  <td>
                     <button onClick={() => removeItem(item.key)} className="btn-sm btn-danger">✕</button>
                   </td>
                 </tr>

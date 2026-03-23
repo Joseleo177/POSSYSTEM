@@ -135,14 +135,16 @@ const create = async (req, res) => {
         subtotal
       }, { transaction });
 
-      // Incrementar stock en almacén
-      const [stockEntry] = await ProductStock.findOrCreate({
-        where: { warehouse_id, product_id },
-        defaults: { qty: 0 },
-        transaction,
-        lock: true
-      });
-      await stockEntry.increment('qty', { by: total_units, transaction });
+      // Incrementar stock en almacén (SÓLO si no es servicio)
+      if (!product.is_service) {
+        const [stockEntry] = await ProductStock.findOrCreate({
+          where: { warehouse_id, product_id },
+          defaults: { qty: 0 },
+          transaction,
+          lock: true
+        });
+        await stockEntry.increment('qty', { by: total_units, transaction });
+      }
 
       // Actualizar datos del producto
       const updateData = {
@@ -196,8 +198,10 @@ const create = async (req, res) => {
       }
 
       // Sincronizar stock total
-      const totalStock = await ProductStock.sum('qty', { where: { product_id }, transaction });
-      await product.update({ stock: totalStock }, { transaction });
+      if (!product.is_service) {
+        const totalStock = await ProductStock.sum('qty', { where: { product_id }, transaction });
+        await product.update({ stock: totalStock || 0 }, { transaction });
+      }
     }
 
     await purchase.update({ total: grandTotal }, { transaction });
@@ -246,19 +250,22 @@ const remove = async (req, res) => {
     for (const item of items) {
       if (!item.product_id) continue;
       
-      // Restar del almacén
-      const stockEntry = await ProductStock.findOne({
-        where: { warehouse_id: purchase.warehouse_id, product_id: item.product_id },
-        transaction,
-        lock: true
-      });
-      if (stockEntry) {
-        await stockEntry.decrement('qty', { by: item.total_units, transaction });
-      }
+      // Restar del almacén (SÓLO si no es servicio)
+      const fullProd = await Product.findByPk(item.product_id, { transaction });
+      if (fullProd && !fullProd.is_service) {
+        const stockEntry = await ProductStock.findOne({
+          where: { warehouse_id: purchase.warehouse_id, product_id: item.product_id },
+          transaction,
+          lock: true
+        });
+        if (stockEntry) {
+          await stockEntry.decrement('qty', { by: item.total_units, transaction });
+        }
 
-      // Sincronizar stock total
-      const totalStock = await ProductStock.sum('qty', { where: { product_id: item.product_id }, transaction });
-      await Product.update({ stock: totalStock || 0 }, { where: { id: item.product_id }, transaction });
+        // Sincronizar stock total
+        const totalStock = await ProductStock.sum('qty', { where: { product_id: item.product_id }, transaction });
+        await Product.update({ stock: totalStock || 0 }, { where: { id: item.product_id }, transaction });
+      }
     }
 
     await purchase.destroy({ transaction });

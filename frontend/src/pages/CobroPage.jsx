@@ -371,10 +371,11 @@ export default function CobroPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 lg:gap-6">
             {filteredProducts.map(p => {
               const inStock = parseFloat(p.stock) > 0 && activeWarehouse;
+              const canSell = (p.is_service || inStock);
               return (
-                <div key={p.id} onClick={() => inStock && addToCart(p)}
+                <div key={p.id} onClick={() => canSell && addToCart(p)}
                   className={`group bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-white/5 rounded-[32px] overflow-hidden transition-all duration-300 flex flex-col text-content dark:text-content-dark
-                    ${inStock ? "cursor-pointer hover:border-brand-500/50 hover:shadow-2xl hover:bg-surface-3 dark:bg-surface-dark-3 hover:-translate-y-1" : "opacity-30 grayscale cursor-not-allowed"}`}>
+                    ${canSell ? "cursor-pointer hover:border-brand-500/50 hover:shadow-2xl hover:bg-surface-3 dark:bg-surface-dark-3 hover:-translate-y-1" : "opacity-30 grayscale cursor-not-allowed"}`}>
                   
                   <div className="relative aspect-square overflow-hidden bg-black/20">
                     {p.image_url ? (
@@ -391,8 +392,8 @@ export default function CobroPage() {
 
                   <div className="p-5 flex items-center justify-between mt-auto">
                     <div className="text-lg font-black text-brand-400 tracking-tight leading-none">{fmt(convertToDisplay(p.price), currSym)}</div>
-                    <div className={`text-[10px] font-black px-2.5 py-1.5 rounded-xl uppercase tracking-widest leading-none ${parseFloat(p.stock) <= 5 ? "bg-brand-500/20 text-brand-400 animate-pulse" : "bg-white/5 text-content-subtle"}`}>
-                      {p.stock} {p.unit || "und"}
+                    <div className={`text-[10px] font-black px-2.5 py-1.5 rounded-xl uppercase tracking-widest leading-none ${p.is_service ? "bg-amber-500/10 text-amber-500" : (parseFloat(p.stock) <= 5 ? "bg-brand-500/20 text-brand-400 animate-pulse" : "bg-white/5 text-content-subtle")}`}>
+                      {p.is_service ? "Servicio" : `${p.stock} ${p.unit || "und"}`}
                     </div>
                   </div>
                 </div>

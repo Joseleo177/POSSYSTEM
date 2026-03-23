@@ -66,7 +66,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
   }, []);
 
   const loadProducts = useCallback(async () => {
-    try { const r = await api.products.getAll({ is_combo: false }); setProducts(r.data); }
+    try { const r = await api.products.getAll({ is_combo: false, is_service: false }); setProducts(r.data); }
     catch (e) {}
   }, []);
 
@@ -85,7 +85,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
   useEffect(() => {
     if (!addStockSearch.trim()) { setAddStockResults([]); return; }
     const t = setTimeout(async () => {
-      try { const r = await api.products.getAll({ search: addStockSearch }); setAddStockResults(r.data.slice(0, 8)); }
+      try { const r = await api.products.getAll({ search: addStockSearch, is_service: false }); setAddStockResults(r.data.slice(0, 8)); }
       catch {}
     }, 250);
     return () => clearTimeout(t);
@@ -218,9 +218,11 @@ export default function WarehousesTab({ notify, currentEmployee }) {
 
   // ── Stock filtrado ─────────────────────────────────────────
   const filteredStock = stock.filter(s =>
+    !s.is_service && (
     !stockSearch ||
     s.product_name.toLowerCase().includes(stockSearch.toLowerCase()) ||
     (s.category_name || "").toLowerCase().includes(stockSearch.toLowerCase())
+    )
   );
 
   return (
@@ -258,8 +260,8 @@ export default function WarehousesTab({ notify, currentEmployee }) {
               <div
                 key={w.id}
                 className={[
-                  "bg-surface-2 dark:bg-surface-dark-2 border rounded-md p-4 transition-opacity",
-                  w.active ? "border-surface-3 dark:border-surface-dark-3 opacity-100" : "border-surface-2 dark:border-surface-dark-2 opacity-60",
+                  "card-md p-4 transition-opacity",
+                  w.active ? "opacity-100" : "opacity-60",
                 ].join(" ")}
               >
                 <div className="flex justify-between items-start mb-2.5">
@@ -371,7 +373,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                 {filteredStock.length} producto{filteredStock.length !== 1 ? "s" : ""} en{" "}
                 <b className="text-warning">{selectedWarehouse.name}</b>
               </div>
-              <table className="w-full border-collapse text-[13px]">
+              <table className="table-pos">
                 <thead>
                   <tr className="border-b-2 border-warning text-warning">
                     {["Categoría","Producto","Stock","Unidad","Precio venta","Costo","Acciones"].map(h => (
@@ -466,7 +468,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
               Sin transferencias registradas
             </div>
           ) : (
-            <table className="w-full border-collapse text-[13px]">
+            <table className="table-pos">
               <thead>
                 <tr className="border-b-2 border-warning text-warning">
                   {["Fecha","Producto","Origen","Destino","Cantidad","Nota","Empleado"].map(h => (
@@ -511,8 +513,8 @@ export default function WarehousesTab({ notify, currentEmployee }) {
 
       {/* ── MODAL: Nueva Transferencia ── */}
       {transferModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-5">
-          <div className="bg-surface-2 dark:bg-surface-dark-2 border border-info rounded-md p-6 w-full max-w-[520px]">
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-5">
+          <div className="card-md p-6 w-full max-w-[520px]">
             <div className="font-bold text-sm text-info tracking-widest mb-5">
               🔄 NUEVA TRANSFERENCIA
             </div>
@@ -599,8 +601,8 @@ export default function WarehousesTab({ notify, currentEmployee }) {
 
       {/* ── MODAL: Crear / Editar Almacén ── */}
       {warehouseModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-5">
-          <div className="bg-surface-2 dark:bg-surface-dark-2 border border-warning rounded-md p-6 w-full max-w-[480px]">
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-5">
+          <div className="card-md p-6 w-full max-w-[480px]">
             <div className="font-bold text-sm text-warning tracking-widest mb-5">
               {editId ? "✏ EDITAR ALMACÉN" : "+ NUEVO ALMACÉN"}
             </div>
@@ -664,8 +666,8 @@ export default function WarehousesTab({ notify, currentEmployee }) {
 
       {/* ── MODAL: Agregar producto al almacén ── */}
       {addStockModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-5">
-          <div className="bg-surface-2 dark:bg-surface-dark-2 border border-success rounded-md p-6 w-full max-w-[480px]">
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-5">
+          <div className="card-md p-6 w-full max-w-[480px]">
             <div className="font-bold text-sm text-success tracking-widest mb-1.5">
               + AGREGAR PRODUCTO
             </div>
@@ -700,7 +702,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                     className="input"
                   />
                   {addStockResults.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 bg-surface-2 dark:bg-surface-dark-2 border border-surface-3 dark:border-surface-dark-3 rounded z-10 max-h-[200px] overflow-y-auto">
+                    <div className="absolute top-full left-0 right-0 bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-lg z-10 max-h-48 overflow-y-auto shadow-xl">
                       {addStockResults.map(p => (
                         <div
                           key={p.id}
@@ -754,8 +756,8 @@ export default function WarehousesTab({ notify, currentEmployee }) {
 
       {/* ── MODAL: Asignar empleados ── */}
       {assignModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-5">
-          <div className="bg-surface-2 dark:bg-surface-dark-2 border border-warning rounded-md p-6 w-full max-w-[420px]">
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-5">
+          <div className="card-md p-6 w-full max-w-[420px]">
             <div className="font-bold text-sm text-warning tracking-widest mb-1.5">ASIGNAR EMPLEADOS</div>
             <div className="text-[12px] text-content-muted dark:text-content-dark-muted mb-4.5">
               Almacén: <b className="text-content dark:text-content-dark">{assignModal.name}</b>
@@ -797,8 +799,8 @@ export default function WarehousesTab({ notify, currentEmployee }) {
 
       {/* ── MODAL: Editar Stock ── */}
       {editStockModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-5">
-          <form onSubmit={submitEditStock} className="bg-surface-2 dark:bg-surface-dark-2 border border-warning rounded-md p-6 w-full max-w-[340px]">
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-5">
+          <form onSubmit={submitEditStock} className="card-md p-6 w-full max-w-[340px]">
             <div className="font-bold text-sm text-warning tracking-widest mb-1.5">EDITAR STOCK</div>
             <div className="text-[12px] text-content-muted dark:text-content-dark-muted mb-4.5">
               Producto: <b className="text-content dark:text-content-dark">{editStockModal.product_name}</b>
@@ -819,8 +821,8 @@ export default function WarehousesTab({ notify, currentEmployee }) {
 
       {/* ── MODAL: Eliminar Stock ── */}
       {deleteStockModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-5">
-          <div className="bg-surface-2 dark:bg-surface-dark-2 border border-danger/60 rounded-md p-6 w-full max-w-[340px]">
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-5">
+          <div className="card-md p-6 w-full max-w-[340px]">
              <div className="text-danger flex justify-center mb-3">
                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
              </div>

@@ -37,11 +37,12 @@ const calculateComboStockAndCost = (comboItems) => {
 // GET /api/products
 const getAll = async (req, res) => {
   try {
-    const { search, category_id, is_combo, limit = 100, offset = 0 } = req.query;
+    const { search, category_id, is_combo, is_service, limit = 100, offset = 0 } = req.query;
     const where = {};
 
     if (category_id) where.category_id = category_id;
     if (is_combo !== undefined) where.is_combo = is_combo === 'true';
+    if (is_service !== undefined) where.is_service = is_service === 'true';
     if (search) {
       // Evitar problemas de Sequelize con subQuery, limit y outer joins buscando primero las categorías
       const categories = await Category.findAll({
@@ -129,7 +130,7 @@ const create = async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { name, price, stock, category_id, unit, qty_step,
-            cost_price, profit_margin, package_size, package_unit, min_stock, is_combo, combo_items } = req.body;
+            cost_price, profit_margin, package_size, package_unit, min_stock, is_combo, combo_items, is_service } = req.body;
     
     if (!name || price == null) {
       if (req.file) deleteOldImage(req.file.filename);
@@ -139,10 +140,11 @@ const create = async (req, res) => {
 
     const filename = req.file ? req.file.filename : null;
     const isComboBool = is_combo === 'true' || is_combo === true;
+    const isServiceBool = is_service === 'true' || is_service === true;
 
     const product = await Product.create({
       name, price,
-      stock: isComboBool ? 0 : (stock ?? 0),
+      stock: (isComboBool || isServiceBool) ? 0 : (stock ?? 0),
       category_id: category_id || null,
       image_filename: filename,
       unit: unit || "unidad",
@@ -153,6 +155,7 @@ const create = async (req, res) => {
       package_unit: package_unit || null,
       min_stock: parseFloat(min_stock) || 0,
       is_combo: isComboBool,
+      is_service: isServiceBool,
     }, { transaction: t });
 
     if (isComboBool && combo_items) {
@@ -185,7 +188,7 @@ const update = async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { name, price, category_id, unit, qty_step,
-            cost_price, profit_margin, package_size, package_unit, min_stock, is_combo, combo_items } = req.body;
+            cost_price, profit_margin, package_size, package_unit, min_stock, is_combo, combo_items, is_service } = req.body;
 
     const product = await Product.findByPk(req.params.id, { transaction: t });
     if (!product) {
@@ -205,6 +208,7 @@ const update = async (req, res) => {
     }
 
     const isComboBool = is_combo === 'true' || is_combo === true || (is_combo === undefined ? product.is_combo : false);
+    const isServiceBool = is_service === 'true' || is_service === true || (is_service === undefined ? product.is_service : false);
 
     await product.update({
       name, price,
@@ -212,12 +216,14 @@ const update = async (req, res) => {
       image_filename: filename,
       unit: unit || "unidad",
       qty_step: qty_step || 1,
+      stock: (isComboBool || isServiceBool) ? 0 : product.stock,
       cost_price: isComboBool ? null : (cost_price || null),
       profit_margin: profit_margin || null,
       package_size: package_size || null,
       package_unit: package_unit || null,
       min_stock: parseFloat(min_stock) || 0,
       is_combo: isComboBool,
+      is_service: isServiceBool,
     }, { transaction: t });
 
     if (isComboBool && combo_items !== undefined) {

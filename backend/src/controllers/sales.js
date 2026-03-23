@@ -173,7 +173,15 @@ const create = async (req, res) => {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
       if (!product) throw new Error(`Producto ${item.product_id} no encontrado`);
 
-      if (product.is_combo) {
+      if (product.is_service) {
+        total += parseFloat(product.price) * item.quantity;
+        enrichedItems.push({
+          product,
+          qty: item.quantity,
+          isCombo: false,
+          isService: true
+        });
+      } else if (product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
         if (!comboItems || comboItems.length === 0) {
           throw new Error(`El combo "${product.name}" no tiene ingredientes configurados`);
@@ -260,7 +268,9 @@ const create = async (req, res) => {
         discount: 0 // Simplificación, expandible si hay descuentos por item
       }, { transaction });
 
-      if (entry.isCombo) {
+      if (entry.isService) {
+        // No se descuenta stock para servicios
+      } else if (entry.isCombo) {
         // Descontar del almacén por ingrediente
         for (const ing of entry.ingredientsData) {
           await ing.stockEntry.decrement('qty', { by: ing.qtyNeeded, transaction });
@@ -338,7 +348,9 @@ const cancel = async (req, res) => {
       
       const product = await Product.findByPk(item.product_id, { transaction });
       
-      if (product && product.is_combo) {
+      if (product && product.is_service) {
+        // No se restaura stock para servicios
+      } else if (product && product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
         for (const cItem of comboItems) {
           const qtyToRestore = item.quantity * parseFloat(cItem.quantity);

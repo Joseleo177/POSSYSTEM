@@ -69,13 +69,13 @@ export function CartProvider({ children }) {
   // ── Cart helpers ───────────────────────────────────────────
   const addToCart = useCallback((product) => {
     if (!activeWarehouse) return notify("Selecciona un almacén antes de cobrar", "err");
-    if (parseFloat(product.stock) <= 0) return notify("Sin stock disponible", "err");
+    if (!product.is_service && parseFloat(product.stock) <= 0) return notify("Sin stock disponible", "err");
     const step = parseFloat(product.qty_step) || 1;
     setCart(prev => {
       const ex = prev.find(i => i.id === product.id);
       if (ex) {
         const nq = parseFloat((ex.qty + step).toFixed(3));
-        if (nq > parseFloat(product.stock)) { notify("Stock insuficiente", "err"); return prev; }
+        if (!product.is_service && nq > parseFloat(product.stock)) { notify("Stock insuficiente", "err"); return prev; }
         return prev.map(i => i.id === product.id ? { ...i, qty: nq } : i);
       }
       return [...prev, { ...product, qty: step }];
@@ -93,7 +93,7 @@ export function CartProvider({ children }) {
       const nq   = parseFloat((i.qty + dir * step).toFixed(3));
       const prod = products.find(p => p.id === id);
       if (nq < step) return i;
-      if (prod && nq > parseFloat(prod.stock)) { notify("Stock insuficiente", "err"); return i; }
+      if (prod && !prod.is_service && nq > parseFloat(prod.stock)) { notify("Stock insuficiente", "err"); return i; }
       return { ...i, qty: nq };
     }));
   }, [notify]);
@@ -103,7 +103,7 @@ export function CartProvider({ children }) {
     if (isNaN(nq) || nq <= 0) return;
     const prod = products.find(p => p.id === id);
     if (!prod) return;
-    if (nq > parseFloat(prod.stock)) { notify("Stock insuficiente", "err"); return; }
+    if (!prod.is_service && nq > parseFloat(prod.stock)) { notify("Stock insuficiente", "err"); return; }
     setCart(prev => prev.map(i => i.id === id ? { ...i, qty: parseFloat(nq.toFixed(3)) } : i));
   }, [notify]);
 
