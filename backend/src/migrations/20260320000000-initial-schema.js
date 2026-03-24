@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS payment_methods (
   id         SERIAL       PRIMARY KEY,
   name       VARCHAR(100) NOT NULL UNIQUE,
   code       VARCHAR(50)  NOT NULL UNIQUE,
-  icon       VARCHAR(10)  DEFAULT '💳',
+  icon       VARCHAR(10)  DEFAULT '',
   color      VARCHAR(7)   NOT NULL DEFAULT '#555555',
   active     BOOLEAN      NOT NULL DEFAULT TRUE,
   sort_order INTEGER      NOT NULL DEFAULT 0,
@@ -390,10 +390,10 @@ INSERT INTO payment_methods (name, code, icon, color, sort_order) VALUES
   ('Transferencia', 'transferencia', '🏦', '#5dade2', 1),
   ('Pago Móvil', 'pago_movil', '📱', '#f0a500', 2),
   ('Zelle', 'zelle', '💱', '#9b59b6', 3),
-  ('Punto de Venta', 'punto_venta', '💳', '#e74c3c', 4)
+  ('Punto de Venta', 'punto_venta', '', '#e74c3c', 4)
 ON CONFLICT (code) DO NOTHING;
       `;
-      
+
       await queryInterface.sequelize.query(rawSql);
       console.log('--- Migración de esquema completada ---');
     } catch (error) {

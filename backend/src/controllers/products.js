@@ -19,7 +19,11 @@ const calculateComboStockAndCost = (comboItems) => {
   let totalCost = 0;
   for (const item of comboItems) {
     if (!item.ingredient) return { stock: 0, cost: 0 };
-    const ingStock = parseFloat(item.ingredient.stock) || 0;
+    
+    // Si tenemos stock específico de almacén lo usamos, si no el stock global
+    const stockModel = item.ingredient.stocks && item.ingredient.stocks[0];
+    const ingStock = stockModel ? parseFloat(stockModel.qty) : parseFloat(item.ingredient.stock || 0);
+    
     const ingCost = parseFloat(item.ingredient.cost_price) || 0;
     const reqQty = parseFloat(item.quantity) || 1;
     
@@ -37,12 +41,43 @@ const calculateComboStockAndCost = (comboItems) => {
 // GET /api/products
 const getAll = async (req, res) => {
   try {
-    const { search, category_id, is_combo, is_service, limit = 100, offset = 0 } = req.query;
+    const { search, category_id, is_combo, is_service, warehouse_id, limit = 100, offset = 0 } = req.query;
     const where = {};
 
     if (category_id) where.category_id = category_id;
     if (is_combo !== undefined) where.is_combo = is_combo === 'true';
     if (is_service !== undefined) where.is_service = is_service === 'true';
+    
+    const include = [
+      { model: Category, attributes: ['name'], required: false },
+      { 
+        model: ProductComboItem, 
+        as: 'comboItems', 
+        include: [{ 
+          model: Product, 
+          as: 'ingredient', 
+          attributes: ['id', 'name', 'unit', 'price', 'cost_price', 'stock'],
+          include: warehouse_id ? [{
+            model: ProductStock,
+            as: 'stocks',
+            where: { warehouse_id: parseInt(warehouse_id) },
+            required: false,
+            attributes: ['qty']
+          }] : []
+        }] 
+      }
+    ];
+
+    if (warehouse_id) {
+      include.push({
+        model: ProductStock,
+        as: 'stocks',
+        where: { warehouse_id: parseInt(warehouse_id) },
+        required: false,
+        attributes: ['qty']
+      });
+    }
+
     if (search) {
       // Evitar problemas de Sequelize con subQuery, limit y outer joins buscando primero las categorías
       const categories = await Category.findAll({
@@ -59,18 +94,11 @@ const getAll = async (req, res) => {
 
     const { count, rows } = await Product.findAndCountAll({
       where,
-      include: [
-        { model: Category, attributes: ['name'], required: false },
-        { 
-          model: ProductComboItem, 
-          as: 'comboItems', 
-          include: [{ model: Product, as: 'ingredient', attributes: ['id', 'name', 'unit', 'price', 'cost_price', 'stock'] }] 
-        }
-      ],
+      include,
       order: [['name', 'ASC']],
       limit: parseInt(limit),
       offset: parseInt(offset),
-      distinct: true, // required for count with includes that can duplicate rows
+      distinct: true,
     });
 
     const data = rows.map(p => {
@@ -78,6 +106,15 @@ const getAll = async (req, res) => {
       prod.category_name = prod.Category?.name ?? null;
       delete prod.Category;
       prod.image_url = imageUrl(prod.image_filename);
+      
+      // Mapear stock del almacén si existe
+      if (prod.stocks && prod.stocks.length > 0) {
+        prod.warehouse_stock = parseFloat(prod.stocks[0].qty || 0);
+        delete prod.stocks;
+      } else if (warehouse_id) {
+        prod.warehouse_stock = 0; // Si pedimos almacén pero no hay registro, es 0
+      }
+
       if (prod.is_combo) {
         const stats = calculateComboStockAndCost(prod.comboItems);
         prod.stock = stats.stock;

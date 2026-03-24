@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppProvider, useApp } from "./context/AppContext";
 import { CartProvider, useCart } from "./context/CartContext";
 import { useTheme } from "./hooks/useTheme";
@@ -12,6 +12,7 @@ import InventarioPage  from "./pages/InventarioPage";
 import ClientesPage    from "./pages/ClientesPage";
 import ContabilidadPage from "./pages/ContabilidadPage";
 import ConfigPage      from "./pages/ConfigPage";
+import ReportesPage    from "./pages/ReportesPage";
 
 const ROLE_COLORS = {
   admin:     "text-danger border-danger/40 bg-danger/10",
@@ -21,15 +22,16 @@ const ROLE_COLORS = {
 };
 
 const ALL_TABS = [
-  { key:"Dashboard",     label:"Dashboard",      icon:"📊", perm:"sales"     },
-  { key:"Cobro",         label:"Cobro",          icon:"🛒", perm:"sales"     },
-  { key:"Catálogo",      label:"Catálogo",        icon:"📦", perm:"products"  },
-  { key:"Compras",       label:"Compras",         icon:"🛍", perm:"products"  },
-  { key:"Inventario",    label:"Inventario",      icon:"🏭", perm:"inventory" },
-  { key:"Clientes",      label:"Clientes",        icon:"👥", perm:"customers" },
-  { key:"Contabilidad",  label:"Contabilidad",    icon:"💰", perm:"sales"     },
-  { key:"Empleados",     label:"Empleados",       icon:"👤", perm:"admin"     },
-  { key:"Configuración", label:"Configuración",   icon:"⚙️", perm:"config"    },
+  { key:"Dashboard",     label:"Dashboard",      icon:"", perms:["sales", "reports", "inventory", "config"] },
+  { key:"Cobro",         label:"Venta (POS)",    icon:"", perms:["sales"] },
+  { key:"Catálogo",      label:"Catálogo",       icon:"", perms:["products", "inventory", "config"] },
+  { key:"Clientes",      label:"Clientes",       icon:"", perms:["customers"] },
+  { key:"Inventario",    label:"Inventario",     icon:"", perms:["inventory"] },
+  { key:"Compras",       label:"Compras",        icon:"", perms:["inventory"] },
+  { key:"Contabilidad",  label:"Contabilidad",   icon:"", perms:["sales", "reports", "config"] },
+  { key:"Reportes",      label:"Reportes",       icon:"", perms:["reports", "config", "inventory"] },
+  { key:"Empleados",     label:"Empleados",      icon:"", adminOnly:true },
+  { key:"Configuración", label:"Configuración",  icon:"", perms:["config"] },
 ];
 
 function NavTab({ t, active, onGo }) {
@@ -55,12 +57,21 @@ function PosApp() {
   const { dark, toggle } = useTheme();
   const [tab, setTab] = useState("Dashboard");
 
-  const visibleTabs = ALL_TABS.filter(t => {
-    if (t.perm === "admin")     return employee?.permissions?.all;
-    if (t.perm === "config")    return can("config") || employee?.permissions?.all;
-    if (t.perm === "inventory") return can("inventory") || employee?.permissions?.all;
-    return can(t.perm);
+  const canAny = (perms = []) => perms.some((p) => can(p));
+
+  const visibleTabs = ALL_TABS.filter((t) => {
+    if (t.adminOnly) return !!employee?.permissions?.all;
+    return canAny(t.perms);
   });
+
+  const activeTabVisible = visibleTabs.some((t) => t.key === tab);
+  const safeTab = activeTabVisible ? tab : (visibleTabs[0]?.key || "Dashboard");
+
+  useEffect(() => {
+    if (!activeTabVisible && visibleTabs.length) {
+      setTab(visibleTabs[0].key);
+    }
+  }, [activeTabVisible, visibleTabs]);
 
   const goTab = (key) => { setTab(key); if (key === "Cobro") setReceipt(null); };
 
@@ -156,16 +167,17 @@ function PosApp() {
       </header>
 
       {/* Contenido */}
-      <main className={tab === "Cobro" ? "w-full" : "max-w-screen-2xl mx-auto px-4 py-5"}>
-        {tab === "Dashboard"      && <DashboardPage />}
-        {tab === "Cobro"          && <CobroPage />}
-        {tab === "Catálogo"       && <CatalogPage />}
-        {tab === "Compras"        && <ComprasPage />}
-        {tab === "Inventario"     && <InventarioPage />}
-        {tab === "Clientes"       && <ClientesPage />}
-        {tab === "Contabilidad"   && <ContabilidadPage />}
-        {tab === "Empleados"      && <EmpleadosPage />}
-        {tab === "Configuración"  && <ConfigPage />}
+      <main className={safeTab === "Cobro" ? "w-full" : "max-w-screen-2xl mx-auto px-4 py-5"}>
+        {safeTab === "Dashboard"      && <DashboardPage />}
+        {safeTab === "Cobro"          && <CobroPage />}
+        {safeTab === "Catálogo"       && <CatalogPage />}
+        {safeTab === "Compras"        && <ComprasPage />}
+        {safeTab === "Inventario"     && <InventarioPage />}
+        {safeTab === "Clientes"       && <ClientesPage />}
+        {safeTab === "Contabilidad"   && <ContabilidadPage />}
+        {safeTab === "Reportes"       && <ReportesPage />}
+        {safeTab === "Empleados"      && <EmpleadosPage />}
+        {safeTab === "Configuración"  && <ConfigPage />}
       </main>
     </div>
   );

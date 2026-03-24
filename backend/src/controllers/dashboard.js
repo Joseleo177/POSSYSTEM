@@ -85,7 +85,7 @@ const getDashboard = async (req, res) => {
     const lowStock = await Product.findAll({
       where: {
         min_stock: { [Op.gt]: 0 },
-        [Op.and]: Sequelize.literal('"Product"."stock" < "Product"."min_stock"'),
+        stock: { [Op.lt]: Sequelize.col('min_stock') }
       },
       attributes: ["id", "name", "stock", "min_stock", "unit"],
       order: [["stock", "ASC"]],

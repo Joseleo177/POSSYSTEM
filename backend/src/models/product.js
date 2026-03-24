@@ -20,6 +20,7 @@ module.exports = (sequelize, DataTypes) => {
     package_unit: { type: DataTypes.STRING(50) },
     is_combo: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     is_service: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    min_stock: { type: DataTypes.DECIMAL(10, 3), allowNull: false, defaultValue: 0 },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

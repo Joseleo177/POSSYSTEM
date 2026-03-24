@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
 import Modal from "./Modal";
 import { api } from "../services/api";
+import { fmtNumber } from "../helpers";
+import ConfirmModal from "./ConfirmModal";
 
-const fmtPrice = (n) => `$${Number(n || 0).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmtPrice = (n) => `$${fmtNumber(n)}`;
 
 export default function ReturnModal({ open, onClose, sale, onReturnSuccess, notify }) {
   const [returnQtys, setReturnQtys] = useState({});
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
+  const [confirmShow, setConfirmShow] = useState(false);
 
   useEffect(() => {
     if (open && sale) {
@@ -36,7 +39,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     return acc + (retQty * parseFloat(i.price));
   }, 0);
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     const returnItems = Object.entries(returnQtys)
       .map(([id, qty]) => ({ sale_item_id: parseInt(id), qty }))
       .filter(i => i.qty > 0);
@@ -45,14 +48,19 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
       return notify("Debes indicar al menos una cantidad mayor a 0 para devolver", "err");
     }
 
-    if (!confirm(`¿Confirmas procesar la devolución por un total de ${fmtPrice(totalReturn)}? El stock será devuelto al almacén correspondiente.`)) {
-      return;
-    }
+    setConfirmShow(true);
+  };
 
+  const executeSubmit = async () => {
+    const returnItems = Object.entries(returnQtys)
+      .map(([id, qty]) => ({ sale_item_id: parseInt(id), qty }))
+      .filter(i => i.qty > 0);
+
+    setConfirmShow(false);
     setLoading(true);
     try {
       await api.sales.createReturn(sale.id, { items: returnItems, reason });
-      notify("Devolución registrada correctamente ✓");
+      notify("Devolución registrada correctamente");
       onReturnSuccess();
       onClose();
     } catch (e) {
@@ -62,7 +70,8 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={`DEVOLUCIÓN DE ${sale.invoice_number || "#" + sale.id}`} width={600}>
+    <>
+      <Modal open={open} onClose={onClose} title={`DEVOLUCIÓN DE ${sale.invoice_number || "#" + sale.id}`} width={600}>
       <div className="mb-4 text-[12px] text-content-muted dark:text-content-dark-muted">
         Indica la cantidad que deseas devolver de cada producto. Si devuelves una cantidad parcial, el valor total a reintegrar se calculará automáticamente.
       </div>
@@ -145,5 +154,16 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
         </button>
       </div>
     </Modal>
+
+    <ConfirmModal
+      isOpen={confirmShow}
+      title="¿Confirmar devolución?"
+      message={`Estás a punto de procesar una devolución por un total de ${fmtPrice(totalReturn)}. El stock será reintegrado automáticamente a sus almacenes de origen.`}
+      onConfirm={executeSubmit}
+      onCancel={() => setConfirmShow(false)}
+      confirmText="Sí, procesar devolución"
+      type="warning"
+    />
+  </>
   );
 }

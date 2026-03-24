@@ -2,27 +2,30 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../services/api";
 import { exportToCSV } from "../../utils/exportUtils";
 import ReturnModal from "../ReturnModal";
+import ConfirmModal from "../ConfirmModal";
+import { fmtDateShort } from "../../helpers";
 
-export default function TransaccionesTab({ 
-  notify, can, baseCurrency, allSeries, fmtPrice, fmtSale, setReceiptSale 
+export default function TransaccionesTab({
+  notify, can, baseCurrency, allSeries, fmtPrice, fmtSale, setReceiptSale
 }) {
-  const [sales,          setSales]          = useState([]);
-  const [histDateFrom,   setHistDateFrom]   = useState("");
-  const [histDateTo,     setHistDateTo]     = useState("");
-  const [searchTerm,     setSearchTerm]     = useState("");
-  const [activeFilters,  setActiveFilters]  = useState([]); // pendiente, parcial, pagado, anulado
-  const [activeSeries,   setActiveSeries]   = useState([]); // array de IDs
-  const [groupBy,        setGroupBy]        = useState(null); // cliente, fecha, serie
+  const [sales, setSales] = useState([]);
+  const [histDateFrom, setHistDateFrom] = useState("");
+  const [histDateTo, setHistDateTo] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [activeFilters, setActiveFilters] = useState([]); // pendiente, parcial, pagado, anulado
+  const [activeSeries, setActiveSeries] = useState([]); // array de IDs
+  const [groupBy, setGroupBy] = useState(null); // cliente, fecha, serie
   const [showFilterDrop, setShowFilterDrop] = useState(false);
-  const [showGroupDrop,  setShowGroupDrop]  = useState(false);
-  const [saleDetail,     setSaleDetail]     = useState(null);
-  const [returnSale,     setReturnSale]     = useState(null);
+  const [showGroupDrop, setShowGroupDrop] = useState(false);
+  const [saleDetail, setSaleDetail] = useState(null);
+  const [returnSale, setReturnSale] = useState(null);
+  const [cancelConfirm, setCancelConfirm] = useState(null);
 
   const loadSales = useCallback(async () => {
     try {
       const params = {};
-      if (histDateFrom)  params.date_from = histDateFrom;
-      if (histDateTo)    params.date_to   = histDateTo;
+      if (histDateFrom) params.date_from = histDateFrom;
+      if (histDateTo) params.date_to = histDateTo;
       // Los otros filtros (estado, serie, búsqueda) los haremos localmente para mayor fluidez
       const r = await api.sales.getAll(params);
       setSales(r.data);
@@ -52,9 +55,9 @@ export default function TransaccionesTab({
     list.forEach(item => {
       let key = 'Sin grupo';
       if (groupBy === 'cliente') key = item.customer_name || 'Sin cliente';
-      if (groupBy === 'fecha')   key = new Date(item.created_at).toLocaleDateString('es-VE', { month: 'long', year: 'numeric' });
-      if (groupBy === 'serie')   key = item.serie_name || 'Sin serie';
-      
+      if (groupBy === 'fecha') key = fmtDateShort(item.created_at, { month: 'long', year: 'numeric' });
+      if (groupBy === 'serie') key = item.serie_name || 'Sin serie';
+
       if (!groups[key]) groups[key] = [];
       groups[key].push(item);
     });
@@ -72,7 +75,6 @@ export default function TransaccionesTab({
   useEffect(() => { loadSales(); }, [loadSales]);
 
   const cancelSale = async (id) => {
-    if (!confirm("¿Anular esta venta? Se restaurará el stock.")) return;
     try { await api.sales.cancel(id); notify("Venta anulada ✓"); loadSales(); }
     catch (e) { notify(e.message, "err"); }
   };
@@ -81,7 +83,7 @@ export default function TransaccionesTab({
     const headers = ['Factura', 'Fecha', 'Cliente', 'RIF', 'Estado', 'Serie', 'Total', 'Abonado', 'Pendiente'];
     const rows = filteredSales.map(s => [
       s.invoice_number || s.id,
-      new Date(s.created_at).toLocaleDateString(),
+      fmtDateShort(s.created_at),
       s.customer_name || 'Sin Cliente',
       s.customer_rif || '',
       s.status,
@@ -95,35 +97,35 @@ export default function TransaccionesTab({
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-      
+
       {/* ── BARRA DE BÚSQUEDA Y FILTROS (ODOO STYLE) ── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 print-hidden">
         <div className="relative flex-1 group w-full lg:max-w-xl">
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="Buscar por factura, cliente o RIF..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-6 py-4 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl text-xs font-bold text-content dark:text-content-dark placeholder:text-content-subtle placeholder:font-medium focus:ring-4 focus:ring-brand-500/10 shadow-sm transition-all outline-none"
           />
-          <span className="absolute left-5 top-1/2 -translate-y-1/2 text-base lg:text-lg opacity-40 group-focus-within:opacity-100 group-focus-within:text-brand-500 transition-all">🔍</span>
+          <span className="absolute left-5 top-1/2 -translate-y-1/2 text-base lg:text-lg opacity-40 group-focus-within:opacity-100 group-focus-within:text-brand-500 transition-all">S</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
           <div className="relative flex-1 sm:flex-none">
-            <button 
+            <button
               onClick={() => { setShowFilterDrop(!showFilterDrop); setShowGroupDrop(false); }}
               className={[
                 "w-full sm:w-auto px-6 py-4 bg-white dark:bg-surface-dark-2 border rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3 transition-all",
                 (activeFilters.length > 0 || activeSeries.length > 0 || histDateFrom || histDateTo)
-                  ? "border-brand-500 text-brand-500 bg-brand-500/5 shadow-md" 
+                  ? "border-brand-500 text-brand-500 bg-brand-500/5 shadow-md"
                   : "border-border dark:border-border-dark text-content-subtle hover:text-content"
               ].join(" ")}
             >
-              <span>⚙️ Filtros</span>
+              <span>Filtros</span>
               <span className={`transition-transform duration-300 ${showFilterDrop ? 'rotate-180' : ''}`}>▼</span>
             </button>
-            
+
             {showFilterDrop && (
               <>
                 <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
@@ -137,7 +139,7 @@ export default function TransaccionesTab({
                         { id: 'pagado', label: 'Pagado', color: 'success' },
                         { id: 'anulado', label: 'Anulado', color: 'content-subtle' },
                       ].map(f => (
-                        <button 
+                        <button
                           key={f.id}
                           onClick={() => toggleFilter(f.id)}
                           className={[
@@ -158,13 +160,13 @@ export default function TransaccionesTab({
                       <div className="text-[8px] font-black uppercase tracking-widest text-content-subtle mb-3">Por Serie</div>
                       <div className="flex flex-col gap-1">
                         {allSeries.map(s => (
-                          <button 
+                          <button
                             key={s.id}
                             onClick={() => toggleSerie(s.id)}
                             className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-surface-2 dark:hover:bg-surface-dark-3 rounded-lg transition-colors border-none cursor-pointer"
                           >
                             <span className="text-[10px] font-bold uppercase tracking-wider text-content">{s.prefix} · {s.name}</span>
-                            {activeSeries.includes(s.id) && <span className="text-brand-500 text-xs">✓</span>}
+                             {activeSeries.includes(s.id) && <span className="text-brand-500"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></span>}
                           </button>
                         ))}
                       </div>
@@ -174,27 +176,28 @@ export default function TransaccionesTab({
                   <div className="p-4 space-y-3 bg-surface-2/30 dark:bg-surface-dark-3/30">
                     <div className="text-[8px] font-black uppercase tracking-widest text-content-subtle">Rango de Fecha</div>
                     <div className="flex flex-col gap-2">
-                       <div className="flex flex-col gap-1">
-                          <span className="text-[7px] font-bold uppercase text-content-subtle opacity-60 ml-1">Desde</span>
-                          <input type="date" value={histDateFrom} onChange={e => setHistDateFrom(e.target.value)}
-                            className="w-full bg-white dark:bg-surface-dark border border-border dark:border-border-dark py-1.5 px-2 rounded-lg text-[10px] font-bold outline-none focus:ring-1 focus:ring-brand-500/20" />
-                       </div>
-                       <div className="flex flex-col gap-1">
-                          <span className="text-[7px] font-bold uppercase text-content-subtle opacity-60 ml-1">Hasta</span>
-                          <input type="date" value={histDateTo} onChange={e => setHistDateTo(e.target.value)}
-                            className="w-full bg-white dark:bg-surface-dark border border-border dark:border-border-dark py-1.5 px-2 rounded-lg text-[10px] font-bold outline-none focus:ring-1 focus:ring-brand-500/20" />
-                       </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[7px] font-bold uppercase text-content-subtle opacity-60 ml-1">Desde</span>
+                        <input type="date" value={histDateFrom} onChange={e => setHistDateFrom(e.target.value)}
+                          className="w-full bg-white dark:bg-surface-dark border border-border dark:border-border-dark py-1.5 px-2 rounded-lg text-[10px] font-bold outline-none focus:ring-1 focus:ring-brand-500/20" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[7px] font-bold uppercase text-content-subtle opacity-60 ml-1">Hasta</span>
+                        <input type="date" value={histDateTo} onChange={e => setHistDateTo(e.target.value)}
+                          className="w-full bg-white dark:bg-surface-dark border border-border dark:border-border-dark py-1.5 px-2 rounded-lg text-[10px] font-bold outline-none focus:ring-1 focus:ring-brand-500/20" />
+                      </div>
                     </div>
                     {(histDateFrom || histDateTo) && (
-                      <button onClick={() => { setHistDateFrom(""); setHistDateTo(""); }}
-                        className="w-full py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest text-danger hover:bg-danger/5 transition-colors border border-danger/20 cursor-pointer">
-                        ✕ Limpiar Fechas
+                       <button onClick={() => { setHistDateFrom(""); setHistDateTo(""); }}
+                        className="w-full py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest text-danger hover:bg-danger/10 transition-all border border-danger/20 flex items-center justify-center gap-2">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        Limpiar Fechas
                       </button>
                     )}
                   </div>
 
                   <div className="p-2 bg-surface-3 dark:bg-surface-dark text-center">
-                    <button 
+                    <button
                       onClick={() => { setActiveFilters([]); setActiveSeries([]); setHistDateFrom(""); setHistDateTo(""); setSearchTerm(""); setShowFilterDrop(false); }}
                       className="w-full py-2 rounded-lg text-[8px] font-black uppercase tracking-widest text-danger hover:bg-danger/5 transition-colors border-none cursor-pointer"
                     >
@@ -208,16 +211,16 @@ export default function TransaccionesTab({
 
           {/* Agrupar por Dropdown */}
           <div className="relative flex-1 sm:flex-none">
-            <button 
+            <button
               onClick={() => { setShowGroupDrop(!showGroupDrop); setShowFilterDrop(false); }}
               className={[
                 "w-full sm:w-auto px-6 py-4 bg-white dark:bg-surface-dark-2 border rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3 transition-all",
-                groupBy 
-                  ? "border-info text-info bg-info/5 shadow-md" 
+                groupBy
+                  ? "border-info text-info bg-info/5 shadow-md"
                   : "border-border dark:border-border-dark text-content-subtle hover:text-content"
               ].join(" ")}
             >
-              <span>{groupBy ? `✓ Agrupado por ${groupBy}` : "📦 Agrupar por"}</span>
+              <span>{groupBy ? `✓ Agrupado por ${groupBy}` : "Agrupar por"}</span>
               <span className={`transition-transform duration-300 ${showGroupDrop ? 'rotate-180' : ''}`}>▼</span>
             </button>
             {showGroupDrop && (
@@ -225,11 +228,11 @@ export default function TransaccionesTab({
                 <div className="fixed inset-0 z-[60]" onClick={() => setShowGroupDrop(false)} />
                 <div className="absolute top-full right-0 mt-3 w-56 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl shadow-2xl z-[70] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                   {[
-                    { id: 'cliente', label: 'Cliente', icon: '👤' },
-                    { id: 'fecha', label: 'Fecha (Mes)', icon: '📅' },
-                    { id: 'serie', label: 'Serie/Correlativo', icon: '🎫' },
+                    { id: 'cliente', label: 'Cliente' },
+                    { id: 'fecha', label: 'Fecha (Mes)' },
+                    { id: 'serie', label: 'Serie/Correlativo' },
                   ].map(g => (
-                    <button 
+                    <button
                       key={g.id}
                       onClick={() => { setGroupBy(groupBy === g.id ? null : g.id); setShowGroupDrop(false); }}
                       className="w-full px-5 py-3.5 text-left flex items-center justify-between hover:bg-surface-2 dark:hover:bg-surface-dark-3 transition-colors border-none cursor-pointer"
@@ -249,11 +252,11 @@ export default function TransaccionesTab({
           <div className="h-8 w-px bg-border/40 dark:bg-border-dark/40 shrink-0 hidden sm:block mx-1" />
 
           <button onClick={handleExportCSV} className="w-full sm:w-auto px-4 py-3 bg-surface-2 dark:bg-surface-dark-3 border border-border dark:border-border-dark rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-surface-3 transition-all">
-            <span>📥 CSV</span>
+            <span>CSV</span>
           </button>
-          
+
           <button onClick={() => window.print()} className="w-full sm:w-auto px-4 py-3 bg-brand-500/10 text-brand-500 border border-brand-500/20 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-brand-500 hover:text-black transition-all">
-            <span>🖨️ Imprimir</span>
+            <span>Imprimir</span>
           </button>
         </div>
       </div>
@@ -276,11 +279,11 @@ export default function TransaccionesTab({
                   <span className="text-[10px] font-bold text-content-subtle">({group.items.length})</span>
                 </div>
               )}
-              
+
               <div className="space-y-4">
                 {group.items.map(sale => (
-                  <div 
-                    key={sale.id} 
+                  <div
+                    key={sale.id}
                     className="group bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl overflow-hidden hover:shadow-card-md transition-all duration-300"
                   >
                     <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -289,7 +292,7 @@ export default function TransaccionesTab({
                           <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest mb-1">Factura</span>
                           <span className="text-sm font-black text-content dark:text-content-dark">{sale.invoice_number || `#${sale.id}`}</span>
                         </div>
-                        
+
                         <div className="hidden sm:block h-8 w-px bg-border/40 dark:bg-border-dark/40 shrink-0" />
 
                         <div className="flex flex-wrap items-center gap-2">
@@ -304,10 +307,10 @@ export default function TransaccionesTab({
                           )}
 
                           {sale.journal_name && (
-                            <span 
+                            <span
                               className="px-3 py-1 rounded-full text-[9px] font-black border uppercase tracking-widest flex items-center gap-1.5"
-                              style={{ 
-                                backgroundColor: (sale.journal_color || "#6366f1") + "10", 
+                              style={{
+                                backgroundColor: (sale.journal_color || "#6366f1") + "10",
                                 color: sale.journal_color || "#6366f1",
                                 borderColor: (sale.journal_color || "#6366f1") + "30"
                               }}
@@ -319,7 +322,7 @@ export default function TransaccionesTab({
 
                           {sale.customer_name && (
                             <span className="flex items-center gap-1.5 text-[11px] font-bold text-info bg-info/5 px-2.5 py-1 rounded-lg truncate max-w-[150px] sm:max-w-none">
-                              👤 {sale.customer_name}
+                              {sale.customer_name}
                             </span>
                           )}
                         </div>
@@ -327,12 +330,12 @@ export default function TransaccionesTab({
 
                       <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto mt-2 md:mt-0 pt-4 md:pt-0 border-t md:border-none border-border/10">
                         <div className="flex flex-col items-end">
-                          <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest mb-1">{new Date(sale.created_at).toLocaleDateString()}</span>
+                          <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest mb-1">{fmtDateShort(sale.created_at)}</span>
                           <span className="text-lg font-black text-brand-400 tracking-tight">{fmtPrice(sale.total)}</span>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <button 
+                          <button
                             onClick={() => setSaleDetail(saleDetail?.id === sale.id ? null : sale)}
                             className={[
                               "px-4 md:px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all border shadow-sm",
@@ -343,33 +346,33 @@ export default function TransaccionesTab({
                           >
                             {saleDetail?.id === sale.id ? "Cerrar" : "Detalles"}
                           </button>
-                          
-                          <button 
+
+                          <button
                             onClick={() => setReceiptSale(sale)}
-                            className="p-3.5 rounded-2xl bg-brand-500/10 text-brand-400 border border-brand-500/20 hover:bg-brand-500 hover:text-black transition-all shadow-sm text-lg"
+                            className="w-12 h-12 rounded-2xl bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black transition-all shadow-sm flex items-center justify-center shrink-0"
                             title="Ver Recibo"
                           >
-                            🧾
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                           </button>
 
                           {sale.status !== 'anulado' && (
                             <button
                               onClick={() => setReturnSale(sale)}
-                              className="p-3.5 rounded-2xl bg-warning/10 text-warning border border-warning/20 hover:bg-warning hover:text-black transition-all shadow-sm text-lg"
-                              title="Registrar Devolución Parcial/Total"
-                            >
-                              ↩️
-                            </button>
+                              className="w-12 h-12 rounded-2xl bg-warning/10 text-warning border border-warning/20 hover:bg-warning hover:text-black transition-all shadow-sm flex items-center justify-center shrink-0"
+                            title="Registrar Devolución"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 15L12 19M12 19L8 15M12 19V9a5 5 0 00-10 0" /></svg>
+                          </button>
                           )}
 
                           {can("admin") && sale.status !== 'anulado' && (
-                            <button 
-                              onClick={() => cancelSale(sale.id)} 
-                              className="p-3.5 rounded-2xl bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all shadow-sm text-lg"
-                              title="Anular Transacción"
-                            >
-                              🗑️
-                            </button>
+                            <button
+                              onClick={() => setCancelConfirm(sale)}
+                            className="w-12 h-12 rounded-2xl bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all shadow-sm flex items-center justify-center shrink-0"
+                            title="Anular Transacción"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
                           )}
                         </div>
                       </div>
@@ -444,6 +447,19 @@ export default function TransaccionesTab({
           notify={notify}
         />
       )}
+
+      <ConfirmModal
+        isOpen={!!cancelConfirm}
+        title="¿Anular transacción?"
+        message={`¿Estás seguro de que deseas anular la factura ${cancelConfirm?.invoice_number || '#' + cancelConfirm?.id}? Se restaurará el stock original de los productos.`}
+        onConfirm={async () => {
+          await cancelSale(cancelConfirm.id);
+          setCancelConfirm(null);
+        }}
+        onCancel={() => setCancelConfirm(null)}
+        type="danger"
+        confirmText="Sí, anular venta"
+      />
     </div>
   );
 }

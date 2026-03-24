@@ -76,6 +76,8 @@ app.use("/api/warehouses",       require("./routes/warehouses"));       // auth 
 app.use("/api/banks",            require("./routes/banks"));            // auth+permit dentro
 app.use("/api/payments",         require("./routes/payments"));         // auth dentro
 app.use("/api/series",           require("./routes/series"));           // auth+permit dentro
+app.use("/api/reports",          require("./routes/reports"));          // auth dentro
+app.use("/api/cash-sessions",    require("./routes/cashSessions"));     // auth dentro
 
 // ── Health check ──────────────────────────────────────────────
 app.get("/health", async (req, res) => {

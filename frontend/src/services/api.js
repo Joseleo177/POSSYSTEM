@@ -7,6 +7,13 @@ function getToken() {
 let isRefreshing = false;
 let refreshPromise = null;
 
+function buildApiError(status, message, code) {
+  const err = new Error(message || "Error en la solicitud");
+  err.status = status;
+  err.code = code;
+  return err;
+}
+
 async function request(path, options = {}) {
   const isFormData = options.body instanceof FormData;
   let token = getToken();
@@ -59,8 +66,22 @@ async function request(path, options = {}) {
     }
   }
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Error en la solicitud");
+  let data = {};
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
+
+  if (!res.ok) {
+    if (res.status === 403) {
+      throw buildApiError(403, "No tienes permisos para esta acción", "FORBIDDEN");
+    }
+    if (res.status === 401) {
+      throw buildApiError(401, "Tu sesión expiró. Inicia sesión nuevamente", "UNAUTHORIZED");
+    }
+    throw buildApiError(res.status, data.message || "Error en la solicitud", data.code);
+  }
   return data;
 }
 
@@ -136,7 +157,7 @@ export const api = {
     getAll:  ()      => request("/purchases"),
     getOne:  (id)    => request(`/purchases/${id}`),
     create:  (body)  => request("/purchases",       { method: "POST",   body: JSON.stringify(body) }),
-    remove:  (id)    => request(`/purchases/${id}`, { method: "DELETE" }),
+    cancel:  (id)    => request(`/purchases/${id}`, { method: "DELETE" }),
   },
   settings: {
     getAll:     ()      => request("/settings"),
@@ -204,5 +225,25 @@ export const api = {
   // ── Dashboard ────────────────────────────────────────────────
   dashboard: {
     get: () => request("/dashboard"),
+  },
+
+  // ── Reportes ─────────────────────────────────────────────────
+  reports: {
+    sales:              (params = {}) => request("/reports/sales?"              + new URLSearchParams(params)),
+    products:           (params = {}) => request("/reports/products?"           + new URLSearchParams(params)),
+    receivables:        ()            => request("/reports/receivables"),
+    purchases:          (params = {}) => request("/reports/purchases?"          + new URLSearchParams(params)),
+    inventory:          (params = {}) => request("/reports/inventory?"          + new URLSearchParams(params)),
+    margins:            (params = {}) => request("/reports/margins?"            + new URLSearchParams(params)),
+    customersAnalysis:  (params = {}) => request("/reports/customers-analysis?" + new URLSearchParams(params)),
+    audit:              (params = {}) => request("/reports/audit?"              + new URLSearchParams(params)),
+  },
+
+  cashSessions: {
+    open:       (body)   => request("/cash-sessions/open",           { method: "POST", body: JSON.stringify(body) }),
+    current:    (params) => request("/cash-sessions/current?"        + new URLSearchParams(params)),
+    summary:    (id)     => request(`/cash-sessions/${id}/summary`),
+    close:      (id, body) => request(`/cash-sessions/${id}/close`,  { method: "POST", body: JSON.stringify(body) }),
+    history:    (params) => request("/cash-sessions/history?"        + new URLSearchParams(params)),
   },
 };

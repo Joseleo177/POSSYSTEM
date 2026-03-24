@@ -38,7 +38,7 @@ Object.keys(db).forEach(modelName => {
 });
 
 // Centralized associations
-const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem } = db;
+const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal } = db;
 
 if(Employee && Role) {
   Employee.belongsTo(Role, { foreignKey: 'role_id' });
@@ -139,6 +139,14 @@ if (Sale && Serie && SerieRange) {
 }
 
 const { Setting } = db;
+
+if (CashSession && Employee && Warehouse && CashSessionJournal && PaymentJournal) {
+  CashSession.belongsTo(Employee,  { as: 'employee',  foreignKey: 'employee_id' });
+  CashSession.belongsTo(Warehouse, { as: 'warehouse', foreignKey: 'warehouse_id' });
+  CashSession.hasMany(CashSessionJournal, { as: 'journals', foreignKey: 'session_id' });
+  CashSessionJournal.belongsTo(CashSession,   { foreignKey: 'session_id' });
+  CashSessionJournal.belongsTo(PaymentJournal, { as: 'journal', foreignKey: 'journal_id' });
+}
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;

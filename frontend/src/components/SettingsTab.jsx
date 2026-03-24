@@ -2,28 +2,37 @@ import { useState, useEffect } from "react";
 import { api } from "../services/api";
 
 const SECTIONS = [
-  ["general",    "⚙ General"],
-  ["currencies", "💱 Monedas"],
+  ["empresa", "Empresa"],
+  ["factura", "Factura"],
+  ["currencies", "Monedas"],
 ];
 
-const FIELDS = [
-  ["store_name",     "Nombre de la tienda"],
-  ["store_address",  "Dirección"],
-  ["store_phone",    "Teléfono"],
-  ["store_email",    "Correo electrónico"],
-  ["tax_name",       "Nombre del impuesto (ej. IVA)"],
-  ["tax_rate",       "Tasa de impuesto (%)"],
-  ["receipt_footer", "Pie de recibo"],
+const FIELDS_EMPRESA = [
+  ["store_name", "Nombre / Razón Social", "text", "Ej: Distribuidora El Sol C.A."],
+  ["store_rif", "RIF", "text", "Ej: J-12345678-9"],
+  ["store_slogan", "Slogan (opcional)", "text", "Ej: Calidad garantizada"],
+  ["store_address", "Dirección fiscal", "text", "Av. Principal, Local 1"],
+  ["store_city", "Ciudad / Estado", "text", "Caracas, Miranda"],
+  ["store_phone", "Teléfono", "text", "0212-555-0000"],
+  ["store_phone2", "Teléfono 2 (opcional)", "text", ""],
+  ["store_email", "Correo electrónico", "email", ""],
+  ["store_website", "Sitio web (opcional)", "text", "www.mitienda.com"],
+];
+
+const FIELDS_FACTURA = [
+  ["tax_name", "Nombre del impuesto", "text", "Ej: IVA"],
+  ["tax_rate", "Tasa de impuesto (%)", "number", "16"],
+  ["receipt_footer", "Mensaje pie de factura", "text", "¡Gracias por su preferencia!"],
 ];
 
 export default function SettingsTab({ notify }) {
-  const [settings, setSettings]       = useState({});
-  const [currencies, setCurrencies]   = useState([]);
-  const [loading, setLoading]         = useState(false);
-  const [refreshing, setRefreshing]   = useState(false);
+  const [settings, setSettings] = useState({});
+  const [currencies, setCurrencies] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
-  const [section, setSection]         = useState("general");
-  const [newCurrency, setNewCurrency] = useState({ code:"", name:"", symbol:"", exchange_rate:"" });
+  const [section, setSection] = useState("general");
+  const [newCurrency, setNewCurrency] = useState({ code: "", name: "", symbol: "", exchange_rate: "" });
 
   const load = async () => {
     try {
@@ -44,7 +53,7 @@ export default function SettingsTab({ notify }) {
     try {
       const { logo_url, logo_filename, ...rest } = settings;
       await api.settings.update(rest);
-      notify("Configuración guardada ✓");
+      notify("Configuración guardada correctamente");
     } catch (e) { notify(e.message, "err"); }
     finally { setLoading(false); }
   };
@@ -55,7 +64,7 @@ export default function SettingsTab({ notify }) {
     try {
       const res = await api.settings.uploadLogo(file);
       setSettings(p => ({ ...p, logo_url: res.logo_url }));
-      notify("Logo actualizado ✓");
+      notify("Logo actualizado correctamente");
     } catch (e) { notify(e.message, "err"); }
   };
 
@@ -63,7 +72,7 @@ export default function SettingsTab({ notify }) {
   const updateRate = async (id, rate) => {
     try {
       await api.currencies.updateRate(id, { exchange_rate: parseFloat(rate) });
-      notify("Tipo de cambio actualizado ✓");
+      notify("Tipo de cambio actualizado correctamente");
       await load();
     } catch (e) { notify(e.message, "err"); }
   };
@@ -73,7 +82,7 @@ export default function SettingsTab({ notify }) {
     try {
       const res = await api.currencies.refreshRates();
       const names = res.updated.map(u => `${u.code}: ${parseFloat(u.rate).toFixed(4)}`).join(" | ");
-      notify(res.updated.length ? `Tasas actualizadas ✓  ${names}` : "Sin cambios nuevos");
+      notify(res.updated.length ? `Tasas actualizadas correctamente: ${names}` : "Las tasas ya están al día");
       setLastRefresh(new Date());
       setCurrencies(res.data);
     } catch (e) { notify(e.message || "Error al consultar la API de tasas", "err"); }
@@ -82,11 +91,10 @@ export default function SettingsTab({ notify }) {
 
   const addCurrency = async () => {
     const { code, name, symbol, exchange_rate } = newCurrency;
-    if (!code || !name || !symbol || !exchange_rate) return notify("Completa todos los campos", "err");
     try {
       await api.currencies.create({ ...newCurrency, exchange_rate: parseFloat(exchange_rate) });
-      notify("Moneda agregada ✓");
-      setNewCurrency({ code:"", name:"", symbol:"", exchange_rate:"" });
+      notify("Moneda agregada correctamente");
+      setNewCurrency({ code: "", name: "", symbol: "", exchange_rate: "" });
       await load();
     } catch (e) { notify(e.message, "err"); }
   };
@@ -95,73 +103,125 @@ export default function SettingsTab({ notify }) {
 
   return (
     <div>
-      {/* Section tabs */}
-      <div className="flex flex-wrap gap-2 mb-5">
+      {/* Sub-navegación Premium */}
+      <div className="flex items-center gap-1 mb-10 bg-surface-2 dark:bg-white/5 p-1.5 rounded-[22px] w-fit border border-border/40 dark:border-white/5 shadow-inner">
         {SECTIONS.map(([key, label]) => (
           <button
             key={key}
             onClick={() => setSection(key)}
-            className={
+            className={[
+              "px-6 py-2.5 text-[11px] tracking-[2px] font-black uppercase rounded-[18px] transition-all duration-300",
               section === key
-                ? "btn-sm bg-warning text-surface-dark border border-warning font-bold"
-                : "btn-sm bg-transparent text-content-muted dark:text-content-dark-muted border border-border dark:border-border-dark hover:border-warning/60 hover:text-warning"
-            }
+                ? "bg-brand-500 text-black shadow-lg shadow-brand-500/20"
+                : "text-content-subtle hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/10",
+            ].join(" ")}
           >
             {label}
           </button>
         ))}
       </div>
 
-      {/* ── General ── */}
-      {section === "general" && (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-5">
-          {/* Store data card */}
-          <div className="card-md p-4">
-            <div className="text-xs font-bold text-warning uppercase tracking-widest mb-4">
-              DATOS DE LA TIENDA
+      {/* ── Empresa ── */}
+      {section === "empresa" && (
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5">
+          <div className="card-md p-5 space-y-5">
+            {/* Identidad */}
+            <div>
+              <div className="text-[10px] font-black text-warning uppercase tracking-widest mb-3">Identidad Legal</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {FIELDS_EMPRESA.slice(0, 3).map(([key, label, type, placeholder]) => (
+                  <div key={key} className={key === "store_name" ? "md:col-span-2" : ""}>
+                    <label className="label">{label}</label>
+                    <input type={type} placeholder={placeholder}
+                      value={settings[key] || ""}
+                      onChange={e => setSettings(p => ({ ...p, [key]: e.target.value }))}
+                      className="input" />
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-              {FIELDS.map(([key, label]) => (
-                <div key={key}>
-                  <label className="label">{label}</label>
-                  <input
-                    value={settings[key] || ""}
-                    onChange={e => setSettings(p => ({ ...p, [key]: e.target.value }))}
-                    className="input"
-                  />
-                </div>
-              ))}
+
+            {/* Contacto */}
+            <div>
+              <div className="text-[10px] font-black text-info uppercase tracking-widest mb-3">Contacto y Ubicación</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {FIELDS_EMPRESA.slice(3).map(([key, label, type, placeholder]) => (
+                  <div key={key} className={key === "store_address" ? "md:col-span-2" : ""}>
+                    <label className="label">{label}</label>
+                    <input type={type} placeholder={placeholder}
+                      value={settings[key] || ""}
+                      onChange={e => setSettings(p => ({ ...p, [key]: e.target.value }))}
+                      className="input" />
+                  </div>
+                ))}
+              </div>
             </div>
-            <button
-              onClick={saveSettings}
-              disabled={loading}
-              className={`btn-sm btn-primary ${loading ? "opacity-60 cursor-not-allowed" : ""}`}
-            >
-              {loading ? "Guardando..." : "Guardar configuración"}
+
+            <button onClick={saveSettings} disabled={loading}
+              className={`btn-sm btn-primary ${loading ? "opacity-60 cursor-not-allowed" : ""}`}>
+              {loading ? "Guardando..." : " Guardar datos de empresa"}
             </button>
           </div>
 
-          {/* Logo card */}
-          <div className="card-md p-4">
-            <div className="text-xs font-bold text-warning uppercase tracking-widest mb-4">
-              LOGO
-            </div>
-            <label className="cursor-pointer block">
-              <div className="w-full h-40 bg-surface-2 dark:bg-surface-dark border-2 border-dashed border-border dark:border-border-dark rounded-lg flex items-center justify-center overflow-hidden mb-2.5 transition-colors duration-150 hover:border-brand-400 dark:hover:border-brand-400">
-                {settings.logo_url
-                  ? <img src={settings.logo_url} alt="logo" className="max-w-full max-h-full object-contain" />
-                  : <div className="text-center text-content-muted dark:text-content-dark-muted">
-                      <div className="text-3xl">🏪</div>
-                      <div className="text-xs mt-1.5">Subir logo</div>
+          {/* Logo + Preview */}
+          <div className="space-y-4">
+            <div className="card-md p-4">
+              <div className="text-[10px] font-black text-warning uppercase tracking-widest mb-3">Logo</div>
+              <label className="cursor-pointer block">
+                <div className="w-full h-36 bg-surface-2 dark:bg-surface-dark border-2 border-dashed border-border dark:border-border-dark rounded-xl flex items-center justify-center overflow-hidden mb-2 hover:border-brand-400 transition-colors">
+                  {settings.logo_url
+                    ? <img src={settings.logo_url} alt="logo" className="max-w-full max-h-full object-contain p-2" />
+                    : <div className="text-center text-content-muted dark:text-content-dark-muted">
+                      <div className="text-3xl"></div>
+                      <div className="text-xs mt-1">Subir logo</div>
                     </div>
-                }
+                  }
+                </div>
+                <input type="file" accept="image/*" onChange={uploadLogo} className="hidden" />
+              </label>
+              <div className="text-[10px] text-content-muted dark:text-content-dark-muted text-center">JPG, PNG o WebP · Máx. 5MB</div>
+            </div>
+
+            {/* Preview encabezado factura */}
+            <div className="card-md p-4">
+              <div className="text-[10px] font-black text-content-muted dark:text-content-dark-muted uppercase tracking-widest mb-3">Preview encabezado</div>
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-xl p-4 text-center border border-border/30 dark:border-white/10">
+                {settings.logo_url && (
+                  <img src={settings.logo_url} alt="logo" className="h-10 mx-auto mb-2 object-contain" />
+                )}
+                <div className="text-sm font-black text-gray-900 dark:text-white leading-tight">{settings.store_name || "NOMBRE DE LA EMPRESA"}</div>
+                {settings.store_rif && <div className="text-[10px] text-gray-500 mt-0.5">RIF: {settings.store_rif}</div>}
+                {settings.store_slogan && <div className="text-[10px] italic text-gray-400 mt-0.5">{settings.store_slogan}</div>}
+                {settings.store_address && <div className="text-[10px] text-gray-500 mt-1">{settings.store_address}</div>}
+                {(settings.store_city || settings.store_phone) && (
+                  <div className="text-[10px] text-gray-500">{[settings.store_city, settings.store_phone].filter(Boolean).join(" · ")}</div>
+                )}
+                {settings.store_email && <div className="text-[10px] text-gray-400">{settings.store_email}</div>}
               </div>
-              <input type="file" accept="image/*" onChange={uploadLogo} className="hidden" />
-            </label>
-            <div className="text-2xs text-content-muted dark:text-content-dark-muted text-center">
-              JPG, PNG o WebP · Máx. 5MB
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Factura ── */}
+      {section === "factura" && (
+        <div className="card-md p-5 max-w-xl">
+          <div className="text-[10px] font-black text-warning uppercase tracking-widest mb-4">Configuración de Factura</div>
+          <div className="space-y-3 mb-5">
+            {FIELDS_FACTURA.map(([key, label, type, placeholder]) => (
+              <div key={key}>
+                <label className="label">{label}</label>
+                <input type={type} placeholder={placeholder}
+                  value={settings[key] || ""}
+                  onChange={e => setSettings(p => ({ ...p, [key]: e.target.value }))}
+                  className="input" />
+              </div>
+            ))}
+          </div>
+          <button onClick={saveSettings} disabled={loading}
+            className={`btn-sm btn-primary ${loading ? "opacity-60 cursor-not-allowed" : ""}`}>
+            {loading ? "Guardando..." : "Guardar configuración"}
+          </button>
         </div>
       )}
 
@@ -171,7 +231,9 @@ export default function SettingsTab({ notify }) {
           {/* Base currency banner */}
           {base && (
             <div className="flex items-center gap-3 bg-success/10 border border-success/40 rounded-lg px-4 py-3 mb-5">
-              <span className="text-lg">🏠</span>
+              <div className="w-10 h-10 rounded-xl bg-success/20 flex items-center justify-center shrink-0">
+                <svg className="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+              </div>
               <div>
                 <div className="font-bold text-success text-sm">
                   Moneda base: {base.symbol} {base.code} — {base.name}
@@ -198,11 +260,10 @@ export default function SettingsTab({ notify }) {
                 <button
                   onClick={autoRefreshRates}
                   disabled={refreshing}
-                  className={`btn-sm border border-success/60 font-bold ${
-                    refreshing
+                  className={`btn-sm border border-success/60 font-bold ${refreshing
                       ? "bg-success/5 text-content-muted dark:text-content-dark-muted cursor-not-allowed opacity-60"
                       : "bg-success/10 text-success hover:bg-success/20"
-                  }`}
+                    }`}
                 >
                   {refreshing ? "⟳ Consultando..." : "⟳ Auto-actualizar tasas"}
                 </button>
@@ -237,11 +298,10 @@ export default function SettingsTab({ notify }) {
                       {!c.is_base && (
                         <button
                           onClick={() => api.currencies.toggle(c.id).then(load).catch(e => notify(e.message, "err"))}
-                          className={`btn-sm border font-medium ${
-                            c.active
+                          className={`btn-sm border font-medium ${c.active
                               ? "border-danger/60 text-danger bg-transparent hover:bg-danger/10"
                               : "border-success/60 text-success bg-transparent hover:bg-success/10"
-                          }`}
+                            }`}
                         >
                           {c.active ? "Desactivar" : "Activar"}
                         </button>
@@ -261,8 +321,8 @@ export default function SettingsTab({ notify }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(4,1fr)_auto] gap-2.5 items-end">
               {[
                 ["Código (ej. EUR)", "code"],
-                ["Nombre",          "name"],
-                ["Símbolo",         "symbol"],
+                ["Nombre", "name"],
+                ["Símbolo", "symbol"],
                 ["Tipo de cambio vs USD", "exchange_rate"],
               ].map(([label, key]) => (
                 <div key={key}>
@@ -289,7 +349,7 @@ export default function SettingsTab({ notify }) {
 // ── Editor inline de tipo de cambio ──────────────────────────
 function RateEditor({ currency, onSave }) {
   const [editing, setEditing] = useState(false);
-  const [val, setVal]         = useState(currency.exchange_rate);
+  const [val, setVal] = useState(currency.exchange_rate);
 
   if (!editing) return (
     <span
@@ -311,15 +371,15 @@ function RateEditor({ currency, onSave }) {
       />
       <button
         onClick={() => { onSave(currency.id, val); setEditing(false); }}
-        className="btn-sm btn-primary px-2.5"
+        className="p-2.5 rounded-xl bg-success/10 text-success border border-success/20 hover:bg-success hover:text-black transition-all"
       >
-        ✓
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
       </button>
       <button
         onClick={() => setEditing(false)}
-        className="btn-sm btn-secondary px-2.5"
+        className="p-2.5 rounded-xl bg-surface-3 dark:bg-white/10 text-content hover:bg-danger/10 hover:text-danger transition-all"
       >
-        ✕
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
       </button>
     </div>
   );

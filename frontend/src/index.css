@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -10,93 +10,113 @@
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
   }
 
   body {
     @apply bg-surface-2 text-content dark:bg-surface-dark dark:text-content-dark;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: 'Outfit', 'Inter', system-ui, sans-serif;
   }
 
   * {
     @apply border-border dark:border-border-dark;
   }
 
-  /* Scrollbar */
-  ::-webkit-scrollbar        { width: 6px; height: 6px; }
+  /* Scrollbar - Modern Slim */
+  ::-webkit-scrollbar        { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track  { @apply bg-transparent; }
-  ::-webkit-scrollbar-thumb  { @apply bg-border dark:bg-border-dark rounded-full; }
+  ::-webkit-scrollbar-thumb  { @apply bg-border/50 dark:bg-border-dark/50 rounded-full; }
   ::-webkit-scrollbar-thumb:hover { @apply bg-content-subtle dark:bg-content-dark-muted; }
 }
 
 @layer components {
-  /* ── Botones ── */
+  /* ── Botones Premium ── */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 font-medium rounded-md
-           transition-all duration-150 cursor-pointer select-none
-           focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-1;
+    @apply inline-flex items-center justify-center gap-2 font-semibold rounded-lg
+           transition-all duration-300 cursor-pointer select-none
+           active:scale-95 disabled:opacity-50 disabled:pointer-events-none
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2;
   }
-  .btn-sm  { @apply btn px-3 py-1.5 text-sm; }
-  .btn-md  { @apply btn px-4 py-2 text-base; }
-  .btn-lg  { @apply btn px-5 py-2.5 text-lg; }
+  .btn-sm  { @apply btn px-3 py-1.5 text-xs; }
+  .btn-md  { @apply btn px-5 py-2.5 text-sm; }
+  .btn-lg  { @apply btn px-6 py-3 text-base; }
 
   .btn-primary {
-    @apply bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700
-           dark:bg-brand-500 dark:hover:bg-brand-400;
+    @apply bg-brand-500 text-white shadow-lg shadow-brand-500/20 
+           hover:bg-brand-600 hover:shadow-brand-600/30
+           dark:shadow-brand-500/10 dark:hover:shadow-brand-500/20;
   }
   .btn-secondary {
-    @apply bg-surface-3 text-content border border-border hover:bg-border
-           dark:bg-surface-dark-3 dark:text-content-dark dark:border-border-dark dark:hover:bg-surface-dark-2;
+    @apply bg-white text-content border border-border shadow-sm 
+           hover:bg-surface-2 hover:border-content-subtle/30
+           dark:bg-surface-dark-2 dark:text-content-dark dark:border-border-dark dark:hover:bg-surface-dark-3;
   }
   .btn-danger {
-    @apply bg-danger text-white hover:bg-red-600 active:bg-red-700;
+    @apply bg-danger text-white shadow-lg shadow-danger/20 hover:bg-danger-dark hover:shadow-danger/30;
   }
   .btn-ghost {
-    @apply bg-transparent text-content-muted hover:bg-surface-3 hover:text-content
-           dark:hover:bg-surface-dark-3 dark:text-content-dark-muted dark:hover:text-content-dark;
+    @apply bg-transparent text-content-muted hover:bg-surface-3/50 hover:text-content
+           dark:hover:bg-surface-dark-3/50 dark:text-content-dark-muted dark:hover:text-content-dark;
   }
   .btn-success {
-    @apply bg-success text-white hover:bg-emerald-600 active:bg-emerald-700;
+    @apply bg-success text-white shadow-lg shadow-success/20 hover:bg-success-dark hover:shadow-success/30;
   }
 
-  /* ── Inputs ── */
+  /* ── Inputs Refinados ── */
   .input {
-    @apply w-full px-3 py-2 text-base rounded-md
-           bg-white border border-border text-content placeholder-content-subtle
-           transition-colors duration-150
-           focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400
-           disabled:opacity-50 disabled:cursor-not-allowed
+    @apply w-full px-4 py-2.5 text-sm rounded-xl
+           bg-white border border-border text-content placeholder-content-subtle/60
+           transition-all duration-200
+           focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10
+           disabled:bg-surface-2 disabled:cursor-not-allowed
            dark:bg-surface-dark-2 dark:border-border-dark dark:text-content-dark
-           dark:placeholder-content-dark-muted dark:focus:border-brand-400;
+           dark:placeholder-content-dark-muted/40 dark:focus:border-brand-500;
   }
-  .input-sm { @apply input text-sm px-2.5 py-1.5; }
+  .input-sm { @apply input text-xs px-3 py-2; }
 
-  /* ── Cards ── */
+  /* ── Cards Premium ── */
   .card {
-    @apply bg-white rounded-lg border border-border shadow-card p-4
-           dark:bg-surface-dark-2 dark:border-border-dark dark:shadow-card-dark;
+    @apply bg-white rounded-2xl border border-border/60 shadow-card overflow-hidden
+           dark:bg-surface-dark-2 dark:border-border-dark/60 dark:shadow-card-dark;
   }
-  .card-md { @apply card shadow-card-md dark:shadow-card-dark-md; }
+  .card-premium {
+    @apply card shadow-premium border-white/40 dark:shadow-premium-dark dark:border-white/5;
+  }
 
-  /* ── Badges de estado ── */
-  .badge { @apply inline-flex items-center px-2 py-0.5 rounded text-2xs font-semibold uppercase tracking-wide; }
-  .badge-success { @apply badge bg-success/15 text-emerald-700 dark:bg-success/20 dark:text-emerald-400; }
-  .badge-warning { @apply badge bg-warning/15 text-amber-700 dark:bg-warning/20 dark:text-amber-400; }
-  .badge-danger  { @apply badge bg-danger/15 text-red-700 dark:bg-danger/20 dark:text-red-400; }
-  .badge-info    { @apply badge bg-info/15 text-blue-700 dark:bg-info/20 dark:text-blue-400; }
-  .badge-neutral { @apply badge bg-surface-3 text-content-muted dark:bg-surface-dark-3 dark:text-content-dark-muted; }
+  /* ── Badges Modernos ── */
+  .badge { @apply inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border; }
+  .badge-success { @apply badge bg-success/10 text-success border-success/20; }
+  .badge-warning { @apply badge bg-warning/10 text-warning border-warning/20; }
+  .badge-danger  { @apply badge badge-info; } /* Fallback or fix */
+  .badge-danger  { @apply badge bg-danger/10 text-danger border-danger/20; }
+  .badge-info    { @apply badge bg-info/10 text-info border-info/20; }
+  .badge-neutral { @apply badge bg-surface-3 text-content-muted border-border; }
 
+  /* ── Tablas de Grado Comercial ── */
+  .table-pos { @apply w-full text-sm; }
+  .table-pos thead th { 
+    @apply text-left text-[10px] font-bold text-content-subtle uppercase tracking-widest py-4 px-4 
+           bg-surface-2/50 dark:bg-surface-dark-3/50 border-b border-border dark:border-border-dark; 
+  }
+  .table-pos tbody td { 
+    @apply py-4 px-4 border-b border-border/40 dark:border-border-dark/40 
+           text-content dark:text-content-dark transition-colors; 
+  }
+  .table-pos tbody tr:hover td { @apply bg-surface-2/30 dark:bg-surface-dark-3/30; }
   /* ── Labels de formulario ── */
   .label { @apply block text-xs font-medium text-content-muted dark:text-content-dark-muted mb-1 uppercase tracking-wide; }
 
   /* ── Divisor ── */
   .divider { @apply border-t border-border dark:border-border-dark my-4; }
 
-  /* ── Tabla ── */
-  .table-pos { @apply w-full text-sm border-collapse; }
-  .table-pos th { @apply text-left text-2xs font-semibold text-content-muted dark:text-content-dark-muted uppercase tracking-wide py-2 px-3 border-b border-border dark:border-border-dark; }
-  .table-pos td { @apply py-2.5 px-3 border-b border-border/60 dark:border-border-dark/60 text-content dark:text-content-dark; }
-  .table-pos tr:last-child td { @apply border-b-0; }
-  .table-pos tr:hover td { @apply bg-surface-2 dark:bg-surface-dark-3; }
+  /* ── Overrides Globales de Contraste ── */
+  .text-content { @apply dark:text-content-dark; }
+  .text-content-muted { @apply dark:text-content-dark-muted; }
+  .text-content-subtle { @apply dark:text-content-dark-muted; }
 }
 
 /* ── PRINT MEDIA QUERY ── */

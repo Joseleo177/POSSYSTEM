@@ -1,7 +1,8 @@
 import Modal from "./Modal";
 import { useApp } from "../context/AppContext";
+import { fmtMoney, fmtDate } from "../helpers";
 
-const fmt = (n, sym = "$") => `${sym}${Number(n || 0).toFixed(2)}`;
+const fmt = fmtMoney;
 
 // Normaliza el objeto sale ya sea de ContabilidadPage (getAll) o de CobroPage (checkout)
 function normalizeSale(sale) {
@@ -30,7 +31,8 @@ function normalizeSale(sale) {
 
 // displayCurrency: la moneda no-base (VES). Todos los montos del recibo se convierten a ella.
 // sale.total y item.price están siempre en USD base.
-function printReceipt(sale, storeName, displayCurrency) {
+function printReceipt(sale, companyInfo, displayCurrency) {
+  const storeName = companyInfo?.name || "MI TIENDA POS";
   const s    = normalizeSale(sale);
   // Pagado: usar tasa del último pago (cuando se cerró la deuda)
   // Pendiente/Parcial: usar tasa histórica de la venta
@@ -41,7 +43,7 @@ function printReceipt(sale, storeName, displayCurrency) {
   const sym  = displayCurrency?.symbol || "$";
   const code = displayCurrency?.code   || "VES";
   const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
-  const dateStr = new Date(s.created_at).toLocaleString("es-VE");
+  const dateStr = fmtDate(s.created_at);
 
   const itemsRows = s.items.map(i => `
     <tr>
@@ -82,7 +84,14 @@ function printReceipt(sale, storeName, displayCurrency) {
   </style>
 </head>
 <body>
+  ${companyInfo?.logo_url ? `<div style="text-align:center;margin-bottom:8px"><img src="${companyInfo.logo_url}" style="max-height:60px;max-width:200px;object-fit:contain" /></div>` : ""}
   <div class="store-name">${storeName}</div>
+  ${companyInfo?.rif     ? `<div style="text-align:center;font-size:11px;margin-bottom:2px">RIF: ${companyInfo.rif}</div>` : ""}
+  ${companyInfo?.slogan  ? `<div style="text-align:center;font-size:10px;font-style:italic;color:#555;margin-bottom:4px">${companyInfo.slogan}</div>` : ""}
+  ${companyInfo?.address ? `<div style="text-align:center;font-size:10px;color:#555">${companyInfo.address}</div>` : ""}
+  ${companyInfo?.city    ? `<div style="text-align:center;font-size:10px;color:#555">${companyInfo.city}</div>` : ""}
+  ${(companyInfo?.phone || companyInfo?.phone2) ? `<div style="text-align:center;font-size:10px;color:#555">${[companyInfo.phone, companyInfo.phone2].filter(Boolean).join(" / ")}</div>` : ""}
+  ${companyInfo?.email   ? `<div style="text-align:center;font-size:10px;color:#555;margin-bottom:2px">${companyInfo.email}</div>` : ""}
   <div class="receipt-title">COMPROBANTE DE VENTA</div>
 
   <div class="meta">
@@ -129,7 +138,7 @@ function printReceipt(sale, storeName, displayCurrency) {
     <div class="row"><span>CAMBIO</span><span>${fmtP(s.change)}</span></div>
   </div>
 
-  <div class="footer">¡Gracias por su compra!</div>
+  <div class="footer">${companyInfo?.footer || "¡Gracias por su compra!"}</div>
 </body>
 </html>`;
 
@@ -141,7 +150,7 @@ function printReceipt(sale, storeName, displayCurrency) {
 }
 
 export default function ReceiptModal({ open, onClose, sale }) {
-  const { storeName, baseCurrency, activeCurrencies } = useApp();
+  const { storeName, companyInfo, baseCurrency, activeCurrencies } = useApp();
   if (!open || !sale) return null;
 
   const s = normalizeSale(sale);
@@ -159,15 +168,27 @@ export default function ReceiptModal({ open, onClose, sale }) {
 
   // Todos los montos vienen en USD base → multiplicar por tasa de display
   const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
-  const dateStr = new Date(s.created_at).toLocaleString("es-VE");
+  const dateStr = fmtDate(s.created_at);
   const invoiceLabel = s.invoice_number || `#${s.id}`;
 
   return (
     <Modal open={open} onClose={onClose} title={`FACTURA ${invoiceLabel}`} width={500}>
       {/* Encabezado empresa */}
-      <div className="text-center mb-4">
-        <div className="text-base font-semibold text-content dark:text-content-dark tracking-widest">{storeName}</div>
-        <div className="text-xs text-content-muted dark:text-content-dark-muted tracking-[0.2em] mt-0.5">COMPROBANTE DE VENTA</div>
+      <div className="text-center mb-4 pb-4 border-b border-border/20 dark:border-white/10">
+        {companyInfo?.logo_url && (
+          <img src={companyInfo.logo_url} alt="logo" className="h-12 mx-auto mb-2 object-contain" />
+        )}
+        <div className="text-base font-black text-content dark:text-content-dark tracking-wide">{storeName}</div>
+        {companyInfo?.rif    && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">RIF: {companyInfo.rif}</div>}
+        {companyInfo?.slogan && <div className="text-[10px] italic text-content-subtle mt-0.5">{companyInfo.slogan}</div>}
+        {companyInfo?.address && <div className="text-[10px] text-content-muted dark:text-content-dark-muted mt-1">{companyInfo.address}</div>}
+        {(companyInfo?.city || companyInfo?.phone) && (
+          <div className="text-[10px] text-content-muted dark:text-content-dark-muted">
+            {[companyInfo.city, companyInfo.phone, companyInfo.phone2].filter(Boolean).join(" · ")}
+          </div>
+        )}
+        {companyInfo?.email && <div className="text-[10px] text-content-subtle">{companyInfo.email}</div>}
+        <div className="text-[10px] font-black text-content-subtle tracking-[0.2em] mt-2 uppercase">Comprobante de Venta</div>
       </div>
 
       {/* Metadata */}
@@ -279,7 +300,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
           CERRAR
         </button>
         <button
-          onClick={() => printReceipt(sale, storeName, displayCurrency)}
+          onClick={() => printReceipt(sale, companyInfo, displayCurrency)}
           className="btn-md btn-primary w-full"
           style={{ flex: 2 }}
         >

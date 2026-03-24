@@ -12,10 +12,10 @@ const getAllBanks = async (req, res) => {
       order: [['sort_order', 'ASC'], ['name', 'ASC']],
       raw: true
     });
-    
+
     // Convert count to int to match pg behavior
     banks.forEach(b => b.journals_count = parseInt(b.journals_count || 0));
-    
+
     res.json({ ok: true, data: banks });
   } catch (err) {
     console.error(err);
@@ -85,7 +85,7 @@ const getAllMethods = async (req, res) => {
       order: [['sort_order', 'ASC'], ['name', 'ASC']],
       raw: true
     });
-    
+
     methods.forEach(m => m.sales_count = parseInt(m.sales_count || 0));
     res.json({ ok: true, data: methods });
   } catch (err) {
@@ -97,12 +97,12 @@ const getAllMethods = async (req, res) => {
 // POST /api/payment-methods
 const createMethod = async (req, res) => {
   try {
-    const { name, code, icon = "💳", color = "#555555", sort_order = 0 } = req.body;
+    const { name, code, color = "#555555", sort_order = 0 } = req.body;
     if (!name?.trim()) return res.status(400).json({ ok: false, message: "El nombre es requerido" });
     if (!code?.trim()) return res.status(400).json({ ok: false, message: "El código es requerido" });
 
     const normalizedCode = code.trim().toLowerCase().replace(/\s+/g, "_");
-    const method = await PaymentMethod.create({ name: name.trim(), code: normalizedCode, icon, color, sort_order });
+    const method = await PaymentMethod.create({ name: name.trim(), code: normalizedCode, color, sort_order });
     res.status(201).json({ ok: true, data: method });
   } catch (err) {
     if (err.name === 'SequelizeUniqueConstraintError') return res.status(400).json({ ok: false, message: "Ya existe un método con ese nombre o código" });
@@ -114,13 +114,13 @@ const createMethod = async (req, res) => {
 // PUT /api/payment-methods/:id
 const updateMethod = async (req, res) => {
   try {
-    const { name, icon, color, active, sort_order } = req.body;
+    const { name, color, active, sort_order } = req.body;
     if (!name?.trim()) return res.status(400).json({ ok: false, message: "El nombre es requerido" });
 
     const method = await PaymentMethod.findByPk(req.params.id);
     if (!method) return res.status(404).json({ ok: false, message: "Método de pago no encontrado" });
 
-    await method.update({ name: name.trim(), icon: icon || "💳", color: color || "#555555", active: active ?? true, sort_order: sort_order ?? 0 });
+    await method.update({ name: name.trim(), color: color || "#555555", active: active ?? true, sort_order: sort_order ?? 0 });
     res.json({ ok: true, data: method });
   } catch (err) {
     if (err.name === 'SequelizeUniqueConstraintError') return res.status(400).json({ ok: false, message: "Ya existe un método con ese nombre" });

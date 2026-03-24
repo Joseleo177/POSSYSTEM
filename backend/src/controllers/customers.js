@@ -141,6 +141,7 @@ const create = async (req, res) => {
   try {
     const { type, name, phone, email, address, rif, tax_name, notes } = req.body;
     if (!name) return res.status(400).json({ ok: false, message: "El nombre es requerido" });
+    if (!rif)  return res.status(400).json({ ok: false, message: "La cédula / RIF es requerida" });
     const recordType = ["cliente", "proveedor"].includes(type) ? type : "cliente";
 
     const customer = await Customer.create({
@@ -170,6 +171,7 @@ const update = async (req, res) => {
   try {
     const { type, name, phone, email, address, rif, tax_name, notes } = req.body;
     if (!name) return res.status(400).json({ ok: false, message: "El nombre es requerido" });
+    if (!rif)  return res.status(400).json({ ok: false, message: "La cédula / RIF es requerida" });
     const recordType = ["cliente", "proveedor"].includes(type) ? type : "cliente";
 
     const customer = await Customer.findByPk(req.params.id);

@@ -95,7 +95,22 @@ export function AppProvider({ children }) {
   const activeBanks      = banks.filter(b => b.active);
   const activePaymentMethods = paymentMethods.filter(m => m.active);
 
-  const storeName = settings.store_name || "MI TIENDA POS";
+  const storeName    = settings.store_name || "MI TIENDA POS";
+  const companyInfo  = {
+    name:     settings.store_name    || "",
+    rif:      settings.store_rif     || "",
+    slogan:   settings.store_slogan  || "",
+    address:  settings.store_address || "",
+    city:     settings.store_city    || "",
+    phone:    settings.store_phone   || "",
+    phone2:   settings.store_phone2  || "",
+    email:    settings.store_email   || "",
+    website:  settings.store_website || "",
+    logo_url: settings.logo_url      || "",
+    footer:   settings.receipt_footer || "¡Gracias por su compra!",
+    tax_name: settings.tax_name      || "",
+    tax_rate: settings.tax_rate      || "",
+  };
 
   return (
     <AppContext.Provider value={{
@@ -104,7 +119,7 @@ export function AppProvider({ children }) {
       // Notify
       notification, notify,
       // Settings
-      settings, loadSettings, storeName,
+      settings, loadSettings, storeName, companyInfo,
       // Currencies
       currencies, activeCurrencies, baseCurrency, loadCurrencies,
       // Journals

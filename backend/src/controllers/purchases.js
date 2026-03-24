@@ -259,7 +259,14 @@ const remove = async (req, res) => {
           lock: true
         });
         if (stockEntry) {
-          await stockEntry.decrement('qty', { by: item.total_units, transaction });
+          const currentQty = parseFloat(stockEntry.qty || 0);
+          const qtyToSubtract = parseFloat(item.total_units || 0);
+          
+          if (currentQty < qtyToSubtract) {
+            throw new Error(`No se puede anular la compra: el producto "${item.product_name}" ya ha sido vendido o movido. Stock disponible: ${currentQty}, Requerido para anular: ${qtyToSubtract}`);
+          }
+          
+          await stockEntry.decrement('qty', { by: qtyToSubtract, transaction });
         }
 
         // Sincronizar stock total

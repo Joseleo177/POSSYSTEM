@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import Modal from "./Modal";
+import ConfirmModal from "./ConfirmModal";
 
 const EMPTY = { username: "", password: "", full_name: "", email: "", phone: "", role_id: "" };
 
@@ -18,6 +19,7 @@ export default function EmployeesTab({ notify }) {
   const [editId, setEditId]       = useState(null);
   const [loading, setLoading]     = useState(false);
   const [modal, setModal]         = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const load = async () => {
     try {
@@ -44,76 +46,105 @@ export default function EmployeesTab({ notify }) {
       return notify("La contraseña es requerida para nuevos empleados", "err");
     setLoading(true);
     try {
-      if (editId) { await api.employees.update(editId, form); notify("Empleado actualizado ✓"); }
-      else        { await api.employees.create(form); notify("Empleado creado ✓"); }
+      if (editId) { await api.employees.update(editId, form); notify("Empleado actualizado correctamente"); }
+      else        { await api.employees.create(form); notify("Empleado creado correctamente"); }
       closeModal(); await load();
     } catch (e) { notify(e.message, "err"); }
     finally { setLoading(false); }
   };
 
   const del = async (id) => {
-    if (!confirm("¿Eliminar empleado?")) return;
     try { await api.employees.remove(id); notify("Empleado eliminado"); await load(); }
     catch (e) { notify(e.message, "err"); }
   };
 
   return (
     <div>
-      {/* Cabecera */}
-      <div className="flex justify-end mb-4">
-        <button onClick={openNew} className="btn-sm btn-primary">
-          + Nuevo empleado
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h2 className="text-xl font-black text-content dark:text-white uppercase tracking-[4px] font-display">Gestión de Personal</h2>
+          <div className="text-[10px] font-black text-brand-500 uppercase tracking-[2px] opacity-80 mt-1">Control de accesos y roles</div>
+        </div>
+        <button onClick={openNew} className="px-6 py-4 bg-brand-500 text-black rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all shadow-lg shadow-brand-500/20 flex items-center gap-2 group">
+          <span className="text-xl group-hover:scale-125 transition-transform">+</span> Nuevo empleado
         </button>
       </div>
 
-      {/* Tabla */}
-      <table className="table-pos">
-        <thead>
-          <tr>
-            {["Nombre", "Usuario", "Rol", "Correo", "Estado", "Acciones"].map(h => (
-              <th key={h}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {employees.map((e) => (
-            <tr key={e.id}>
-              <td className="font-semibold">{e.full_name}</td>
-              <td className="text-content-muted dark:text-content-dark-muted">{e.username}</td>
-              <td>
-                <span className={ROLE_BADGE[e.role_name] ?? "badge-neutral"}>
-                  {e.role_label}
-                </span>
-              </td>
-              <td className="text-content-muted dark:text-content-dark-muted text-xs">{e.email || "—"}</td>
-              <td>
-                <span className={`text-xs font-medium ${e.active ? "text-success" : "text-danger"}`}>
-                  {e.active ? "● Activo" : "○ Inactivo"}
-                </span>
-              </td>
-              <td>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => openEdit(e)}
-                    className="btn-sm border border-warning/60 text-warning bg-transparent hover:bg-warning/10 dark:hover:bg-warning/10"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => del(e.id)}
-                    className="btn-sm border border-danger/60 text-danger bg-transparent hover:bg-danger/10 dark:hover:bg-danger/10"
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              </td>
+      <div className="card-premium overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-border/40 bg-surface-1 dark:bg-white/5 text-[9px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-[2px]">
+              <th className="px-6 py-5">Identificación / Usuario</th>
+              <th className="px-6 py-5">Tipo de Acceso</th>
+              <th className="px-6 py-5">Contacto</th>
+              <th className="px-6 py-5">Estado Operativo</th>
+              <th className="px-6 py-5 text-right">Acciones</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-border/10">
+            {employees.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-20 text-center text-content-subtle text-xs font-bold uppercase tracking-widest italic opacity-40">
+                  No se han registrado empleados en el sistema
+                </td>
+              </tr>
+            ) : (
+              employees.map((e) => (
+                <tr key={e.id} className="group hover:bg-brand-500/[0.02] transition-colors">
+                  <td className="px-6 py-5">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-black text-content dark:text-heading-dark tracking-tight uppercase group-hover:text-brand-500 transition-colors">{e.full_name}</span>
+                      <span className="text-[10px] font-black text-content-subtle mt-1 opacity-60">@{e.username}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-5">
+                    <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${ROLE_BADGE[e.role_name] ? "bg-surface-2 dark:bg-white/5 border-border/20" : "bg-surface-1 dark:bg-white/5"}`}>
+                      {e.role_label}
+                    </span>
+                  </td>
+                  <td className="px-6 py-5">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[11px] font-bold text-content dark:text-content-dark">{e.email || "—"}</span>
+                      {e.phone && <span className="text-[10px] text-content-subtle tabular-nums">{e.phone}</span>}
+                    </div>
+                  </td>
+                  <td className="px-6 py-5">
+                    <span className={[
+                      "px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border",
+                      e.active
+                        ? "text-success border-success/30 bg-success/5 shadow-[0_0_12px_rgba(34,197,94,0.1)]"
+                        : "text-danger border-danger/30 bg-danger/5",
+                    ].join(" ")}>
+                      {e.active ? "En Servicio" : "Fuera de Línea"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-5 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => openEdit(e)}
+                        className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-500 border border-orange-500/20 hover:bg-orange-500 hover:text-white transition-all active:scale-90 flex items-center justify-center"
+                        title="Modificar"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(e)}
+                        className="w-10 h-10 rounded-xl bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all active:scale-90 flex items-center justify-center"
+                        title="Eliminar acceso"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {/* Modal */}
-      <Modal open={modal} onClose={closeModal} title={editId ? "✏ EDITAR EMPLEADO" : "+ NUEVO EMPLEADO"} width={560}>
+      <Modal open={modal} onClose={closeModal} title={editId ? "EDITAR EMPLEADO" : "NUEVO EMPLEADO"} width={560}>
         <div className="grid grid-cols-2 gap-2.5 mb-2.5">
           {[["Nombre completo *", "full_name", "text"], ["Usuario *", "username", "text"]].map(([label, key, type]) => (
             <div key={key}>
@@ -189,6 +220,19 @@ export default function EmployeesTab({ notify }) {
           </button>
         </div>
       </Modal>
+
+      <ConfirmModal
+        isOpen={!!deleteConfirm}
+        title="¿Eliminar empleado?"
+        message={`¿Estás seguro de que deseas eliminar a ${deleteConfirm?.full_name}? Esta acción no se puede deshacer.`}
+        onConfirm={async () => {
+          await del(deleteConfirm.id);
+          setDeleteConfirm(null);
+        }}
+        onCancel={() => setDeleteConfirm(null)}
+        type="danger"
+        confirmText="Sí, eliminar"
+      />
     </div>
   );
 }

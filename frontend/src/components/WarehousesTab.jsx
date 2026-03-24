@@ -1,243 +1,79 @@
-import { useState, useEffect, useCallback } from "react";
-import { api } from "../services/api";
-
-const EMPTY_WAREHOUSE = { name: "", description: "", sort_order: 0, active: true };
-const EMPTY_ADD_STOCK = { product_id: "", qty: "" };
+import { useState, useEffect } from "react";
+import { useWarehouses } from "../hooks/useWarehouses";
+import { useWarehouseOps } from "../hooks/useWarehouseOps";
+import { fmtDate, fmtQty } from "../helpers";
+import ConfirmModal from "./ConfirmModal";
 
 export default function WarehousesTab({ notify, currentEmployee }) {
   const [subTab, setSubTab] = useState("almacenes");
-
-  // ── Almacenes ──────────────────────────────────────────────
-  const [warehouses, setWarehouses] = useState([]);
-  const [form, setForm]             = useState(EMPTY_WAREHOUSE);
-  const [editId, setEditId]         = useState(null);
-  const [loading, setLoading]       = useState(false);
   const [warehouseModal, setWarehouseModal] = useState(false);
-
-  // ── Stock ──────────────────────────────────────────────────
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
-  const [stock, setStock]               = useState([]);
-  const [stockSearch, setStockSearch]   = useState("");
-  const [loadingStock, setLoadingStock] = useState(false);
 
-  // ── Editar o Eliminar Stock (Modals) ───────────────────────
-  const [editStockModal, setEditStockModal]     = useState(null); // { product_id, product_name, qty }
-  const [deleteStockModal, setDeleteStockModal] = useState(null); // { product_id, product_name }
-  const [editStockValue, setEditStockValue]     = useState("");
+  // Modales de confirmación
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // Almacén a eliminar
 
-  // ── Agregar producto al almacén manualmente ────────────────
-  const [addStockModal, setAddStockModal]   = useState(false);
-  const [addStockForm, setAddStockForm]     = useState(EMPTY_ADD_STOCK);
-  const [addStockSearch, setAddStockSearch] = useState("");
-  const [addStockResults, setAddStockResults] = useState([]);
-  const [addStockProduct, setAddStockProduct] = useState(null);
-  const [savingStock, setSavingStock]       = useState(false);
+  const {
+    warehouses, load: loadWarehouses,
+    form, setForm, editId, loading,
+    save: saveWarehouseAction, remove: deleteWarehouseAction,
+    startEdit: startEditHook, cancelEdit: cancelEditHook,
+    employees, assignModal, setAssignModal, assignSelected,
+    openAssign, toggleAssign, saveAssign
+  } = useWarehouses(notify);
 
-  // ── Transferencias ─────────────────────────────────────────
-  const [transfers, setTransfers]     = useState([]);
-  const [products, setProducts]       = useState([]);
-  const [transferForm, setTransferForm] = useState({
-    from_warehouse_id: "", to_warehouse_id: "", product_id: "", qty: "", note: "",
-  });
-  const [loadingTransfer, setLoadingTransfer] = useState(false);
-  const [transferModal, setTransferModal]     = useState(false);
+  const {
+    stock, loadStock, loadingStock,
+    stockSearch, setStockSearch, filteredStock,
+    editStockModal, setEditStockModal, editStockValue, setEditStockValue, handleEditStock, submitEditStock,
+    deleteStockModal, setDeleteStockModal, handleDeleteStock, confirmDeleteStock,
+    addStockModal, setAddStockModal, openAddStock,
+    addStockForm, setAddStockForm, addStockSearch, setAddStockSearch, addStockResults,
+    addStockProduct, selectAddStockProduct, doAddStock, savingStock,
+    transfers, loadTransfers, products,
+    transferForm, setTransferForm, transferModal, setTransferModal, loadingTransfer, doTransfer
+  } = useWarehouseOps(notify, selectedWarehouse, loadWarehouses);
 
-  // ── Empleados ──────────────────────────────────────────────
-  const [employees, setEmployees]           = useState([]);
-  const [assignModal, setAssignModal]       = useState(null);
-  const [assignSelected, setAssignSelected] = useState([]);
-
-  // ── Loaders ────────────────────────────────────────────────
-  const loadWarehouses = useCallback(async () => {
-    try { const r = await api.warehouses.getAll(); setWarehouses(r.data); }
-    catch (e) { notify(e.message, "err"); }
-  }, []);
-
-  const loadStock = useCallback(async (warehouseId) => {
-    setLoadingStock(true);
-    try { const r = await api.warehouses.getStock(warehouseId); setStock(r.data); }
-    catch (e) { notify(e.message, "err"); }
-    finally { setLoadingStock(false); }
-  }, []);
-
-  const loadTransfers = useCallback(async () => {
-    try { const r = await api.warehouses.getTransfers({ limit: 100 }); setTransfers(r.data); }
-    catch (e) { notify(e.message, "err"); }
-  }, []);
-
-  const loadProducts = useCallback(async () => {
-    try { const r = await api.products.getAll({ is_combo: false, is_service: false }); setProducts(r.data); }
-    catch (e) {}
-  }, []);
-
-  const loadEmployees = useCallback(async () => {
-    try { const r = await api.employees.getAll(); setEmployees(r.data); }
-    catch (e) {}
-  }, []);
-
-  useEffect(() => { loadWarehouses(); loadProducts(); loadEmployees(); }, []);
-  useEffect(() => { if (subTab === "transferencias") loadTransfers(); }, [subTab]);
+  // ── Conditional Loaders ───────────────────────────────────
+  useEffect(() => { if (subTab === "transferencias") loadTransfers(); }, [subTab, loadTransfers]);
   useEffect(() => {
     if (subTab === "stock" && selectedWarehouse) loadStock(selectedWarehouse.id);
-  }, [subTab, selectedWarehouse]);
+  }, [subTab, selectedWarehouse, loadStock]);
 
-  // ── Búsqueda de producto para modal addStock ───────────────
-  useEffect(() => {
-    if (!addStockSearch.trim()) { setAddStockResults([]); return; }
-    const t = setTimeout(async () => {
-      try { const r = await api.products.getAll({ search: addStockSearch, is_service: false }); setAddStockResults(r.data.slice(0, 8)); }
-      catch {}
-    }, 250);
-    return () => clearTimeout(t);
-  }, [addStockSearch]);
+  // ── UI Wrappers ───────────────────────────────────────────
+  const openNewWarehouse = () => {
+    cancelEditHook();
+    setWarehouseModal(true);
+  };
 
-  // ── CRUD almacenes ─────────────────────────────────────────
+  const startEdit = (w) => {
+    startEditHook(w);
+    setWarehouseModal(true);
+  };
+
+  const cancelEdit = () => {
+    cancelEditHook();
+    setWarehouseModal(false);
+  };
+
   const saveWarehouse = async () => {
-    if (!form.name.trim()) return notify("El nombre es requerido", "err");
-    setLoading(true);
-    try {
-      if (editId) { await api.warehouses.update(editId, form); notify("Almacén actualizado ✓"); }
-      else        { await api.warehouses.create(form);         notify("Almacén creado ✓"); }
-      setForm(EMPTY_WAREHOUSE); setEditId(null); setWarehouseModal(false);
-      await loadWarehouses();
-    } catch (e) { notify(e.message, "err"); }
-    finally { setLoading(false); }
+    await saveWarehouseAction();
+    if (!editId) setWarehouseModal(false); // Close if it was a new creation
+    else setWarehouseModal(false); // also close if edit
   };
-
-  const deleteWarehouse = async (id) => {
-    if (!confirm("¿Eliminar este almacén? Solo es posible si no tiene stock.")) return;
-    try { await api.warehouses.remove(id); notify("Almacén eliminado"); await loadWarehouses(); }
-    catch (e) { notify(e.message, "err"); }
-  };
-
-  const openNewWarehouse = () => { setEditId(null); setForm(EMPTY_WAREHOUSE); setWarehouseModal(true); };
-  const startEdit  = (w) => { setEditId(w.id); setForm({ name: w.name, description: w.description || "", sort_order: w.sort_order, active: w.active ?? true }); setWarehouseModal(true); };
-  const cancelEdit = ()  => { setEditId(null); setForm(EMPTY_WAREHOUSE); setWarehouseModal(false); };
-
-  // ── Agregar producto manualmente ───────────────────────────
-  const openAddStock = () => {
-    setAddStockProduct(null);
-    setAddStockForm(EMPTY_ADD_STOCK);
-    setAddStockSearch("");
-    setAddStockResults([]);
-    setAddStockModal(true);
-  };
-
-  const selectAddStockProduct = (p) => {
-    setAddStockProduct(p);
-    setAddStockSearch("");
-    setAddStockResults([]);
-    setAddStockForm(prev => ({ ...prev, product_id: p.id }));
-  };
-
-  const doAddStock = async () => {
-    if (!addStockProduct)              return notify("Selecciona un producto", "err");
-    if (!addStockForm.qty && addStockForm.qty !== 0) return notify("Ingresa la cantidad", "err");
-    setSavingStock(true);
-    try {
-      await api.warehouses.addStock(selectedWarehouse.id, {
-        product_id: addStockProduct.id,
-        qty:        parseFloat(addStockForm.qty) || 0,
-      });
-      notify(`${addStockProduct.name} agregado al almacén ✓`);
-      setAddStockModal(false);
-      await loadStock(selectedWarehouse.id);
-      await loadWarehouses();
-    } catch (e) { notify(e.message, "err"); }
-    finally { setSavingStock(false); }
-  };
-
-  // ── Transferencias ─────────────────────────────────────────
-  const doTransfer = async () => {
-    const { from_warehouse_id, to_warehouse_id, product_id, qty, note } = transferForm;
-    if (!from_warehouse_id || !to_warehouse_id || !product_id || !qty)
-      return notify("Origen, destino, producto y cantidad son requeridos", "err");
-    setLoadingTransfer(true);
-    try {
-      await api.warehouses.transfer({
-        from_warehouse_id: parseInt(from_warehouse_id),
-        to_warehouse_id:   parseInt(to_warehouse_id),
-        product_id:        parseInt(product_id),
-        qty:               parseFloat(qty),
-        note:              note || null,
-      });
-      notify("Transferencia registrada ✓");
-      setTransferForm({ from_warehouse_id: "", to_warehouse_id: "", product_id: "", qty: "", note: "" });
-      setTransferModal(false);
-      await loadTransfers(); await loadWarehouses();
-    } catch (e) { notify(e.message, "err"); }
-    finally { setLoadingTransfer(false); }
-  };
-
-  // ── Editar o Eliminar Stock manualmente ──────────────────────
-  const handleEditStock = (item) => {
-    if (item.is_combo) {
-      notify("El stock de un combo es calculado automáticamente y no puede editarse manualmente.", "warning");
-      return;
-    }
-    const currentQty = parseFloat(item.qty).toFixed(item.qty % 1 !== 0 ? 3 : 0);
-    setEditStockValue(currentQty);
-    setEditStockModal(item);
-  };
-
-  const submitEditStock = async (e) => {
-    e.preventDefault();
-    if (!editStockModal) return;
-    const qty = parseFloat(editStockValue);
-    if (isNaN(qty) || qty < 0) return notify("Cantidad inválida", "err");
-
-    try {
-      await api.warehouses.setStock(selectedWarehouse.id, editStockModal.product_id, { qty });
-      notify("Stock actualizado ✓");
-      loadStock(selectedWarehouse.id);
-      setEditStockModal(null);
-    } catch (err) { notify(err.message, "err"); }
-  };
-
-  const handleDeleteStock = (item) => {
-    setDeleteStockModal(item);
-  };
-
-  const confirmDeleteStock = async () => {
-    if (!deleteStockModal) return;
-    try {
-      await api.warehouses.removeStock(selectedWarehouse.id, deleteStockModal.product_id);
-      notify("Producto retirado del almacén ✓");
-      loadStock(selectedWarehouse.id);
-      setDeleteStockModal(null);
-    } catch (err) { notify(err.message, "err"); }
-  };
-
-  // ── Asignar empleados ──────────────────────────────────────
-  const openAssign   = (w) => { setAssignModal(w); setAssignSelected((w.assigned_employees || []).map(e => e.employee_id)); };
-  const saveAssign   = async () => {
-    try { await api.warehouses.assignEmployees(assignModal.id, { employee_ids: assignSelected }); notify("Empleados asignados ✓"); setAssignModal(null); await loadWarehouses(); }
-    catch (e) { notify(e.message, "err"); }
-  };
-  const toggleAssign = (empId) => setAssignSelected(prev => prev.includes(empId) ? prev.filter(id => id !== empId) : [...prev, empId]);
-
-  // ── Stock filtrado ─────────────────────────────────────────
-  const filteredStock = stock.filter(s =>
-    !s.is_service && (
-    !stockSearch ||
-    s.product_name.toLowerCase().includes(stockSearch.toLowerCase()) ||
-    (s.category_name || "").toLowerCase().includes(stockSearch.toLowerCase())
-    )
-  );
 
   return (
     <div>
-      {/* Sub-navegación */}
-      <div className="flex gap-0 mb-6 border-b-2 border-surface-3 dark:border-surface-dark-3">
-        {[["almacenes","ALMACENES"],["stock","STOCK"],["transferencias","TRANSFERENCIAS"]].map(([key,label]) => (
+      {/* Sub-navegación Premium */}
+      <div className="flex items-center gap-1 mb-10 bg-surface-2 dark:bg-surface-dark-2 p-1.5 rounded-[22px] w-fit border border-border/40 dark:border-white/5 shadow-inner">
+        {[["almacenes", "Almacenes"], ["stock", "Stock Actual"], ["transferencias", "Transferencias"]].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setSubTab(key)}
             className={[
-              "px-[18px] py-2 text-[12px] tracking-widest font-inherit bg-transparent border-none cursor-pointer -mb-0.5 transition-colors",
+              "px-6 py-2.5 text-[11px] tracking-[2px] font-black uppercase rounded-[18px] transition-all duration-300",
               subTab === key
-                ? "text-warning border-b-2 border-warning font-bold"
-                : "text-content-muted dark:text-content-dark-muted border-b-2 border-transparent hover:text-content dark:hover:text-content-dark",
+                ? "bg-brand-500 text-black shadow-lg shadow-brand-500/20"
+                : "text-content-subtle hover:text-content dark:hover:text-content-dark hover:bg-surface-3 dark:hover:bg-surface-dark-3",
             ].join(" ")}
           >
             {label}
@@ -249,74 +85,84 @@ export default function WarehousesTab({ notify, currentEmployee }) {
       {subTab === "almacenes" && (
         <div>
           {/* Botón nuevo almacén */}
-          <div className="flex justify-end mb-4">
-            <button onClick={openNewWarehouse} className="btn-md btn-primary">
-              + Nuevo Almacén
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-sm font-black tracking-[4px] uppercase text-content dark:text-heading-dark">Gestión de Almacenes</h2>
+            <button onClick={openNewWarehouse} className="px-6 py-4 bg-brand-500 text-black rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all shadow-lg shadow-brand-500/20 flex items-center gap-2">
+              <span className="text-lg">+</span> Nuevo Almacén
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {warehouses.map(w => (
               <div
                 key={w.id}
                 className={[
-                  "card-md p-4 transition-opacity",
-                  w.active ? "opacity-100" : "opacity-60",
+                  "group relative bg-surface-2 dark:bg-surface-dark-2 border border-border/40 dark:border-white/5 rounded-[32px] p-8 transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:-translate-y-1 overflow-hidden",
+                  w.active ? "opacity-100" : "opacity-60 grayscale",
                 ].join(" ")}
               >
-                <div className="flex justify-between items-start mb-2.5">
-                  <div>
-                    <div className="font-bold text-sm text-content dark:text-content-dark mb-0.5">{w.name}</div>
-                    {w.description && <div className="text-[11px] text-content-muted dark:text-content-dark-muted">{w.description}</div>}
+                {/* Decoración de fondo */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-brand-500/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-brand-500/10 transition-colors"></div>
+
+                <div className="relative z-10">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="flex-1 min-w-0 pr-4">
+                      <div className="font-black text-sm text-content dark:text-heading-dark uppercase tracking-wider truncate group-hover:text-brand-500 transition-colors">{w.name}</div>
+                      {w.description && <div className="text-[11px] text-content-subtle mt-1 italic trunacte">{w.description}</div>}
+                    </div>
+                    <span className={[
+                      "text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-xl border",
+                      w.active
+                        ? "text-success border-success/30 bg-success/5"
+                        : "text-danger border-danger/30 bg-danger/5",
+                    ].join(" ")}>
+                      {w.active ? "Activo" : "Inactivo"}
+                    </span>
                   </div>
-                  <span className={[
-                    "text-[10px] border px-1.5 py-0.5 rounded-sm",
-                    w.active
-                      ? "text-success border-success"
-                      : "text-danger border-danger",
-                  ].join(" ")}>
-                    {w.active ? "Activo" : "Inactivo"}
-                  </span>
-                </div>
-                <div className="flex gap-4 mb-3">
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-warning">{w.product_count || 0}</div>
-                    <div className="text-[10px] text-content-muted dark:text-content-dark-muted">productos</div>
+
+                  <div className="grid grid-cols-3 gap-2 mb-8">
+                    <div className="bg-surface-3 dark:bg-surface-dark-3/50 p-3 rounded-2xl text-center border border-border/20">
+                      <div className="text-lg font-black text-brand-500">{w.product_count || 0}</div>
+                      <div className="text-[8px] font-black uppercase tracking-widest text-content-subtle">SKUs</div>
+                    </div>
+                    <div className="bg-surface-3 dark:bg-surface-dark-3/50 p-3 rounded-2xl text-center border border-border/20">
+                      <div className="text-lg font-black text-info">{parseFloat(w.total_stock || 0).toFixed(0)}</div>
+                      <div className="text-[8px] font-black uppercase tracking-widest text-content-subtle">Items</div>
+                    </div>
+                    <div className="bg-surface-3 dark:bg-surface-dark-3/50 p-3 rounded-2xl text-center border border-border/20">
+                      <div className="text-lg font-black text-violet-500">{(w.assigned_employees || []).length}</div>
+                      <div className="text-[8px] font-black uppercase tracking-widest text-content-subtle">Staff</div>
+                    </div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-info">{parseFloat(w.total_stock || 0).toFixed(0)}</div>
-                    <div className="text-[10px] text-content-muted dark:text-content-dark-muted">unidades</div>
+
+                  <div className="flex flex-wrap gap-2 pt-4 border-t border-border/20">
+                    <button
+                      onClick={() => { setSelectedWarehouse(w); setSubTab("stock"); }}
+                      className="flex-1 min-w-[100px] py-2.5 rounded-xl bg-info/10 text-info text-[10px] font-black uppercase tracking-widest hover:bg-info hover:text-black transition-all"
+                    >
+                      Stock
+                    </button>
+                    <button
+                      onClick={() => openAssign(w)}
+                      className="flex-1 min-w-[100px] py-2.5 rounded-xl bg-violet-500/10 text-violet-400 text-[10px] font-black uppercase tracking-widest hover:bg-violet-500 hover:text-black transition-all"
+                    >
+                      Staff
+                    </button>
+                    <button
+                      onClick={() => startEdit(w)}
+                      className="p-2.5 rounded-xl bg-surface-3 dark:bg-surface-dark-3 text-content-subtle hover:text-brand-500 transition-all border border-border/20"
+                      title="Editar"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirm(w)}
+                      className="p-2.5 rounded-xl bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-black transition-all"
+                      title="Eliminar"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
                   </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-violet-500">{(w.assigned_employees || []).length}</div>
-                    <div className="text-[10px] text-content-muted dark:text-content-dark-muted">empleados</div>
-                  </div>
-                </div>
-                <div className="flex gap-1.5 flex-wrap">
-                  <button
-                    onClick={() => { setSelectedWarehouse(w); setSubTab("stock"); }}
-                    className="btn-sm text-info border border-info/60 hover:border-info bg-transparent"
-                  >
-                    Ver stock
-                  </button>
-                  <button
-                    onClick={() => openAssign(w)}
-                    className="btn-sm text-violet-500 border border-violet-600/60 hover:border-violet-500 bg-transparent"
-                  >
-                    Empleados
-                  </button>
-                  <button
-                    onClick={() => startEdit(w)}
-                    className="btn-sm text-warning border border-warning/60 hover:border-warning bg-transparent"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => deleteWarehouse(w.id)}
-                    className="btn-sm text-danger border border-danger/60 hover:border-danger bg-transparent"
-                  >
-                    Eliminar
-                  </button>
                 </div>
               </div>
             ))}
@@ -327,127 +173,123 @@ export default function WarehousesTab({ notify, currentEmployee }) {
       {/* ── STOCK ── */}
       {subTab === "stock" && (
         <div>
-          {/* Selector de almacén + búsqueda + botón agregar */}
-          <div className="flex gap-2.5 items-center mb-5 flex-wrap">
-            <div className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-widest">ALMACÉN:</div>
-            <div className="flex gap-1.5 flex-wrap">
-              {warehouses.filter(w => w.active).map(w => (
-                <button
-                  key={w.id}
-                  onClick={() => { setSelectedWarehouse(w); loadStock(w.id); }}
-                  className={[
-                    "px-3.5 py-1.5 rounded border text-[12px] cursor-pointer transition-colors",
-                    selectedWarehouse?.id === w.id
-                      ? "bg-warning text-surface-1 dark:text-surface-dark-1 border-warning font-bold"
-                      : "bg-surface-2 dark:bg-surface-dark-2 text-content-muted dark:text-content-dark-muted border-surface-3 dark:border-surface-dark-3 hover:border-content-muted dark:hover:border-content-dark-muted font-normal",
-                  ].join(" ")}
-                >
-                  {w.name}
-                </button>
-              ))}
+          {/* Selector de almacén y Herramientas */}
+          <div className="bg-surface-2 dark:bg-surface-dark-2 border border-border/40 dark:border-white/5 rounded-3xl p-6 mb-8 shadow-sm">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] font-black uppercase tracking-[2px] text-content-subtle ml-1">Seleccionar Almacén</span>
+                <div className="flex flex-wrap gap-2">
+                  {warehouses.filter(w => w.active).map(w => (
+                    <button
+                      key={w.id}
+                      onClick={() => { setSelectedWarehouse(w); loadStock(w.id); }}
+                      className={[
+                        "px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-widest transition-all border",
+                        selectedWarehouse?.id === w.id
+                          ? "bg-brand-500 text-black border-brand-500 shadow-lg shadow-brand-500/20"
+                          : "bg-surface-3 dark:bg-surface-dark-3 text-content-subtle border-transparent hover:border-border"
+                      ].join(" ")}
+                    >
+                      {w.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {selectedWarehouse && (
+                <div className="flex flex-col sm:flex-row items-end gap-3 self-end lg:self-auto uppercase">
+                  <div className="relative w-full sm:w-64">
+                    <input
+                      value={stockSearch}
+                      onChange={e => setStockSearch(e.target.value)}
+                      placeholder="FILTRAR PRODUCTO..."
+                      className="w-full pl-10 pr-4 py-3.5 bg-surface-3 dark:bg-surface-dark-3 border border-border/40 dark:border-white/5 rounded-2xl text-[11px] font-bold focus:ring-4 focus:ring-brand-500/10 transition-all outline-none"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 opacity-30">S</span>
+                  </div>
+                  <button onClick={openAddStock} className="px-5 py-3.5 bg-success/10 text-success border border-success/30 rounded-2xl text-[10px] font-black uppercase tracking-[2px] hover:bg-success hover:text-black transition-all">
+                    + Registrar Stock
+                  </button>
+                </div>
+              )}
             </div>
-            {selectedWarehouse && (
-              <>
-                <input
-                  value={stockSearch}
-                  onChange={e => setStockSearch(e.target.value)}
-                  placeholder="🔍 Buscar producto..."
-                  className="input ml-auto min-w-[200px]"
-                />
-                <button onClick={openAddStock} className="btn-sm btn-success whitespace-nowrap">
-                  + Agregar producto
-                </button>
-              </>
-            )}
           </div>
 
           {!selectedWarehouse ? (
-            <div className="text-center text-surface-3 dark:text-surface-dark-3 py-10 text-[13px]">
-              Selecciona un almacén para ver su stock
+            <div className="card-premium py-20 text-center text-content-subtle text-xs font-black uppercase tracking-[4px] opacity-40">
+              Selecciona un almacén para gestionar inventario
             </div>
           ) : loadingStock ? (
-            <div className="text-center text-content-muted dark:text-content-dark-muted py-10">Cargando...</div>
+            <div className="py-20 text-center text-brand-500 animate-pulse text-[10px] font-black uppercase tracking-[4px]">Sincronizando existencias...</div>
           ) : (
-            <>
-              <div className="text-[11px] text-content-muted dark:text-content-dark-muted mb-3">
-                {filteredStock.length} producto{filteredStock.length !== 1 ? "s" : ""} en{" "}
-                <b className="text-warning">{selectedWarehouse.name}</b>
-              </div>
-              <table className="table-pos">
+            <div className="card-premium overflow-hidden">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b-2 border-warning text-warning">
-                    {["Categoría","Producto","Stock","Unidad","Precio venta","Costo","Acciones"].map(h => (
-                      <th key={h} className="text-left px-3 py-2 text-[11px] tracking-widest font-semibold">{h}</th>
-                    ))}
+                  <tr className="bg-surface-2 dark:bg-surface-dark-2">
+                     {["Producto", "Categoría", "Stock Actual", "P. Venta", "Acciones"].map(h => (
+                       <th key={h} className="px-6 py-5 text-[10px] font-black uppercase tracking-[3px] text-content-subtle border-b border-border/40 dark:border-white/5">{h}</th>
+                     ))}
                   </tr>
                 </thead>
-                <tbody>
-                  {filteredStock.length === 0
-                    ? (
-                      <tr>
-                        <td colSpan={7} className="text-center text-content-muted dark:text-content-dark-muted py-8 px-3">
-                          Sin productos en este almacén —{" "}
-                          <span
-                            onClick={openAddStock}
-                            className="text-success cursor-pointer underline"
-                          >
-                            agregar uno
-                          </span>
+                <tbody className="divide-y divide-border/40 dark:divide-white/5">
+                  {filteredStock.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-20 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <span className="text-4xl opacity-10">?</span>
+                          <div className="text-content-subtle text-xs font-bold uppercase tracking-widest">No se encontraron productos</div>
+                          <button onClick={openAddStock} className="text-brand-500 font-black text-[10px] uppercase tracking-widest underline underline-offset-4">Agregar Stock</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredStock.map((s) => (
+                      <tr key={s.product_id} className="group hover:bg-brand-500/[0.02] transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-black text-content dark:text-heading-dark tracking-tight uppercase group-hover:text-brand-500 transition-colors">{s.product_name}</span>
+                            {s.is_combo && <span className="w-fit mt-1 px-1.5 py-0.5 bg-indigo-500/10 text-indigo-400 text-[8px] font-black uppercase tracking-widest rounded-md">Combo Virtual</span>}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-[10px] font-bold text-content-subtle uppercase">{s.category_name || "General"}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className={[
+                              "text-lg font-black",
+                              parseFloat(s.qty) <= 0 ? "text-danger" : (parseFloat(s.qty) <= 5 ? "text-warning" : "text-success")
+                            ].join(" ")}>
+                              {fmtQty(s.qty)}
+                              <span className="text-[10px] ml-1 opacity-40 uppercase">{s.unit || "uds"}</span>
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 font-black text-brand-500 text-sm">${parseFloat(s.price || 0).toFixed(2)}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleEditStock(s)}
+                              className="p-2.5 rounded-xl bg-info/10 text-info border border-info/20 hover:bg-info hover:text-black transition-all"
+                              title="Ajustar"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteStock(s)}
+                              className="p-2.5 rounded-xl bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-black transition-all"
+                              title="Retirar"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                          </div>
                         </td>
                       </tr>
-                    )
-                    : filteredStock.map((s, i) => {
-                        const stockColorClass =
-                          parseFloat(s.qty) <= 0
-                            ? "text-danger"
-                            : parseFloat(s.qty) <= 5
-                            ? "text-warning"
-                            : "text-success";
-                        return (
-                          <tr
-                            key={s.product_id}
-                            className={[
-                              "border-b border-surface-3 dark:border-surface-dark-3 hover:bg-surface-2 dark:hover:bg-surface-dark-2 transition-colors",
-                              i % 2 === 0 ? "bg-surface-1 dark:bg-surface-dark-1" : "bg-transparent",
-                            ].join(" ")}
-                          >
-                            <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted text-[11px]">{s.category_name || "—"}</td>
-                            <td className="px-3 py-2.5 font-bold text-content dark:text-content-dark">{s.product_name} {s.is_combo && <span className="ml-1 text-[10px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded">Combo/Virtual</span>}</td>
-                            <td className="px-3 py-2.5">
-                              <span className={`${stockColorClass} font-bold text-[15px]`}>
-                                {parseFloat(s.qty).toFixed(s.qty % 1 !== 0 ? 3 : 0)}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted text-[11px]">{s.unit || "unidad"}</td>
-                            <td className="px-3 py-2.5 text-warning">${parseFloat(s.price || 0).toFixed(2)}</td>
-                            <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted">
-                              {s.cost_price != null ? `$${parseFloat(s.cost_price).toFixed(2)}` : "—"}
-                            </td>
-                            <td className="px-3 py-2.5">
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleEditStock(s)}
-                                  className="text-[11px] text-info hover:text-info-dark transition-colors"
-                                  title="Editar cantidad"
-                                >
-                                  ✏️
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteStock(s)}
-                                  className="text-[11px] text-danger hover:text-danger-dark transition-colors"
-                                  title="Retirar del almacén"
-                                >
-                                  ❌
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                  }
+                    ))
+                  )}
                 </tbody>
               </table>
-            </>
+            </div>
           )}
         </div>
       )}
@@ -456,58 +298,65 @@ export default function WarehousesTab({ notify, currentEmployee }) {
       {subTab === "transferencias" && (
         <div>
           {/* Botón nueva transferencia */}
-          <div className="flex justify-end mb-4">
-            <button onClick={() => setTransferModal(true)} className="btn-md btn-primary">
-              + Nueva Transferencia
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-sm font-black tracking-[4px] uppercase text-content dark:text-heading-dark">Historial de Movimientos</h2>
+            <button onClick={() => setTransferModal(true)} className="px-6 py-4 bg-brand-500 text-black rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all shadow-lg shadow-brand-500/20 flex items-center gap-2">
+              <span className="text-lg">+</span> Nueva Transferencia
             </button>
           </div>
 
-          <div className="font-bold text-[13px] text-warning tracking-widest mb-3.5">HISTORIAL DE MOVIMIENTOS</div>
-          {transfers.length === 0 ? (
-            <div className="text-center text-content-muted dark:text-content-dark-muted py-8 text-[13px]">
-              Sin transferencias registradas
-            </div>
-          ) : (
-            <table className="table-pos">
+          <div className="card-premium overflow-hidden">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b-2 border-warning text-warning">
-                  {["Fecha","Producto","Origen","Destino","Cantidad","Nota","Empleado"].map(h => (
-                    <th key={h} className="text-left px-3 py-2 text-[11px] tracking-widest font-semibold">{h}</th>
+                <tr className="bg-surface-2 dark:bg-surface-dark-2">
+                  {["Fecha", "Producto", "Origen", "Destino", "Cantidad", "Responsable"].map(h => (
+                    <th key={h} className="px-6 py-5 text-[10px] font-black uppercase tracking-[3px] text-content-subtle border-b border-border/40 dark:border-white/5">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody>
-                {transfers.map((t, i) => (
-                  <tr
-                    key={t.id}
-                    className={[
-                      "border-b border-surface-3 dark:border-surface-dark-3",
-                      i % 2 === 0 ? "bg-surface-1 dark:bg-surface-dark-1" : "bg-transparent",
-                    ].join(" ")}
-                  >
-                    <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted text-[11px] whitespace-nowrap">
-                      {new Date(t.created_at).toLocaleString("es-VE")}
+              <tbody className="divide-y divide-border/40 dark:divide-white/5">
+                {transfers.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-20 text-center text-content-subtle text-xs font-bold uppercase tracking-widest italic">
+                      No se han registrado movimientos entre almacenes
                     </td>
-                    <td className="px-3 py-2.5 font-bold text-content dark:text-content-dark">{t.product_name}</td>
-                    <td className="px-3 py-2.5">
-                      {t.from_warehouse_name
-                        ? <span className="text-danger text-[12px]">📤 {t.from_warehouse_name}</span>
-                        : <span className="text-content-muted dark:text-content-dark-muted text-[11px]">Entrada externa</span>
-                      }
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className="text-success text-[12px]">📥 {t.to_warehouse_name}</span>
-                    </td>
-                    <td className="px-3 py-2.5 text-warning font-bold">
-                      {parseFloat(t.qty).toFixed(t.qty % 1 !== 0 ? 3 : 0)}
-                    </td>
-                    <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted text-[11px]">{t.note || "—"}</td>
-                    <td className="px-3 py-2.5 text-content-muted dark:text-content-dark-muted text-[11px]">{t.employee_name || "—"}</td>
                   </tr>
-                ))}
+                ) : (
+                  transfers.map((t) => (
+                    <tr key={t.id} className="group hover:bg-brand-500/[0.02] transition-colors">
+                      <td className="px-6 py-5 text-[11px] font-bold text-content-subtle whitespace-nowrap">
+                        {fmtDate(t.created_at)}
+                      </td>
+                      <td className="px-6 py-5 font-black text-content dark:text-heading-dark text-xs uppercase tracking-tight">
+                        {t.product_name}
+                      </td>
+                      <td className="px-6 py-5">
+                        {t.from_warehouse_name ? (
+                          <span className="px-2.5 py-1 rounded-lg bg-danger/5 text-danger text-[10px] font-black uppercase border border-danger/10">
+                            {t.from_warehouse_name}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-content-subtle uppercase italic">Entrada Externa</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="px-2.5 py-1 rounded-lg bg-success/5 text-success text-[10px] font-black uppercase border border-success/10">
+                          {t.to_warehouse_name}
+                        </span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="text-sm font-black text-brand-500">{fmtQty(t.qty)}</span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className="text-[10px] font-bold text-content dark:text-heading-dark uppercase">{t.employee_name || "Sistema"}</div>
+                        {t.note && <div className="text-[9px] text-content-subtle mt-0.5 truncate max-w-[150px]">{t.note}</div>}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
-          )}
+          </div>
         </div>
       )}
 
@@ -516,7 +365,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-5">
           <div className="card-md p-6 w-full max-w-[520px]">
             <div className="font-bold text-sm text-info tracking-widest mb-5">
-              🔄 NUEVA TRANSFERENCIA
+              NUEVA TRANSFERENCIA
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-3">
@@ -604,7 +453,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-5">
           <div className="card-md p-6 w-full max-w-[480px]">
             <div className="font-bold text-sm text-warning tracking-widest mb-5">
-              {editId ? "✏ EDITAR ALMACÉN" : "+ NUEVO ALMACÉN"}
+              {editId ? "EDITAR ALMACÉN" : "NUEVO ALMACÉN"}
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-3">
@@ -688,9 +537,9 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                   </div>
                   <button
                     onClick={() => { setAddStockProduct(null); setAddStockForm(EMPTY_ADD_STOCK); }}
-                    className="btn-sm text-danger border border-danger/60 hover:border-danger bg-transparent"
+                    className="p-1.5 rounded-lg bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-black transition-all"
                   >
-                    ✕
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
               ) : (
@@ -805,10 +654,10 @@ export default function WarehousesTab({ notify, currentEmployee }) {
             <div className="text-[12px] text-content-muted dark:text-content-dark-muted mb-4.5">
               Producto: <b className="text-content dark:text-content-dark">{editStockModal.product_name}</b>
             </div>
-            
+
             <div className="mb-5">
-               <label className="label mb-1">Nueva cantidad *</label>
-               <input autoFocus type="number" step="0.001" min="0" value={editStockValue} onChange={e => setEditStockValue(e.target.value)} required className="input w-full" />
+              <label className="label mb-1">Nueva cantidad *</label>
+              <input autoFocus type="number" step="0.001" min="0" value={editStockValue} onChange={e => setEditStockValue(e.target.value)} required className="input w-full" />
             </div>
 
             <div className="flex gap-2.5">
@@ -819,27 +668,29 @@ export default function WarehousesTab({ notify, currentEmployee }) {
         </div>
       )}
 
-      {/* ── MODAL: Eliminar Stock ── */}
-      {deleteStockModal && (
-        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-5">
-          <div className="card-md p-6 w-full max-w-[340px]">
-             <div className="text-danger flex justify-center mb-3">
-               <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-             </div>
-             <div className="font-bold text-center text-sm mb-1.5 text-content dark:text-content-dark">
-               ¿Retirar producto?
-             </div>
-             <div className="text-center text-[12px] text-content-muted dark:text-content-dark-muted mb-5 leading-relaxed">
-               Estás a punto de retirar <b>{deleteStockModal.product_name}</b> de este almacén de forma permanente.
-             </div>
-             
-             <div className="flex gap-2.5 justify-center">
-                <button onClick={confirmDeleteStock} className="btn-md btn-danger">Sí, retirar</button>
-                <button onClick={() => setDeleteStockModal(null)} className="btn-md btn-secondary">Cancelar</button>
-             </div>
-          </div>
-        </div>
-      )}
+      {/* ── MODALES DE CONFIRMACIÓN ── */}
+      <ConfirmModal
+        isOpen={!!deleteConfirm}
+        title="¿Eliminar almacén?"
+        message={`Estás a punto de eliminar "${deleteConfirm?.name}". Esta acción no se puede deshacer y solo es posible si el almacén no tiene stock registrado.`}
+        onConfirm={async () => {
+          await deleteWarehouseAction(deleteConfirm.id);
+          setDeleteConfirm(null);
+        }}
+        onCancel={() => setDeleteConfirm(null)}
+        type="danger"
+        confirmText="Sí, eliminar almacén"
+      />
+
+      <ConfirmModal
+        isOpen={!!deleteStockModal}
+        title="¿Retirar producto?"
+        message={`Estás a punto de retirar "${deleteStockModal?.product_name}" de este almacén de forma permanente.`}
+        onConfirm={confirmDeleteStock}
+        onCancel={() => setDeleteStockModal(null)}
+        type="danger"
+        confirmText="Sí, retirar producto"
+      />
     </div>
   );
 }

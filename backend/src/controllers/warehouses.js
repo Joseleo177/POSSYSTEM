@@ -501,7 +501,7 @@ const getProducts = async (req, res) => {
       FROM products p
       LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = :wid
       LEFT JOIN categories c ON c.id = p.category_id
-      WHERE (p.is_service = true OR p.is_combo = true OR ps.product_id IS NOT NULL)
+      WHERE (p.is_service = true OR ps.product_id IS NOT NULL)
       ${searchFilter}
       ORDER BY total_sold DESC, p.name ASC
     `, { replacements, type: Sequelize.QueryTypes.SELECT });

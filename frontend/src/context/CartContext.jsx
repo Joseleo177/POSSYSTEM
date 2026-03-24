@@ -34,6 +34,10 @@ export function CartProvider({ children }) {
     setSelectedSerieId(prev => prev === serieId ? null : serieId);
   }, []);
 
+  // ── Descuento global ──────────────────────────────────────
+  const [discountEnabled, setDiscountEnabled] = useState(false);
+  const [discountPct,     setDiscountPct]     = useState("");
+
   // ── Cliente seleccionado ───────────────────────────────────
   const [selectedCustomer, setSelectedCustomer] = useState(null);
 
@@ -46,7 +50,17 @@ export function CartProvider({ children }) {
     try {
       const r = await api.warehouses.getByEmployee(employee.id);
       setEmployeeWarehouses(r.data);
-      if (r.data.length >= 1) setActiveWarehouse(prev => prev || r.data[0]);
+      
+      if (r.data.length >= 1) {
+        setActiveWarehouse(prev => {
+          if (!prev) return r.data[0];
+          // Validar que el almacén previo siga asignado al empleado
+          const stillAssigned = r.data.find(w => w.id === prev.id);
+          return stillAssigned || r.data[0];
+        });
+      } else {
+        setActiveWarehouse(null);
+      }
     } catch (e) { console.error(e); }
   }, [employee]);
 
@@ -86,25 +100,39 @@ export function CartProvider({ children }) {
     setCart(prev => prev.filter(i => i.id !== id));
   }, []);
 
-  const changeQty = useCallback((id, dir, products) => {
+  const changeQty = useCallback((id, dir) => {
     setCart(prev => prev.map(i => {
       if (i.id !== id) return i;
       const step = parseFloat(i.qty_step) || 1;
-      const nq   = parseFloat((i.qty + dir * step).toFixed(3));
-      const prod = products.find(p => p.id === id);
+      let nq     = parseFloat((i.qty + dir * step).toFixed(3));
+      
+      // Restringir a enteros para unidades "grandes" (según regla del usuario)
+      const isIntegerUnit = ["unidad", "kg", "litro", "metro"].includes(i.unit?.toLowerCase());
+      if (isIntegerUnit) nq = Math.max(1, Math.floor(nq));
+      
       if (nq < step) return i;
-      if (prod && !prod.is_service && nq > parseFloat(prod.stock)) { notify("Stock insuficiente", "err"); return i; }
+      if (!i.is_service && nq > parseFloat(i.stock)) { notify("Stock insuficiente", "err"); return i; }
       return { ...i, qty: nq };
     }));
   }, [notify]);
 
-  const setQtyDirect = useCallback((id, raw, products) => {
-    const nq = parseFloat(raw);
-    if (isNaN(nq) || nq <= 0) return;
-    const prod = products.find(p => p.id === id);
-    if (!prod) return;
-    if (!prod.is_service && nq > parseFloat(prod.stock)) { notify("Stock insuficiente", "err"); return; }
-    setCart(prev => prev.map(i => i.id === id ? { ...i, qty: parseFloat(nq.toFixed(3)) } : i));
+  const setQtyDirect = useCallback((id, raw) => {
+    if (raw === "") {
+      setCart(prev => prev.map(i => i.id === id ? { ...i, qty: "" } : i));
+      return;
+    }
+    let nq = parseFloat(raw);
+    if (isNaN(nq) || nq < 0) return;
+
+    setCart(prev => prev.map(i => {
+      if (i.id !== id) return i;
+      
+      const isIntegerUnit = ["unidad", "kg", "litro", "metro"].includes(i.unit?.toLowerCase());
+      if (isIntegerUnit) nq = Math.floor(nq);
+      
+      if (!i.is_service && nq > parseFloat(i.stock)) { notify("Stock insuficiente", "err"); return i; }
+      return { ...i, qty: nq };
+    }));
   }, [notify]);
 
   const clearCart = useCallback(() => {
@@ -112,11 +140,16 @@ export function CartProvider({ children }) {
     setSelectedCustomer(null);
     setSelectedCurrency(null);
     setSelectedSerieId(null);
+    setDiscountEnabled(false);
+    setDiscountPct("");
   }, []);
 
   // ── Totales ────────────────────────────────────────────────
-  const totalBase    = cart.reduce((s, i) => s + parseFloat(i.price) * i.qty, 0);
-  const totalDisplay = convertToDisplay(totalBase);
+  const subtotalBase   = cart.reduce((s, i) => s + parseFloat(i.price) * i.qty, 0);
+  const discountAmount = discountEnabled && parseFloat(discountPct) > 0
+    ? subtotalBase * (parseFloat(discountPct) / 100) : 0;
+  const totalBase      = subtotalBase - discountAmount;
+  const totalDisplay   = convertToDisplay(totalBase);
 
   // ── Generar factura (sin pago aún) ─────────────────────────
   const checkout = useCallback(async (onSuccess) => {
@@ -128,14 +161,15 @@ export function CartProvider({ children }) {
     setLoading(true);
     try {
       const res = await api.sales.create({
-        items:         cart.map(i => ({ product_id: i.id, quantity: i.qty })),
-        paid:          0,
-        customer_id:   selectedCustomer?.id || null,
-        employee_id:   employee?.id         || null,
-        currency_id:   currentCurrency?.id  || null,
-        exchange_rate: exchangeRate,
-        serie_id:      selectedSerieId,
-        warehouse_id:  activeWarehouse.id,
+        items:           cart.map(i => ({ product_id: i.id, quantity: parseFloat(i.qty) || 0 })),
+        paid:            0,
+        customer_id:     selectedCustomer?.id || null,
+        employee_id:     employee?.id         || null,
+        currency_id:     currentCurrency?.id  || null,
+        exchange_rate:   exchangeRate,
+        serie_id:        selectedSerieId,
+        warehouse_id:    activeWarehouse.id,
+        discount_amount: discountAmount,
       });
 
       const serie = mySeries.find(s => s.id === selectedSerieId);
@@ -163,7 +197,8 @@ export function CartProvider({ children }) {
       // Carrito
       cart, addToCart, removeFromCart, changeQty, setQtyDirect, clearCart,
       // Totales
-      totalBase, totalDisplay,
+      subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
+      discountPct, setDiscountPct, totalBase, totalDisplay,
       // Moneda
       selectedCurrency, setSelectedCurrency, currentCurrency, exchangeRate,
       convertToDisplay, convertToBase,

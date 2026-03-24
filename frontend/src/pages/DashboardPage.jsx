@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../services/api";
+import { fmtNumber, fmtInt } from "../helpers";
 
-const fmt  = (n, d = 2) => parseFloat(n || 0).toLocaleString("es-VE", { minimumFractionDigits: d, maximumFractionDigits: d });
-const fmtN = (n)        => parseInt(n || 0).toLocaleString("es-VE");
+const fmt  = (n, d = 2) => fmtNumber(n, d);
+const fmtN = (n)        => fmtInt(n);
 
 function KpiCard({ label, value, sub, icon, color = "text-warning" }) {
   return (
@@ -77,7 +78,7 @@ function SalesChart({ data }) {
   return (
     <div className="bg-surface-2 dark:bg-surface-dark-2 border border-surface-3 dark:border-surface-dark-3 rounded-md p-5">
       <div className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-widest font-semibold uppercase mb-4">
-        📈 VENTAS ÚLTIMOS 30 DÍAS
+        VENTAS ÚLTIMOS 30 DÍAS
       </div>
       <canvas ref={canvasRef} style={{ width: "100%", height: "180px", display: "block" }} />
     </div>
@@ -131,19 +132,19 @@ export default function DashboardPage() {
       {/* KPI Cards — Hoy */}
       <div className="text-[10px] text-content-muted dark:text-content-dark-muted tracking-widest font-semibold uppercase mb-3">HOY</div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <KpiCard label="Ventas hoy"       value={fmtN(kpi.today.sales)}       sub={`$${fmt(kpi.today.revenue)}`} icon="🧾" color="text-warning" />
-        <KpiCard label="Ingresos hoy"     value={`$${fmt(kpi.today.revenue)}`} sub="facturado"                       icon="💰" color="text-success" />
-        <KpiCard label="Ctas. por cobrar" value={fmtN(pending_bills.count)}   sub={`$${fmt(pending_bills.balance)} pendiente`} icon="⏳" color="text-danger" />
-        <KpiCard label="Alertas stock"    value={fmtN(low_stock.length)}      sub="productos bajo mínimo"           icon="⚠️" color="text-danger" />
+        <KpiCard label="Ventas hoy"       value={fmtN(kpi.today.sales)}       sub={`$${fmt(kpi.today.revenue)}`} icon="" color="text-warning" />
+        <KpiCard label="Ingresos hoy"     value={`$${fmt(kpi.today.revenue)}`} sub="facturado"                       icon="" color="text-success" />
+        <KpiCard label="Ctas. por cobrar" value={fmtN(pending_bills.count)}   sub={`$${fmt(pending_bills.balance)} pendiente`} icon="" color="text-danger" />
+        <KpiCard label="Alertas stock"    value={fmtN(low_stock.length)}      sub="productos bajo mínimo"           icon="" color="text-danger" />
       </div>
 
       {/* KPI Cards — Periodo */}
       <div className="text-[10px] text-content-muted dark:text-content-dark-muted tracking-widest font-semibold uppercase mb-3">ÚLTIMOS 30 DÍAS</div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <KpiCard label="Ventas (30d)"     value={fmtN(kpi.month.sales)}       sub={`$${fmt(kpi.month.revenue)}`}       icon="📊" color="text-info" />
-        <KpiCard label="Ingresos (30d)"   value={`$${fmt(kpi.month.revenue)}`} sub="facturado"                              icon="📈" color="text-success" />
-        <KpiCard label="Compras (30d)"    value={fmtN(purchases_month.count)} sub={`$${fmt(purchases_month.total)}`}   icon="🏭" color="text-warning" />
-        <KpiCard label="Nuevos clientes"  value={fmtN(new_customers)}         sub="este mes"                               icon="👤" color="text-info" />
+        <KpiCard label="Ventas (30d)"     value={fmtN(kpi.month.sales)}       sub={`$${fmt(kpi.month.revenue)}`}       icon="" color="text-info" />
+        <KpiCard label="Ingresos (30d)"   value={`$${fmt(kpi.month.revenue)}`} sub="facturado"                              icon="" color="text-success" />
+        <KpiCard label="Compras (30d)"    value={fmtN(purchases_month.count)} sub={`$${fmt(purchases_month.total)}`}   icon="" color="text-warning" />
+        <KpiCard label="Nuevos clientes"  value={fmtN(new_customers)}         sub="este mes"                               icon="" color="text-info" />
       </div>
 
       {/* Chart + Top productos */}
@@ -152,7 +153,7 @@ export default function DashboardPage() {
 
         <div className="bg-surface-2 dark:bg-surface-dark-2 border border-surface-3 dark:border-surface-dark-3 rounded-md p-5">
           <div className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-widest font-semibold uppercase mb-4">
-            🏆 TOP PRODUCTOS (30 DÍAS)
+            TOP PRODUCTOS (30 DÍAS)
           </div>
           {top_products.length === 0 ? (
             <div className="text-[13px] text-content-muted dark:text-content-dark-muted text-center py-4">Sin datos</div>
@@ -184,7 +185,7 @@ export default function DashboardPage() {
       {low_stock.length > 0 && (
         <div className="bg-surface-2 dark:bg-surface-dark-2 border border-danger/40 rounded-md p-5">
           <div className="text-[11px] text-danger tracking-widest font-semibold uppercase mb-4">
-            ⚠️ STOCK BAJO — REQUIERE ATENCIÓN
+            STOCK BAJO — REQUIERE ATENCIÓN
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {low_stock.map(p => (
