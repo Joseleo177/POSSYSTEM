@@ -104,7 +104,7 @@ export default function SettingsTab({ notify }) {
   return (
     <div>
       {/* Sub-navegación Premium */}
-      <div className="flex items-center gap-1 mb-10 bg-surface-2 dark:bg-white/5 p-1.5 rounded-[22px] w-fit border border-border/40 dark:border-white/5 shadow-inner">
+      <div className="flex items-center gap-1 mb-4 bg-surface-2 dark:bg-white/5 p-1.5 rounded-[22px] w-fit border border-border/40 dark:border-white/5 shadow-inner">
         {SECTIONS.map(([key, label]) => (
           <button
             key={key}

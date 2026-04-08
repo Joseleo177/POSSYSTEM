@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
 import CustomerModal from "./CustomerModal";
 import ProductModal from "./ProductModal";
+import Modal from "./Modal";
 import { calcPurchaseItem, fmtDate } from "../helpers";
 import ConfirmModal from "./ConfirmModal";
 
@@ -54,6 +55,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
   const [savingProduct, setSavingProduct] = useState(false);
   const [categories, setCategories] = useState([]);
   const [cancelConfirm, setCancelConfirm] = useState(null);
+  const [newModal, setNewModal] = useState(false);
 
   // ── CRUD Wrappers / UI Logic ───────────────────────────────
   const openCreateSupplier = (name = "") => {
@@ -107,7 +109,10 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     clearSupplierSearch();
   };
 
-  const savePurchase = () => savePurchaseAction(selectedSupplier);
+  const savePurchase = async () => {
+    await savePurchaseAction(selectedSupplier);
+    setNewModal(false);
+  };
 
   const cancelPurchase = (id) => cancelPurchaseAction(id);
 
@@ -122,7 +127,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
             {purchases.length} recibo(s) registrado(s) en sistema
           </div>
         </div>
-        <button onClick={() => setView("new")} className="btn-primary h-14 px-8 !rounded-2xl text-[11px] font-black uppercase tracking-[3px] shadow-xl shadow-brand-500/20 active:scale-95 transition-all">
+        <button onClick={() => setNewModal(true)} className="btn-primary h-10 px-4 !rounded-2xl text-[11px] font-black uppercase tracking-[3px] shadow-xl shadow-brand-500/20 active:scale-95 transition-all">
           + Nuevo recibo de compra
         </button>
       </div>
@@ -209,8 +214,8 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="card-premium p-6 flex flex-col justify-between">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        <div className="card-premium p-4 flex flex-col justify-between">
           <div>
             <div className="text-[10px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-[3px] mb-4 opacity-50">Proveedor</div>
             <div className={`text-lg font-black uppercase tracking-tight ${detail.supplier_name ? "text-brand-500" : "text-content-muted"}`}>
@@ -226,7 +231,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
           )}
         </div>
 
-        <div className="card-premium p-6">
+        <div className="card-premium p-4">
           <div className="text-[10px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-[3px] mb-4 opacity-50">Información de Origen</div>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
@@ -259,7 +264,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
           </div>
         </div>
 
-        <div className="card-premium p-6 bg-warning/5 border-warning/20 flex flex-col items-end justify-center">
+        <div className="card-premium p-4 bg-warning/5 border-warning/20 flex flex-col items-end justify-center">
           <div className="text-[10px] font-black text-warning uppercase tracking-[3px] mb-2">Total Compra Invertido</div>
           <div className="text-5xl font-black text-warning font-display drop-shadow-sm tabular-nums tracking-tighter">${fmt2(detail.total)}</div>
           <div className="text-[10px] font-bold text-warning/60 uppercase tracking-[2px] mt-2 italic">* precios expresados en USD</div>
@@ -313,11 +318,6 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
 
   const newView = (
     <div>
-      <div className="flex items-center gap-3 mb-5">
-        <button onClick={() => setView("list")} className="btn-sm btn-secondary">← Cancelar</button>
-        <div className="text-sm font-bold text-warning tracking-[0.15em]">NUEVO RECIBO DE COMPRA</div>
-      </div>
-
       <div className="card card-md mb-4">
         <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-widest mb-3">INFORMACIÓN DEL RECIBO</div>
         <div className="grid grid-cols-3 gap-3">
@@ -608,7 +608,10 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     <div className="animate-in fade-in duration-500">
       {view === "list" && listView}
       {view === "detail" && detailView}
-      {view === "new" && newView}
+
+      <Modal open={newModal} onClose={() => setNewModal(false)} title="Nuevo Recibo de Compra" width={960}>
+        {newView}
+      </Modal>
 
       <CustomerModal open={supplierModal} onClose={closeSupplierModal} onSave={saveSupplier} editData={supplierEditData} loading={savingSupplier} />
       <ProductModal open={productModal} onClose={closeProductModal} onSave={saveProduct} editData={productEditData} categories={categories} loading={savingProduct} />

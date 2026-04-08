@@ -94,7 +94,7 @@ if(Purchase && Customer && Employee && Warehouse && PurchaseItem && Product) {
 if(Product && Warehouse && ProductStock) {
   Product.belongsToMany(Warehouse, { through: ProductStock, foreignKey: 'product_id' });
   Warehouse.belongsToMany(Product, { through: ProductStock, foreignKey: 'warehouse_id' });
-  Product.hasMany(ProductStock, { foreignKey: 'product_id' });
+  Product.hasMany(ProductStock, { as: 'stocks', foreignKey: 'product_id' });
   Warehouse.hasMany(ProductStock, { foreignKey: 'warehouse_id' });
   // Inversas necesarias para eager loading desde ProductStock
   ProductStock.belongsTo(Product, { foreignKey: 'product_id' });

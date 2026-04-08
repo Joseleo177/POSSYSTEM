@@ -198,15 +198,15 @@ export default function CobroPage() {
   });
 
   return (
-    <div className="min-h-[calc(100vh-68px)] lg:h-[calc(100vh-68px)] flex flex-col lg:flex-row bg-[#f8f9fc] dark:bg-[#080808] text-content dark:text-content-dark overflow-hidden font-sans animate-in fade-in duration-1000">
+    <div className="h-full flex flex-col lg:flex-row bg-[#f8f9fc] dark:bg-[#080808] text-content dark:text-content-dark overflow-hidden font-sans animate-in fade-in duration-1000">
       
       {/* ── Sidebar (Carrito) ── */}
-      <aside className="w-full lg:w-[460px] lg:h-full bg-white dark:bg-[#0c0c0c] flex flex-col border-b lg:border-r border-border dark:border-white/5 shadow-[20px_0_60px_rgba(0,0,0,0.03)] z-20 shrink-0 order-2 lg:order-1 relative">
-        <div className="p-8 space-y-8 flex-1 flex flex-col overflow-hidden">
-          
+      <aside className="w-full lg:w-[360px] lg:h-full bg-white dark:bg-[#0c0c0c] flex flex-col border-b lg:border-r border-border dark:border-white/5 shadow-[20px_0_60px_rgba(0,0,0,0.03)] z-20 shrink-0 order-2 lg:order-1 relative">
+        <div className="p-4 space-y-3 flex-1 flex flex-col overflow-hidden">
+
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-[20px] bg-brand-500/10 flex items-center justify-center text-brand-500 border border-brand-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-brand-500/10 flex items-center justify-center text-brand-500 border border-brand-500/20">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
               </div>
               <h2 className="text-[11px] font-black text-content dark:text-white tracking-[4px] uppercase leading-none">Checkout</h2>
@@ -237,7 +237,7 @@ export default function CobroPage() {
           <div className="space-y-4 relative">
             <div className="relative group">
               {selectedCustomer ? (
-                <div className="flex items-center justify-between h-16 px-6 bg-brand-500/10 border border-brand-500/20 rounded-[24px]">
+                <div className="flex items-center justify-between h-10 px-4 bg-brand-500/10 border border-brand-500/20 rounded-xl">
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="text-xl text-brand-500">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -253,7 +253,7 @@ export default function CobroPage() {
                 </div>
               ) : (
                 <>
-                  <input value={custSearch} onChange={e => setCustSearch(e.target.value)} placeholder="BUSCAR CLIENTE..." className="input !h-16 !pl-14 !bg-surface-1 dark:!bg-white/5 !rounded-[24px] !text-[10px] !font-black !tracking-[3px] !border-none dark:!text-white dark:placeholder-white/20" />
+                  <input value={custSearch} onChange={e => setCustSearch(e.target.value)} placeholder="BUSCAR CLIENTE..." className="input !h-10 !pl-10 !bg-surface-1 dark:!bg-white/5 !rounded-xl !text-[10px] !font-black !tracking-[3px] !border-none dark:!text-white dark:placeholder-white/20" />
                   <div className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-500 opacity-40">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                   </div>
@@ -277,7 +277,7 @@ export default function CobroPage() {
                 <span className="text-xs opacity-40">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </span>
-                <select value={currentCurrency?.id || ""} onChange={e => setSelectedCurrency(activeCurrencies.find(x => x.id === parseInt(e.target.value)))} className="bg-transparent flex-1 h-12 text-[10px] font-black outline-none border-none p-0 dark:text-white">
+                <select value={currentCurrency?.id || ""} onChange={e => setSelectedCurrency(activeCurrencies.find(x => x.id === parseInt(e.target.value)))} className="bg-transparent flex-1 h-9 text-[10px] font-black outline-none border-none p-0 dark:text-white">
                   {activeCurrencies.map(c => <option key={c.id} value={c.id} className="dark:bg-[#0c0c0c]">{c.code}</option>)}
                 </select>
               </div>
@@ -285,7 +285,7 @@ export default function CobroPage() {
                 <span className="text-xs opacity-40">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                 </span>
-                <select value={selectedSerieId || ""} onChange={e => selectSerie(parseInt(e.target.value))} className="bg-transparent flex-1 h-12 text-[10px] font-black outline-none border-none p-0 dark:text-white">
+                <select value={selectedSerieId || ""} onChange={e => selectSerie(parseInt(e.target.value))} className="bg-transparent flex-1 h-9 text-[10px] font-black outline-none border-none p-0 dark:text-white">
                   <option value="" disabled className="dark:bg-[#0c0c0c]">SERIE...</option>
                   {mySeries.map(s => <option key={s.id} value={s.id} className="dark:bg-[#0c0c0c]">{s.name}</option>)}
                 </select>
@@ -295,8 +295,8 @@ export default function CobroPage() {
 
           <div className="flex-1 overflow-y-auto space-y-3 scrollbar-hide pt-2">
             {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center opacity-30 gap-6 py-20 translate-y-10">
-                <div className="w-24 h-24 rounded-[32px] bg-surface-2 dark:bg-white/5 flex items-center justify-center text-content-subtle opacity-20">
+              <div className="h-full flex flex-col items-center justify-center opacity-30 gap-3 py-8">
+                <div className="w-14 h-14 rounded-2xl bg-surface-2 dark:bg-white/5 flex items-center justify-center text-content-subtle opacity-20">
                   <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                 </div>
                 <div className="text-[10px] font-black tracking-[6px] uppercase text-center dark:text-white">Inicia una venta</div>
@@ -330,8 +330,8 @@ export default function CobroPage() {
             )}
           </div>
 
-          <div className="pt-6 border-t border-border/10 space-y-4">
-            <div className="bg-surface-1 dark:bg-white/5 rounded-3xl p-4 flex items-center justify-between gap-4 border border-black/5 dark:border-white/5">
+          <div className="pt-3 border-t border-border/10 space-y-2">
+            <div className="bg-surface-1 dark:bg-white/5 rounded-xl p-3 flex items-center justify-between gap-3 border border-black/5 dark:border-white/5">
               <div className="flex items-center gap-3">
                 <button onClick={() => setDiscountEnabled(!discountEnabled)} className={`w-10 h-6 rounded-full transition-all relative ${discountEnabled ? "bg-brand-500" : "bg-surface-3 dark:bg-white/10"}`}>
                   <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all ${discountEnabled ? "translate-x-4" : ""}`} />
@@ -345,7 +345,7 @@ export default function CobroPage() {
                 </div>
               )}
             </div>
-            <div className="bg-surface-1 dark:bg-white/5 p-6 rounded-[32px] border border-black/5 dark:border-white/10">
+            <div className="bg-surface-1 dark:bg-white/5 p-4 rounded-2xl border border-black/5 dark:border-white/10">
               <div className="space-y-2 mb-4">
                 <div className="flex justify-between items-center opacity-60 dark:text-content-dark-muted">
                   <span className="text-[9px] font-black uppercase tracking-[3px]">SUBTOTAL</span>
@@ -360,41 +360,53 @@ export default function CobroPage() {
               </div>
               <div className="flex justify-between items-end">
                 <span className="text-[10px] font-black text-brand-500 uppercase tracking-[4px]">TOTAL</span>
-                <div className="text-4xl font-black tracking-tighter tabular-nums font-display dark:text-white">{fmt(totalDisplay, currSym)}</div>
+                <div className="text-2xl font-black tracking-tighter tabular-nums font-display dark:text-white">{fmt(totalDisplay, currSym)}</div>
               </div>
             </div>
-            <button onClick={() => setShowConfirmCheckout(true)} disabled={loading || cart.length === 0} className="w-full h-20 bg-brand-500 text-brand-900 rounded-[32px] font-black uppercase tracking-[6px] shadow-xl shadow-brand-500/20 active:scale-95 transition-all text-sm">
+            <button onClick={() => setShowConfirmCheckout(true)} disabled={loading || cart.length === 0} className="w-full h-12 bg-brand-500 text-brand-900 rounded-2xl font-black uppercase tracking-[4px] shadow-xl shadow-brand-500/20 active:scale-95 transition-all text-sm">
               {loading ? "PROCESANDO..." : "FINALIZAR VENTA"}
             </button>
           </div>
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col p-8 overflow-hidden order-1 lg:order-2">
-        <div className="flex items-center gap-2 overflow-x-auto mb-10 pb-2 scrollbar-hide">
-          <button onClick={() => setSelectedCat("all")} className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[3px] border-2 transition-all ${selectedCat === "all" ? "bg-brand-500 text-brand-900 border-brand-500" : "bg-white dark:bg-white/5 border-transparent dark:text-white"}`}>TODOS</button>
-          {categories.map(cat => <button key={cat.id} onClick={() => setSelectedCat(cat.name)} className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[3px] border-2 transition-all ${selectedCat === cat.name ? "bg-brand-500 text-brand-900 border-brand-500" : "bg-white dark:bg-white/5 border-transparent dark:text-white"}`}>{cat.name}</button>)}
+      <main className="flex-1 flex flex-col p-4 overflow-hidden order-1 lg:order-2">
+        <div className="flex items-center gap-2 overflow-x-auto mb-3 pb-1 scrollbar-hide">
+          <button onClick={() => setSelectedCat("all")} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[3px] border-2 transition-all whitespace-nowrap ${selectedCat === "all" ? "bg-brand-500 text-brand-900 border-brand-500" : "bg-white dark:bg-white/5 border-transparent dark:text-white"}`}>TODOS</button>
+          {categories.map(cat => <button key={cat.id} onClick={() => setSelectedCat(cat.name)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[3px] border-2 transition-all whitespace-nowrap ${selectedCat === cat.name ? "bg-brand-500 text-brand-900 border-brand-500" : "bg-white dark:bg-white/5 border-transparent dark:text-white"}`}>{cat.name}</button>)}
         </div>
-        <div className="relative mb-10">
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="BUSCAR PRODUCTO..." className="w-full bg-white dark:bg-surface-dark-2 h-20 px-16 rounded-[32px] text-sm font-black tracking-[4px] outline-none shadow-xl shadow-black/5 dark:text-white dark:placeholder-white/20" />
-          <div className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-500 opacity-40">
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        <div className="relative mb-3">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="BUSCAR PRODUCTO..." className="w-full bg-white dark:bg-surface-dark-2 h-10 px-10 rounded-xl text-xs font-black tracking-[2px] outline-none shadow dark:text-white dark:placeholder-white/20" />
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-500 opacity-40">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto pr-4 pb-20 scrollbar-hide">
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-8">
-            {filteredProducts.map(p => (
-              <div key={p.id} onClick={() => addToCart(p)} className="group bg-white dark:bg-surface-dark-2 rounded-[40px] overflow-hidden transition-all shadow-lg hover:-translate-y-2 cursor-pointer border-2 border-transparent hover:border-brand-500/50">
-                <div className="aspect-square bg-surface-1 dark:bg-white/5 relative overflow-hidden">
-                  {p.image_url ? <img src={p.image_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center opacity-10 dark:text-white"><svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>}
+        <div className="flex-1 overflow-y-auto pr-2 pb-4 scrollbar-hide">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+            {filteredProducts.map(p => {
+              const outOfStock = !p.is_service && (p.stock ?? 0) <= 0;
+              return (
+                <div key={p.id}
+                  onClick={() => !outOfStock && addToCart(p)}
+                  className={`group bg-white dark:bg-surface-dark-2 rounded-2xl overflow-hidden transition-all shadow border-2 border-transparent
+                    ${outOfStock ? "opacity-40 cursor-not-allowed" : "hover:-translate-y-1 cursor-pointer hover:border-brand-500/50"}`}
+                >
+                  <div className="aspect-square bg-surface-1 dark:bg-white/5 relative overflow-hidden">
+                    {p.image_url ? <img src={p.image_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center opacity-10 dark:text-white"><svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>}
+                    {outOfStock && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="bg-black/60 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full">Sin stock</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3 flex flex-col gap-0.5">
+                    <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest">{p.category_name || "Sin Categoría"}</div>
+                    <div className="text-xs font-black truncate dark:text-white uppercase tracking-wider">{p.name}</div>
+                    <div className="text-base font-black mt-1 dark:text-white font-display">{fmt(convertToDisplay(p.price), currSym)}</div>
+                  </div>
                 </div>
-                <div className="p-8 flex flex-col gap-1">
-                  <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest">{p.category_name || "Sin Categoría"}</div>
-                  <div className="text-xs font-black truncate dark:text-white uppercase tracking-wider">{p.name}</div>
-                  <div className="text-xl font-black mt-2 dark:text-white font-display">{fmt(convertToDisplay(p.price), currSym)}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </main>

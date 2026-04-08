@@ -7,7 +7,7 @@ const fmtN = (n)        => fmtInt(n);
 
 function KpiCard({ label, value, sub, icon, color = "text-warning" }) {
   return (
-    <div className="bg-surface-2 dark:bg-surface-dark-2 border border-surface-3 dark:border-surface-dark-3 rounded-md p-5">
+    <div className="bg-surface-2 dark:bg-surface-dark-2 border border-surface-3 dark:border-surface-dark-3 rounded-md p-4">
       <div className="flex items-start justify-between mb-3">
         <div className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-widest font-semibold uppercase">{label}</div>
         <span className="text-2xl">{icon}</span>
@@ -76,7 +76,7 @@ function SalesChart({ data }) {
   }, [data]);
 
   return (
-    <div className="bg-surface-2 dark:bg-surface-dark-2 border border-surface-3 dark:border-surface-dark-3 rounded-md p-5">
+    <div className="bg-surface-2 dark:bg-surface-dark-2 border border-surface-3 dark:border-surface-dark-3 rounded-md p-4">
       <div className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-widest font-semibold uppercase mb-4">
         VENTAS ÚLTIMOS 30 DÍAS
       </div>
@@ -117,9 +117,9 @@ export default function DashboardPage() {
   const { kpi, top_products, sales_by_day, pending_bills, low_stock, new_customers, purchases_month } = data;
 
   return (
-    <div className="p-6 max-w-[1200px] mx-auto">
+    <div className="p-4 max-w-[1200px] mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-3">
         <div>
           <h1 className="text-xl font-bold text-content dark:text-content-dark">Dashboard</h1>
           <p className="text-[12px] text-content-muted dark:text-content-dark-muted mt-0.5">
@@ -131,7 +131,7 @@ export default function DashboardPage() {
 
       {/* KPI Cards — Hoy */}
       <div className="text-[10px] text-content-muted dark:text-content-dark-muted tracking-widest font-semibold uppercase mb-3">HOY</div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-3">
         <KpiCard label="Ventas hoy"       value={fmtN(kpi.today.sales)}       sub={`$${fmt(kpi.today.revenue)}`} icon="" color="text-warning" />
         <KpiCard label="Ingresos hoy"     value={`$${fmt(kpi.today.revenue)}`} sub="facturado"                       icon="" color="text-success" />
         <KpiCard label="Ctas. por cobrar" value={fmtN(pending_bills.count)}   sub={`$${fmt(pending_bills.balance)} pendiente`} icon="" color="text-danger" />
@@ -140,7 +140,7 @@ export default function DashboardPage() {
 
       {/* KPI Cards — Periodo */}
       <div className="text-[10px] text-content-muted dark:text-content-dark-muted tracking-widest font-semibold uppercase mb-3">ÚLTIMOS 30 DÍAS</div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-3">
         <KpiCard label="Ventas (30d)"     value={fmtN(kpi.month.sales)}       sub={`$${fmt(kpi.month.revenue)}`}       icon="" color="text-info" />
         <KpiCard label="Ingresos (30d)"   value={`$${fmt(kpi.month.revenue)}`} sub="facturado"                              icon="" color="text-success" />
         <KpiCard label="Compras (30d)"    value={fmtN(purchases_month.count)} sub={`$${fmt(purchases_month.total)}`}   icon="" color="text-warning" />
@@ -148,10 +148,10 @@ export default function DashboardPage() {
       </div>
 
       {/* Chart + Top productos */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 mb-3">
         <SalesChart data={sales_by_day} />
 
-        <div className="bg-surface-2 dark:bg-surface-dark-2 border border-surface-3 dark:border-surface-dark-3 rounded-md p-5">
+        <div className="bg-surface-2 dark:bg-surface-dark-2 border border-surface-3 dark:border-surface-dark-3 rounded-md p-4">
           <div className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-widest font-semibold uppercase mb-4">
             TOP PRODUCTOS (30 DÍAS)
           </div>
@@ -183,7 +183,7 @@ export default function DashboardPage() {
 
       {/* Alertas stock bajo */}
       {low_stock.length > 0 && (
-        <div className="bg-surface-2 dark:bg-surface-dark-2 border border-danger/40 rounded-md p-5">
+        <div className="bg-surface-2 dark:bg-surface-dark-2 border border-danger/40 rounded-md p-4">
           <div className="text-[11px] text-danger tracking-widest font-semibold uppercase mb-4">
             STOCK BAJO — REQUIERE ATENCIÓN
           </div>

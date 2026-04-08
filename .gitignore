@@ -1,5 +1,30 @@
+# ── Dependencies ─────────────────────────────
 node_modules/
+
+# ── Environment (NEVER commit secrets) ───────
 .env
-*.log
+.env.local
+.env.production
+.env.*.local
+
+# ── Uploads (user-generated content) ─────────
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# ── Build output ──────────────────────────────
 dist/
+build/
+
+# ── Logs ──────────────────────────────────────
+*.log
+logs/
+backend/logs/
+
+# ── OS / IDE ──────────────────────────────────
 .DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ── Misc ──────────────────────────────────────
+*.local

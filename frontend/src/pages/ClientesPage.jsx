@@ -135,13 +135,13 @@ export default function ContactosPage() {
 
   const listView = (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex gap-4 items-center mb-10 flex-wrap">
+      <div className="flex gap-4 items-center mb-4 flex-wrap">
         <div className="relative flex-1 group">
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar contacto por nombre, ID o teléfono..."
-            className="input pr-4 pl-12 h-14 !rounded-2xl shadow-sm group-hover:shadow-md transition-all"
+            className="input pr-4 pl-12 h-10 !rounded-2xl shadow-sm group-hover:shadow-md transition-all"
           />
           <div className="absolute left-4 top-1/2 -translate-y-1/2 text-content-subtle group-focus-within:text-brand-500 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -150,7 +150,7 @@ export default function ContactosPage() {
 
         <button
           onClick={() => openNew("cliente")}
-          className="btn-primary h-14 px-8 !rounded-2xl text-[11px] font-black uppercase tracking-[2px]"
+          className="btn-primary h-10 px-5 !rounded-2xl text-[11px] font-black uppercase tracking-[2px]"
         >
           + Nuevo Contacto
         </button>
@@ -175,7 +175,7 @@ export default function ContactosPage() {
 
   const detailView = detail && (
     <div className="animate-in fade-in slide-in-from-left-6 duration-500">
-      <div className="flex justify-between items-center mb-8 print-hidden">
+      <div className="flex justify-between items-center mb-4 print-hidden">
         <button
           onClick={closeDetail}
           className="group flex items-center gap-2 text-content-muted font-bold text-xs uppercase tracking-[2px] hover:text-brand-500 transition-all active:scale-95"
@@ -192,16 +192,16 @@ export default function ContactosPage() {
         </div>
       </div>
 
-      <div className="hidden print-force-break mb-10 text-center text-black">
+      <div className="hidden print-force-break mb-4 text-center text-black">
         <h1 className="text-3xl font-black uppercase font-display tracking-tight">Estado de Cuenta</h1>
         <p className="text-sm mt-2 tracking-[3px] font-bold opacity-70">{detail.name} — RIF: {detail.rif || 'S/N'}</p>
         <div className="w-16 h-1 bg-black mx-auto my-4"></div>
         <p className="text-[10px] uppercase font-black tracking-widest opacity-50">Fecha de emisión: {new Date().toLocaleDateString("es-VE")}</p>
       </div>
 
-      <div className="card-premium p-8 mb-8 relative overflow-hidden">
+      <div className="card-premium p-4 mb-4 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-brand-500/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-center relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center relative z-10">
           <div className="flex items-center gap-6">
             <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-3xl font-black shadow-lg border-4 border-white dark:border-surface-dark-2 ${detail.type === "proveedor"
               ? "bg-violet-500/10 text-violet-500 border-violet-500/20"
@@ -231,7 +231,7 @@ export default function ContactosPage() {
             </div>
           </div>
 
-          <div className="lg:text-right bg-gradient-to-br from-white to-surface-2 dark:from-surface-dark-2 dark:to-surface-dark-3 rounded-2xl p-8 border border-brand-500/20 shadow-xl relative overflow-hidden group">
+          <div className="lg:text-right bg-gradient-to-br from-white to-surface-2 dark:from-surface-dark-2 dark:to-surface-dark-3 rounded-2xl p-4 border border-brand-500/20 shadow-xl relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-full h-full bg-brand-500/5 transition-all group-hover:bg-brand-500/10"></div>
             <div className="text-[11px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-[4px] mb-3 relative z-10">SALDO PENDIENTE</div>
             {parseFloat(detail.total_debt || 0) > 0
@@ -253,15 +253,15 @@ export default function ContactosPage() {
       </div>
 
       {pendingSales.length > 0 && (
-        <div className="mb-12">
-          <div className="flex items-center gap-4 mb-6">
+        <div className="mb-4">
+          <div className="flex items-center gap-4 mb-3">
             <h3 className="text-[11px] font-black text-danger uppercase tracking-[5px] whitespace-nowrap">Cuentas por Cobrar</h3>
             <div className="h-0.5 flex-1 bg-danger/10 rounded-full"></div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {pendingSales.map(sale => (
-              <div key={sale.id} className="group bg-white dark:bg-surface-dark-2 border border-border/60 hover:border-danger/30 transition-all rounded-2xl p-6 shadow-sm hover:shadow-xl relative overflow-hidden">
+              <div key={sale.id} className="group bg-white dark:bg-surface-dark-2 border border-border/60 hover:border-danger/30 transition-all rounded-2xl p-4 shadow-sm hover:shadow-xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-danger/5 rounded-full -mr-16 -mt-16 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <div className="flex justify-between items-start mb-6 relative z-10">
                   <div>
@@ -302,7 +302,7 @@ export default function ContactosPage() {
 
                 <button
                   onClick={() => openPay(sale)}
-                  className="btn-success w-full mt-6 h-12 !rounded-xl text-[11px] font-black uppercase tracking-[3px] active:scale-95"
+                  className="btn-success w-full mt-3 h-12 !rounded-xl text-[11px] font-black uppercase tracking-[3px] active:scale-95"
                 >
                   Registrar Cobro
                 </button>
@@ -312,7 +312,7 @@ export default function ContactosPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex items-center gap-4 mb-3">
         <h3 className="text-[11px] font-black text-content-subtle uppercase tracking-[5px] whitespace-nowrap opacity-60">Historial de Pagos</h3>
         <div className="h-0.5 flex-1 bg-border/40 rounded-full"></div>
       </div>
@@ -355,7 +355,7 @@ export default function ContactosPage() {
   );
 
   return (
-    <div className="animate-in fade-in duration-700 max-w-[1600px] mx-auto p-2 lg:p-6">
+    <div className="animate-in fade-in duration-700 max-w-[1600px] mx-auto p-2 lg:p-4">
       {!detail && listView}
       {detail && detailView}
 

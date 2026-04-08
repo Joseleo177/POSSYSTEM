@@ -44,14 +44,30 @@ export default function CatalogPage() {
 
   // ── Loaders ────────────────────────────────────────────────
   useEffect(() => {
-    // Load warehouses for selector
-    api.warehouses.getAll().then(r => {
-      setWarehouses(r.data);
-      // Try to match the POS active warehouse if it exists in local storage or session
+    // Load warehouses for selector, then apply smart preselection
+    Promise.all([
+      api.warehouses.getAll(),
+      employee?.id ? api.warehouses.getByEmployee(employee.id) : Promise.resolve({ data: [] })
+    ]).then(([allRes, myRes]) => {
+      setWarehouses(allRes.data);
+
+      // 1. Si el cajero ya eligió un almacén en el POS, respetarlo
       const activeId = localStorage.getItem("activeWarehouseId");
-      if (activeId) setSelectedWarehouseId(activeId);
+      if (activeId) {
+        setSelectedWarehouseId(activeId);
+        return;
+      }
+
+      // 2. Si el empleado tiene exactamente 1 almacén asignado, preseleccionarlo
+      const myWarehouses = myRes?.data ?? [];
+      if (myWarehouses.length === 1) {
+        setSelectedWarehouseId(String(myWarehouses[0].id));
+        return;
+      }
+
+      // 3. Por defecto: vista global (string vacío)
     });
-  }, []);
+  }, [employee?.id]);
 
   useEffect(() => { setPage(1); }, [debouncedSearch, selectedWarehouseId]);
   
@@ -164,10 +180,10 @@ export default function CatalogPage() {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
+    <div className="space-y-4 animate-in fade-in duration-700">
       
       {/* ── Header & Sub-tabs ── */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-border/40 pb-2">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border/40 pb-2">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-content dark:text-content-dark uppercase font-display mb-4">
             Gestión de <span className="text-brand-500">Inventario</span>
@@ -204,14 +220,14 @@ export default function CatalogPage() {
 
       {/* ── PRODUCTOS ── */}
       {subTab === "productos" && (
-        <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-          <div className="flex flex-col lg:flex-row justify-between items-center gap-6">
+        <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
+          <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
             <div className="relative flex-1 group w-full max-w-2xl">
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar por nombre, código o categoría..."
-                className="input !pl-14 !h-16 !text-base !rounded-[24px] shadow-sm border border-border/60"
+                className="input !pl-14 !h-10 !text-base !rounded-xl shadow-sm border border-border/60"
               />
               <div className="absolute left-5 top-1/2 -translate-y-1/2 text-content-subtle group-focus-within:text-brand-500 transition-colors">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -219,7 +235,7 @@ export default function CatalogPage() {
             </div>
 
             <div className="flex items-center gap-3 w-full lg:w-auto">
-              <div className="flex-1 lg:w-72 bg-surface-2 dark:bg-white/5 border border-border/40 rounded-[24px] px-6 py-2 group-focus-within:border-brand-500 transition-all flex items-center h-16 shadow-sm relative">
+              <div className="flex-1 lg:w-72 bg-surface-2 dark:bg-white/5 border border-border/40 rounded-xl px-4 py-1.5 group-focus-within:border-brand-500 transition-all flex items-center h-10 shadow-sm relative">
                 <div className="flex flex-col flex-1 pl-1">
                   <label className="text-[9px] font-black uppercase tracking-[3px] text-brand-500 opacity-80 mb-0.5">Visión de Existencias</label>
                   <div className="relative">
@@ -244,7 +260,7 @@ export default function CatalogPage() {
             {canManageProducts && (
               <button 
                 onClick={openNewProduct} 
-                className="btn-primary !h-16 px-10 !rounded-[24px] shadow-xl shadow-brand-500/20 flex items-center gap-3 w-full lg:w-auto justify-center group"
+                className="btn-primary !h-10 px-5 !rounded-xl shadow-xl shadow-brand-500/20 flex items-center gap-3 w-full lg:w-auto justify-center group"
               >
                 <span className="text-3xl opacity-20"></span>
                 <span className="text-[11px] font-black tracking-[2px] uppercase">Nuevo Producto</span>
@@ -352,12 +368,12 @@ export default function CatalogPage() {
 
       {/* ── CATEGORÍAS ── */}
       {subTab === "categorias" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 animate-in slide-in-from-bottom-4 duration-500">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 animate-in slide-in-from-bottom-4 duration-500">
           
           {/* Left: Lista de categorías */}
           <div className="lg:col-span-12">
             <div className="card-premium !p-0 overflow-hidden">
-              <div className="p-8 border-b border-border/40">
+              <div className="p-4 border-b border-border/40">
                  <h3 className="text-xl font-black tracking-tight text-content dark:text-content-dark uppercase font-display">
                   Listado de <span className="text-brand-500">Categorías</span>
                 </h3>
@@ -425,8 +441,8 @@ export default function CatalogPage() {
           {/* New Category Float Card? Or just below? Let's use a nice card for creating */}
           {canManageCategories && (
             <div className="lg:col-span-12">
-            <div className="card-premium p-8 !bg-brand-500/5 border-dashed border-2 border-brand-500/30">
-              <div className="flex flex-col md:flex-row gap-8 items-end">
+            <div className="card-premium p-4 !bg-brand-500/5 border-dashed border-2 border-brand-500/30">
+              <div className="flex flex-col md:flex-row gap-4 items-end">
                 <div className="flex-1 space-y-3">
                   <h4 className="text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-[4px]">Nueva Categoría</h4>
                   <div className="relative group">
@@ -435,14 +451,14 @@ export default function CatalogPage() {
                       onChange={e => setCatName(e.target.value)}
                       placeholder="Ejemplo: Bebidas, Lácteos, Cigarrillos..."
                       onKeyDown={e => e.key === "Enter" && createCategory()}
-                      className="input !h-16 !pl-14 !bg-white dark:!bg-surface-dark-2 !rounded-2xl border-brand-500/20 group-focus-within:border-brand-500 transition-all font-bold"
+                      className="input !h-10 !pl-14 !bg-white dark:!bg-surface-dark-2 !rounded-2xl border-brand-500/20 group-focus-within:border-brand-500 transition-all font-bold"
                     />
                     <div className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-500/40 group-focus-within:text-brand-500 transition-colors pointer-events-none">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
                     </div>
                   </div>
                 </div>
-                <button onClick={createCategory} className="btn-primary !h-16 px-12 !rounded-2xl shadow-xl shadow-brand-500/20 w-full md:w-auto font-black text-[11px] uppercase tracking-[3px]">
+                <button onClick={createCategory} className="btn-primary !h-10 px-6 !rounded-2xl shadow-xl shadow-brand-500/20 w-full md:w-auto font-black text-[11px] uppercase tracking-[3px]">
                   Vincular Categoría
                 </button>
               </div>

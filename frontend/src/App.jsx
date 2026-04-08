@@ -39,14 +39,13 @@ function NavTab({ t, active, onGo }) {
   return (
     <button
       onClick={() => onGo(t.key)}
-      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-300 shrink-0
+      className={`flex items-center justify-center px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-300 shrink-0
         ${isActive
-          ? "bg-brand-500 text-brand-900 shadow-lg shadow-brand-500/20 scale-105"
+          ? "bg-brand-500 text-brand-900 shadow-lg shadow-brand-500/20"
           : "text-content-subtle hover:bg-surface-3 dark:hover:bg-white/5 hover:text-content dark:hover:text-white"
         }`}
     >
-      <span className="text-xl leading-none">{t.icon}</span>
-      <span className="hidden lg:inline-block tracking-tight">{t.label}</span>
+      <span className="tracking-tight">{t.label}</span>
     </button>
   );
 }
@@ -92,7 +91,7 @@ function PosApp() {
   const roleClass = ROLE_COLORS[employee.role] || "text-content-muted border-border bg-surface-3 dark:bg-surface-dark-3";
 
   return (
-    <div className="min-h-screen bg-surface-2 dark:bg-surface-dark text-content dark:text-content-dark font-sans">
+    <div className="h-screen flex flex-col overflow-hidden bg-surface-2 dark:bg-surface-dark text-content dark:text-content-dark font-sans">
 
       {/* Toast de notificación */}
       {notification && (
@@ -126,7 +125,7 @@ function PosApp() {
           </div>
 
           {/* Tabs — scrollable */}
-          <nav className="flex items-center gap-2 overflow-x-auto flex-1 py-1 px-2 scrollbar-hide no-scrollbar">
+          <nav className="flex items-center gap-1 flex-1 py-1 px-1 min-w-0">
             {visibleTabs.map(t => (
               <NavTab key={t.key} t={t} active={tab} onGo={goTab} />
             ))}
@@ -167,7 +166,7 @@ function PosApp() {
       </header>
 
       {/* Contenido */}
-      <main className={safeTab === "Cobro" ? "w-full" : "max-w-screen-2xl mx-auto px-4 py-5"}>
+      <main className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${safeTab === "Cobro" ? "w-full h-full overflow-hidden" : "max-w-screen-2xl mx-auto w-full px-4 py-5"}`}>
         {safeTab === "Dashboard"      && <DashboardPage />}
         {safeTab === "Cobro"          && <CobroPage />}
         {safeTab === "Catálogo"       && <CatalogPage />}

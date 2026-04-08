@@ -30,7 +30,7 @@ function DateRangePicker({ from, to, onChange }) {
     onChange(d.toISOString().slice(0, 10), t);
   };
   return (
-    <div className="flex flex-wrap items-center gap-4 mb-8 p-6 bg-white dark:bg-white/5 rounded-[24px] border border-border/40 dark:border-white/5 shadow-sm">
+    <div className="flex flex-wrap items-center gap-4 mb-4 p-4 bg-white dark:bg-white/5 rounded-xl border border-border/40 dark:border-white/5 shadow-sm">
       <div className="flex gap-2 flex-wrap">
         {presets.map(p => (
           <button key={p.label} onClick={() => applyPreset(p.days)}
@@ -50,7 +50,7 @@ function DateRangePicker({ from, to, onChange }) {
 
 function KpiCard({ label, value, sub, icon, color="text-brand-500", bg="bg-brand-500/5", delta: d }) {
   return (
-    <div className={`rounded-[32px] border border-border/40 dark:border-white/5 bg-white dark:bg-white/5 p-6 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group`}>
+    <div className={`rounded-xl border border-border/40 dark:border-white/5 bg-white dark:bg-white/5 p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group`}>
       <div className="absolute top-0 right-0 w-24 h-24 bg-current opacity-[0.03] rounded-bl-[60px] translate-x-12 -translate-y-12 transition-transform group-hover:translate-x-10 group-hover:-translate-y-10" style={{ color: color.includes("text-") ? `var(--${color.split("-")[1]})` : "currentColor" }} />
       <div className="flex justify-between items-start">
         <div className="text-[9px] font-black text-content-subtle uppercase tracking-[3px] leading-none opacity-60">{label}</div>
@@ -82,7 +82,7 @@ function SectionHeader({ title, sub }) {
 
 function Card({ children, className="" }) {
   return (
-    <div className={`bg-white dark:bg-white/5 rounded-[40px] border border-border/40 dark:border-white/5 p-8 shadow-sm transition-all hover:shadow-md ${className}`}>
+    <div className={`bg-white dark:bg-white/5 rounded-2xl border border-border/40 dark:border-white/5 p-4 shadow-sm transition-all hover:shadow-md ${className}`}>
       {children}
     </div>
   );
@@ -177,7 +177,7 @@ function ProgressBar({ value, max, color="bg-warning" }) {
 function ExportButton({ onClick }) {
   return (
     <button onClick={onClick}
-      className="flex items-center gap-2 px-6 py-3 text-[10px] font-black uppercase tracking-[2px] rounded-xl border border-green-500/30 text-green-500 bg-green-500/5 hover:bg-green-500 hover:text-white transition-all shadow-sm">
+      className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-[2px] rounded-xl border border-green-500/30 text-green-500 bg-green-500/5 hover:bg-green-500 hover:text-white transition-all shadow-sm">
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
       </svg>
@@ -224,24 +224,24 @@ function SalesReport() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
         {data && <ExportButton onClick={() => buildSalesExcel(data, range)} />}
       </div>
 
       {loading && <Loading />}
-      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-[32px] text-danger font-black uppercase tracking-widest">{error}</div>}
+      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-black uppercase tracking-widest">{error}</div>}
       
       {!loading && !error && data && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard label="Volumen de Ventas"  value={fmtN(s.total_sales)}     icon="" color="text-brand-500" />
             <KpiCard label="Ingresos Brutos"   value={fmt$(s.total_revenue)}   icon="" color="text-green-500" />
             <KpiCard label="Ticket Promedio"    value={fmt$(s.avg_ticket)}      sub={`Máximo: ${fmt$(s.max_sale)}`} icon="" color="text-blue-500" />
             <KpiCard label="Cuentas x Cobrar"   value={fmt$(s.pending_amount)}  sub={`${s.pending_count} facturas abiertas`} icon="" color="text-danger" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Card className="lg:col-span-2">
               <SectionHeader title="Ingresos Cronológicos" sub="Análisis de flujo de caja diario" />
               {data.by_day.length > 0 ? (
@@ -279,7 +279,7 @@ function SalesReport() {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>
               <SectionHeader title="Zonas de Calor Temporal" sub="Actividad por hora del día" />
               <div className="pt-6">
@@ -337,7 +337,7 @@ function InventoryReport() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-2 p-1.5 bg-surface-2 dark:bg-white/5 rounded-2xl border border-border/40 dark:border-white/5 w-fit">
           {[7, 30, 90].map(d => (
             <button key={d} onClick={() => setDays(d)}
@@ -350,11 +350,11 @@ function InventoryReport() {
       </div>
 
       {loading && <Loading />}
-      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-[32px] text-danger font-black uppercase tracking-widest">{error}</div>}
+      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-black uppercase tracking-widest">{error}</div>}
 
       {!loading && !error && data && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard label="Nivel Crítico"     value={fmtN(s.critical_count)}   icon="" color="text-danger" />
             <KpiCard label="Quiebre de Stock"  value={fmtN(s.zero_count)}       icon="" color="text-danger" />
             <KpiCard label="Baja Rotación"     value={fmtN(s.low_rotation_count)} icon="" color="text-brand-500" />
@@ -364,7 +364,7 @@ function InventoryReport() {
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide no-scrollbar">
             {[["critical","Stock Crítico"],["zero","Sin Stock"],["top","Alta Rotación"],["slow","Sin Movimiento"],["category","Por Categoría"]].map(([k, l]) => (
               <button key={k} onClick={() => setView(k)}
-                className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[2px] transition-all whitespace-nowrap border-2
+                className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-[2px] transition-all whitespace-nowrap border-2
                   ${view === k ? "bg-brand-500 text-brand-900 border-brand-500 shadow-lg shadow-brand-500/20" : "bg-white dark:bg-white/5 border-transparent text-content-subtle opacity-60 hover:opacity-100"}`}>
                 {l}
               </button>
@@ -372,7 +372,7 @@ function InventoryReport() {
           </div>
 
           <Card className="!p-0 overflow-hidden">
-            <div className="p-8 pb-0">
+            <div className="p-4 pb-0">
                <SectionHeader title={view === "critical" ? "Reposición Urgente" : view === "zero" ? "Inventario Agotado" : view === "top" ? "Productos Estrella" : view === "slow" ? "Capital Estancado" : "Valorización Industrial"} 
                               sub="Detalle técnico de existencias y proyecciones" />
             </div>
@@ -439,17 +439,17 @@ function MarginsReport() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
         {data && <ExportButton onClick={() => buildMarginsExcel(data, range)} />}
       </div>
 
       {loading && <Loading />}
-      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-[32px] text-danger font-black uppercase tracking-widest">{error}</div>}
+      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-black uppercase tracking-widest">{error}</div>}
 
       {!loading && !error && data && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard label="Retorno de Inversión" value={`${s.avg_margin_pct || 0}%`} icon="" color="text-brand-500" />
             <KpiCard label="Utilidad Bruta"     value={fmt$(s.total_margin || 0)}   icon="" color="text-green-500" />
             <KpiCard label="Ingresos de Operación" value={fmt$(s.total_revenue || 0)} icon="" color="text-blue-500" />
@@ -459,7 +459,7 @@ function MarginsReport() {
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide no-scrollbar">
             {[["top","Mayor Margen"],["bottom","Menor Margen"],["category","Por Categoría"]].map(([k,l]) => (
               <button key={k} onClick={() => setView(k)}
-                className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[2px] transition-all whitespace-nowrap border-2
+                className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-[2px] transition-all whitespace-nowrap border-2
                   ${view === k ? "bg-brand-500 text-brand-900 border-brand-500 shadow-lg shadow-brand-500/20" : "bg-white dark:bg-white/5 border-transparent text-content-subtle opacity-60 hover:opacity-100"}`}>
                 {l}
               </button>
@@ -467,7 +467,7 @@ function MarginsReport() {
           </div>
 
           <Card className="!p-0 overflow-hidden">
-            <div className="p-8">
+            <div className="p-4">
               <SectionHeader title={view === "top" ? "Productos de Alta Rentabilidad" : view === "bottom" ? "Optimización de Precios" : "Rentabilidad Sectorizada"} 
                             sub="Cálculo basado en el costo de reposición actual" />
             </div>
@@ -531,17 +531,17 @@ function CustomersReport() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
         {data && <ExportButton onClick={() => buildCustomersExcel(data, range)} />}
       </div>
 
       {loading && <Loading />}
-      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-[32px] text-danger font-black uppercase tracking-widest">{error}</div>}
+      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-black uppercase tracking-widest">{error}</div>}
 
       {!loading && !error && data && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard label="Nuevos Clientes"  value={fmtN(data.new_customers.length)} icon="" color="text-brand-500" />
             <KpiCard label="Clientes Inactivos" value={fmtN(data.inactive_customers.length)} icon="" color="text-danger" sub={`>${inactiveDays} días`} />
             <KpiCard label="Tasa de Recurrencia" value={rr?.identified_customers > 0 ? `${pct(rr.repeat_customers, rr.identified_customers)}%` : "—"} icon="" color="text-blue-500" />
@@ -551,7 +551,7 @@ function CustomersReport() {
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide no-scrollbar">
             {[["top","Top Clientes"],["inactive","Inactivos"],["new","Nuevos"],["ticket","Distribución Ticket"]].map(([k,l]) => (
               <button key={k} onClick={() => setView(k)}
-                className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[2px] transition-all whitespace-nowrap border-2
+                className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-[2px] transition-all whitespace-nowrap border-2
                   ${view === k ? "bg-brand-500 text-brand-900 border-brand-500 shadow-lg shadow-brand-500/20" : "bg-white dark:bg-white/5 border-transparent text-content-subtle opacity-60 hover:opacity-100"}`}>
                 {l}
               </button>
@@ -559,7 +559,7 @@ function CustomersReport() {
           </div>
 
           <Card className="!p-0 overflow-hidden">
-            <div className="p-8 pb-4">
+            <div className="p-4 pb-4">
               <SectionHeader title={view === "top" ? "Ranking de Clientes Elite" : view === "inactive" ? "Campaña de Reactivación" : view === "new" ? "Registro de Nuevos Prospectos" : "Segmentación por Ticket"}
                             sub="Perfiles detallados y métricas de consumo" />
             </div>
@@ -619,17 +619,17 @@ function AuditReport() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
         {data && <ExportButton onClick={() => buildAuditExcel(data, range)} />}
       </div>
 
       {loading && <Loading />}
-      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-[32px] text-danger font-black uppercase tracking-widest">{error}</div>}
+      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-black uppercase tracking-widest">{error}</div>}
 
       {!loading && !error && data && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard label="Devoluciones" value={fmtN(rs?.return_count || 0)} icon="" color="text-danger" />
             <KpiCard label="Monto Reembolsado" value={fmt$(rs?.total_returned || 0)} icon="" color="text-danger" />
             <KpiCard label="Ventas con Descuento" value={fmtN(data.discounts.length)} icon="" color="text-brand-500" />
@@ -639,7 +639,7 @@ function AuditReport() {
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide no-scrollbar">
             {[["employees","Vendedores"],["returns","Devoluciones"],["discounts","Descuentos"]].map(([k,l]) => (
               <button key={k} onClick={() => setView(k)}
-                className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[2px] transition-all whitespace-nowrap border-2
+                className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-[2px] transition-all whitespace-nowrap border-2
                   ${view === k ? "bg-brand-500 text-brand-900 border-brand-500 shadow-lg shadow-brand-500/20" : "bg-white dark:bg-white/5 border-transparent text-content-subtle opacity-60 hover:opacity-100"}`}>
                 {l}
               </button>
@@ -647,7 +647,7 @@ function AuditReport() {
           </div>
 
           <Card className="!p-0 overflow-hidden">
-            <div className="p-8 pb-4">
+            <div className="p-4 pb-4">
               <SectionHeader title={view === "employees" ? "Rendimiento y Cumplimiento" : view === "returns" ? "Control de Merma y Devoluciones" : "Supervisión de Descuentos"}
                             sub="Trazabilidad completa de operaciones y transacciones" />
             </div>
@@ -702,11 +702,11 @@ function ReceivablesReport() {
       </div>
 
       {loading && <Loading />}
-      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-[32px] text-danger font-black uppercase tracking-widest">{error}</div>}
+      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-black uppercase tracking-widest">{error}</div>}
 
       {!loading && !error && data && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard label="Cuentas Pendientes" value={fmtN(s.total_invoices || 0)} icon="" color="text-orange-500" />
             <KpiCard label="Saldo en Calle"     value={fmt$(s.total_balance || 0)} icon="" color="text-danger" />
             <KpiCard label="Cartera Total"      value={fmt$(s.total_billed || 0)}  icon="" color="text-blue-500" />
@@ -714,13 +714,13 @@ function ReceivablesReport() {
           </div>
 
           {a && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[
                 { label:"0 – 30 Días",    amount:a.d0_30_amount,    color:"text-success",  status:"bg-success" },
                 { label:"31 – 60 Días",   amount:a.d31_60_amount,   color:"text-brand-500", status:"bg-brand-500" },
                 { label:"Crítico +60d",  amount:a.d60_plus_amount, color:"text-danger",    status:"bg-danger" },
               ].map(b => (
-                <Card key={b.label} className="!p-6 border-l-4" style={{ borderLeftColor: `var(--${b.color.split('-')[1]}-500)` }}>
+                <Card key={b.label} className="!p-4 border-l-4" style={{ borderLeftColor: `var(--${b.color.split('-')[1]}-500)` }}>
                   <div className="flex items-center gap-2 mb-2">
                     <span className={`w-2 h-2 rounded-full ${b.status}`}></span>
                     <div className="text-[10px] font-black uppercase tracking-widest opacity-50">{b.label}</div>
@@ -732,7 +732,7 @@ function ReceivablesReport() {
           )}
 
           <Card className="!p-0 overflow-hidden">
-            <div className="p-8 pb-4">
+            <div className="p-4 pb-4">
                <SectionHeader title="Detalle de Cartera por Cliente" sub="Estado de cuenta y antigüedad de saldos" />
             </div>
             <div className="overflow-x-auto">
@@ -784,26 +784,26 @@ function PurchasesReport() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
         {data && <ExportButton onClick={() => buildPurchasesExcel(data, range)} />}
       </div>
 
       {loading && <Loading />}
-      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-[32px] text-danger font-black uppercase tracking-widest">{error}</div>}
+      {!loading && error && <div className="p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-black uppercase tracking-widest">{error}</div>}
 
       {!loading && !error && data && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard label="Órdenes de Compra" value={fmtN(s.total_orders || 0)} icon="" color="text-brand-500" />
             <KpiCard label="Inversión Total"   value={fmt$(s.total_cost || 0)}  icon="" color="text-danger" />
             <KpiCard label="Ticket Promedio"   value={fmt$(s.avg_order || 0)} icon="" color="text-blue-500" />
             <KpiCard label="Compra Máxima"     value={fmt$(s.max_order || 0)} icon="" color="text-green-500" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="!p-0 overflow-hidden">
-              <div className="p-8 pb-4"><SectionHeader title="Principales Aliados" sub="Gasto acumulado por proveedor" /></div>
+              <div className="p-4 pb-4"><SectionHeader title="Principales Aliados" sub="Gasto acumulado por proveedor" /></div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-surface-1 dark:bg-white/5 border-y border-border/40 dark:border-white/5">
@@ -822,7 +822,7 @@ function PurchasesReport() {
             </Card>
 
             <Card className="!p-0 overflow-hidden">
-              <div className="p-8 pb-4"><SectionHeader title="Top Artículos" sub="Productos con mayor volumen de compra" /></div>
+              <div className="p-4 pb-4"><SectionHeader title="Top Artículos" sub="Productos con mayor volumen de compra" /></div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-surface-1 dark:bg-white/5 border-y border-border/40 dark:border-white/5">
@@ -864,7 +864,7 @@ export default function ReportesPage() {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000 max-w-[1600px] mx-auto pb-20">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4">
         <div>
           <div className="text-[10px] font-black text-brand-500 uppercase tracking-[6px] mb-2 leading-none">Módulo de Analítica</div>
           <h1 className="text-4xl font-black text-content dark:text-heading-dark tracking-tighter font-display leading-none">Reportes Estratégicos</h1>
@@ -874,7 +874,7 @@ export default function ReportesPage() {
         </p>
       </div>
 
-      <div className="flex gap-2 mb-10 p-1.5 bg-surface-2 dark:bg-white/5 rounded-[28px] border border-border/40 dark:border-white/5 overflow-x-auto scrollbar-hide no-scrollbar w-fit">
+      <div className="flex gap-2 mb-4 p-1.5 bg-surface-2 dark:bg-white/5 rounded-[28px] border border-border/40 dark:border-white/5 overflow-x-auto scrollbar-hide no-scrollbar w-fit">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`flex items-center gap-3 px-6 py-3.5 text-[10px] font-black tracking-[3px] uppercase rounded-[20px] transition-all whitespace-nowrap

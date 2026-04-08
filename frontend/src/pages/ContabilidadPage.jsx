@@ -151,11 +151,11 @@ export default function ContabilidadPage() {
   };
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto animate-in fade-in duration-700">
+    <div className="p-4 max-w-[1600px] mx-auto animate-in fade-in duration-700">
       {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-10">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4">
         <div className="flex items-center gap-4 lg:gap-6">
-          <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl bg-brand-500/10 flex items-center justify-center text-2xl lg:text-3xl shadow-inner border border-brand-500/20 shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-brand-500/10 flex items-center justify-center text-2xl lg:text-3xl shadow-inner border border-brand-500/20 shrink-0">
 
           </div>
           <div>
@@ -173,7 +173,7 @@ export default function ContabilidadPage() {
           <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mb-2 ml-1 opacity-50">Seleccionar Módulo</div>
           <button
             onClick={() => setDropOpen(!dropOpen)}
-            className="flex items-center justify-between w-full px-6 py-4 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl shadow-sm hover:shadow-md transition-all group"
+            className="flex items-center justify-between w-full px-4 py-2.5 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl shadow-sm hover:shadow-md transition-all group"
           >
             <span className="text-xs font-black uppercase tracking-widest text-brand-500">{subPage}</span>
             <span className={`text-xs transition-transform duration-300 ${dropOpen ? "rotate-180" : ""}`}>▼</span>
@@ -188,7 +188,7 @@ export default function ContabilidadPage() {
                     key={p}
                     onClick={() => { setSubPage(p); setDropOpen(false); }}
                     className={[
-                      "w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest transition-colors border-none cursor-pointer",
+                      "w-full px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest transition-colors border-none cursor-pointer",
                       subPage === p
                         ? "bg-brand-500 text-black"
                         : "text-content-subtle hover:bg-surface-2 dark:hover:bg-surface-dark-3 hover:text-content"

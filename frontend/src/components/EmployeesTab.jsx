@@ -60,12 +60,12 @@ export default function EmployeesTab({ notify }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-xl font-black text-content dark:text-white uppercase tracking-[4px] font-display">Gestión de Personal</h2>
           <div className="text-[10px] font-black text-brand-500 uppercase tracking-[2px] opacity-80 mt-1">Control de accesos y roles</div>
         </div>
-        <button onClick={openNew} className="px-6 py-4 bg-brand-500 text-black rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all shadow-lg shadow-brand-500/20 flex items-center gap-2 group">
+        <button onClick={openNew} className="px-4 py-2.5 bg-brand-500 text-black rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all shadow-lg shadow-brand-500/20 flex items-center gap-2 group">
           <span className="text-xl group-hover:scale-125 transition-transform">+</span> Nuevo empleado
         </button>
       </div>
