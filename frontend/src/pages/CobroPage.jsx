@@ -113,6 +113,7 @@ export default function CobroPage() {
   const [showPayModal,  setShowPayModal]  = useState(false);
   const [selectedCat,   setSelectedCat]   = useState("all");
   const [showConfirmCheckout, setShowConfirmCheckout] = useState(false);
+  const [mobileTab, setMobileTab] = useState("products"); // "products" | "cart"
 
   if (employeeWarehouses.length === 0) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center p-10 animate-in fade-in duration-700">
@@ -198,10 +199,10 @@ export default function CobroPage() {
   });
 
   return (
-    <div className="h-full flex flex-col lg:flex-row bg-[#f8f9fc] dark:bg-[#080808] text-content dark:text-content-dark overflow-hidden font-sans animate-in fade-in duration-1000">
+    <div className="h-full flex flex-col lg:flex-row bg-[#f8f9fc] dark:bg-[#080808] text-content dark:text-content-dark overflow-hidden font-sans animate-in fade-in duration-1000 pb-[72px] lg:pb-0">
       
       {/* ── Sidebar (Carrito) ── */}
-      <aside className="w-full lg:w-[360px] lg:h-full bg-white dark:bg-[#0c0c0c] flex flex-col border-b lg:border-r border-border dark:border-white/5 shadow-[20px_0_60px_rgba(0,0,0,0.03)] z-20 shrink-0 order-2 lg:order-1 relative">
+      <aside className={`w-full lg:w-[360px] lg:h-full bg-white dark:bg-[#0c0c0c] flex-col border-b lg:border-r border-border dark:border-white/5 shadow-[20px_0_60px_rgba(0,0,0,0.03)] z-20 shrink-0 order-2 lg:order-1 relative ${mobileTab === 'cart' ? 'flex' : 'hidden'} lg:flex`}>
         <div className="p-4 space-y-3 flex-1 flex flex-col overflow-hidden">
 
           <div className="flex items-center justify-between">
@@ -370,7 +371,7 @@ export default function CobroPage() {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col p-4 overflow-hidden order-1 lg:order-2">
+      <main className={`flex-1 flex-col p-4 overflow-hidden order-1 lg:order-2 ${mobileTab === 'products' ? 'flex' : 'hidden'} lg:flex`}>
         <div className="flex items-center gap-2 overflow-x-auto mb-3 pb-1 scrollbar-hide">
           <button onClick={() => setSelectedCat("all")} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[3px] border-2 transition-all whitespace-nowrap ${selectedCat === "all" ? "bg-brand-500 text-brand-900 border-brand-500" : "bg-white dark:bg-white/5 border-transparent dark:text-white"}`}>TODOS</button>
           {categories.map(cat => <button key={cat.id} onClick={() => setSelectedCat(cat.name)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[3px] border-2 transition-all whitespace-nowrap ${selectedCat === cat.name ? "bg-brand-500 text-brand-900 border-brand-500" : "bg-white dark:bg-white/5 border-transparent dark:text-white"}`}>{cat.name}</button>)}
@@ -410,6 +411,21 @@ export default function CobroPage() {
           </div>
         </div>
       </main>
+
+      {/* ── Mobile Bottom Nav ── */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-[#141414] border-t border-border/40 dark:border-white/10 flex items-center justify-around p-2 pb-safe z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+        <button onClick={() => setMobileTab("products")} className={`flex flex-col items-center gap-1 p-2 flex-1 rounded-2xl transition-all ${mobileTab === "products" ? "bg-brand-500/10 text-brand-500" : "text-content-subtle"}`}>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+          <span className="text-[10px] font-black uppercase tracking-widest">Catálogo</span>
+        </button>
+        <button onClick={() => setMobileTab("cart")} className={`flex flex-col items-center gap-1 p-2 flex-1 rounded-2xl transition-all relative ${mobileTab === "cart" ? "bg-brand-500/10 text-brand-500" : "text-content-subtle"}`}>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+          <span className="text-[10px] font-black uppercase tracking-widest">Carrito</span>
+          {cart.length > 0 && (
+            <span className="absolute top-1 right-[20%] w-4 h-4 bg-danger text-white text-[9px] font-black rounded-full flex items-center justify-center -translate-y-1">{cart.length}</span>
+          )}
+        </button>
+      </div>
 
       <CustomerModal open={customerModal} onClose={() => setCustomerModal(false)} onSave={saveCustomer} />
       {showApertura && (
