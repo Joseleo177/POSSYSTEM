@@ -4,6 +4,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile app utilities */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
 @layer base {
   html {
     font-size: 16px;
@@ -26,11 +31,9 @@
     @apply border-border dark:border-border-dark;
   }
 
-  /* Scrollbar - Modern Slim */
-  ::-webkit-scrollbar        { width: 5px; height: 5px; }
-  ::-webkit-scrollbar-track  { @apply bg-transparent; }
-  ::-webkit-scrollbar-thumb  { @apply bg-border/50 dark:bg-border-dark/50 rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-content-subtle dark:bg-content-dark-muted; }
+  /* Hide all scrollbars — app-like experience */
+  ::-webkit-scrollbar { width: 0; height: 0; display: none; }
+  * { scrollbar-width: none; -ms-overflow-style: none; }
 }
 
 @layer components {

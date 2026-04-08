@@ -1,5 +1,15 @@
 const salesService = require("../services/sales");
 
+// GET /api/sales/:id
+const getOne = async (req, res) => {
+  try {
+    const data = await salesService.getOneSale(req.params.id);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(err.status || 500).json({ ok: false, message: err.message });
+  }
+};
+
 // GET /api/sales
 const getAll = async (req, res) => {
   try {
@@ -44,4 +54,4 @@ const cancel = async (req, res) => {
   }
 };
 
-module.exports = { getAll, getStats, create, cancel };
+module.exports = { getOne, getAll, getStats, create, cancel };

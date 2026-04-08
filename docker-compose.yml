@@ -1,20 +1,18 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16-alpine
     container_name: pos_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-posdb}
-      POSTGRES_USER: ${POSTGRES_USER:-posuser}
+      POSTGRES_DB:       ${POSTGRES_DB:-posdb}
+      POSTGRES_USER:     ${POSTGRES_USER:-posuser}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pospassword}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-posuser} -d ${POSTGRES_DB:-posdb}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-posuser} -d ${POSTGRES_DB:-posdb}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,23 +24,22 @@ services:
     container_name: pos_backend
     restart: unless-stopped
     environment:
-      NODE_ENV: ${NODE_ENV:-development}
-      PORT: 4000
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB:-posdb}
-      DB_USER: ${POSTGRES_USER:-posuser}
+      NODE_ENV:    ${NODE_ENV:-development}
+      PORT:        4000
+      DB_HOST:     db
+      DB_PORT:     5432
+      DB_NAME:     ${POSTGRES_DB:-posdb}
+      DB_USER:     ${POSTGRES_USER:-posuser}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-pospassword}
-      JWT_SECRET: ${JWT_SECRET:-supersecretkey_change_in_production}
+      JWT_SECRET:  ${JWT_SECRET:-supersecretkey_change_in_production}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      LOG_LEVEL:   ${LOG_LEVEL:-info}
     ports:
-      - "4000:4000"
-    command: npm start
+      - "${BACKEND_PORT:-4000}:4000"
     depends_on:
       db:
         condition: service_healthy
     volumes:
-      - ./backend:/app
-      - /app/node_modules
       - uploads_data:/app/uploads
 
   frontend:
@@ -52,12 +49,9 @@ services:
     container_name: pos_frontend
     restart: unless-stopped
     ports:
-      - "3001:3000"
+      - "${FRONTEND_PORT:-3001}:3000"
     depends_on:
       - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
 
 volumes:
   postgres_data:

@@ -59,26 +59,28 @@ export default function EmployeesTab({ notify }) {
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between gap-3 border-b border-border/30 dark:border-white/5">
         <div>
-          <h2 className="text-xl font-black text-content dark:text-white uppercase tracking-[4px] font-display">Gestión de Personal</h2>
-          <div className="text-[10px] font-black text-brand-500 uppercase tracking-[2px] opacity-80 mt-1">Control de accesos y roles</div>
+          <div className="text-[10px] font-black text-brand-500 uppercase tracking-[3px] leading-none mb-0.5">MÓDULO DE PERSONAL</div>
+          <h2 className="text-sm font-black text-content dark:text-white uppercase tracking-tight leading-none">Gestión de Empleados</h2>
         </div>
-        <button onClick={openNew} className="px-4 py-2.5 bg-brand-500 text-black rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all shadow-lg shadow-brand-500/20 flex items-center gap-2 group">
-          <span className="text-xl group-hover:scale-125 transition-transform">+</span> Nuevo empleado
+        <button onClick={openNew} className="px-3 py-1.5 bg-brand-500 text-black rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all active:scale-95 shrink-0">
+          + Nuevo Empleado
         </button>
       </div>
 
+      <div className="flex-1 min-h-0 overflow-auto px-4 py-3">
       <div className="card-premium overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-border/40 bg-surface-1 dark:bg-white/5 text-[9px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-[2px]">
-              <th className="px-6 py-5">Identificación / Usuario</th>
-              <th className="px-6 py-5">Tipo de Acceso</th>
-              <th className="px-6 py-5">Contacto</th>
-              <th className="px-6 py-5">Estado Operativo</th>
-              <th className="px-6 py-5 text-right">Acciones</th>
+            <tr className="border-b border-border/40 bg-surface-2 dark:bg-surface-dark-2 text-[9px] font-black text-content-muted dark:text-white/30 uppercase tracking-widest sticky top-0">
+              <th className="px-4 py-2">Identificación</th>
+              <th className="px-4 py-2">Rol</th>
+              <th className="px-4 py-2">Contacto</th>
+              <th className="px-4 py-2">Estado</th>
+              <th className="px-4 py-2 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/10">
@@ -141,6 +143,7 @@ export default function EmployeesTab({ notify }) {
             )}
           </tbody>
         </table>
+      </div>
       </div>
 
       {/* Modal */}

@@ -181,7 +181,7 @@ const create = async (req, res) => {
 
     const product = await Product.create({
       name, price,
-      stock: (isComboBool || isServiceBool) ? 0 : (stock ?? 0),
+      stock: 0, // El stock inicial siempre debe ser 0, se alimenta por almacenes o compras
       category_id: category_id || null,
       image_filename: filename,
       unit: unit || "unidad",

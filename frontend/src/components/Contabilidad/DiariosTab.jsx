@@ -59,16 +59,16 @@ export default function DiariosTab({
           </div>
         ) : (
           <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-2xl overflow-hidden border border-border/40 mb-8 shadow-sm">
-            <table className="w-full text-[11px] border-collapse">
+            <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-surface-3 dark:bg-surface-dark border-b border-border/40">
                   <th className="w-12 px-4 py-4" />
-                  <th className="text-left px-4 py-4 font-black text-content-subtle uppercase tracking-widest">Nombre del Diario</th>
-                  <th className="text-left px-4 py-4 font-black text-content-subtle uppercase tracking-widest">Método</th>
-                  <th className="text-left px-4 py-4 font-black text-content-subtle uppercase tracking-widest">Banco / Entidad</th>
-                  <th className="text-center px-4 py-4 font-black text-content-subtle uppercase tracking-widest">Moneda</th>
-                  <th className="text-center px-4 py-4 font-black text-content-subtle uppercase tracking-widest">Estado</th>
-                  {can("config") && <th className="text-right px-4 py-4 font-black text-content-subtle uppercase tracking-widest w-48">Acciones</th>}
+                  <th className="text-left px-4 py-4 font-black text-content-subtle uppercase tracking-wider text-xs">Nombre del Diario</th>
+                  <th className="text-left px-4 py-4 font-black text-content-subtle uppercase tracking-wider text-xs">Método</th>
+                  <th className="text-left px-4 py-4 font-black text-content-subtle uppercase tracking-wider text-xs">Banco / Entidad</th>
+                  <th className="text-center px-4 py-4 font-black text-content-subtle uppercase tracking-wider text-xs">Moneda</th>
+                  <th className="text-center px-4 py-4 font-black text-content-subtle uppercase tracking-wider text-xs">Estado</th>
+                  {can("config") && <th className="text-right px-4 py-4 font-black text-content-subtle uppercase tracking-wider text-xs w-48">Acciones</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/20">
@@ -76,26 +76,26 @@ export default function DiariosTab({
                   const isEdit = editJournal?.id === j.id;
                   return (
                     <tr key={j.id} className="hover:bg-brand-500/5 transition-colors group">
-                      <td className="px-4 py-3">
-                        <div className="w-3 h-3 rounded-full shadow-sm" style={{ background: j.color }} />
+                      <td className="px-4 py-4">
+                        <div className="w-4 h-4 rounded-full shadow-sm" style={{ background: j.color }} />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-4">
                         {isEdit ? (
                           <input
                             value={editJournal.name}
                             onChange={e => setEditJournal(p => ({ ...p, name: e.target.value }))}
-                            className="input-pos bg-white dark:bg-surface-dark border-brand-500/40 py-1.5 px-3 rounded-lg text-xs font-bold w-full"
+                            className="input-pos bg-white dark:bg-surface-dark border-brand-500/40 py-2 px-4 rounded-xl text-sm font-bold w-full"
                           />
                         ) : (
-                          <span className="font-bold text-content dark:text-content-dark">{j.name}</span>
+                          <span className="font-bold text-base text-content dark:text-content-dark">{j.name}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-4">
                         {isEdit ? (
                           <select
                             value={editJournal.type || ""}
                             onChange={e => setEditJournal(p => ({ ...p, type: e.target.value }))}
-                            className="input-pos bg-white dark:bg-surface-dark border-border py-1.5 px-3 rounded-lg text-[10px] font-bold"
+                            className="input-pos bg-white dark:bg-surface-dark border-border py-2 px-3 rounded-lg text-sm font-bold"
                           >
                             <option value="">— Sin tipo</option>
                             {activeMethods.map(m => <option key={m.code} value={m.code}>{m.icon} {m.name}</option>)}
@@ -107,12 +107,12 @@ export default function DiariosTab({
                           })()
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-4">
                         {isEdit ? (
                           <select
                             value={editJournal.bank_id || ""}
                             onChange={e => setEditJournal(p => ({ ...p, bank_id: e.target.value || "" }))}
-                            className="input-pos bg-white dark:bg-surface-dark border-border py-1.5 px-3 rounded-lg text-[10px] font-bold"
+                            className="input-pos bg-white dark:bg-surface-dark border-border py-2 px-4 rounded-lg text-sm font-bold"
                           >
                             <option value="">— Sin banco</option>
                             {activeBanks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -121,12 +121,12 @@ export default function DiariosTab({
                           <span className="text-content-muted dark:text-content-dark-muted">{j.bank_name || j.bank || "—"}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-4 text-center">
                         {isEdit ? (
                           <select
                             value={editJournal.currency_id || ""}
                             onChange={e => setEditJournal(p => ({ ...p, currency_id: e.target.value || null }))}
-                            className="input-pos bg-white dark:bg-surface-dark border-border py-1.5 px-3 rounded-lg text-[10px] font-bold"
+                            className="input-pos bg-white dark:bg-surface-dark border-border py-2 px-4 rounded-lg text-sm font-bold"
                           >
                             <option value="">— Base</option>
                             {currencies.map(c => <option key={c.id} value={c.id}>{c.symbol} {c.code}</option>)}
@@ -139,8 +139,8 @@ export default function DiariosTab({
                           ) : <span className="opacity-30">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${j.active ? 'bg-success/5 text-success border-success/20' : 'bg-danger/5 text-danger border-danger/20'}`}>
+                      <td className="px-4 py-4 text-center">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${j.active ? 'bg-success/5 text-success border-success/20' : 'bg-danger/5 text-danger border-danger/20'}`}>
                           {j.active ? "Activo" : "Inactivo"}
                         </span>
                       </td>

@@ -168,7 +168,7 @@ module.exports = async function createSale(body) {
 
     const fullSale = await Sale.findByPk(sale.id, {
       include: [
-        { model: Customer, attributes: ["name"] },
+        { model: Customer, attributes: ["name", "rif"] },
         { model: Employee, attributes: ["full_name"] },
         { model: Currency, attributes: ["symbol", "code"] },
         { model: Warehouse, attributes: ["name"] },
@@ -179,6 +179,7 @@ module.exports = async function createSale(body) {
 
     const data = fullSale.toJSON();
     data.customer_name = data.Customer?.name ?? null;
+    data.customer_rif  = data.Customer?.rif ?? null;
     data.employee_name = data.Employee?.full_name ?? null;
     data.currency_symbol = data.Currency?.symbol ?? null;
     data.currency_code = data.Currency?.code ?? null;

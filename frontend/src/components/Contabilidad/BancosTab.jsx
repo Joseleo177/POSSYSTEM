@@ -67,14 +67,14 @@ export default function BancosTab({
           </div>
         ) : (
           <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-2xl overflow-hidden border border-border/40 mb-8 shadow-sm">
-            <table className="w-full text-[11px] border-collapse">
+            <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-surface-3 dark:bg-surface-dark border-b border-border/40">
-                  <th className="text-left px-6 py-4 font-black text-content-subtle uppercase tracking-widest">Nombre del Banco</th>
-                  <th className="text-left px-6 py-4 font-black text-content-subtle uppercase tracking-widest">Código</th>
-                  <th className="text-center px-6 py-4 font-black text-content-subtle uppercase tracking-widest">Cuentas/Diarios</th>
-                  <th className="text-center px-6 py-4 font-black text-content-subtle uppercase tracking-widest">Estado</th>
-                  {can("config") && <th className="text-right px-6 py-4 font-black text-content-subtle uppercase tracking-widest w-48">Acciones</th>}
+                  <th className="text-left px-6 py-4 font-black text-content-subtle uppercase tracking-wider text-xs">Nombre del Banco</th>
+                  <th className="text-left px-6 py-4 font-black text-content-subtle uppercase tracking-wider text-xs">Código</th>
+                  <th className="text-center px-6 py-4 font-black text-content-subtle uppercase tracking-wider text-xs">Cuentas/Diarios</th>
+                  <th className="text-center px-6 py-4 font-black text-content-subtle uppercase tracking-wider text-xs">Estado</th>
+                  {can("config") && <th className="text-right px-6 py-4 font-black text-content-subtle uppercase tracking-wider text-xs w-48">Acciones</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/20">
@@ -82,34 +82,34 @@ export default function BancosTab({
                   const isEdit = bankEditId === b.id;
                   return (
                     <tr key={b.id} className="hover:bg-brand-500/5 transition-colors group">
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-5">
                         {isEdit ? (
                           <input
                             value={bankForm.name}
                             onChange={e => setBankForm(p => ({ ...p, name: e.target.value }))}
-                            className="input-pos bg-white dark:bg-surface-dark border-brand-500/40 py-1.5 px-3 rounded-lg text-xs font-bold w-full"
+                            className="input-pos bg-white dark:bg-surface-dark border-brand-500/40 py-2 px-4 rounded-xl text-sm font-bold w-full"
                           />
                         ) : (
-                          <span className="font-bold text-content dark:text-content-dark">{b.name}</span>
+                          <span className="font-bold text-base text-content dark:text-content-dark">{b.name}</span>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-5">
                         {isEdit ? (
                           <input
                             value={bankForm.code}
                             onChange={e => setBankForm(p => ({ ...p, code: e.target.value }))}
                             placeholder="0102"
-                            className="input-pos bg-white dark:bg-surface-dark border-border py-1.5 px-3 rounded-lg text-[10px] font-bold w-20"
+                            className="input-pos bg-white dark:bg-surface-dark border-border py-2 px-4 rounded-xl text-sm font-bold w-24"
                           />
                         ) : (
-                          <span className="font-mono text-content-muted dark:text-content-dark-muted py-0.5 px-2 bg-surface-3 dark:bg-surface-dark rounded border border-border/40">{b.code || "—"}</span>
+                          <span className="font-mono text-sm text-content-muted dark:text-content-dark-muted py-1 px-3 bg-surface-3 dark:bg-surface-dark rounded-lg border border-border/40">{b.code || "—"}</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className="text-content-muted font-black">{b.journals_count ?? 0}</span>
+                      <td className="px-6 py-5 text-center">
+                        <span className="text-content-muted font-black text-base">{b.journals_count ?? 0}</span>
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${b.active ? 'bg-success/5 text-success border-success/20' : 'bg-danger/5 text-danger border-danger/20'}`}>
+                      <td className="px-6 py-5 text-center">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${b.active ? 'bg-success/5 text-success border-success/20' : 'bg-danger/5 text-danger border-danger/20'}`}>
                           {b.active ? "Activo" : "Inactivo"}
                         </span>
                       </td>

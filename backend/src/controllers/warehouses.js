@@ -508,15 +508,17 @@ const getProducts = async (req, res) => {
 
     if (productsRaw.length === 0) return res.json({ ok: true, data: [] });
 
-    // 2. Para los que son combos, calcular stock virtual y costo
+    // 2. Para los que son combos, calcular stock virtual y costo, y extraer sus ingredientes
     const comboIds = productsRaw.filter(p => p.is_combo).map(p => p.id);
     const ingredientStockMap = {}; // combo_id => stock virtual
     const comboCostMap = {}; // combo_id => costo calculado
+    const comboItemsMap = {}; // combo_id => array de { ingredient_id, quantity }
     
     if (comboIds.length > 0) {
       const comboData = await sequelize.query(`
         SELECT
           pci.combo_id,
+          pci.product_id AS ingredient_id,
           pci.quantity,
           COALESCE(ps2.qty, 0) AS ingredient_stock,
           p.cost_price AS ingredient_cost
@@ -536,6 +538,12 @@ const getProducts = async (req, res) => {
 
       comboIds.forEach(cid => {
         const rows = byCombo[cid] || [];
+        comboItemsMap[cid] = rows.map(r => ({ 
+          ingredient_id: r.ingredient_id, 
+          quantity: parseFloat(r.quantity) || 1,
+          ingredient_stock: parseFloat(r.ingredient_stock) || 0
+        }));
+
         if (rows.length === 0) { 
           ingredientStockMap[cid] = 0; 
           comboCostMap[cid] = 0;
@@ -568,6 +576,7 @@ const getProducts = async (req, res) => {
       category_id: p.category_id,
       is_combo: p.is_combo,
       is_service: p.is_service,
+      combo_items: p.is_combo ? (comboItemsMap[p.id] || []) : [],
       image_url: p.image_filename ? `/uploads/${p.image_filename}` : null
     }));
 

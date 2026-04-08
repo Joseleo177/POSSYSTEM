@@ -63,19 +63,46 @@ export default function WarehousesTab({ notify, currentEmployee }) {
   };
 
   return (
-    <div>
-      {/* Sub-navegación Premium */}
-      <div className="flex items-center gap-1 mb-4 bg-surface-2 dark:bg-surface-dark-2 p-1.5 rounded-[22px] w-fit border border-border/40 dark:border-white/5 shadow-inner">
-        {[["almacenes", "Almacenes"], ["stock", "Stock Actual"], ["transferencias", "Transferencias"]].map(([key, label]) => (
+    <div className="h-full flex flex-col">
+
+      {/* ── Header principal ── */}
+      <div className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between gap-3 border-b border-border/30 dark:border-white/5">
+        <div>
+          <div className="text-[10px] font-black text-brand-500 uppercase tracking-[3px] leading-none mb-0.5">MÓDULO DE INVENTARIO</div>
+          <h1 className="text-sm font-black text-content dark:text-white uppercase tracking-tight leading-none">
+            {subTab === "transferencias" ? "Transferencias" : subTab === "stock" ? `Stock · ${selectedWarehouse?.name || ""}` : "Gestión de Almacenes"}
+          </h1>
+        </div>
+        <div className="flex items-center gap-2">
+          {subTab === "almacenes" && (
+            <button onClick={openNewWarehouse} className="px-3 py-1.5 bg-brand-500 text-black rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all active:scale-95 shrink-0">
+              + Nuevo Almacén
+            </button>
+          )}
+          {subTab === "stock" && selectedWarehouse && (
+            <button onClick={openAddStock} className="px-3 py-1.5 bg-success/10 text-success border border-success/30 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-success hover:text-black transition-all active:scale-95">
+              + Registrar Stock
+            </button>
+          )}
+          {subTab === "transferencias" && (
+            <button onClick={() => setTransferModal(true)} className="px-3 py-1.5 bg-brand-500 text-black rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all active:scale-95">
+              + Nueva Transferencia
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Sub-tabs ── */}
+      <div className="shrink-0 px-4 py-1.5 flex items-center gap-1 border-b border-border/20 dark:border-white/5 bg-surface-2/50 dark:bg-white/[0.02]">
+        {[["almacenes", "Almacenes"], ["transferencias", "Transferencias"]].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setSubTab(key)}
-            className={[
-              "px-6 py-2.5 text-[11px] tracking-[2px] font-black uppercase rounded-[18px] transition-all duration-300",
-              subTab === key
-                ? "bg-brand-500 text-black shadow-lg shadow-brand-500/20"
-                : "text-content-subtle hover:text-content dark:hover:text-content-dark hover:bg-surface-3 dark:hover:bg-surface-dark-3",
-            ].join(" ")}
+            className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
+              subTab === key || (key === "almacenes" && subTab === "stock")
+                ? "bg-brand-500 text-black shadow-sm"
+                : "text-content-muted dark:text-white/30 hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/5"
+            }`}
           >
             {label}
           </button>
@@ -84,22 +111,13 @@ export default function WarehousesTab({ notify, currentEmployee }) {
 
       {/* ── ALMACENES ── */}
       {subTab === "almacenes" && (
-        <div>
-          {/* Botón nuevo almacén */}
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-black tracking-[4px] uppercase text-content dark:text-heading-dark">Gestión de Almacenes</h2>
-            <button onClick={openNewWarehouse} className="px-4 py-2.5 bg-brand-500 text-black rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all shadow-lg shadow-brand-500/20 flex items-center gap-2">
-              <span className="text-lg">+</span> Nuevo Almacén
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="flex-1 overflow-auto px-4 py-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 content-start">
             {warehouses.map(w => (
               <div
                 key={w.id}
                 className={[
-                  "group relative bg-surface-2 dark:bg-surface-dark-2 border border-border/40 dark:border-white/5 rounded-xl p-4 transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:-translate-y-1 overflow-hidden",
-                  w.active ? "opacity-100" : "opacity-60 grayscale",
+                  "group relative bg-white dark:bg-surface-dark-2 border border-border dark:border-white/5 rounded-xl p-4 shadow-sm transition-all duration-300 hover:shadow-md hover:shadow-brand-500/10 hover:-translate-y-0.5 overflow-hidden",
+                  w.active ? "opacity-100" : "opacity-50 grayscale",
                 ].join(" ")}
               >
                 {/* Decoración de fondo */}
@@ -122,17 +140,17 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 mb-4">
-                    <div className="bg-surface-3 dark:bg-surface-dark-3/50 p-3 rounded-2xl text-center border border-border/20">
-                      <div className="text-lg font-black text-brand-500">{w.product_count || 0}</div>
-                      <div className="text-[8px] font-black uppercase tracking-widest text-content-subtle">SKUs</div>
+                    <div className="bg-surface-2 dark:bg-surface-dark-3/50 p-3 rounded-xl text-center border border-border/30 dark:border-white/5">
+                      <div className="text-xl font-black text-brand-500">{w.product_count || 0}</div>
+                      <div className="text-xs font-medium text-content-subtle uppercase tracking-wide mt-0.5">Productos</div>
                     </div>
-                    <div className="bg-surface-3 dark:bg-surface-dark-3/50 p-3 rounded-2xl text-center border border-border/20">
-                      <div className="text-lg font-black text-info">{parseFloat(w.total_stock || 0).toFixed(0)}</div>
-                      <div className="text-[8px] font-black uppercase tracking-widest text-content-subtle">Items</div>
+                    <div className="bg-surface-2 dark:bg-surface-dark-3/50 p-3 rounded-xl text-center border border-border/30 dark:border-white/5">
+                      <div className="text-xl font-black text-info">{parseFloat(w.total_stock || 0).toFixed(0)}</div>
+                      <div className="text-xs font-medium text-content-subtle uppercase tracking-wide mt-0.5">Items</div>
                     </div>
-                    <div className="bg-surface-3 dark:bg-surface-dark-3/50 p-3 rounded-2xl text-center border border-border/20">
-                      <div className="text-lg font-black text-violet-500">{(w.assigned_employees || []).length}</div>
-                      <div className="text-[8px] font-black uppercase tracking-widest text-content-subtle">Staff</div>
+                    <div className="bg-surface-2 dark:bg-surface-dark-3/50 p-3 rounded-xl text-center border border-border/30 dark:border-white/5">
+                      <div className="text-xl font-black text-violet-500">{(w.assigned_employees || []).length}</div>
+                      <div className="text-xs font-medium text-content-subtle uppercase tracking-wide mt-0.5">Empleados</div>
                     </div>
                   </div>
 
@@ -147,7 +165,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                       onClick={() => openAssign(w)}
                       className="flex-1 min-w-[100px] py-2.5 rounded-xl bg-violet-500/10 text-violet-400 text-[10px] font-black uppercase tracking-widest hover:bg-violet-500 hover:text-black transition-all"
                     >
-                      Staff
+                      Empleados
                     </button>
                     <button
                       onClick={() => startEdit(w)}
@@ -167,54 +185,23 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                 </div>
               </div>
             ))}
-          </div>
         </div>
       )}
 
       {/* ── STOCK ── */}
       {subTab === "stock" && (
-        <div>
-          {/* Selector de almacén y Herramientas */}
-          <div className="bg-surface-2 dark:bg-surface-dark-2 border border-border/40 dark:border-white/5 rounded-3xl p-4 mb-4 shadow-sm">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div className="flex flex-col gap-2">
-                <span className="text-[10px] font-black uppercase tracking-[2px] text-content-subtle ml-1">Seleccionar Almacén</span>
-                <div className="flex flex-wrap gap-2">
-                  {warehouses.filter(w => w.active).map(w => (
-                    <button
-                      key={w.id}
-                      onClick={() => { setSelectedWarehouse(w); loadStock(w.id); }}
-                      className={[
-                        "px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-widest transition-all border",
-                        selectedWarehouse?.id === w.id
-                          ? "bg-brand-500 text-black border-brand-500 shadow-lg shadow-brand-500/20"
-                          : "bg-surface-3 dark:bg-surface-dark-3 text-content-subtle border-transparent hover:border-border"
-                      ].join(" ")}
-                    >
-                      {w.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {selectedWarehouse && (
-                <div className="flex flex-col sm:flex-row items-end gap-3 self-end lg:self-auto uppercase">
-                  <div className="relative w-full sm:w-64">
-                    <input
-                      value={stockSearch}
-                      onChange={e => setStockSearch(e.target.value)}
-                      placeholder="FILTRAR PRODUCTO..."
-                      className="w-full pl-10 pr-4 py-3.5 bg-surface-3 dark:bg-surface-dark-3 border border-border/40 dark:border-white/5 rounded-2xl text-[11px] font-bold focus:ring-4 focus:ring-brand-500/10 transition-all outline-none"
-                    />
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 opacity-30">S</span>
-                  </div>
-                  <button onClick={openAddStock} className="px-5 py-3.5 bg-success/10 text-success border border-success/30 rounded-2xl text-[10px] font-black uppercase tracking-[2px] hover:bg-success hover:text-black transition-all">
-                    + Registrar Stock
-                  </button>
-                </div>
-              )}
+        <div className="flex-1 overflow-hidden flex flex-col px-4 py-3">
+          {/* Barra de búsqueda */}
+          {selectedWarehouse && (
+            <div className="shrink-0 mb-3">
+              <input
+                value={stockSearch}
+                onChange={e => setStockSearch(e.target.value)}
+                placeholder="Filtrar producto..."
+                className="w-full max-w-xs h-8 px-3 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/5 rounded-lg text-xs font-medium focus:ring-2 focus:ring-brand-500/20 outline-none transition-all"
+              />
             </div>
-          </div>
+          )}
 
           {!selectedWarehouse ? (
             <div className="card-premium py-20 text-center text-content-subtle text-xs font-black uppercase tracking-[4px] opacity-40">
@@ -223,13 +210,13 @@ export default function WarehousesTab({ notify, currentEmployee }) {
           ) : loadingStock ? (
             <div className="py-20 text-center text-brand-500 animate-pulse text-[10px] font-black uppercase tracking-[4px]">Sincronizando existencias...</div>
           ) : (
-            <div className="card-premium overflow-hidden">
+            <div className="card-premium overflow-auto flex-1">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-surface-2 dark:bg-surface-dark-2">
-                     {["Producto", "Categoría", "Stock Actual", "P. Venta", "Acciones"].map(h => (
-                       <th key={h} className="px-6 py-5 text-[10px] font-black uppercase tracking-[3px] text-content-subtle border-b border-border/40 dark:border-white/5">{h}</th>
-                     ))}
+                    {["Producto", "Categoría", "Stock Actual", "P. Venta", "Acciones"].map(h => (
+                      <th key={h} className="px-6 py-5 text-[10px] font-black uppercase tracking-[3px] text-content-subtle border-b border-border/40 dark:border-white/5">{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40 dark:divide-white/5">
@@ -274,7 +261,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                               className="p-2.5 rounded-xl bg-info/10 text-info border border-info/20 hover:bg-info hover:text-black transition-all"
                               title="Ajustar"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                             </button>
                             <button
                               onClick={() => handleDeleteStock(s)}
@@ -297,16 +284,8 @@ export default function WarehousesTab({ notify, currentEmployee }) {
 
       {/* ── TRANSFERENCIAS ── */}
       {subTab === "transferencias" && (
-        <div>
-          {/* Botón nueva transferencia */}
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-black tracking-[4px] uppercase text-content dark:text-heading-dark">Historial de Movimientos</h2>
-            <button onClick={() => setTransferModal(true)} className="px-4 py-2.5 bg-brand-500 text-black rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all shadow-lg shadow-brand-500/20 flex items-center gap-2">
-              <span className="text-lg">+</span> Nueva Transferencia
-            </button>
-          </div>
-
-          <div className="card-premium overflow-hidden">
+        <div className="flex-1 overflow-hidden flex flex-col px-4 py-3">
+          <div className="card-premium overflow-auto flex-1">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-surface-2 dark:bg-surface-dark-2">

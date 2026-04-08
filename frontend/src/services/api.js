@@ -7,10 +7,11 @@ function getToken() {
 let isRefreshing = false;
 let refreshPromise = null;
 
-function buildApiError(status, message, code) {
+function buildApiError(status, message, code, data) {
   const err = new Error(message || "Error en la solicitud");
   err.status = status;
   err.code = code;
+  err.data = data;
   return err;
 }
 
@@ -79,7 +80,7 @@ async function request(path, options = {}) {
     }
     // Siempre usar el mensaje real del servidor (ej: "Contraseña incorrecta")
     // El flujo de refresh token ya maneja la sesión expirada por separado
-    throw buildApiError(res.status, data.message || "Error en la solicitud", data.code);
+    throw buildApiError(res.status, data.message || "Error en la solicitud", data.code, data);
   }
   return data;
 }
@@ -125,6 +126,7 @@ export const api = {
   sales: {
     getAll:      (params={}) => request("/sales?"       + new URLSearchParams(params)),
     getStats:    (params={}) => request("/sales/stats?" + new URLSearchParams(params)),
+    getOne:      (id)        => request(`/sales/${id}`),
     create:      (body)      => request("/sales",        { method: "POST",   body: JSON.stringify(body) }),
     cancel:      (id)        => request(`/sales/${id}`,  { method: "DELETE" }),
     // Devoluciones

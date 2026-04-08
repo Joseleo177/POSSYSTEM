@@ -81,59 +81,108 @@ export function CartProvider({ children }) {
   }, [currentCurrency, exchangeRate]);
 
   // ── Cart helpers ───────────────────────────────────────────
+  const validateCartStock = useCallback((newCart) => {
+    const usage = {};
+    for (const item of newCart) {
+      if (item.is_service) continue;
+      if (item.is_combo && item.combo_items) {
+        for (const ing of item.combo_items) {
+          if (!usage[ing.ingredient_id]) {
+            usage[ing.ingredient_id] = { used: 0, maxStock: ing.ingredient_stock };
+          }
+          usage[ing.ingredient_id].used += parseFloat(item.qty) * ing.quantity;
+        }
+      } else {
+        if (!usage[item.id]) {
+          usage[item.id] = { used: 0, maxStock: parseFloat(item.stock) || 0 };
+        }
+        usage[item.id].used += parseFloat(item.qty);
+      }
+    }
+    for (const id in usage) {
+      if (usage[id].used > usage[id].maxStock + 0.001) return false;
+    }
+    return true;
+  }, []);
+
   const addToCart = useCallback((product) => {
     if (!activeWarehouse) return notify("Selecciona un almacén antes de cobrar", "err");
     if (!product.is_service && parseFloat(product.stock) <= 0) return notify("Sin stock disponible", "err");
     const step = parseFloat(product.qty_step) || 1;
+    
     setCart(prev => {
+      let newCart;
       const ex = prev.find(i => i.id === product.id);
       if (ex) {
         const nq = parseFloat((ex.qty + step).toFixed(3));
-        if (!product.is_service && nq > parseFloat(product.stock)) { notify("Stock insuficiente", "err"); return prev; }
-        return prev.map(i => i.id === product.id ? { ...i, qty: nq } : i);
+        newCart = prev.map(i => i.id === product.id ? { ...i, qty: nq } : i);
+      } else {
+        newCart = [...prev, { ...product, qty: step }];
       }
-      return [...prev, { ...product, qty: step }];
+      if (!validateCartStock(newCart)) {
+        notify("Stock insuficiente de este producto o sus ingredientes", "err");
+        return prev;
+      }
+      return newCart;
     });
-  }, [activeWarehouse, notify]);
+  }, [activeWarehouse, notify, validateCartStock]);
 
   const removeFromCart = useCallback((id) => {
     setCart(prev => prev.filter(i => i.id !== id));
   }, []);
 
   const changeQty = useCallback((id, dir) => {
-    setCart(prev => prev.map(i => {
-      if (i.id !== id) return i;
-      const step = parseFloat(i.qty_step) || 1;
-      let nq     = parseFloat((i.qty + dir * step).toFixed(3));
-      
-      // Restringir a enteros para unidades "grandes" (según regla del usuario)
-      const isIntegerUnit = ["unidad", "kg", "litro", "metro"].includes(i.unit?.toLowerCase());
-      if (isIntegerUnit) nq = Math.max(1, Math.floor(nq));
-      
-      if (nq < step) return i;
-      if (!i.is_service && nq > parseFloat(i.stock)) { notify("Stock insuficiente", "err"); return i; }
-      return { ...i, qty: nq };
-    }));
-  }, [notify]);
+    setCart(prev => {
+      let changeOccurred = false;
+      const newCart = prev.map(i => {
+        if (i.id !== id) return i;
+        const step = parseFloat(i.qty_step) || 1;
+        let nq     = parseFloat((i.qty + dir * step).toFixed(3));
+        
+        const isIntegerUnit = ["unidad", "kg", "litro", "metro"].includes(i.unit?.toLowerCase());
+        if (isIntegerUnit) nq = Math.max(1, Math.floor(nq));
+        
+        if (nq < step || nq === i.qty) return i;
+        changeOccurred = true;
+        return { ...i, qty: nq };
+      });
+      if (!changeOccurred) return prev;
+      if (!validateCartStock(newCart)) {
+        notify("Stock limite alcanzado", "err");
+        return prev;
+      }
+      return newCart;
+    });
+  }, [notify, validateCartStock]);
 
   const setQtyDirect = useCallback((id, raw) => {
     if (raw === "") {
       setCart(prev => prev.map(i => i.id === id ? { ...i, qty: "" } : i));
       return;
     }
-    let nq = parseFloat(raw);
-    if (isNaN(nq) || nq < 0) return;
+    let targetNq = parseFloat(raw);
+    if (isNaN(targetNq) || targetNq < 0) return;
 
-    setCart(prev => prev.map(i => {
-      if (i.id !== id) return i;
-      
-      const isIntegerUnit = ["unidad", "kg", "litro", "metro"].includes(i.unit?.toLowerCase());
-      if (isIntegerUnit) nq = Math.floor(nq);
-      
-      if (!i.is_service && nq > parseFloat(i.stock)) { notify("Stock insuficiente", "err"); return i; }
-      return { ...i, qty: nq };
-    }));
-  }, [notify]);
+    setCart(prev => {
+      let changeOccurred = false;
+      const newCart = prev.map(i => {
+        if (i.id !== id) return i;
+        const isIntegerUnit = ["unidad", "kg", "litro", "metro"].includes(i.unit?.toLowerCase());
+        let nq = targetNq;
+        if (isIntegerUnit) nq = Math.floor(nq);
+        
+        if (nq === i.qty) return i;
+        changeOccurred = true;
+        return { ...i, qty: nq };
+      });
+      if (!changeOccurred) return prev;
+      if (!validateCartStock(newCart)) {
+        notify("Stock limite alcanzado por el componente", "err");
+        return prev;
+      }
+      return newCart;
+    });
+  }, [notify, validateCartStock]);
 
   const clearCart = useCallback(() => {
     setCart([]);
@@ -176,6 +225,7 @@ export function CartProvider({ children }) {
       setReceipt({
         ...res.data,
         customerName: selectedCustomer?.name || null,
+        customerRif: selectedCustomer?.rif || null,
         currency:     currentCurrency,
         exchangeRate,
         serie,

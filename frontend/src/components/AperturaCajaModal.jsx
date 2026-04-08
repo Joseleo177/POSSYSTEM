@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
+import CustomSelect from "./CustomSelect";
 
-export default function AperturaCajaModal({ employee, warehouses = [], initialWarehouse, onOpened }) {
+export default function AperturaCajaModal({ employee, warehouses = [], initialWarehouse, onOpened, onWarehouseChange }) {
   const [selectedWarehouseId, setSelectedWarehouseId] = useState(initialWarehouse?.id || "");
   const [journals, setJournals] = useState([]);   // todos los de tipo efectivo
   const [selected, setSelected] = useState({});   // { [journal_id]: { checked, amount } }
@@ -49,7 +50,12 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
       });
       onOpened(res.data);
     } catch (e) {
-      setError(e.message || "Error al abrir caja");
+      if (e.status === 409 && e.data?.session) {
+        // La sesión ya existe, simplemente la retomamos
+        onOpened(e.data.session);
+      } else {
+        setError(e.message || "Error al abrir caja");
+      }
     } finally {
       setSaving(false);
     }
@@ -79,18 +85,20 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
               <div className="text-sm font-black text-content dark:text-content-dark truncate">{employee?.full_name || employee?.name}</div>
             </div>
 
-            <div className="bg-surface-3 dark:bg-white/5 rounded-2xl p-4 flex flex-col">
+            <div className={`bg-surface-3 dark:bg-white/5 rounded-2xl p-4 flex flex-col ${warehouses.length > 1 ? "relative overflow-visible" : ""}`}>
               <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle mb-1">Almacén</div>
               {warehouses.length > 1 ? (
-                <select
+                <CustomSelect
                   value={selectedWarehouseId}
-                  onChange={e => setSelectedWarehouseId(e.target.value)}
-                  className="bg-transparent text-sm font-black text-content dark:text-content-dark outline-none cursor-pointer border-none p-0 appearance-none"
-                >
-                  {warehouses.map(w => (
-                    <option key={w.id} value={w.id} className="dark:bg-[#141414]">{w.name}</option>
-                  ))}
-                </select>
+                  onChange={val => {
+                    setSelectedWarehouseId(val);
+                    setError(""); // Limpiamos error al cambiar almacén
+                    if (onWarehouseChange) onWarehouseChange(val);
+                  }}
+                  options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
+                  placeholder="Selec. Almacén"
+                  className="w-full"
+                />
               ) : (
                 <div className="text-sm font-black text-content dark:text-content-dark truncate">
                   {currentWh?.name || "Sin Almacén"}

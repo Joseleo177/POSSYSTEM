@@ -382,22 +382,22 @@ export default function TransaccionesTab({
                       <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-300">
                         <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-[2.5rem] border border-border/40 overflow-hidden shadow-sm">
                           <div className="overflow-x-auto">
-                            <table className="w-full text-[11px] border-collapse min-w-[600px]">
+                            <table className="w-full text-sm border-collapse min-w-[600px]">
                               <thead>
                                 <tr className="bg-surface-3 dark:bg-surface-dark border-b border-border/40">
-                                  <th className="text-left px-4 py-3 font-black text-content-subtle uppercase tracking-widest">Producto</th>
-                                  <th className="text-center px-4 py-3 font-black text-content-subtle uppercase tracking-widest w-24">Cant.</th>
-                                  <th className="text-right px-4 py-3 font-black text-content-subtle uppercase tracking-widest w-32">Precio Unit.</th>
-                                  <th className="text-right px-4 py-3 font-black text-content-subtle uppercase tracking-widest w-32">Subtotal</th>
+                                  <th className="text-left px-4 py-3 font-black text-content-subtle uppercase tracking-wider text-xs">Producto</th>
+                                  <th className="text-center px-4 py-3 font-black text-content-subtle uppercase tracking-wider text-xs w-24">Cant.</th>
+                                  <th className="text-right px-4 py-3 font-black text-content-subtle uppercase tracking-wider text-xs w-32">Precio Unit.</th>
+                                  <th className="text-right px-4 py-3 font-black text-content-subtle uppercase tracking-wider text-xs w-32">Subtotal</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-border/20">
                                 {sale.items.map((item, idx) => (
                                   <tr key={idx} className="hover:bg-brand-500/5 transition-colors">
-                                    <td className="px-4 py-3 font-bold text-content">{item.name}</td>
-                                    <td className="px-4 py-3 text-center font-bold text-content-muted">{item.quantity}</td>
-                                    <td className="px-4 py-3 text-right font-bold text-content-muted">{fmtPrice(item.price)}</td>
-                                    <td className="px-4 py-3 text-right font-black text-brand-400">
+                                    <td className="px-4 py-4 font-bold text-base text-content">{item.name}</td>
+                                    <td className="px-4 py-4 text-center font-bold text-base text-content-muted">{item.quantity}</td>
+                                    <td className="px-4 py-4 text-right font-bold text-base text-content-muted">{fmtPrice(item.price)}</td>
+                                    <td className="px-4 py-4 text-right font-black text-base text-brand-400">
                                       {fmtPrice(item.subtotal ?? parseFloat(item.price || 0) * parseFloat(item.quantity || 1))}
                                     </td>
                                   </tr>

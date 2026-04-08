@@ -70,15 +70,15 @@ export default function MetodosTab({
           </div>
         ) : (
           <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-2xl overflow-hidden border border-border/40 mb-8 shadow-sm">
-            <table className="w-full text-[11px] border-collapse">
+            <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-surface-3 dark:bg-surface-dark border-b border-border/40">
                   <th className="w-20 px-6 py-4" />
-                  <th className="text-left px-6 py-4 font-black text-content-subtle uppercase tracking-widest">Identificador</th>
-                  <th className="text-left px-6 py-4 font-black text-content-subtle uppercase tracking-widest">Código Interno</th>
-                  <th className="text-center px-6 py-4 font-black text-content-subtle uppercase tracking-widest">Uso Global</th>
-                  <th className="text-center px-6 py-4 font-black text-content-subtle uppercase tracking-widest">Estado</th>
-                  {can("config") && <th className="text-right px-6 py-4 font-black text-content-subtle uppercase tracking-widest w-48">Acciones</th>}
+                  <th className="text-left px-6 py-4 font-black text-content-subtle uppercase tracking-wider text-xs">Identificador</th>
+                  <th className="text-left px-6 py-4 font-black text-content-subtle uppercase tracking-wider text-xs">Código Interno</th>
+                  <th className="text-center px-6 py-4 font-black text-content-subtle uppercase tracking-wider text-xs">Uso Global</th>
+                  <th className="text-center px-6 py-4 font-black text-content-subtle uppercase tracking-wider text-xs">Estado</th>
+                  {can("config") && <th className="text-right px-6 py-4 font-black text-content-subtle uppercase tracking-wider text-xs w-48">Acciones</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/20">
@@ -86,7 +86,7 @@ export default function MetodosTab({
                   const isEdit = methodEditId === m.id;
                   return (
                     <tr key={m.id} className="hover:bg-brand-500/5 transition-colors group">
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-5">
                         <div className="flex items-center gap-3">
                           {isEdit ? (
                             <input 
@@ -95,29 +95,29 @@ export default function MetodosTab({
                               className="w-10 h-10 p-1 bg-white border-2 border-border/40 rounded-xl cursor-pointer" 
                             />
                           ) : (
-                            <div className="w-4 h-4 rounded-full shadow-md" style={{ background: m.color || "#555" }} />
+                            <div className="w-6 h-6 rounded-full shadow-md" style={{ background: m.color || "#555" }} />
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-5">
                         {isEdit ? (
                           <input 
                             value={methodForm.name} 
                             onChange={e => setMethodForm(p => ({...p, name: e.target.value}))}
-                            className="input-pos bg-white dark:bg-surface-dark border-brand-500/40 py-1.5 px-3 rounded-lg text-xs font-bold w-full" 
+                            className="input-pos bg-white dark:bg-surface-dark border-brand-500/40 py-2 px-4 rounded-xl text-sm font-bold w-full" 
                           />
                         ) : (
-                          <span className="font-bold text-content dark:text-content-dark">{m.name}</span>
+                          <span className="font-bold text-base text-content dark:text-content-dark">{m.name}</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-xs font-mono">
-                         <span className="text-content-muted dark:text-content-dark-muted py-0.5 px-2 bg-surface-3 dark:bg-surface-dark rounded border border-border/40">{m.code}</span>
+                      <td className="px-6 py-5 text-sm font-mono">
+                         <span className="text-content-muted dark:text-content-dark-muted py-1 px-3 bg-surface-3 dark:bg-surface-dark rounded border border-border/40">{m.code}</span>
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className="text-content-muted font-black">{m.sales_count ?? 0}</span>
+                      <td className="px-6 py-5 text-center">
+                        <span className="text-content-muted font-black text-base">{m.sales_count ?? 0}</span>
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${m.active ? 'bg-success/5 text-success border-success/20' : 'bg-danger/5 text-danger border-danger/20'}`}>
+                      <td className="px-6 py-5 text-center">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${m.active ? 'bg-success/5 text-success border-success/20' : 'bg-danger/5 text-danger border-danger/20'}`}>
                           {m.active ? "Activo" : "Inactivo"}
                         </span>
                       </td>

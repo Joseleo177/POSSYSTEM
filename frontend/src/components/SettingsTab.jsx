@@ -31,7 +31,7 @@ export default function SettingsTab({ notify }) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
-  const [section, setSection] = useState("general");
+  const [section, setSection] = useState("empresa");
   const [newCurrency, setNewCurrency] = useState({ code: "", name: "", symbol: "", exchange_rate: "" });
 
   const load = async () => {
@@ -102,24 +102,33 @@ export default function SettingsTab({ notify }) {
   const base = currencies.find(c => c.is_base);
 
   return (
-    <div>
-      {/* Sub-navegación Premium */}
-      <div className="flex items-center gap-1 mb-4 bg-surface-2 dark:bg-white/5 p-1.5 rounded-[22px] w-fit border border-border/40 dark:border-white/5 shadow-inner">
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between gap-3 border-b border-border/30 dark:border-white/5">
+        <div>
+          <div className="text-[10px] font-black text-brand-500 uppercase tracking-[3px] leading-none mb-0.5">MÓDULO DE SISTEMA</div>
+          <h1 className="text-sm font-black text-content dark:text-white uppercase tracking-tight leading-none">Configuración</h1>
+        </div>
+      </div>
+      {/* Sub-tabs */}
+      <div className="shrink-0 px-4 py-1.5 flex items-center gap-1 border-b border-border/20 dark:border-white/5 bg-surface-2/50 dark:bg-white/[0.02]">
         {SECTIONS.map(([key, label]) => (
           <button
             key={key}
             onClick={() => setSection(key)}
             className={[
-              "px-6 py-2.5 text-[11px] tracking-[2px] font-black uppercase rounded-[18px] transition-all duration-300",
+              "px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all",
               section === key
-                ? "bg-brand-500 text-black shadow-lg shadow-brand-500/20"
-                : "text-content-subtle hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/10",
+                ? "bg-brand-500 text-black shadow-sm"
+                : "text-content-muted dark:text-content-dark-muted hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/10",
             ].join(" ")}
           >
             {label}
           </button>
         ))}
       </div>
+      {/* Content */}
+      <div className="flex-1 min-h-0 overflow-auto px-4 py-3">
 
       {/* ── Empresa ── */}
       {section === "empresa" && (
@@ -342,6 +351,7 @@ export default function SettingsTab({ notify }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

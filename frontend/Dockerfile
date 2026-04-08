@@ -4,12 +4,10 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# Cache de npm entre builds — solo re-descarga si cambia package.json
-RUN --mount=type=cache,target=/root/.npm \
-    npm install
+RUN npm install
 
 COPY . .
 
 EXPOSE 3000
 
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

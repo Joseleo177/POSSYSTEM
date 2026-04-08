@@ -18,8 +18,10 @@ module.exports = async function getSessionSummary(id) {
       SELECT COUNT(*)::int AS sale_count,
         COALESCE(SUM(total), 0)::float AS total_sales,
         COALESCE(SUM(discount_amount), 0)::float AS total_discounts,
-        COUNT(CASE WHEN status = 'pagada'    THEN 1 END)::int AS paid_count,
-        COUNT(CASE WHEN status = 'pendiente' THEN 1 END)::int AS pending_count
+        COALESCE(SUM(CASE WHEN LOWER(status) IN ('pagada', 'pagado') THEN total ELSE 0 END), 0)::float AS total_paid,
+        COALESCE(SUM(CASE WHEN LOWER(status) = 'pendiente' THEN total ELSE 0 END), 0)::float AS total_pending,
+        COUNT(CASE WHEN LOWER(status) IN ('pagada', 'pagado') THEN 1 END)::int AS paid_count,
+        COUNT(CASE WHEN LOWER(status) = 'pendiente' THEN 1 END)::int AS pending_count
       FROM sales
       WHERE warehouse_id = :wid AND employee_id = :eid
         AND created_at >= :openedAt AND created_at < :closedAt
@@ -88,17 +90,31 @@ module.exports = async function getSessionSummary(id) {
     `,
     {
       type: Sequelize.QueryTypes.SELECT,
-      replacements: {
-        wid,
-        openedAt: openedAt.toISOString(),
-        closedAt: closedAt.toISOString(),
-      },
+      replacements: { wid, openedAt: openedAt.toISOString(), closedAt: closedAt.toISOString() },
+    }
+  );
+
+  const salesList = await sequelize.query(
+    `
+      SELECT s.id, s.invoice_number, s.total, s.status, s.created_at,
+             c.name AS customer_name
+      FROM sales s
+      LEFT JOIN customers c ON s.customer_id = c.id
+      WHERE s.warehouse_id = :wid AND s.employee_id = :eid
+        AND s.created_at >= :openedAt AND s.created_at < :closedAt
+        AND s.status <> 'cancelada'
+      ORDER BY s.created_at DESC
+    `,
+    {
+      type: Sequelize.QueryTypes.SELECT,
+      replacements: { wid, eid, openedAt: openedAt.toISOString(), closedAt: closedAt.toISOString() },
     }
   );
 
   return {
     session,
     sales: salesSummary,
+    sales_list: salesList,
     payments_by_journal: paymentsByJournal,
     journal_summary: journalSummary,
     returns: returnsSummary,

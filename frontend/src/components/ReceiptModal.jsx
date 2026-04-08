@@ -19,6 +19,7 @@ function normalizeSale(sale) {
       subtotal: i.subtotal ?? parseFloat(i.price || 0) * parseFloat(i.quantity || 1),
     })),
     customer_name:   sale.customer_name || sale.customerName || null,
+    customer_rif:    sale.customer_rif || sale.customerRif || null,
     employee_name:   sale.employee_name || null,
     warehouse_name:  sale.warehouse_name || null,
     journal_name:    sale.journal_name  || sale.journal?.name  || null,
@@ -39,7 +40,7 @@ function printReceipt(sale, companyInfo, displayCurrency) {
   const effectiveRate = (s.status === 'pagado' && parseFloat(s.final_payment_rate) > 1)
     ? parseFloat(s.final_payment_rate)
     : parseFloat(s.exchange_rate || 1);
-  const rate = parseFloat(effectiveRate || displayCurrency?.exchange_rate || 1);
+  const rate = (effectiveRate > 1) ? effectiveRate : parseFloat(displayCurrency?.exchange_rate || 1);
   const sym  = displayCurrency?.symbol || "$";
   const code = displayCurrency?.code   || "VES";
   const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
@@ -98,15 +99,13 @@ function printReceipt(sale, companyInfo, displayCurrency) {
     <div><span>Factura N°:</span><span><b>${s.invoice_number || `#${s.id}`}</b></span></div>
     <div><span>Fecha:</span><span>${dateStr}</span></div>
     ${s.employee_name  ? `<div><span>Vendedor:</span><span>${s.employee_name}</span></div>` : ""}
-    ${s.warehouse_name ? `<div><span>Almacén:</span><span>${s.warehouse_name}</span></div>` : ""}
     ${s.journal_name   ? `<div><span>Diario:</span><span>${s.journal_name}</span></div>` : ""}
-    <div><span>Moneda:</span><span>${code} · tasa ${rate.toFixed(4)}</span></div>
   </div>
 
   ${s.customer_name ? `
     <div class="customer">
       <div class="label">CLIENTE</div>
-      <div>${s.customer_name}</div>
+      <div>${s.customer_rif ? s.customer_rif + " - " : ""}${s.customer_name}</div>
     </div>
   ` : ""}
 
@@ -133,10 +132,7 @@ function printReceipt(sale, companyInfo, displayCurrency) {
     </div>
   </div>
 
-  <div class="payment">
-    <div class="row"><span>PAGADO</span><span>${fmtP(s.paid)}</span></div>
-    <div class="row"><span>CAMBIO</span><span>${fmtP(s.change)}</span></div>
-  </div>
+
 
   <div class="footer">${companyInfo?.footer || "¡Gracias por su compra!"}</div>
 </body>
@@ -163,7 +159,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
   const effectiveRate = (s.status === 'pagado' && parseFloat(s.final_payment_rate) > 1)
     ? parseFloat(s.final_payment_rate)
     : parseFloat(s.exchange_rate || 1);
-  const rate = isBase ? 1 : parseFloat(effectiveRate || displayCurrency.exchange_rate || 1);
+  const rate = isBase ? 1 : parseFloat(effectiveRate > 1 ? effectiveRate : (displayCurrency.exchange_rate || 1));
   const sym    = isBase ? (baseCurrency?.symbol || "$") : (displayCurrency.symbol || "$");
 
   // Todos los montos vienen en USD base → multiplicar por tasa de display
@@ -207,12 +203,6 @@ export default function ReceiptModal({ open, onClose, sale }) {
             <span className="text-content dark:text-content-dark font-medium">{s.employee_name}</span>
           </div>
         )}
-        {s.warehouse_name && (
-          <div className="flex justify-between items-center py-1.5 text-sm">
-            <span className="text-content-muted dark:text-content-dark-muted">Almacén</span>
-            <span className="text-content dark:text-content-dark font-medium">{s.warehouse_name}</span>
-          </div>
-        )}
         {s.journal_name && (
           <div className="flex justify-between items-center py-1.5 text-sm">
             <span className="text-content-muted dark:text-content-dark-muted">Diario</span>
@@ -227,19 +217,15 @@ export default function ReceiptModal({ open, onClose, sale }) {
             </span>
           </div>
         )}
-        {!isBase && (
-          <div className="flex justify-between items-center py-1.5 text-sm">
-            <span className="text-content-muted dark:text-content-dark-muted">Moneda</span>
-            <span className="text-content dark:text-content-dark font-medium">{displayCurrency?.code} · tasa {rate.toFixed(4)}</span>
-          </div>
-        )}
       </div>
 
       {/* Cliente */}
       {s.customer_name && (
         <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg px-4 py-2.5 mb-4 text-sm">
           <span className="text-content-muted dark:text-content-dark-muted text-xs tracking-wider">CLIENTE: </span>
-          <span className="text-content dark:text-content-dark font-medium">{s.customer_name}</span>
+          <span className="text-content dark:text-content-dark font-medium">
+            {s.customer_rif ? s.customer_rif + " - " : ""}{s.customer_name}
+          </span>
         </div>
       )}
 
@@ -279,17 +265,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
         </div>
       </div>
 
-      {/* Pago */}
-      <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-4 mb-4 space-y-2">
-        <div className="flex justify-between items-center py-1.5 text-sm">
-          <span className="text-content-muted dark:text-content-dark-muted">Pagado</span>
-          <span className="text-success font-medium">{fmtP(s.paid)}</span>
-        </div>
-        <div className="flex justify-between items-center py-1.5 text-sm">
-          <span className="text-content-muted dark:text-content-dark-muted">Cambio</span>
-          <span className="text-content dark:text-content-dark font-medium">{fmtP(s.change)}</span>
-        </div>
-      </div>
+
 
       {/* Footer */}
       <div className="text-center text-xs text-content-muted dark:text-content-dark-muted mb-4">¡Gracias por su compra!</div>

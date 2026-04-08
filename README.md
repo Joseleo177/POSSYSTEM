@@ -1,131 +1,90 @@
-# 🏪 Mi Tienda POS
+# 🏪 POS System v3
 
-Sistema de Punto de Venta con arquitectura separada: **Backend API REST** + **Frontend React** + **PostgreSQL**, todo orquestado con **Docker Compose**.
-
----
-
-## 📁 Estructura del Proyecto
-
-```
-pos-system/
-├── docker-compose.yml          ← Orquestación de los 3 servicios
-├── .env.example                ← Variables de entorno (copiar a .env)
-├── backend/
-│   ├── Dockerfile
-│   ├── package.json
-│   └── src/
-│       ├── index.js            ← Entrada Express
-│       ├── config/             ← Configuración de Sequelize
-│       ├── db/
-│       │   ├── pool.js         ← Conexión Raw para transacciones críticas
-│       │   └── init.sql        ← Tablas (18) + datos iniciales (Unificado)
-│       ├── models/             ← Modelos Sequelize ORM
-│       ├── controllers/        ← Controladores refactorizados a ORM
-│       └── routes/             ← Definición de rutas API
-└── frontend/
-    ├── Dockerfile
-    ├── package.json
-    ├── vite.config.js
-    ├── index.html
-    └── src/
-        ├── main.jsx
-        ├── App.jsx             ← UI principal
-        └── services/
-            └── api.js          ← Comunicación con el backend
-```
+Sistema de Punto de Venta con arquitectura moderna: **Backend API REST (Node/Express)** + **Frontend React (Vite)** + **PostgreSQL**, todo orquestado con **Docker Compose**.
 
 ---
 
-## 🚀 Inicio rápido
+## 🚀 Inicio rápido (cualquier PC)
 
-### 1. Requisitos previos
+### Requisitos previos
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado y corriendo.
+- Git
 
-### 2. Clonar / descargar el proyecto
+### 1. Clonar el repositorio
 
 ```bash
-cd pos-system
+git clone https://github.com/Joseleo177/POSSYSTEM.git
+cd POSSYSTEM
 ```
 
-### 3. Configurar variables de entorno
+### 2. Configurar variables de entorno
 
 ```bash
 cp .env.example .env
-# Editar .env si deseas cambiar contraseñas
 ```
 
-### 4. Levantar todo con Docker Compose
+> Edita `.env` si necesitas cambiar contraseñas o puertos (por ejemplo si el puerto `5432` ya está en uso, cambia `POSTGRES_HOST_PORT=5433`).
+
+### 3. Levantar todo con Docker
 
 ```bash
 docker compose up --build
 ```
 
-> La primera vez tarda ~2 minutos mientras descarga imágenes e instala dependencias.
+> La primera vez tarda ~3 minutos mientras descarga imágenes e instala dependencias. Las migraciones y datos iniciales se aplican automáticamente.
 
-### 5. Abrir la aplicación
+### 4. Abrir la aplicación
 
-| Servicio   | URL                          |
-|------------|------------------------------|
-| Frontend   | http://localhost:3000        |
-| Backend API| http://localhost:4000/api    |
-| Health     | http://localhost:4000/health |
-| PostgreSQL  | localhost:5432               |
+| Servicio    | URL                          |
+|-------------|------------------------------|
+| Frontend    | http://localhost:3001        |
+| Backend API | http://localhost:4000/api    |
+| Health      | http://localhost:4000/health |
 
----
+### 5. Credenciales por defecto
 
-## 🔌 API Endpoints
-
-### Productos
-| Método | Ruta                  | Descripción             |
-|--------|-----------------------|-------------------------|
-| GET    | `/api/products`       | Listar (con ?search=)   |
-| GET    | `/api/products/:id`   | Obtener uno             |
-| POST   | `/api/products`       | Crear                   |
-| PUT    | `/api/products/:id`   | Actualizar              |
-| DELETE | `/api/products/:id`   | Eliminar                |
-
-### Ventas
-| Método | Ruta              | Descripción              |
-|--------|-------------------|--------------------------|
-| GET    | `/api/sales`      | Historial de ventas      |
-| GET    | `/api/sales/stats`| Estadísticas generales   |
-| POST   | `/api/sales`      | Registrar nueva venta    |
-
-### Categorías
-| Método | Ruta               | Descripción       |
-|--------|--------------------|-------------------|
-| GET    | `/api/categories`  | Listar categorías |
-| POST   | `/api/categories`  | Crear categoría   |
+| Campo      | Valor      |
+|------------|------------|
+| Usuario    | `admin`    |
+| Contraseña | `admin1234`|
 
 ---
 
-## 🗄️ Base de Datos y ORM
+## 📁 Estructura del proyecto
 
-El sistema utiliza **Sequelize ORM** para la mayoría de las operaciones, garantizando un código limpio y escalable. Para operaciones críticas de stock, se utilizan transacciones SQL puras.
-
-Tablas principales (18 en total):
-
-- **`products`** — Maestro de productos con costos y márgenes.
-- **`warehouses` & `product_stock`** — Gestión multi-almacén.
-- **`sales` & `sale_items`** — Ventas y detalle.
-- **`purchases` & `purchase_items`** — Compras a proveedores.
-- **`customers`** — Clientes y proveedores.
-- **`banks` & `payment_methods`** — Finanzas dinámicas.
-- **`currencies`** — Manejo de multimoneda y tasas de cambio.
-- **`employees` & `roles`** — Gestión de usuarios y permisos.
-
-El stock se gestiona automáticamente mediante transacciones PostgreSQL para evitar inconsistencias.
+```
+POSSYSTEM/
+├── docker-compose.yml       ← Orquestación de los 3 servicios
+├── .env.example             ← Variables de entorno (copiar a .env)
+├── backend/
+│   ├── Dockerfile
+│   ├── package.json
+│   └── src/
+│       ├── index.js         ← Entrada Express
+│       ├── config/          ← Configuración de Sequelize
+│       ├── controllers/     ← Lógica de negocio
+│       ├── models/          ← Modelos Sequelize ORM
+│       ├── migrations/      ← Migraciones de BD (orden cronológico)
+│       └── routes/          ← Definición de rutas API
+└── frontend/
+    ├── Dockerfile
+    ├── package.json
+    ├── vite.config.js       ← Proxy /api → backend
+    └── src/
+        ├── App.jsx
+        ├── pages/
+        ├── components/
+        └── services/
+            └── api.js       ← Comunicación con el backend
+```
 
 ---
 
 ## 🛑 Comandos útiles
 
 ```bash
-# Detener todo
-docker compose down
-
-# Detener y borrar la base de datos (¡borra todos los datos!)
-docker compose down -v
+# Ver estado de contenedores
+docker compose ps
 
 # Ver logs en tiempo real
 docker compose logs -f
@@ -133,25 +92,45 @@ docker compose logs -f
 # Ver logs solo del backend
 docker compose logs -f backend
 
-# Reiniciar solo el frontend
-docker compose restart frontend
+# Reiniciar solo el backend
+docker compose restart backend
+
+# Detener todo (conserva la BD)
+docker compose down
+
+# Detener y BORRAR la base de datos (¡resetea todo!)
+docker compose down -v
 ```
 
 ---
 
-## 🔧 Desarrollo sin Docker
+## ⚠️ Conflicto de puertos
 
-**Backend:**
-```bash
-cd backend
-npm install
-# Configura un .env con tus credenciales locales de Postgres
-npm run dev
+Si ya tienes otro servicio usando los puertos por defecto, edita `.env`:
+
+```env
+POSTGRES_HOST_PORT=5433   # si 5432 está ocupado
+FRONTEND_PORT=3002        # si 3001 está ocupado
+BACKEND_PORT=4001         # si 4000 está ocupado
 ```
 
-**Frontend:**
-```bash
-cd frontend
-npm install
-npm run dev
-```
+---
+
+## 🗄️ Roles y permisos
+
+| Rol        | Acceso                                         |
+|------------|-----------------------------------------------|
+| `admin`    | Todo el sistema                               |
+| `manager`  | Ventas, reportes, configuración, clientes     |
+| `cashier`  | POS de ventas, clientes                       |
+| `warehouse`| Productos, inventario, categorías             |
+
+---
+
+## 🔒 Seguridad en producción
+
+Antes de deployar en producción:
+1. Cambia `JWT_SECRET` por un string aleatorio largo y seguro
+2. Cambia las contraseñas de la BD (`POSTGRES_PASSWORD`)
+3. Configura `CORS_ORIGIN` con tu dominio real (ej: `https://mitienda.com`)
+4. Cambia `NODE_ENV=production`

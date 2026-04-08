@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Modal from "./Modal";
 import { api } from "../services/api";
+import CustomSelect from "./CustomSelect";
 import { calcSalePrice as calcSalePriceHelper } from "../helpers";
 
 const UNITS = ["unidad", "kg", "gramo", "litro", "ml", "metro", "cm"];
@@ -119,30 +120,30 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
   return (
     <Modal open={open} onClose={onClose} title={isEdit ? "Edición de Producto" : "Nuevo Producto"} width={780}>
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-5">
 
         {/* ── Sección Principal: Imagen + Datos ── */}
-        <div className="flex flex-col lg:flex-row gap-10">
+        <div className="flex flex-col lg:flex-row gap-6">
 
           {/* Imagen Subida Premium */}
           <div className="flex-shrink-0 flex flex-col items-center">
             <label className="block cursor-pointer relative group">
-              <div className="w-[180px] h-[180px] rounded-[32px] overflow-hidden bg-surface-2 dark:bg-surface-dark-2 border-2 border-dashed border-border/60 dark:border-white/5 flex items-center justify-center hover:border-brand-500/50 transition-all duration-500 shadow-inner group-hover:shadow-brand-500/10">
+              <div className="w-[140px] h-[140px] rounded-[24px] overflow-hidden bg-surface-2 dark:bg-surface-dark-2 border-2 border-dashed border-border/60 dark:border-white/5 flex items-center justify-center hover:border-brand-500/50 transition-all duration-500 shadow-inner group-hover:shadow-brand-500/10">
                 {imagePreview ? (
                   <>
                     <img src={imagePreview} alt="preview" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                     <div className="absolute inset-0 bg-brand-900/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center backdrop-blur-sm">
-                      <svg className="w-10 h-10 text-white mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                      <span className="text-white text-[10px] font-black tracking-[3px] uppercase">Reemplazar</span>
+                      <svg className="w-8 h-8 text-white mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      <span className="text-white text-[9px] font-black tracking-[2px] uppercase">Reemplazar</span>
                     </div>
                   </>
                 ) : (
                   <div className="text-center flex flex-col items-center text-content-subtle dark:text-content-dark-muted group-hover:text-brand-500 transition-all duration-300">
-                    <div className="w-14 h-14 rounded-full bg-white dark:bg-surface-dark-3 border border-border/40 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-sm">
-                      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                    <div className="w-10 h-10 rounded-full bg-white dark:bg-surface-dark-3 border border-border/40 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-sm">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                     </div>
-                    <div className="text-[10px] font-black uppercase tracking-[3px]">Subir Imagen</div>
-                    <div className="text-[9px] mt-1 opacity-50 font-bold uppercase tracking-wider">JPG, PNG, WEBP</div>
+                    <div className="text-[9px] font-black uppercase tracking-[2px]">Subir Imagen</div>
+                    <div className="text-[8px] mt-1 opacity-50 font-bold tracking-wider">JPG, PNG</div>
                   </div>
                 )}
               </div>
@@ -151,68 +152,65 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             {imagePreview && (
               <button
                 onClick={(e) => { e.preventDefault(); setImageFile(null); setImagePreview(null); }}
-                className="mt-4 text-[10px] font-black text-danger uppercase tracking-[2px] opacity-60 hover:opacity-100 transition-opacity flex items-center gap-2"
+                className="mt-3 text-[9px] font-black text-danger uppercase tracking-[2px] opacity-60 hover:opacity-100 transition-opacity flex items-center gap-1.5"
               >
-                <span className="text-sm">×</span> Eliminar Imagen
+                <span className="text-xs">×</span> Eliminar
               </button>
             )}
           </div>
 
           {/* Información Principal */}
-          <div className="flex-1 space-y-6">
+          <div className="flex-1 space-y-4">
             <div>
-              <label className="label !text-[10px] !tracking-[3px] opacity-60 uppercase mb-2 text-content-subtle dark:text-content-dark-muted">Nombre del Artículo / Referencia</label>
-              <input value={form.name} onChange={e => set("name", e.target.value)} autoFocus className="input !h-14 !text-base !rounded-2xl shadow-sm border border-border/60" placeholder="Ej. Computadora Portátil Gamer X-1..." />
+              <label className="label !text-[10px] !tracking-[3px] opacity-60 uppercase mb-1 text-content-subtle dark:text-content-dark-muted">Nombre del Artículo / Referencia</label>
+              <input value={form.name} onChange={e => set("name", e.target.value)} autoFocus className="input py-3 !text-bas shadow-sm border border-border/60" placeholder="Ej. Computadora Portátil Gamer X-1..." />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-[10px] font-black uppercase tracking-[2px] text-content-subtle dark:text-content-dark-muted mb-2 block">Categoría Vinculada</label>
+                <label className="text-[10px] font-black uppercase tracking-[2px] text-content-subtle dark:text-content-dark-muted mb-1 block">Categoría Vinculada</label>
                 <div className="relative group">
-                  <select value={form.category_id} onChange={e => set("category_id", e.target.value)} className="input !h-14 !rounded-2xl !bg-white dark:!bg-surface-dark-3 !font-bold text-content dark:text-white">
-                    <option value="">Sin Categoría</option>
-                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7"/></svg>
-                  </div>
+                  <CustomSelect 
+                    value={form.category_id} 
+                    onChange={val => set("category_id", val)} 
+                    options={[{ value: "", label: "Sin Categoría" }, ...categories.map(c => ({ value: String(c.id), label: c.name }))]}
+                    placeholder="Sin Categoría"
+                    className="w-full"
+                  />
                 </div>
               </div>
               <div>
-                <label className="label !text-[10px] !tracking-[3px] opacity-60 uppercase mb-2">Unidad de Medida</label>
+                <label className="label !text-[10px] !tracking-[3px] opacity-60 uppercase mb-1">Unidad de Medida</label>
                 <div className="relative">
-                  <select value={form.unit} onChange={e => set("unit", e.target.value)} className="input !h-12 !rounded-xl !text-sm appearance-none cursor-pointer">
-                    {UNITS.map(u => <option key={u} value={u}>{u.toUpperCase()}</option>)}
-                  </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7"/></svg>
-                  </div>
+                  <CustomSelect 
+                    value={form.unit} 
+                    onChange={val => set("unit", val)} 
+                    options={UNITS.map(u => ({ value: u, label: u.toUpperCase() }))}
+                    placeholder="Unidad de Medida"
+                    className="w-full"
+                  />
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
               <div>
-                <label className="label !text-[10px] !tracking-[3px] opacity-60 uppercase mb-2">Precio de Venta Público (PVPR)</label>
+                <label className="label !text-[10px] !tracking-[3px] opacity-60 uppercase mb-1">Precio de Venta Público (PVPR)</label>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <span className="text-brand-500 font-black tracking-widest">$</span>
                   </div>
-                  <input value={form.price} onChange={e => set("price", e.target.value)} type="number" step="0.01" className="input !h-16 !pl-12 !pr-6 !py-3 !text-2xl !font-black !text-brand-500 !bg-brand-500/5 !border-brand-500/20 focus:!ring-brand-500/30 !rounded-3xl transition-all" placeholder="0.00" />
+                  <input value={form.price} onChange={e => set("price", e.target.value)} type="number" step="0.01" className="input !h-12 !pl-10 !pr-4 !text-xl !font-black !text-brand-500 !bg-brand-500/5 !border-brand-500/20 focus:!ring-brand-500/30 transition-all" placeholder="0.00" />
                 </div>
               </div>
 
-              {!form.is_combo && !form.is_service && (
+              {editData?.id && !form.is_combo && !form.is_service && (
                 <div>
-                  <label className="label !text-[10px] !tracking-[3px] opacity-60 uppercase mb-2">Existencia Inicial</label>
-                  {editData?.id ? (
-                    <div className="h-16 bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border border-border/40 rounded-3xl px-6 flex justify-between items-center cursor-not-allowed opacity-80">
-                      <span className="text-xl font-black">{form.stock ?? 0} <span className="text-[10px] opacity-40 uppercase tracking-widest">{form.unit}</span></span>
-                      <span className="text-[9px] bg-black/10 dark:bg-white/10 px-3 py-1.5 rounded-xl font-black uppercase tracking-widest">Solo Historial</span>
-                    </div>
-                  ) : (
-                    <input value={form.stock} onChange={e => set("stock", e.target.value)} type="number" step="0.01" className="input !h-16 !text-xl !font-black !rounded-3xl" placeholder="0" />
-                  )}
+                  <label className="label !text-[10px] !tracking-[3px] opacity-60 uppercase mb-1">Stock Global (Acumulado)</label>
+                  <div className="h-12 bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border border-border/40 rounded-xl px-4 flex justify-between items-center cursor-not-allowed opacity-80">
+                    <span className="text-lg font-black">{form.stock ?? 0} <span className="text-[10px] opacity-40 uppercase tracking-widest">{form.unit}</span></span>
+                    <span className="text-[8px] bg-black/10 dark:bg-white/10 px-2 py-1 rounded-lg font-black uppercase tracking-widest">Lectura</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -220,78 +218,72 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         </div>
 
         {/* ── Toggles de Tipo (Servicio / Combo) ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
            {/* Toggle Servicio */}
-            <div className={`p-6 rounded-[32px] border transition-all flex flex-col gap-4 ${form.is_service ? "bg-amber-500/10 border-amber-500/30" : "bg-surface-2 dark:bg-white/5 border-border/60 dark:border-white/5"}`}>
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-2xl bg-white dark:bg-surface-dark-3 shadow-sm flex items-center justify-center text-xl"></div>
-                <label className="relative inline-flex items-center cursor-pointer scale-110">
-                  <input type="checkbox" className="sr-only peer" checked={form.is_service} onChange={e => set("is_service", e.target.checked)} />
-                  <div className="w-12 h-7 bg-surface-3 dark:bg-white/10 rounded-full border-2 border-transparent transition-all duration-300 peer-checked:bg-amber-500 after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 shadow-inner"></div>
-                </label>
-              </div>
+            <div className={`p-4 py-3 rounded-2xl border transition-all flex items-center justify-between gap-4 ${form.is_service ? "bg-amber-500/10 border-amber-500/30" : "bg-surface-2 dark:bg-white/5 border-border/60 dark:border-white/5"}`}>
               <div>
-                <div className="text-[11px] font-black text-content dark:text-content-dark uppercase tracking-[2px]">Registro como Servicio</div>
-                <div className="text-[10px] text-content-subtle dark:text-content-dark-muted font-bold mt-1 opacity-70">Desactiva el seguimiento de inventario.</div>
+                <div className="text-[11px] font-black text-content dark:text-content-dark uppercase tracking-[1px]">Registro como Servicio</div>
+                <div className="text-[9px] text-content-subtle dark:text-content-dark-muted font-bold mt-0.5 opacity-70">Desactiva el seguimiento de inventario.</div>
               </div>
+              <label className="relative inline-flex items-center cursor-pointer scale-90">
+                <input type="checkbox" className="sr-only peer" checked={form.is_service} onChange={e => set("is_service", e.target.checked)} />
+                <div className="w-12 h-7 bg-surface-3 dark:bg-white/10 rounded-full border-2 border-transparent transition-all duration-300 peer-checked:bg-amber-500 after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 shadow-inner"></div>
+              </label>
             </div>
 
             {/* Toggle Combo */}
             {!form.is_service && (
-              <div className={`p-6 rounded-[32px] border transition-all flex flex-col gap-4 ${form.is_combo ? "bg-brand-500/10 border-brand-500/30" : "bg-surface-2 dark:bg-white/5 border-border/60 dark:border-white/5"}`}>
-                <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-2xl bg-white dark:bg-surface-dark-3 shadow-sm flex items-center justify-center text-xl"></div>
-                  <label className="relative inline-flex items-center cursor-pointer scale-110">
-                    <input type="checkbox" className="sr-only peer" checked={form.is_combo} onChange={e => set("is_combo", e.target.checked)} disabled={isEdit && form.combo_items.length > 0} />
-                    <div className="w-12 h-7 bg-surface-3 dark:bg-white/10 rounded-full border-2 border-transparent transition-all duration-300 peer-checked:bg-brand-500 after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 shadow-inner"></div>
-                  </label>
-                </div>
+              <div className={`p-4 py-3 rounded-2xl border transition-all flex items-center justify-between gap-4 ${form.is_combo ? "bg-brand-500/10 border-brand-500/30" : "bg-surface-2 dark:bg-white/5 border-border/60 dark:border-white/5"}`}>
                 <div>
-                  <div className="text-[11px] font-black text-content dark:text-content-dark uppercase tracking-[2px]">Producto Compuesto</div>
-                  <div className="text-[10px] text-content-subtle dark:text-content-dark-muted font-bold mt-1 opacity-70">Combina stock de múltiples ingredientes.</div>
+                  <div className="text-[11px] font-black text-content dark:text-content-dark uppercase tracking-[1px]">Producto Compuesto</div>
+                  <div className="text-[9px] text-content-subtle dark:text-content-dark-muted font-bold mt-0.5 opacity-70">Combina stock de ingredientes.</div>
                 </div>
+                <label className="relative inline-flex items-center cursor-pointer scale-90">
+                  <input type="checkbox" className="sr-only peer" checked={form.is_combo} onChange={e => set("is_combo", e.target.checked)} disabled={isEdit && form.combo_items.length > 0} />
+                  <div className="w-12 h-7 bg-surface-3 dark:bg-white/10 rounded-full border-2 border-transparent transition-all duration-300 peer-checked:bg-brand-500 after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 shadow-inner"></div>
+                </label>
               </div>
             )}
         </div>
 
         {/* ── Si NO es combo y NO es servicio: Mostrar Costos. Si es Combo: Mostrar Componentes ── */}
         {!form.is_combo && !form.is_service ? (
-          <div className="space-y-8 animate-in fade-in duration-500">
+          <div className="space-y-4 animate-in fade-in duration-500">
             {/* ── Rentabilidad ── */}
-            <div className="bg-surface-2 dark:bg-white/5 rounded-[40px] p-8 border border-border/40 dark:border-white/5 shadow-sm">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-2xl bg-green-500/10 text-green-500 flex items-center justify-center text-xl shadow-sm border border-white/20"></div>
-                <h3 className="text-sm font-black tracking-[3px] uppercase text-content dark:text-heading-dark font-display">Modelo de Negocio y Rentabilidad</h3>
+            <div className="bg-surface-2 dark:bg-white/5 rounded-3xl p-5 border border-border/40 dark:border-white/5 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-green-500/10 text-green-500 flex items-center justify-center text-lg shadow-sm border border-white/20"></div>
+                <h3 className="text-sm font-black tracking-[2px] uppercase text-content dark:text-heading-dark font-display">Modelo de Negocio y Rentabilidad</h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="label !text-[9px] !tracking-[3px] opacity-60 uppercase">Costo Unitario</label>
+                  <div className="space-y-1.5">
+                    <label className="label !text-[9px] !tracking-[2px] opacity-60 uppercase">Costo Unitario</label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-content-subtle font-black">$</span>
-                      <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.01" className="input !h-12 !pl-8 !rounded-xl !text-sm !font-black !bg-white dark:!bg-surface-dark-3" placeholder="0.00" />
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle font-black">$</span>
+                      <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.01" className="input !h-10 !pl-6 shrink-0 !rounded-xl !text-sm !font-black !bg-white dark:!bg-surface-dark-3" placeholder="0.00" />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="label !text-[9px] !tracking-[3px] opacity-60 uppercase">Margen (%)</label>
+                  <div className="space-y-1.5">
+                    <label className="label !text-[9px] !tracking-[2px] opacity-60 uppercase">Margen (%)</label>
                     <div className="relative">
-                      <input value={form.profit_margin} onChange={e => handleCostOrMarginChange("profit_margin", e.target.value)} type="number" step="0.1" className="input !h-12 !pr-8 !rounded-xl !text-sm !font-black !bg-white dark:!bg-surface-dark-3 text-center" placeholder="0" />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-content-subtle font-black">%</span>
+                      <input value={form.profit_margin} onChange={e => handleCostOrMarginChange("profit_margin", e.target.value)} type="number" step="0.1" className="input !h-10 shrink-0 !pr-6 !rounded-xl !text-sm !font-black !bg-white dark:!bg-surface-dark-3 text-center" placeholder="0" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle font-black">%</span>
                     </div>
                   </div>
                 </div>
 
                 <div 
-                  className={`flex-1 flex flex-col justify-center p-6 rounded-3xl border-2 border-dashed transition-all group ${suggestedPrice ? "bg-green-500/5 border-green-500/30 hover:bg-green-500/10 cursor-pointer shadow-sm active:scale-98" : "bg-surface-1 dark:bg-white/5 border-border/40 opacity-50"}`}
+                  className={`flex-1 flex flex-col justify-center p-3 px-5 rounded-2xl border-2 border-dashed transition-all group ${suggestedPrice ? "bg-green-500/5 border-green-500/30 hover:bg-green-500/10 cursor-pointer shadow-sm active:scale-98" : "bg-surface-1 dark:bg-white/5 border-border/40 opacity-50"}`}
                   title={suggestedPrice ? "Haz clic para aplicar este precio automáticamente" : ""}
                   onClick={() => { if (suggestedPrice) set("price", suggestedPrice); }}
                 >
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-[9px] font-black uppercase tracking-[3px] text-green-600 dark:text-green-400">PVP Sugerido</span>
-                    {suggestedPrice && <span className="bg-green-500 text-white text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all">Click para aplicar</span>}
+                    <span className="text-[9px] font-black uppercase tracking-[2px] text-green-600 dark:text-green-400">PVP Sugerido</span>
+                    {suggestedPrice && <span className="bg-green-500 text-white text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all">Aplicar</span>}
                   </div>
-                  <div className="text-3xl font-black text-green-600 dark:text-green-400 font-display tabular-nums tracking-tighter">
+                  <div className="text-2xl font-black text-green-600 dark:text-green-400 font-display tabular-nums tracking-tighter">
                     {suggestedPrice ? `$${suggestedPrice}` : "—"}
                   </div>
                 </div>
@@ -299,36 +291,36 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             </div>
 
             {/* ── Configuración Avanzada ── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="bg-surface-2 dark:bg-white/5 rounded-[40px] p-8 border border-border/40 dark:border-white/5">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center shadow-sm border border-white/20">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-surface-2 dark:bg-white/5 rounded-3xl p-5 border border-border/40 dark:border-white/5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-xl bg-brand-500/10 text-brand-500 flex items-center justify-center shadow-sm border border-white/20">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
                   </div>
-                  <h3 className="text-[11px] font-black tracking-[3px] uppercase text-content-subtle dark:text-content-dark-muted font-display">Unidades de Embalaje</h3>
+                  <h3 className="text-[10px] font-black tracking-[2px] uppercase text-content-subtle dark:text-content-dark-muted font-display">Unidades de Embalaje</h3>
                 </div>
-                <div className="flex gap-4">
+                <div className="flex gap-3">
                   <div className="flex-1">
-                    <input list="pkg-units-list" value={form.package_unit} onChange={e => set("package_unit", e.target.value)} placeholder="Ej. Caja, Bulto..." className="input !h-12 !rounded-xl !text-sm !font-bold dark:text-white" />
+                    <input list="pkg-units-list" value={form.package_unit} onChange={e => set("package_unit", e.target.value)} placeholder="Ej. Caja, Bulto..." className="input !h-10 !rounded-xl !text-sm !font-bold dark:text-white" />
                     <datalist id="pkg-units-list">{PKG_UNITS.map(u => <option key={u} value={u} />)}</datalist>
                   </div>
-                  <div className="w-32 relative">
-                    <input value={form.package_size} onChange={e => set("package_size", e.target.value)} type="number" placeholder="Cant." className="input !h-12 !rounded-xl !text-sm !font-black text-center dark:text-white" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-content-subtle dark:text-content-dark-muted font-black opacity-30 uppercase">uds</span>
+                  <div className="w-24 relative">
+                    <input value={form.package_size} onChange={e => set("package_size", e.target.value)} type="number" placeholder="Cant." className="input !h-10 !rounded-xl !text-sm !font-black text-center dark:text-white" />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-content-subtle dark:text-content-dark-muted font-black opacity-30 uppercase">uds</span>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-surface-2 dark:bg-white/5 rounded-[40px] p-8 border border-border/40 dark:border-white/5 border-dashed border-2 border-danger/10">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-2xl bg-danger/10 text-danger flex items-center justify-center shadow-sm border border-white/20">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+              <div className="bg-surface-2 dark:bg-white/5 rounded-3xl p-5 border border-border/40 dark:border-white/5 border-dashed border-2 border-danger/10">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-xl bg-danger/10 text-danger flex items-center justify-center shadow-sm border border-white/20">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
                   </div>
-                  <h3 className="text-[11px] font-black tracking-[3px] uppercase text-content-subtle dark:text-content-dark-muted font-display">Alerta de Reposición</h3>
+                  <h3 className="text-[10px] font-black tracking-[2px] uppercase text-content-subtle dark:text-content-dark-muted font-display">Alerta de Reposición</h3>
                 </div>
                 <div className="relative">
-                  <input value={form.min_stock} onChange={e => set("min_stock", e.target.value)} type="number" className="input !h-12 !rounded-xl !text-sm !font-black !border-danger/20 focus:!ring-danger/20 dark:text-white" placeholder="Min. para notificar..." />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-danger/40 dark:text-danger/60 font-black uppercase tracking-widest">Registros</span>
+                  <input value={form.min_stock} onChange={e => set("min_stock", e.target.value)} type="number" className="input !h-10 !rounded-xl !text-sm !font-black !border-danger/20 focus:!ring-danger/20 dark:text-white" placeholder="Min. para notificar..." />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-danger/40 dark:text-danger/60 font-black uppercase tracking-widest">Registros</span>
                 </div>
               </div>
             </div>
@@ -440,13 +432,13 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         ) : null}
 
         {/* ── Footer de Acción ── */}
-        <div className="flex gap-4 justify-end mt-10 pt-10 border-t border-border/40">
-          <button onClick={onClose} className="px-10 py-4 text-xs font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-[3px] hover:bg-surface-2 dark:hover:bg-white/5 rounded-[24px] transition-all border-none bg-transparent active:scale-95">
+        <div className="flex gap-4 justify-end mt-4 pt-4 border-t border-border/40">
+          <button onClick={onClose} className="px-6 py-2.5 text-xs font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-[2px] hover:bg-surface-2 dark:hover:bg-white/5 rounded-xl transition-all border-none bg-transparent active:scale-95">
             Cancelar Operación
           </button>
           <button
             onClick={handleSave} disabled={loading}
-            className={`flex items-center justify-center gap-4 px-12 py-4 rounded-[24px] text-xs font-black text-white uppercase tracking-[3px] shadow-2xl transition-all h-16 min-w-[280px] ${loading ? "bg-surface-3 cursor-not-allowed shadow-none" : "bg-brand-500 hover:bg-brand-600 hover:shadow-brand-500/30 active:scale-95"} border-none`}
+            className={`flex items-center justify-center gap-3 px-8 py-2.5 rounded-xl text-xs font-black text-white uppercase tracking-[2px] shadow-lg transition-all h-12 min-w-[200px] ${loading ? "bg-surface-3 cursor-not-allowed shadow-none" : "bg-brand-500 hover:bg-brand-600 hover:shadow-brand-500/30 active:scale-95"} border-none`}
           >
             {loading ? (
               <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>

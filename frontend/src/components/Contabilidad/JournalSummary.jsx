@@ -33,7 +33,7 @@ export default function JournalSummary({ dateFrom, dateTo, onData }) {
         return (
           <div
             key={j.id}
-            className="group relative bg-white dark:bg-surface-dark-3 rounded-2xl p-5 border border-border dark:border-border-dark shadow-sm hover:shadow-card-md transition-all duration-300 overflow-hidden"
+            className="group relative bg-white dark:bg-surface-dark-3 rounded-xl p-4 border border-border dark:border-border-dark shadow-sm overflow-hidden"
           >
             {/* Color accent bar */}
             <div
@@ -41,13 +41,13 @@ export default function JournalSummary({ dateFrom, dateTo, onData }) {
               style={{ background: journalColor }}
             />
 
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
                 <div
-                  className="w-2.5 h-2.5 rounded-full shadow-sm animate-pulse"
+                  className="w-2 h-2 rounded-full"
                   style={{ background: journalColor }}
                 />
-                <h4 className="text-[11px] font-black text-content dark:text-content-dark uppercase tracking-wider truncate max-w-[120px]">
+                <h4 className="text-[10px] font-black text-content dark:text-content-dark uppercase tracking-wider truncate max-w-[120px]">
                   {j.name}
                 </h4>
               </div>
@@ -64,21 +64,21 @@ export default function JournalSummary({ dateFrom, dateTo, onData }) {
               </div>
             )}
 
-            <div className="mb-4">
-              <div className="text-[10px] font-black text-content dark:text-content-dark uppercase tracking-[1.5px] mb-1 opacity-70">TOTAL ACUMULADO</div>
-              <div className="text-2xl font-black tracking-tight" style={{ color: journalColor }}>
+            <div className="mb-3">
+              <div className="text-[9px] font-black text-content-muted uppercase tracking-widest mb-0.5">TOTAL ACUMULADO</div>
+              <div className="text-xl font-black tracking-tight" style={{ color: journalColor }}>
                 {fmtJ(j.total_ingresos)}
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-border/40 dark:border-border-dark/40">
+            <div className="flex items-center justify-between pt-2.5 border-t border-border/40 dark:border-border-dark/40">
               <div className="flex flex-col">
-                <span className="text-[9px] font-black text-content dark:text-content-dark uppercase tracking-widest opacity-60">Movimientos</span>
-                <span className="text-sm font-bold text-content dark:text-content-dark">{j.tx_count} TX</span>
+                <span className="text-[9px] font-black text-content-muted uppercase tracking-widest">Movimientos</span>
+                <span className="text-xs font-bold text-content dark:text-content-dark">{j.tx_count} TX</span>
               </div>
               <div className="flex flex-col items-end">
                 <span className="text-[9px] font-black text-success uppercase tracking-widest">Hoy</span>
-                <span className="text-sm font-bold text-success">{fmtJ(j.ingresos_hoy)}</span>
+                <span className="text-xs font-bold text-success">{fmtJ(j.ingresos_hoy)}</span>
               </div>
             </div>
 

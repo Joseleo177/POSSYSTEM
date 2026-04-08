@@ -151,65 +151,42 @@ export default function ContabilidadPage() {
   };
 
   return (
-    <div className="p-4 max-w-[1600px] mx-auto animate-in fade-in duration-700">
-      {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4">
-        <div className="flex items-center gap-4 lg:gap-6">
-          <div className="w-10 h-10 rounded-2xl bg-brand-500/10 flex items-center justify-center text-2xl lg:text-3xl shadow-inner border border-brand-500/20 shrink-0">
+    <div className="h-full flex flex-col ">
 
-          </div>
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-black text-content dark:text-content-dark tracking-tighter uppercase mb-0.5 lg:mb-1">
-              Contabilidad <span className="text-brand-500">.</span>
-            </h1>
-            <p className="text-[9px] lg:text-[10px] font-bold text-content-subtle uppercase tracking-[2px] lg:tracking-[3px] opacity-70">
-              Gestión de Finanzas, Libros y Correlativos
-            </p>
-          </div>
-        </div>
-
-        {/* NAVEGACIÓN PREMIUM */}
-        <div className="relative group w-full md:w-72">
-          <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mb-2 ml-1 opacity-50">Seleccionar Módulo</div>
-          <button
-            onClick={() => setDropOpen(!dropOpen)}
-            className="flex items-center justify-between w-full px-4 py-2.5 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl shadow-sm hover:shadow-md transition-all group"
-          >
-            <span className="text-xs font-black uppercase tracking-widest text-brand-500">{subPage}</span>
-            <span className={`text-xs transition-transform duration-300 ${dropOpen ? "rotate-180" : ""}`}>▼</span>
-          </button>
-
-          {dropOpen && (
-            <>
-              <div className="fixed inset-0 z-[40]" onClick={() => setDropOpen(false)} />
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl shadow-2xl z-[50] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                {visibleSubPages.map(p => (
-                  <button
-                    key={p}
-                    onClick={() => { setSubPage(p); setDropOpen(false); }}
-                    className={[
-                      "w-full px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest transition-colors border-none cursor-pointer",
-                      subPage === p
-                        ? "bg-brand-500 text-black"
-                        : "text-content-subtle hover:bg-surface-2 dark:hover:bg-surface-dark-3 hover:text-content"
-                    ].join(" ")}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+      {/* ── Header compacto ─────────────────────────── */}
+      <div className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between gap-3 border-b border-border/30 dark:border-white/5">
+        <div>
+          <div className="text-[10px] font-black text-brand-500 uppercase tracking-[3px] leading-none mb-0.5">MÓDULO FINANCIERO</div>
+          <h1 className="text-sm font-black text-content dark:text-white uppercase tracking-tight leading-none">Contabilidad</h1>
         </div>
       </div>
 
-      {renderContent()}
+      {/* ── Tabs compactos ───────────────────────────── */}
+      <div className="shrink-0 px-4 py-1.5 border-b border-border/20 dark:border-white/5 bg-surface-1/30 dark:bg-white/[0.02]">
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          {visibleSubPages.map(p => (
+            <button
+              key={p}
+              onClick={() => setSubPage(p)}
+              className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
+                subPage === p
+                  ? "bg-brand-500 text-black shadow-[0_0_12px_rgba(20,184,166,0.3)]"
+                  : "text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white hover:bg-surface-2 dark:hover:bg-white/5"
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <ReceiptModal
-        open={!!receiptSale}
-        onClose={() => setReceiptSale(null)}
-        sale={receiptSale}
-      />
+      {/* ── Contenido del sub-módulo ─────────────────── */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {renderContent()}
+      </div>
+
+      <ReceiptModal open={!!receiptSale} onClose={() => setReceiptSale(null)} sale={receiptSale} />
     </div>
   );
 }
+

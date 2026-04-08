@@ -25,7 +25,7 @@ module.exports = async function getAllSales(query) {
       ],
     },
     include: [
-      { model: Customer, attributes: ["name"], required: false },
+      { model: Customer, attributes: ["name", "rif"], required: false },
       { model: Employee, attributes: ["full_name"], required: false },
       { model: Currency, attributes: ["symbol", "code"], required: false },
       { model: Warehouse, attributes: ["name"], required: false },
@@ -38,6 +38,7 @@ module.exports = async function getAllSales(query) {
   const data = sales.map((s) => {
     const item = s.toJSON();
     item.customer_name = item.Customer?.name ?? null;
+    item.customer_rif  = item.Customer?.rif ?? null;
     item.employee_name = item.Employee?.full_name ?? null;
     item.currency_symbol = item.Currency?.symbol ?? null;
     item.currency_code = item.Currency?.code ?? null;
