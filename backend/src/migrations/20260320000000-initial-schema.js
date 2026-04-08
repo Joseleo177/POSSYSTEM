@@ -356,7 +356,7 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO employees (username, password_hash, full_name, email, role_id)
 VALUES (
   'admin',
-  '$$2b$$10$$eD2g3hjyAuWcR.nWxpwczeuW3IXDA4yUEUHyWGpzQGHcEU5t0j3G.',
+  '$2b$10$RyX18e08gcs7YB8nn2hYruuBR/0qrtowWJZW8Rzd5JzWS38OMSCh6',
   'Administrador',
   'admin@mitienda.com',
   (SELECT id FROM roles WHERE name = 'admin')
