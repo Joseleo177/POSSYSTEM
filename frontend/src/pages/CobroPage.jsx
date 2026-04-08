@@ -417,7 +417,7 @@ export default function CobroPage() {
           employee={employee} 
           warehouses={employeeWarehouses} 
           initialWarehouse={activeWarehouse} 
-          onOpened={setCashSession} 
+          onOpened={(session) => { setCashSession(session); setShowApertura(false); }} 
         />
       )}
       <ConfirmModal isOpen={showConfirmCheckout} title="Venta" message="¿Realizar cobro?" onConfirm={() => { setShowConfirmCheckout(false); checkout(); }} onCancel={() => setShowConfirmCheckout(false)} />

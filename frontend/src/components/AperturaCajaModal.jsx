@@ -152,16 +152,16 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
 
           <div className="pt-4 space-y-4">
             {error && (
-              <div className="bg-danger/10 border border-danger/20 text-danger text-[10px] font-black uppercase tracking-wider rounded-xl px-5 py-3.5 flex items-center gap-3">
-                <span className="text-sm"></span> {error}
+              <div className="bg-danger/10 border border-danger/20 text-danger text-xs font-black uppercase tracking-wider rounded-xl px-5 py-4 flex items-center gap-3">
+                <span className="text-sm">⚠️</span> {error}
               </div>
             )}
 
             <button onClick={handleOpen} disabled={saving || !anySelected}
-              className={`w-full py-4.5 rounded-[22px] font-black text-xs uppercase tracking-[3px] transition-all cursor-pointer flex items-center justify-center gap-3
+              className={`w-full py-5 rounded-[22px] font-black text-sm uppercase tracking-[3px] transition-all cursor-pointer flex items-center justify-center gap-3
                 ${saving || !anySelected
                   ? "bg-surface-3 dark:bg-white/5 text-content-subtle cursor-not-allowed"
-                  : "bg-success text-white hover:scale-[1.01] active:scale-95 shadow-xl shadow-success/20 ring-1 ring-white/10"}`}>
+                  : "bg-success text-white hover:scale-[1.02] active:scale-95 shadow-xl shadow-success/20 ring-1 ring-white/10"}`}>
               {saving ? "Abriendo..." : "Abrir Caja"}
             </button>
           </div>
