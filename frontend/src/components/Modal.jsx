@@ -14,11 +14,11 @@ export default function Modal({ open, onClose, title, children, width = 560 }) {
   <div onClick={onClose}
   className="fixed inset-0 z-[1000] flex items-center justify-center p-4 sm:p-5 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
   <div onClick={e => e.stopPropagation()}
-  className="bg-white dark:bg-surface-dark-2 border border-border dark:border-white/5 rounded-[24px] shadow-2xl w-full relative animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out flex flex-col max-h-[90vh]"
+  className="bg-white dark:bg-surface-dark-2 border border-border dark:border-white/5 rounded-xl shadow-2xl w-full relative animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out flex flex-col max-h-[90vh]"
   style={{ maxWidth: width }}>
 
   {/* Header */}
-  <div className="flex shrink-0 items-center justify-between px-5 py-4 border-b border-border/40 dark:border-white/5 bg-white/80 dark:bg-surface-dark-2/80 backdrop-blur-xl z-20 rounded-t-[24px]">
+  <div className="flex shrink-0 items-center justify-between px-5 py-3 border-b border-border/40 dark:border-white/5 bg-white/80 dark:bg-surface-dark-2/80 backdrop-blur-xl z-20 rounded-t-xl">
  <h2 className="text-sm font-black text-content dark:text-content-dark tracking-wide uppercase">
  {title}
  </h2>

@@ -162,13 +162,13 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
  {/* Información Principal */}
  <div className="flex-1 space-y-3">
  <div>
- <label className="label tracking-wide opacity-60 uppercase mb-1 text-content-subtle dark:text-content-dark-muted">Nombre del Artículo / Referencia</label>
- <input value={form.name} onChange={e => set("name", e.target.value)} autoFocus className="input shadow-sm border border-border/60" placeholder="Ej. Computadora Portátil Gamer X-1..." />
+ <label className="label">Nombre del Artículo / Referencia</label>
+ <input value={form.name} onChange={e => set("name", e.target.value)} autoFocus className="input " placeholder="Ej. Computadora Portátil Gamer X-1..." />
  </div>
 
  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
  <div>
- <label className="text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-content-dark-muted mb-1 block">Categoría Vinculada</label>
+ <label className="label">Categoría Vinculada</label>
  <div className="relative group">
  <CustomSelect 
  value={form.category_id} 
@@ -180,7 +180,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
  </div>
  </div>
  <div>
- <label className="label tracking-wide opacity-60 uppercase mb-1">Unidad de Medida</label>
+ <label className="label">Unidad de Medida</label>
  <div className="relative">
  <CustomSelect 
  value={form.unit} 
@@ -195,19 +195,19 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
  <div>
- <label className="label tracking-wide opacity-60 uppercase mb-1">Precio de Venta Público (PVPR)</label>
+ <label className="label">Precio de Venta Público (PVPR)</label>
  <div className="relative group">
  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
  <span className="text-brand-500 font-black tracking-wide">$</span>
  </div>
- <input value={form.price} onChange={e => set("price", e.target.value)} type="number" step="0.01" className="input !pl-10 !pr-4 !text-lg !font-black !text-brand-500 !bg-brand-500/5 !border-brand-500/20 focus:!ring-brand-500/30 transition-all" placeholder="0.00" />
+ <input value={form.price} onChange={e => set("price", e.target.value)} type="number" step="0.01" className="input !pl-10 !pr-4 !text-sm !font-black !text-brand-500 !bg-brand-500/5 !border-brand-500/20 focus:!ring-brand-500/30 transition-all" placeholder="0.00" />
  </div>
  </div>
 
  {editData?.id && !form.is_combo && !form.is_service && (
  <div>
- <label className="label tracking-wide opacity-60 uppercase mb-1">Stock Global (Acumulado)</label>
- <div className="bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border border-border/40 rounded-xl px-4 flex justify-between items-center cursor-not-allowed opacity-80">
+ <label className="label">Stock Global (Acumulado)</label>
+ <div className="bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border border-border/40 rounded-lg px-4 flex justify-between items-center cursor-not-allowed opacity-80 h-10">
  <span className="text-lg font-black">{form.stock ?? 0} <span className="text-[11px] opacity-40 uppercase tracking-wide">{form.unit}</span></span>
  <span className="text-[10px] bg-black/10 dark:bg-white/10 px-2 py-1 rounded-lg font-black uppercase tracking-wide">Lectura</span>
  </div>
@@ -220,7 +220,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
  {/* ── Toggles de Tipo (Servicio / Combo) ── */}
  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
  {/* Toggle Servicio */}
- <div className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-4 ${form.is_service ? "bg-amber-500/10 border-amber-500/30" : "bg-surface-2 dark:bg-white/5 border-border/60 dark:border-white/5"}`}>
+ <div className={`p-4 rounded-lg border transition-all flex items-center justify-between gap-4 ${form.is_service ? "bg-amber-500/10 border-amber-500/30" : "bg-surface-2 dark:bg-white/5 border-border/60 dark:border-white/5"}`}>
  <div>
  <div className="text-[11px] font-black text-content dark:text-content-dark uppercase tracking-wide">Registro como Servicio</div>
  <div className="text-[11px] text-content-subtle dark:text-content-dark-muted font-bold mt-0.5 opacity-70">Desactiva el seguimiento de inventario.</div>
@@ -233,7 +233,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
  {/* Toggle Combo */}
  {!form.is_service && (
- <div className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-4 ${form.is_combo ? "bg-brand-500/10 border-brand-500/30" : "bg-surface-2 dark:bg-white/5 border-border/60 dark:border-white/5"}`}>
+ <div className={`p-4 rounded-lg border transition-all flex items-center justify-between gap-4 ${form.is_combo ? "bg-brand-500/10 border-brand-500/30" : "bg-surface-2 dark:bg-white/5 border-border/60 dark:border-white/5"}`}>
  <div>
  <div className="text-[11px] font-black text-content dark:text-content-dark uppercase tracking-wide">Producto Compuesto</div>
  <div className="text-[11px] text-content-subtle dark:text-content-dark-muted font-bold mt-0.5 opacity-70">Combina stock de ingredientes.</div>
@@ -250,7 +250,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
  {!form.is_combo && !form.is_service ? (
  <div className="space-y-3 animate-in fade-in duration-500">
  {/* ── Rentabilidad ── */}
- <div className="bg-surface-2 dark:bg-white/5 rounded-2xl p-4 border border-border/40 dark:border-white/5 shadow-sm">
+ <div className="bg-surface-2 dark:bg-white/5 rounded-lg p-4 border border-border/40 dark:border-white/5 shadow-sm">
  <div className="flex items-center gap-2.5 mb-3">
  <div className="w-7 h-7 rounded-lg bg-green-500/10 text-green-500 flex items-center justify-center shadow-sm border border-white/20">
  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -260,14 +260,14 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
  <div className="grid grid-cols-2 gap-2">
  <div>
- <label className="label !text-[11px]">Costo Unitario</label>
+ <label className="label">Costo Unitario</label>
  <div className="relative">
  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle font-black text-xs">$</span>
  <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.01" className="input !pl-6 !font-black !bg-white dark:!bg-surface-dark-3" placeholder="0.00" />
  </div>
  </div>
  <div>
- <label className="label !text-[11px]">Margen (%)</label>
+ <label className="label">Margen (%)</label>
  <div className="relative">
  <input value={form.profit_margin} onChange={e => handleCostOrMarginChange("profit_margin", e.target.value)} type="number" step="0.1" className="input !pr-6 !font-black !bg-white dark:!bg-surface-dark-3 text-center" placeholder="0" />
  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle font-black text-xs">%</span>
@@ -275,7 +275,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
  </div>
  </div>
  <div
- className={`flex flex-col justify-center p-3 px-4 rounded-xl border-2 border-dashed transition-all group cursor-pointer ${suggestedPrice ? "bg-green-500/5 border-green-500/30 hover:bg-green-500/10" : "bg-surface-1 dark:bg-white/5 border-border/40 opacity-50"}`}
+ className={`flex flex-col justify-center p-3 px-4 rounded-lg border-2 border-dashed transition-all group cursor-pointer ${suggestedPrice ? "bg-green-500/5 border-green-500/30 hover:bg-green-500/10" : "bg-surface-1 dark:bg-white/5 border-border/40 opacity-50"}`}
  onClick={() => { if (suggestedPrice) set("price", suggestedPrice); }}
  >
  <div className="flex justify-between items-center mb-0.5">
@@ -291,7 +291,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
  {/* ── Configuración Avanzada ── */}
  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
- <div className="bg-surface-2 dark:bg-white/5 rounded-2xl p-4 border border-border/40 dark:border-white/5">
+ <div className="bg-surface-2 dark:bg-white/5 rounded-lg p-4 border border-border/40 dark:border-white/5">
  <div className="flex items-center gap-2.5 mb-2.5">
  <div className="w-7 h-7 rounded-lg bg-brand-500/10 text-brand-500 flex items-center justify-center shadow-sm border border-white/20">
  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
@@ -310,7 +310,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
  </div>
  </div>
 
- <div className="bg-surface-2 dark:bg-white/5 rounded-2xl p-4 border-2 border-dashed border-danger/15 dark:border-danger/10">
+ <div className="bg-surface-2 dark:bg-white/5 rounded-lg p-4 border-2 border-dashed border-danger/15 dark:border-danger/10">
  <div className="flex items-center gap-2.5 mb-2.5">
  <div className="w-7 h-7 rounded-lg bg-danger/10 text-danger flex items-center justify-center shadow-sm border border-white/20">
  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
@@ -347,7 +347,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
  onChange={e => { setSearchIngredient(e.target.value); setShowDropdown(true); }}
  onFocus={() => setShowDropdown(true)}
  placeholder="Buscar componentes por nombre o código..."
- className="input !pl-14 !pr-6 !rounded-2xl border-brand-500/30 focus:border-brand-500 dark:text-white"
+ className="input !pl-14 !pr-6 !rounded-lg border-brand-500/30 focus:border-brand-500 dark:text-white"
  />
  <div className="absolute left-5 top-1/2 -translate-y-1/2 text-brand-500/50">
  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -409,18 +409,18 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
  onChange={e => updateIngredientQty(item.product_id, e.target.value)} 
  type="number" 
  step={item.unit === 'unidad' || item.unit === 'uds' ? "1" : "0.001"}
- className="input !rounded-2xl !text-sm !font-black text-center bg-surface-2 dark:bg-surface-dark-2 dark:text-white border-2 border-brand-500/20 focus:border-brand-500" 
+ className="input !rounded-lg !text-sm !font-black text-center bg-surface-2 dark:bg-surface-dark-2 dark:text-white border-2 border-brand-500/20 focus:border-brand-500" 
  />
  </div>
  <span className="text-[11px] text-content-subtle/60 font-black uppercase tracking-wide w-12 truncate">{item.unit || "uds"}</span>
  </div>
- <button onClick={() => removeIngredient(item.product_id)} className="w-10 flex items-center justify-center text-danger/40 hover:text-danger hover:bg-danger/10 rounded-xl transition-all active:scale-90">
+ <button onClick={() => removeIngredient(item.product_id)} className="w-10 flex items-center justify-center text-danger/40 hover:text-danger hover:bg-danger/10 rounded-lg transition-all active:scale-90">
  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
  </button>
  </div>
  ))}
  <div className="pt-6 flex justify-end">
- <div className="bg-brand-500/10 px-8 rounded-2xl border border-brand-500/20">
+ <div className="bg-brand-500/10 px-8 rounded-lg border border-brand-500/20">
  <span className="text-[11px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-wide">Total Componentes: {form.combo_items.length}</span>
  </div>
  </div>

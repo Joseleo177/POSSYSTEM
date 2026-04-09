@@ -16,620 +16,620 @@ import { usePurchases } from "../hooks/usePurchases";
 import { useProductSearch, useSupplierSearch } from "../hooks/useSearchHooks";
 
 export default function PurchasesTab({ notify, onProductsUpdated }) {
- const {
- view, setView,
- purchases, loadPurchases,
- detail, openDetail,
- warehouses, selectedWarehouseId, setSelectedWarehouseId,
- selectedSupplier, setSelectedSupplier,
- notes, setNotes,
- items,
- itemForm, setIF, selectProduct: selectProductHook,
- addItem, removeItem,
- loading, savePurchase: savePurchaseAction, cancelPurchase: cancelPurchaseAction,
- EMPTY_ITEM
- } = usePurchases(notify, onProductsUpdated);
+  const {
+    view, setView,
+    purchases, loadPurchases,
+    detail, openDetail,
+    warehouses, selectedWarehouseId, setSelectedWarehouseId,
+    selectedSupplier, setSelectedSupplier,
+    notes, setNotes,
+    items,
+    itemForm, setIF, selectProduct: selectProductHook,
+    addItem, removeItem,
+    loading, savePurchase: savePurchaseAction, cancelPurchase: cancelPurchaseAction,
+    EMPTY_ITEM
+  } = usePurchases(notify, onProductsUpdated);
 
- // ── Specialized Searches ───────────────────────────────────
- const {
- term: productSearch,
- setTerm: setProductSearch,
- results: productResults,
- searching,
- clear: clearProductSearch
- } = useProductSearch({ limit: 8 });
+  // ── Specialized Searches ───────────────────────────────────
+  const {
+    term: productSearch,
+    setTerm: setProductSearch,
+    results: productResults,
+    searching,
+    clear: clearProductSearch
+  } = useProductSearch({ limit: 8 });
 
- const {
- term: supplierSearch,
- setTerm: setSupplierSearch,
- results: supplierResults,
- clear: clearSupplierSearch
- } = useSupplierSearch({ limit: 6 });
+  const {
+    term: supplierSearch,
+    setTerm: setSupplierSearch,
+    results: supplierResults,
+    clear: clearSupplierSearch
+  } = useSupplierSearch({ limit: 6 });
 
- // ── UI State (Modals) ──────────────────────────────────────
- const [supplierModal, setSupplierModal] = useState(false);
- const [supplierEditData, setSupplierEditData] = useState(null);
- const [savingSupplier, setSavingSupplier] = useState(false);
+  // ── UI State (Modals) ──────────────────────────────────────
+  const [supplierModal, setSupplierModal] = useState(false);
+  const [supplierEditData, setSupplierEditData] = useState(null);
+  const [savingSupplier, setSavingSupplier] = useState(false);
 
- const [productModal, setProductModal] = useState(false);
- const [productEditData, setProductEditData] = useState(null);
- const [savingProduct, setSavingProduct] = useState(false);
- const [categories, setCategories] = useState([]);
- const [cancelConfirm, setCancelConfirm] = useState(null);
- const [newModal, setNewModal] = useState(false);
+  const [productModal, setProductModal] = useState(false);
+  const [productEditData, setProductEditData] = useState(null);
+  const [savingProduct, setSavingProduct] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [cancelConfirm, setCancelConfirm] = useState(null);
+  const [newModal, setNewModal] = useState(false);
 
- // ── CRUD Wrappers / UI Logic ───────────────────────────────
- const openCreateSupplier = (name = "") => {
- setSupplierEditData({ _newType: "proveedor", _newName: name });
- setSupplierModal(true);
- };
- const closeSupplierModal = () => { setSupplierModal(false); setSupplierEditData(null); };
+  // ── CRUD Wrappers / UI Logic ───────────────────────────────
+  const openCreateSupplier = (name = "") => {
+    setSupplierEditData({ _newType: "proveedor", _newName: name });
+    setSupplierModal(true);
+  };
+  const closeSupplierModal = () => { setSupplierModal(false); setSupplierEditData(null); };
 
- const saveSupplier = async (form) => {
- if (!form.name) return notify("El nombre es requerido", "err");
- setSavingSupplier(true);
- try {
- const res = await api.customers.create({ ...form, type: "proveedor" });
- notify("Proveedor registrado exitosamente");
- setSelectedSupplier(res.data);
- clearSupplierSearch();
- closeSupplierModal();
- } catch (e) { notify(e.message, "err"); }
- setSavingSupplier(false);
- };
+  const saveSupplier = async (form) => {
+    if (!form.name) return notify("El nombre es requerido", "err");
+    setSavingSupplier(true);
+    try {
+      const res = await api.customers.create({ ...form, type: "proveedor" });
+      notify("Proveedor registrado exitosamente");
+      setSelectedSupplier(res.data);
+      clearSupplierSearch();
+      closeSupplierModal();
+    } catch (e) { notify(e.message, "err"); }
+    setSavingSupplier(false);
+  };
 
- const openCreateProduct = (name = "") => {
- if (!categories.length) api.categories.getAll().then(r => setCategories(r.data)).catch(() => { });
- setProductEditData({ name });
- setProductModal(true);
- };
- const closeProductModal = () => { setProductModal(false); setProductEditData(null); };
+  const openCreateProduct = (name = "") => {
+    if (!categories.length) api.categories.getAll().then(r => setCategories(r.data)).catch(() => { });
+    setProductEditData({ name });
+    setProductModal(true);
+  };
+  const closeProductModal = () => { setProductModal(false); setProductEditData(null); };
 
- const saveProduct = async (form, imageFile) => {
- const { name, price, stock, category_id, unit, qty_step } = form;
- if (!name || !price) return notify("Nombre y precio son requeridos", "err");
- setSavingProduct(true);
- try {
- const payload = { name, price: +price, stock: +stock, category_id: category_id || null, unit: unit || "unidad", qty_step: +qty_step || 1 };
- const res = await api.products.create(payload, imageFile);
- notify("Producto creado exitosamente");
- if (res?.data) selectProduct(res.data);
- closeProductModal();
- clearProductSearch();
- } catch (e) { notify(e.message, "err"); }
- setSavingProduct(false);
- };
+  const saveProduct = async (form, imageFile) => {
+    const { name, price, stock, category_id, unit, qty_step } = form;
+    if (!name || !price) return notify("Nombre y precio son requeridos", "err");
+    setSavingProduct(true);
+    try {
+      const payload = { name, price: +price, stock: +stock, category_id: category_id || null, unit: unit || "unidad", qty_step: +qty_step || 1 };
+      const res = await api.products.create(payload, imageFile);
+      notify("Producto creado exitosamente");
+      if (res?.data) selectProduct(res.data);
+      closeProductModal();
+      clearProductSearch();
+    } catch (e) { notify(e.message, "err"); }
+    setSavingProduct(false);
+  };
 
- const selectProduct = (p) => {
- selectProductHook(p);
- clearProductSearch();
- };
+  const selectProduct = (p) => {
+    selectProductHook(p);
+    clearProductSearch();
+  };
 
- const selectSupplier = (s) => {
- setSelectedSupplier(s);
- clearSupplierSearch();
- };
+  const selectSupplier = (s) => {
+    setSelectedSupplier(s);
+    clearSupplierSearch();
+  };
 
- const savePurchase = async () => {
- await savePurchaseAction(selectedSupplier);
- setNewModal(false);
- };
+  const savePurchase = async () => {
+    await savePurchaseAction(selectedSupplier);
+    setNewModal(false);
+  };
 
- const cancelPurchase = (id) => cancelPurchaseAction(id);
+  const cancelPurchase = (id) => cancelPurchaseAction(id);
 
- const grandTotal = items.reduce((s, i) => s + (i.subtotal || 0), 0);
+  const grandTotal = items.reduce((s, i) => s + (i.subtotal || 0), 0);
 
- const listView = (
- <div className="h-full flex flex-col">
- {/* Header */}
- <div className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between gap-3 border-b border-border/30 dark:border-white/5">
- <div>
- <div className="text-[11px] font-black text-brand-500 uppercase tracking-wide leading-none mb-0.5">MÓDULO DE COMPRAS</div>
- <h2 className="text-sm font-black text-content dark:text-white uppercase tracking-tight leading-none">
- Historial de Compras <span className="ml-2 text-[11px] font-medium text-content-subtle dark:text-white/30 normal-case">({purchases.length})</span>
- </h2>
- </div>
- <button onClick={() => setNewModal(true)} className="px-3 py-1.5 bg-brand-500 text-black rounded-lg text-[11px] font-black uppercase tracking-wide hover:bg-brand-400 transition-all active:scale-95 shrink-0">
- + Nuevo Recibo
- </button>
- </div>
+  const listView = (
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between gap-3 border-b border-border/30 dark:border-white/5">
+        <div>
+          <div className="text-[11px] font-black text-brand-500 uppercase tracking-wide leading-none mb-0.5">MÓDULO DE COMPRAS</div>
+          <h2 className="text-sm font-black text-content dark:text-white uppercase tracking-tight leading-none">
+            Historial de Compras <span className="ml-2 text-[11px] font-medium text-content-subtle dark:text-white/30 normal-case">({purchases.length})</span>
+          </h2>
+        </div>
+        <button onClick={() => setNewModal(true)} className="px-3 py-1.5 bg-brand-500 text-black rounded-lg text-[11px] font-black uppercase tracking-wide hover:bg-brand-400 transition-all active:scale-95 shrink-0">
+          + Nuevo Recibo
+        </button>
+      </div>
 
- {/* Content */}
- <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-4 py-3">
- {purchases.length === 0
- ? <div className="text-center py-16 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted opacity-30">
- Sin recibos de compra registrados
- </div>
- : <div className="card-premium flex-1 overflow-hidden flex flex-col">
- <div className="overflow-auto h-full"><table className="w-full text-left border-separate border-spacing-0">
- <thead className="sticky top-0">
- <tr className="border-b border-border/40 bg-surface-2 dark:bg-surface-dark-2 text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
- <th className="px-4 py-2.5 w-12">#</th>
- <th className="px-4 py-2.5">Almacén</th>
- <th className="px-4 py-2.5">Proveedor</th>
- <th className="px-4 py-2.5">Productos</th>
- <th className="px-4 py-2.5 text-right">Total</th>
- <th className="px-4 py-2.5">Empleado</th>
- <th className="px-4 py-2.5">Fecha</th>
- <th className="px-4 py-2.5 text-right w-28">Acciones</th>
- </tr>
- </thead>
- <tbody className="divide-y divide-border/10">
- {purchases.map((p) => (
- <tr key={p.id} className="group hover:bg-surface-1/50 dark:hover:bg-white/[0.03] transition-colors text-xs">
- <td className="px-4 py-2.5 font-bold text-content-subtle tabular-nums">#{p.id}</td>
- <td className="px-4 py-2.5">
- {p.warehouse_name
- ? <span className="px-2 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wide bg-info/10 text-info border border-info/20">{p.warehouse_name}</span>
- : <span className="text-content-subtle opacity-30 text-[11px] font-bold uppercase">Sin Almacén</span>}
- </td>
- <td className="px-4 py-2.5">
- <div className="font-black text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">{p.supplier_name || "PROVEEDOR FINAL"}</div>
- {p.supplier_rif && <div className="text-[11px] font-bold text-content-subtle opacity-50 uppercase tracking-wider mt-0.5">{p.supplier_rif}</div>}
- </td>
- <td className="px-4 py-2.5 font-bold text-content-subtle">{p.item_count} <span className="text-[11px] uppercase font-black opacity-50">items</span></td>
- <td className="px-4 py-2.5 text-right font-black text-warning tabular-nums text-sm">${Number(p.total).toFixed(2)}</td>
- <td className="px-4 py-2.5">
- <div className="flex items-center gap-2">
- <div className="w-6 h-6 rounded-lg bg-surface-3 dark:bg-white/10 flex items-center justify-center text-[11px] font-black text-content-subtle">{p.employee_name?.charAt(0)}</div>
- <span className="font-bold text-content-muted">{p.employee_name || "—"}</span>
- </div>
- </td>
- <td className="px-4 py-2.5 font-medium text-content-subtle">{fmtDate(p.created_at)}</td>
- <td className="px-4 py-2 text-right">
- <div className="flex justify-end gap-1.5">
- <button onClick={() => openDetail(p.id)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-info/10 text-info border border-info/20 hover:bg-info hover:text-white transition-all active:scale-95" title="Ver Detalle">
- <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
- </button>
- <button onClick={() => setCancelConfirm(p)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all active:scale-95" title="Anular">
- <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
- </button>
- </div>
- </td>
- </tr>
- ))}
- </tbody>
- </table>
- </div></div>
- }
- </div>
- </div>
- );
+      {/* Content */}
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-4 py-3">
+        {purchases.length === 0
+          ? <div className="text-center py-16 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted opacity-30">
+            Sin recibos de compra registrados
+          </div>
+          : <div className="card-premium flex-1 overflow-hidden flex flex-col">
+            <div className="overflow-auto h-full"><table className="w-full text-left border-separate border-spacing-0">
+              <thead className="sticky top-0">
+                <tr className="border-b border-border/40 bg-surface-2 dark:bg-surface-dark-2 text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
+                  <th className="px-4 py-2.5 w-12">#</th>
+                  <th className="px-4 py-2.5">Almacén</th>
+                  <th className="px-4 py-2.5">Proveedor</th>
+                  <th className="px-4 py-2.5">Productos</th>
+                  <th className="px-4 py-2.5 text-right">Total</th>
+                  <th className="px-4 py-2.5">Empleado</th>
+                  <th className="px-4 py-2.5">Fecha</th>
+                  <th className="px-4 py-2.5 text-right w-28">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/10">
+                {purchases.map((p) => (
+                  <tr key={p.id} className="group hover:bg-surface-1/50 dark:hover:bg-white/[0.03] transition-colors text-xs">
+                    <td className="px-4 py-2.5 font-bold text-content-subtle tabular-nums">#{p.id}</td>
+                    <td className="px-4 py-2.5">
+                      {p.warehouse_name
+                        ? <span className="px-2 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wide bg-info/10 text-info border border-info/20">{p.warehouse_name}</span>
+                        : <span className="text-content-subtle opacity-30 text-[11px] font-bold uppercase">Sin Almacén</span>}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="font-black text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">{p.supplier_name || "PROVEEDOR FINAL"}</div>
+                      {p.supplier_rif && <div className="text-[11px] font-bold text-content-subtle opacity-50 uppercase tracking-wider mt-0.5">{p.supplier_rif}</div>}
+                    </td>
+                    <td className="px-4 py-2.5 font-bold text-content-subtle">{p.item_count} <span className="text-[11px] uppercase font-black opacity-50">items</span></td>
+                    <td className="px-4 py-2.5 text-right font-black text-warning tabular-nums text-sm">${Number(p.total).toFixed(2)}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-surface-3 dark:bg-white/10 flex items-center justify-center text-[11px] font-black text-content-subtle">{p.employee_name?.charAt(0)}</div>
+                        <span className="font-bold text-content-muted">{p.employee_name || "—"}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 font-medium text-content-subtle">{fmtDate(p.created_at)}</td>
+                    <td className="px-4 py-2 text-right">
+                      <div className="flex justify-end gap-1.5">
+                        <button onClick={() => openDetail(p.id)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-info/10 text-info border border-info/20 hover:bg-info hover:text-white transition-all active:scale-95" title="Ver Detalle">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        </button>
+                        <button onClick={() => setCancelConfirm(p)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all active:scale-95" title="Anular">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div></div>
+        }
+      </div>
+    </div>
+  );
 
- const detailView = detail && (
- <div className="h-full flex flex-col">
- {/* Header */}
- <div className="shrink-0 px-4 pt-3 pb-2 flex items-center gap-3 border-b border-border/30 dark:border-white/5">
- <button onClick={() => { setView("list"); }} className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface-2 dark:bg-white/5 text-content-subtle hover:bg-brand-500 hover:text-black transition-all border border-border/40" title="Volver">
- <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
- </button>
- <div>
- <div className="text-[11px] font-black text-brand-500 uppercase tracking-wide leading-none mb-0.5">MÓDULO DE COMPRAS</div>
- <h2 className="text-sm font-black text-content dark:text-white uppercase tracking-tight leading-none">Recibo de Compra <span className="text-warning">#{detail.id}</span></h2>
- </div>
- </div>
- <div className="flex-1 min-h-0 overflow-auto px-4 py-3">
+  const detailView = detail && (
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="shrink-0 px-4 pt-3 pb-2 flex items-center gap-3 border-b border-border/30 dark:border-white/5">
+        <button onClick={() => { setView("list"); }} className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface-2 dark:bg-white/5 text-content-subtle hover:bg-brand-500 hover:text-black transition-all border border-border/40" title="Volver">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+        </button>
+        <div>
+          <div className="text-[11px] font-black text-brand-500 uppercase tracking-wide leading-none mb-0.5">MÓDULO DE COMPRAS</div>
+          <h2 className="text-sm font-black text-content dark:text-white uppercase tracking-tight leading-none">Recibo de Compra <span className="text-warning">#{detail.id}</span></h2>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0 overflow-auto px-4 py-3">
 
- <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-3">
- <div className="card-premium p-4 flex flex-col justify-between">
- <div>
- <div className="text-[11px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-wide mb-3 opacity-50">Proveedor</div>
- <div className={`text-lg font-black uppercase tracking-tight ${detail.supplier_name ? "text-brand-500" : "text-content-muted"}`}>
- {detail.supplier_name || "PROVEEDOR FINAL"}
- </div>
- {detail.supplier_rif && <div className="text-[11px] font-bold text-content-subtle mt-1 opacity-60">RIF: {detail.supplier_rif}</div>}
- </div>
- {detail.notes && (
- <div className="mt-6 pt-4 border-t border-border/10">
- <div className="text-[11px] font-black text-content-subtle uppercase tracking-wide mb-1 opacity-40">Observaciones:</div>
- <div className="text-xs italic text-content-subtle leading-relaxed opacity-70">"{detail.notes}"</div>
- </div>
- )}
- </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-3">
+          <div className="card-premium p-4 flex flex-col justify-between">
+            <div>
+              <div className="text-[11px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-wide mb-3 opacity-50">Proveedor</div>
+              <div className={`text-lg font-black uppercase tracking-tight ${detail.supplier_name ? "text-brand-500" : "text-content-muted"}`}>
+                {detail.supplier_name || "PROVEEDOR FINAL"}
+              </div>
+              {detail.supplier_rif && <div className="text-[11px] font-bold text-content-subtle mt-1 opacity-60">RIF: {detail.supplier_rif}</div>}
+            </div>
+            {detail.notes && (
+              <div className="mt-6 pt-4 border-t border-border/10">
+                <div className="text-[11px] font-black text-content-subtle uppercase tracking-wide mb-1 opacity-40">Observaciones:</div>
+                <div className="text-xs italic text-content-subtle leading-relaxed opacity-70">"{detail.notes}"</div>
+              </div>
+            )}
+          </div>
 
- <div className="card-premium p-4">
- <div className="text-[11px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-wide mb-3 opacity-50">Información de Origen</div>
- <div className="space-y-4">
- <div className="flex items-center gap-3">
- <div className="w-8 h-8 rounded-xl bg-info/10 text-info flex items-center justify-center border border-info/20 shadow-inner">
- <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
- </div>
- <div>
- <div className="text-[11px] font-black text-content-subtle uppercase tracking-wide opacity-40">Almacén Destino</div>
- <div className="text-xs font-black text-content uppercase">{detail.warehouse_name || "—"}</div>
- </div>
- </div>
- <div className="flex items-center gap-3">
- <div className="w-8 h-8 rounded-xl bg-surface-3 dark:bg-white/10 text-content-subtle flex items-center justify-center border border-border/10 shadow-inner">
- <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
- </div>
- <div>
- <div className="text-[11px] font-black text-content-subtle uppercase tracking-wide opacity-40">Empleado Registrador</div>
- <div className="text-xs font-black text-content uppercase">{detail.employee_name || "—"}</div>
- </div>
- </div>
- <div className="flex items-center gap-3">
- <div className="w-8 h-8 rounded-xl bg-surface-3 dark:bg-white/10 text-content-subtle flex items-center justify-center border border-border/10 shadow-inner">
- <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
- </div>
- <div>
- <div className="text-[11px] font-black text-content-subtle uppercase tracking-wide opacity-40">Fecha de Registro</div>
- <div className="text-xs font-black text-content uppercase tracking-wider tabular-nums">{fmtDate(detail.created_at)}</div>
- </div>
- </div>
- </div>
- </div>
+          <div className="card-premium p-4">
+            <div className="text-[11px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-wide mb-3 opacity-50">Información de Origen</div>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-info/10 text-info flex items-center justify-center border border-info/20 shadow-inner">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </div>
+                <div>
+                  <div className="text-[11px] font-black text-content-subtle uppercase tracking-wide opacity-40">Almacén Destino</div>
+                  <div className="text-xs font-black text-content uppercase">{detail.warehouse_name || "—"}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-surface-3 dark:bg-white/10 text-content-subtle flex items-center justify-center border border-border/10 shadow-inner">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                </div>
+                <div>
+                  <div className="text-[11px] font-black text-content-subtle uppercase tracking-wide opacity-40">Empleado Registrador</div>
+                  <div className="text-xs font-black text-content uppercase">{detail.employee_name || "—"}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-surface-3 dark:bg-white/10 text-content-subtle flex items-center justify-center border border-border/10 shadow-inner">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                </div>
+                <div>
+                  <div className="text-[11px] font-black text-content-subtle uppercase tracking-wide opacity-40">Fecha de Registro</div>
+                  <div className="text-xs font-black text-content uppercase tracking-wider tabular-nums">{fmtDate(detail.created_at)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
 
- <div className="card-premium p-4 bg-warning/5 border-warning/20 flex flex-col items-end justify-center">
- <div className="text-[11px] font-black text-warning uppercase tracking-wide mb-2">Total Compra Invertido</div>
- <div className="text-5xl font-black text-warning font-display drop-shadow-sm tabular-nums tracking-tighter">${fmt2(detail.total)}</div>
- <div className="text-[11px] font-bold text-warning/60 uppercase tracking-wide mt-2 italic">* precios expresados en USD</div>
- </div>
- </div>
+          <div className="card-premium p-4 bg-warning/5 border-warning/20 flex flex-col items-end justify-center">
+            <div className="text-[11px] font-black text-warning uppercase tracking-wide mb-2">Total Compra Invertido</div>
+            <div className="text-5xl font-black text-warning font-display drop-shadow-sm tabular-nums tracking-tighter">${fmt2(detail.total)}</div>
+            <div className="text-[11px] font-bold text-warning/60 uppercase tracking-wide mt-2 italic">* precios expresados en USD</div>
+          </div>
+        </div>
 
- <div className="mb-3 flex items-center gap-3">
- <div className="h-0.5 flex-1 bg-gradient-to-r from-warning/30 to-transparent"></div>
- <div className="text-[11px] font-black text-warning tracking-wide uppercase">Productos Recibidos</div>
- <div className="h-0.5 flex-1 bg-gradient-to-l from-warning/30 to-transparent"></div>
- </div>
+        <div className="mb-3 flex items-center gap-3">
+          <div className="h-0.5 flex-1 bg-gradient-to-r from-warning/30 to-transparent"></div>
+          <div className="text-[11px] font-black text-warning tracking-wide uppercase">Productos Recibidos</div>
+          <div className="h-0.5 flex-1 bg-gradient-to-l from-warning/30 to-transparent"></div>
+        </div>
 
- <div className="card-premium overflow-hidden mb-12">
- <table className="w-full text-left border-collapse">
- <thead>
- <tr className="border-b border-border/40 bg-surface-1 dark:bg-white/5 text-[11px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-wide">
- <th className="px-6 py-4">Producto</th>
- <th className="px-6 py-4">Paquete</th>
- <th className="px-6 py-4">Cant.</th>
- <th className="px-6 py-4">Precio/paq.</th>
- <th className="px-6 py-4">Costo unit.</th>
- <th className="px-6 py-4">Margen</th>
- <th className="px-6 py-4">P. venta</th>
- <th className="px-6 py-4">Total uds.</th>
- <th className="px-6 py-4 text-right">Subtotal</th>
- </tr>
- </thead>
- <tbody className="divide-y divide-border/10">
- {detail.items?.map((item) => (
- <tr key={item.id} className="hover:bg-surface-2 dark:hover:bg-white/5 transition-colors">
- <td className="px-6 py-4 font-black text-content dark:text-white uppercase tracking-tight text-xs">{item.product_name}</td>
- <td className="px-6 py-4 text-[11px] font-bold text-content-subtle uppercase tracking-wide">{item.package_unit} <span className="opacity-30">×</span> {item.package_size}</td>
- <td className="px-6 py-4 text-xs font-bold tabular-nums">{item.package_qty}</td>
- <td className="px-6 py-4 text-xs font-black text-info tabular-nums">${fmt2(item.package_price)}</td>
- <td className="px-6 py-4 text-xs font-bold text-content-subtle tabular-nums">${fmt2(item.unit_cost)}</td>
- <td className="px-6 py-4">
- <span className="px-2 py-0.5 rounded-lg bg-surface-2 dark:bg-white/5 border border-border/20 text-[11px] font-black text-content-subtle uppercase tabular-nums">{item.profit_margin}%</span>
- </td>
- <td className="px-6 py-4 text-xs font-black text-success tabular-nums">${fmt2(item.sale_price)}</td>
- <td className="px-6 py-4 text-xs font-bold text-brand-500 tabular-nums">{item.total_units} <span className="text-[11px] opacity-40 uppercase">u</span></td>
- <td className="px-6 py-4 text-right text-sm font-black text-warning tabular-nums font-display">${fmt2(item.subtotal)}</td>
- </tr>
- ))}
- </tbody>
- </table>
- </div>
- </div>
- </div>
- );
+        <div className="card-premium overflow-hidden mb-12">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-border/40 bg-surface-1 dark:bg-white/5 text-[11px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-wide">
+                <th className="px-6 py-4">Producto</th>
+                <th className="px-6 py-4">Paquete</th>
+                <th className="px-6 py-4">Cant.</th>
+                <th className="px-6 py-4">Precio/paq.</th>
+                <th className="px-6 py-4">Costo unit.</th>
+                <th className="px-6 py-4">Margen</th>
+                <th className="px-6 py-4">P. venta</th>
+                <th className="px-6 py-4">Total uds.</th>
+                <th className="px-6 py-4 text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/10">
+              {detail.items?.map((item) => (
+                <tr key={item.id} className="hover:bg-surface-2 dark:hover:bg-white/5 transition-colors">
+                  <td className="px-6 py-4 font-black text-content dark:text-white uppercase tracking-tight text-xs">{item.product_name}</td>
+                  <td className="px-6 py-4 text-[11px] font-bold text-content-subtle uppercase tracking-wide">{item.package_unit} <span className="opacity-30">×</span> {item.package_size}</td>
+                  <td className="px-6 py-4 text-xs font-bold tabular-nums">{item.package_qty}</td>
+                  <td className="px-6 py-4 text-xs font-black text-info tabular-nums">${fmt2(item.package_price)}</td>
+                  <td className="px-6 py-4 text-xs font-bold text-content-subtle tabular-nums">${fmt2(item.unit_cost)}</td>
+                  <td className="px-6 py-4">
+                    <span className="px-2 py-0.5 rounded-lg bg-surface-2 dark:bg-white/5 border border-border/20 text-[11px] font-black text-content-subtle uppercase tabular-nums">{item.profit_margin}%</span>
+                  </td>
+                  <td className="px-6 py-4 text-xs font-black text-success tabular-nums">${fmt2(item.sale_price)}</td>
+                  <td className="px-6 py-4 text-xs font-bold text-brand-500 tabular-nums">{item.total_units} <span className="text-[11px] opacity-40 uppercase">u</span></td>
+                  <td className="px-6 py-4 text-right text-sm font-black text-warning tabular-nums font-display">${fmt2(item.subtotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 
- const calc = calcItem(itemForm);
+  const calc = calcItem(itemForm);
 
- const newView = (
- <div>
- <div className="card overflow-visible card-md mb-3">
- <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-wide mb-3">INFORMACIÓN DEL RECIBO</div>
- <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+  const newView = (
+    <div>
+      <div className="card overflow-visible card-md mb-3">
+        <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-wide mb-3">INFORMACIÓN DEL RECIBO</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
 
- <div>
- <label className="label">Almacén destino *</label>
- {warehouses.length === 0
- ? <div className="input text-danger bg-danger/5 border-danger">
- Sin almacenes disponibles
- </div>
- : <CustomSelect
- value={selectedWarehouseId}
- onChange={val => setSelectedWarehouseId(val)}
- options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
- placeholder="— Seleccionar almacén"
- className="w-full"
- />
- }
- {selectedWarehouseId && (
- <div className="text-[11px] text-success mt-1">
- ● El stock entrará a <b>{warehouses.find(w => String(w.id) === selectedWarehouseId)?.name}</b>
- </div>
- )}
- </div>
+          <div>
+            <label className="label">Almacén destino *</label>
+            {warehouses.length === 0
+              ? <div className="input text-danger bg-danger/5 border-danger">
+                Sin almacenes disponibles
+              </div>
+              : <CustomSelect
+                value={selectedWarehouseId}
+                onChange={val => setSelectedWarehouseId(val)}
+                options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
+                placeholder="Seleccionar almacén"
+                className="w-full"
+              />
+            }
+            {selectedWarehouseId && (
+              <div className="text-[11px] text-success mt-1">
+                ● El stock entrará a <b>{warehouses.find(w => String(w.id) === selectedWarehouseId)?.name}</b>
+              </div>
+            )}
+          </div>
 
- <div className="relative z-[50]">
- <label className="label">Proveedor</label>
- {selectedSupplier
- ? <div className="flex items-center gap-2 bg-info/10 border border-info/30 rounded-lg p-2">
- <div className="flex-1">
- <div className="text-sm font-bold text-brand-500 dark:text-brand-400">{selectedSupplier.name}</div>
- {selectedSupplier.rif && <div className="text-[11px] text-content-muted dark:text-content-dark-muted">{selectedSupplier.rif}</div>}
- </div>
- <button
- onClick={() => { setSelectedSupplier(null); setSupplierSearch(""); }}
- className="btn-sm btn-danger"
- >✕</button>
- </div>
- : <div className="relative">
- <input
- spellCheck={false}
- autoComplete="off"
- value={supplierSearch}
- onChange={e => setSupplierSearch(e.target.value)}
- placeholder="Buscar proveedor registrado..."
- className="input"
- />
- {supplierSearch.trim().length > 0 && (
- <div className="absolute top-full left-0 right-0 mt-1 bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-xl shadow-2xl max-h-48 overflow-y-auto">
- {supplierResults.map(s => (
- <div
- key={s.id}
- onClick={() => selectSupplier(s)}
- className="px-4 py-3 cursor-pointer border-b border-border/50 dark:border-border-dark/50 text-sm hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors"
- >
- <div className="font-bold text-brand-500 dark:text-brand-400">{s.name}</div>
- <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">
- {[s.rif, s.tax_name].filter(Boolean).join(" · ") || "Sin datos adicionales"}
- </div>
- </div>
- ))}
- <div
- onClick={() => openCreateSupplier(supplierSearch)}
- className={`px-4 py-3 cursor-pointer text-sm font-bold text-brand-500 dark:text-brand-400 flex items-center gap-2 hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors ${supplierResults.length > 0 ? "border-t border-border dark:border-border-dark" : ""}`}
- >
- <span className="text-lg bg-brand-500/10 text-brand-500 w-6 h-6 flex items-center justify-center rounded-md">+</span> 
- Crear "{supplierSearch}"
- </div>
- </div>
- )}
- </div>
- }
- </div>
+          <div className="relative z-[50]">
+            <label className="label">Proveedor</label>
+            {selectedSupplier
+              ? <div className="flex items-center gap-2 bg-info/10 border border-info/30 rounded-lg p-2">
+                <div className="flex-1">
+                  <div className="text-sm font-bold text-brand-500 dark:text-brand-400">{selectedSupplier.name}</div>
+                  {selectedSupplier.rif && <div className="text-[11px] text-content-muted dark:text-content-dark-muted">{selectedSupplier.rif}</div>}
+                </div>
+                <button
+                  onClick={() => { setSelectedSupplier(null); setSupplierSearch(""); }}
+                  className="btn-sm btn-danger"
+                >✕</button>
+              </div>
+              : <div className="relative">
+                <input
+                  spellCheck={false}
+                  autoComplete="off"
+                  value={supplierSearch}
+                  onChange={e => setSupplierSearch(e.target.value)}
+                  placeholder="Buscar proveedor registrado..."
+                  className="input"
+                />
+                {supplierSearch.trim().length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-lg shadow-2xl max-h-48 overflow-y-auto">
+                    {supplierResults.map(s => (
+                      <div
+                        key={s.id}
+                        onClick={() => selectSupplier(s)}
+                        className="px-4 py-3 cursor-pointer border-b border-border/50 dark:border-border-dark/50 text-sm hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors"
+                      >
+                        <div className="font-bold text-brand-500 dark:text-brand-400">{s.name}</div>
+                        <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">
+                          {[s.rif, s.tax_name].filter(Boolean).join(" · ") || "Sin datos adicionales"}
+                        </div>
+                      </div>
+                    ))}
+                    <div
+                      onClick={() => openCreateSupplier(supplierSearch)}
+                      className={`px-4 py-3 cursor-pointer text-sm font-bold text-brand-500 dark:text-brand-400 flex items-center gap-2 hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors ${supplierResults.length > 0 ? "border-t border-border dark:border-border-dark" : ""}`}
+                    >
+                      <span className="text-lg bg-brand-500/10 text-brand-500 w-6 h-6 flex items-center justify-center rounded-md">+</span>
+                      Crear "{supplierSearch}"
+                    </div>
+                  </div>
+                )}
+              </div>
+            }
+          </div>
 
- <div>
- <label className="label">Notas (opcional)</label>
- <input
- spellCheck={false}
- autoComplete="off"
- value={notes}
- onChange={e => setNotes(e.target.value)}
- placeholder="ej. Compra de la semana..."
- className="input"
- />
- </div>
- </div>
- </div>
+          <div>
+            <label className="label">Notas (opcional)</label>
+            <input
+              spellCheck={false}
+              autoComplete="off"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="ej. Compra de la semana..."
+              className="input"
+            />
+          </div>
+        </div>
+      </div>
 
- <div className="card overflow-visible card-md mb-3">
- <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-wide mb-2">+ AGREGAR PRODUCTO AL RECIBO</div>
+      <div className="card overflow-visible card-md mb-3">
+        <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-wide mb-2">+ AGREGAR PRODUCTO AL RECIBO</div>
 
- <div className="mb-2 relative z-[40]">
- <label className="label">Buscar producto</label>
- {itemForm.product
- ? <div className="flex items-center gap-2 bg-info/10 border border-info/30 rounded-xl p-3">
- <div className="flex-1">
- <div className="text-sm font-bold text-info">{itemForm.product.name}</div>
- <div className="text-[11px] text-info/80 font-bold tracking-wider uppercase mt-1">
- Stock actual: {itemForm.product.stock} {itemForm.product.unit}
- </div>
- </div>
- <button onClick={() => setIF("product", null)} className="btn-sm btn-danger rounded-lg px-4">✕ Quitar</button>
- </div>
- : <>
- <input
- spellCheck={false}
- autoComplete="off"
- value={productSearch}
- onChange={e => setProductSearch(e.target.value)}
- placeholder="Escribe para buscar un producto..."
- className="input"
- />
- {searching && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-2 ml-1">Buscando productos...</div>}
- {productSearch.trim().length > 0 && (
- <div className="absolute top-full left-0 right-0 mt-1 bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-xl z-20 shadow-2xl max-h-48 overflow-y-auto">
- {productResults.map(p => (
- <div
- key={p.id}
- onClick={() => selectProduct(p)}
- className="px-4 py-3 cursor-pointer border-b border-border/50 dark:border-border-dark/50 text-sm hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors"
- >
- <div className="font-bold text-content dark:text-content-dark">{p.name}</div>
- <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">
- Stock: {p.stock} {p.unit}
- {p.package_unit && ` · Paquete: ${p.package_unit} x${p.package_size}`}
- {p.cost_price && ` · Costo: $${fmt2(p.cost_price)}`}
- </div>
- </div>
- ))}
- <div
- onClick={() => openCreateProduct(productSearch)}
- className={`px-4 py-3 cursor-pointer text-sm font-bold text-warning flex items-center gap-2 hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors ${productResults.length > 0 ? "border-t border-border dark:border-border-dark" : ""}`}
- >
- <span className="text-lg bg-warning/10 text-warning w-6 h-6 flex items-center justify-center rounded-md">+</span> 
- Crear "{productSearch}"
- </div>
- </div>
- )}
- </>
- }
- </div>
+        <div className="mb-2 relative z-[40]">
+          <label className="label">Buscar producto</label>
+          {itemForm.product
+            ? <div className="flex items-center gap-2 bg-info/10 border border-info/30 rounded-lg p-3">
+              <div className="flex-1">
+                <div className="text-sm font-bold text-info">{itemForm.product.name}</div>
+                <div className="text-[11px] text-info/80 font-bold tracking-wider uppercase mt-1">
+                  Stock actual: {itemForm.product.stock} {itemForm.product.unit}
+                </div>
+              </div>
+              <button onClick={() => setIF("product", null)} className="btn-sm btn-danger rounded-lg px-4">✕ Quitar</button>
+            </div>
+            : <>
+              <input
+                spellCheck={false}
+                autoComplete="off"
+                value={productSearch}
+                onChange={e => setProductSearch(e.target.value)}
+                placeholder="Escribe para buscar un producto..."
+                className="input"
+              />
+              {searching && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-2 ml-1">Buscando productos...</div>}
+              {productSearch.trim().length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-lg z-20 shadow-2xl max-h-48 overflow-y-auto">
+                  {productResults.map(p => (
+                    <div
+                      key={p.id}
+                      onClick={() => selectProduct(p)}
+                      className="px-4 py-3 cursor-pointer border-b border-border/50 dark:border-border-dark/50 text-sm hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors"
+                    >
+                      <div className="font-bold text-content dark:text-content-dark">{p.name}</div>
+                      <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">
+                        Stock: {p.stock} {p.unit}
+                        {p.package_unit && ` · Paquete: ${p.package_unit} x${p.package_size}`}
+                        {p.cost_price && ` · Costo: $${fmt2(p.cost_price)}`}
+                      </div>
+                    </div>
+                  ))}
+                  <div
+                    onClick={() => openCreateProduct(productSearch)}
+                    className={`px-4 py-3 cursor-pointer text-sm font-bold text-warning flex items-center gap-2 hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors ${productResults.length > 0 ? "border-t border-border dark:border-border-dark" : ""}`}
+                  >
+                    <span className="text-lg bg-warning/10 text-warning w-6 h-6 flex items-center justify-center rounded-md">+</span>
+                    Crear "{productSearch}"
+                  </div>
+                </div>
+              )}
+            </>
+          }
+        </div>
 
- <div className="grid grid-cols-4 gap-2.5 mb-2.5">
- <div>
- <label className="label">Tipo de paquete</label>
- <input
- list="pkg-list"
- value={itemForm.package_unit}
- onChange={e => setIF("package_unit", e.target.value)}
- placeholder="caja, bulto..."
- className="input"
- />
- <datalist id="pkg-list">{PKG_UNITS.map(u => <option key={u} value={u} />)}</datalist>
- </div>
- <div>
- <label className="label">Unidades por paquete</label>
- <input
- type="number" min="1" step="1"
- value={itemForm.package_size}
- onChange={e => setIF("package_size", e.target.value)}
- disabled={itemForm.package_unit?.toLowerCase() === "unidad"}
- placeholder={itemForm.package_unit?.toLowerCase() === "unidad" ? "1" : "ej. 12"}
- className={`input transition-all ${itemForm.package_unit?.toLowerCase() === "unidad" ? "bg-surface-2 dark:bg-surface-dark-3 opacity-50 cursor-not-allowed" : ""}`}
- />
- </div>
- <div>
- <label className="label">Cantidad de paquetes</label>
- <input
- type="number" min="1" step="1"
- value={itemForm.package_qty}
- onChange={e => setIF("package_qty", e.target.value)}
- className="input"
- />
- </div>
- <div>
- <label className="label">Precio por paquete ($)</label>
- <input
- type="number" min="0" step="0.01"
- value={itemForm.package_price}
- onChange={e => setIF("package_price", e.target.value)}
- placeholder="0.00"
- className="input"
- />
- </div>
- </div>
+        <div className="grid grid-cols-4 gap-2.5 mb-2.5">
+          <div>
+            <label className="label">Tipo de paquete</label>
+            <input
+              list="pkg-list"
+              value={itemForm.package_unit}
+              onChange={e => setIF("package_unit", e.target.value)}
+              placeholder="caja, bulto..."
+              className="input"
+            />
+            <datalist id="pkg-list">{PKG_UNITS.map(u => <option key={u} value={u} />)}</datalist>
+          </div>
+          <div>
+            <label className="label">Unidades por paquete</label>
+            <input
+              type="number" min="1" step="1"
+              value={itemForm.package_size}
+              onChange={e => setIF("package_size", e.target.value)}
+              disabled={itemForm.package_unit?.toLowerCase() === "unidad"}
+              placeholder={itemForm.package_unit?.toLowerCase() === "unidad" ? "1" : "ej. 12"}
+              className={`input transition-all ${itemForm.package_unit?.toLowerCase() === "unidad" ? "bg-surface-2 dark:bg-surface-dark-3 opacity-50 cursor-not-allowed" : ""}`}
+            />
+          </div>
+          <div>
+            <label className="label">Cantidad de paquetes</label>
+            <input
+              type="number" min="1" step="1"
+              value={itemForm.package_qty}
+              onChange={e => setIF("package_qty", e.target.value)}
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="label">Precio por paquete ($)</label>
+            <input
+              type="number" min="0" step="0.01"
+              value={itemForm.package_price}
+              onChange={e => setIF("package_price", e.target.value)}
+              placeholder="0.00"
+              className="input"
+            />
+          </div>
+        </div>
 
- <div className="grid grid-cols-4 gap-2.5 mb-2">
- <div>
- <label className="label">Margen de ganancia (%)</label>
- <input
- type="number" min="0" step="0.1"
- value={itemForm.profit_margin}
- onChange={e => setIF("profit_margin", e.target.value)}
- className="input"
- />
- </div>
- <div>
- <label className="label">Costo unitario (calc.)</label>
- <div className={`input bg-surface-3 dark:bg-surface-dark-3 ${calc.unit_cost ? "text-info" : "text-content-muted dark:text-content-dark-muted"}`}>
- {calc.unit_cost ? `$${fmt2(calc.unit_cost)}` : "—"}
- </div>
- </div>
- <div>
- <label className="label">Precio de venta (calc.)</label>
- <div className={`input bg-surface-3 dark:bg-surface-dark-3 font-bold ${calc.sale_price ? "text-success" : "text-content-muted dark:text-content-dark-muted"}`}>
- {calc.sale_price ? `$${fmt2(calc.sale_price)}` : "—"}
- </div>
- </div>
- <div>
- <label className="label">Total unidades (calc.)</label>
- <div className={`input bg-surface-3 dark:bg-surface-dark-3 ${calc.total_units ? "text-warning" : "text-content-muted dark:text-content-dark-muted"}`}>
- {calc.total_units ? calc.total_units : "—"}
- </div>
- </div>
- </div>
+        <div className="grid grid-cols-4 gap-2.5 mb-2">
+          <div>
+            <label className="label">Margen de ganancia (%)</label>
+            <input
+              type="number" min="0" step="0.1"
+              value={itemForm.profit_margin}
+              onChange={e => setIF("profit_margin", e.target.value)}
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="label">Costo unitario (calc.)</label>
+            <div className={`input bg-surface-3 dark:bg-surface-dark-3 ${calc.unit_cost ? "text-info" : "text-content-muted dark:text-content-dark-muted"}`}>
+              {calc.unit_cost ? `$${fmt2(calc.unit_cost)}` : "—"}
+            </div>
+          </div>
+          <div>
+            <label className="label">Precio de venta (calc.)</label>
+            <div className={`input bg-surface-3 dark:bg-surface-dark-3 font-bold ${calc.sale_price ? "text-success" : "text-content-muted dark:text-content-dark-muted"}`}>
+              {calc.sale_price ? `$${fmt2(calc.sale_price)}` : "—"}
+            </div>
+          </div>
+          <div>
+            <label className="label">Total unidades (calc.)</label>
+            <div className={`input bg-surface-3 dark:bg-surface-dark-3 ${calc.total_units ? "text-warning" : "text-content-muted dark:text-content-dark-muted"}`}>
+              {calc.total_units ? calc.total_units : "—"}
+            </div>
+          </div>
+        </div>
 
- <div className="flex items-center gap-2.5 mb-2">
- <label className="flex items-center gap-2 cursor-pointer text-xs">
- <input
- type="checkbox"
- checked={itemForm.update_price}
- onChange={e => setIF("update_price", e.target.checked)}
- className="w-3.5 h-3.5 accent-warning"
- />
- <span className="text-content dark:text-content-dark">Actualizar precio de venta del producto al guardar</span>
- {calc.sale_price > 0 && (
- <span className="text-success text-[11px]">→ quedará en ${fmt2(calc.sale_price)}</span>
- )}
- </label>
- </div>
+        <div className="flex items-center gap-2.5 mb-2">
+          <label className="flex items-center gap-2 cursor-pointer text-xs">
+            <input
+              type="checkbox"
+              checked={itemForm.update_price}
+              onChange={e => setIF("update_price", e.target.checked)}
+              className="w-3.5 h-3.5 accent-warning"
+            />
+            <span className="text-content dark:text-content-dark">Actualizar precio de venta del producto al guardar</span>
+            {calc.sale_price > 0 && (
+              <span className="text-success text-[11px]">→ quedará en ${fmt2(calc.sale_price)}</span>
+            )}
+          </label>
+        </div>
 
- <button onClick={addItem} className="btn-sm btn-success">
- + Agregar al recibo
- </button>
- </div>
+        <button onClick={addItem} className="btn-sm btn-success">
+          + Agregar al recibo
+        </button>
+      </div>
 
- {items.length > 0 && (
- <div className="card card-md mb-3">
- <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-wide mb-3">PRODUCTOS EN ESTE RECIBO</div>
- <table className="table-pos text-xs">
- <thead>
- <tr>
- {["Producto", "Paquete", "Cant.", "Precio/paq.", "Costo unit.", "Margen", "P. venta", "Total uds.", "Subtotal", ""].map(h =>
- <th key={h}>{h}</th>
- )}
- </tr>
- </thead>
- <tbody>
- {items.map((item) => (
- <tr key={item.key}>
- <td className="font-bold text-content dark:text-content-dark">{item.product?.name}</td>
- <td className="text-content-muted dark:text-content-dark-muted">{item.package_unit} × {item.package_unit?.toLowerCase() === 'unidad' ? '1' : item.package_size}</td>
- <td className="text-content dark:text-content-dark">{item.package_qty}</td>
- <td className="text-info">${fmt2(item.package_price)}</td>
- <td className="text-content-muted dark:text-content-dark-muted">${fmt2(item.unit_cost)}</td>
- <td className="text-content-muted dark:text-content-dark-muted">{item.profit_margin}%</td>
- <td className="text-success font-bold">${fmt2(item.sale_price)}</td>
- <td className="text-content dark:text-content-dark">{item.total_units}</td>
- <td className="text-warning font-bold">${fmt2(item.subtotal)}</td>
- <td>
- <button onClick={() => removeItem(item.key)} className="btn-sm btn-danger">✕</button>
- </td>
- </tr>
- ))}
- </tbody>
- </table>
+      {items.length > 0 && (
+        <div className="card card-md mb-3">
+          <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-wide mb-3">PRODUCTOS EN ESTE RECIBO</div>
+          <table className="table-pos text-xs">
+            <thead>
+              <tr>
+                {["Producto", "Paquete", "Cant.", "Precio/paq.", "Costo unit.", "Margen", "P. venta", "Total uds.", "Subtotal", ""].map(h =>
+                  <th key={h}>{h}</th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.key}>
+                  <td className="font-bold text-content dark:text-content-dark">{item.product?.name}</td>
+                  <td className="text-content-muted dark:text-content-dark-muted">{item.package_unit} × {item.package_unit?.toLowerCase() === 'unidad' ? '1' : item.package_size}</td>
+                  <td className="text-content dark:text-content-dark">{item.package_qty}</td>
+                  <td className="text-info">${fmt2(item.package_price)}</td>
+                  <td className="text-content-muted dark:text-content-dark-muted">${fmt2(item.unit_cost)}</td>
+                  <td className="text-content-muted dark:text-content-dark-muted">{item.profit_margin}%</td>
+                  <td className="text-success font-bold">${fmt2(item.sale_price)}</td>
+                  <td className="text-content dark:text-content-dark">{item.total_units}</td>
+                  <td className="text-warning font-bold">${fmt2(item.subtotal)}</td>
+                  <td>
+                    <button onClick={() => removeItem(item.key)} className="btn-sm btn-danger">✕</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
- <div className="flex justify-end items-center gap-3 mt-4 pt-3 border-t border-border dark:border-border-dark">
- <div>
- <span className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-wide">TOTAL COMPRA: </span>
- <span className="text-xl font-bold text-warning">${fmt2(grandTotal)}</span>
- </div>
- <button
- onClick={savePurchase}
- disabled={loading || !selectedWarehouseId}
- className={`btn-md ${loading || !selectedWarehouseId ? "btn-secondary opacity-60 cursor-not-allowed" : "btn-primary"}`}
- >
- {loading ? "Guardando..." : !selectedWarehouseId ? "Selecciona almacén" : "Guardar recibo de compra"}
- </button>
- </div>
- </div>
- )}
+          <div className="flex justify-end items-center gap-3 mt-4 pt-3 border-t border-border dark:border-border-dark">
+            <div>
+              <span className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-wide">TOTAL COMPRA: </span>
+              <span className="text-xl font-bold text-warning">${fmt2(grandTotal)}</span>
+            </div>
+            <button
+              onClick={savePurchase}
+              disabled={loading || !selectedWarehouseId}
+              className={`btn-md ${loading || !selectedWarehouseId ? "btn-secondary opacity-60 cursor-not-allowed" : "btn-primary"}`}
+            >
+              {loading ? "Guardando..." : !selectedWarehouseId ? "Selecciona almacén" : "Guardar recibo de compra"}
+            </button>
+          </div>
+        </div>
+      )}
 
- {items.length === 0 && (
- <div className="text-center py-8 text-xs text-content-muted dark:text-content-dark-muted">
- Agrega al menos un producto al recibo para poder guardarlo.
- </div>
- )}
- </div>
- );
+      {items.length === 0 && (
+        <div className="text-center py-8 text-xs text-content-muted dark:text-content-dark-muted">
+          Agrega al menos un producto al recibo para poder guardarlo.
+        </div>
+      )}
+    </div>
+  );
 
- return (
- <div className="h-full">
- {view === "list" && listView}
- {view === "detail" && detailView}
+  return (
+    <div className="h-full">
+      {view === "list" && listView}
+      {view === "detail" && detailView}
 
- <Modal open={newModal} onClose={() => setNewModal(false)} title="Nuevo Recibo de Compra" width={960}>
- {newView}
- </Modal>
+      <Modal open={newModal} onClose={() => setNewModal(false)} title="Nuevo Recibo de Compra" width={960}>
+        {newView}
+      </Modal>
 
- <CustomerModal open={supplierModal} onClose={closeSupplierModal} onSave={saveSupplier} editData={supplierEditData} loading={savingSupplier} />
- <ProductModal open={productModal} onClose={closeProductModal} onSave={saveProduct} editData={productEditData} categories={categories} loading={savingProduct} />
+      <CustomerModal open={supplierModal} onClose={closeSupplierModal} onSave={saveSupplier} editData={supplierEditData} loading={savingSupplier} />
+      <ProductModal open={productModal} onClose={closeProductModal} onSave={saveProduct} editData={productEditData} categories={categories} loading={savingProduct} />
 
- <ConfirmModal
- isOpen={!!cancelConfirm}
- title="¿Anular compra?"
- message={`¿Estás seguro de que deseas anular la compra #${cancelConfirm?.id}? El stock será revertido de los almacenes correspondientes.`}
- onConfirm={async () => {
- await cancelPurchaseAction(cancelConfirm.id);
- setCancelConfirm(null);
- }}
- onCancel={() => setCancelConfirm(null)}
- type="danger"
- confirmText="Sí, anular compra"
- />
- </div>
- );
+      <ConfirmModal
+        isOpen={!!cancelConfirm}
+        title="¿Anular compra?"
+        message={`¿Estás seguro de que deseas anular la compra #${cancelConfirm?.id}? El stock será revertido de los almacenes correspondientes.`}
+        onConfirm={async () => {
+          await cancelPurchaseAction(cancelConfirm.id);
+          setCancelConfirm(null);
+        }}
+        onCancel={() => setCancelConfirm(null)}
+        type="danger"
+        confirmText="Sí, anular compra"
+      />
+    </div>
+  );
 }

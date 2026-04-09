@@ -45,7 +45,7 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
     <Modal open={open} onClose={onClose} title={modalTitle} width={580}>
 
       {/* ── Toggle tipo ── */}
-      <div className="bg-surface-2 dark:bg-white/5 px-4 py-3 rounded-xl flex items-center justify-between border border-border/50 dark:border-white/5 mb-4">
+      <div className="bg-surface-2 dark:bg-white/5 px-4 py-3 rounded-lg flex items-center justify-between border border-border/50 dark:border-white/5 mb-4">
         <div className="flex items-center gap-2.5">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black ${
             isProveedor ? "bg-violet-500/10 text-violet-500" : "bg-brand-500/10 text-brand-500"

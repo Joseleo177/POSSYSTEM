@@ -66,11 +66,11 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
 
  return (
  <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4 animate-in fade-in duration-300">
- <div className="w-full max-w-md bg-surface-2 dark:bg-[#141414] border border-border/40 dark:border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+ <div className="w-full max-w-md bg-surface-2 dark:bg-[#141414] border border-border/40 dark:border-white/10 rounded-lg shadow-2xl overflow-hidden">
 
  {/* Header */}
- <div className="bg-success/10 border-b border-success/20 px-5 py-4 flex items-center gap-3">
- <div className="w-10 rounded-xl bg-success/20 flex items-center justify-center text-xl"></div>
+ <div className="bg-success/10 border-b border-success/20 px-5 h-10 flex items-center gap-3">
+ <div className="w-10 rounded-lg bg-success/20 flex items-center justify-center text-xl"></div>
  <div>
  <div className="text-[11px] font-black uppercase tracking-wide text-success/70">TURNO DE TRABAJO</div>
  <div className="text-lg font-black text-content dark:text-content-dark">Apertura de Caja</div>
@@ -80,12 +80,12 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
  <div className="p-5 space-y-4">
  {/* Cajero + Almacén */}
  <div className="grid grid-cols-2 gap-3">
- <div className="bg-surface-3 dark:bg-white/5 rounded-2xl p-4">
+ <div className="bg-surface-3 dark:bg-white/5 rounded-lg p-4">
  <div className="text-[11px] font-black uppercase tracking-wide text-content-subtle mb-1">Cajero</div>
  <div className="text-sm font-black text-content dark:text-content-dark truncate">{employee?.full_name || employee?.name}</div>
  </div>
 
- <div className={`bg-surface-3 dark:bg-white/5 rounded-2xl p-4 flex flex-col ${warehouses.length > 1 ? "relative overflow-visible" : ""}`}>
+ <div className={`bg-surface-3 dark:bg-white/5 rounded-lg p-4 flex flex-col ${warehouses.length > 1 ? "relative overflow-visible" : ""}`}>
  <div className="text-[11px] font-black uppercase tracking-wide text-content-subtle mb-1">Almacén</div>
  {warehouses.length > 1 ? (
  <CustomSelect
@@ -115,7 +115,7 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
  </div>
 
  {journals.length === 0 ? (
- <div className="text-xs text-danger font-bold bg-danger/5 border border-danger/20 rounded-xl p-3">
+ <div className="text-xs text-danger font-bold bg-danger/5 border border-danger/20 rounded-lg p-3">
  No hay diarios de tipo "efectivo" activos. Configúralos en Contabilidad → Diarios.
  </div>
  ) : (
@@ -124,7 +124,7 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
  const s = selected[j.id] || { checked: false, amount: "" };
  return (
  <div key={j.id}
- className={`rounded-2xl border-2 transition-all overflow-hidden
+ className={`rounded-lg border-2 transition-all overflow-hidden
  ${s.checked ? "border-success/40 bg-success/5" : "border-border/30 dark:border-white/10 opacity-30 shadow-inner"}`}>
  <div className="flex items-center gap-3 px-4 py-3">
  <button onClick={() => toggle(j.id)}
@@ -145,7 +145,7 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
  value={s.amount}
  onChange={e => setAmount(j.id, e.target.value)}
  placeholder="0.00"
- className="w-full bg-white/10 dark:bg-white/5 border border-success/20 rounded-xl px-3 py-2 pr-8 text-lg font-black text-success outline-none focus:ring-2 focus:ring-success/20 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+ className="w-full bg-white/10 dark:bg-white/5 border border-success/20 rounded-lg px-3 py-2 pr-8 text-lg font-black text-success outline-none focus:ring-2 focus:ring-success/20 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
  />
  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-success/50 text-xs font-black tracking-wide">$</span>
  </div>
@@ -160,13 +160,13 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
 
  <div className="pt-4 space-y-4">
  {error && (
- <div className="bg-danger/10 border border-danger/20 text-danger text-xs font-black uppercase tracking-wider rounded-xl px-5 py-4 flex items-center gap-3">
+ <div className="bg-danger/10 border border-danger/20 text-danger text-xs font-black uppercase tracking-wider rounded-lg px-5 h-10 flex items-center gap-3">
  <span className="text-sm">⚠️</span> {error}
  </div>
  )}
 
  <button onClick={handleOpen} disabled={saving || !anySelected}
- className={`w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-wide transition-all cursor-pointer flex items-center justify-center gap-2
+ className={`w-full h-10 rounded-lg font-black text-xs uppercase tracking-wide transition-all cursor-pointer flex items-center justify-center gap-2
  ${saving || !anySelected
  ? "bg-surface-3 dark:bg-white/5 text-content-subtle cursor-not-allowed"
  : "bg-success text-white hover:scale-[1.02] active:scale-95 shadow-xl shadow-success/20 ring-1 ring-white/10"}`}>

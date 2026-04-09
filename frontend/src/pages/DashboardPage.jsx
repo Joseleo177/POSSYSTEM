@@ -8,7 +8,7 @@ const fmtN = (n) => fmtInt(n);
 function KpiCard({ label, value, sub, color = "text-warning" }) {
  return (
  <div className="bg-surface-2 dark:bg-white/[0.04] border border-border/30 dark:border-white/5 rounded-lg p-3">
- <div className="text-[7.5px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 mb-2">{label}</div>
+ <div className="text-[9px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 mb-2">{label}</div>
  <div className={`text-sm font-black tabular-nums leading-none ${color} mb-1`}>{value}</div>
  {sub && <div className="text-[10px] text-content-subtle dark:text-white/20 font-medium">{sub}</div>}
  </div>
@@ -56,7 +56,7 @@ function SalesChart({ data }) {
  }, [data]);
  return (
  <div className="bg-surface-2 dark:bg-white/[0.04] border border-border/30 dark:border-white/5 rounded-lg p-3 flex flex-col">
- <div className="text-[7.5px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 mb-2">Ventas últimos 30 días</div>
+ <div className="text-[9px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 mb-2">Ventas últimos 30 días</div>
  <canvas ref={canvasRef} style={{ width: "100%", height: "140px", display: "block" }} />
  </div>
  );
@@ -135,7 +135,7 @@ export default function DashboardPage() {
  <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-2">
  <SalesChart data={sales_by_day} />
  <div className="bg-surface-2 dark:bg-white/[0.04] border border-border/30 dark:border-white/5 rounded-lg p-3">
- <div className="text-[7.5px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 mb-2.5">TOP PRODUCTOS (30 DÍAS)</div>
+ <div className="text-[9px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 mb-2.5">TOP PRODUCTOS (30 DÍAS)</div>
  {top_products.length === 0
  ? <div className="text-[10px] text-content-subtle dark:text-white/20 text-center py-4">Sin datos</div>
  : <div className="space-y-2.5">
@@ -163,13 +163,13 @@ export default function DashboardPage() {
  {/* Stock bajo */}
  {low_stock.length > 0 && (
  <div className="bg-surface-2 dark:bg-white/[0.04] border border-danger/20 rounded-lg p-3">
- <div className="text-[7.5px] font-black text-danger uppercase tracking-wide mb-2">STOCK BAJO — REQUIERE ATENCIÓN</div>
+ <div className="text-[9px] font-black text-danger uppercase tracking-wide mb-2">STOCK BAJO — REQUIERE ATENCIÓN</div>
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
  {low_stock.map(p => (
  <div key={p.id} className="flex items-center justify-between bg-surface-1 dark:bg-white/5 border border-danger/10 rounded-lg px-3 py-2">
  <div>
  <div className="text-[11px] font-bold text-content dark:text-content-dark">{p.name}</div>
- <div className="text-[7.5px] text-content-subtle dark:text-white/30">Mín: {fmt(p.min_stock, 0)} {p.unit}</div>
+ <div className="text-[9px] text-content-subtle dark:text-white/30">Mín: {fmt(p.min_stock, 0)} {p.unit}</div>
  </div>
  <div className="text-right">
  <div className="text-danger font-black text-sm tabular-nums">{fmt(p.stock, 0)}</div>

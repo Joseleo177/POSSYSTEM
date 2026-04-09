@@ -62,7 +62,7 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
  key={v.id}
  onClick={() => setSummaryView(v.id)}
  className={[
- "px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wide transition-all",
+ "px-4 py-1.5 rounded-md text-[11px] font-black uppercase tracking-wide transition-all",
  summaryView === v.id
  ? "bg-brand-500 text-black shadow-sm"
  : "text-content-muted dark:text-content-dark-muted hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/10",
@@ -80,7 +80,7 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
  {summaryView === "diarios" && (
  <div>
  <div className="flex items-center gap-2 mb-3">
- <div className="h-3 w-1 bg-brand-500 rounded-full" />
+ <div className="h-3 w-1 bg-brand-500 rounded-md" />
  <span className="text-[11px] font-black uppercase tracking-wide text-content dark:text-white">Distribución por Diarios</span>
  </div>
  <JournalSummary
@@ -107,7 +107,7 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
  return (
  <div>
  <div className="flex items-center gap-2 mb-3">
- <div className="h-3 w-1 bg-info rounded-full" />
+ <div className="h-3 w-1 bg-info rounded-md" />
  <span className="text-[11px] font-black uppercase tracking-wide text-content dark:text-white">Distribución por Bancos</span>
  </div>
  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -119,7 +119,7 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
  const fmtB = n => `${sym}${Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
  return (
- <div key={bank} className="bg-white dark:bg-surface-dark-3 rounded-xl p-4 border border-border dark:border-border-dark shadow-sm">
+ <div key={bank} className="bg-white dark:bg-surface-dark-3 rounded-lg p-4 border border-border dark:border-border-dark shadow-sm">
  <div className="flex items-center gap-3 mb-3">
  <div className="w-8 h-8 rounded-lg bg-info/10 text-info flex items-center justify-center shrink-0">
  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" /></svg>
@@ -178,14 +178,14 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
  return (
  <div>
  <div className="flex items-center gap-2 mb-3">
- <div className="h-3 w-1 bg-brand-500 rounded-full" />
+ <div className="h-3 w-1 bg-brand-500 rounded-md" />
  <span className="text-[11px] font-black uppercase tracking-wide text-content dark:text-white">Distribución por Series</span>
  </div>
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
  {entries.map(([serie, d]) => (
- <div key={serie} className="bg-white dark:bg-surface-dark-3 border border-brand-500/20 rounded-xl p-4 shadow-sm">
+ <div key={serie} className="bg-white dark:bg-surface-dark-3 border border-brand-500/20 rounded-lg p-4 shadow-sm">
  <div className="text-[11px] font-black text-brand-500 uppercase tracking-wide mb-3 flex items-center gap-2">
- <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
+ <span className="w-1.5 h-1.5 rounded-md bg-brand-500 shrink-0" />
  {serie}
  </div>
  <div className="mb-3">

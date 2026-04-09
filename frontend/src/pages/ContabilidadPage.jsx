@@ -181,7 +181,7 @@ export default function ContabilidadPage() {
  </div>
 
  {/* ── Contenido del sub-módulo ─────────────────── */}
- <div className="flex-1 min-h-0 overflow-y-auto">
+ <div className="flex-1 min-h-0 overflow-hidden bg-surface-2 dark:bg-[#0f1117]">
  {renderContent()}
  </div>
 
@@ -189,4 +189,3 @@ export default function ContabilidadPage() {
  </div>
  );
 }
-

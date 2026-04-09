@@ -52,11 +52,11 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
 
  return (
  <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4 animate-in fade-in duration-300">
- <div className="w-full max-w-lg bg-surface-2 dark:bg-[#141414] border border-border/40 dark:border-white/10 rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+ <div className="w-full max-w-lg bg-surface-2 dark:bg-[#141414] border border-border/40 dark:border-white/10 rounded-lg shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
 
  {/* Header */}
  <div className="bg-warning/10 border-b border-warning/20 px-7 py-5 flex items-center gap-4 shrink-0">
- <div className="w-12 rounded-2xl bg-warning/20 flex items-center justify-center shadow-inner">
+ <div className="w-12 rounded-lg bg-warning/20 flex items-center justify-center shadow-inner">
  <svg className="w-6 h-6 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
  </div>
  <div className="flex-1 min-w-0">
@@ -79,15 +79,15 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
  <>
  {/* KPIs del turno */}
  <div className="grid grid-cols-3 gap-3">
- <div className="bg-surface-3 dark:bg-white/5 rounded-2xl p-3 text-center">
+ <div className="bg-surface-3 dark:bg-white/5 rounded-lg p-3 text-center">
  <div className="text-[11px] font-black uppercase tracking-wide text-content-subtle mb-1">Ventas</div>
  <div className="text-xl font-black text-content dark:text-content-dark">{summary.sales.sale_count}</div>
  </div>
- <div className="bg-surface-3 dark:bg-white/5 rounded-2xl p-3 text-center">
+ <div className="bg-surface-3 dark:bg-white/5 rounded-lg p-3 text-center">
  <div className="text-[11px] font-black uppercase tracking-wide text-content-subtle mb-1">Facturado</div>
  <div className="text-sm font-black text-success">{fmt$(summary.sales.total_sales)}</div>
  </div>
- <div className="bg-surface-3 dark:bg-white/5 rounded-2xl p-3 text-center">
+ <div className="bg-surface-3 dark:bg-white/5 rounded-lg p-3 text-center">
  <div className="text-[11px] font-black uppercase tracking-wide text-content-subtle mb-1">Pendientes</div>
  <div className="text-xl font-black text-danger">{summary.sales.pending_count}</div>
  </div>
@@ -95,7 +95,7 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
 
  {/* Cobros por método (todos los métodos) */}
  {summary.payments_by_journal.length > 0 && (
- <div className="bg-surface-3 dark:bg-white/5 rounded-2xl p-4">
+ <div className="bg-surface-3 dark:bg-white/5 rounded-lg p-4">
  <div className="text-[11px] font-black uppercase tracking-wide text-content-subtle mb-3">Todos los Cobros</div>
  {summary.payments_by_journal.map((p, i) => (
  <div key={i} className="flex items-center justify-between py-2 border-b border-border/10 dark:border-white/5 last:border-0">
@@ -124,12 +124,12 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
  const diffLabel = diff === null ? "" : diff > 0 ? `+${f(diff)} sobrante` : diff < 0 ? `${f(diff)} faltante` : "Cuadra correctamente";
 
  return (
- <div key={j.journal_id} className="bg-surface-3 dark:bg-white/5 rounded-2xl p-4">
+ <div key={j.journal_id} className="bg-surface-3 dark:bg-white/5 rounded-lg p-4">
  <div className="flex items-center gap-2 mb-3">
  <div className="w-2.5 h-2.5 rounded-full" style={{ background: j.journal_color || "#555" }} />
  <span className="font-black text-sm text-content dark:text-content-dark">{j.journal_name}</span>
  </div>
- <div className="flex flex-col gap-3 mb-4 bg-black/5 dark:bg-white/5 rounded-xl p-3 border border-border/20 dark:border-white/5">
+ <div className="flex flex-col gap-3 mb-4 bg-black/5 dark:bg-white/5 rounded-lg p-3 border border-border/20 dark:border-white/5">
  <div className="flex justify-between items-center text-xs">
  <span className="font-black text-content-subtle uppercase tracking-wide text-[11px]">Fondo Inicial</span>
  <span className="font-black tabular-nums">{f(j.opening_amount)}</span>
@@ -149,7 +149,7 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
  value={closingAmounts[j.journal_id] ?? ""}
  onChange={e => setAmount(j.journal_id, e.target.value)}
  placeholder={`Conteo real (esperado: ${f(j.expected_amount)})`}
- className="w-full bg-white/5 border-2 border-warning/30 rounded-xl px-4 py-2.5 pr-8 text-sm font-black text-warning outline-none focus:ring-2 focus:ring-warning/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all"
+ className="w-full bg-white/5 border-2 border-warning/30 rounded-lg px-4 py-2.5 pr-8 text-sm font-black text-warning outline-none focus:ring-2 focus:ring-warning/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all"
  />
  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-black">{sym}</span>
  </div>
@@ -164,7 +164,7 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
 
  {/* Devoluciones */}
  {summary.returns?.count > 0 && (
- <div className="bg-danger/5 border border-danger/20 rounded-2xl p-3 flex justify-between items-center">
+ <div className="bg-danger/5 border border-danger/20 rounded-lg p-3 flex justify-between items-center">
  <span className="text-xs font-black text-danger">Devoluciones en el turno</span>
  <span className="text-sm font-black text-danger">{summary.returns.count} · -{fmt$(summary.returns.total)}</span>
  </div>
@@ -175,24 +175,24 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
  <label className="block text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted mb-2">Notas (opcional)</label>
  <textarea value={notes} onChange={e => setNotes(e.target.value)}
  placeholder="Observaciones del turno..." rows={2}
- className="w-full bg-surface-3 dark:bg-white/5 border border-border dark:border-white/10 rounded-2xl px-4 py-3 text-sm text-content dark:text-content-dark outline-none focus:ring-2 focus:ring-warning/20 resize-none" />
+ className="w-full bg-surface-3 dark:bg-white/5 border border-border dark:border-white/10 rounded-lg px-4 py-3 text-sm text-content dark:text-content-dark outline-none focus:ring-2 focus:ring-warning/20 resize-none" />
  </div>
  </>
  )}
 
  {error && (
- <div className="bg-danger/10 border border-danger/20 text-danger text-xs font-bold rounded-xl px-4 py-3">{error}</div>
+ <div className="bg-danger/10 border border-danger/20 text-danger text-xs font-bold rounded-lg px-4 py-3">{error}</div>
  )}
  </div>
 
  {/* Footer */}
  <div className="p-5 border-t border-border/20 dark:border-white/5 flex gap-3 shrink-0">
  <button onClick={onCancel}
- className="flex-1 py-4 rounded-2xl border border-border dark:border-white/10 font-black text-[11px] uppercase tracking-wide text-content-muted dark:text-content-dark-muted hover:bg-surface-3 dark:hover:bg-white/5 transition-all cursor-pointer">
+ className="flex-1 h-10 rounded-lg border border-border dark:border-white/10 font-black text-[11px] uppercase tracking-wide text-content-muted dark:text-content-dark-muted hover:bg-surface-3 dark:hover:bg-white/5 transition-all cursor-pointer">
  Cancelar
  </button>
  <button onClick={handleClose} disabled={saving || loadingSummary || !allFilled}
- className={`flex-[2] py-4 rounded-2xl font-black text-[11px] uppercase tracking-wide transition-all cursor-pointer
+ className={`flex-[2] h-10 rounded-lg font-black text-[11px] uppercase tracking-wide transition-all cursor-pointer
  ${saving || loadingSummary || !allFilled
  ? "bg-surface-3 dark:bg-white/5 text-content-subtle cursor-not-allowed"
  : "bg-warning text-white hover:scale-[1.01] active:scale-100 shadow-lg shadow-warning/20"}`}>

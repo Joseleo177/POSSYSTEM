@@ -106,7 +106,7 @@ export default function TransaccionesTab({
  placeholder="Buscar por factura, cliente o RIF..."
  value={searchTerm}
  onChange={e => setSearchTerm(e.target.value)}
- className="w-full pl-12 pr-6 py-4 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl text-xs font-bold text-content dark:text-content-dark placeholder:text-content-subtle placeholder:font-medium focus:ring-4 focus:ring-brand-500/10 shadow-sm transition-all outline-none"
+ className="w-full pl-12 pr-6 h-10 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-lg text-xs font-bold text-content dark:text-content-dark placeholder:text-content-subtle placeholder:font-medium focus:ring-4 focus:ring-brand-500/10 shadow-sm transition-all outline-none"
  />
  <span className="absolute left-5 top-1/2 -translate-y-1/2 text-xs lg:text-lg opacity-40 group-focus-within:opacity-100 group-focus-within:text-brand-500 transition-all">S</span>
  </div>
@@ -116,7 +116,7 @@ export default function TransaccionesTab({
  <button
  onClick={() => { setShowFilterDrop(!showFilterDrop); setShowGroupDrop(false); }}
  className={[
- "w-full sm:w-auto px-4 py-2.5 bg-white dark:bg-surface-dark-2 border rounded-2xl text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-3 transition-all",
+ "w-full sm:w-auto px-4 py-2.5 bg-white dark:bg-surface-dark-2 border rounded-lg text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-3 transition-all",
  (activeFilters.length > 0 || activeSeries.length > 0 || histDateFrom || histDateTo)
  ? "border-brand-500 text-brand-500 bg-brand-500/5 shadow-md"
  : "border-border dark:border-border-dark text-content-subtle hover:text-content"
@@ -129,7 +129,7 @@ export default function TransaccionesTab({
  {showFilterDrop && (
  <>
  <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
- <div className="absolute top-full right-0 mt-3 w-72 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl shadow-2xl z-[70] p-5 animate-in fade-in slide-in-from-top-2 duration-200">
+ <div className="absolute top-full right-0 mt-3 w-72 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-lg shadow-2xl z-[70] p-5 animate-in fade-in slide-in-from-top-2 duration-200">
  <div className="p-4 bg-surface-2/30 dark:bg-surface-dark-3/30 border-b border-border/50">
  <div className="text-[10px] font-black uppercase tracking-wide text-content-subtle mb-3">Estados de Factura</div>
  <div className="grid grid-cols-2 gap-2">
@@ -189,7 +189,7 @@ export default function TransaccionesTab({
  </div>
  {(histDateFrom || histDateTo) && (
  <button onClick={() => { setHistDateFrom(""); setHistDateTo(""); }}
- className="w-full py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide text-danger hover:bg-danger/10 transition-all border border-danger/20 flex items-center justify-center gap-2">
+ className="w-full py-2.5 rounded-lg text-[11px] font-black uppercase tracking-wide text-danger hover:bg-danger/10 transition-all border border-danger/20 flex items-center justify-center gap-2">
  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
  Limpiar Fechas
  </button>
@@ -214,7 +214,7 @@ export default function TransaccionesTab({
  <button
  onClick={() => { setShowGroupDrop(!showGroupDrop); setShowFilterDrop(false); }}
  className={[
- "w-full sm:w-auto px-4 py-2.5 bg-white dark:bg-surface-dark-2 border rounded-2xl text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-3 transition-all",
+ "w-full sm:w-auto px-4 py-2.5 bg-white dark:bg-surface-dark-2 border rounded-lg text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-3 transition-all",
  groupBy
  ? "border-info text-info bg-info/5 shadow-md"
  : "border-border dark:border-border-dark text-content-subtle hover:text-content"
@@ -226,7 +226,7 @@ export default function TransaccionesTab({
  {showGroupDrop && (
  <>
  <div className="fixed inset-0 z-[60]" onClick={() => setShowGroupDrop(false)} />
- <div className="absolute top-full right-0 mt-3 w-56 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl shadow-2xl z-[70] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+ <div className="absolute top-full right-0 mt-3 w-56 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-lg shadow-2xl z-[70] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
  {[
  { id: 'cliente', label: 'Cliente' },
  { id: 'fecha', label: 'Fecha (Mes)' },
@@ -235,7 +235,7 @@ export default function TransaccionesTab({
  <button
  key={g.id}
  onClick={() => { setGroupBy(groupBy === g.id ? null : g.id); setShowGroupDrop(false); }}
- className="w-full px-5 py-3.5 text-left flex items-center justify-between hover:bg-surface-2 dark:hover:bg-surface-dark-3 transition-colors border-none cursor-pointer"
+ className="w-full px-5 h-10 text-left flex items-center justify-between hover:bg-surface-2 dark:hover:bg-surface-dark-3 transition-colors border-none cursor-pointer"
  >
  <div className="flex items-center gap-3">
  <span className="text-sm">{g.icon}</span>
@@ -251,11 +251,11 @@ export default function TransaccionesTab({
 
  <div className="h-8 w-px bg-border/40 dark:bg-border-dark/40 shrink-0 hidden sm:block mx-1" />
 
- <button onClick={handleExportCSV} className="w-full sm:w-auto px-4 py-3 bg-surface-2 dark:bg-surface-dark-3 border border-border dark:border-border-dark rounded-2xl text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-surface-3 transition-all">
+ <button onClick={handleExportCSV} className="w-full sm:w-auto px-4 h-9 bg-surface-2 dark:bg-surface-dark-3 border border-border dark:border-border-dark rounded-lg text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-surface-3 transition-all">
  <span>CSV</span>
  </button>
 
- <button onClick={() => window.print()} className="w-full sm:w-auto px-4 py-3 bg-brand-500/10 text-brand-500 border border-brand-500/20 rounded-2xl text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-brand-500 hover:text-black transition-all">
+ <button onClick={() => window.print()} className="w-full sm:w-auto px-4 h-9 bg-brand-500/10 text-brand-500 border border-brand-500/20 rounded-lg text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-brand-500 hover:text-black transition-all">
  <span>Imprimir</span>
  </button>
  </div>
@@ -265,7 +265,7 @@ export default function TransaccionesTab({
  {/* Lista ventas Premium Agrupada */}
  <div className="space-y-8">
  {filteredSales.length === 0 ? (
- <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-surface-dark-2 rounded-2xl border border-dashed border-border dark:border-border-dark opacity-60">
+ <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-surface-dark-2 rounded-lg border border-dashed border-border dark:border-border-dark opacity-60">
  <div className="text-4xl mb-4">📄</div>
  <div className="text-xs font-black uppercase tracking-wide text-content-muted">Sin ventas registradas con estos filtros</div>
  </div>
@@ -274,7 +274,7 @@ export default function TransaccionesTab({
  <div key={group.key} className="animate-in fade-in duration-500">
  {groupBy && (
  <div className="flex items-center gap-3 mb-4 ml-2">
- <div className="h-4 w-1 bg-brand-500 rounded-full" />
+ <div className="h-4 w-1 bg-brand-500 rounded-md" />
  <span className="text-[11px] font-black uppercase tracking-wide text-content">{group.key}</span>
  <span className="text-[11px] font-bold text-content-subtle">({group.items.length})</span>
  </div>
@@ -284,9 +284,9 @@ export default function TransaccionesTab({
  {group.items.map(sale => (
  <div
  key={sale.id}
- className="group bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl overflow-hidden hover:shadow-card-md transition-all duration-300"
+ className="group bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-lg overflow-hidden hover:shadow-sm transition-all duration-300"
  >
- <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+ <div className="px-4 py-2 flex flex-col md:flex-row md:items-center justify-between gap-4">
  <div className="flex items-center gap-4 flex-1 min-w-0">
  <div className="flex flex-col shrink-0">
  <span className="text-[11px] font-black text-content-subtle uppercase tracking-wide mb-1">Factura</span>
@@ -297,25 +297,25 @@ export default function TransaccionesTab({
 
  <div className="flex flex-wrap items-center gap-2">
  {sale.status === "pagado" ? (
- <span className="px-3 py-1 rounded-full text-[11px] font-black bg-success/10 text-success border border-success/20 uppercase tracking-wide">PAGADO</span>
+ <span className="px-3 py-1 rounded-md text-[11px] font-black bg-success/10 text-success border border-success/20 uppercase tracking-wide">PAGADO</span>
  ) : sale.status === "parcial" ? (
- <span className="px-3 py-1 rounded-full text-[11px] font-black bg-brand-500/10 text-brand-400 border border-brand-500/20 uppercase tracking-wide">PARCIAL</span>
+ <span className="px-3 py-1 rounded-md text-[11px] font-black bg-brand-500/10 text-brand-400 border border-brand-500/20 uppercase tracking-wide">PARCIAL</span>
  ) : sale.status === "anulado" ? (
- <span className="px-3 py-1 rounded-full text-[11px] font-black bg-content-subtle/10 text-content-subtle border border-content-subtle/20 uppercase tracking-wide">ANULADO</span>
+ <span className="px-3 py-1 rounded-md text-[11px] font-black bg-content-subtle/10 text-content-subtle border border-content-subtle/20 uppercase tracking-wide">ANULADO</span>
  ) : (
- <span className="px-3 py-1 rounded-full text-[11px] font-black bg-danger/10 text-danger border border-danger/20 uppercase tracking-wide">PENDIENTE</span>
+ <span className="px-3 py-1 rounded-md text-[11px] font-black bg-danger/10 text-danger border border-danger/20 uppercase tracking-wide">PENDIENTE</span>
  )}
 
  {sale.journal_name && (
  <span
- className="px-3 py-1 rounded-full text-[11px] font-black border uppercase tracking-wide flex items-center gap-1.5"
+ className="px-3 py-1 rounded-md text-[11px] font-black border uppercase tracking-wide flex items-center gap-1.5"
  style={{
  backgroundColor: (sale.journal_color || "#6366f1") + "10",
  color: sale.journal_color || "#6366f1",
  borderColor: (sale.journal_color || "#6366f1") + "30"
  }}
  >
- <div className="w-1.5 h-1.5 rounded-full" style={{ background: sale.journal_color || "#6366f1" }} />
+ <div className="w-1.5 h-1.5 rounded-md" style={{ background: sale.journal_color || "#6366f1" }} />
  <span className="truncate max-w-[80px] sm:max-w-none">{sale.journal_name}</span>
  </span>
  )}
@@ -338,7 +338,7 @@ export default function TransaccionesTab({
  <button
  onClick={() => setSaleDetail(saleDetail?.id === sale.id ? null : sale)}
  className={[
- "px-4 md:px-4 py-2 rounded-2xl text-[11px] font-black uppercase tracking-wide transition-all border shadow-sm",
+ "px-4 md:px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all border shadow-sm",
  saleDetail?.id === sale.id
  ? "bg-content text-white border-content shadow-content/20"
  : "bg-surface-2 dark:bg-surface-dark-3 text-content dark:text-content-dark border-border dark:border-border-dark hover:border-brand-500/40"
@@ -349,7 +349,7 @@ export default function TransaccionesTab({
 
  <button
  onClick={() => setReceiptSale(sale)}
- className="w-12 rounded-2xl bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black transition-all shadow-sm flex items-center justify-center shrink-0"
+ className="w-12 rounded-lg bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black transition-all shadow-sm flex items-center justify-center shrink-0"
  title="Ver Recibo"
  >
  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
@@ -358,7 +358,7 @@ export default function TransaccionesTab({
  {sale.status !== 'anulado' && (
  <button
  onClick={() => setReturnSale(sale)}
- className="w-12 rounded-2xl bg-warning/10 text-warning border border-warning/20 hover:bg-warning hover:text-black transition-all shadow-sm flex items-center justify-center shrink-0"
+ className="w-12 rounded-lg bg-warning/10 text-warning border border-warning/20 hover:bg-warning hover:text-black transition-all shadow-sm flex items-center justify-center shrink-0"
  title="Registrar Devolución"
  >
  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 15L12 19M12 19L8 15M12 19V9a5 5 0 00-10 0" /></svg>
@@ -368,7 +368,7 @@ export default function TransaccionesTab({
  {can("admin") && sale.status !== 'anulado' && (
  <button
  onClick={() => setCancelConfirm(sale)}
- className="w-12 rounded-2xl bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all shadow-sm flex items-center justify-center shrink-0"
+ className="w-12 rounded-lg bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all shadow-sm flex items-center justify-center shrink-0"
  title="Anular Transacción"
  >
  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -380,15 +380,15 @@ export default function TransaccionesTab({
 
  {saleDetail?.id === sale.id && (
  <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-300">
- <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-[2.5rem] border border-border/40 overflow-hidden shadow-sm">
+ <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-xl border border-border/40 overflow-hidden shadow-sm">
  <div className="overflow-x-auto">
  <table className="w-full text-sm border-collapse min-w-[600px]">
  <thead>
  <tr className="bg-surface-3 dark:bg-surface-dark border-b border-border/40">
- <th className="text-left px-4 py-3 font-black text-content-subtle uppercase tracking-wider text-xs">Producto</th>
- <th className="text-center px-4 py-3 font-black text-content-subtle uppercase tracking-wider text-xs w-24">Cant.</th>
- <th className="text-right px-4 py-3 font-black text-content-subtle uppercase tracking-wider text-xs w-32">Precio Unit.</th>
- <th className="text-right px-4 py-3 font-black text-content-subtle uppercase tracking-wider text-xs w-32">Subtotal</th>
+ <th className="text-left px-4 h-9 font-black text-content-subtle uppercase tracking-wider">Producto</th>
+ <th className="text-center px-4 h-9 font-black text-content-subtle uppercase tracking-wider w-24">Cant.</th>
+ <th className="text-right px-4 h-9 font-black text-content-subtle uppercase tracking-wider w-32">Precio Unit.</th>
+ <th className="text-right px-4 h-9 font-black text-content-subtle uppercase tracking-wider w-32">Subtotal</th>
  </tr>
  </thead>
  <tbody className="divide-y divide-border/20">
@@ -405,8 +405,8 @@ export default function TransaccionesTab({
  </tbody>
  <tfoot className="bg-surface-3/50 dark:bg-surface-dark/50 text-[11px]">
  <tr>
- <td colSpan={3} className="px-4 py-3 text-right font-black text-content-subtle uppercase tracking-wide">Total Transacción</td>
- <td className="px-4 py-3 text-right font-black text-xs text-brand-400 tracking-tight">{fmtPrice(sale.total)}</td>
+ <td colSpan={3} className="px-4 h-9 text-right font-black text-content-subtle uppercase tracking-wide">Total Transacción</td>
+ <td className="px-4 h-9 text-right font-black text-xs text-brand-400 tracking-tight">{fmtPrice(sale.total)}</td>
  </tr>
  {sale.discount_amount > 0 && (
  <tr>
@@ -420,8 +420,8 @@ export default function TransaccionesTab({
  </tr>
  {sale.status !== 'pagado' && sale.status !== 'anulado' && (
  <tr className="border-t border-danger/10">
- <td colSpan={3} className="px-4 py-3 text-right font-black text-danger uppercase tracking-wide">Saldo Pendiente</td>
- <td className="px-4 py-3 text-right font-black text-xs text-danger tracking-tight">{fmtPrice(sale.balance ?? 0)}</td>
+ <td colSpan={3} className="px-4 h-9 text-right font-black text-danger uppercase tracking-wide">Saldo Pendiente</td>
+ <td className="px-4 h-9 text-right font-black text-xs text-danger tracking-tight">{fmtPrice(sale.balance ?? 0)}</td>
  </tr>
  ) || null}
  </tfoot>

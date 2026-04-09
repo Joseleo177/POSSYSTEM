@@ -86,19 +86,19 @@
 
   /* ── Inputs Refinados ── */
   .input {
-    @apply w-full px-3 py-2 text-xs rounded-xl
-           bg-white border border-border text-content placeholder-content-subtle/60
+    @apply w-full px-3 h-10 text-[11px] font-medium rounded-md
+           bg-white border border-border/80 text-content placeholder-content-subtle/50
            transition-all duration-200
-           focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10
-           disabled:bg-surface-2 disabled:cursor-not-allowed
-           dark:bg-surface-dark-2 dark:border-border-dark dark:text-content-dark
-           dark:placeholder-content-dark-muted/40 dark:focus:border-brand-500;
+           focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15
+           disabled:bg-surface-2 disabled:opacity-60 disabled:cursor-not-allowed
+           dark:bg-[#12141a] dark:border-white/5 dark:text-content-dark
+           dark:placeholder-content-dark-muted/30 dark:focus:border-brand-500 dark:focus:bg-[#161821];
   }
-  .input-sm { @apply input text-[10px] px-2.5 py-1.5; }
+  .input-sm { @apply input !h-8 text-[10px] px-2.5; }
 
   /* ── Cards Premium ── */
   .card {
-    @apply bg-white rounded-2xl border border-border/60 shadow-card overflow-hidden
+    @apply bg-white rounded-xl border border-border/60 shadow-card overflow-hidden
            dark:bg-surface-dark-2 dark:border-border-dark/60 dark:shadow-card-dark;
   }
   .card-premium {
@@ -106,7 +106,7 @@
   }
 
   /* ── Badges Modernos ── */
-  .badge { @apply inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border; }
+  .badge { @apply inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border; }
   .badge-success { @apply badge bg-success/10 text-success border-success/20; }
   .badge-warning { @apply badge bg-warning/10 text-warning border-warning/20; }
   .badge-danger  { @apply badge badge-info; } /* Fallback or fix */
@@ -126,7 +126,7 @@
   }
   .table-pos tbody tr:hover td { @apply bg-surface-2/30 dark:bg-surface-dark-3/30; }
   /* ── Labels de formulario ── */
-  .label { @apply block text-xs font-medium text-content-muted dark:text-content-dark-muted mb-1 uppercase tracking-wide; }
+  .label { @apply block text-[10px] font-bold text-content-subtle dark:text-content-dark-muted mb-1.5 uppercase tracking-wider; }
 
   /* ── Divisor ── */
   .divider { @apply border-t border-border dark:border-border-dark my-4; }

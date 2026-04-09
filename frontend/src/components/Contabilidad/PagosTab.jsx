@@ -100,7 +100,7 @@ export default function PagosTab({
  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
 
  {/* ── BARRA DE BÚSQUEDA Y FILTROS (ODOO STYLE) ── */}
- <div className="bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl p-4 mb-4 shadow-sm">
+ <div className="bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-lg p-4 mb-4 shadow-sm">
  <div className="flex flex-wrap items-center gap-4">
  {/* Search Input */}
  <div className="flex-1 min-w-[280px] relative">
@@ -110,7 +110,7 @@ export default function PagosTab({
  placeholder="Buscar por cliente, RIF o factura..."
  value={searchTerm}
  onChange={e => setSearchTerm(e.target.value)}
- className="w-full pl-11 pr-4 py-3 bg-surface-2 dark:bg-surface-dark border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-brand-500/20 transition-all outline-none"
+ className="w-full pl-11 pr-4 h-9 bg-surface-2 dark:bg-surface-dark border-none rounded-lg text-xs font-bold focus:ring-2 focus:ring-brand-500/20 transition-all outline-none"
  />
  </div>
 
@@ -119,19 +119,19 @@ export default function PagosTab({
  <button
  onClick={() => { setShowFilterDrop(!showFilterDrop); setShowGroupDrop(false); }}
  className={[
- "flex items-center gap-2 px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all border",
+ "flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all border",
  activeFilters.length > 0
  ? "bg-brand-500/10 text-brand-500 border-brand-500/30"
  : "bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border-transparent hover:border-border"
  ].join(" ")}
  >
  <span className="text-xs"></span> Filtros
- {activeFilters.length > 0 && <span className="bg-brand-500 text-black w-4 h-4 rounded-full flex items-center justify-center text-[10px]">{activeFilters.length}</span>}
+ {activeFilters.length > 0 && <span className="bg-brand-500 text-black w-4 h-4 rounded-md flex items-center justify-center text-[10px]">{activeFilters.length}</span>}
  </button>
  {showFilterDrop && (
  <>
  <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
- <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl shadow-2xl z-[70] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+ <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-lg shadow-2xl z-[70] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
  {[
  { id: 'pendientes', label: 'Facturas Pendientes' },
  { id: 'parciales', label: 'Pagos Parciales' },
@@ -140,7 +140,7 @@ export default function PagosTab({
  <button
  key={f.id}
  onClick={() => toggleFilter(f.id)}
- className="w-full px-5 py-3.5 text-left flex items-center justify-between hover:bg-surface-2 dark:hover:bg-surface-dark-3 transition-colors border-none cursor-pointer"
+ className="w-full px-5 py-2.5 text-left flex items-center justify-between hover:bg-surface-2 dark:hover:bg-surface-dark-3 transition-colors border-none cursor-pointer"
  >
  <div className="flex items-center gap-3">
  <span className="text-sm">{f.icon}</span>
@@ -160,7 +160,7 @@ export default function PagosTab({
  </div>
  {(payDateFrom || payDateTo) && (
  <button onClick={() => { setPayDateFrom(""); setPayDateTo(""); }}
- className="w-full py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide text-danger hover:bg-danger/10 transition-all border border-danger/20 flex items-center justify-center gap-2">
+ className="w-full py-2.5 rounded-lg text-[11px] font-black uppercase tracking-wide text-danger hover:bg-danger/10 transition-all border border-danger/20 flex items-center justify-center gap-2">
  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
  Limpiar Fechas
  </button>
@@ -185,7 +185,7 @@ export default function PagosTab({
  <button
  onClick={() => { setShowGroupDrop(!showGroupDrop); setShowFilterDrop(false); }}
  className={[
- "flex items-center gap-2 px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all border",
+ "flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all border",
  groupBy
  ? "bg-info/10 text-info border-info/30"
  : "bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border-transparent hover:border-border"
@@ -196,7 +196,7 @@ export default function PagosTab({
  {showGroupDrop && (
  <>
  <div className="fixed inset-0 z-[60]" onClick={() => setShowGroupDrop(false)} />
- <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-2xl shadow-2xl z-[70] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+ <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-lg shadow-2xl z-[70] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
  {[
  { id: 'cliente', label: 'Cliente', icon: '' },
  { id: 'fecha', label: 'Fecha de Factura', icon: '' },
@@ -204,7 +204,7 @@ export default function PagosTab({
  <button
  key={g.id}
  onClick={() => { setGroupBy(groupBy === g.id ? null : g.id); setShowGroupDrop(false); }}
- className="w-full px-5 py-3.5 text-left flex items-center justify-between hover:bg-surface-2 dark:hover:bg-surface-dark-3 transition-colors border-none cursor-pointer"
+ className="w-full px-5 py-2.5 text-left flex items-center justify-between hover:bg-surface-2 dark:hover:bg-surface-dark-3 transition-colors border-none cursor-pointer"
  >
  <div className="flex items-center gap-3">
  <span className="text-sm">{g.icon}</span>
@@ -224,7 +224,7 @@ export default function PagosTab({
  <div className="space-y-6">
 
  {filteredMovements.length === 0 ? (
- <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-surface-dark-2 rounded-2xl border border-dashed border-border dark:border-border-dark opacity-60">
+ <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-surface-dark-2 rounded-lg border border-dashed border-border dark:border-border-dark opacity-60">
  <div className="text-4xl mb-4">📜</div>
  <div className="text-xs font-black uppercase tracking-wide text-content-muted">No se encontraron movimientos registrados</div>
  </div>
@@ -232,7 +232,7 @@ export default function PagosTab({
  groupData(filteredMovements).map(group => (
  <div key={group.key} className="animate-in fade-in duration-500">
  <div className="flex items-center gap-3 mb-4 ml-2">
- <div className="h-4 w-1 bg-brand-500 rounded-full" />
+ <div className="h-4 w-1 bg-brand-500 rounded-md" />
  <span className="text-[11px] font-black uppercase tracking-wide text-content">{group.key}</span>
  <span className="text-[11px] font-bold text-content-subtle">({group.items.length})</span>
  </div>
@@ -244,14 +244,14 @@ export default function PagosTab({
  const isPaid = item.status === 'pagado' || !isInvoice;
 
  return (
- <div key={`${item._type}-${item.id}`} className="group bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark hover:border-brand-500/30 rounded-xl overflow-hidden transition-all duration-200">
- <div className="px-5 py-3 flex items-center justify-between gap-4">
+ <div key={`${item._type}-${item.id}`} className="group bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark hover:border-brand-500/30 hover:bg-surface-2/30 transition-all border-b border-border/10">
+ <div className="px-3 py-2 flex items-center justify-between gap-4">
  {/* Info Principal */}
  <div className="flex items-center gap-4 flex-1 min-w-0">
  {/* Indicador de Estado */}
  <div
  className={[
- "w-2 h-2 rounded-full shadow-sm",
+ "w-2 h-2 rounded-md shadow-sm",
  isPaid ? "bg-success" : (isPartial ? "bg-brand-500 animate-pulse" : "bg-danger")
  ].join(" ")}
  title={isPaid ? "Cobrado" : (isPartial ? "Parcial" : "Pendiente")}
@@ -309,7 +309,7 @@ export default function PagosTab({
  <div className="flex items-center gap-2">
  {isInvoice ? (
  <>
- <button onClick={() => setReceiptSale(item)} className="w-10 rounded-xl bg-surface-2 dark:bg-surface-dark-3 flex items-center justify-center text-brand-500 border border-border dark:border-border-dark hover:border-brand-500/40 transition-all" title="Ver Factura">
+ <button onClick={() => setReceiptSale(item)} className="w-10 rounded-lg bg-surface-2 dark:bg-surface-dark-3 flex items-center justify-center text-brand-500 border border-border dark:border-border-dark hover:border-brand-500/40 transition-all" title="Ver Factura">
  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
  </button>
  {!isPaid && (
@@ -320,7 +320,7 @@ export default function PagosTab({
  <>
  <button onClick={() => setPayDetail(item)} className="px-4 py-2 rounded-lg bg-surface-2 dark:bg-surface-dark text-content-subtle text-[11px] font-black uppercase tracking-wide hover:text-content hover:bg-surface-3 transition-all border-none cursor-pointer">Detalle</button>
  {can("admin") && (
- <button onClick={() => removePayment(item.id)} className="w-10 rounded-xl bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all flex items-center justify-center" title="Eliminar Pago">
+ <button onClick={() => removePayment(item.id)} className="w-10 rounded-lg bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all flex items-center justify-center" title="Eliminar Pago">
  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
  </button>
  )}
@@ -366,10 +366,10 @@ export default function PagosTab({
  className="fixed inset-0 z-[1000] bg-black/80 flex items-center justify-center p-5">
  <div onClick={e => e.stopPropagation()}
  className="bg-surface-2 dark:bg-surface-dark-2 border border-success rounded-lg w-full max-w-[420px] font-mono shadow-[0_8px_40px_rgba(0,0,0,0.8)]">
- <div className="px-5 py-3.5 border-b border-border dark:border-border-dark flex justify-between items-center">
+ <div className="px-5 py-2.5 border-b border-border dark:border-border-dark flex justify-between items-center">
  <div className="font-bold text-[13px] text-success tracking-wide">DETALLE DEL PAGO</div>
  <button onClick={() => setPayDetail(null)}
- className="w-10 rounded-xl bg-danger/10 text-danger flex items-center justify-center hover:bg-danger hover:text-white transition-all active:scale-90 border-none">
+ className="w-10 rounded-lg bg-danger/10 text-danger flex items-center justify-center hover:bg-danger hover:text-white transition-all active:scale-90 border-none">
  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
  </button>
  </div>
@@ -388,7 +388,7 @@ export default function PagosTab({
  {p.notes && row("Notas", p.notes)}
  <button
  onClick={() => setPayDetail(null)}
- className="w-full mt-6 py-3 rounded-xl bg-surface-3 dark:bg-surface-dark-3 text-content-muted dark:text-content-dark-muted font-black text-[11px] uppercase tracking-wide hover:text-content transition-all border border-border dark:border-border-dark"
+ className="w-full mt-6 h-9 rounded-lg bg-surface-3 dark:bg-surface-dark-3 text-content-muted dark:text-content-dark-muted font-black text-[11px] uppercase tracking-wide hover:text-content transition-all border border-border dark:border-border-dark"
  >
  Cerrar Detalle
  </button>
