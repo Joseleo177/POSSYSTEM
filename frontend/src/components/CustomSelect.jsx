@@ -20,7 +20,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
     <div ref={ref} className={`relative ${className}`}>
       <div 
         onClick={() => setOpen(!open)}
-        className="input py-3 cursor-pointer flex items-center justify-between !bg-white dark:!bg-surface-dark-2"
+        className="input cursor-pointer flex items-center justify-between !bg-white dark:!bg-surface-dark-2"
       >
         <span className={selectedOption ? "text-content dark:text-content-dark font-black tracking-wide" : "text-content-subtle opacity-60"}>
           {selectedOption ? selectedOption.label : placeholder}

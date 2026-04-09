@@ -31,9 +31,24 @@
     @apply border-border dark:border-border-dark;
   }
 
-  /* Hide all scrollbars — app-like experience */
-  ::-webkit-scrollbar { width: 0; height: 0; display: none; }
-  * { scrollbar-width: none; -ms-overflow-style: none; }
+  /* Standardize scrollbars for a premium look instead of hiding them completely */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-content-subtle/20 dark:bg-content-dark-muted/20 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-content-subtle/40 dark:bg-content-dark-muted/40;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+  }
 }
 
 @layer components {
@@ -44,9 +59,9 @@
            active:scale-95 disabled:opacity-50 disabled:pointer-events-none
            focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2;
   }
-  .btn-sm  { @apply btn px-3 py-1.5 text-xs; }
-  .btn-md  { @apply btn px-5 py-2.5 text-sm; }
-  .btn-lg  { @apply btn px-6 py-3 text-base; }
+  .btn-sm  { @apply btn px-2.5 py-1.5 text-[10px]; }
+  .btn-md  { @apply btn px-4 py-2 text-xs; }
+  .btn-lg  { @apply btn px-5 py-2.5 text-sm; }
 
   .btn-primary {
     @apply bg-brand-500 text-white shadow-lg shadow-brand-500/20 
@@ -71,7 +86,7 @@
 
   /* ── Inputs Refinados ── */
   .input {
-    @apply w-full px-4 py-2.5 text-sm rounded-xl
+    @apply w-full px-3 py-2 text-xs rounded-xl
            bg-white border border-border text-content placeholder-content-subtle/60
            transition-all duration-200
            focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10
@@ -79,7 +94,7 @@
            dark:bg-surface-dark-2 dark:border-border-dark dark:text-content-dark
            dark:placeholder-content-dark-muted/40 dark:focus:border-brand-500;
   }
-  .input-sm { @apply input text-xs px-3 py-2; }
+  .input-sm { @apply input text-[10px] px-2.5 py-1.5; }
 
   /* ── Cards Premium ── */
   .card {
@@ -102,11 +117,11 @@
   /* ── Tablas de Grado Comercial ── */
   .table-pos { @apply w-full text-sm; }
   .table-pos thead th { 
-    @apply text-left text-[10px] font-bold text-content-subtle uppercase tracking-widest py-4 px-4 
+    @apply text-left text-[11px] font-bold text-content-subtle uppercase tracking-wider py-2.5 px-3 
            bg-surface-2/50 dark:bg-surface-dark-3/50 border-b border-border dark:border-border-dark; 
   }
   .table-pos tbody td { 
-    @apply py-4 px-4 border-b border-border/40 dark:border-border-dark/40 
+    @apply py-2.5 px-3 border-b border-border/40 dark:border-border-dark/40 
            text-content dark:text-content-dark transition-colors; 
   }
   .table-pos tbody tr:hover td { @apply bg-surface-2/30 dark:bg-surface-dark-3/30; }
