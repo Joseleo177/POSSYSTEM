@@ -16,13 +16,17 @@ const PORT = process.env.PORT || 4000;
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",")
   : ["*"];
-app.use(cors({
+const corsOptions = {
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin)) return cb(null, true);
     cb(new Error("CORS: origen no permitido"));
   },
   credentials: true,
-}));
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // ── Rate limiting ─────────────────────────────────────────────
 const globalLimiter = rateLimit({
