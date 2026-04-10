@@ -1,10 +1,9 @@
 const path = require("path");
 const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, Sequelize, ProductComboItem, sequelize } = require("../models");
-const { useSupabase } = require("../middleware/upload");
 const Op = Sequelize.Op;
 
-// Carga el cliente de Supabase solo si está configurado
-const supabaseStorage = useSupabase ? require("../config/supabase") : null;
+const isSupabase = () => !!process.env.SUPABASE_URL;
+const getSupabaseStorage = () => require("../config/supabase");
 
 // URL pública de una imagen
 const imageUrl = (filename) => {
@@ -44,13 +43,13 @@ const calculateComboStockAndCost = (comboItems) => {
 async function handleImageUpload(file) {
   if (!file) return null;
 
-  if (useSupabase) {
+  if (isSupabase()) {
     const ext = path.extname(file.originalname).toLowerCase();
     const filename = `product_${Date.now()}${ext}`;
-    const url = await supabaseStorage.uploadImage(file.buffer, filename, file.mimetype);
-    return url; // retorna URL completa
+    const url = await getSupabaseStorage().uploadImage(file.buffer, filename, file.mimetype);
+    return url;
   } else {
-    // diskStorage ya guardó el archivo, solo retornamos el filename
+    // Con diskStorage el archivo ya está guardado, retornamos el filename
     return file.filename;
   }
 }
@@ -59,12 +58,10 @@ async function handleImageUpload(file) {
 async function handleImageDelete(imageValue) {
   if (!imageValue) return;
 
-  if (useSupabase) {
-    // Extrae el filename de la URL pública de Supabase
+  if (isSupabase()) {
     const filename = imageValue.startsWith("http") ? imageValue.split("/").pop() : null;
-    if (filename) await supabaseStorage.deleteImage(filename);
+    if (filename) await getSupabaseStorage().deleteImage(filename);
   }
-  // En local, el archivo se queda (o podrías agregar fs.unlink si quieres limpiar)
 }
 
 // GET /api/products
