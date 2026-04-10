@@ -1,4 +1,5 @@
 require("dotenv").config();
+require("pg"); // Required for Vercel to bundle pg with Sequelize
 require("./config/envValidator"); // Joi env validation
 const express      = require("express");
 const cors         = require("cors");
