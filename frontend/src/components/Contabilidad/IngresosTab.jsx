@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import JournalSummary from "./JournalSummary";
 import { api } from "../../services/api";
+import Page from "../ui/Page";
 
 export default function IngresosTab({ notify, fmtPrice, allSeries }) {
  const [histDateFrom, setHistDateFrom] = useState("");
@@ -21,62 +22,54 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
 
  useEffect(() => { loadSalesForSummary(); }, [loadSalesForSummary]);
 
- return (
- <div className="h-full flex flex-col px-4 pt-3 pb-3 gap-3">
+  const subheader = (
+    <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 bg-surface-1/50 dark:bg-white/[0.01]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] font-black text-content-subtle uppercase tracking-wide">Periodo:</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={histDateFrom}
+              onChange={e => setHistDateFrom(e.target.value)}
+              className="input h-7 text-[11px] w-36"
+            />
+            <span className="text-content-subtle opacity-40 font-black">→</span>
+            <input
+              type="date"
+              value={histDateTo}
+              onChange={e => setHistDateTo(e.target.value)}
+              className="input h-7 text-[11px] w-36"
+            />
+          </div>
+        </div>
+        <div className="flex gap-1">
+          {[
+            { id: "diarios", label: "Diarios" },
+            { id: "bancos", label: "Bancos" },
+            { id: "series", label: "Series" }
+          ].map(v => (
+            <button
+              key={v.id}
+              onClick={() => setSummaryView(v.id)}
+              className={[
+                "px-4 py-1.5 rounded-md text-[11px] font-black uppercase tracking-wide transition-all",
+                summaryView === v.id
+                  ? "bg-brand-500 text-black shadow-sm"
+                  : "text-content-muted dark:text-content-dark-muted hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/10",
+              ].join(" ")}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
- {/* ── FILTROS ── */}
- <div className="shrink-0 card-premium p-4">
- <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
- <div className="flex-1 max-w-lg">
- <div className="text-[11px] font-black text-brand-500 uppercase tracking-wide mb-2">Periodo de Análisis</div>
- <div className="flex items-center gap-3">
- <div className="flex-1">
- <span className="text-[11px] font-black text-content-muted uppercase tracking-wide mb-1 block">Desde</span>
- <input
- type="date"
- value={histDateFrom}
- onChange={e => setHistDateFrom(e.target.value)}
- className="w-full bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/5 py-1.5 px-3 rounded-lg text-xs font-bold focus:ring-2 focus:ring-brand-500/20 transition-all outline-none text-content dark:text-white"
- />
- </div>
- <span className="text-content-subtle opacity-40 font-black pt-5">→</span>
- <div className="flex-1">
- <span className="text-[11px] font-black text-content-muted uppercase tracking-wide mb-1 block">Hasta</span>
- <input
- type="date"
- value={histDateTo}
- onChange={e => setHistDateTo(e.target.value)}
- className="w-full bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/5 py-1.5 px-3 rounded-lg text-xs font-bold focus:ring-2 focus:ring-brand-500/20 transition-all outline-none text-content dark:text-white"
- />
- </div>
- </div>
- </div>
-
- <div className="flex gap-1">
- {[
- { id: "diarios", label: "Diarios" },
- { id: "bancos", label: "Bancos" },
- { id: "series", label: "Series" }
- ].map(v => (
- <button
- key={v.id}
- onClick={() => setSummaryView(v.id)}
- className={[
- "px-4 py-1.5 rounded-md text-[11px] font-black uppercase tracking-wide transition-all",
- summaryView === v.id
- ? "bg-brand-500 text-black shadow-sm"
- : "text-content-muted dark:text-content-dark-muted hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/10",
- ].join(" ")}
- >
- {v.label}
- </button>
- ))}
- </div>
- </div>
- </div>
-
- {/* ── CONTENIDO ── */}
- <div className="flex-1 min-h-0 card-premium p-4 overflow-auto">
+  return (
+    <Page module="MÓDULO CONTABLE" title="Ingresos y Facturación" subheader={subheader}>
+      <div className="flex-1 min-h-0 card-premium p-4 overflow-auto">
  {summaryView === "diarios" && (
  <div>
  <div className="flex items-center gap-2 mb-3">
@@ -202,7 +195,7 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
  </div>
  );
  })()}
- </div>
- </div>
- );
+      </div>
+    </Page>
+  );
 }

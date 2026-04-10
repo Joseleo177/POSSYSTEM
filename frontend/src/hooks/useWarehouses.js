@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
 
-const EMPTY_FORM = { name: "", description: "", sort_order: 0, active: true };
+const EMPTY_FORM = { name: "", description: "", active: true };
 
 /**
  * Gestiona el CRUD de almacenes y la asignación de empleados.
@@ -64,7 +64,7 @@ export function useWarehouses(notify) {
 
   const startEdit  = useCallback((w) => {
     setEditId(w.id);
-    setForm({ name: w.name, description: w.description || "", sort_order: w.sort_order, active: w.active ?? true });
+    setForm({ name: w.name, description: w.description || "", active: w.active ?? true });
   }, []);
 
   const cancelEdit = useCallback(() => {

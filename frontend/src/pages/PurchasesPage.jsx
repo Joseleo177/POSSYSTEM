@@ -1,7 +1,7 @@
 import { useApp } from "../context/AppContext";
-import PurchasesTab from "../components/PurchasesTab";
+import PurchasesTab from "../components/purchases/PurchasesTab";
 
-export default function ComprasPage() {
+export default function PurchasesPage() {
   const { notify } = useApp();
   return <PurchasesTab notify={notify} />;
 }

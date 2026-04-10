@@ -91,6 +91,11 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
     setAddStockForm(prev => ({ ...prev, product_id: p.id }));
   };
 
+  const clearAddStockProduct = useCallback(() => {
+    setAddStockProduct(null);
+    setAddStockForm(EMPTY_ADD_STOCK);
+  }, []);
+
   const doAddStock = async () => {
     if (!selectedWarehouse) return notify("No hay almacén seleccionado", "err");
     if (!addStockProduct) return notify("Selecciona un producto", "err");
@@ -188,7 +193,7 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
     // Add Stock
     addStockModal, setAddStockModal, openAddStock,
     addStockForm, setAddStockForm, addStockSearch, setAddStockSearch, addStockResults,
-    addStockProduct, selectAddStockProduct, doAddStock, savingStock,
+    addStockProduct, selectAddStockProduct, clearAddStockProduct, doAddStock, savingStock,
     // Transfers
     transfers, loadTransfers, products,
     transferForm, setTransferForm, transferModal, setTransferModal, loadingTransfer, doTransfer,

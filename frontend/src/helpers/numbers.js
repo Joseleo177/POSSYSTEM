@@ -31,3 +31,11 @@ export const fmtQty = (qty) => {
  */
 export const parseAmount = (str) =>
   parseFloat(String(str || "0").replace(",", ".")) || 0;
+/**
+ * Formatea un número a 2 decimales exactos.
+ * @param {number|string} n
+ */
+export const fmt2 = (n) => {
+  if (n === null || n === undefined || n === "") return "0.00";
+  return Number(n).toFixed(2);
+};

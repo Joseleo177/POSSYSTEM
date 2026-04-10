@@ -1,4 +1,4 @@
-import Modal from "./Modal";
+import Modal from "./ui/Modal";
 import { useApp } from "../context/AppContext";
 import { fmtMoney, fmtDate } from "../helpers";
 
@@ -6,47 +6,47 @@ const fmt = fmtMoney;
 
 // Normaliza el objeto sale ya sea de ContabilidadPage (getAll) o de CobroPage (checkout)
 function normalizeSale(sale) {
- return {
- id: sale.id,
- invoice_number: sale.invoice_number || null,
- total: sale.total,
- paid: sale.paid,
- change: sale.change,
- discount: sale.discount_amount || 0,
- created_at: sale.created_at,
- items: (sale.items || []).map(i => ({
- ...i,
- subtotal: i.subtotal ?? parseFloat(i.price || 0) * parseFloat(i.quantity || 1),
- })),
- customer_name: sale.customer_name || sale.customerName || null,
- customer_rif: sale.customer_rif || sale.customerRif || null,
- employee_name: sale.employee_name || null,
- warehouse_name: sale.warehouse_name || null,
- journal_name: sale.journal_name || sale.journal?.name || null,
- journal_color: sale.journal_color || sale.journal?.color || null,
- exchange_rate: sale.exchange_rate || sale.exchangeRate || 1,
- final_payment_rate: sale.final_payment_rate || null,
- status: sale.status || null,
- };
+    return {
+        id: sale.id,
+        invoice_number: sale.invoice_number || null,
+        total: sale.total,
+        paid: sale.paid,
+        change: sale.change,
+        discount: sale.discount_amount || 0,
+        created_at: sale.created_at,
+        items: (sale.items || []).map(i => ({
+            ...i,
+            subtotal: i.subtotal ?? parseFloat(i.price || 0) * parseFloat(i.quantity || 1),
+        })),
+        customer_name: sale.customer_name || sale.customerName || null,
+        customer_rif: sale.customer_rif || sale.customerRif || null,
+        employee_name: sale.employee_name || null,
+        warehouse_name: sale.warehouse_name || null,
+        journal_name: sale.journal_name || sale.journal?.name || null,
+        journal_color: sale.journal_color || sale.journal?.color || null,
+        exchange_rate: sale.exchange_rate || sale.exchangeRate || 1,
+        final_payment_rate: sale.final_payment_rate || null,
+        status: sale.status || null,
+    };
 }
 
 // displayCurrency: la moneda no-base (VES). Todos los montos del recibo se convierten a ella.
 // sale.total y item.price están siempre en USD base.
 function printReceipt(sale, companyInfo, displayCurrency) {
- const storeName = companyInfo?.name || "MI TIENDA POS";
- const s = normalizeSale(sale);
- // Pagado: usar tasa del último pago (cuando se cerró la deuda)
- // Pendiente/Parcial: usar tasa histórica de la venta
- const effectiveRate = (s.status === 'pagado' && parseFloat(s.final_payment_rate) > 1)
- ? parseFloat(s.final_payment_rate)
- : parseFloat(s.exchange_rate || 1);
- const rate = (effectiveRate > 1) ? effectiveRate : parseFloat(displayCurrency?.exchange_rate || 1);
- const sym = displayCurrency?.symbol || "$";
- const code = displayCurrency?.code || "VES";
- const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
- const dateStr = fmtDate(s.created_at);
+    const storeName = companyInfo?.name || "MI TIENDA POS";
+    const s = normalizeSale(sale);
+    // Pagado: usar tasa del último pago (cuando se cerró la deuda)
+    // Pendiente/Parcial: usar tasa histórica de la venta
+    const effectiveRate = (s.status === 'pagado' && parseFloat(s.final_payment_rate) > 1)
+        ? parseFloat(s.final_payment_rate)
+        : parseFloat(s.exchange_rate || 1);
+    const rate = (effectiveRate > 1) ? effectiveRate : parseFloat(displayCurrency?.exchange_rate || 1);
+    const sym = displayCurrency?.symbol || "$";
+    const code = displayCurrency?.code || "VES";
+    const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
+    const dateStr = fmtDate(s.created_at);
 
- const itemsRows = s.items.map(i => `
+    const itemsRows = s.items.map(i => `
  <tr>
  <td>${i.name}</td>
  <td style="text-align:center">${i.quantity}</td>
@@ -55,7 +55,7 @@ function printReceipt(sale, companyInfo, displayCurrency) {
  </tr>
  `).join("");
 
- const html = `<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html>
 <head>
  <meta charset="utf-8" />
@@ -138,151 +138,151 @@ function printReceipt(sale, companyInfo, displayCurrency) {
 </body>
 </html>`;
 
- const win = window.open("", "_blank");
- win.document.write(html);
- win.document.close();
- win.focus();
- setTimeout(() => { win.print(); win.close(); }, 400);
+    const win = window.open("", "_blank");
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); win.close(); }, 400);
 }
 
 export default function ReceiptModal({ open, onClose, sale }) {
- const { storeName, companyInfo, baseCurrency, activeCurrencies } = useApp();
- if (!open || !sale) return null;
+    const { storeName, companyInfo, baseCurrency, activeCurrencies } = useApp();
+    if (!open || !sale) return null;
 
- const s = normalizeSale(sale);
+    const s = normalizeSale(sale);
 
- // Siempre mostrar en la moneda no-base (VES). Si no hay, fallback a base.
- const displayCurrency = activeCurrencies?.find(c => !c.is_base) || baseCurrency;
- const isBase = !displayCurrency || displayCurrency.is_base;
- // Pagado: tasa del último pago (cuando se cerró la deuda)
- // Pendiente/Parcial: tasa histórica de la venta
- const effectiveRate = (s.status === 'pagado' && parseFloat(s.final_payment_rate) > 1)
- ? parseFloat(s.final_payment_rate)
- : parseFloat(s.exchange_rate || 1);
- const rate = isBase ? 1 : parseFloat(effectiveRate > 1 ? effectiveRate : (displayCurrency.exchange_rate || 1));
- const sym = isBase ? (baseCurrency?.symbol || "$") : (displayCurrency.symbol || "$");
+    // Siempre mostrar en la moneda no-base (VES). Si no hay, fallback a base.
+    const displayCurrency = activeCurrencies?.find(c => !c.is_base) || baseCurrency;
+    const isBase = !displayCurrency || displayCurrency.is_base;
+    // Pagado: tasa del último pago (cuando se cerró la deuda)
+    // Pendiente/Parcial: tasa histórica de la venta
+    const effectiveRate = (s.status === 'pagado' && parseFloat(s.final_payment_rate) > 1)
+        ? parseFloat(s.final_payment_rate)
+        : parseFloat(s.exchange_rate || 1);
+    const rate = isBase ? 1 : parseFloat(effectiveRate > 1 ? effectiveRate : (displayCurrency.exchange_rate || 1));
+    const sym = isBase ? (baseCurrency?.symbol || "$") : (displayCurrency.symbol || "$");
 
- // Todos los montos vienen en USD base → multiplicar por tasa de display
- const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
- const dateStr = fmtDate(s.created_at);
- const invoiceLabel = s.invoice_number || `#${s.id}`;
+    // Todos los montos vienen en USD base → multiplicar por tasa de display
+    const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
+    const dateStr = fmtDate(s.created_at);
+    const invoiceLabel = s.invoice_number || `#${s.id}`;
 
- return (
- <Modal open={open} onClose={onClose} title={`FACTURA ${invoiceLabel}`} width={500}>
- {/* Encabezado empresa */}
- <div className="text-center mb-4 pb-4 border-b border-border/20 dark:border-white/10">
- {companyInfo?.logo_url && (
- <img src={companyInfo.logo_url} alt="logo" className=" mx-auto mb-2 object-contain" />
- )}
- <div className="text-sm font-black text-content dark:text-content-dark tracking-wide">{storeName}</div>
- {companyInfo?.rif && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">RIF: {companyInfo.rif}</div>}
- {companyInfo?.slogan && <div className="text-[11px] italic text-content-subtle mt-0.5">{companyInfo.slogan}</div>}
- {companyInfo?.address && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-1">{companyInfo.address}</div>}
- {(companyInfo?.city || companyInfo?.phone) && (
- <div className="text-[11px] text-content-muted dark:text-content-dark-muted">
- {[companyInfo.city, companyInfo.phone, companyInfo.phone2].filter(Boolean).join(" · ")}
- </div>
- )}
- {companyInfo?.email && <div className="text-[11px] text-content-subtle">{companyInfo.email}</div>}
- <div className="text-[11px] font-black text-content-subtle tracking-wide mt-2 uppercase">Comprobante de Venta</div>
- </div>
+    return (
+        <Modal open={open} onClose={onClose} title={`FACTURA ${invoiceLabel}`} width={500}>
+            {/* Encabezado empresa */}
+            <div className="text-center mb-4 pb-4 border-b border-border/20 dark:border-white/10">
+                {companyInfo?.logo_url && (
+                    <img src={companyInfo.logo_url} alt="logo" className=" mx-auto mb-2 object-contain" />
+                )}
+                <div className="text-sm font-black text-content dark:text-content-dark tracking-wide">{storeName}</div>
+                {companyInfo?.rif && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">RIF: {companyInfo.rif}</div>}
+                {companyInfo?.slogan && <div className="text-[11px] italic text-content-subtle mt-0.5">{companyInfo.slogan}</div>}
+                {companyInfo?.address && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-1">{companyInfo.address}</div>}
+                {(companyInfo?.city || companyInfo?.phone) && (
+                    <div className="text-[11px] text-content-muted dark:text-content-dark-muted">
+                        {[companyInfo.city, companyInfo.phone, companyInfo.phone2].filter(Boolean).join(" · ")}
+                    </div>
+                )}
+                {companyInfo?.email && <div className="text-[11px] text-content-subtle">{companyInfo.email}</div>}
+                <div className="text-[11px] font-black text-content-subtle tracking-wide mt-2 uppercase">Comprobante de Venta</div>
+            </div>
 
- {/* Metadata */}
- <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-4 mb-4 space-y-2">
- <div className="flex justify-between items-center py-1.5 text-sm">
- <span className="text-content-muted dark:text-content-dark-muted">Factura N°</span>
- <span className="text-content dark:text-content-dark font-medium">{invoiceLabel}</span>
- </div>
- <div className="flex justify-between items-center py-1.5 text-sm">
- <span className="text-content-muted dark:text-content-dark-muted">Fecha</span>
- <span className="text-content dark:text-content-dark font-medium">{dateStr}</span>
- </div>
- {s.employee_name && (
- <div className="flex justify-between items-center py-1.5 text-sm">
- <span className="text-content-muted dark:text-content-dark-muted">Vendedor</span>
- <span className="text-content dark:text-content-dark font-medium">{s.employee_name}</span>
- </div>
- )}
- {s.journal_name && (
- <div className="flex justify-between items-center py-1.5 text-sm">
- <span className="text-content-muted dark:text-content-dark-muted">Diario</span>
- <span className="text-content dark:text-content-dark font-medium inline-flex items-center gap-1.5">
- {s.journal_color && (
- <span
- className="inline-block w-2 h-2 rounded-full"
- style={{ background: s.journal_color }}
- />
- )}
- {s.journal_name}
- </span>
- </div>
- )}
- </div>
+            {/* Metadata */}
+            <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-4 mb-4 space-y-2">
+                <div className="flex justify-between items-center py-1.5 text-sm">
+                    <span className="text-content-muted dark:text-content-dark-muted">Factura N°</span>
+                    <span className="text-content dark:text-content-dark font-medium">{invoiceLabel}</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 text-sm">
+                    <span className="text-content-muted dark:text-content-dark-muted">Fecha</span>
+                    <span className="text-content dark:text-content-dark font-medium">{dateStr}</span>
+                </div>
+                {s.employee_name && (
+                    <div className="flex justify-between items-center py-1.5 text-sm">
+                        <span className="text-content-muted dark:text-content-dark-muted">Vendedor</span>
+                        <span className="text-content dark:text-content-dark font-medium">{s.employee_name}</span>
+                    </div>
+                )}
+                {s.journal_name && (
+                    <div className="flex justify-between items-center py-1.5 text-sm">
+                        <span className="text-content-muted dark:text-content-dark-muted">Diario</span>
+                        <span className="text-content dark:text-content-dark font-medium inline-flex items-center gap-1.5">
+                            {s.journal_color && (
+                                <span
+                                    className="inline-block w-2 h-2 rounded-full"
+                                    style={{ background: s.journal_color }}
+                                />
+                            )}
+                            {s.journal_name}
+                        </span>
+                    </div>
+                )}
+            </div>
 
- {/* Cliente */}
- {s.customer_name && (
- <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg px-4 py-2.5 mb-4 text-sm">
- <span className="text-content-muted dark:text-content-dark-muted text-xs tracking-wider">CLIENTE: </span>
- <span className="text-content dark:text-content-dark font-medium">
- {s.customer_rif ? s.customer_rif + " - " : ""}{s.customer_name}
- </span>
- </div>
- )}
+            {/* Cliente */}
+            {s.customer_name && (
+                <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg px-4 py-2.5 mb-4 text-sm">
+                    <span className="text-content-muted dark:text-content-dark-muted text-xs tracking-wider">CLIENTE: </span>
+                    <span className="text-content dark:text-content-dark font-medium">
+                        {s.customer_rif ? s.customer_rif + " - " : ""}{s.customer_name}
+                    </span>
+                </div>
+            )}
 
- {/* Items */}
- <table className="w-full border-collapse mb-4 text-sm">
- <thead>
- <tr className="border-b border-border dark:border-border-dark text-content-muted dark:text-content-dark-muted text-xs">
- <th className="text-left px-1.5 py-1">Producto</th>
- <th className="text-center px-1.5 py-1">Cant.</th>
- <th className="text-right px-1.5 py-1">P.U.</th>
- <th className="text-right px-1.5 py-1">Total</th>
- </tr>
- </thead>
- <tbody>
- {s.items.map((item, idx) => (
- <tr key={idx} className="border-b border-dashed border-border dark:border-border-dark">
- <td className="px-1.5 py-1.5 text-content dark:text-content-dark">{item.name}</td>
- <td className="px-1.5 py-1.5 text-center text-content-muted dark:text-content-dark-muted">{item.quantity}</td>
- <td className="px-1.5 py-1.5 text-right text-content-muted dark:text-content-dark-muted">{fmtP(item.price)}</td>
- <td className="px-1.5 py-1.5 text-right text-content dark:text-content-dark font-medium">{fmtP(item.subtotal)}</td>
- </tr>
- ))}
- </tbody>
- </table>
+            {/* Items */}
+            <table className="w-full border-collapse mb-4 text-sm">
+                <thead>
+                    <tr className="border-b border-border dark:border-border-dark text-content-muted dark:text-content-dark-muted text-xs">
+                        <th className="text-left px-1.5 py-1">Producto</th>
+                        <th className="text-center px-1.5 py-1">Cant.</th>
+                        <th className="text-right px-1.5 py-1">P.U.</th>
+                        <th className="text-right px-1.5 py-1">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {s.items.map((item, idx) => (
+                        <tr key={idx} className="border-b border-dashed border-border dark:border-border-dark">
+                            <td className="px-1.5 py-1.5 text-content dark:text-content-dark">{item.name}</td>
+                            <td className="px-1.5 py-1.5 text-center text-content-muted dark:text-content-dark-muted">{item.quantity}</td>
+                            <td className="px-1.5 py-1.5 text-right text-content-muted dark:text-content-dark-muted">{fmtP(item.price)}</td>
+                            <td className="px-1.5 py-1.5 text-right text-content dark:text-content-dark font-medium">{fmtP(item.subtotal)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
 
- {/* Totales */}
- <div className="border-t border-border dark:border-border-dark pt-2.5 mb-4">
- {s.discount > 0 && (
- <div className="flex justify-between items-center py-1.5 text-sm">
- <span className="text-content-muted dark:text-content-dark-muted">Descuento</span>
- <span className="text-danger font-medium">-{fmtP(s.discount)}</span>
- </div>
- )}
- <div className="flex justify-between items-center py-1.5 border-t border-border dark:border-border-dark mt-1 pt-1.5">
- <span className="text-content dark:text-content-dark font-semibold text-sm">TOTAL</span>
- <span className="text-content dark:text-content-dark font-bold text-sm">{fmtP(s.total)}</span>
- </div>
- </div>
+            {/* Totales */}
+            <div className="border-t border-border dark:border-border-dark pt-2.5 mb-4">
+                {s.discount > 0 && (
+                    <div className="flex justify-between items-center py-1.5 text-sm">
+                        <span className="text-content-muted dark:text-content-dark-muted">Descuento</span>
+                        <span className="text-danger font-medium">-{fmtP(s.discount)}</span>
+                    </div>
+                )}
+                <div className="flex justify-between items-center py-1.5 border-t border-border dark:border-border-dark mt-1 pt-1.5">
+                    <span className="text-content dark:text-content-dark font-semibold text-sm">TOTAL</span>
+                    <span className="text-content dark:text-content-dark font-bold text-sm">{fmtP(s.total)}</span>
+                </div>
+            </div>
 
 
 
- {/* Footer */}
- <div className="text-center text-xs text-content-muted dark:text-content-dark-muted mb-4">¡Gracias por su compra!</div>
+            {/* Footer */}
+            <div className="text-center text-xs text-content-muted dark:text-content-dark-muted mb-4">¡Gracias por su compra!</div>
 
- {/* Botones */}
- <div className="flex gap-2.5">
- <button onClick={onClose} className="btn-md btn-secondary w-full">
- CERRAR
- </button>
- <button
- onClick={() => printReceipt(sale, companyInfo, displayCurrency)}
- className="btn-md btn-primary w-full"
- style={{ flex: 2 }}
- >
- 🖨 IMPRIMIR
- </button>
- </div>
- </Modal>
- );
+            {/* Botones */}
+            <div className="flex gap-2.5">
+                <button onClick={onClose} className="btn-md btn-secondary w-full">
+                    CERRAR
+                </button>
+                <button
+                    onClick={() => printReceipt(sale, companyInfo, displayCurrency)}
+                    className="btn-md btn-primary w-full"
+                    style={{ flex: 2 }}
+                >
+                    🖨 IMPRIMIR
+                </button>
+            </div>
+        </Modal>
+    );
 }

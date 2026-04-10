@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../services/api";
 import PaymentFormModal from "../PaymentFormModal";
 import { fmtDate } from "../../helpers";
+import Page from "../ui/Page";
+import { Button } from "../ui/Button";
+import ConfirmModal from "../ui/ConfirmModal";
 
 export default function PagosTab({
  notify, can, baseCurrency, fmtPrice, fmtPayment, setReceiptSale
