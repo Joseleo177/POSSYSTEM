@@ -97,6 +97,10 @@ app.use((req, res) => res.status(404).json({ ok: false, message: "Ruta no encont
 app.use(errorHandler);
 
 // ── Start ─────────────────────────────────────────────────────
-app.listen(PORT, "0.0.0.0", () => {
-  logger.info(`✅  Backend POS corriendo en http://0.0.0.0:${PORT}`);
-});
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, "0.0.0.0", () => {
+    logger.info(`✅  Backend POS corriendo en http://0.0.0.0:${PORT}`);
+  });
+}
+
+module.exports = app;
