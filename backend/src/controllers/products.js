@@ -1,10 +1,19 @@
 const path = require("path");
 const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, Sequelize, ProductComboItem, sequelize } = require("../models");
-const { uploadImage, deleteImage } = require("../config/supabase");
+const { useSupabase } = require("../middleware/upload");
 const Op = Sequelize.Op;
 
-const imageUrl = (filename) =>
-  filename ? (filename.startsWith("http") ? filename : null) : null;
+// Carga el cliente de Supabase solo si está configurado
+const supabaseStorage = useSupabase ? require("../config/supabase") : null;
+
+// URL pública de una imagen
+const imageUrl = (filename) => {
+  if (!filename) return null;
+  // Si es una URL completa (Supabase), la retorna tal cual
+  if (filename.startsWith("http")) return filename;
+  // Si es nombre de archivo local, construye la ruta relativa
+  return `/uploads/${filename}`;
+};
 
 // Helper: Calcular stock virtual y costo de un combo basado en sus ingredientes
 const calculateComboStockAndCost = (comboItems) => {
@@ -31,19 +40,31 @@ const calculateComboStockAndCost = (comboItems) => {
   };
 };
 
-// Sube imagen a Supabase Storage y retorna la URL pública
+// Sube imagen: a Supabase Storage o guarda en disco local
 async function handleImageUpload(file) {
   if (!file) return null;
-  const ext = path.extname(file.originalname).toLowerCase();
-  const filename = `product_${Date.now()}${ext}`;
-  const url = await uploadImage(file.buffer, filename, file.mimetype);
-  return url;
+
+  if (useSupabase) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const filename = `product_${Date.now()}${ext}`;
+    const url = await supabaseStorage.uploadImage(file.buffer, filename, file.mimetype);
+    return url; // retorna URL completa
+  } else {
+    // diskStorage ya guardó el archivo, solo retornamos el filename
+    return file.filename;
+  }
 }
 
-// Extrae el nombre del archivo desde la URL de Supabase
-function filenameFromUrl(url) {
-  if (!url || !url.startsWith("http")) return null;
-  return url.split("/").pop();
+// Elimina imagen anterior
+async function handleImageDelete(imageValue) {
+  if (!imageValue) return;
+
+  if (useSupabase) {
+    // Extrae el filename de la URL pública de Supabase
+    const filename = imageValue.startsWith("http") ? imageValue.split("/").pop() : null;
+    if (filename) await supabaseStorage.deleteImage(filename);
+  }
+  // En local, el archivo se queda (o podrías agregar fs.unlink si quieres limpiar)
 }
 
 // GET /api/products
@@ -179,7 +200,7 @@ const create = async (req, res) => {
       return res.status(400).json({ ok: false, message: "name y price son requeridos" });
     }
 
-    const imageUrlValue = await handleImageUpload(req.file);
+    const imageValue = await handleImageUpload(req.file);
     const isComboBool = is_combo === 'true' || is_combo === true;
     const isServiceBool = is_service === 'true' || is_service === true;
 
@@ -187,7 +208,7 @@ const create = async (req, res) => {
       name, price,
       stock: 0,
       category_id: category_id || null,
-      image_filename: imageUrlValue,
+      image_filename: imageValue,
       unit: unit || "unidad",
       qty_step: qty_step || 1,
       cost_price: isComboBool ? null : (cost_price || null),
@@ -214,7 +235,7 @@ const create = async (req, res) => {
     await t.commit();
     res.status(201).json({
       ok: true,
-      data: { ...product.toJSON(), image_url: imageUrlValue }
+      data: { ...product.toJSON(), image_url: imageUrl(imageValue) }
     });
   } catch (err) {
     await t.rollback();
@@ -236,15 +257,14 @@ const update = async (req, res) => {
       return res.status(404).json({ ok: false, message: "Producto no encontrado" });
     }
 
-    let currentImageUrl = product.image_filename;
+    let currentImageValue = product.image_filename;
 
     if (req.file) {
-      // Borrar imagen anterior de Supabase
-      await deleteImage(filenameFromUrl(currentImageUrl));
-      currentImageUrl = await handleImageUpload(req.file);
+      await handleImageDelete(currentImageValue);
+      currentImageValue = await handleImageUpload(req.file);
     } else if (req.body.remove_image === "true") {
-      await deleteImage(filenameFromUrl(currentImageUrl));
-      currentImageUrl = null;
+      await handleImageDelete(currentImageValue);
+      currentImageValue = null;
     }
 
     const isComboBool = is_combo === 'true' || is_combo === true || (is_combo === undefined ? product.is_combo : false);
@@ -253,7 +273,7 @@ const update = async (req, res) => {
     await product.update({
       name, price,
       category_id: category_id || null,
-      image_filename: currentImageUrl,
+      image_filename: currentImageValue,
       unit: unit || "unidad",
       qty_step: qty_step || 1,
       stock: (isComboBool || isServiceBool) ? 0 : product.stock,
@@ -285,7 +305,7 @@ const update = async (req, res) => {
     await t.commit();
     res.json({
       ok: true,
-      data: { ...product.toJSON(), image_url: currentImageUrl }
+      data: { ...product.toJSON(), image_url: imageUrl(currentImageValue) }
     });
   } catch (err) {
     await t.rollback();
@@ -325,7 +345,7 @@ const remove = async (req, res) => {
       return res.status(400).json({ ok: false, message: "No se puede eliminar: tiene historial de transferencias" });
     }
 
-    await deleteImage(filenameFromUrl(product.image_filename));
+    await handleImageDelete(product.image_filename);
     await ProductStock.destroy({ where: { product_id: req.params.id } });
     await product.destroy();
     res.json({ ok: true, message: "Producto eliminado exitosamente" });
