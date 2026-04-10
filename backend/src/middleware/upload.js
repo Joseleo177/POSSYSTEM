@@ -1,20 +1,5 @@
 const multer = require("multer");
 const path   = require("path");
-const fs     = require("fs");
-
-const UPLOAD_DIR = path.join(__dirname, "../../uploads");
-
-// Asegurar que el directorio exista
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-  filename: (_req, file, cb) => {
-    const ext  = path.extname(file.originalname).toLowerCase();
-    const name = `product_${Date.now()}${ext}`;
-    cb(null, name);
-  },
-});
 
 const fileFilter = (_req, file, cb) => {
   const allowed = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
@@ -23,10 +8,11 @@ const fileFilter = (_req, file, cb) => {
   else cb(new Error("Solo se permiten imágenes (jpg, png, webp, gif)"), false);
 };
 
+// Usar memoria en vez de disco — compatible con Vercel y Supabase Storage
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   fileFilter,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB máx
 });
 
-module.exports = { upload, UPLOAD_DIR };
+module.exports = { upload };
