@@ -1,4 +1,4 @@
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const { Employee, Role } = require("../models");
 
 const safeEmp = (e) => {
