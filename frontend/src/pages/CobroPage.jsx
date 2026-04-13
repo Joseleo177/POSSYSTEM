@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
 import { fmtMoney } from "../helpers";
@@ -29,12 +29,15 @@ export default function CobroPage() {
         subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
         discountPct, setDiscountPct, totalDisplay,
         currentCurrency, setSelectedCurrency, convertToDisplay,
-        selectedSerieId, selectSerie, mySeries,
+        selectedSerieId, selectSerie, mySeries, loadMySeries,
         selectedCustomer, setSelectedCustomer,
-        employeeWarehouses, activeWarehouse, switchWarehouse,
+        employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
         checkout, loading, receipt, setReceipt,
         heldCarts, holdCart, takeHeldCart, removeHeldCart,
     } = useCart();
+
+    // ── Carga inicial ──────────────────────────────────────────
+    useEffect(() => { loadEmployeeWarehouses(); loadMySeries(); }, [loadEmployeeWarehouses, loadMySeries]);
 
     // ── Estado local ───────────────────────────────────────────
     const [mobileTab, setMobileTab]               = useState("products");
