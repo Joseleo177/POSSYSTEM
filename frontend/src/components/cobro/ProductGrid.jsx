@@ -55,7 +55,7 @@ export default function ProductGrid({
             </div>
 
             {/* Grilla */}
-            <div className="flex-1 overflow-y-auto pr-2 pb-4 scrollbar-hide">
+            <div className="flex-1 overflow-hidden pb-4">
                 <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
                     {filteredProducts.map((p, idx) => {
                         const outOfStock = !p.is_service && (p.stock ?? 0) <= 0;

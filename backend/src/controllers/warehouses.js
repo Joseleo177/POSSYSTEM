@@ -62,8 +62,26 @@ const getAll = async (req, res) => {
 const getStock = async (req, res) => {
   try {
     const warehouseId = parseInt(req.params.id);
+    const { search, limit = 50, offset = 0 } = req.query;
 
-    // 1. Obtener todos los productos y stock del almacén
+    const replacements = { wid: warehouseId, limit: parseInt(limit), offset: parseInt(offset) };
+    let searchFilter = "";
+    if (search && search.trim()) {
+      searchFilter = "AND (p.name ILIKE :search OR c.name ILIKE :search)";
+      replacements.search = `%${search.trim()}%`;
+    }
+
+    // 1. Obtener total para paginación
+    const [{ count }] = await sequelize.query(`
+      SELECT count(*) 
+      FROM product_stock ps
+      JOIN products p ON p.id = ps.product_id
+      LEFT JOIN categories c ON c.id = p.category_id
+      WHERE ps.warehouse_id = :wid
+      ${searchFilter}
+    `, { replacements, type: Sequelize.QueryTypes.SELECT });
+
+    // 2. Obtener productos paginados
     const productsRaw = await sequelize.query(`
       SELECT
         p.id AS product_id, p.name AS product_name, p.price, p.unit, p.image_filename,
@@ -74,12 +92,14 @@ const getStock = async (req, res) => {
       JOIN products p ON p.id = ps.product_id
       LEFT JOIN categories c ON c.id = p.category_id
       WHERE ps.warehouse_id = :wid
+      ${searchFilter}
       ORDER BY c.name ASC NULLS LAST, p.name ASC
-    `, { replacements: { wid: warehouseId }, type: Sequelize.QueryTypes.SELECT });
+      LIMIT :limit OFFSET :offset
+    `, { replacements, type: Sequelize.QueryTypes.SELECT });
 
-    if (productsRaw.length === 0) return res.json({ ok: true, data: [] });
+    if (productsRaw.length === 0) return res.json({ ok: true, data: [], total: 0 });
 
-    // 2. Calcular stock virtual para combos
+    // 3. Calcular stock virtual para combos
     const comboIds = productsRaw.filter(p => p.is_combo).map(p => p.product_id);
     const ingredientStockMap = {}; 
     const comboCostMap = {};
@@ -135,7 +155,7 @@ const getStock = async (req, res) => {
       image_url: p.image_filename ? `/uploads/${p.image_filename}` : null
     }));
 
-    res.json({ ok: true, data });
+    res.json({ ok: true, data, total: parseInt(count) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener stock del almacén" });
@@ -511,6 +531,7 @@ const getProducts = async (req, res) => {
       WHERE (p.is_service = true OR ps.product_id IS NOT NULL)
       ${searchFilter}
       ORDER BY total_sold DESC, p.name ASC
+      LIMIT 18
     `, { replacements, type: Sequelize.QueryTypes.SELECT });
 
     if (productsRaw.length === 0) return res.json({ ok: true, data: [] });

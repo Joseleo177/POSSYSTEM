@@ -13,7 +13,11 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   // ── Stock ──────────────────────────────────────────────────
   const [stock, setStock]               = useState([]);
   const [stockSearch, setStockSearch]   = useState("");
+  const debouncedStockSearch            = useDebounce(stockSearch, 400);
   const [loadingStock, setLoadingStock] = useState(false);
+  const [stockPage, setStockPage]       = useState(1);
+  const [totalStockItems, setTotalStockItems] = useState(0);
+  const stockLimit = 50;
 
   // ── Editar o Eliminar Stock (Modals) ───────────────────────
   const [editStockModal, setEditStockModal]     = useState(null);
@@ -40,15 +44,22 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   const [transferModal, setTransferModal]     = useState(false);
 
   // ── Loaders ────────────────────────────────────────────────
-  const loadStock = useCallback(async (warehouseId) => {
+  const loadStock = useCallback(async (warehouseId, p = 1) => {
     if (!warehouseId) return;
     setLoadingStock(true);
+    setStockPage(p);
     try {
-      const r = await api.warehouses.getStock(warehouseId);
-      setStock(r.data);
+      const q = { 
+        limit: stockLimit, 
+        offset: (p - 1) * stockLimit,
+        search: stockSearch.trim() 
+      };
+      const r = await api.warehouses.getStock(warehouseId, q);
+      setStock(r.data || []);
+      setTotalStockItems(r.total || 0);
     } catch (e) { notify(e.message, "err"); }
     finally { setLoadingStock(false); }
-  }, [notify]);
+  }, [notify, stockSearch, stockLimit]);
 
   const loadTransfers = useCallback(async () => {
     try {
@@ -58,6 +69,9 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   }, [notify]);
 
   // ── Effects ────────────────────────────────────────────────
+  useEffect(() => {
+    if (selectedWarehouse) loadStock(selectedWarehouse.id, 1);
+  }, [debouncedStockSearch, selectedWarehouse, loadStock]);
   useEffect(() => {
     if (!debouncedTransferProductSearch.trim()) { setTransferProductResults([]); return; }
     // Filtra solo productos con stock en el almacén de origen seleccionado
@@ -182,19 +196,13 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   };
 
   // ── Stock filtrado ─────────────────────────────────────────
-  const filteredStock = stock.filter(s =>
-    !s.is_service && (
-      !stockSearch ||
-      s.product_name.toLowerCase().includes(stockSearch.toLowerCase()) ||
-      (s.category_name || "").toLowerCase().includes(stockSearch.toLowerCase())
-    )
-  );
+  const filteredStock = stock;
 
   return {
     // Stock
     stock, loadStock, loadingStock,
     stockSearch, setStockSearch,
-    filteredStock,
+    filteredStock, stockPage, setStockPage, totalStockItems, stockLimit,
     // CRUD Stock Modals
     editStockModal, setEditStockModal, editStockValue, setEditStockValue, handleEditStock, submitEditStock,
     deleteStockModal, setDeleteStockModal, handleDeleteStock, confirmDeleteStock,

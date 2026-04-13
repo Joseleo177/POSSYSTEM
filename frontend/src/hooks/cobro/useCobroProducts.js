@@ -22,9 +22,7 @@ export function useCobroProducts(activeWarehouse, notify) {
     }, [activeWarehouse, debouncedSearch, loadProducts]);
 
     const filteredProducts = products.filter(p => {
-        const s = search.toLowerCase();
-        const matchesSearch = (p.name || "").toLowerCase().includes(s) || (p.category_name || "").toLowerCase().includes(s);
-        return matchesSearch && (selectedCat === "all" || p.category_name === selectedCat);
+        return selectedCat === "all" || p.category_name === selectedCat;
     });
 
     return {

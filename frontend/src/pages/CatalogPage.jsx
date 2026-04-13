@@ -191,7 +191,11 @@ function CategoriesTab({ notify, can }) {
 
 // ── Página principal ──────────────────────────────────────────
 export default function CatalogPage() {
-    const { products, search, setSearch, loadProducts, can, categories, notify, loading } = useCatalog();
+    const { 
+        products, search, setSearch, loadProducts, can, 
+        categories, notify, loading,
+        page, setPage, totalProducts, limit
+    } = useCatalog();
     const debouncedSearch = useDebounce(search, 400);
 
     const [activeTab, setActiveTab] = useState("products");
@@ -199,7 +203,11 @@ export default function CatalogPage() {
     const [productEditData, setProductEditData] = useState(null);
     const [deleteProductDialog, setDeleteProductDialog] = useState(null);
 
-    useEffect(() => { loadProducts(); }, [debouncedSearch]);
+    useEffect(() => { loadProducts(1); }, [debouncedSearch]);
+
+    const totalPages = Math.ceil(totalProducts / limit);
+    const startItem = (page - 1) * limit + 1;
+    const endItem = Math.min(page * limit, totalProducts);
 
     const saveProduct = async (form, imageFile) => {
         try {
@@ -211,7 +219,7 @@ export default function CatalogPage() {
                 notify("Producto creado");
             }
             setProductModal(false);
-            loadProducts();
+            loadProducts(page);
         } catch (e) { notify(e.message, "err"); }
     };
 
@@ -220,7 +228,7 @@ export default function CatalogPage() {
             await api.products.remove(deleteProductDialog);
             notify("Producto eliminado");
             setDeleteProductDialog(null);
-            loadProducts();
+            loadProducts(page);
         } catch (e) { notify(e.message, "err"); }
     };
 
@@ -276,13 +284,58 @@ export default function CatalogPage() {
                             />
                         </div>
                     </div>
-                    <div className="flex-1 overflow-auto">
-                        <ProductTable
-                            products={products}
-                            canManageProducts={can("products")}
-                            openEditProduct={(p) => { setProductEditData(p); setProductModal(true); }}
-                            setDeleteProductDialog={setDeleteProductDialog}
-                        />
+                    
+                    <div className="flex-1 min-h-0 flex flex-col">
+                        <div className="flex-1 overflow-auto">
+                            <ProductTable
+                                products={products}
+                                canManageProducts={can("products")}
+                                openEditProduct={(p) => { setProductEditData(p); setProductModal(true); }}
+                                setDeleteProductDialog={setDeleteProductDialog}
+                            />
+                        </div>
+
+                        {/* Paginación */}
+                        {totalPages > 1 && (
+                            <div className="shrink-0 px-4 py-2 bg-surface-2 dark:bg-white/[0.02] border-t border-border/20 dark:border-white/5 flex items-center justify-between gap-3">
+                                <div className="text-[10px] font-bold text-content-subtle dark:text-white/20 uppercase tracking-widest">
+                                    Mostrando <span className="text-content dark:text-white">{startItem}-{endItem}</span> de <span className="text-content dark:text-white">{totalProducts}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <button 
+                                        disabled={page === 1}
+                                        onClick={() => loadProducts(1)}
+                                        className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 dark:border-white/5 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-inherit"
+                                    >
+                                        «
+                                    </button>
+                                    <button 
+                                        disabled={page === 1}
+                                        onClick={() => loadProducts(page - 1)}
+                                        className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 dark:border-white/5 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-inherit"
+                                    >
+                                        Anterior
+                                    </button>
+                                    <div className="px-3 h-7 flex items-center justify-center text-[10px] font-black text-brand-500 bg-brand-500/10 rounded-lg border border-brand-500/20">
+                                        Página {page} de {totalPages}
+                                    </div>
+                                    <button 
+                                        disabled={page === totalPages}
+                                        onClick={() => loadProducts(page + 1)}
+                                        className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 dark:border-white/5 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-inherit"
+                                    >
+                                        Siguiente
+                                    </button>
+                                    <button 
+                                        disabled={page === totalPages}
+                                        onClick={() => loadProducts(totalPages)}
+                                        className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 dark:border-white/5 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-inherit"
+                                    >
+                                        »
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </>
             )}

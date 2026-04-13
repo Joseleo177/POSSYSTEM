@@ -47,7 +47,7 @@ const getAll = async (req, res) => {
       c.total_debt      = parseFloat(c.total_debt   || 0);
     });
 
-    res.json({ ok: true, data: customers, total: count });
+    res.json({ ok: true, data: customers, total: Array.isArray(count) ? count.length : count });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: err.message });
