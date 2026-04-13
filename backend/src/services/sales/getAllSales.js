@@ -1,7 +1,7 @@
 const { Sale, SaleItem, Customer, Employee, Currency, Warehouse, Serie, Sequelize, Op, PAYMENT_METHODS } = require("./shared");
 
 module.exports = async function getAllSales(query) {
-  const { limit = 50, offset = 0, date_from, date_to, payment_method, status, serie_id } = query;
+  const { limit = 50, offset = 0, date_from, date_to, payment_method, status, serie_id, search } = query;
 
   const where = {};
   if (date_from || date_to) {
@@ -12,6 +12,14 @@ module.exports = async function getAllSales(query) {
   if (payment_method && PAYMENT_METHODS.includes(payment_method)) where.payment_method = payment_method;
   if (status) where.status = status;
   if (serie_id) where.serie_id = parseInt(serie_id, 10);
+
+  if (search) {
+    where[Op.or] = [
+      { invoice_number: { [Op.iLike]: `%${search}%` } },
+      { [Op.and]: Sequelize.literal(`"Customer"."name" ILIKE '%${search}%'`) },
+      { [Op.and]: Sequelize.literal(`"Customer"."rif" ILIKE '%${search}%'`) },
+    ];
+  }
 
   const { count, rows: sales } = await Sale.findAndCountAll({
     where,

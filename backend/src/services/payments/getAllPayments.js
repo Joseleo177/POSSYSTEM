@@ -1,15 +1,24 @@
 const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Sequelize, Op } = require("./shared");
 
 module.exports = async function getAllPayments(query) {
-  const { date_from, date_to, limit = 100, offset = 0 } = query;
+  const { date_from, date_to, limit = 100, offset = 0, search } = query;
   const where = {
-    // Excluir egresos de cambio (amount < 0) del historial visible — solo son asientos internos
+    // Excluir egresos de cambio (amount < 0) del historial visible
     amount: { [Op.gt]: 0 },
   };
   if (date_from || date_to) {
     where.created_at = {};
     if (date_from) where.created_at[Op.gte] = date_from;
     if (date_to) where.created_at[Op.lt] = Sequelize.literal(`('${date_to}'::date + INTERVAL '1 day')`);
+  }
+
+  if (search) {
+    where[Op.or] = [
+      { [Op.and]: Sequelize.literal(`"Sale"."invoice_number" ILIKE '%${search}%'`) },
+      { [Op.and]: Sequelize.literal(`"Customer"."name" ILIKE '%${search}%'`) },
+      { [Op.and]: Sequelize.literal(`"Customer"."rif" ILIKE '%${search}%'`) },
+      { reference_number: { [Op.iLike]: `%${search}%` } }
+    ];
   }
 
   const { count, rows } = await Payment.findAndCountAll({
