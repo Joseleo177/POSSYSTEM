@@ -2,7 +2,10 @@ const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, S
 
 module.exports = async function getAllPayments(query) {
   const { date_from, date_to, limit = 100, offset = 0 } = query;
-  const where = {};
+  const where = {
+    // Excluir egresos de cambio (amount < 0) del historial visible — solo son asientos internos
+    amount: { [Op.gt]: 0 },
+  };
   if (date_from || date_to) {
     where.created_at = {};
     if (date_from) where.created_at[Op.gte] = date_from;

@@ -10,5 +10,6 @@ router.get("/inventory",          auth, permit("reports", "config", "inventory")
 router.get("/margins",            auth, permit("reports", "config"), ctrl.getMarginsReport);
 router.get("/customers-analysis", auth, permit("reports", "config"), ctrl.getCustomersAnalysis);
 router.get("/audit",              auth, permit("config"), ctrl.getAuditReport);
+router.get("/expiry",             auth, permit("reports", "config", "inventory"), ctrl.getExpiryReport);
 
 module.exports = router;

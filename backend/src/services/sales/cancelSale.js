@@ -52,7 +52,28 @@ module.exports = async function cancelSale(id) {
       }
     }
 
-    await sale.destroy({ transaction });
+    // 5. Marcar como anulado (en lugar de destruir)
+    await sale.update({ status: 'anulado' }, { transaction });
+
+    // 6. Generar Reembolso Automático de todos los pagos
+    const { Payment } = require("../../models");
+    const totalPaid = await Payment.sum('amount', { where: { sale_id: id }, transaction }) || 0;
+    
+    if (parseFloat(totalPaid) > 0) {
+      await Payment.create({
+        sale_id:            id,
+        customer_id:        sale.customer_id,
+        amount:             -totalPaid,
+        currency_id:        sale.currency_id,
+        exchange_rate:      sale.exchange_rate,
+        payment_journal_id: sale.payment_journal_id,
+        employee_id:        null, // O pasar el employee_id si estuviera disponible
+        reference_date:     new Date(),
+        reference_number:   `ANUL-${id}`,
+        notes:              `Reembolso automático por anulación de factura`
+      }, { transaction });
+    }
+
     await transaction.commit();
   } catch (err) {
     await transaction.rollback();

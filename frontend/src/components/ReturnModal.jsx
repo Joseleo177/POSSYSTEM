@@ -30,13 +30,16 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
 
     const handleReturnAll = () => {
         const qtys = {};
-        sale.items.forEach(i => { qtys[i.id] = parseFloat(i.quantity); });
+        sale.items.forEach(i => { 
+            const available = parseFloat(i.quantity) - parseFloat(i.returned_qty || 0);
+            if (available > 0) qtys[i.id] = available;
+        });
         setReturnQtys(qtys);
     };
 
     const totalReturn = sale.items.reduce((acc, i) => {
         const retQty = returnQtys[i.id] || 0;
-        return acc + (retQty * parseFloat(i.price));
+        return acc + (retQty * (parseFloat(i.price) - parseFloat(i.discount || 0)));
     }, 0);
 
     const handleSubmit = () => {
@@ -89,29 +92,35 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                 <th className="text-left px-4 py-2 font-black text-content-subtle uppercase tracking-wide">Producto</th>
                                 <th className="text-center px-4 py-2 font-black text-content-subtle uppercase tracking-wide w-24">Precio U.</th>
                                 <th className="text-center px-4 py-2 font-black text-content-subtle uppercase tracking-wide w-24">Vendidos</th>
-                                <th className="text-right px-4 py-2 font-black text-content-subtle uppercase tracking-wide w-28">Devolver</th>
+                                <th className="text-center px-4 py-2 font-black text-content-subtle uppercase tracking-wide w-24 text-danger">Devueltos</th>
+                                <th className="text-right px-4 py-2 font-black text-content-subtle uppercase tracking-wide w-28 text-brand-500">Volver a Dev.</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border/20">
-                            {sale.items.map((item, idx) => (
-                                <tr key={idx} className="hover:bg-brand-500/5 transition-colors">
+                            {sale.items.map((item, idx) => {
+                                const available = parseFloat(item.quantity) - parseFloat(item.returned_qty || 0);
+                                return (
+                                <tr key={idx} className={`hover:bg-brand-500/5 transition-colors ${available <= 0 ? 'opacity-40 bg-surface-3' : ''}`}>
                                     <td className="px-4 py-3 font-bold text-content">{item.name}</td>
                                     <td className="px-4 py-3 text-center font-bold text-content-muted">{fmtPrice(item.price)}</td>
-                                    <td className="px-4 py-3 text-center font-bold text-content-muted">{parseFloat(item.quantity).toString()}</td>
+                                    <td className="px-4 py-3 text-center font-bold text-content-muted">{parseFloat(item.quantity)}</td>
+                                    <td className="px-4 py-3 text-center font-bold text-danger">{parseFloat(item.returned_qty || 0)}</td>
                                     <td className="px-4 py-2 text-right">
                                         <input
                                             type="number"
                                             min="0"
-                                            max={item.quantity}
+                                            max={available}
                                             step="1"
-                                            className="w-[70px] bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark py-1.5 px-2 rounded-lg text-[11px] font-bold text-center outline-none focus:ring-1 focus:ring-brand-500/20 shadow-sm"
+                                            disabled={available <= 0}
+                                            className="w-[70px] bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark py-1.5 px-2 rounded-lg text-[11px] font-bold text-center outline-none focus:ring-1 focus:ring-brand-500/20 shadow-sm disabled:opacity-50"
                                             value={returnQtys[item.id] === 0 ? "" : (returnQtys[item.id] || "")}
-                                            onChange={(e) => handleQtyChange(item.id, parseFloat(item.quantity), e.target.value)}
+                                            onChange={(e) => handleQtyChange(item.id, available, e.target.value)}
                                             placeholder="0"
                                         />
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

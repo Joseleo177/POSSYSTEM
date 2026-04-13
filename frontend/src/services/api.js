@@ -238,6 +238,7 @@ export const api = {
     margins:            (params = {}) => request("/reports/margins?"            + new URLSearchParams(params)),
     customersAnalysis:  (params = {}) => request("/reports/customers-analysis?" + new URLSearchParams(params)),
     audit:              (params = {}) => request("/reports/audit?"              + new URLSearchParams(params)),
+    expiry:             (params = {}) => request("/reports/expiry?"             + new URLSearchParams(params)),
   },
 
   cashSessions: {

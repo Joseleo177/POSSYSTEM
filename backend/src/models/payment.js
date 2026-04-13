@@ -17,6 +17,8 @@ module.exports = (sequelize, DataTypes) => {
     reference_date:     { type: DataTypes.DATEONLY },
     reference_number:   { type: DataTypes.STRING(100) },
     notes:              { type: DataTypes.TEXT },
+    change_given:       { type: DataTypes.DECIMAL(14, 4), allowNull: true },
+    change_journal_id:  { type: DataTypes.INTEGER, allowNull: true },
     created_at:         { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

@@ -21,6 +21,7 @@ module.exports = async function getAllSales(query) {
     attributes: {
       include: [
         [Sequelize.literal('(SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = "Sale"."id")'), "amount_paid"],
+        [Sequelize.literal('(SELECT COALESCE(SUM(total),0) FROM returns WHERE sale_id = "Sale"."id")'), "total_returned"],
         [Sequelize.literal('(SELECT exchange_rate FROM payments WHERE sale_id = "Sale"."id" ORDER BY created_at DESC LIMIT 1)'), "final_payment_rate"],
       ],
     },
@@ -46,7 +47,8 @@ module.exports = async function getAllSales(query) {
     item.serie_name = item.Serie?.name ?? null;
     item.items = item.SaleItems ?? [];
     item.amount_paid = parseFloat(item.amount_paid || 0);
-    item.balance = parseFloat((parseFloat(item.total) - item.amount_paid).toFixed(2));
+    const totalRet = parseFloat(item.total_returned || 0);
+    item.balance = parseFloat((parseFloat(item.total) - totalRet - item.amount_paid).toFixed(2));
     ["Customer", "Employee", "Currency", "Warehouse", "Serie", "SaleItems"].forEach((k) => delete item[k]);
     return item;
   });

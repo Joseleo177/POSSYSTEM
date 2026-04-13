@@ -90,6 +90,8 @@ export function usePurchasesList({
                         package_price: parseFloat(i.package_price),
                         profit_margin: parseFloat(i.profit_margin),
                         update_price: i.update_price,
+                        lot_number: i.lot_number,
+                        expiration_date: i.expiration_date,
                     })),
                 });
 

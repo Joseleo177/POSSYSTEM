@@ -1,4 +1,4 @@
-const { Purchase, PurchaseItem, Employee, Warehouse, Customer, Product, ProductStock, ProductComboItem, Sequelize, sequelize } = require("../models");
+const { Purchase, PurchaseItem, ProductLot, Employee, Warehouse, Customer, Product, ProductStock, ProductComboItem, Sequelize, sequelize } = require("../models");
 
 // GET /api/purchases
 const getAll = async (req, res) => {
@@ -103,7 +103,11 @@ const create = async (req, res) => {
 
     let grandTotal = 0;
     for (const item of items) {
-      const { product_id, package_unit, package_size, package_qty, package_price, profit_margin, update_price = true } = item;
+      const { 
+        product_id, package_unit, package_size, package_qty, package_price, 
+        profit_margin, update_price = true,
+        lot_number, expiration_date 
+      } = item;
       if (!product_id || !package_size || !package_qty || !package_price) throw new Error("Datos incompletos en línea de compra");
 
       const pkgSize  = parseFloat(package_size);
@@ -132,7 +136,9 @@ const create = async (req, res) => {
         profit_margin: margin,
         sale_price,
         total_units,
-        subtotal
+        subtotal,
+        lot_number: lot_number || null,
+        expiration_date: expiration_date || null
       }, { transaction });
 
       // Incrementar stock en almacén (SÓLO si no es servicio)
@@ -144,6 +150,22 @@ const create = async (req, res) => {
           lock: true
         });
         await stockEntry.increment('qty', { by: total_units, transaction });
+
+        // Registrar/Incrementar stock por LOTE
+        if (lot_number && expiration_date) {
+            const [lotEntry] = await ProductLot.findOrCreate({
+                where: { 
+                    warehouse_id, 
+                    product_id, 
+                    lot_number: String(lot_number), 
+                    expiration_date 
+                },
+                defaults: { qty: 0 },
+                transaction,
+                lock: true
+            });
+            await lotEntry.increment('qty', { by: total_units, transaction });
+        }
       }
 
       // Actualizar datos del producto
@@ -184,17 +206,16 @@ const create = async (req, res) => {
             product_id: product.id,
             quantity: pkgSize
           }, { transaction });
-
-          // Ligar el Combo explicitamente al almacén de destino con stock físico 0
-          // (Su uso será virtual, pero necesita existir en la tabla para aparecer en el POS de este almacén)
-          await ProductStock.findOrCreate({
-            where: { warehouse_id, product_id: comboProduct.id },
-            defaults: { qty: 0 },
-            transaction
-          });
         } else if (update_price) {
           await comboProduct.update({ price: comboSalePrice }, { transaction });
         }
+
+        // Siempre ligar el combo al almacén destino (puede ser un almacén nuevo aunque el combo ya exista)
+        await ProductStock.findOrCreate({
+          where: { warehouse_id, product_id: comboProduct.id },
+          defaults: { qty: 0 },
+          transaction
+        });
       }
 
       // Sincronizar stock total

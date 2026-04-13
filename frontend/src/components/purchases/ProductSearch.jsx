@@ -168,6 +168,29 @@ export default function ProductSearch({ state }) {
                 </div>
             </div>
 
+            {/* Lotes y Vencimiento */}
+            <div className="grid grid-cols-2 gap-2.5 mb-2.5 bg-warning/5 p-4 rounded-2xl border border-warning/20">
+                <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-warning tracking-widest ml-1">Número de Lote (Requerido)</label>
+                    <input
+                        type="text"
+                        value={itemForm.lot_number || ""}
+                        onChange={e => setIF("lot_number", e.target.value)}
+                        placeholder="Ej. L-2024-001"
+                        className="input !border-warning/30 focus:!border-warning"
+                    />
+                </div>
+                <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-warning tracking-widest ml-1">Fecha de Vencimiento</label>
+                    <input
+                        type="date"
+                        value={itemForm.expiration_date || ""}
+                        onChange={e => setIF("expiration_date", e.target.value)}
+                        className="input !border-warning/30 focus:!border-warning"
+                    />
+                </div>
+            </div>
+
             {/* Cálculos */}
             <div className="grid grid-cols-4 gap-2.5 mb-2">
                 <div>
@@ -257,12 +280,10 @@ export default function ProductSearch({ state }) {
                             <tr>
                                 {[
                                     "Producto",
+                                    "Lote / Vence",
                                     "Paquete",
                                     "Cant.",
-                                    "Precio/paq.",
-                                    "Costo unit.",
-                                    "Margen",
-                                    "P. venta",
+                                    "P.Venta",
                                     "Total uds.",
                                     "Subtotal",
                                     "",
@@ -279,6 +300,11 @@ export default function ProductSearch({ state }) {
                                         {item.product?.name}
                                     </td>
 
+                                    <td className="text-[10px] font-black uppercase tracking-tight">
+                                        <div className="text-warning">L: {item.lot_number || "S/L"}</div>
+                                        <div className="opacity-50">{item.expiration_date || "S/V"}</div>
+                                    </td>
+
                                     <td className="text-content-muted dark:text-content-dark-muted">
                                         {item.package_unit} ×{" "}
                                         {item.package_unit?.toLowerCase() === "unidad"
@@ -288,16 +314,6 @@ export default function ProductSearch({ state }) {
 
                                     <td className="text-content dark:text-content-dark">
                                         {item.package_qty}
-                                    </td>
-
-                                    <td className="text-info">${fmt2(item.package_price)}</td>
-
-                                    <td className="text-content-muted dark:text-content-dark-muted">
-                                        ${fmt2(item.unit_cost)}
-                                    </td>
-
-                                    <td className="text-content-muted dark:text-content-dark-muted">
-                                        {item.profit_margin}%
                                     </td>
 
                                     <td className="text-success font-bold">

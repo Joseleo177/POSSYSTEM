@@ -373,7 +373,7 @@ const addStock = async (req, res) => {
     if (!product_id || qty == null) throw new Error("product_id y qty son requeridos");
 
     const parsedQty = parseFloat(qty);
-    if (isNaN(parsedQty) || parsedQty < 0) throw new Error("La cantidad debe ser mayor o igual a 0");
+    if (isNaN(parsedQty) || parsedQty === 0) throw new Error("La cantidad no puede ser 0");
 
     const product = await Product.findByPk(product_id, { transaction, lock: true });
     if (!product) throw new Error("Producto no encontrado");
@@ -385,6 +385,12 @@ const addStock = async (req, res) => {
       lock: true
     });
 
+    // Validar que no quede stock negativo en ajustes de resta
+    if (parsedQty < 0) {
+      const currentQty = parseFloat(stockEntry.qty || 0);
+      if (currentQty + parsedQty < 0) throw new Error(`Stock insuficiente. Disponible: ${currentQty}`);
+    }
+
     await stockEntry.increment('qty', { by: parsedQty, transaction });
 
     // Sincronizar stock total
@@ -392,7 +398,8 @@ const addStock = async (req, res) => {
     await product.update({ stock: totalStock }, { transaction });
 
     await transaction.commit();
-    res.json({ ok: true, message: `${product.name}: +${parsedQty} unidades sumadas al almacén` });
+    const action = parsedQty > 0 ? `+${parsedQty}` : `${parsedQty}`;
+    res.json({ ok: true, message: `${product.name}: ${action} unidades ajustadas` });
   } catch (err) {
     if (transaction) await transaction.rollback();
     console.error(err);

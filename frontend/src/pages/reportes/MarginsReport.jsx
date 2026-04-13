@@ -51,7 +51,7 @@ export default function MarginsReport() {
  <div className="overflow-x-auto">
  <table className="w-full text-left border-collapse min-w-[600px]">
  <thead className="bg-surface-2 dark:bg-surface-dark-2/50">
- {view === "top" && (
+ {(view === "top" || view === "bottom") && (
  <tr className="border-b border-border/40 dark:border-white/5">
  {["Ranking", "Producto", "Ingresos", "Inversión", "Utilidad", "ROI %"].map(h => (
  <th key={h} className={`px-4 py-2 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted ${["Ingresos","Inversión","Utilidad"].includes(h) ? "text-right" : h === "ROI %" ? "text-center" : ""}`}>{h}</th>
@@ -67,7 +67,11 @@ export default function MarginsReport() {
  )}
  </thead>
  <tbody className="divide-y divide-border/20 dark:divide-white/5">
- {view === "top" && data.by_product.slice(0, 20).map((p, i) => (
+ {(view === "top" || view === "bottom") && (() => {
+   const sorted = view === "top"
+     ? data.by_product.slice(0, 20)
+     : [...data.by_product].sort((a, b) => parseFloat(a.margin_pct) - parseFloat(b.margin_pct)).slice(0, 20);
+   return sorted.map((p, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2"><div className="w-6 h-6 rounded-lg bg-surface-3 dark:bg-white/5 flex items-center justify-center text-[10px] font-black text-brand-500">{i + 1}</div></td>
  <td className="px-4 py-2">
@@ -83,7 +87,8 @@ export default function MarginsReport() {
  </span>
  </td>
  </tr>
- ))}
+ ));
+ })()}
  {view === "category" && data.by_category.map((c, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2 font-black text-[11px] uppercase tracking-wider text-brand-500">{c.category_name}</td>
@@ -98,7 +103,6 @@ export default function MarginsReport() {
  ))}
  </tbody>
  </table>
- {view === "bottom" && <div className="p-10 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-20">Análisis Completo en el Excel Estratégico</div>}
  </div>
  </Card>
  </div>

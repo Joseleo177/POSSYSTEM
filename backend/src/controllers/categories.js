@@ -2,7 +2,19 @@ const { Category, Product } = require("../models");
 
 const getAll = async (req, res) => {
   try {
-    const categories = await Category.findAll({ order: [['name', 'ASC']] });
+    const categories = await Category.findAll({
+      order: [['name', 'ASC']],
+      attributes: {
+        include: [
+          [
+            Category.sequelize.literal(
+              `(SELECT COUNT(*) FROM products WHERE products.category_id = "Category".id)`
+            ),
+            'product_count',
+          ],
+        ],
+      },
+    });
     res.json({ ok: true, data: categories });
   } catch (err) {
     console.error(err);
@@ -12,11 +24,11 @@ const getAll = async (req, res) => {
 
 const create = async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, color } = req.body;
     if (!name) return res.status(400).json({ ok: false, message: "name es requerido" });
     const [category, created] = await Category.findOrCreate({
       where: { name: name.trim() },
-      defaults: { name: name.trim() }
+      defaults: { name: name.trim(), color: color || null }
     });
     if (!created) return res.status(409).json({ ok: false, message: "Categoría ya existe" });
     res.status(201).json({ ok: true, data: category });
@@ -28,12 +40,12 @@ const create = async (req, res) => {
 
 const update = async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, color } = req.body;
     if (!name) return res.status(400).json({ ok: false, message: "name es requerido" });
     const category = await Category.findByPk(req.params.id);
     if (!category) return res.status(404).json({ ok: false, message: "Categoría no encontrada" });
-    
-    await category.update({ name: name.trim() });
+
+    await category.update({ name: name.trim(), color: color || null });
     res.json({ ok: true, data: category });
   } catch (err) {
     console.error(err);

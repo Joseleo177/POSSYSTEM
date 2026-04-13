@@ -13,6 +13,10 @@ module.exports = async function createPayment(body) {
       reference_date,
       reference_number,
       notes,
+      // Cambio/vuelto
+      received_amount,    // lo que físicamente entregó el cliente (en moneda del pago)
+      change_given,       // cambio a devolver (en moneda base)
+      change_journal_id,  // diario del que sale el cambio
     } = body;
 
     if (!sale_id) throw new Error("sale_id es requerido");
@@ -35,6 +39,14 @@ module.exports = async function createPayment(body) {
       throw new Error(`El monto excede el saldo pendiente. Saldo: ${(saleTotal - alreadyPaid).toFixed(2)}`);
     }
 
+    const changeAmt = parseFloat(change_given || 0);
+
+    // Validar que si hay cambio, se indicó de dónde sale
+    if (changeAmt > 0 && !change_journal_id) {
+      throw new Error("Debes seleccionar el diario del que saldrá el cambio");
+    }
+
+    // Registrar el cobro (amount = lo que abona a la factura, en moneda base)
     const payment = await Payment.create(
       {
         sale_id,
@@ -47,9 +59,33 @@ module.exports = async function createPayment(body) {
         reference_date,
         reference_number: reference_number?.trim() || null,
         notes: notes?.trim() || null,
+        change_given: changeAmt > 0 ? changeAmt : null,
+        change_journal_id: changeAmt > 0 ? change_journal_id : null,
       },
       { transaction: t }
     );
+
+    // Si hay cambio: registrar un egreso negativo en el diario del cambio
+    // Esto permite cuadrar la caja: ese diario perdió esa cantidad
+    if (changeAmt > 0 && change_journal_id) {
+      await Payment.create(
+        {
+          sale_id,
+          customer_id: sale.customer_id,
+          amount: -changeAmt,
+          currency_id: currency_id || sale.currency_id || null,
+          exchange_rate: 1,
+          payment_journal_id: change_journal_id,
+          employee_id: employee_id || null,
+          reference_date,
+          reference_number: reference_number?.trim() || null,
+          notes: `Cambio entregado — Factura ${sale.invoice_number || '#' + sale_id}`,
+          change_given: null,
+          change_journal_id: null,
+        },
+        { transaction: t }
+      );
+    }
 
     const newStatus = totalPaidNow >= saleTotal - 0.001 ? "pagado" : "parcial";
     await sale.update({ status: newStatus }, { transaction: t });
@@ -61,6 +97,7 @@ module.exports = async function createPayment(body) {
       sale_status: newStatus,
       amount_paid: totalPaidNow,
       balance: balance < 0 ? 0 : balance,
+      change_given: changeAmt > 0 ? changeAmt : 0,
     };
   } catch (err) {
     await t.rollback();

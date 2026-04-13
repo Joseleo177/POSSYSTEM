@@ -56,6 +56,12 @@ export default function WarehouseGrid({ warehouses, openAssign, startEdit, setDe
                                 Empleados
                             </button>
                             <button
+                                onClick={() => { setSelectedWarehouse(w); setSubTab("ajustes"); }}
+                                className="flex-1 min-w-[100px] py-2.5 rounded-lg bg-warning/10 text-warning text-[11px] font-black uppercase tracking-wide hover:bg-warning hover:text-black transition-all"
+                            >
+                                Ajustes
+                            </button>
+                            <button
                                 onClick={() => startEdit(w)}
                                 className="p-2.5 rounded-lg bg-surface-3 dark:bg-surface-dark-3 text-content-subtle hover:text-brand-500 transition-all border border-border/20"
                                 title="Editar"

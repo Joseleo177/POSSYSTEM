@@ -38,7 +38,18 @@ Object.keys(db).forEach(modelName => {
 });
 
 // Centralized associations
-const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal } = db;
+const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot } = db;
+
+if(Return && Sale && Employee && ReturnItem && Product) {
+  Return.belongsTo(Sale, { foreignKey: 'sale_id' });
+  Sale.hasMany(Return, { foreignKey: 'sale_id' });
+  Return.belongsTo(Employee, { foreignKey: 'employee_id' });
+  Return.hasMany(ReturnItem, { foreignKey: 'return_id' });
+  ReturnItem.belongsTo(Return, { foreignKey: 'return_id' });
+  ReturnItem.belongsTo(Product, { foreignKey: 'product_id' });
+  ReturnItem.belongsTo(SaleItem, { foreignKey: 'sale_item_id' });
+  SaleItem.hasMany(ReturnItem, { foreignKey: 'sale_item_id' });
+}
 
 if(Employee && Role) {
   Employee.belongsTo(Role, { foreignKey: 'role_id' });
@@ -89,6 +100,13 @@ if(Purchase && Customer && Employee && Warehouse && PurchaseItem && Product) {
   Purchase.hasMany(PurchaseItem, { foreignKey: 'purchase_id' });
   PurchaseItem.belongsTo(Purchase, { foreignKey: 'purchase_id' });
   PurchaseItem.belongsTo(Product, { foreignKey: 'product_id' });
+}
+
+if (ProductLot && Product && Warehouse) {
+  ProductLot.belongsTo(Product,   { foreignKey: 'product_id' });
+  ProductLot.belongsTo(Warehouse, { foreignKey: 'warehouse_id' });
+  Product.hasMany(ProductLot,   { foreignKey: 'product_id' });
+  Warehouse.hasMany(ProductLot, { foreignKey: 'warehouse_id' });
 }
 
 if(Product && Warehouse && ProductStock) {

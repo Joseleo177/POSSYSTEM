@@ -26,14 +26,21 @@ services:
     environment:
       NODE_ENV:    ${NODE_ENV:-development}
       PORT:        4000
+      # ── Modo LOCAL (PostgreSQL en Docker) ──────────────────────
       DB_HOST:     db
       DB_PORT:     5432
       DB_NAME:     ${POSTGRES_DB:-posdb}
       DB_USER:     ${POSTGRES_USER:-posuser}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-pospassword}
+      # ── Seguridad ──────────────────────────────────────────────
       JWT_SECRET:  ${JWT_SECRET:-supersecretkey_change_in_production}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       LOG_LEVEL:   ${LOG_LEVEL:-info}
+      # ── Modo NUBE — Supabase (dejar vacío para modo local) ─────
+      # Si se proveen SUPABASE_URL y SUPABASE_SERVICE_KEY el
+      # backend usará Supabase en lugar del contenedor db.
+      SUPABASE_URL:         ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
     ports:
       - "${BACKEND_PORT:-4000}:4000"
     depends_on:

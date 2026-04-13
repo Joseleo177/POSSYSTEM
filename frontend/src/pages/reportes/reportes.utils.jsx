@@ -157,7 +157,8 @@ export function BarChart({ data, xKey, yKey, color = "#fabd2f", height = 160 }) 
  const pad = { top: 10, right: 10, bottom: 28, left: 55 };
  const cW = W - pad.left - pad.right;
  const cH = H - pad.top - pad.bottom;
- const barW = Math.max(3, cW / data.length - 3);
+ const slotW = cW / data.length;
+ const barW = Math.min(40, Math.max(3, slotW - 3));
  ctx.clearRect(0, 0, W, H);
  for (let i = 0; i <= 4; i++) {
  const y = pad.top + (cH / 4) * i;
@@ -168,7 +169,7 @@ export function BarChart({ data, xKey, yKey, color = "#fabd2f", height = 160 }) 
  ctx.fillText(v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0), pad.left - 4, y + 3);
  }
  data.forEach((d, i) => {
- const x = pad.left + i * (cW / data.length) + (cW / data.length - barW) / 2;
+ const x = pad.left + i * slotW + (slotW - barW) / 2;
  const barH = ((parseFloat(d[yKey]) || 0) / maxY) * cH;
  const y = pad.top + cH - barH;
  const grad = ctx.createLinearGradient(0, y, 0, pad.top + cH);

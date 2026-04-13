@@ -15,24 +15,30 @@ export default function PurchaseItemsTable({ detail }) {
                 <table className="w-full text-left border-collapse">
                     <thead>
                         <tr className="border-b border-border/40 bg-surface-1 dark:bg-white/5 text-[11px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-wide">
-                            <th className="px-6 py-4">Producto</th>
-                            <th className="px-6 py-4">Paquete</th>
-                            <th className="px-6 py-4">Cant.</th>
-                            <th className="px-6 py-4">Precio/paq.</th>
-                            <th className="px-6 py-4">Costo unit.</th>
-                            <th className="px-6 py-4">Margen</th>
-                            <th className="px-6 py-4">P. venta</th>
-                            <th className="px-6 py-4">Total uds.</th>
-                            <th className="px-6 py-4 text-right">Subtotal</th>
-                        </tr>
-                    </thead>
-
-                    <tbody className="divide-y divide-border/10">
-                        {detail.items?.map((item) => (
-                            <tr key={item.id} className="hover:bg-surface-2 dark:hover:bg-white/5 transition-colors">
-                                <td className="px-6 py-4 font-black text-content dark:text-white uppercase tracking-tight text-xs">
-                                    {item.product_name}
-                                </td>
+                             <th className="px-6 py-4">Producto</th>
+                             <th className="px-6 py-4">Lote / Vence</th>
+                             <th className="px-6 py-4">Paquete</th>
+                             <th className="px-6 py-4">Cant.</th>
+                             <th className="px-6 py-4">Precio/paq.</th>
+                             <th className="px-6 py-4">Costo unit.</th>
+                             <th className="px-6 py-4">Margen</th>
+                             <th className="px-6 py-4">P. venta</th>
+                             <th className="px-6 py-4">Total uds.</th>
+                             <th className="px-6 py-4 text-right">Subtotal</th>
+                         </tr>
+                     </thead>
+ 
+                     <tbody className="divide-y divide-border/10">
+                         {detail.items?.map((item) => (
+                             <tr key={item.id} className="hover:bg-surface-2 dark:hover:bg-white/5 transition-colors">
+                                 <td className="px-6 py-4 font-black text-content dark:text-white uppercase tracking-tight text-xs">
+                                     {item.product_name}
+                                 </td>
+ 
+                                 <td className="px-6 py-4 text-[10px] font-black uppercase tracking-tight">
+                                     <div className="text-warning">L: {item.lot_number || "S/L"}</div>
+                                     <div className="opacity-50">{item.expiration_date || "S/V"}</div>
+                                 </td>
 
                                 <td className="px-6 py-4 text-[11px] font-bold text-content-subtle uppercase tracking-wide">
                                     {item.package_unit} <span className="opacity-30">×</span> {item.package_size}

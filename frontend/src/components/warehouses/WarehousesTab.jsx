@@ -14,6 +14,7 @@ import AddStockModal from "./AddStockModal";
 import TransferModal from "./TransferModal";
 import AssignEmployeesModal from "./AssignEmployeesModal";
 import EditStockModal from "./EditStockModal";
+import AdjustmentsView from "./AdjustmentsView";
 
 export default function WarehousesTab({ notify, currentEmployee }) {
     const [subTab, setSubTab] = useState("almacenes");
@@ -74,6 +75,8 @@ export default function WarehousesTab({ notify, currentEmployee }) {
     // ── Título dinámico ───────────────────────────────────────
     const pageTitle = subTab === "transferencias"
         ? "Transferencias"
+        : subTab === "ajustes"
+        ? "Ajustes de Inventario"
         : subTab === "stock"
         ? `Stock · ${selectedWarehouse?.name || ""}`
         : "Gestión de Almacenes";
@@ -111,6 +114,13 @@ export default function WarehousesTab({ notify, currentEmployee }) {
 
             {subTab === "transferencias" && (
                 <TransfersView transfers={transfers} />
+            )}
+
+            {subTab === "ajustes" && (
+                <AdjustmentsView 
+                    selectedWarehouse={selectedWarehouse}
+                    notify={notify}
+                />
             )}
 
             {/* ── Modales ── */}

@@ -1,13 +1,13 @@
 const {
   Sale, SaleItem, Product, ProductStock, Employee, Customer, Currency, Warehouse, ProductComboItem,
-  Sequelize, sequelize,
+  Return, ReturnItem, Sequelize, sequelize,
 } = require("../models");
 
 // POST /api/sales/:id/return
 const createReturn = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
-    const saleId  = parseInt(req.params.id);
+    const saleId = parseInt(req.params.id);
     const { items, reason } = req.body; // items: [{ sale_item_id, qty }]
 
     if (!items?.length) throw new Error("Debes indicar al menos un producto a devolver");
@@ -35,13 +35,24 @@ const createReturn = async (req, res) => {
       const parsedQty = parseFloat(qty);
       if (isNaN(parsedQty) || parsedQty <= 0)
         throw new Error(`Cantidad inválida para ${si.name}`);
-      if (parsedQty > si.quantity)
-        throw new Error(`No puedes devolver más de ${si.quantity} uds de "${si.name}"`);
+      
+      // 3.1 Validar contra devoluciones previas
+      const alreadyReturned = await ReturnItem.sum('qty', {
+        where: { sale_item_id },
+        transaction
+      }) || 0;
 
-      const subtotal = parseFloat((si.price * parsedQty).toFixed(2));
+      const availableToReturn = parseFloat(si.quantity) - parseFloat(alreadyReturned);
+      
+      if (parsedQty > availableToReturn) {
+        throw new Error(`Solo quedan ${availableToReturn} uds disponibles para devolver de "${si.name}" (ya se devolvieron ${alreadyReturned})`);
+      }
+
+      const subtotal = parseFloat(((si.price - si.discount) * parsedQty).toFixed(2));
       returnTotal += subtotal;
 
       returnLines.push({
+        sale_item_id,
         product_id: si.product_id,
         name:       si.name,
         price:      si.price,
@@ -51,35 +62,24 @@ const createReturn = async (req, res) => {
     }
 
     // 4. Crear el encabezado de devolución
-    const ret = await sequelize.query(
-      `INSERT INTO returns (sale_id, employee_id, reason, total)
-       VALUES (:saleId, :empId, :reason, :total)
-       RETURNING id`,
-      {
-        replacements: {
-          saleId,
-          empId:  req.employee?.id || null,
-          reason: reason || null,
-          total:  parseFloat(returnTotal.toFixed(2)),
-        },
-        type: Sequelize.QueryTypes.INSERT,
-        transaction,
-      }
-    );
-    const returnId = ret[0][0].id;
+    const returnRecord = await Return.create({
+      sale_id:     saleId,
+      employee_id: req.employee?.id || null,
+      reason:      reason || null,
+      total:       parseFloat(returnTotal.toFixed(2)),
+    }, { transaction });
 
     // 5. Crear líneas + restaurar stock
     for (const line of returnLines) {
-      // Insertar línea
-      await sequelize.query(
-        `INSERT INTO return_items (return_id, product_id, name, price, qty, subtotal)
-         VALUES (:returnId, :productId, :name, :price, :qty, :subtotal)`,
-        {
-          replacements: { returnId, ...line },
-          type: Sequelize.QueryTypes.INSERT,
-          transaction,
-        }
-      );
+      await ReturnItem.create({
+        return_id:    returnRecord.id,
+        sale_item_id: line.sale_item_id,
+        product_id:   line.product_id,
+        name:         line.name,
+        price:        line.price,
+        qty:          line.qty,
+        subtotal:     line.subtotal,
+      }, { transaction });
 
       if (line.product_id) {
         const product = await Product.findByPk(line.product_id, { transaction });
@@ -107,7 +107,7 @@ const createReturn = async (req, res) => {
               { where: { id: cItem.product_id }, transaction }
             );
           }
-        } else {
+        } else if (product) {
           // Restaurar stock en el almacén de la venta directamente
           const [stockEntry] = await ProductStock.findOrCreate({
             where:    { warehouse_id: sale.warehouse_id, product_id: line.product_id },
@@ -130,15 +130,53 @@ const createReturn = async (req, res) => {
       }
     }
 
+    // 6. Actualizar estado de la venta si es necesario
+    const allSaleItems = await SaleItem.findAll({ where: { sale_id: saleId }, transaction });
+    let fullyReturned = true;
+    for (const si of allSaleItems) {
+      const totalRet = await ReturnItem.sum('qty', { where: { sale_item_id: si.id }, transaction }) || 0;
+      if (parseFloat(totalRet) < parseFloat(si.quantity)) {
+        fullyReturned = false;
+        break;
+      }
+    }
+
+    if (fullyReturned) {
+      await sale.update({ status: 'devuelto' }, { transaction });
+    }
+
+    // 7. Generar Reembolso Automático (Pago Negativo)
+    // Buscamos cuánto se ha pagado en esta factura
+    const totalPaid = await Payment.sum('amount', { where: { sale_id: saleId }, transaction }) || 0;
+    
+    // Si hay plata cobrada, registramos un reembolso por el total de la devolución (o lo que haya disponible de saldo pagado)
+    if (parseFloat(totalPaid) > 0) {
+      const refundAmount = Math.min(parseFloat(returnTotal), parseFloat(totalPaid));
+      
+      await Payment.create({
+        sale_id:            saleId,
+        customer_id:        sale.customer_id,
+        amount:             -refundAmount, // Negativo para restar del diario
+        currency_id:        sale.currency_id,
+        exchange_rate:      sale.exchange_rate,
+        payment_journal_id: sale.payment_journal_id,
+        employee_id:        req.employee?.id || null,
+        reference_date:     new Date(),
+        reference_number:   `DEV-${returnRecord.id}`,
+        notes:              `Reembolso automático por devolución #${returnRecord.id}`
+      }, { transaction });
+    }
+
     await transaction.commit();
 
     res.status(201).json({
       ok: true,
-      message: `Devolución registrada. Total devuelto: ${returnTotal.toFixed(2)}`,
-      data: { return_id: returnId, total: returnTotal, items: returnLines },
+      message: `Devolución registrada exitosamente. Total: ${returnTotal.toFixed(2)}`,
+      data: { return_id: returnRecord.id, total: returnTotal, items: returnLines },
     });
   } catch (err) {
-    await transaction.rollback();
+    if (transaction) await transaction.rollback();
+    console.error(err);
     const status = /no encontrada|inválida|más de/i.test(err.message) ? 400 : 500;
     res.status(status).json({ ok: false, message: err.message });
   }
@@ -147,27 +185,29 @@ const createReturn = async (req, res) => {
 // GET /api/sales/:id/returns
 const getSaleReturns = async (req, res) => {
   try {
-    const returns = await sequelize.query(
-      `SELECT r.id, r.sale_id, r.reason, r.total, r.created_at,
-              e.full_name AS employee_name,
-              json_agg(json_build_object(
-                'id', ri.id, 'name', ri.name, 'price', ri.price,
-                'qty', ri.qty, 'subtotal', ri.subtotal
-              )) AS items
-       FROM returns r
-       LEFT JOIN employees e ON e.id = r.employee_id
-       LEFT JOIN return_items ri ON ri.return_id = r.id
-       WHERE r.sale_id = :saleId
-       GROUP BY r.id, e.full_name
-       ORDER BY r.created_at DESC`,
-      {
-        replacements: { saleId: parseInt(req.params.id) },
-        type: Sequelize.QueryTypes.SELECT,
-      }
-    );
-    res.json({ ok: true, data: returns });
+    const saleId = parseInt(req.params.id);
+    const returns = await Return.findAll({
+      where: { sale_id: saleId },
+      include: [
+        { model: Employee, attributes: ['full_name'] },
+        { model: ReturnItem }
+      ],
+      order: [['created_at', 'DESC']]
+    });
+
+    const data = returns.map(r => {
+      const item = r.toJSON();
+      item.employee_name = item.Employee?.full_name || 'Desconocido';
+      item.items = item.ReturnItems;
+      delete item.Employee;
+      delete item.ReturnItems;
+      return item;
+    });
+
+    res.json({ ok: true, data });
   } catch (err) {
-    res.status(500).json({ ok: false, message: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, message: "Error al obtener devoluciones" });
   }
 };
 

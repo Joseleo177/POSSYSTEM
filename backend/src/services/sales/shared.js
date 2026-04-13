@@ -10,6 +10,10 @@ const {
   Serie,
   SerieRange,
   ProductComboItem,
+  CashSession,
+  CashSessionJournal,
+  Return,
+  ReturnItem,
   Sequelize,
   sequelize,
 } = require("../../models");
@@ -25,7 +29,10 @@ const SALE_INCLUDE = [
   { model: Serie, attributes: ["id", "name", "prefix"], required: false },
   { 
     model: SaleItem, 
-    include: [{ model: Product, attributes: ["id", "name"] }] 
+    include: [
+      { model: Product, attributes: ["id", "name"] },
+      { model: ReturnItem, attributes: ["qty"], required: false }
+    ] 
   }
 ];
 

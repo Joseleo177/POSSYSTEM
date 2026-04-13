@@ -15,6 +15,8 @@ const EMPTY_ITEM = {
   package_size: "",
   package_qty: 1,
   package_price: "",
+  lot_number: "",
+  expiration_date: "",
   profit_margin: 30,
   update_price: true,
 };

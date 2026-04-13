@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
 import { api } from "../services/api";
@@ -11,6 +11,8 @@ import { fmtMoney } from "../helpers";
 import { useDebounce } from "../hooks/useDebounce";
 import ConfirmModal from "../components/ui/ConfirmModal";
 import CustomSelect from "../components/ui/CustomSelect";
+import HeldCartsModal from "../components/HeldCartsModal";
+import { Button } from "../components/ui/Button";
 
 const fmt = fmtMoney;
 
@@ -30,6 +32,7 @@ export default function CobroPage() {
         selectedCustomer, setSelectedCustomer,
         employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
         checkout, loading, receipt, setReceipt,
+        heldCarts, holdCart, takeHeldCart, removeHeldCart,
     } = useCart();
 
     // ── Productos ──────────────────────────────────────────────
@@ -115,6 +118,128 @@ export default function CobroPage() {
     const [selectedCat, setSelectedCat] = useState("all");
     const [showConfirmCheckout, setShowConfirmCheckout] = useState(false);
     const [mobileTab, setMobileTab] = useState("products"); // "products" | "cart"
+    const [showHeldModal, setShowHeldModal] = useState(false);
+    const [selectedIndex, setSelectedIndex] = useState(-1);
+    const [selectedCustIdx, setSelectedCustIdx] = useState(-1);
+    const searchInputRef = useRef(null);
+
+    const filteredProducts = products.filter(p => {
+        const s = search.toLowerCase();
+        const nameMatch = (p.name || "").toLowerCase().includes(s);
+        const catMatch = (p.category_name || "").toLowerCase().includes(s);
+        const matchesSearch = nameMatch || catMatch;
+        return matchesSearch && (selectedCat === "all" || p.category_name === selectedCat);
+    });
+
+    // ── Atajos de Teclado ─────────────────────────────────────
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+
+            // Navegación en Buscador de Clientes
+            if (e.target.id === 'customer-search-input') {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSelectedCustIdx(prev => Math.min(prev + 1, customers.length - 1));
+                }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSelectedCustIdx(prev => Math.max(prev - 1, 0));
+                }
+                if (e.key === 'Enter' && selectedCustIdx >= 0) {
+                    e.preventDefault();
+                    const c = customers[selectedCustIdx];
+                    if (c) {
+                        setSelectedCustomer(c);
+                        setCustomers([]);
+                        setCustSearch("");
+                        setSelectedCustIdx(-1);
+                        searchInputRef.current?.focus(); // Volver al foco de productos
+                    }
+                }
+                return; // No procesar el resto de atajos si estamos en clientes
+            }
+
+            if (e.key === 'F1') {
+                e.preventDefault();
+                setSelectedIndex(-1);
+                searchInputRef.current?.focus();
+            }
+            if (e.key === 'F2') {
+                e.preventDefault();
+                document.getElementById('customer-search-input')?.focus();
+            }
+            if (e.key === 'F4') {
+                e.preventDefault();
+                holdCart();
+            }
+            if (e.key === 'F10') {
+                e.preventDefault();
+                if (cart.length > 0) setShowConfirmCheckout(true);
+            }
+            if (e.key === 'Escape') {
+                setSearch("");
+                setSelectedIndex(-1);
+                setShowPayModal(false);
+                setShowConfirmCheckout(false);
+                searchInputRef.current?.focus();
+            }
+
+            // Navegación en Grilla
+            if (e.key === 'ArrowDown') {
+                if (e.target === searchInputRef.current) {
+                    e.preventDefault();
+                    setSelectedIndex(0);
+                } else if (selectedIndex >= 0) {
+                    e.preventDefault();
+                    setSelectedIndex(prev => Math.min(prev + 4, filteredProducts.length - 1));
+                }
+            }
+            if (e.key === 'ArrowUp' && selectedIndex >= 0) {
+                e.preventDefault();
+                setSelectedIndex(prev => Math.max(prev - 4, -1));
+                if (selectedIndex < 4) searchInputRef.current?.focus();
+            }
+            if (e.key === 'ArrowRight' && selectedIndex >= 0) {
+                e.preventDefault();
+                setSelectedIndex(prev => Math.min(prev + 1, filteredProducts.length - 1));
+            }
+            if (e.key === 'ArrowLeft' && selectedIndex >= 0) {
+                e.preventDefault();
+                setSelectedIndex(prev => Math.max(prev - 1, 0));
+            }
+
+            // Seleccionar producto con Enter o Confirmar Venta
+            if (e.key === 'Enter') {
+                if (showConfirmCheckout) {
+                    e.preventDefault();
+                    setShowConfirmCheckout(false);
+                    checkout();
+                    return;
+                }
+                
+                if (selectedIndex >= 0) {
+                    e.preventDefault();
+                    const p = filteredProducts[selectedIndex];
+                    if (p) {
+                        addToCart(p);
+                        setTimeout(() => {
+                            const input = document.getElementById(`qty-input-${p.id}`);
+                            if (input) {
+                                input.focus();
+                                input.select(); 
+                            }
+                        }, 50);
+                    }
+                } else if (!isInput && cart.length > 0 && !receipt) {
+                    setShowConfirmCheckout(true);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [cart, holdCart, receipt, selectedIndex, filteredProducts, addToCart]);
 
     if (employeeWarehouses.length === 0) return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center p-10 animate-in fade-in duration-700">
@@ -135,44 +260,69 @@ export default function CobroPage() {
 
     if (receipt) {
         const statusLabel = currentStatus === "pagado" ? "Completado" : currentStatus === "parcial" ? "Abono Parcial" : "Pendiente";
-        const badgeClass = currentStatus === "pagado" ? "bg-green-500/10 text-green-500 border-green-500/20" : currentStatus === "parcial" ? "bg-brand-500/10 text-brand-500 border-brand-500/20" : "bg-danger/10 text-danger border-danger/20";
+        const badgeClass = currentStatus === "pagado" ? "bg-green-500/10 text-green-500 border-green-500/20" : currentStatus === "parcial" ? "bg-brand-500/10 text-brand-500 border-brand-500/20" : "bg-danger/10 text-danger border-danger/21";
 
         return (
-            <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-500">
-                <div className="w-full max-w-[540px] bg-white dark:bg-surface-dark-2 rounded-[48px] p-10 shadow-2xl border border-white/20 relative overflow-hidden">
-                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-brand-500/5 rounded-full blur-3xl pointer-events-none" />
-                    <div className="flex flex-col items-center mb-5 relative text-center">
-                        <div className={`w-24 h-24 rounded-[32px] border-2 flex items-center justify-center mb-4 shadow-xl ${badgeClass}`}>
-                            {currentStatus === "pagado" ? (
-                                <svg className="w-12 " fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                            ) : (
-                                <svg className="w-12 " fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 8v4l3 2" /></svg>
-                            )}
+            <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+                <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 rounded-xl shadow-2xl border border-border/20 dark:border-white/5 overflow-hidden">
+
+                    {/* Header estado */}
+                    <div className={`px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3 ${currentStatus === "pagado" ? "bg-success/5" : "bg-danger/5"}`}>
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${badgeClass}`}>
+                            {currentStatus === "pagado"
+                                ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2" /></svg>
+                            }
                         </div>
-                        <div className="text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-60 mb-2">Transacción Registrada</div>
-                        <h2 className="text-3xl font-black tracking-tight text-content dark:text-white font-display">Orden #{receipt.invoice_number || receipt.id}</h2>
+                        <div>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Transacción Registrada</div>
+                            <div className="text-sm font-black text-content dark:text-white">Orden #{receipt.invoice_number || receipt.id}</div>
+                        </div>
+                        <div className={`ml-auto text-[11px] font-black uppercase tracking-wide px-2.5 py-1 rounded-lg border ${badgeClass}`}>
+                            {statusLabel}
+                        </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 mb-5 relative">
-                        <div className="bg-surface-1 dark:bg-white/5 p-5 rounded-[32px] border border-border/40 dark:border-white/5">
-                            <div className="text-[11px] font-black text-content-subtle uppercase tracking-wide mb-2 opacity-60">Importe Total</div>
-                            <div className="text-3xl font-black text-brand-500 tracking-tighter font-display tabular-nums">{fmtSale(receipt.total)}</div>
-                        </div>
-                        <div className="bg-surface-1 dark:bg-white/5 p-5 rounded-[32px] border border-border/40 dark:border-white/5">
-                            <div className="text-[11px] font-black text-content-subtle uppercase tracking-wide mb-2 opacity-60">Status</div>
-                            <div className={`text-[11px] font-black tracking-wide uppercase mt-1 px-4 py-2 rounded-full inline-block border ${badgeClass}`}>
-                                {statusLabel}
+
+                    {/* Totales */}
+                    <div className="px-5 py-4 space-y-2 border-b border-border/20 dark:border-white/5">
+                        {parseFloat(receipt.discount_amount) > 0 && (
+                            <div className="flex justify-between items-center">
+                                <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 uppercase tracking-wide">Subtotal</span>
+                                <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 tabular-nums">{fmtSale(parseFloat(receipt.total) + parseFloat(receipt.discount_amount || 0))}</span>
                             </div>
+                        )}
+                        {parseFloat(receipt.discount_amount) > 0 && (
+                            <div className="flex justify-between items-center">
+                                <span className="text-[11px] font-bold text-danger uppercase tracking-wide">Descuento</span>
+                                <span className="text-[11px] font-bold text-danger tabular-nums">-{fmtSale(receipt.discount_amount)}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between items-center pt-1">
+                            <span className="text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40">Total a Pagar</span>
+                            <span className="text-xl font-black text-brand-500 tabular-nums">{fmtSale(receipt.total)}</span>
                         </div>
                     </div>
-                    <div className="flex flex-col gap-4 relative">
+
+                    {/* Acciones */}
+                    <div className="px-5 py-4 flex flex-col gap-2">
                         {currentStatus !== "pagado" && (
-                            <button onClick={() => setShowPayModal(true)} className="btn-primary !h-16 !rounded-[24px] !bg-green-500 hover:!bg-green-600 shadow-xl shadow-green-500/20 text-[11px] uppercase tracking-wide">
+                            <Button
+                                onClick={() => setShowPayModal(true)}
+                                className="w-full h-9 bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
                                 Registrar Pago Inmediato
-                            </button>
+                            </Button>
                         )}
-                        <div className="flex gap-4">
-                            <button onClick={() => setShowReceiptModal(true)} className="flex-1 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 text-content dark:text-white rounded-[24px] font-black text-[11px] uppercase tracking-wide hover:bg-surface-3 transition-all">Ver Ticket</button>
-                            <button onClick={() => { setReceipt(null); setSaleBalance(null); setShowPayModal(false); }} className="flex-1 bg-brand-500 text-brand-900 rounded-[24px] font-black text-[11px] uppercase tracking-wide hover:bg-brand-600 shadow-lg shadow-brand-500/20 transition-all">Siguiente</button>
+                        <div className="flex gap-2">
+                            <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="flex-1 h-9 border border-border/30 dark:border-white/10">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                Ver Ticket
+                            </Button>
+                            <Button onClick={() => { setReceipt(null); setSaleBalance(null); setShowPayModal(false); }} className="flex-1 h-9 shadow-none">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                Siguiente
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -191,13 +341,7 @@ export default function CobroPage() {
         );
     }
 
-    const filteredProducts = products.filter(p => {
-        const s = search.toLowerCase();
-        const nameMatch = (p.name || "").toLowerCase().includes(s);
-        const catMatch = (p.category_name || "").toLowerCase().includes(s);
-        const matchesSearch = nameMatch || catMatch;
-        return matchesSearch && (selectedCat === "all" || p.category_name === selectedCat);
-    });
+
 
     return (
         <div className="h-full flex flex-col lg:flex-row bg-[#f8f9fc] dark:bg-[#080808] text-content dark:text-content-dark overflow-hidden font-sans animate-in fade-in duration-1000">
@@ -227,13 +371,27 @@ export default function CobroPage() {
                             <h2 className="text-[11px] font-black text-content dark:text-white tracking-wide uppercase leading-none">Checkout</h2>
                         </div>
                         {cashSession && (
-                            <button
-                                onClick={() => setShowCierre(true)}
-                                className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 px-4 py-2 rounded-full cursor-pointer hover:bg-green-500/20 transition-all group"
-                            >
-                                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse group-hover:scale-125 transition-transform" />
-                                <span className="text-[11px] font-black uppercase tracking-wide text-green-500">Sesión Abierta</span>
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowHeldModal(true)}
+                                    className="relative w-9 h-9 rounded-full bg-surface-2 dark:bg-white/5 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all group"
+                                    title="Cuentas en espera"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2m9-.828l-1.414-1.414M3.707 18.293V21h2.707l14.586-14.586a2 2 0 10-2.828-2.828L3.707 18.293z" /></svg>
+                                    {heldCarts.length > 0 && (
+                                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-500 text-brand-900 text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-[#0c0c0c]">
+                                            {heldCarts.length}
+                                        </span>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => setShowCierre(true)}
+                                    className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 px-4 py-2 rounded-full cursor-pointer hover:bg-green-500/20 transition-all group"
+                                >
+                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse group-hover:scale-125 transition-transform" />
+                                    <span className="text-[11px] font-black uppercase tracking-wide text-green-500">Sesión Abierta</span>
+                                </button>
+                            </div>
                         )}
                     </div>
 
@@ -277,7 +435,15 @@ export default function CobroPage() {
                                 </div>
                             ) : (
                                 <>
-                                    <input spellCheck={false} autoComplete="off" value={custSearch} onChange={e => setCustSearch(e.target.value)} placeholder="BUSCAR CLIENTE..." className="input !pl-10 relative z-10" />
+                                    <input
+                                        id="customer-search-input"
+                                        spellCheck={false}
+                                        autoComplete="off"
+                                        value={custSearch}
+                                        onChange={e => setCustSearch(e.target.value)}
+                                        placeholder="BUSCAR CLIENTE... (F2)"
+                                        className="input !pl-10 relative z-10"
+                                    />
                                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-content-subtle opacity-60 z-20 pointer-events-none">
                                         <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                                     </div>
@@ -286,8 +452,14 @@ export default function CobroPage() {
                             )}
                             {!selectedCustomer && customers.length > 0 && (
                                 <div className="absolute top-full left-0 right-0 mt-1 bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-xl shadow-2xl z-[100] max-h-56 overflow-y-auto">
-                                    {customers.map(c => (
-                                        <button key={c.id} onClick={() => { setSelectedCustomer(c); setCustomers([]); setCustSearch(""); }} className="w-full text-left px-4 cursor-pointer border-b border-border/50 dark:border-border-dark/50 hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors group">
+                                    {customers.map((c, idx) => (
+                                        <button 
+                                            key={c.id} 
+                                            onClick={() => { setSelectedCustomer(c); setCustomers([]); setCustSearch(""); setSelectedCustIdx(-1); }} 
+                                            onMouseEnter={() => setSelectedCustIdx(idx)}
+                                            className={`w-full text-left px-4 py-2 cursor-pointer border-b border-border/50 dark:border-border-dark/50 transition-colors group flex flex-col
+                                                ${idx === selectedCustIdx ? "bg-brand-500/20 border-l-4 border-l-brand-500" : "hover:bg-surface-3 dark:hover:bg-surface-dark-3"}`}
+                                        >
                                             <div className="text-sm font-bold text-brand-500 dark:text-brand-400 truncate">{c.name}</div>
                                             <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">{c.rif || "Sin datos adicionales"}</div>
                                         </button>
@@ -301,18 +473,24 @@ export default function CobroPage() {
                                 <span className="text-xs opacity-40">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                 </span>
-                                <select value={currentCurrency?.id || ""} onChange={e => setSelectedCurrency(activeCurrencies.find(x => x.id === parseInt(e.target.value)))} className="bg-transparent flex-1 h-9 text-[11px] font-black outline-none border-none p-0 dark:text-white">
-                                    {activeCurrencies.map(c => <option key={c.id} value={c.id} className="dark:bg-[#0c0c0c]">{c.code}</option>)}
-                                </select>
+                                <CustomSelect
+                                    value={currentCurrency?.id || ""}
+                                    onChange={val => setSelectedCurrency(activeCurrencies.find(x => x.id === parseInt(val)))}
+                                    options={activeCurrencies.map(c => ({ value: c.id, label: c.code }))}
+                                    className="!p-0 !bg-transparent !border-none !text-[11px] flex-1"
+                                />
                             </div>
                             <div className="flex-1 bg-surface-1 dark:bg-white/5 rounded-2xl flex items-center px-4 gap-2 border border-black/5 dark:border-white/5">
                                 <span className="text-xs opacity-40">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                 </span>
-                                <select value={selectedSerieId || ""} onChange={e => selectSerie(parseInt(e.target.value))} className="bg-transparent flex-1 h-9 text-[11px] font-black outline-none border-none p-0 dark:text-white">
-                                    <option value="" disabled className="dark:bg-[#0c0c0c]">SERIE...</option>
-                                    {mySeries.map(s => <option key={s.id} value={s.id} className="dark:bg-[#0c0c0c]">{s.name}</option>)}
-                                </select>
+                                <CustomSelect
+                                    value={selectedSerieId || ""}
+                                    onChange={val => selectSerie(parseInt(val))}
+                                    options={mySeries.map(s => ({ value: s.id, label: s.name }))}
+                                    placeholder="SERIE..."
+                                    className="!p-0 !bg-transparent !border-none !text-[11px] flex-1"
+                                />
                             </div>
                         </div>
                     </div>
@@ -320,34 +498,40 @@ export default function CobroPage() {
                     <div className="flex-1 overflow-y-auto space-y-3 scrollbar-hide pt-2">
                         {cart.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center opacity-30 gap-3 py-8">
-                                <div className="w-14 rounded-2xl bg-surface-2 dark:bg-white/5 flex items-center justify-center text-content-subtle opacity-20">
-                                    <svg className="w-12 " fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                                <div className="w-14 h-14 rounded-2xl bg-surface-2 dark:bg-white/5 flex items-center justify-center text-content-subtle opacity-20">
+                                    <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                                 </div>
                                 <div className="text-[11px] font-black tracking-wide uppercase text-center dark:text-white">Inicia una venta</div>
                             </div>
                         ) : (
                             cart.map(i => (
-                                <div key={i.id} className="bg-surface-1 dark:bg-white/5 p-4 rounded-[28px] flex items-center gap-4 group transition-all">
-                                    <div className="w-12 rounded-xl bg-surface-2 dark:bg-white/5 flex items-center justify-center text-xl shrink-0 overflow-hidden relative">
-                                        {i.image_url ? <img src={i.image_url} className="w-full h-full object-cover" /> : <div className="text-sm opacity-20 dark:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></div>}
+                                <div key={i.id} className="bg-surface-1 dark:bg-white/5 p-3 rounded-[24px] flex items-center gap-3 group transition-all border border-black/5 dark:border-white/5">
+                                    <div className="w-12 h-12 rounded-xl bg-surface-2 dark:bg-white/5 flex items-center justify-center text-xl shrink-0 overflow-hidden relative">
+                                        {i.image_url ? <img src={i.image_url} className="w-full h-full object-cover" /> : <div className="text-sm opacity-20 dark:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>}
                                         <button onClick={() => removeFromCart(i.id)} className="absolute inset-0 bg-danger/80 text-white opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                                         </button>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="text-[11px] font-black truncate dark:text-white">{i.name}</div>
-                                        <div className="text-[11px] font-black text-brand-500 mt-1">{fmt(convertToDisplay(i.price), currSym)}</div>
+                                        <div className="text-[11px] font-black truncate dark:text-white uppercase tracking-wide leading-tight">{i.name}</div>
+                                        <div className="text-[11px] font-black text-brand-500 mt-0.5">{fmt(convertToDisplay(i.price), currSym)}</div>
                                     </div>
-                                    <div className="flex items-center bg-surface-2 dark:bg-black/20 p-1 rounded-xl shadow-inner border border-black/5 dark:border-white/5">
-                                        <button onClick={() => changeQty(i.id, -1)} className="w-8 h-8 rounded-lg font-black dark:text-white">-</button>
+                                    <div className="flex items-center bg-surface-2 dark:bg-black/20 p-1 rounded-xl border border-black/5 dark:border-white/5 shrink-0">
+                                        <button onClick={() => changeQty(i.id, -1)} className="w-7 h-7 rounded-lg font-black dark:text-white hover:bg-white/10">-</button>
                                         <input
+                                            id={`qty-input-${i.id}`}
                                             type="number"
-                                            step={["unidad", "kg", "litro", "metro"].includes(i.unit?.toLowerCase()) ? "1" : (i.qty_step || "0.01")}
                                             value={i.qty}
                                             onChange={e => setQtyDirect(i.id, e.target.value)}
-                                            className="w-12 bg-transparent text-center text-[11px] font-black border-none outline-none dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    searchInputRef.current?.focus();
+                                                }
+                                            }}
+                                            className="w-10 bg-transparent text-center text-[11px] font-black border-none outline-none dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0"
                                         />
-                                        <button onClick={() => changeQty(i.id, 1)} className="w-8 h-8 rounded-lg font-black dark:text-white">+</button>
+                                        <button onClick={() => changeQty(i.id, 1)} className="w-7 h-7 rounded-lg font-black dark:text-white hover:bg-white/10">+</button>
                                     </div>
                                 </div>
                             ))
@@ -387,9 +571,19 @@ export default function CobroPage() {
                                 <div className="text-2xl font-black tracking-tighter tabular-nums font-display dark:text-white">{fmt(totalDisplay, currSym)}</div>
                             </div>
                         </div>
-                        <button onClick={() => setShowConfirmCheckout(true)} disabled={loading || cart.length === 0} className="w-full bg-brand-500 text-brand-900 py-3.5 rounded-2xl font-black uppercase tracking-wide shadow-xl shadow-brand-500/20 active:scale-95 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                            {loading ? "PROCESANDO..." : "FINALIZAR VENTA"}
-                        </button>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={holdCart} 
+                                disabled={cart.length === 0}
+                                className="w-14 h-14 rounded-2xl bg-surface-2 dark:bg-white/5 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all disabled:opacity-30 shrink-0"
+                                title="Poner en espera"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2m9-.828l-1.414-1.414M3.707 18.293V21h2.707l14.586-14.586a2 2 0 10-2.828-2.828L3.707 18.293z" /></svg>
+                            </button>
+                            <button onClick={() => setShowConfirmCheckout(true)} disabled={loading || cart.length === 0} className="flex-1 bg-brand-500 text-brand-900 py-3.5 rounded-2xl font-black uppercase tracking-wide shadow-xl shadow-brand-500/20 active:scale-95 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                                {loading ? "PROCESANDO..." : "FINALIZAR VENTA"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </aside>
@@ -409,25 +603,49 @@ export default function CobroPage() {
                         )}
                     </button>
                 </div>
-                <div className="flex items-center gap-2 overflow-x-auto mb-3 pb-1 scrollbar-hide">
-                    <button onClick={() => setSelectedCat("all")} className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide border-2 transition-all whitespace-nowrap ${selectedCat === "all" ? "bg-brand-500 text-brand-900 border-brand-500" : "bg-white dark:bg-white/5 border-transparent dark:text-white"}`}>TODOS</button>
-                    {categories.map(cat => <button key={cat.id} onClick={() => setSelectedCat(cat.name)} className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide border-2 transition-all whitespace-nowrap ${selectedCat === cat.name ? "bg-brand-500 text-brand-900 border-brand-500" : "bg-white dark:bg-white/5 border-transparent dark:text-white"}`}>{cat.name}</button>)}
-                </div>
-                <div className="relative mb-3">
-                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="BUSCAR PRODUCTO..." className="w-full bg-white dark:bg-surface-dark-2 px-10 rounded-xl text-xs font-black tracking-wide outline-none shadow dark:text-white dark:placeholder-white/20" />
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-500 opacity-40">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                {/* Barra de búsqueda + filtro de categoría */}
+                <div className="flex items-center gap-2 mb-3">
+                    <div className="relative flex-1">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle opacity-40 pointer-events-none">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        </div>
+                        <input
+                            ref={searchInputRef}
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIndex(0); }
+                            }}
+                            placeholder="Buscar producto... (F1)"
+                            className="input !pl-10 w-full"
+                        />
+                    </div>
+                    <div className="relative shrink-0">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40 z-10 w-4 h-4 flex items-center justify-center">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" /></svg>
+                        </div>
+                        <CustomSelect
+                            value={selectedCat}
+                            onChange={val => setSelectedCat(val)}
+                            options={[
+                                { value: "all", label: "Todas las categorías" },
+                                ...categories.map(cat => ({ value: cat.name, label: cat.name }))
+                            ]}
+                            className="!pl-9 min-w-[140px] !text-[11px] font-black uppercase tracking-wide h-10"
+                        />
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto pr-2 pb-4 scrollbar-hide">
                     <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
-                        {filteredProducts.map(p => {
+                        {filteredProducts.map((p, idx) => {
                             const outOfStock = !p.is_service && (p.stock ?? 0) <= 0;
+                            const isSelected = idx === selectedIndex;
                             return (
                                 <div key={p.id}
                                     onClick={() => !outOfStock && addToCart(p)}
-                                    className={`group bg-white dark:bg-surface-dark-2 rounded-xl overflow-hidden transition-all shadow border-2 border-transparent
- ${outOfStock ? "opacity-40 cursor-not-allowed" : "hover:-translate-y-0.5 cursor-pointer hover:border-brand-500/50"}`}
+                                    className={`group bg-white dark:bg-surface-dark-2 rounded-xl overflow-hidden transition-all shadow border-2 
+                                        ${isSelected ? "border-brand-500 shadow-lg shadow-brand-500/20 scale-105 z-10" : "border-transparent"}
+                                        ${outOfStock ? "opacity-40 cursor-not-allowed" : "hover:-translate-y-0.5 cursor-pointer hover:border-brand-500/50"}`}
                                 >
                                     <div className="aspect-[4/3] bg-surface-1 dark:bg-white/5 relative overflow-hidden">
                                         {p.image_url ? <img src={p.image_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center opacity-10 dark:text-white"><svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>}
@@ -447,10 +665,33 @@ export default function CobroPage() {
                         })}
                     </div>
                 </div>
+                {/* Legend - Atajos de teclado */}
+                <div className="px-6 py-3 border-t border-border/40 dark:border-white/5 bg-surface-1 dark:bg-white/[0.02] flex gap-5 overflow-x-auto scrollbar-hide shrink-0 rounded-b-[40px] mt-auto">
+                    {[
+                        { k: 'F1', l: 'Buscar' },
+                        { k: 'F2', l: 'Cliente' },
+                        { k: 'F4', l: 'Pausar' },
+                        { k: 'F10', l: 'Cobrar' },
+                        { k: 'Esc', l: 'Limpiar' },
+                    ].map(s => (
+                        <div key={s.k} className="flex items-center gap-2 shrink-0">
+                            <kbd className="px-2 py-0.5 rounded-lg bg-white dark:bg-white/10 border-b-2 border-black/10 dark:border-white/10 text-[10px] font-black text-brand-500 shadow-sm">{s.k}</kbd>
+                            <span className="text-[10px] font-black uppercase tracking-widest opacity-40 dark:text-white">{s.l}</span>
+                        </div>
+                    ))}
+                </div>
             </main>
 
 
             <CustomerModal open={customerModal} onClose={() => setCustomerModal(false)} onSave={saveCustomer} />
+            <HeldCartsModal 
+                open={showHeldModal} 
+                onClose={() => setShowHeldModal(false)} 
+                carts={heldCarts} 
+                onTake={(id) => { takeHeldCart(id); setShowHeldModal(false); }}
+                onRemove={removeHeldCart}
+                baseCurrency={baseCurrency}
+            />
             {showApertura && (
                 <AperturaCajaModal
                     employee={employee}

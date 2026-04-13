@@ -1,4 +1,4 @@
-const { Sale, SaleItem, Product, Customer, Employee, Purchase, PurchaseItem, Warehouse, Sequelize, sequelize } = require("../models");
+const { Sale, SaleItem, Product, Customer, Employee, Purchase, PurchaseItem, ProductLot, Warehouse, Sequelize, sequelize } = require("../models");
 const { Op } = Sequelize;
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -18,16 +18,26 @@ const getSalesReport = async (req, res) => {
 
     const [summary, byMethod, byDay, byEmployee, byHour] = await Promise.all([
 
-      // Resumen general — ingresos solo de ventas pagadas
+      // Resumen general — ingresos solo de ventas pagadas, descontando devoluciones
       sequelize.query(
         `SELECT
            COUNT(*)::int AS total_sales,
-           COALESCE(SUM(CASE WHEN status = 'pagado' THEN total ELSE 0 END), 0)::float AS total_revenue,
+           (COALESCE(SUM(CASE WHEN status = 'pagado' THEN total ELSE 0 END), 0) - 
+            COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id 
+                      WHERE s2.status = 'pagado' 
+                        ${date_from ? `AND s2.created_at >= '${date_from}'` : ""}
+                        ${date_to   ? `AND s2.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
+                     ), 0))::float AS total_revenue,
            COALESCE(AVG(CASE WHEN status = 'pagado' THEN total END), 0)::float AS avg_ticket,
            COALESCE(MAX(CASE WHEN status = 'pagado' THEN total END), 0)::float AS max_sale,
            COALESCE(MIN(CASE WHEN status = 'pagado' THEN total END), 0)::float AS min_sale,
            COUNT(CASE WHEN status IN ('pendiente','parcial') THEN 1 END)::int AS pending_count,
-           COALESCE(SUM(CASE WHEN status IN ('pendiente','parcial') THEN total ELSE 0 END), 0)::float AS pending_amount
+           COALESCE(SUM(CASE WHEN status IN ('pendiente','parcial') THEN total ELSE 0 END), 0)::float AS pending_amount,
+           COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id 
+                      WHERE s2.status = 'pagado' 
+                        ${date_from ? `AND s2.created_at >= '${date_from}'` : ""}
+                        ${date_to   ? `AND s2.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
+                     ), 0)::float AS total_returned
          FROM sales
          WHERE TRUE
            ${date_from ? `AND created_at >= '${date_from}'` : ""}
@@ -83,16 +93,16 @@ const getSalesReport = async (req, res) => {
         { type: Sequelize.QueryTypes.SELECT }
       ),
 
-      // Por hora del día (solo ventas pagadas)
+      // Por hora del día (solo ventas pagadas, hora local Venezuela UTC-4)
       sequelize.query(
-        `SELECT EXTRACT(HOUR FROM created_at)::int AS hour,
+        `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Caracas')::int AS hour,
                 COUNT(*)::int AS count,
                 COALESCE(SUM(total), 0)::float AS revenue
          FROM sales
          WHERE status = 'pagado'
            ${date_from ? `AND created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
-         GROUP BY EXTRACT(HOUR FROM created_at)
+         GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Caracas')
          ORDER BY hour ASC`,
         { type: Sequelize.QueryTypes.SELECT }
       ),
@@ -110,6 +120,7 @@ const getSalesReport = async (req, res) => {
           min_sale:       parseFloat(s.min_sale       || 0),
           pending_count:  parseInt(s.pending_count  || 0),
           pending_amount: parseFloat(s.pending_amount || 0),
+          total_returned: parseFloat(s.total_returned || 0),
         },
         by_method:   byMethod,
         by_day:      byDay,
@@ -375,7 +386,7 @@ const getInventoryReport = async (req, res) => {
     const { days = 30, warehouse_id } = req.query; // rotation window
 
     const stockField = warehouse_id ? `COALESCE(ps.qty, 0)` : `p.stock`;
-    const stockJoin = warehouse_id ? `LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = ${parseInt(warehouse_id)}` : ``;
+    const stockJoin = warehouse_id ? `JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = ${parseInt(warehouse_id)}` : ``;
 
     const [criticalStock, zeroStock, rotation, byCategory, topRotation, lowRotation] = await Promise.all([
 
@@ -832,6 +843,35 @@ const getAuditReport = async (req, res) => {
   }
 };
 
+// ── GET /api/reports/expiry ────────────────────────────────────
+const getExpiryReport = async (req, res) => {
+  try {
+    const lots = await ProductLot.findAll({
+      where: { qty: { [Op.gt]: 0 } },
+      include: [
+        { model: Product, as: 'product', attributes: ['name', 'unit'] },
+        { model: Warehouse, as: 'warehouse', attributes: ['name'] }
+      ],
+      order: [['expiration_date', 'ASC']]
+    });
+
+    const data = lots.map(l => ({
+      id: l.id,
+      product: l.product?.name || "Producto desconocido",
+      lot: l.lot_number,
+      expiry: l.expiration_date,
+      stock: l.qty,
+      unit: l.product?.unit || "uds",
+      warehouse: l.warehouse?.name || "N/A"
+    }));
+
+    res.json({ ok: true, data });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, message: "Error al generar reporte de vencimientos" });
+  }
+};
+
 module.exports = {
   getSalesReport,
   getProductsReport,
@@ -841,4 +881,5 @@ module.exports = {
   getMarginsReport,
   getCustomersAnalysis,
   getAuditReport,
+  getExpiryReport,
 };

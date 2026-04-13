@@ -20,7 +20,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
     <div ref={ref} className={`relative ${className}`}>
       <div 
         onClick={() => setOpen(!open)}
-        className="input cursor-pointer flex items-center justify-between !bg-white dark:!bg-surface-dark-2"
+        className="input h-8 text-[11px] cursor-pointer flex items-center justify-between !bg-white dark:!bg-surface-dark-2"
       >
         <span className={selectedOption ? "text-content dark:text-content-dark font-black tracking-wide" : "text-content-subtle opacity-60"}>
           {selectedOption ? selectedOption.label : placeholder}
@@ -29,12 +29,12 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
       </div>
 
       {open && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-2xl shadow-2xl z-[100] max-h-60 overflow-y-auto animate-in slide-in-from-top-2 fade-in duration-200">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[100] max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
           {options.map((opt, i) => (
             <div 
               key={opt.value}
               onClick={() => { onChange(opt.value); setOpen(false); }}
-              className={`px-5 py-3.5 cursor-pointer flex items-center gap-2 text-sm font-bold tracking-wide transition-colors
+              className={`px-4 py-2.5 cursor-pointer flex items-center gap-2 text-[11px] font-black uppercase tracking-wide transition-colors
                 ${String(value) === String(opt.value) 
                   ? "bg-brand-500/10 text-brand-500" 
                   : "hover:bg-surface-2 dark:hover:bg-white/5 text-content dark:text-content-dark"}

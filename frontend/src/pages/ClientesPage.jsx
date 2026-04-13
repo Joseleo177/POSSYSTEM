@@ -37,12 +37,17 @@ export default function ClientesPage() {
                     </div>
 
                     {/* Filtros rápidos */}
-                    <div className="px-4 py-2 bg-white/[0.02]">
-                        <input
-                            value={search} onChange={e => setSearch(e.target.value)}
-                            className="h-8 w-full max-w-xs px-3 bg-white/5 border border-white/10 rounded-lg text-[11px] focus:border-brand-500 outline-none"
-                            placeholder="Buscar Contacto..."
-                        />
+                    <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5">
+                        <div className="relative max-w-xs">
+                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            <input
+                                value={search} onChange={e => setSearch(e.target.value)}
+                                className="input h-8 pl-8 text-[11px] w-full"
+                                placeholder="Buscar contacto..."
+                            />
+                        </div>
                     </div>
 
                     <CustomerTable

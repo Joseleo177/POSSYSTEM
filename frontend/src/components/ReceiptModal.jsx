@@ -9,10 +9,10 @@ function normalizeSale(sale) {
     return {
         id: sale.id,
         invoice_number: sale.invoice_number || null,
-        total: sale.total,
-        paid: sale.paid,
-        change: sale.change,
-        discount: sale.discount_amount || 0,
+        total: parseFloat(sale.total || 0),
+        paid: parseFloat(sale.paid || 0),
+        change: parseFloat(sale.change || 0),
+        discount: parseFloat(sale.discount_amount || sale.discount || 0),
         created_at: sale.created_at,
         items: (sale.items || []).map(i => ({
             ...i,
@@ -122,6 +122,9 @@ function printReceipt(sale, companyInfo, displayCurrency) {
  </table>
 
  <div class="totals">
+ <div class="row">
+ <span>SUBTOTAL</span><span>${fmtP(s.total + s.discount)}</span>
+ </div>
  ${s.discount > 0 ? `
  <div class="row discount">
  <span>DESCUENTO</span><span>-${fmtP(s.discount)}</span>
@@ -253,10 +256,14 @@ export default function ReceiptModal({ open, onClose, sale }) {
 
             {/* Totales */}
             <div className="border-t border-border dark:border-border-dark pt-2.5 mb-4">
+                <div className="flex justify-between items-center py-1 text-sm">
+                    <span className="text-content-muted dark:text-content-dark-muted">Subtotal</span>
+                    <span className="text-content dark:text-content-dark font-medium">{fmtP(s.total + s.discount)}</span>
+                </div>
                 {s.discount > 0 && (
-                    <div className="flex justify-between items-center py-1.5 text-sm">
-                        <span className="text-content-muted dark:text-content-dark-muted">Descuento</span>
-                        <span className="text-danger font-medium">-{fmtP(s.discount)}</span>
+                    <div className="flex justify-between items-center py-1 text-sm text-danger">
+                        <span className="font-medium">Descuento</span>
+                        <span className="font-bold">-{fmtP(s.discount)}</span>
                     </div>
                 )}
                 <div className="flex justify-between items-center py-1.5 border-t border-border dark:border-border-dark mt-1 pt-1.5">

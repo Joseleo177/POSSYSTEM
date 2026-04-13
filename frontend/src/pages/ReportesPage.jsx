@@ -9,6 +9,7 @@ import AuditReport from "./reportes/AuditReport";
 import ReceivablesReport from "./reportes/ReceivablesReport";
 import PurchasesReport from "./reportes/PurchasesReport";
 import CashSessionsReport from "./reportes/CashSessionsReport";
+import ExpiryReport from "./reportes/ExpiryReport";
 
 const TABS = [
  { key: "ventas", label: "Ventas" },
@@ -19,6 +20,7 @@ const TABS = [
  { key: "cobrar", label: "Cobrar" },
  { key: "compras", label: "Compras" },
  { key: "sesiones", label: "Cajas" },
+ { key: "vencimientos", label: "Vencimientos" },
 ];
 
 export default function ReportesPage() {
@@ -75,6 +77,7 @@ export default function ReportesPage() {
  {tab === "cobrar" && <ReceivablesReport />}
  {tab === "compras" && <PurchasesReport />}
  {tab === "sesiones" && <CashSessionsReport />}
+ {tab === "vencimientos" && <ExpiryReport />}
  </div>
  </div>
  );

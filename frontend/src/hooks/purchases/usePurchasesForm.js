@@ -119,6 +119,8 @@ export function usePurchasesForm({
             package_size: "",
             package_qty: 1,
             package_price: "",
+            lot_number: "",
+            expiration_date: "",
             update_price: true,
             profit_margin: prev.profit_margin,
         }));
@@ -144,6 +146,8 @@ export function usePurchasesForm({
             package_size: "",
             package_qty: 1,
             package_price: "",
+            lot_number: "",
+            expiration_date: "",
             profit_margin: 30,
             update_price: true,
         });

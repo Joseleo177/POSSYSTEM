@@ -27,7 +27,8 @@ function SalesChart({ data }) {
  const pad = { top: 16, right: 12, bottom: 32, left: 48 };
  const chartW = W - pad.left - pad.right;
  const chartH = H - pad.top - pad.bottom;
- const barW = Math.max(3, chartW / data.length - 3);
+ const slotW = chartW / data.length;
+ const barW = Math.min(40, Math.max(3, slotW - 3));
  ctx.clearRect(0, 0, W, H);
  ctx.strokeStyle = "rgba(200,200,200,0.08)"; ctx.lineWidth = 1;
  for (let i = 0; i <= 4; i++) {
@@ -38,7 +39,7 @@ function SalesChart({ data }) {
  ctx.fillText(fmt(maxRev * (1 - i / 4), 0), pad.left - 5, y + 3);
  }
  data.forEach((d, i) => {
- const x = pad.left + i * (chartW / data.length) + (chartW / data.length - barW) / 2;
+ const x = pad.left + i * slotW + (slotW - barW) / 2;
  const barH = (d.revenue / maxRev) * chartH;
  const y = pad.top + chartH - barH;
  const grad = ctx.createLinearGradient(0, y, 0, pad.top + chartH);
