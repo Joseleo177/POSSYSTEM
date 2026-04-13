@@ -1,11 +1,20 @@
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
 
-const EMPTY = { from_warehouse_id: "", to_warehouse_id: "", product_id: "", qty: "", note: "" };
+const EMPTY = { from_warehouse_id: "", to_warehouse_id: "", qty: "", note: "" };
 
-export default function TransferModal({ open, onClose, warehouses, products, transferForm, setTransferForm, doTransfer, loadingTransfer }) {
+export default function TransferModal({
+    open, onClose, warehouses,
+    transferProductSearch, setTransferProductSearch,
+    transferProductResults, setTransferProductResults,
+    transferProductSelected, setTransferProductSelected,
+    transferForm, setTransferForm, doTransfer, loadingTransfer
+}) {
     const handleClose = () => {
         setTransferForm(EMPTY);
+        setTransferProductSearch("");
+        setTransferProductResults([]);
+        setTransferProductSelected(null);
         onClose();
     };
 
@@ -47,14 +56,40 @@ export default function TransferModal({ open, onClose, warehouses, products, tra
             <div className="grid grid-cols-[2fr_1fr] gap-3 mb-3">
                 <div>
                     <div className="label mb-1">Producto *</div>
-                    <select
-                        value={transferForm.product_id}
-                        onChange={e => setTransferForm(p => ({ ...p, product_id: e.target.value }))}
-                        className="input"
-                    >
-                        <option value="">Seleccionar producto</option>
-                        {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    {transferProductSelected ? (
+                        <div className="input h-8 flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-black truncate">{transferProductSelected.name}</span>
+                            <button
+                                onClick={() => { setTransferProductSelected(null); setTransferProductSearch(""); setTransferProductResults([]); }}
+                                className="text-content-subtle hover:text-danger flex-shrink-0"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="relative">
+                            <input
+                                value={transferProductSearch}
+                                onChange={e => setTransferProductSearch(e.target.value)}
+                                placeholder="Buscar producto..."
+                                className="input h-8 pl-8 text-[11px]"
+                            />
+                            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            {transferProductResults.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+                                    {transferProductResults.map(p => (
+                                        <div
+                                            key={p.id}
+                                            onClick={() => { setTransferProductSelected(p); setTransferProductSearch(""); setTransferProductResults([]); }}
+                                            className="px-3 py-2 text-[11px] font-black uppercase tracking-wide cursor-pointer hover:bg-surface-2 dark:hover:bg-white/5 border-b border-border/20 last:border-0"
+                                        >
+                                            {p.name}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
                 <div>
                     <div className="label mb-1">Cantidad *</div>

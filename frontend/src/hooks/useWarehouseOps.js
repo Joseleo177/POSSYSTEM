@@ -31,7 +31,10 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
 
   // ── Transferencias ─────────────────────────────────────────
   const [transfers, setTransfers]     = useState([]);
-  const [products, setProducts]       = useState([]);
+  const [transferProductSearch, setTransferProductSearch] = useState("");
+  const debouncedTransferProductSearch = useDebounce(transferProductSearch, 250);
+  const [transferProductResults, setTransferProductResults] = useState([]);
+  const [transferProductSelected, setTransferProductSelected] = useState(null);
   const [transferForm, setTransferForm] = useState(EMPTY_TRANSFER);
   const [loadingTransfer, setLoadingTransfer] = useState(false);
   const [transferModal, setTransferModal]     = useState(false);
@@ -54,15 +57,13 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
     } catch (e) { notify(e.message, "err"); }
   }, [notify]);
 
-  const loadProducts = useCallback(async () => {
-    try {
-      const r = await api.products.getAll({ is_combo: false, is_service: false });
-      setProducts(r.data);
-    } catch (e) {}
-  }, []);
-
   // ── Effects ────────────────────────────────────────────────
-  useEffect(() => { loadProducts(); }, [loadProducts]);
+  useEffect(() => {
+    if (!debouncedTransferProductSearch.trim()) { setTransferProductResults([]); return; }
+    api.products.getAll({ search: debouncedTransferProductSearch, is_combo: false, is_service: false, limit: 10 })
+      .then(r => setTransferProductResults(r.data))
+      .catch(() => {});
+  }, [debouncedTransferProductSearch]);
 
   useEffect(() => {
     if (!debouncedAddStockSearch.trim()) { setAddStockResults([]); return; }
@@ -116,7 +117,8 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
 
   // ── Transferencias ─────────────────────────────────────────
   const doTransfer = async () => {
-    const { from_warehouse_id, to_warehouse_id, product_id, qty, note } = transferForm;
+    const { from_warehouse_id, to_warehouse_id, qty, note } = transferForm;
+    const product_id = transferProductSelected?.id;
     if (!from_warehouse_id || !to_warehouse_id || !product_id || !qty)
       return notify("Origen, destino, producto y cantidad son requeridos", "err");
     setLoadingTransfer(true);
@@ -124,12 +126,15 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
       await api.warehouses.transfer({
         from_warehouse_id: parseInt(from_warehouse_id),
         to_warehouse_id: parseInt(to_warehouse_id),
-        product_id: parseInt(product_id),
+        product_id,
         qty: parseFloat(qty),
         note: note || null,
       });
       notify("Transferencia registrada ✓");
       setTransferForm(EMPTY_TRANSFER);
+      setTransferProductSearch("");
+      setTransferProductResults([]);
+      setTransferProductSelected(null);
       setTransferModal(false);
       await loadTransfers();
       await loadWarehouses();
@@ -195,7 +200,10 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
     addStockForm, setAddStockForm, addStockSearch, setAddStockSearch, addStockResults,
     addStockProduct, selectAddStockProduct, clearAddStockProduct, doAddStock, savingStock,
     // Transfers
-    transfers, loadTransfers, products,
+    transfers, loadTransfers,
+    transferProductSearch, setTransferProductSearch,
+    transferProductResults, setTransferProductResults,
+    transferProductSelected, setTransferProductSelected,
     transferForm, setTransferForm, transferModal, setTransferModal, loadingTransfer, doTransfer,
     EMPTY_TRANSFER
   };

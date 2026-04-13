@@ -40,7 +40,10 @@ export default function WarehousesTab({ notify, currentEmployee }) {
         addStockModal, setAddStockModal, openAddStock,
         addStockForm, setAddStockForm, addStockSearch, setAddStockSearch, addStockResults,
         addStockProduct, selectAddStockProduct, clearAddStockProduct, doAddStock, savingStock,
-        transfers, loadTransfers, products,
+        transfers, loadTransfers,
+        transferProductSearch, setTransferProductSearch,
+        transferProductResults, setTransferProductResults,
+        transferProductSelected, setTransferProductSelected,
         transferForm, setTransferForm, transferModal, setTransferModal, loadingTransfer, doTransfer,
     } = useWarehouseOps(notify, selectedWarehouse, loadWarehouses);
 
@@ -154,7 +157,12 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                 open={transferModal}
                 onClose={() => setTransferModal(false)}
                 warehouses={warehouses}
-                products={products}
+                transferProductSearch={transferProductSearch}
+                setTransferProductSearch={setTransferProductSearch}
+                transferProductResults={transferProductResults}
+                setTransferProductResults={setTransferProductResults}
+                transferProductSelected={transferProductSelected}
+                setTransferProductSelected={setTransferProductSelected}
                 transferForm={transferForm}
                 setTransferForm={setTransferForm}
                 doTransfer={doTransfer}

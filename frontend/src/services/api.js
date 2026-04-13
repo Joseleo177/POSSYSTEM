@@ -155,7 +155,7 @@ export const api = {
     remove:     (id)        => request(`/payment-journals/${id}`, { method: "DELETE" }),
   },
   purchases: {
-    getAll:  ()      => request("/purchases"),
+    getAll:  (params = {}) => request("/purchases?" + new URLSearchParams(params)),
     getOne:  (id)    => request(`/purchases/${id}`),
     create:  (body)  => request("/purchases",       { method: "POST",   body: JSON.stringify(body) }),
     cancel:  (id)    => request(`/purchases/${id}`, { method: "DELETE" }),

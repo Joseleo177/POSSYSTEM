@@ -1,7 +1,10 @@
 import { fmtDate } from "../../helpers";
 
+const LIMIT = 50;
+
 export default function PurchasesTable({ state }) {
-    const { purchases, openDetail, setCancelConfirm } = state;
+    const { purchases, openDetail, setCancelConfirm, purchasesTotal, purchasesPage, setPurchasesPage } = state;
+    const totalPages = Math.ceil((purchasesTotal || 0) / LIMIT);
 
     if (!purchases.length) {
         return (
@@ -116,6 +119,30 @@ export default function PurchasesTable({ state }) {
                     </tbody>
                 </table>
             </div>
+
+            {totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/20 dark:border-white/5">
+                    <span className="text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-60">
+                        {purchasesTotal} compras · página {purchasesPage} de {totalPages}
+                    </span>
+                    <div className="flex gap-1.5">
+                        <button
+                            onClick={() => setPurchasesPage(p => Math.max(1, p - 1))}
+                            disabled={purchasesPage === 1}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-content-subtle hover:bg-surface-2 dark:hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <button
+                            onClick={() => setPurchasesPage(p => Math.min(totalPages, p + 1))}
+                            disabled={purchasesPage === totalPages}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-content-subtle hover:bg-surface-2 dark:hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

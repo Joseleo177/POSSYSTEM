@@ -18,17 +18,30 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const [imagePreview, setImagePreview] = useState(null);
 
     // Combo states
-    const [allProducts, setAllProducts] = useState([]);
     const [searchIngredient, setSearchIngredient] = useState("");
+    const [ingredientResults, setIngredientResults] = useState([]);
+    const [loadingIngredients, setLoadingIngredients] = useState(false);
     const [showDropdown, setShowDropdown] = useState(false);
     const ingredientRef = useRef(null);
+    const ingredientTimer = useRef(null);
 
-    // Cargar productos para el combo
+    // Búsqueda debounced de ingredientes (server-side, no carga todo el catálogo)
     useEffect(() => {
-        if (form.is_combo && allProducts.length === 0) {
-            api.products.getAll({ limit: 1000 }).then(res => setAllProducts(res.data)).catch(console.error);
+        if (!form.is_combo || !searchIngredient.trim()) {
+            setIngredientResults([]);
+            return;
         }
-    }, [form.is_combo]);
+        clearTimeout(ingredientTimer.current);
+        ingredientTimer.current = setTimeout(async () => {
+            setLoadingIngredients(true);
+            try {
+                const r = await api.products.getAll({ search: searchIngredient, is_combo: false, limit: 10 });
+                setIngredientResults(r.data.filter(p => p.id !== editData?.id));
+            } catch {}
+            finally { setLoadingIngredients(false); }
+        }, 250);
+        return () => clearTimeout(ingredientTimer.current);
+    }, [searchIngredient, form.is_combo, editData?.id]);
 
     useEffect(() => {
         if (open) {
@@ -118,7 +131,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const filteredProducts = allProducts.filter(p => !p.is_combo && p.id !== editData?.id && p.name.toLowerCase().includes(searchIngredient.toLowerCase())).slice(0, 10);
+    const filteredProducts = ingredientResults;
 
     return (
         <Modal open={open} onClose={onClose} title={isEdit ? "Edición de Producto" : "Nuevo Producto"} width={780}>
@@ -357,7 +370,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
                                 {showDropdown && searchIngredient.trim() !== "" && (
                                     <div className="absolute z-50 w-full mt-3 bg-white dark:bg-surface-dark-2 border border-border dark:border-white/5 rounded-[32px] shadow-2xl p-2 max-h-[280px] overflow-y-auto animate-in zoom-in-95 backdrop-blur-xl">
-                                        {filteredProducts.length === 0 ? (
+                                        {loadingIngredients ? (
+                                            <div className="p-8 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-60">Buscando...</div>
+                                        ) : filteredProducts.length === 0 ? (
                                             <div className="p-10 text-center flex flex-col items-center gap-2">
                                                 <span className="text-3xl opacity-20 text-brand-500">
                                                     <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>

@@ -31,6 +31,8 @@ export function usePurchases(notify, onProductsUpdated) {
 
   // Lista y detalle
   const [purchases, setPurchases] = useState([]);
+  const [purchasesTotal, setPurchasesTotal] = useState(0);
+  const [purchasesPage, setPurchasesPage] = useState(1);
   const [detail, setDetail] = useState(null);
 
   // Almacenes / categorías
@@ -65,6 +67,8 @@ export function usePurchases(notify, onProductsUpdated) {
   // ───────────────────────────────────────────────
   const data = usePurchasesData({
     setPurchases,
+    setPurchasesTotal,
+    purchasesPage,
     setWarehouses,
     setCategories,
     notify,
@@ -188,6 +192,11 @@ export function usePurchases(notify, onProductsUpdated) {
     selectedWarehouseId,
     setSelectedWarehouseId,
     categories,
+
+    // paginación compras
+    purchasesTotal,
+    purchasesPage,
+    setPurchasesPage,
 
     // sub-hooks (orden importante: los wrappers van DESPUÉS)
     ...list,

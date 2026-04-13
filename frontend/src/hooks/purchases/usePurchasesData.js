@@ -3,21 +3,26 @@ import { api } from "../../services/api";
 
 export function usePurchasesData({
     setPurchases,
+    setPurchasesTotal,
+    purchasesPage,
     setWarehouses,
     setCategories,
     notify,
 }) {
+    const LIMIT = 50;
+
     // ───────────────────────────────────────────────
-    // CARGAR LISTA DE COMPRAS
+    // CARGAR LISTA DE COMPRAS (paginada)
     // ───────────────────────────────────────────────
-    const loadPurchases = useCallback(async () => {
+    const loadPurchases = useCallback(async (page = purchasesPage) => {
         try {
-            const r = await api.purchases.getAll();
+            const r = await api.purchases.getAll({ limit: LIMIT, offset: (page - 1) * LIMIT });
             setPurchases(r.data);
+            if (r.total !== undefined) setPurchasesTotal(r.total);
         } catch (e) {
             notify(e.message, "err");
         }
-    }, [notify, setPurchases]);
+    }, [notify, setPurchases, setPurchasesTotal, purchasesPage]);
 
     // ───────────────────────────────────────────────
     // CARGAR ALMACENES
