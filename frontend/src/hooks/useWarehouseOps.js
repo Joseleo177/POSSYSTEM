@@ -60,10 +60,13 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   // ── Effects ────────────────────────────────────────────────
   useEffect(() => {
     if (!debouncedTransferProductSearch.trim()) { setTransferProductResults([]); return; }
-    api.products.getAll({ search: debouncedTransferProductSearch, is_combo: false, is_service: false, limit: 10 })
-      .then(r => setTransferProductResults(r.data))
-      .catch(() => {});
-  }, [debouncedTransferProductSearch]);
+    // Filtra solo productos con stock en el almacén de origen seleccionado
+    const fromId = transferForm.from_warehouse_id;
+    const call = fromId
+      ? api.warehouses.getProducts(fromId, { search: debouncedTransferProductSearch })
+      : api.products.getAll({ search: debouncedTransferProductSearch, is_combo: false, is_service: false, limit: 10 });
+    call.then(r => setTransferProductResults((r.data || []).slice(0, 10))).catch(() => {});
+  }, [debouncedTransferProductSearch, transferForm.from_warehouse_id]);
 
   useEffect(() => {
     if (!debouncedAddStockSearch.trim()) { setAddStockResults([]); return; }
@@ -131,7 +134,7 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
         note: note || null,
       });
       notify("Transferencia registrada ✓");
-      setTransferForm(EMPTY_TRANSFER);
+      setTransferForm({ ...EMPTY_TRANSFER });
       setTransferProductSearch("");
       setTransferProductResults([]);
       setTransferProductSelected(null);
