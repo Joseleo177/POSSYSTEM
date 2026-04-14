@@ -7,6 +7,7 @@ import ConfirmModal from "../components/ui/ConfirmModal";
 import Modal from "../components/ui/Modal";
 import { useDebounce } from "../hooks/useDebounce";
 import { api } from "../services/api";
+import { useApp } from "../context/AppContext";
 
 const TABS = [
     { id: "products", label: "Productos" },
@@ -191,6 +192,7 @@ function CategoriesTab({ notify, can }) {
 
 // ── Página principal ──────────────────────────────────────────
 export default function CatalogPage() {
+    const { employee } = useApp();
     const { 
         products, search, setSearch, loadProducts, can, 
         categories, notify, loading,
@@ -203,7 +205,23 @@ export default function CatalogPage() {
     const [productEditData, setProductEditData] = useState(null);
     const [deleteProductDialog, setDeleteProductDialog] = useState(null);
 
-    useEffect(() => { loadProducts(1); }, [debouncedSearch]);
+    // Almacenes con acceso (solo los que el empleado tiene asignados)
+    const availableWarehouses = employee?.warehouses || [];
+
+    // Filtros
+    const [showFilters, setShowFilters] = useState(false);
+    const [warehouseId, setWarehouseId] = useState(() => {
+        return availableWarehouses.length > 0 ? availableWarehouses[0].id : null;
+    });
+
+    useEffect(() => { 
+        if (warehouseId) {
+            loadProducts(1, warehouseId); 
+        }
+    }, [debouncedSearch, warehouseId, loadProducts]);
+
+    // Obtener nombre del almacén seleccionado
+    const selectedWarehouseName = availableWarehouses.find(w => w.id === warehouseId)?.name;
 
     const totalPages = Math.ceil(totalProducts / limit);
     const startItem = (page - 1) * limit + 1;
@@ -219,7 +237,7 @@ export default function CatalogPage() {
                 notify("Producto creado");
             }
             setProductModal(false);
-            loadProducts(page);
+            loadProducts(page, warehouseId);
         } catch (e) { notify(e.message, "err"); }
     };
 
@@ -228,7 +246,7 @@ export default function CatalogPage() {
             await api.products.remove(deleteProductDialog);
             notify("Producto eliminado");
             setDeleteProductDialog(null);
-            loadProducts(page);
+            loadProducts(page, warehouseId);
         } catch (e) { notify(e.message, "err"); }
     };
 
@@ -271,17 +289,60 @@ export default function CatalogPage() {
             {/* Tab: Productos */}
             {activeTab === "products" && (
                 <>
-                    <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5">
-                        <div className="relative max-w-xs">
+                    <div className="shrink-0 px-4 py-3 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-3">
+                        <div className="relative flex-1 min-w-[200px] max-w-xs">
                             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
                             <input
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
-                                className="input h-8 pl-8 text-[11px] w-full"
+                                className="input h-9 pl-9 text-[11px] w-full"
                                 placeholder="Buscar producto..."
                             />
+                        </div>
+
+                        {/* Botón de Filtros Dropdown */}
+                        <div className="relative">
+                            <button 
+                                onClick={() => setShowFilters(!showFilters)}
+                                className={`h-9 px-4 flex items-center gap-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${warehouseId ? 'bg-brand-500/10 border-brand-500/30 text-brand-500 shadow-[0_0_20px_rgba(var(--brand-500-rgb),0.1)]' : 'bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/10 text-content-subtle hover:text-content'}`}
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                                <span>{selectedWarehouseName || 'Seleccionar Almacén'}</span>
+                                <svg className={`w-3 h-3 transition-transform duration-200 ${showFilters ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                            </button>
+
+                            {/* Dropdown flotante */}
+                            {showFilters && (
+                                <>
+                                    <div className="fixed inset-0 z-30" onClick={() => setShowFilters(false)} />
+                                    <div className="absolute right-0 top-full mt-2 w-64 bg-surface-2 dark:bg-surface-dark-2 rounded-2xl border border-border/40 dark:border-white/10 shadow-2xl z-40 p-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="flex items-center justify-between mb-4 pb-2 border-b border-border/10">
+                                            <span className="text-[10px] font-black text-content dark:text-white uppercase tracking-widest">Cambiar Almacén</span>
+                                        </div>
+                                        
+                                        <div className="space-y-1 max-h-[250px] overflow-auto pr-1 custom-scrollbar">
+                                            {availableWarehouses.length === 0 ? (
+                                                <div className="py-4 text-center text-[10px] font-bold text-content-muted uppercase opacity-50">Sin almacenes asignados</div>
+                                            ) : (
+                                                availableWarehouses.map(w => (
+                                                    <button 
+                                                        key={w.id}
+                                                        onClick={() => { setWarehouseId(w.id); setShowFilters(false); }}
+                                                        className={`w-full text-left px-3 py-3 rounded-xl text-[11px] font-bold transition-all flex items-center justify-between group ${warehouseId === w.id ? 'bg-brand-500 text-black' : 'hover:bg-brand-500/10 text-content-subtle hover:text-brand-500'}`}
+                                                    >
+                                                        <span>{w.name}</span>
+                                                        {warehouseId === w.id && (
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                        )}
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                     

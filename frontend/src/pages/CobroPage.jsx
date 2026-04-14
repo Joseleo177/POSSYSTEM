@@ -141,6 +141,9 @@ export default function CobroPage() {
                 selectedIndex={products.selectedIndex}
                 addToCart={addToCart}
                 convertToDisplay={convertToDisplay} currSym={currSym} fmt={fmt}
+                loadMore={products.loadMore}
+                loadingMore={products.loadingMore}
+                hasMore={products.hasMore}
             />
 
             {/* Modales */}

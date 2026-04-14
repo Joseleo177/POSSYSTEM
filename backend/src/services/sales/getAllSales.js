@@ -3,23 +3,25 @@ const { Sale, SaleItem, Customer, Employee, Currency, Warehouse, Serie, Sequeliz
 module.exports = async function getAllSales(query) {
   const { limit = 50, offset = 0, date_from, date_to, payment_method, status, serie_id, search } = query;
 
-  const where = {};
-  if (date_from || date_to) {
-    where.created_at = {};
-    if (date_from) where.created_at[Op.gte] = date_from;
-    if (date_to) where.created_at[Op.lt] = Sequelize.literal(`('${date_to}'::date + INTERVAL '1 day')`);
-  }
-  if (payment_method && PAYMENT_METHODS.includes(payment_method)) where.payment_method = payment_method;
-  if (status) where.status = status;
-  if (serie_id) where.serie_id = parseInt(serie_id, 10);
+  const andClauses = [];
+
+  if (date_from) andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date >= '${date_from}'`));
+  if (date_to)   andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date <= '${date_to}'`));
+  if (payment_method && PAYMENT_METHODS.includes(payment_method)) andClauses.push({ payment_method });
+  if (status)   andClauses.push({ status });
+  if (serie_id) andClauses.push({ serie_id: parseInt(serie_id, 10) });
 
   if (search) {
-    where[Op.or] = [
-      { invoice_number: { [Op.iLike]: `%${search}%` } },
-      { [Op.and]: Sequelize.literal(`"Customer"."name" ILIKE '%${search}%'`) },
-      { [Op.and]: Sequelize.literal(`"Customer"."rif" ILIKE '%${search}%'`) },
-    ];
+    const esc = search.replace(/'/g, "''");
+    andClauses.push({
+      [Op.or]: [
+        { invoice_number: { [Op.iLike]: `%${search}%` } },
+        Sequelize.literal(`"Sale"."customer_id" IN (SELECT id FROM customers WHERE name ILIKE '%${esc}%' OR rif ILIKE '%${esc}%')`),
+      ],
+    });
   }
+
+  const where = andClauses.length ? { [Op.and]: andClauses } : {};
 
   const { count, rows: sales } = await Sale.findAndCountAll({
     where,

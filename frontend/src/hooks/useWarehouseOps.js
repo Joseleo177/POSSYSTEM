@@ -52,14 +52,14 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
       const q = { 
         limit: stockLimit, 
         offset: (p - 1) * stockLimit,
-        search: stockSearch.trim() 
+        search: debouncedStockSearch.trim() 
       };
       const r = await api.warehouses.getStock(warehouseId, q);
       setStock(r.data || []);
       setTotalStockItems(r.total || 0);
     } catch (e) { notify(e.message, "err"); }
     finally { setLoadingStock(false); }
-  }, [notify, stockSearch, stockLimit]);
+  }, [notify, debouncedStockSearch, stockLimit]);
 
   const loadTransfers = useCallback(async () => {
     try {
@@ -71,7 +71,7 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   // ── Effects ────────────────────────────────────────────────
   useEffect(() => {
     if (selectedWarehouse) loadStock(selectedWarehouse.id, 1);
-  }, [debouncedStockSearch, selectedWarehouse, loadStock]);
+  }, [selectedWarehouse, loadStock]);
   useEffect(() => {
     if (!debouncedTransferProductSearch.trim()) { setTransferProductResults([]); return; }
     // Filtra solo productos con stock en el almacén de origen seleccionado

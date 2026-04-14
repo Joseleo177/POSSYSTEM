@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import CustomSelect from "../ui/CustomSelect";
 import KeyboardLegend from "./KeyboardLegend";
 
@@ -9,7 +9,21 @@ export default function ProductGrid({
     selectedCat, setSelectedCat, categories,
     filteredProducts, selectedIndex,
     addToCart, convertToDisplay, currSym, fmt,
+    loadMore, loadingMore, hasMore,
 }) {
+    const sentinelRef = useRef(null);
+
+    // IntersectionObserver — dispara loadMore cuando el sentinel entra en pantalla
+    useEffect(() => {
+        if (!sentinelRef.current) return;
+        const observer = new IntersectionObserver(
+            entries => { if (entries[0].isIntersecting && hasMore && !loadingMore) loadMore(); },
+            { threshold: 0.1 }
+        );
+        observer.observe(sentinelRef.current);
+        return () => observer.disconnect();
+    }, [hasMore, loadingMore, loadMore]);
+
     return (
         <main className={`flex-1 flex-col p-4 overflow-hidden order-1 lg:order-2 ${mobileTab === "products" ? "flex" : "hidden"} lg:flex`}>
 
@@ -54,8 +68,8 @@ export default function ProductGrid({
                 </div>
             </div>
 
-            {/* Grilla */}
-            <div className="flex-1 overflow-hidden pb-4">
+            {/* Grilla con scroll infinito */}
+            <div className="flex-1 overflow-y-auto pr-2 pb-4 scrollbar-hide">
                 <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
                     {filteredProducts.map((p, idx) => {
                         const outOfStock = !p.is_service && (p.stock ?? 0) <= 0;
@@ -87,6 +101,19 @@ export default function ProductGrid({
                             </div>
                         );
                     })}
+                </div>
+
+                {/* Sentinel — trigger de scroll infinito */}
+                <div ref={sentinelRef} className="h-8 flex items-center justify-center mt-2">
+                    {loadingMore && (
+                        <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-40">
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                            </svg>
+                            Cargando...
+                        </div>
+                    )}
                 </div>
             </div>
 

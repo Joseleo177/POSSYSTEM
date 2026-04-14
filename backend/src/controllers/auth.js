@@ -1,6 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt    = require("jsonwebtoken");
-const { Employee, Role } = require("../models");
+const { Employee, Role, Warehouse } = require("../models");
 
 const SECRET  = process.env.JWT_SECRET || "supersecretkey_change_in_production";
 const EXPIRES = "12h";
@@ -14,7 +14,10 @@ const login = async (req, res) => {
 
     const emp = await Employee.findOne({
       where: { username },
-      include: [{ model: Role, attributes: ['name', 'label', 'permissions'] }]
+      include: [
+        { model: Role, attributes: ['name', 'label', 'permissions'] },
+        { model: Warehouse, attributes: ['id', 'name'], through: { attributes: [] } }
+      ]
     });
 
     if (!emp || !emp.active)
@@ -31,6 +34,7 @@ const login = async (req, res) => {
       role:        emp.Role?.name  ?? null,
       role_label:  emp.Role?.label ?? null,
       permissions: emp.Role?.permissions ?? {},
+      warehouses:  emp.Warehouses || []
     };
 
     const token = jwt.sign(payload, SECRET, { expiresIn: EXPIRES });
@@ -80,7 +84,10 @@ const refresh = async (req, res) => {
 
     const decoded = jwt.verify(refresh_token, SECRET);
     const emp = await Employee.findByPk(decoded.id, {
-      include: [{ model: Role, attributes: ['name', 'label', 'permissions'] }]
+      include: [
+        { model: Role, attributes: ['name', 'label', 'permissions'] },
+        { model: Warehouse, attributes: ['id', 'name'], through: { attributes: [] } }
+      ]
     });
 
     if (!emp || !emp.active) return res.status(401).json({ ok: false, message: "Usuario inválido o inactivo" });
@@ -92,6 +99,7 @@ const refresh = async (req, res) => {
       role:        emp.Role?.name  ?? null,
       role_label:  emp.Role?.label ?? null,
       permissions: emp.Role?.permissions ?? {},
+      warehouses:  emp.Warehouses || []
     };
 
     const token = jwt.sign(payload, SECRET, { expiresIn: EXPIRES });

@@ -28,8 +28,16 @@ export default function ProductTable({ products, canManageProducts, openEditProd
                             <div className="text-[11px] font-black uppercase tracking-tight">{p.name}</div>
                             <div className="text-[10px] font-bold opacity-30 uppercase">{p.category_name || "General"}</div>
                         </td>
-                        <td className="px-4 py-2 text-[11px] font-black">
-                            <span className={p.stock <= 5 ? "text-danger" : "text-success"}>{p.stock}</span>
+                        <td className="px-4 py-2 text-[11px] font-black tabular-nums">
+                            {p.warehouse_stock !== undefined ? (
+                                <span className={parseFloat(p.warehouse_stock) <= 5 ? "text-warning" : parseFloat(p.warehouse_stock) <= 0 ? "text-danger" : "text-success"}>
+                                    {p.warehouse_stock}
+                                </span>
+                            ) : (
+                                <span className={parseFloat(p.stock) <= 5 ? "text-warning" : parseFloat(p.stock) <= 0 ? "text-danger" : "text-success"}>
+                                    {p.stock}
+                                </span>
+                            )}
                             <span className="ml-1 opacity-30 font-bold uppercase">{p.unit || "uds"}</span>
                         </td>
                         <td className="px-4 py-2 text-[11px] font-black text-brand-500">{fmtPrice(p.price)}</td>

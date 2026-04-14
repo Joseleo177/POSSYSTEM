@@ -176,7 +176,7 @@ export const api = {
     create:          (body)      => request("/warehouses",             { method: "POST",   body: JSON.stringify(body) }),
     update:          (id, body)  => request(`/warehouses/${id}`,       { method: "PUT",    body: JSON.stringify(body) }),
     remove:          (id)        => request(`/warehouses/${id}`,       { method: "DELETE" }),
-    getStock:        (id)        => request(`/warehouses/${id}/stock`),
+    getStock:        (id, params={}) => request(`/warehouses/${id}/stock?` + new URLSearchParams(params)),
     getByEmployee:   (empId)     => request(`/warehouses/employee/${empId}`),
     assignEmployees: (id, body)  => request(`/warehouses/${id}/employees`, { method: "PUT", body: JSON.stringify(body) }),
     transfer:        (body)      => request("/warehouses/transfer",    { method: "POST",   body: JSON.stringify(body) }),

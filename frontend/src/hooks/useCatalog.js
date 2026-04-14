@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 
@@ -11,12 +11,13 @@ export function useCatalog() {
     const [totalProducts, setTotalProducts] = useState(0);
     const limit = 50;
 
-    const loadProducts = async (p = 1) => {
+    const loadProducts = useCallback(async (p = 1, warehouseId = null) => {
         setLoading(true);
         setPage(p);
         try {
             const q = { limit, offset: (p - 1) * limit };
             if (search?.trim()) { q.search = search.trim(); }
+            if (warehouseId) { q.warehouse_id = warehouseId; }
 
             const r = await api.products.getAll(q);
             setProducts(r.data || []);
@@ -26,7 +27,7 @@ export function useCatalog() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [notify, search, limit]);
 
     return { 
         products, loading, search, setSearch, loadProducts, 

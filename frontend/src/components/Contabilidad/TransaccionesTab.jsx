@@ -6,6 +6,7 @@ import ConfirmModal from "../ui/ConfirmModal";
 import { Button } from "../ui/Button";
 import { fmtDateShort } from "../../helpers";
 import Page from "../ui/Page";
+import DateRangePicker from "../ui/DateRangePicker";
 
 const STATUS_BADGE = {
     pagado:   "text-success border-success/30 bg-success/5",
@@ -143,10 +144,7 @@ export default function TransaccionesTab({
                             </div>
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Rango de Fecha</div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input type="date" value={histDateFrom} onChange={e => setHistDateFrom(e.target.value)} className="input h-7 text-[11px]" />
-                                    <input type="date" value={histDateTo} onChange={e => setHistDateTo(e.target.value)} className="input h-7 text-[11px]" />
-                                </div>
+                                <DateRangePicker from={histDateFrom} to={histDateTo} setFrom={setHistDateFrom} setTo={setHistDateTo} />
                             </div>
                             <div className="px-4 py-2">
                                 <button onClick={() => { setActiveFilters([]); setActiveSeries([]); setHistDateFrom(""); setHistDateTo(""); setSearchTerm(""); setShowFilterDrop(false); }}

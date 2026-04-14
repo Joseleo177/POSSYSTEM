@@ -181,12 +181,12 @@ const getProductsReport = async (req, res) => {
 
       // Productos sin movimiento (tienen stock pero no aparecen en ventas del período)
       sequelize.query(
-        `SELECT p.id, p.name, p.stock, p.price, p.min_stock,
+        `SELECT p.id, p.name, (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id) AS stock, p.price, p.min_stock,
                 p.cost_price
          FROM products p
          WHERE p.is_service = false
            AND p.is_combo = false
-           AND p.stock > 0
+           AND (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id) > 0
            AND p.id NOT IN (
              SELECT DISTINCT si.product_id
              FROM sale_items si
@@ -204,9 +204,9 @@ const getProductsReport = async (req, res) => {
       sequelize.query(
         `SELECT
            COUNT(*)::int AS product_count,
-           COALESCE(SUM(stock * price), 0)::float AS total_value_sale,
-           COALESCE(SUM(stock * COALESCE(cost_price, 0)), 0)::float AS total_value_cost
-         FROM products
+           COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id) * price), 0)::float AS total_value_sale,
+           COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id) * COALESCE(cost_price, 0)), 0)::float AS total_value_cost
+         FROM products p
          WHERE is_combo = false AND is_service = false`,
         { type: Sequelize.QueryTypes.SELECT }
       ),
@@ -383,139 +383,85 @@ const getPurchasesReport = async (req, res) => {
 // ── GET /api/reports/inventory ────────────────────────────────
 const getInventoryReport = async (req, res) => {
   try {
-    const { days = 30, warehouse_id } = req.query; // rotation window
+    const { days = 30, warehouse_id, category_id, limit = 50, offset = 0, view = "all", search = "" } = req.query;
 
-    const stockField = warehouse_id ? `COALESCE(ps.qty, 0)` : `p.stock`;
+    const stockFieldByWarehouse = warehouse_id ? `COALESCE(ps.qty, 0)` : `(SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id)`;
+    const stockField = stockFieldByWarehouse;
     const stockJoin = warehouse_id ? `JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = ${parseInt(warehouse_id)}` : ``;
+    const catFilter = category_id ? `AND p.category_id = ${parseInt(category_id)}` : "";
+    const searchFilter = search ? `AND p.name ILIKE '%${search}%'` : "";
 
-    const [criticalStock, zeroStock, rotation, byCategory, topRotation, lowRotation] = await Promise.all([
-
-      // Productos bajo mínimo (con stock mínimo definido)
-      sequelize.query(
-        `SELECT p.id, p.name, ${stockField} AS stock, p.min_stock, p.unit, p.price,
-                COALESCE(c.name,'Sin categoría') AS category_name,
-                (p.min_stock - ${stockField}) AS needed
-         FROM products p
-         LEFT JOIN categories c ON p.category_id = c.id
-         ${stockJoin}
-         WHERE p.is_service = false
-           AND p.is_combo = false
-           AND p.min_stock > 0
-           AND ${stockField} < p.min_stock
-         ORDER BY (p.min_stock - ${stockField}) DESC`,
-        { type: Sequelize.QueryTypes.SELECT }
-      ),
-
-      // Productos sin stock
-      sequelize.query(
-        `SELECT p.id, p.name, ${stockField} AS stock, p.min_stock, p.unit,
-                COALESCE(c.name,'Sin categoría') AS category_name
-         FROM products p
-         LEFT JOIN categories c ON p.category_id = c.id
-         ${stockJoin}
-         WHERE p.is_service = false
-           AND p.is_combo = false
-           AND (${stockField} IS NULL OR ${stockField} <= 0)
-         ORDER BY p.name ASC`,
-        { type: Sequelize.QueryTypes.SELECT }
-      ),
-
-      // Rotación: unidades vendidas en los últimos N días
-      sequelize.query(
-        `SELECT
-           p.id, p.name, ${stockField} AS stock, p.unit,
-           COALESCE(c.name,'Sin categoría') AS category_name,
-           COALESCE(SUM(si.quantity), 0)::float AS units_sold,
-           CASE WHEN ${stockField} > 0
-                THEN ROUND((COALESCE(SUM(si.quantity), 0) / ${stockField})::numeric, 2)
-                ELSE NULL
-           END AS rotation_ratio
-         FROM products p
-         LEFT JOIN categories c ON p.category_id = c.id
-         ${stockJoin}
-         LEFT JOIN sale_items si ON si.product_id = p.id
-           AND si.sale_id IN (
-             SELECT id FROM sales WHERE created_at >= NOW() - (${parseInt(days)} * INTERVAL '1 day')
-           )
-         WHERE p.is_service = false AND p.is_combo = false
-         GROUP BY p.id, p.name, ${stockField}, p.unit, c.name
-         ORDER BY units_sold DESC`,
-        { type: Sequelize.QueryTypes.SELECT }
-      ),
-
-      // Valor del inventario por categoría
-      sequelize.query(
-        `SELECT
-           COALESCE(c.name,'Sin categoría') AS category_name,
-           COUNT(p.id)::int AS product_count,
-           COALESCE(SUM(${stockField}), 0)::float AS total_units,
-           COALESCE(SUM(${stockField} * COALESCE(p.cost_price, 0)), 0)::float AS value_cost,
-           COALESCE(SUM(${stockField} * p.price), 0)::float AS value_sale
-         FROM products p
-         LEFT JOIN categories c ON p.category_id = c.id
-         ${stockJoin}
-         WHERE p.is_service = false AND p.is_combo = false
-         GROUP BY c.name
-         ORDER BY value_cost DESC`,
-        { type: Sequelize.QueryTypes.SELECT }
-      ),
-
-      // Alta rotación (top 10 por units_sold)
-      sequelize.query(
-        `SELECT p.id, p.name, ${stockField} AS stock, p.unit,
-                COALESCE(SUM(si.quantity), 0)::float AS units_sold,
-                COALESCE(SUM(si.subtotal), 0)::float AS revenue
-         FROM products p
-         ${stockJoin}
-         JOIN sale_items si ON si.product_id = p.id
-         JOIN sales s ON si.sale_id = s.id
-         WHERE s.created_at >= NOW() - (${parseInt(days)} * INTERVAL '1 day')
-           AND p.is_service = false AND p.is_combo = false
-         GROUP BY p.id, p.name, ${stockField}, p.unit
-         ORDER BY units_sold DESC
-         LIMIT 10`,
-        { type: Sequelize.QueryTypes.SELECT }
-      ),
-
-      // Sin movimiento (con stock, sin ventas en el período)
-      sequelize.query(
-        `SELECT p.id, p.name, ${stockField} AS stock, p.price,
-                COALESCE(p.cost_price, 0) AS cost_price,
-                COALESCE(c.name,'Sin categoría') AS category_name,
-                ${stockField} * COALESCE(p.cost_price, p.price) AS value_locked
-         FROM products p
-         LEFT JOIN categories c ON p.category_id = c.id
-         ${stockJoin}
-         WHERE p.is_service = false AND p.is_combo = false
-           AND ${stockField} > 0
-           AND p.id NOT IN (
-             SELECT DISTINCT si.product_id
-             FROM sale_items si
-             JOIN sales s ON si.sale_id = s.id
-             WHERE s.created_at >= NOW() - (${parseInt(days)} * INTERVAL '1 day')
-           )
-         ORDER BY value_locked DESC
-         LIMIT 20`,
-        { type: Sequelize.QueryTypes.SELECT }
-      ),
+    // Queries para los KPIs (Siempre se ejecutan para mantener los indicadores arriba)
+    const [criticalCount, zeroCount, slowCount, lockedValue] = await Promise.all([
+      sequelize.query(`SELECT COUNT(*)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND p.min_stock > 0 AND ${stockField} < p.min_stock ${catFilter} ${searchFilter}`, { type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COUNT(*)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND (${stockField} IS NULL OR ${stockField} <= 0) ${catFilter} ${searchFilter}`, { type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COUNT(p.id)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (SELECT DISTINCT si.product_id FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE s.created_at >= NOW() - (${parseInt(days)} * INTERVAL '1 day')) ${catFilter} ${searchFilter}`, { type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COALESCE(SUM(${stockField} * COALESCE(p.cost_price, p.price)), 0)::float AS value FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (SELECT DISTINCT si.product_id FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE s.created_at >= NOW() - (${parseInt(days)} * INTERVAL '1 day')) ${catFilter} ${searchFilter}`, { type: Sequelize.QueryTypes.SELECT }),
     ]);
+
+    let listData = {};
+
+    // Solo obtenemos la lista detallada de la vista que el usuario está viendo actualmente
+    if (view === "all" || view === "critical") {
+      listData.critical_stock = await sequelize.query(
+        `SELECT p.id, p.name, ${stockField} AS stock, p.min_stock, p.unit, p.price, COALESCE(c.name,'Sin categoría') AS category_name, (p.min_stock - ${stockField}) AS needed
+         FROM products p LEFT JOIN categories c ON p.category_id = c.id ${stockJoin}
+         WHERE p.is_service = false AND p.is_combo = false AND p.min_stock > 0 AND ${stockField} < p.min_stock ${catFilter} ${searchFilter}
+         ORDER BY (p.min_stock - ${stockField}) DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`,
+        { type: Sequelize.QueryTypes.SELECT }
+      );
+    }
+    if (view === "all" || view === "zero") {
+      listData.zero_stock = await sequelize.query(
+        `SELECT p.id, p.name, ${stockField} AS stock, p.min_stock, p.unit, COALESCE(c.name,'Sin categoría') AS category_name
+         FROM products p LEFT JOIN categories c ON p.category_id = c.id ${stockJoin}
+         WHERE p.is_service = false AND p.is_combo = false AND (${stockField} IS NULL OR ${stockField} <= 0) ${catFilter} ${searchFilter}
+         ORDER BY p.name ASC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`,
+        { type: Sequelize.QueryTypes.SELECT }
+      );
+    }
+    if (view === "all" || view === "top") {
+      listData.top_rotation = await sequelize.query(
+        `SELECT p.id, p.name, ${stockField} AS stock, p.unit, COALESCE(SUM(si.quantity), 0)::float AS units_sold, COALESCE(SUM(si.subtotal), 0)::float AS revenue
+         FROM products p ${stockJoin} JOIN sale_items si ON si.product_id = p.id JOIN sales s ON si.sale_id = s.id
+         WHERE s.created_at >= NOW() - (${parseInt(days)} * INTERVAL '1 day') AND p.is_service = false AND p.is_combo = false ${catFilter} ${searchFilter}
+         GROUP BY p.id, p.name, ${stockField}, p.unit ORDER BY units_sold DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`,
+        { type: Sequelize.QueryTypes.SELECT }
+      );
+    }
+    if (view === "all" || view === "slow") {
+      listData.low_rotation = await sequelize.query(
+        `SELECT p.id, p.name, ${stockField} AS stock, p.price, COALESCE(p.cost_price, 0) AS cost_price, COALESCE(c.name,'Sin categoría') AS category_name, ${stockField} * COALESCE(p.cost_price, p.price) AS value_locked
+         FROM products p LEFT JOIN categories c ON p.category_id = c.id ${stockJoin}
+         WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (SELECT DISTINCT si.product_id FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE s.created_at >= NOW() - (${parseInt(days)} * INTERVAL '1 day')) ${catFilter} ${searchFilter}
+         ORDER BY value_locked DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`,
+        { type: Sequelize.QueryTypes.SELECT }
+      );
+    }
+    if (view === "all" || view === "category") {
+      listData.by_category = await sequelize.query(
+        `SELECT COALESCE(c.name,'Sin categoría') AS category_name, COUNT(p.id)::int AS product_count, COALESCE(SUM(${stockField}), 0)::float AS total_units, COALESCE(SUM(${stockField} * COALESCE(p.cost_price, 0)), 0)::float AS value_cost, COALESCE(SUM(${stockField} * p.price), 0)::float AS value_sale
+         FROM products p LEFT JOIN categories c ON p.category_id = c.id ${stockJoin}
+         WHERE p.is_service = false AND p.is_combo = false ${catFilter} ${searchFilter}
+         GROUP BY c.name ORDER BY value_cost DESC`,
+        { type: Sequelize.QueryTypes.SELECT }
+      );
+    }
 
     res.json({
       ok: true,
       data: {
-        days: parseInt(days),
-        critical_stock: criticalStock,
-        zero_stock:     zeroStock,
-        rotation,
-        by_category:    byCategory,
-        top_rotation:   topRotation,
-        low_rotation:   lowRotation,
+        ...listData,
         summary: {
-          critical_count: criticalStock.length,
-          zero_count:     zeroStock.length,
-          low_rotation_count: lowRotation.length,
-          total_locked_value: lowRotation.reduce((s, p) => s + parseFloat(p.value_locked || 0), 0),
+          critical_count: parseInt(criticalCount[0]?.count || 0),
+          zero_count: parseInt(zeroCount[0]?.count || 0),
+          low_rotation_count: parseInt(slowCount[0]?.count || 0),
+          total_locked_value: parseFloat(lockedValue[0]?.value || 0),
         },
+        total: view === 'critical' ? parseInt(criticalCount[0]?.count || 0) : 
+                view === 'zero' ? parseInt(zeroCount[0]?.count || 0) :
+                view === 'slow' ? parseInt(slowCount[0]?.count || 0) :
+                view === 'top' ? 50 : 0
       },
     });
   } catch (err) {

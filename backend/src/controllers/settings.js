@@ -50,7 +50,8 @@ const uploadLogo = async (req, res) => {
     const setting = await Setting.findByPk('logo_filename');
     const old = setting?.value;
 
-    let logoValue;
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const filename = `logo_${Date.now()}${ext}`;
 
     if (isSupabase()) {
       // Eliminar logo anterior de Supabase
@@ -58,18 +59,22 @@ const uploadLogo = async (req, res) => {
         const oldFilename = old.split("/").pop();
         await getSupabaseStorage().deleteImage(oldFilename);
       }
-
       // Subir nuevo logo a Supabase
-      const ext = path.extname(req.file.originalname).toLowerCase();
-      const filename = `logo_${Date.now()}${ext}`;
       logoValue = await getSupabaseStorage().uploadImage(req.file.buffer, filename, req.file.mimetype);
     } else {
+      // Modo Local: Guardar en disco
+      const uploadsDir = path.join(__dirname, "../../uploads");
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
       // Eliminar logo anterior del disco
-      if (old) {
-        const p = path.join(__dirname, "../../uploads", old);
-        if (fs.existsSync(p)) fs.unlinkSync(p);
+      if (old && !old.startsWith("http")) {
+        const oldPath = path.join(uploadsDir, old);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
-      logoValue = req.file.filename;
+
+      const p = path.join(uploadsDir, filename);
+      fs.writeFileSync(p, req.file.buffer);
+      logoValue = filename;
     }
 
     await Setting.upsert({ key: 'logo_filename', value: logoValue });

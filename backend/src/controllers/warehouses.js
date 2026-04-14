@@ -71,15 +71,20 @@ const getStock = async (req, res) => {
       replacements.search = `%${search.trim()}%`;
     }
 
-    // 1. Obtener total para paginación
-    const [{ count }] = await sequelize.query(`
-      SELECT count(*) 
+    // 1. Obtener total para paginación (Solo enviamos los parámetros que usa esta query)
+    const countReplacements = { wid: warehouseId };
+    if (replacements.search) countReplacements.search = replacements.search;
+
+    const countRes = await sequelize.query(`
+      SELECT count(*)::int as count 
       FROM product_stock ps
       JOIN products p ON p.id = ps.product_id
       LEFT JOIN categories c ON c.id = p.category_id
       WHERE ps.warehouse_id = :wid
       ${searchFilter}
-    `, { replacements, type: Sequelize.QueryTypes.SELECT });
+    `, { replacements: countReplacements, type: Sequelize.QueryTypes.SELECT });
+    
+    const count = countRes[0]?.count || 0;
 
     // 2. Obtener productos paginados
     const productsRaw = await sequelize.query(`
@@ -97,12 +102,13 @@ const getStock = async (req, res) => {
       LIMIT :limit OFFSET :offset
     `, { replacements, type: Sequelize.QueryTypes.SELECT });
 
-    if (productsRaw.length === 0) return res.json({ ok: true, data: [], total: 0 });
+    if (!productsRaw || productsRaw.length === 0) return res.json({ ok: true, data: [], total: 0 });
 
     // 3. Calcular stock virtual para combos
     const comboIds = productsRaw.filter(p => p.is_combo).map(p => p.product_id);
     const ingredientStockMap = {}; 
     const comboCostMap = {};
+
     if (comboIds.length > 0) {
       const comboData = await sequelize.query(`
         SELECT
@@ -114,8 +120,8 @@ const getStock = async (req, res) => {
         JOIN products p ON p.id = pci.product_id
         LEFT JOIN product_stock ps2
           ON ps2.product_id = pci.product_id AND ps2.warehouse_id = :wid
-        WHERE pci.combo_id IN (:cids)
-      `, { replacements: { wid: warehouseId, cids: comboIds }, type: Sequelize.QueryTypes.SELECT });
+        WHERE pci.combo_id IN (${comboIds.join(',')})
+      `, { replacements: { wid: warehouseId }, type: Sequelize.QueryTypes.SELECT });
 
       const byCombo = {};
       comboData.forEach(row => {
@@ -147,6 +153,7 @@ const getStock = async (req, res) => {
       product_id: p.product_id,
       product_name: p.product_name,
       is_combo: p.is_combo,
+      sku: p.sku,
       qty: p.is_combo ? (ingredientStockMap[p.product_id] ?? 0) : parseFloat(p.qty) || 0,
       unit: p.unit,
       price: parseFloat(p.price || 0),
@@ -155,10 +162,10 @@ const getStock = async (req, res) => {
       image_url: p.image_filename ? `/uploads/${p.image_filename}` : null
     }));
 
-    res.json({ ok: true, data, total: parseInt(count) });
+    res.json({ ok: true, data, total: count });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, message: "Error al obtener stock del almacén" });
+    console.error("SEARCH ERROR IN getStock:", err);
+    res.status(500).json({ ok: false, message: "Error al obtener stock del almacén: " + err.message });
   }
 };
 
@@ -506,32 +513,60 @@ const calculateWarehouseComboStock = (comboItems) => {
 // GET /api/warehouses/:id/products
 const getProducts = async (req, res) => {
   try {
-    const { search } = req.query;
+    const { search, category, limit = 30, offset = 0 } = req.query;
     const warehouseId = parseInt(req.params.id);
 
-    // Construir filtro de búsqueda
-    let searchFilter = '';
-    const replacements = { wid: warehouseId };
+    // Construir filtros
+    const filters = [];
+    const replacements = {
+      wid: warehouseId,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+    };
     if (search && search.trim()) {
-      searchFilter = `AND (p.name ILIKE :search OR c.name ILIKE :search)`;
+      filters.push(`(p.name ILIKE :search OR c.name ILIKE :search)`);
       replacements.search = `%${search.trim()}%`;
     }
+    if (category && category !== 'all') {
+      filters.push(`c.name = :category`);
+      replacements.category = category;
+    }
+    const whereExtra = filters.length ? `AND ` + filters.join(' AND ') : '';
+    const needsCatJoin = filters.length > 0;
 
-    // 1. Traer todos los productos del almacén con su stock y datos básicos
+    // 1. Total para saber si hay más páginas
+    const countJoin = needsCatJoin ? `LEFT JOIN categories c ON c.id = p.category_id` : '';
+    const [{ count }] = await sequelize.query(`
+      SELECT COUNT(*) AS count
+      FROM products p
+      LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = :wid
+      ${countJoin}
+      WHERE (p.is_service = true OR ps.product_id IS NOT NULL)
+      ${whereExtra}
+    `, { replacements, type: Sequelize.QueryTypes.SELECT });
+
+    if (parseInt(count) === 0) return res.json({ ok: true, data: [], total: 0 });
+
+    // 2. Productos paginados
     const productsRaw = await sequelize.query(`
       SELECT
         p.id, p.name, p.price, p.unit, p.qty_step, p.image_filename,
         p.cost_price, p.is_combo, p.is_service, p.min_stock,
-        c.name AS category_name, c.id   AS category_id,
+        c.name AS category_name, c.id AS category_id,
         ps.qty,
-        COALESCE((SELECT SUM(quantity) FROM sale_items WHERE product_id = p.id), 0) AS total_sold
+        COALESCE(si_agg.total_sold, 0) AS total_sold
       FROM products p
       LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = :wid
       LEFT JOIN categories c ON c.id = p.category_id
+      LEFT JOIN (
+        SELECT product_id, SUM(quantity) AS total_sold
+        FROM sale_items
+        GROUP BY product_id
+      ) si_agg ON si_agg.product_id = p.id
       WHERE (p.is_service = true OR ps.product_id IS NOT NULL)
-      ${searchFilter}
+      ${whereExtra}
       ORDER BY total_sold DESC, p.name ASC
-      LIMIT 18
+      LIMIT :limit OFFSET :offset
     `, { replacements, type: Sequelize.QueryTypes.SELECT });
 
     if (productsRaw.length === 0) return res.json({ ok: true, data: [] });
@@ -608,7 +643,7 @@ const getProducts = async (req, res) => {
       image_url: p.image_filename ? `/uploads/${p.image_filename}` : null
     }));
 
-    res.json({ ok: true, data });
+    res.json({ ok: true, data, total: parseInt(count) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener productos del almacén" });

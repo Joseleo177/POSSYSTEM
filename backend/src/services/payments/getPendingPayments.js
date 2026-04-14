@@ -1,10 +1,29 @@
-const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Op } = require("./shared");
+const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Sequelize, Op } = require("./shared");
 
 module.exports = async function getPendingPayments(query) {
-  const { limit = 100, offset = 0 } = query;
+  const { limit = 100, offset = 0, date_from, date_to, search } = query;
+
+  const andClauses = [
+    { status: { [Op.in]: ["pendiente", "parcial"] } },
+  ];
+
+  if (date_from) andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date >= '${date_from}'`));
+  if (date_to)   andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date <= '${date_to}'`));
+
+  if (search) {
+    const esc = search.replace(/'/g, "''");
+    andClauses.push({
+      [Op.or]: [
+        { invoice_number: { [Op.iLike]: `%${search}%` } },
+        Sequelize.literal(`"Sale"."customer_id" IN (SELECT id FROM customers WHERE name ILIKE '%${esc}%' OR rif ILIKE '%${esc}%')`),
+      ],
+    });
+  }
+
+  const where = { [Op.and]: andClauses };
 
   const { count, rows: sales } = await Sale.findAndCountAll({
-    where: { status: { [Op.in]: ["pendiente", "parcial"] } },
+    where,
     limit: parseInt(limit, 10),
     offset: parseInt(offset, 10),
     order: [["created_at", "DESC"]],
