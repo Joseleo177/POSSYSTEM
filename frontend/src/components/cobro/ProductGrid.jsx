@@ -1,6 +1,7 @@
 import { useRef, useEffect } from "react";
 import CustomSelect from "../ui/CustomSelect";
 import KeyboardLegend from "./KeyboardLegend";
+import { fmtQtyUnit } from "../../helpers/unitFormatter";
 
 export default function ProductGrid({
     mobileTab, setMobileTab, cart,
@@ -8,10 +9,15 @@ export default function ProductGrid({
     searchInputRef,
     selectedCat, setSelectedCat, categories,
     filteredProducts, selectedIndex,
-    addToCart, convertToDisplay, currSym, fmt,
+    addToCart, openQtyModal, convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt,
     loadMore, loadingMore, hasMore,
 }) {
     const sentinelRef = useRef(null);
+
+    const handleSelect = (p) => {
+        // En PC y Mobile, siempre abrimos el modal para pedir cantidad de inmediato
+        openQtyModal(p);
+    };
 
     // IntersectionObserver — dispara loadMore cuando el sentinel entra en pantalla
     useEffect(() => {
@@ -25,7 +31,7 @@ export default function ProductGrid({
     }, [hasMore, loadingMore, loadMore]);
 
     return (
-        <main className={`flex-1 flex-col p-4 overflow-hidden order-1 lg:order-2 ${mobileTab === "products" ? "flex" : "hidden"} lg:flex`}>
+        <main className={`flex-1 flex-col p-2 lg:p-4 overflow-hidden order-1 lg:order-2 ${mobileTab === "products" ? "flex" : "hidden"} lg:flex`}>
 
             {/* Mobile toggle */}
             <div className="lg:hidden flex items-center gap-2 mb-3">
@@ -68,53 +74,56 @@ export default function ProductGrid({
                 </div>
             </div>
 
-            {/* Grilla con scroll infinito */}
-            <div className="flex-1 overflow-y-auto pr-2 pb-4 scrollbar-hide">
-                <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
-                    {filteredProducts.map((p, idx) => {
-                        const outOfStock = !p.is_service && (p.stock ?? 0) <= 0;
-                        const isSelected = idx === selectedIndex;
-                        return (
+
+            {/* Grilla de productos - Fixed height with scroll */}
+            <div className="flex-1 overflow-y-auto scrollbar-hide">
+                {filteredProducts.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center opacity-30 gap-3 py-10">
+                        <div className="w-16 h-16 rounded-[32px] bg-surface-2 dark:bg-white/5 flex items-center justify-center text-content-subtle opacity-20">
+                            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        </div>
+                        <div className="text-[11px] font-black tracking-widest uppercase text-center dark:text-white">No se encontraron productos</div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1.5 lg:gap-4 pb-10">
+                        {filteredProducts.map((p, idx) => (
                             <div
                                 key={p.id}
-                                onClick={() => !outOfStock && addToCart(p)}
-                                className={`group bg-white dark:bg-surface-dark-2 rounded-xl overflow-hidden transition-all shadow border-2
-                                    ${isSelected ? "border-brand-500 shadow-lg shadow-brand-500/20 scale-105 z-10" : "border-transparent"}
-                                    ${outOfStock ? "opacity-40 cursor-not-allowed" : "hover:-translate-y-0.5 cursor-pointer hover:border-brand-500/50"}`}
-                            >
-                                <div className="aspect-[4/3] bg-surface-1 dark:bg-white/5 relative overflow-hidden">
-                                    {p.image_url
-                                        ? <img src={p.image_url} className="w-full h-full object-cover" alt={p.name} />
-                                        : <div className="w-full h-full flex items-center justify-center opacity-10 dark:text-white"><svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>
-                                    }
-                                    {outOfStock && (
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <span className="bg-black/60 text-white text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full">Sin stock</span>
+                                onClick={() => handleSelect(p)}
+                                className={`group bg-white dark:bg-white/5 rounded-2xl lg:rounded-[32px] overflow-hidden border transition-all cursor-pointer active:scale-95
+                                    ${idx === selectedIndex ? "border-brand-500 ring-2 lg:ring-4 ring-brand-500/10 shadow-2xl -translate-y-0.5 lg:-translate-y-1 scale-[1.02]" : "border-black/5 dark:border-white/5 hover:border-brand-500/50"}`}
+                             >
+                                <div className="aspect-[4/3] lg:aspect-square relative overflow-hidden bg-surface-2 dark:bg-black/20">
+                                    {p.image_url ? (
+                                        <img src={p.image_url} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center opacity-10 dark:text-white">
+                                            <svg className="w-6 h-6 lg:w-10 lg:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                        </div>
+                                    )}
+                                    {p.stock <= 5 && !p.is_service && (
+                                        <div className={`absolute top-1 lg:top-2 right-1 lg:right-2 text-white text-[6px] lg:text-[10px] font-black px-1 lg:px-1.5 py-0.5 rounded-full shadow-lg uppercase tracking-tighter ${p.stock <= 0 ? "bg-danger" : "bg-orange-500"}`}>
+                                            {fmtQtyUnit(p.stock, p.unit)}
                                         </div>
                                     )}
                                 </div>
-                                <div className="p-3 flex flex-col gap-1">
-                                    <div className="text-[11px] font-black text-brand-500 uppercase tracking-wide truncate">{p.category_name || "Sin Categoría"}</div>
-                                    <div className="text-xs font-black line-clamp-2 dark:text-white uppercase tracking-wide leading-tight">{p.name}</div>
-                                    <div className="text-sm font-black dark:text-white font-display">{fmt(convertToDisplay(p.price), currSym)}</div>
+                                <div className="p-1 lg:p-3 flex flex-col gap-0.5 lg:gap-1">
+                                    <div className="text-[7px] lg:text-[11px] font-black text-brand-500 uppercase tracking-tighter lg:tracking-wide truncate">{p.category_name || "Sin Categoría"}</div>
+                                    <div className="text-[8px] lg:text-xs font-black line-clamp-2 dark:text-white uppercase tracking-tight lg:tracking-wide leading-none h-4 lg:h-8">{p.name}</div>
+                                    <div className="mt-0.5">
+                                        <div className="text-[9px] lg:text-sm font-black dark:text-white font-display leading-none">{fmt(convertToDisplay(p.price), currSym)}</div>
+                                        {secondaryCurrency && (
+                                            <div className="text-[6px] lg:text-[10px] font-bold text-content-subtle dark:text-content-dark-muted opacity-60 tabular-nums">
+                                                {fmt(convertToSecondary(p.price), secondaryCurrency.symbol)}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        );
-                    })}
-                </div>
-
-                {/* Sentinel — trigger de scroll infinito */}
-                <div ref={sentinelRef} className="h-8 flex items-center justify-center mt-2">
-                    {loadingMore && (
-                        <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-40">
-                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                            </svg>
-                            Cargando...
-                        </div>
-                    )}
-                </div>
+                        ))}
+                        <div ref={sentinelRef} className="h-4 w-full" />
+                    </div>
+                )}
             </div>
 
             <KeyboardLegend />

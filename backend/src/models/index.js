@@ -38,7 +38,7 @@ Object.keys(db).forEach(modelName => {
 });
 
 // Centralized associations
-const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot } = db;
+const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment } = db;
 
 if(Return && Sale && Employee && ReturnItem && Product) {
   Return.belongsTo(Sale, { foreignKey: 'sale_id' });
@@ -164,6 +164,20 @@ if (CashSession && Employee && Warehouse && CashSessionJournal && PaymentJournal
   CashSession.hasMany(CashSessionJournal, { as: 'journals', foreignKey: 'session_id' });
   CashSessionJournal.belongsTo(CashSession,   { foreignKey: 'session_id' });
   CashSessionJournal.belongsTo(PaymentJournal, { as: 'journal', foreignKey: 'journal_id' });
+}
+
+if (Expense && ExpenseCategory && PaymentJournal && Employee && Currency) {
+  ExpenseCategory.hasMany(Expense, { foreignKey: 'category_id' });
+  PaymentJournal.hasMany(Expense, { foreignKey: 'payment_journal_id' });
+}
+
+if (PurchasePayment && Purchase && PaymentJournal && Currency && Employee) {
+  Purchase.hasMany(PurchasePayment, { foreignKey: 'purchase_id' });
+  PurchasePayment.belongsTo(Purchase,        { foreignKey: 'purchase_id' });
+  PurchasePayment.belongsTo(PaymentJournal,  { foreignKey: 'payment_journal_id' });
+  PurchasePayment.belongsTo(Currency,        { foreignKey: 'currency_id' });
+  PurchasePayment.belongsTo(Employee,        { foreignKey: 'employee_id' });
+  PaymentJournal.hasMany(PurchasePayment,    { foreignKey: 'payment_journal_id' });
 }
 
 db.sequelize = sequelize;

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
+import Modal from "./ui/Modal";
 
 const getEmpty = () => ({
   amount: "",
@@ -12,48 +13,33 @@ const getEmpty = () => ({
   // Cambio
   received_amount: "",
   change_journal_id: "",
+  keep_change: false,
 });
 
-/**
- * Modal unificado para registrar pagos.
- *
- * Props:
- * sale – objeto de la venta/factura a pagar
- * onClose – fn para cerrar
- * onSuccess – fn(res) llamada tras pago exitoso
- */
 export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const { notify, baseCurrency, activeCurrencies, activeJournals } = useApp();
   const [form, setForm] = useState(getEmpty);
   const [loading, setLoading] = useState(false);
 
-  // Moneda de display por defecto (Bs) cuando no hay diario seleccionado aún
   const displayCur = activeCurrencies.find(c => !c.is_base) || baseCurrency;
   const defaultRate = (!displayCur || displayCur.is_base) ? 1 : parseFloat(displayCur.exchange_rate || 1);
   const defaultSym = displayCur?.symbol || baseCurrency?.symbol || "$";
 
-  // Moneda del pago (deriva del diario seleccionado)
   const payCur = activeCurrencies.find(c => c.id === parseInt(form.pay_currency_id));
   const payRate = (!payCur || payCur.is_base) ? 1 : parseFloat(payCur.exchange_rate || 1);
   const paySym = payCur?.symbol || baseCurrency?.symbol || "$";
 
   const balanceUsd = parseFloat(sale?.balance ?? sale?.total ?? 0);
 
-  // ── Lógica de cambio ─────────────────────────────────────────
   const receivedNum = parseFloat(String(form.received_amount).replace(",", "."));
   const amountNum   = parseFloat(String(form.amount).replace(",", "."));
 
-  // Lo que el cliente entregó en moneda base
   const receivedBase = !isNaN(receivedNum) ? receivedNum / payRate : 0;
-  // Lo que abona a la factura (mínimo entre recibido y saldo)
   const amountBase   = !isNaN(amountNum) ? amountNum / payRate : 0;
 
-  // Cambio en moneda base
   const changeBase = receivedBase > amountBase && receivedBase > 0
     ? parseFloat((receivedBase - amountBase).toFixed(4))
     : 0;
-
-  // Cambio en la moneda del pago (para mostrar al usuario)
   const changeDisplay = changeBase * payRate;
 
   const submit = async () => {
@@ -61,9 +47,9 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     if (!form.amount) return notify("El monto es requerido", "err");
     if (!form.reference_date) return notify("La fecha de referencia es requerida", "err");
     if (!form.reference_number?.trim()) return notify("El número de referencia es requerido", "err");
-    if (changeBase > 0 && !form.change_journal_id) return notify("Selecciona el diario del que saldrá el cambio", "err");
+    if (changeBase > 0 && !form.keep_change && !form.change_journal_id) return notify("Selecciona el diario del que saldrá el cambio", "err");
 
-    const finalAmountBase = amountBase;
+    const finalAmountBase = form.keep_change ? Math.min(receivedBase, balanceUsd) : amountBase;
 
     setLoading(true);
     try {
@@ -76,10 +62,10 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
         reference_number: form.reference_number || null,
         notes: form.notes || null,
         payment_journal_id: form.payment_journal_id || null,
-        // Cambio
         received_amount: receivedBase > 0 ? receivedBase : undefined,
-        change_given: changeBase > 0 ? changeBase : undefined,
-        change_journal_id: changeBase > 0 ? form.change_journal_id : undefined,
+        change_given: (changeBase > 0 && !form.keep_change) ? changeBase : undefined,
+        change_journal_id: (changeBase > 0 && !form.keep_change) ? form.change_journal_id : undefined,
+        surplus_kept: (changeBase > 0 && form.keep_change) ? changeBase : undefined,
       });
       if (res.sale_status === "pagado") notify("¡Factura pagada completamente!");
       else notify("Pago parcial registrado");
@@ -92,248 +78,238 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const canSubmit = !loading && form.payment_journal_id &&
     !isNaN(amountNum) && amountNum > 0 &&
     form.reference_date && form.reference_number?.trim() &&
-    (changeBase <= 0 || form.change_journal_id);
+    (changeBase <= 0 || form.keep_change || form.change_journal_id);
+
+  // Para mostrar los montos de la factura
+  const infoRate = form.pay_currency_id ? payRate : defaultRate;
+  const infoSym  = form.pay_currency_id ? paySym : defaultSym;
+  const fmt = (usdAmt) => `${infoSym}${(Number(usdAmt || 0) * infoRate).toFixed(2)}`;
 
   return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        className="bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-xl shadow-card-lg w-full overflow-y-auto"
-        style={{ maxWidth: 460, maxHeight: "90vh" }}
-      >
+    <Modal open={!!sale} onClose={onClose} title="REGISTRAR PAGO" width={460}>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border dark:border-border-dark sticky top-0 bg-white dark:bg-surface-dark-2 z-10">
-          <div className="text-sm font-semibold text-content dark:text-content-dark">REGISTRAR PAGO</div>
-          <button
-            onClick={onClose}
-            className="w-10 rounded-full bg-surface-2 dark:bg-white/5 flex items-center justify-center hover:bg-danger/10 hover:text-danger transition-all"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-
-        <div className="p-5">
-          {/* Info de la factura */}
-          <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-4 mb-4 space-y-2">
-            <div className="flex justify-between items-center py-1.5 text-sm">
-              <span className="text-content-muted dark:text-content-dark-muted">Factura</span>
-              <span className="text-content dark:text-content-dark font-medium">
-                {sale.invoice_number || `#${sale.id}`}
-              </span>
-            </div>
-            {sale.customer_name && (
-              <div className="flex justify-between items-center py-1.5 text-sm">
-                <span className="text-content-muted dark:text-content-dark-muted">Cliente</span>
-                <span className="text-content dark:text-content-dark font-medium">{sale.customer_name}</span>
-              </div>
-            )}
-            {(() => {
-              const infoRate = form.pay_currency_id ? payRate : defaultRate;
-              const infoSym = form.pay_currency_id ? paySym : defaultSym;
-              const fmt = (usdAmt) => `${infoSym}${(Number(usdAmt || 0) * infoRate).toFixed(2)}`;
-              return (<>
-                <div className="flex justify-between items-center py-1.5 text-sm">
-                  <span className="text-content-muted dark:text-content-dark-muted">Total</span>
-                  <span className="text-content dark:text-content-dark font-medium">{fmt(sale.total)}</span>
-                </div>
-                {(sale.amount_paid > 0) && (
-                  <div className="flex justify-between items-center py-1.5 text-sm">
-                    <span className="text-content-muted dark:text-content-dark-muted">Ya pagado</span>
-                    <span className="text-success font-medium">{fmt(sale.amount_paid)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center py-1.5 text-sm">
-                  <span className="text-content-muted dark:text-content-dark-muted">Saldo pendiente</span>
-                  <span className="text-danger font-medium">{fmt(balanceUsd)}</span>
-                </div>
-              </>);
-            })()}
-          </div>
-
-          <div className="grid gap-3">
-            {/* Método de pago (diario) */}
-            <div>
-              <label className="label">MÉTODO DE PAGO *</label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {activeJournals.map(j => (
-                  <button key={j.id}
-                    onClick={() => {
-                      const newCurId = j.currency_id || baseCurrency?.id;
-                      const newCur = activeCurrencies.find(c => c.id === parseInt(newCurId));
-                      const newRate = (!newCur || newCur.is_base) ? 1 : parseFloat(newCur.exchange_rate || 1);
-                      const newAmt = (balanceUsd * newRate).toFixed(2);
-                      setForm(p => ({
-                        ...p,
-                        payment_journal_id: j.id,
-                        pay_currency_id: newCurId || p.pay_currency_id,
-                        amount: newAmt,
-                        received_amount: newAmt,
-                        change_journal_id: "",
-                      }));
-                    }}
-                    className={
-                      form.payment_journal_id === j.id
-                        ? "px-3 py-2 rounded-lg text-sm font-semibold border-2 border-brand-500 bg-brand-500 text-white"
-                        : "px-3 py-2 rounded-lg text-sm font-semibold border border-border dark:border-border-dark text-content-muted dark:text-content-dark-muted hover:border-brand-400"
-                    }
-                    style={
-                      form.payment_journal_id === j.id && j.color
-                        ? { borderColor: j.color, backgroundColor: j.color, color: "#000" }
-                        : undefined
-                    }
-                  >
-                    {j.name}
-                  </button>
-                ))}
-              </div>
-              {form.pay_currency_id && (() => {
-                const cur = activeCurrencies.find(c => c.id === parseInt(form.pay_currency_id));
-                if (!cur) return null;
-                return (
-                  <div className="flex items-center gap-1.5 text-xs text-content-muted dark:text-content-dark-muted mt-1">
-                    <span className="opacity-40"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></span>
-                    Moneda: <b className="text-content dark:text-content-dark">{cur.symbol} {cur.code}</b>
-                    {!cur.is_base ? ` · tasa ${parseFloat(cur.exchange_rate).toFixed(4)}` : ""}
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Monto recibido del cliente */}
-            <div>
-              <label className="label">MONTO RECIBIDO DEL CLIENTE *</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={form.received_amount}
-                onChange={e => {
-                  const val = e.target.value.replace(/[^\d.,]/g, "");
-                  const num = parseFloat(val.replace(",", "."));
-                  // El monto a abonar es el mínimo entre recibido y saldo pendiente en esta moneda
-                  const maxInCur = balanceUsd * payRate;
-                  const abono = !isNaN(num) && num > 0 ? Math.min(num, maxInCur).toFixed(2) : "";
-                  setForm(p => ({ ...p, received_amount: val, amount: abono }));
-                }}
-                placeholder={`${paySym}0.00`}
-                className="input"
-              />
-            </div>
-
-            {/* Cambio a devolver — aparece solo cuando recibido > saldo */}
-            {changeBase > 0 && (
-              <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase tracking-wide text-warning">
-                    Cambio a devolver
-                  </span>
-                  <span className="text-sm font-black text-warning tabular-nums">
-                    {paySym}{changeDisplay.toFixed(2)}
-                    {payCur && !payCur.is_base && (
-                      <span className="text-[10px] font-bold text-content-muted ml-1.5">
-                        ≈ {baseCurrency?.symbol}{changeBase.toFixed(2)}
-                      </span>
-                    )}
-                  </span>
-                </div>
-                <div>
-                  <label className="label">DAR CAMBIO DESDE *</label>
-                  <div className="flex flex-wrap gap-1.5 mt-1">
-                    {activeJournals.map(j => (
-                      <button key={j.id}
-                        type="button"
-                        onClick={() => setForm(p => ({ ...p, change_journal_id: j.id }))}
-                        className={[
-                          "px-3 py-2 rounded-lg text-sm font-semibold border-2 transition-all",
-                          form.change_journal_id === j.id
-                            ? "border-warning bg-warning text-black"
-                            : "border-border dark:border-border-dark text-content-muted dark:text-content-dark-muted hover:border-warning/50"
-                        ].join(" ")}
-                      >
-                        {j.name}
-                      </button>
-                    ))}
-                  </div>
-                  {!form.change_journal_id && (
-                    <p className="text-[10px] text-danger mt-1 font-bold">Selecciona de dónde saldrá el cambio</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Monto que abona (readonly, calculado) */}
-            <div>
-              <label className="label">ABONO A LA FACTURA</label>
-              <input
-                type="text"
-                readOnly
-                value={`${paySym}${(amountBase * payRate).toFixed(2)}`}
-                className="input bg-surface-2 dark:bg-white/5 text-content-subtle cursor-default"
-              />
-              {payCur && !payCur.is_base && amountBase > 0 && (
-                <div className="text-xs text-success mt-1">
-                  ≈ {baseCurrency?.symbol}{amountBase.toFixed(2)} {baseCurrency?.code}
-                  {" "}(tasa: {payRate})
-                </div>
-              )}
-            </div>
-
-            {/* Fecha */}
-            <div>
-              <label className="label">FECHA DE REFERENCIA *</label>
-              <input
-                type="date"
-                value={form.reference_date}
-                onChange={e => setForm(p => ({ ...p, reference_date: e.target.value }))}
-                className="input"
-              />
-            </div>
-
-            {/* N° Referencia */}
-            <div>
-              <label className="label">N° REFERENCIA *</label>
-              <input
-                type="text"
-                value={form.reference_number}
-                onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
-                placeholder="Ej: 000123456"
-                className="input"
-              />
-            </div>
-
-            {/* Notas */}
-            <div>
-              <label className="label">NOTAS</label>
-              <input
-                type="text"
-                value={form.notes}
-                onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-                placeholder="Observaciones..."
-                className="input"
-              />
-            </div>
-          </div>
-
-          {/* Botones */}
-          <div className="border-t border-border dark:border-border-dark my-4" />
-          <div className="flex gap-2.5">
-            <button onClick={onClose} className="btn-md btn-secondary w-full">
-              Cancelar
-            </button>
-            <button
-              onClick={submit}
-              disabled={!canSubmit}
-              className="btn-md btn-success w-full"
-              style={{ flex: 2 }}
-            >
-              {loading ? "Registrando..." : "CONFIRMAR PAGO"}
-            </button>
-          </div>
+      {/* Resumen de la factura */}
+      <div className="rounded-xl bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/5 p-4 mb-5 space-y-1.5">
+        <Row label="Factura" value={sale.invoice_number || `#${sale.id}`} />
+        {sale.customer_name && <Row label="Cliente" value={sale.customer_name} />}
+        <Row label="Total" value={fmt(sale.total)} />
+        {sale.amount_paid > 0 && (
+          <Row label="Ya pagado" value={fmt(sale.amount_paid)} valueClass="text-success" />
+        )}
+        <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
+          <Row label="Saldo pendiente" value={fmt(balanceUsd)} valueClass="text-danger font-black" />
         </div>
       </div>
+
+      <div className="space-y-4">
+
+        {/* Método de pago */}
+        <Field label="MÉTODO DE PAGO *">
+          <div className="flex flex-wrap gap-1.5">
+            {activeJournals.map(j => {
+              const active = form.payment_journal_id === j.id;
+              return (
+                <button key={j.id} type="button"
+                  onClick={() => {
+                    const newCurId = j.currency_id || baseCurrency?.id;
+                    const newCur = activeCurrencies.find(c => c.id === parseInt(newCurId));
+                    const newRate = (!newCur || newCur.is_base) ? 1 : parseFloat(newCur.exchange_rate || 1);
+                    const newAmt = (balanceUsd * newRate).toFixed(2);
+                    setForm(p => ({
+                      ...p,
+                      payment_journal_id: j.id,
+                      pay_currency_id: newCurId || p.pay_currency_id,
+                      amount: newAmt,
+                      received_amount: newAmt,
+                      change_journal_id: "",
+                    }));
+                  }}
+                  style={active && j.color ? { borderColor: j.color, backgroundColor: j.color, color: "#000" } : undefined}
+                  className={[
+                    "px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide border-2 transition-all",
+                    active && !j.color
+                      ? "border-brand-500 bg-brand-500 text-black"
+                      : !active
+                      ? "border-border/40 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-400 dark:hover:border-brand-400/50"
+                      : ""
+                  ].join(" ")}
+                >
+                  {j.name}
+                </button>
+              );
+            })}
+          </div>
+          {payCur && !payCur.is_base && (
+            <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1.5">
+              {payCur.symbol} {payCur.code} · tasa {parseFloat(payCur.exchange_rate).toFixed(4)}
+            </p>
+          )}
+        </Field>
+
+        {/* Monto recibido */}
+        <Field label="MONTO RECIBIDO DEL CLIENTE *">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={form.received_amount}
+            onChange={e => {
+              const val = e.target.value.replace(/[^\d.,]/g, "");
+              const num = parseFloat(val.replace(",", "."));
+              const maxInCur = balanceUsd * payRate;
+              const abono = !isNaN(num) && num > 0 ? Math.min(num, maxInCur).toFixed(2) : "";
+              setForm(p => ({ ...p, received_amount: val, amount: abono }));
+            }}
+            placeholder={`${paySym}0.00`}
+            className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+          />
+        </Field>
+
+        {/* Sobrante */}
+        {changeBase > 0 && (
+          <div className="rounded-xl border-2 border-warning/30 bg-warning/5 p-4 space-y-3">
+            {/* Título + monto */}
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-warning/80">Sobrante</span>
+              <div className="text-right">
+                <span className="text-sm font-black text-warning tabular-nums">
+                  {paySym}{changeDisplay.toFixed(2)}
+                </span>
+                {payCur && !payCur.is_base && (
+                  <span className="block text-[10px] font-bold text-content-subtle dark:text-white/30 tabular-nums">
+                    ≈ {baseCurrency?.symbol}{changeBase.toFixed(2)}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Toggle dar cambio / quedarse */}
+            <div className="flex p-1 bg-surface-2 dark:bg-white/5 rounded-xl border border-white/5">
+              <button type="button"
+                onClick={() => setForm(p => ({ ...p, keep_change: false, change_journal_id: "" }))}
+                className={[
+                  "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
+                  !form.keep_change
+                    ? "bg-warning text-black shadow-lg"
+                    : "text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+                ].join(" ")}
+              >
+                Dar cambio
+              </button>
+              <button type="button"
+                onClick={() => setForm(p => ({ ...p, keep_change: true, change_journal_id: "" }))}
+                className={[
+                  "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
+                  form.keep_change
+                    ? "bg-success text-black shadow-lg"
+                    : "text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+                ].join(" ")}
+              >
+                Quedarse
+              </button>
+            </div>
+
+            {/* Selector de diario de cambio */}
+            {!form.keep_change && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-warning/80 mb-1.5">DAR CAMBIO DESDE *</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {activeJournals.map(j => (
+                    <button key={j.id} type="button"
+                      onClick={() => setForm(p => ({ ...p, change_journal_id: j.id }))}
+                      className={[
+                        "px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide border-2 transition-all",
+                        form.change_journal_id === j.id
+                          ? "border-warning bg-warning text-black"
+                          : "border-border/40 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-warning/50"
+                      ].join(" ")}
+                    >
+                      {j.name}
+                    </button>
+                  ))}
+                </div>
+                {!form.change_journal_id && (
+                  <p className="text-[10px] font-black text-danger mt-1.5">Selecciona de dónde saldrá el cambio</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Abono (readonly) */}
+        <Field label="ABONO A LA FACTURA">
+          <div className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 flex items-center text-[13px] font-black text-content dark:text-white tabular-nums">
+            {paySym}{(amountBase * payRate).toFixed(2)}
+          </div>
+          {payCur && !payCur.is_base && amountBase > 0 && (
+            <p className="text-[10px] font-bold text-success mt-1">
+              ≈ {baseCurrency?.symbol}{amountBase.toFixed(2)} {baseCurrency?.code} · tasa {payRate}
+            </p>
+          )}
+        </Field>
+
+        {/* Fecha */}
+        <Field label="FECHA DE REFERENCIA *">
+          <input
+            type="date"
+            value={form.reference_date}
+            onChange={e => setForm(p => ({ ...p, reference_date: e.target.value }))}
+            className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all"
+          />
+        </Field>
+
+        {/* N° Referencia */}
+        <Field label="N° REFERENCIA *">
+          <input
+            type="text"
+            value={form.reference_number}
+            onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
+            placeholder="Ej: 000123456"
+            className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+          />
+        </Field>
+
+        {/* Notas */}
+        <Field label="NOTAS">
+          <input
+            type="text"
+            value={form.notes}
+            onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+            placeholder="Observaciones..."
+            className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+          />
+        </Field>
+      </div>
+
+      {/* Acciones */}
+      <div className="flex gap-2.5 mt-6 pt-4 border-t border-border/20 dark:border-white/5">
+        <button onClick={onClose}
+          className="flex-1 h-10 rounded-xl border border-border/40 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all">
+          Cancelar
+        </button>
+        <button onClick={submit} disabled={!canSubmit}
+          className="flex-[2] h-10 rounded-xl bg-success text-black text-[11px] font-black uppercase tracking-wide transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed">
+          {loading ? "Registrando..." : "Confirmar pago"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+function Row({ label, value, valueClass = "text-content dark:text-white" }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-[11px] font-bold text-content-subtle dark:text-white/40">{label}</span>
+      <span className={`text-[12px] font-black tabular-nums ${valueClass}`}>{value}</span>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">{label}</p>
+      {children}
     </div>
   );
 }

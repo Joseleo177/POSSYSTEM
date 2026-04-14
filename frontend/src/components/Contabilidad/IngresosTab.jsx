@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import JournalSummary from "./JournalSummary";
+import JournalMovementsModal from "./JournalMovementsModal";
 import { api } from "../../services/api";
 import Page from "../ui/Page";
 import DateRangePicker from "../ui/DateRangePicker";
@@ -10,6 +11,7 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
  const [summaryView, setSummaryView] = useState("diarios");
  const [journalSummData, setJournalSummData] = useState([]);
  const [sales, setSales] = useState([]);
+ const [selectedJournalId, setSelectedJournalId] = useState(null);
 
  const loadSalesForSummary = useCallback(async () => {
  try {
@@ -55,7 +57,7 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
     );
 
     return (
-        <Page module="MÓDULO CONTABLE" title="Ingresos y Facturación" subheader={subheader}>
+        <Page module="MÓDULO CONTABLE" title="Estado de Cuenta" subheader={subheader}>
             <div className="flex-1 min-h-0 overflow-auto p-4 custom-scrollbar">
                 {summaryView === "diarios" && (
                     <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -67,6 +69,7 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
                             dateFrom={histDateFrom}
                             dateTo={histDateTo}
                             onData={setJournalSummData}
+                            onSelectJournal={(j) => setSelectedJournalId(j.id)}
                         />
                     </div>
                 )}
@@ -188,6 +191,7 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
                     );
                 })()}
             </div>
+            <JournalMovementsModal journalId={selectedJournalId} onClose={() => setSelectedJournalId(null)} />
         </Page>
     );
 }

@@ -4,10 +4,10 @@ import { api } from "../services/api";
 import CustomSelect from "./ui/CustomSelect";
 import { calcSalePrice as calcSalePriceHelper } from "../helpers";
 
-const UNITS = ["unidad", "kg", "gramo", "litro", "ml", "metro", "cm"];
-const PKG_UNITS = ["caja", "bulto", "paquete", "docena", "media caja", "fardo", "saco"];
+const UNITS = ["UNIDAD", "KG", "LITRO", "METRO"];
+const PKG_UNITS = ["CAJA", "BULTO", "PAQUETE", "DOCENA", "MEDIA CAJA", "FARDO", "SACO"];
 const EMPTY = {
-    name: "", price: "", stock: "", category_id: "", unit: "unidad", qty_step: "1",
+    name: "", price: "", stock: "", category_id: "", unit: "UNIDAD", qty_step: "1",
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
     is_combo: false, combo_items: [], is_service: false
 };

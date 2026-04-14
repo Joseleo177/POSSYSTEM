@@ -12,6 +12,8 @@ const auditLog     = require("./middleware/auditLog");
 const app  = express();
 const PORT = process.env.PORT || 4000;
 
+app.set('trust proxy', 1);
+
 // ── CORS ─────────────────────────────────────────────────────
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",")
@@ -76,13 +78,15 @@ app.use("/api/employees",        require("./routes/employees"));        // auth+
 app.use("/api/currencies",       require("./routes/currencies"));       // auth+permit dentro
 app.use("/api/settings",         require("./routes/settings"));         // auth+permit dentro
 app.use("/api/payment-journals", require("./routes/paymentJournals"));  // auth dentro
-app.use("/api/purchases",        require("./routes/purchases"));        // auth dentro
+app.use("/api/purchases",         require("./routes/purchases"));        // auth dentro
+app.use("/api/purchase-payments", require("./routes/purchasePayments")); // auth dentro
 app.use("/api/warehouses",       require("./routes/warehouses"));       // auth dentro
 app.use("/api/banks",            require("./routes/banks"));            // auth+permit dentro
 app.use("/api/payments",         require("./routes/payments"));         // auth dentro
 app.use("/api/series",           require("./routes/series"));           // auth+permit dentro
 app.use("/api/reports",          require("./routes/reports"));          // auth dentro
 app.use("/api/cash-sessions",    require("./routes/cashSessions"));     // auth dentro
+app.use("/api/expenses",         require("./routes/expenses"));          // auth dentro
 
 // ── Health check ──────────────────────────────────────────────
 app.get("/health", async (req, res) => {

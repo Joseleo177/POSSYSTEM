@@ -1,5 +1,4 @@
-const { PaymentJournal, Currency, Bank, Sale, Payment, Sequelize } = require("../models");
-const { Op } = Sequelize;
+const { PaymentJournal, Currency, Bank, Sale, Sequelize } = require("../models");
 
 // GET /api/payment-journals
 const getAll = async (req, res) => {
@@ -99,44 +98,37 @@ const summary = async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
 
-    const payWhere = {};
-    if (date_from || date_to) {
-      payWhere.created_at = {};
-      if (date_from) payWhere.created_at[Op.gte] = date_from;
-      if (date_to)   payWhere.created_at[Op.lt]  = Sequelize.literal(`('${date_to}'::date + INTERVAL '1 day')`);
-    }
+    const pDateClause = date_from && date_to 
+      ? `AND p."created_at" >= '${date_from}' AND p."created_at" < ('${date_to}'::date + INTERVAL '1 day')` 
+      : (date_from ? `AND p."created_at" >= '${date_from}'` : (date_to ? `AND p."created_at" < ('${date_to}'::date + INTERVAL '1 day')` : ''));
+    
+    const eDateClause = date_from && date_to 
+      ? `AND e."created_at" >= '${date_from}' AND e."created_at" < ('${date_to}'::date + INTERVAL '1 day')` 
+      : (date_from ? `AND e."created_at" >= '${date_from}'` : (date_to ? `AND e."created_at" < ('${date_to}'::date + INTERVAL '1 day')` : ''));
 
     const journals = await PaymentJournal.findAll({
       attributes: [
         'id', 'name', 'type', 'bank_id', 'color', 'currency_id',
-        // Cantidad de pagos
-        [Sequelize.fn('COUNT', Sequelize.col('Payments.id')), 'tx_count'],
-        // Total: payment.amount en USD × exchange_rate del cobro = monto original en la moneda cobrada
-        [Sequelize.literal(`
-          COALESCE(SUM(
-            "Payments"."amount" * COALESCE("Payments"."exchange_rate", 1)
-          ), 0)
-        `), 'total_ingresos'],
-        // Hoy
-        [Sequelize.literal(`
-          COALESCE(SUM(CASE WHEN "Payments"."created_at" >= CURRENT_DATE
-            THEN "Payments"."amount" * COALESCE("Payments"."exchange_rate", 1)
-          END), 0)
-        `), 'ingresos_hoy'],
+        [Sequelize.literal(`(
+          SELECT COUNT(id) FROM payments p WHERE p.payment_journal_id = "PaymentJournal".id ${pDateClause}
+        )`), 'tx_count'],
+        [Sequelize.literal(`(
+          (SELECT COALESCE(SUM("amount" * COALESCE("exchange_rate", 1)), 0) FROM payments p WHERE p.payment_journal_id = "PaymentJournal".id ${pDateClause})
+          -
+          (SELECT COALESCE(SUM("amount" * COALESCE("rate", 1)), 0) FROM expenses e WHERE e.payment_journal_id = "PaymentJournal".id AND e.status = 'activo' ${eDateClause})
+        )`), 'total_ingresos'],
+        [Sequelize.literal(`(
+          (SELECT COALESCE(SUM("amount" * COALESCE("exchange_rate", 1)), 0) FROM payments p WHERE p.payment_journal_id = "PaymentJournal".id AND p.created_at >= CURRENT_DATE)
+          -
+          (SELECT COALESCE(SUM("amount" * COALESCE("rate", 1)), 0) FROM expenses e WHERE e.payment_journal_id = "PaymentJournal".id AND e.status = 'activo' AND e.created_at >= CURRENT_DATE)
+        )`), 'ingresos_hoy'],
       ],
       include: [
         { model: Currency, attributes: ['code', 'symbol', 'is_base', 'exchange_rate'], required: false },
-        { model: Bank,     attributes: ['name'],                                        required: false },
-        { model: Payment,  attributes: [], required: false, where: payWhere },
+        { model: Bank,     attributes: ['name'],                                        required: false }
       ],
       where: { active: true },
-      group: [
-        'PaymentJournal.id',
-        'Currency.id', 'Currency.code', 'Currency.symbol', 'Currency.is_base', 'Currency.exchange_rate',
-        'Bank.id', 'Bank.name',
-      ],
-      order: [['sort_order', 'ASC'], ['id', 'ASC']],
-      subQuery: false,
+      order: [['sort_order', 'ASC'], ['id', 'ASC']]
     });
 
     const data = journals.map(j => {
@@ -157,4 +149,152 @@ const summary = async (req, res) => {
   }
 };
 
-module.exports = { getAll, create, update, remove, summary };
+// GET /api/payment-journals/:id/movements
+// Estado de cuenta: extracto bancario con saldo acumulado
+const movements = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date_from, date_to, limit = 200, offset = 0 } = req.query;
+    const { sequelize } = require("../models");
+
+    // Verificar que el diario existe
+    const journal = await PaymentJournal.findByPk(id, {
+      include: [
+        { model: Currency, attributes: ['code', 'symbol', 'is_base', 'exchange_rate'] },
+        { model: Bank, attributes: ['name'] },
+      ],
+    });
+    if (!journal) return res.status(404).json({ ok: false, message: "Diario no encontrado" });
+
+    // Construir cláusulas de fecha
+    let datePay = '';
+    let dateExp = '';
+    if (date_from) {
+      datePay += ` AND p.created_at >= '${date_from}'`;
+      dateExp += ` AND e.created_at >= '${date_from}'`;
+    }
+    if (date_to) {
+      datePay += ` AND p.created_at < ('${date_to}'::date + INTERVAL '1 day')`;
+      dateExp += ` AND e.created_at < ('${date_to}'::date + INTERVAL '1 day')`;
+    }
+
+    // Contar el total para paginación
+    const [countResult] = await sequelize.query(`
+      SELECT (
+        (SELECT COUNT(*) FROM payments p WHERE p.payment_journal_id = :id ${datePay})
+        +
+        (SELECT COUNT(*) FROM expenses e WHERE e.payment_journal_id = :id ${dateExp})
+      ) as total
+    `, { replacements: { id }, type: Sequelize.QueryTypes.SELECT });
+
+    // UNION de pagos (ingresos) y egresos, ordenados cronológicamente
+    const rows = await sequelize.query(`
+      SELECT * FROM (
+        SELECT
+          p.id,
+          'ingreso' as type,
+          p.created_at as date,
+          COALESCE(s.invoice_number, CONCAT('PAY-', p.id)) as reference,
+          COALESCE(c.name, 'Pago de venta') as concept,
+          (p.amount * COALESCE(p.exchange_rate, 1)) as amount_local,
+          p.amount as amount_base,
+          COALESCE(p.exchange_rate, 1) as rate,
+          p.reference_number as doc_ref,
+          p.notes,
+          'activo' as status
+        FROM payments p
+        LEFT JOIN sales s ON s.id = p.sale_id
+        LEFT JOIN customers c ON c.id = p.customer_id
+        WHERE p.payment_journal_id = :id ${datePay}
+
+        UNION ALL
+
+        SELECT
+          e.id,
+          'egreso' as type,
+          e.created_at as date,
+          COALESCE(e.reference, CONCAT('EGR-', e.id)) as reference,
+          e.description as concept,
+          (e.amount * COALESCE(e.rate, 1)) as amount_local,
+          e.amount as amount_base,
+          COALESCE(e.rate, 1) as rate,
+          NULL as doc_ref,
+          e.notes,
+          e.status
+        FROM expenses e
+        WHERE e.payment_journal_id = :id ${dateExp}
+      ) AS movements
+      ORDER BY date ASC
+      LIMIT :limit OFFSET :offset
+    `, {
+      replacements: { id, limit: parseInt(limit), offset: parseInt(offset) },
+      type: Sequelize.QueryTypes.SELECT,
+    });
+
+    // Calcular saldo acumulado progresivo
+    // Primero calcular el saldo previo al offset (si hay paginación)
+    let prevBalance = 0;
+    if (parseInt(offset) > 0) {
+      const [prev] = await sequelize.query(`
+        SELECT (
+          (SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) FROM payments WHERE payment_journal_id = :id)
+          -
+          (SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) FROM expenses WHERE payment_journal_id = :id AND status = 'activo')
+        ) as balance
+      `, { replacements: { id }, type: Sequelize.QueryTypes.SELECT });
+      prevBalance = parseFloat(prev?.balance || 0);
+    }
+
+    // Calcular saldo corriente
+    let runningBalance = 0;
+    // Para saldo acumulado desde el inicio: obtenemos saldo previo a la primera fecha
+    if (date_from) {
+      const [prevBal] = await sequelize.query(`
+        SELECT (
+          COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE payment_journal_id = :id AND created_at < :date_from), 0)
+          -
+          COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM expenses WHERE payment_journal_id = :id AND status = 'activo' AND created_at < :date_from), 0)
+        ) as balance
+      `, { replacements: { id, date_from }, type: Sequelize.QueryTypes.SELECT });
+      runningBalance = parseFloat(prevBal?.balance || 0);
+    }
+
+    const movementsWithBalance = rows.map(row => {
+      const localAmt = parseFloat(row.amount_local || 0);
+      if (row.type === 'ingreso') {
+        runningBalance += localAmt;
+      } else if (row.status === 'activo') {
+        runningBalance -= localAmt;
+      }
+      // Los anulados no afectan el saldo
+      return {
+        ...row,
+        amount_local: localAmt,
+        amount_base: parseFloat(row.amount_base || 0),
+        rate: parseFloat(row.rate || 1),
+        balance: runningBalance,
+      };
+    });
+
+    const jj = journal.get({ plain: true });
+
+    res.json({
+      ok: true,
+      journal: {
+        id: jj.id,
+        name: jj.name,
+        color: jj.color,
+        currency_code: jj.Currency?.code || null,
+        currency_symbol: jj.Currency?.symbol || '$',
+        bank_name: jj.Bank?.name || null,
+      },
+      data: movementsWithBalance,
+      total: parseInt(countResult?.total || 0),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, message: "Error al obtener movimientos" });
+  }
+};
+
+module.exports = { getAll, create, update, remove, summary, movements };

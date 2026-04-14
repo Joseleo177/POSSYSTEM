@@ -9,6 +9,7 @@ export function useCobroKeyboard({
     searchInputRef,
     customers, selectedCustIdx, setSelectedCustIdx,
     setSelectedCustomer, setCustomers, setCustSearch,
+    openQtyModal,
 }) {
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -51,12 +52,11 @@ export function useCobroKeyboard({
 
             if (e.key === "Enter") {
                 if (showConfirmCheckout) { e.preventDefault(); setShowConfirmCheckout(false); checkout(); return; }
-                if (selectedIndex >= 0) {
+                if (selectedIndex >= 0 && e.target === searchInputRef.current) {
                     e.preventDefault();
                     const p = filteredProducts[selectedIndex];
                     if (p) {
-                        addToCart(p);
-                        setTimeout(() => { const inp = document.getElementById(`qty-input-${p.id}`); if (inp) { inp.focus(); inp.select(); } }, 50);
+                        openQtyModal(p);
                     }
                 } else if (!isInput && cart.length > 0 && !receipt) {
                     setShowConfirmCheckout(true);
@@ -68,5 +68,5 @@ export function useCobroKeyboard({
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [cart, holdCart, receipt, selectedIndex, filteredProducts, addToCart, showConfirmCheckout,
         checkout, customers, selectedCustIdx, setSelectedCustomer, setCustomers, setCustSearch,
-        setSelectedCustIdx, setSelectedIndex, setSearch, setShowPayModal, setShowConfirmCheckout, searchInputRef]);
+        setSelectedCustIdx, setSelectedIndex, setSearch, setShowPayModal, setShowConfirmCheckout, searchInputRef, openQtyModal]);
 }

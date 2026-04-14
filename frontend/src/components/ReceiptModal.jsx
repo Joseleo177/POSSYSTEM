@@ -130,10 +130,15 @@ function printReceipt(sale, companyInfo, displayCurrency) {
  <span>DESCUENTO</span><span>-${fmtP(s.discount)}</span>
  </div>
  ` : ""}
- <div class="row total">
- <span>TOTAL</span><span>${fmtP(s.total)}</span>
- </div>
- </div>
+  <div class="row total">
+  <span>TOTAL</span><span>${fmtP(s.total)}</span>
+  </div>
+  ${effectiveRate > 1 ? `
+  <div class="row" style="font-size:11px;opacity:0.8;margin-top:2px;justify-content:flex-end;gap:5px">
+    <span>Equiv. USD:</span><span>${fmt(s.total, "$")}</span>
+  </div>
+  ` : ""}
+  </div>
 
 
 
@@ -268,7 +273,14 @@ export default function ReceiptModal({ open, onClose, sale }) {
                 )}
                 <div className="flex justify-between items-center py-1.5 border-t border-border dark:border-border-dark mt-1 pt-1.5">
                     <span className="text-content dark:text-content-dark font-semibold text-sm">TOTAL</span>
-                    <span className="text-content dark:text-content-dark font-bold text-sm">{fmtP(s.total)}</span>
+                    <div className="text-right">
+                        <div className="text-content dark:text-white font-bold text-sm leading-none">{fmtP(s.total)}</div>
+                        {!isBase && (
+                            <div className="text-[10px] font-bold text-content-subtle dark:text-brand-500/60 mt-1">
+                                EQUIV. {fmt(s.total, "$")}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 

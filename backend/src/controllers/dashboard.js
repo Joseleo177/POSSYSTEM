@@ -29,16 +29,21 @@ const getDashboard = async (req, res) => {
       }),
     ]);
 
-    // ── Ingresos Reales (Pagos Recibidos) ──────────────────────
-    const [incomeToday, incomeMonth] = await Promise.all([
-      sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE created_at >= :today`, { replacements: { today }, type: Sequelize.QueryTypes.SELECT }),
-      sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE created_at >= :month`, { replacements: { month }, type: Sequelize.QueryTypes.SELECT }),
+    // ── Ingresos Reales vs Egresos ─────────────────────────────
+    const [incomeToday, incomeMonth, expenseToday, expenseMonth] = await Promise.all([
+      sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total FROM payments WHERE created_at >= :today`, { replacements: { today }, type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total FROM payments WHERE created_at >= :month`, { replacements: { month }, type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) as total FROM expenses WHERE created_at >= :today AND status = 'activo'`, { replacements: { today }, type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) as total FROM expenses WHERE created_at >= :month AND status = 'activo'`, { replacements: { month }, type: Sequelize.QueryTypes.SELECT }),
     ]);
 
-    // ── Cash in Hand (Saldo total disponible) ─────────────────
+    // ── Cash in Hand (Saldo neto total disponible) ──────────────
     const cashInHand = await sequelize.query(`
-        SELECT COALESCE(SUM(amount), 0) as total 
-        FROM payments
+        SELECT (
+          (SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) FROM payments)
+          -
+          (SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) FROM expenses WHERE status = 'activo')
+        ) as total
     `, { type: Sequelize.QueryTypes.SELECT });
 
     // ── Top 5 productos más vendidos (30 días) ─────────────────
@@ -113,14 +118,16 @@ const getDashboard = async (req, res) => {
       data: {
         kpi: {
           today: {
-            sales:   parseInt(kpiToday?.count   || 0),
-            revenue: parseFloat(kpiToday?.revenue || 0),
-            income:  parseFloat(incomeToday[0]?.total || 0),
+            sales:    parseInt(kpiToday?.count   || 0),
+            revenue:  parseFloat(kpiToday?.revenue || 0),
+            income:   parseFloat(incomeToday[0]?.total || 0),
+            expenses: parseFloat(expenseToday[0]?.total || 0),
           },
           month: {
-            sales:   parseInt(kpiMonth?.count   || 0),
-            revenue: parseFloat(kpiMonth?.revenue || 0),
-            income:  parseFloat(incomeMonth[0]?.total || 0),
+            sales:    parseInt(kpiMonth?.count   || 0),
+            revenue:  parseFloat(kpiMonth?.revenue || 0),
+            income:   parseFloat(incomeMonth[0]?.total || 0),
+            expenses: parseFloat(expenseMonth[0]?.total || 0),
           },
           cash_in_hand: parseFloat(cashInHand[0]?.total || 0)
         },

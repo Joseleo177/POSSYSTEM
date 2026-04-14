@@ -44,6 +44,19 @@ export function usePurchasesList({
         [notify, setDetail, setView]
     );
 
+    // Refrescar detalle sin cambiar de vista (usado tras registrar un pago)
+    const refreshDetail = useCallback(
+        async id => {
+            try {
+                const r = await api.purchases.getOne(id);
+                setDetail(r.data);
+            } catch (e) {
+                notify(e.message, "err");
+            }
+        },
+        [notify, setDetail]
+    );
+
     // ───────────────────────────────────────────────
     // ANULAR COMPRA
     // ───────────────────────────────────────────────
@@ -136,6 +149,7 @@ export function usePurchasesList({
 
         // acciones
         openDetail,
+        refreshDetail,
         cancelPurchase,
         cancelPurchaseAction,
         savePurchase,

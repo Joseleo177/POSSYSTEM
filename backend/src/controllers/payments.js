@@ -36,7 +36,7 @@ const getStats = async (req, res) => {
 // POST /api/payments — registrar pago (total o parcial)
 const create = async (req, res) => {
   try {
-    const result = await paymentsService.createPayment(req.body);
+    const result = await paymentsService.createPayment({ ...req.body, employee_id: req.employee?.id || null });
     res.status(201).json({
       ok: true,
       data: result.payment,

@@ -28,7 +28,8 @@ export default function PurchasesTable({ state }) {
                             <th className="px-6 py-5 text-[11px] font-black uppercase tracking-wide text-content-subtle border-b border-border/40 dark:border-white/5 whitespace-nowrap">Almacén</th>
                             <th className="px-6 py-5 text-[11px] font-black uppercase tracking-wide text-content-subtle border-b border-border/40 dark:border-white/5">Proveedor</th>
                             <th className="px-6 py-5 text-[11px] font-black uppercase tracking-wide text-content-subtle border-b border-border/40 dark:border-white/5 whitespace-nowrap text-center">Productos</th>
-                            <th className="px-6 py-5 text-[11px] font-black uppercase tracking-wide text-content-subtle border-b border-border/40 dark:border-white/5 text-right whitespace-nowrap">Total</th>
+                                            <th className="px-6 py-5 text-[11px] font-black uppercase tracking-wide text-content-subtle border-b border-border/40 dark:border-white/5 text-right whitespace-nowrap">Total</th>
+                            <th className="px-6 py-5 text-[11px] font-black uppercase tracking-wide text-content-subtle border-b border-border/40 dark:border-white/5 text-center">Pago</th>
                             <th className="px-6 py-5 text-[11px] font-black uppercase tracking-wide text-content-subtle border-b border-border/40 dark:border-white/5">Empleado</th>
                             <th className="px-6 py-5 text-[11px] font-black uppercase tracking-wide text-content-subtle border-b border-border/40 dark:border-white/5 whitespace-nowrap">Fecha</th>
                             <th className="px-6 py-5 text-[11px] font-black uppercase tracking-wide text-content-subtle border-b border-border/40 dark:border-white/5 text-right w-28">Acciones</th>
@@ -79,6 +80,26 @@ export default function PurchasesTable({ state }) {
                                     <div className="font-black text-brand-500 text-sm tabular-nums">
                                         ${Number(p.total).toFixed(2)}
                                     </div>
+                                    {p.amount_paid > 0 && p.payment_status !== "pagado" && (
+                                        <div className="text-[10px] font-bold text-success tabular-nums">
+                                            +${Number(p.amount_paid).toFixed(2)}
+                                        </div>
+                                    )}
+                                </td>
+
+                                <td className="px-6 py-4 text-center">
+                                    {(() => {
+                                        const s = p.payment_status || "pendiente";
+                                        const cls = s === "pagado"    ? "bg-success/10 text-success border-success/20"
+                                                   : s === "parcial"  ? "bg-warning/10 text-warning border-warning/20"
+                                                   :                    "bg-danger/10 text-danger border-danger/20";
+                                        const lbl = s === "pagado" ? "Pagado" : s === "parcial" ? "Parcial" : "Pendiente";
+                                        return (
+                                            <span className={`text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-lg border ${cls}`}>
+                                                {lbl}
+                                            </span>
+                                        );
+                                    })()}
                                 </td>
 
                                 <td className="px-6 py-4 whitespace-nowrap">

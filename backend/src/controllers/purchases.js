@@ -1,4 +1,4 @@
-const { Purchase, PurchaseItem, ProductLot, Employee, Warehouse, Customer, Product, ProductStock, ProductComboItem, Sequelize, sequelize } = require("../models");
+const { Purchase, PurchaseItem, ProductLot, Employee, Warehouse, Customer, Product, ProductStock, ProductComboItem, PurchasePayment, Sequelize, sequelize } = require("../models");
 
 // GET /api/purchases
 const getAll = async (req, res) => {
@@ -22,6 +22,19 @@ const getAll = async (req, res) => {
       distinct: true
     });
 
+    // Sumar pagos por compra en una sola query
+    const purchaseIds = purchases.map(p => p.id);
+    const paidSums = purchaseIds.length
+      ? await PurchasePayment.findAll({
+          attributes: ['purchase_id', [Sequelize.fn('SUM', Sequelize.col('amount')), 'paid']],
+          where: { purchase_id: purchaseIds },
+          group: ['purchase_id'],
+          raw: true,
+        })
+      : [];
+    const paidMap = {};
+    paidSums.forEach(r => { paidMap[r.purchase_id] = parseFloat(r.paid || 0); });
+
     const data = purchases.map(p => {
       const pp = p.toJSON();
       pp.employee_name          = pp.Employee?.full_name ?? null;
@@ -29,6 +42,9 @@ const getAll = async (req, res) => {
       pp.supplier_rif           = pp.Supplier?.rif      ?? null;
       pp.warehouse_name         = pp.Warehouse?.name    ?? null;
       pp.item_count             = parseInt(pp.item_count || 0);
+      const amountPaid = paidMap[pp.id] || 0;
+      pp.amount_paid  = parseFloat(amountPaid.toFixed(2));
+      pp.balance      = parseFloat(Math.max(0, parseFloat(pp.total) - amountPaid).toFixed(2));
       ['Employee','Supplier','Warehouse','PurchaseItems'].forEach(k => delete pp[k]);
       return pp;
     });
@@ -62,6 +78,10 @@ const getOne = async (req, res) => {
       return item;
     });
     ['Employee','Warehouse','PurchaseItems'].forEach(k => delete data[k]);
+
+    const amountPaid = await PurchasePayment.sum('amount', { where: { purchase_id: data.id } }) || 0;
+    data.amount_paid = parseFloat(parseFloat(amountPaid).toFixed(2));
+    data.balance     = parseFloat(Math.max(0, parseFloat(data.total) - amountPaid).toFixed(2));
 
     res.json({ ok: true, data });
   } catch (err) {

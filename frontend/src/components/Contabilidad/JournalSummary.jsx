@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 
 // ── Balance por diario (suma payments) ────────────────────────
-export default function JournalSummary({ dateFrom, dateTo, onData }) {
+export default function JournalSummary({ dateFrom, dateTo, onData, onSelectJournal }) {
  const [data, setData] = useState([]);
  useEffect(() => {
  const params = {};
@@ -33,7 +33,8 @@ export default function JournalSummary({ dateFrom, dateTo, onData }) {
         return (
           <div
             key={j.id}
-            className="group relative bg-white dark:bg-surface-dark-3 rounded-2xl p-5 border border-border/40 dark:border-white/10 shadow-sm hover:shadow-xl hover:border-brand-500/20 transition-all duration-300 overflow-hidden"
+            onClick={() => onSelectJournal && onSelectJournal(j)}
+            className="group relative bg-white dark:bg-surface-dark-3 rounded-2xl p-5 border border-border/40 dark:border-white/10 shadow-sm hover:shadow-xl hover:border-brand-500/20 transition-all duration-300 overflow-hidden cursor-pointer"
           >
             {/* Color accent bar & background glow */}
             <div className="absolute top-0 left-0 w-full h-1" style={{ background: journalColor }} />

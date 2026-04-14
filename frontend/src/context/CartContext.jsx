@@ -81,6 +81,22 @@ export function CartProvider({ children }) {
     return displayAmount / exchangeRate;
   }, [currentCurrency, exchangeRate]);
 
+  // Identificar moneda secundaria para visualización dual
+  // Si la actual es base (USD), la secundaria es la primera activa no-base (VES)
+  // Si la actual no es base, la secundaria es la base (USD)
+  const secondaryCurrency = currentCurrency?.is_base
+    ? activeCurrencies.find(c => !c.is_base)
+    : baseCurrency;
+
+  const secondaryExchangeRate = secondaryCurrency?.exchange_rate
+    ? parseFloat(secondaryCurrency.exchange_rate) : 1;
+
+  const convertToSecondary = useCallback((baseAmount) => {
+    if (!secondaryCurrency) return null;
+    if (secondaryCurrency.is_base) return baseAmount;
+    return baseAmount * secondaryExchangeRate;
+  }, [secondaryCurrency, secondaryExchangeRate]);
+
   // ── Cart helpers ───────────────────────────────────────────
   const validateCartStock = useCallback((newCart) => {
     const usage = {};
@@ -106,18 +122,20 @@ export function CartProvider({ children }) {
     return true;
   }, []);
 
-  const addToCart = useCallback((product) => {
+  const addToCart = useCallback((product, customQty = null) => {
     if (!activeWarehouse) return notify("Selecciona un almacén antes de cobrar", "err");
     if (!product.is_service && parseFloat(product.stock) <= 0) return notify("Sin stock disponible", "err");
+    
     const step = parseFloat(product.qty_step) || 1;
+    const initialQty = customQty !== null ? parseFloat(customQty) : step;
 
     const ex = cart.find(i => i.id === product.id);
     let newCart;
     if (ex) {
-      const nq = parseFloat((ex.qty + step).toFixed(3));
+      const nq = parseFloat((ex.qty + initialQty).toFixed(3));
       newCart = cart.map(i => i.id === product.id ? { ...i, qty: nq } : i);
     } else {
-      newCart = [...cart, { ...product, qty: step }];
+      newCart = [...cart, { ...product, qty: initialQty }];
     }
 
     if (!validateCartStock(newCart)) {
@@ -235,6 +253,8 @@ export function CartProvider({ children }) {
     ? subtotalBase * (parseFloat(discountPct) / 100) : 0;
   const totalBase = subtotalBase - discountAmount;
   const totalDisplay = convertToDisplay(totalBase);
+  const totalSecondary = convertToSecondary(totalBase);
+
 
   // ── Generar factura (sin pago aún) ─────────────────────────
   const checkout = useCallback(async (onSuccess) => {
@@ -284,10 +304,11 @@ export function CartProvider({ children }) {
       cart, addToCart, removeFromCart, changeQty, setQtyDirect, clearCart,
       // Totales
       subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
-      discountPct, setDiscountPct, totalBase, totalDisplay,
+      discountPct, setDiscountPct, totalBase, totalDisplay, totalSecondary,
       // Moneda
       selectedCurrency, setSelectedCurrency, currentCurrency, exchangeRate,
-      convertToDisplay, convertToBase,
+      secondaryCurrency,
+      convertToDisplay, convertToBase, convertToSecondary,
       // Serie
       selectedSerieId, setSelectedSerieId, selectSerie, mySeries, loadMySeries,
       // Cliente

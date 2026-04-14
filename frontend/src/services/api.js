@@ -148,17 +148,21 @@ export const api = {
     refreshRates: ()         => request("/currencies/refresh",       { method: "POST" }),
   },
   journals: {
-    getAll:     ()          => request("/payment-journals"),
-    getSummary: (params={}) => request("/payment-journals/summary?" + new URLSearchParams(params)),
-    create:     (body)      => request("/payment-journals",       { method: "POST",   body: JSON.stringify(body) }),
-    update:     (id, body)  => request(`/payment-journals/${id}`, { method: "PUT",    body: JSON.stringify(body) }),
-    remove:     (id)        => request(`/payment-journals/${id}`, { method: "DELETE" }),
+    getAll:       ()              => request("/payment-journals"),
+    getSummary:   (params={})     => request("/payment-journals/summary?" + new URLSearchParams(params)),
+    getMovements: (id, params={}) => request(`/payment-journals/${id}/movements?` + new URLSearchParams(params)),
+    create:       (body)          => request("/payment-journals",       { method: "POST",   body: JSON.stringify(body) }),
+    update:       (id, body)      => request(`/payment-journals/${id}`, { method: "PUT",    body: JSON.stringify(body) }),
+    remove:       (id)            => request(`/payment-journals/${id}`, { method: "DELETE" }),
   },
   purchases: {
-    getAll:  (params = {}) => request("/purchases?" + new URLSearchParams(params)),
-    getOne:  (id)    => request(`/purchases/${id}`),
-    create:  (body)  => request("/purchases",       { method: "POST",   body: JSON.stringify(body) }),
-    cancel:  (id)    => request(`/purchases/${id}`, { method: "DELETE" }),
+    getAll:         (params = {}) => request("/purchases?" + new URLSearchParams(params)),
+    getOne:         (id)          => request(`/purchases/${id}`),
+    create:         (body)        => request("/purchases",                  { method: "POST",   body: JSON.stringify(body) }),
+    cancel:         (id)          => request(`/purchases/${id}`,            { method: "DELETE" }),
+    getPayments:    (id)          => request(`/purchases/${id}/payments`),
+    createPayment:  (id, body)    => request(`/purchases/${id}/payments`,   { method: "POST",   body: JSON.stringify(body) }),
+    removePayment:  (paymentId)   => request(`/purchase-payments/${paymentId}`, { method: "DELETE" }),
   },
   settings: {
     getAll:     ()      => request("/settings"),
@@ -247,5 +251,14 @@ export const api = {
     summary:    (id)     => request(`/cash-sessions/${id}/summary`),
     close:      (id, body) => request(`/cash-sessions/${id}/close`,  { method: "POST", body: JSON.stringify(body) }),
     history:    (params) => request("/cash-sessions/history?"        + new URLSearchParams(params)),
+  },
+
+  // ── Egresos ──────────────────────────────────────────────────
+  expenses: {
+    getAll:         (params={}) => request("/expenses?"             + new URLSearchParams(params)),
+    getCategories:  ()          => request("/expenses/categories"),
+    upsertCategory: (body)      => request("/expenses/categories",   { method: "POST", body: JSON.stringify(body) }),
+    create:         (body)      => request("/expenses",              { method: "POST", body: JSON.stringify(body) }),
+    void:           (id)        => request(`/expenses/${id}`,        { method: "DELETE" }),
   },
 };

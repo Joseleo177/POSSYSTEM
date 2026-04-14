@@ -18,6 +18,7 @@ import HeldCartsModal      from "../components/HeldCartsModal";
 import AperturaCajaModal   from "../components/AperturaCajaModal";
 import CierreCajaModal     from "../components/CierreCajaModal";
 import ConfirmModal        from "../components/ui/ConfirmModal";
+import QuantityModal       from "../components/cobro/QuantityModal";
 
 const fmt = fmtMoney;
 
@@ -27,8 +28,9 @@ export default function CobroPage() {
     const {
         cart, addToCart, removeFromCart, changeQty, setQtyDirect,
         subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
-        discountPct, setDiscountPct, totalDisplay,
-        currentCurrency, setSelectedCurrency, convertToDisplay,
+        discountPct, setDiscountPct, totalDisplay, totalSecondary,
+        currentCurrency, setSelectedCurrency, secondaryCurrency,
+        convertToDisplay, convertToSecondary,
         selectedSerieId, selectSerie, mySeries, loadMySeries,
         selectedCustomer, setSelectedCustomer,
         employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
@@ -44,6 +46,7 @@ export default function CobroPage() {
     const [showConfirmCheckout, setShowConfirmCheckout] = useState(false);
     const [showHeldModal, setShowHeldModal]        = useState(false);
     const [saleBalance, setSaleBalance]            = useState(null);
+    const [qtyModalItem, setQtyModalItem]          = useState(null);
     const searchInputRef                           = useRef(null);
 
     // ── Hooks de capa ──────────────────────────────────────────
@@ -69,6 +72,7 @@ export default function CobroPage() {
         setSelectedCustomer,
         setCustomers: customer.setCustomers,
         setCustSearch: customer.setCustSearch,
+        openQtyModal: setQtyModalItem,
     });
 
     // ── Sin almacén asignado ───────────────────────────────────
@@ -105,8 +109,9 @@ export default function CobroPage() {
                 subtotalBase={subtotalBase} discountAmount={discountAmount}
                 discountEnabled={discountEnabled} setDiscountEnabled={setDiscountEnabled}
                 discountPct={discountPct} setDiscountPct={setDiscountPct}
-                totalDisplay={totalDisplay}
-                convertToDisplay={convertToDisplay} currSym={currSym} fmt={fmt}
+                totalDisplay={totalDisplay} totalSecondary={totalSecondary}
+                convertToDisplay={convertToDisplay} convertToSecondary={convertToSecondary}
+                currSym={currSym} secondaryCurrency={secondaryCurrency} fmt={fmt}
                 currentCurrency={currentCurrency} setSelectedCurrency={setSelectedCurrency}
                 activeCurrencies={activeCurrencies}
                 selectedSerieId={selectedSerieId} selectSerie={selectSerie} mySeries={mySeries}
@@ -126,6 +131,7 @@ export default function CobroPage() {
                 loading={loading}
                 setShowConfirmCheckout={setShowConfirmCheckout}
                 holdCart={holdCart}
+                openQtyModal={setQtyModalItem}
                 searchInputRef={searchInputRef}
             />
 
@@ -140,7 +146,9 @@ export default function CobroPage() {
                 filteredProducts={products.filteredProducts}
                 selectedIndex={products.selectedIndex}
                 addToCart={addToCart}
-                convertToDisplay={convertToDisplay} currSym={currSym} fmt={fmt}
+                openQtyModal={setQtyModalItem}
+                convertToDisplay={convertToDisplay} convertToSecondary={convertToSecondary}
+                currSym={currSym} secondaryCurrency={secondaryCurrency} fmt={fmt}
                 loadMore={products.loadMore}
                 loadingMore={products.loadingMore}
                 hasMore={products.hasMore}
@@ -191,6 +199,20 @@ export default function CobroPage() {
                     onCancel={() => session.setShowCierre(false)}
                 />
             )}
+            <QuantityModal
+                isOpen={!!qtyModalItem}
+                onClose={() => setQtyModalItem(null)}
+                item={qtyModalItem}
+                onSave={(id, q) => {
+                    const isInCart = cart.find(i => i.id === id);
+                    if (isInCart) {
+                        setQtyDirect(id, q);
+                    } else {
+                        // Si no está, lo agregamos (el item pasado viene del catálogo)
+                        addToCart(qtyModalItem, q);
+                    }
+                }}
+            />
         </div>
     );
 }

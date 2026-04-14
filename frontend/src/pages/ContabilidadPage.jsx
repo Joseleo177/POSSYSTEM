@@ -13,8 +13,9 @@ import SeriesTab from "../components/Contabilidad/SeriesTab";
 import DiariosTab from "../components/Contabilidad/DiariosTab";
 import BancosTab from "../components/Contabilidad/BancosTab";
 import MetodosTab from "../components/Contabilidad/MetodosTab";
+import EgresosTab from "../components/Contabilidad/EgresosTab";
 
-const SUB_PAGES = ["Ingresos", "Transacciones", "Pagos", "Series", "Diarios", "Tipos de pago", "Bancos"];
+const SUB_PAGES = ["Estado de Cuenta", "Egresos", "Transacciones", "Pagos", "Series", "Diarios", "Tipos de pago", "Bancos"];
 
 export default function ContabilidadPage() {
  const {
@@ -50,7 +51,7 @@ export default function ContabilidadPage() {
  loadAllEmployees();
  }, [canConfig, loadAllSeries, loadAllEmployees]);
 
- const [subPage, setSubPage] = useState("Ingresos");
+ const [subPage, setSubPage] = useState("Estado de Cuenta");
  const [dropOpen, setDropOpen] = useState(false);
  const [receiptSale, setReceiptSale] = useState(null);
 
@@ -67,18 +68,27 @@ export default function ContabilidadPage() {
 
  useEffect(() => {
  if (!visibleSubPages.includes(subPage)) {
- setSubPage(visibleSubPages[0] || "Ingresos");
+ setSubPage(visibleSubPages[0] || "Estado de Cuenta");
  }
  }, [subPage, visibleSubPages]);
 
  const renderContent = () => {
  switch (subPage) {
- case "Ingresos":
+ case "Estado de Cuenta":
  return (
  <IngresosTab
  notify={notify}
  fmtPrice={fmtPrice}
  allSeries={allSeries}
+ />
+ );
+ case "Egresos":
+ return (
+ <EgresosTab
+ notify={notify}
+ can={can}
+ fmtPrice={fmtPrice}
+ journals={journals}
  />
  );
  case "Transacciones":

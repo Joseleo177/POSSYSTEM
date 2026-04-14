@@ -11,9 +11,10 @@ module.exports = (sequelize, DataTypes) => {
     supplier_name: { type: DataTypes.STRING(200) },
     notes: { type: DataTypes.TEXT },
     total: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
-    employee_id: { type: DataTypes.INTEGER },
-    warehouse_id: { type: DataTypes.INTEGER },
-    created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+    employee_id:     { type: DataTypes.INTEGER },
+    warehouse_id:    { type: DataTypes.INTEGER },
+    payment_status:  { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'pendiente' },
+    created_at:      { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,
     tableName: 'purchases',
