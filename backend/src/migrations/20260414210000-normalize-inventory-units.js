@@ -5,7 +5,7 @@ module.exports = {
   async up(queryInterface, Sequelize) {
     // 1. Normalizar GRAMO a KG (División por 1000)
     await queryInterface.sequelize.query(`
-      UPDATE "Products" 
+      UPDATE "products" 
       SET 
         unit = 'KG', 
         stock = stock / 1000, 
@@ -15,7 +15,7 @@ module.exports = {
 
     // 2. Normalizar ML a LITRO (División por 1000)
     await queryInterface.sequelize.query(`
-      UPDATE "Products" 
+      UPDATE "products" 
       SET 
         unit = 'LITRO', 
         stock = stock / 1000, 
@@ -25,7 +25,7 @@ module.exports = {
 
     // 3. Normalizar CM a METRO (División por 100)
     await queryInterface.sequelize.query(`
-      UPDATE "Products" 
+      UPDATE "products" 
       SET 
         unit = 'METRO', 
         stock = stock / 100, 
@@ -35,7 +35,7 @@ module.exports = {
 
     // 4. Estandarizar UNIDAD
     await queryInterface.sequelize.query(`
-      UPDATE "Products" SET unit = 'UNIDAD' WHERE unit IN ('unidad', 'pieza', 'uds', 'UDS', 'Uds');
+      UPDATE "products" SET unit = 'UNIDAD' WHERE unit IN ('unidad', 'pieza', 'uds', 'UDS', 'Uds');
     `);
 
     console.log('✅ Normalización de unidades completada.');

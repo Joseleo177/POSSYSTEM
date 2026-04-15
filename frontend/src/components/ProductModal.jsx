@@ -9,7 +9,7 @@ const PKG_UNITS = ["CAJA", "BULTO", "PAQUETE", "DOCENA", "MEDIA CAJA", "FARDO", 
 const EMPTY = {
     name: "", price: "", stock: "", category_id: "", unit: "UNIDAD", qty_step: "1",
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
-    is_combo: false, combo_items: [], is_service: false
+    is_combo: false, combo_items: [], is_service: false, barcode: ""
 };
 
 export default function ProductModal({ open, onClose, onSave, editData, categories, loading }) {
@@ -60,6 +60,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     min_stock: editData.min_stock ?? "0",
                     is_combo: editData.is_combo || false,
                     is_service: editData.is_service || false,
+                    barcode: editData.barcode || "",
                     combo_items: editData.comboItems ? editData.comboItems.map(c => ({
                         product_id: c.ingredient.id,
                         name: c.ingredient.name,
@@ -181,7 +182,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             <input value={form.name} onChange={e => set("name", e.target.value)} autoFocus className="input " placeholder="Ej. Computadora Portátil Gamer X-1..." />
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <div>
                                 <label className="label">Categoría Vinculada</label>
                                 <div className="relative group">
@@ -205,6 +206,10 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         className="w-full"
                                     />
                                 </div>
+                            </div>
+                            <div>
+                                <label className="label">Código de Barras</label>
+                                <input value={form.barcode} onChange={e => set("barcode", e.target.value)} className="input" placeholder="Ej. 123456789012" />
                             </div>
                         </div>
 

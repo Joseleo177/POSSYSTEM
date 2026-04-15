@@ -11,11 +11,11 @@ export default function Modal({ open, onClose, title, children, width = 560 }) {
  if (!open) return null;
 
  return (
-  <div onClick={onClose}
-  className="fixed inset-0 z-[1000] flex items-center justify-center p-4 sm:p-5 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-  <div onClick={e => e.stopPropagation()}
-  className="bg-white dark:bg-surface-dark-2 border border-border dark:border-white/5 rounded-xl shadow-2xl w-full relative animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out flex flex-col max-h-[90vh]"
-  style={{ maxWidth: width }}>
+    <div onClick={onClose}
+    className="fixed inset-0 z-[1000] flex items-center justify-center p-4 sm:p-5 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+    <div onClick={e => e.stopPropagation()}
+    className="bg-white dark:bg-surface-dark-2 border border-border dark:border-white/5 rounded-xl shadow-2xl w-full relative animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ease-out flex flex-col max-h-[90vh]"
+    style={{ maxWidth: width, overflow: 'auto' }}>
 
   {/* Header */}
   <div className="flex shrink-0 items-center justify-between px-5 py-3 border-b border-border/40 dark:border-white/5 bg-white/80 dark:bg-surface-dark-2/80 backdrop-blur-xl z-20 rounded-t-xl">

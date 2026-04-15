@@ -5,6 +5,7 @@ import ConfirmModal from "../ui/ConfirmModal";
 import CustomerModal from "../Customers/CustomerModal";
 import ProductModal from "../ProductModal";
 import { Button } from "../ui/Button";
+import Page from "../ui/Page";
 
 import { usePurchases } from "../../hooks/purchases/usePurchases";
 
@@ -28,27 +29,10 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     } = state;
 
     return (
-        <div className="h-full overflow-hidden flex flex-col bg-transparent">
-            {view === "list" && (
-                <>
-                    {/* Toolbar Estándar Premium */}
-                    <div className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between gap-3 border-b border-border/30 dark:border-white/5 bg-transparent">
-                        <div>
-                            <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest leading-none mb-1">Módulo</div>
-                            <h1 className="text-sm font-black uppercase tracking-tight">Compras</h1>
-                        </div>
-                        <div className="flex gap-2">
-                            <Button onClick={state.openNew}>+ NUEVO RECIBO</Button>
-                        </div>
-                    </div>
-
-                    <PurchasesTable state={state} />
-                </>
-            )}
-
+        <Page module="INFORMACIÓN DEL RECIBO" title="Compras" actions={view === "list" ? <Button onClick={state.openNew}>+ NUEVO RECIBO</Button> : null}>
+            {view === "list" && <PurchasesTable state={state} />}
             {view === "detail" && <PurchaseDetails state={state} />}
             {view === "new" && <PurchaseForm state={state} />}
-
 
             <CustomerModal
                 open={supplierModal}
@@ -80,6 +64,6 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                 confirmText="Anular"
                 cancelText="Cancelar"
             />
-        </div>
+        </Page>
     );
 }

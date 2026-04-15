@@ -106,7 +106,7 @@ export default function ProductSearch({ state }) {
             </div>
 
             {/* Campos del item */}
-            <div className="grid grid-cols-4 gap-2.5 mb-2.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
                 <div>
                     <label className="label">Tipo de paquete</label>
                     <input
@@ -135,7 +135,7 @@ export default function ProductSearch({ state }) {
                         placeholder={
                             itemForm.package_unit?.toLowerCase() === "unidad" ? "1" : "ej. 12"
                         }
-                        className={`input transition-all ${itemForm.package_unit?.toLowerCase() === "unidad"
+                        className={`input text-center transition-all ${itemForm.package_unit?.toLowerCase() === "unidad"
                             ? "bg-surface-2 dark:bg-surface-dark-3 opacity-50 cursor-not-allowed"
                             : ""
                             }`}
@@ -150,7 +150,7 @@ export default function ProductSearch({ state }) {
                         step="1"
                         value={itemForm.package_qty}
                         onChange={e => setIF("package_qty", e.target.value)}
-                        className="input"
+                        className="input text-center"
                     />
                 </div>
 
@@ -163,37 +163,15 @@ export default function ProductSearch({ state }) {
                         value={itemForm.package_price}
                         onChange={e => setIF("package_price", e.target.value)}
                         placeholder="0.00"
-                        className="input"
-                    />
-                </div>
-            </div>
-
-            {/* Lotes y Vencimiento */}
-            <div className="grid grid-cols-2 gap-2.5 mb-2.5 bg-warning/5 p-4 rounded-2xl border border-warning/20">
-                <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-warning tracking-widest ml-1">Número de Lote (Requerido)</label>
-                    <input
-                        type="text"
-                        value={itemForm.lot_number || ""}
-                        onChange={e => setIF("lot_number", e.target.value)}
-                        placeholder="Ej. L-2024-001"
-                        className="input !border-warning/30 focus:!border-warning"
-                    />
-                </div>
-                <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-warning tracking-widest ml-1">Fecha de Vencimiento</label>
-                    <input
-                        type="date"
-                        value={itemForm.expiration_date || ""}
-                        onChange={e => setIF("expiration_date", e.target.value)}
-                        className="input !border-warning/30 focus:!border-warning"
+                        className="input text-center"
                     />
                 </div>
             </div>
 
             {/* Cálculos */}
-            <div className="grid grid-cols-4 gap-2.5 mb-2">
-                <div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+                <div className="flex flex-col justify-center">
                     <label className="label">Margen de ganancia (%)</label>
                     <input
                         type="number"
@@ -201,14 +179,14 @@ export default function ProductSearch({ state }) {
                         step="0.1"
                         value={itemForm.profit_margin}
                         onChange={e => setIF("profit_margin", e.target.value)}
-                        className="input"
+                        className="input text-center items-center justify-center"
                     />
                 </div>
 
-                <div>
+                <div className="flex flex-col justify-center">
                     <label className="label">Costo unitario (calc.)</label>
                     <div
-                        className={`input bg-surface-3 dark:bg-surface-dark-3 ${calc?.unit_cost
+                        className={`input text-center flex items-center justify-center bg-surface-3 dark:bg-surface-dark-3 ${calc?.unit_cost
                             ? "text-info"
                             : "text-content-muted dark:text-content-dark-muted"
                             }`}
@@ -217,10 +195,10 @@ export default function ProductSearch({ state }) {
                     </div>
                 </div>
 
-                <div>
+                <div className="flex flex-col justify-center">
                     <label className="label">Precio de venta (calc.)</label>
                     <div
-                        className={`input bg-surface-3 dark:bg-surface-dark-3 font-bold ${calc?.sale_price
+                        className={`input text-center flex items-center justify-center bg-surface-3 dark:bg-surface-dark-3 font-bold ${calc?.sale_price
                             ? "text-success"
                             : "text-content-muted dark:text-content-dark-muted"
                             }`}
@@ -229,10 +207,10 @@ export default function ProductSearch({ state }) {
                     </div>
                 </div>
 
-                <div>
+                <div className="flex flex-col justify-center">
                     <label className="label">Total unidades (calc.)</label>
                     <div
-                        className={`input bg-surface-3 dark:bg-surface-dark-3 ${calc?.total_units
+                        className={`input text-center flex items-center justify-center bg-surface-3 dark:bg-surface-dark-3 ${calc?.total_units
                             ? "text-warning"
                             : "text-content-muted dark:text-content-dark-muted"
                             }`}
@@ -242,31 +220,56 @@ export default function ProductSearch({ state }) {
                 </div>
             </div>
 
-            {/* Checkbox actualizar precio */}
-            <div className="flex items-center gap-2.5 mb-2">
-                <label className="flex items-center gap-2 cursor-pointer text-xs">
+            {/* Lotes y Vencimiento */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                        <label className="label">Número de lote</label>
+                        <span className="text-[10px] font-black uppercase text-warning tracking-widest">requerido</span>
+                    </div>
                     <input
-                        type="checkbox"
-                        checked={itemForm.update_price}
-                        onChange={e => setIF("update_price", e.target.checked)}
-                        className="w-3.5 h-3.5 accent-warning"
+                        type="text"
+                        value={itemForm.lot_number || ""}
+                        onChange={e => setIF("lot_number", e.target.value)}
+                        placeholder="Ej. L-2024-001"
+                        className="input"
                     />
-                    <span className="text-content dark:text-content-dark">
-                        Actualizar precio de venta del producto al guardar
-                    </span>
-
-                    {calc?.sale_price > 0 && (
-                        <span className="text-success text-[11px]">
-                            → quedará en ${fmt2(calc.sale_price)}
-                        </span>
-                    )}
-                </label>
+                </div>
+                <div className="space-y-2">
+                    <label className="label">Fecha de vencimiento</label>
+                    <input
+                        type="date"
+                        value={itemForm.expiration_date || ""}
+                        onChange={e => setIF("expiration_date", e.target.value)}
+                        className="input"
+                    />
+                </div>
             </div>
 
-            {/* Botón agregar */}
-            <button onClick={addItem} className="btn-sm btn-success">
-                + Agregar al recibo
-            </button>
+            {/* Acciones */}
+            <div className="border-t border-border dark:border-border-dark pt-4 mb-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs">
+                        <input
+                            type="checkbox"
+                            checked={itemForm.update_price}
+                            onChange={e => setIF("update_price", e.target.checked)}
+                            className="w-3.5 h-3.5 accent-warning"
+                        />
+                        <span className="text-content dark:text-content-dark">
+                            Actualizar precio de venta del producto al guardar
+                        </span>
+                        {calc?.sale_price > 0 && (
+                            <span className="text-success text-[11px]">
+                                → quedará en ${fmt2(calc.sale_price)}
+                            </span>
+                        )}
+                    </label>
+                    <button onClick={addItem} className="btn-sm btn-success w-full sm:w-auto">
+                        + Agregar al recibo
+                    </button>
+                </div>
+            </div>
 
             {/* Lista de items */}
             {items.length > 0 && (

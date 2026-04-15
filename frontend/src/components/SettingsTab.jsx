@@ -104,7 +104,7 @@ export default function SettingsTab({ notify }) {
                     <button
                         key={key}
                         onClick={() => setSection(key)}
-                        className={`h-7 px-4 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${section === key ? 'bg-brand-500 text-black shadow-lg shadow-brand-500/20' : 'text-content-subtle hover:text-content dark:hover:text-white hover:bg-white/5'}`}
+                        className={`btn btn-sm ${section === key ? 'bg-brand-500 text-black shadow-lg shadow-brand-500/20' : 'btn-ghost'} transition-all`}
                     >
                         {label}
                     </button>
@@ -134,13 +134,13 @@ export default function SettingsTab({ notify }) {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {FIELDS_EMPRESA.slice(0, 3).map(([key, label, type, placeholder]) => (
                                         <div key={key} className={key === "store_name" ? "md:col-span-2" : ""}>
-                                            <label className="text-[10px] font-black text-content-subtle uppercase tracking-widest mb-1.5 block px-1 opacity-60">{label}</label>
+                                            <label className="label">{label}</label>
                                             <input 
                                                 type={type} 
                                                 placeholder={placeholder}
                                                 value={settings[key] || ""}
                                                 onChange={e => setSettings(p => ({ ...p, [key]: e.target.value }))}
-                                                className="w-full bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/5 rounded-xl px-4 h-10 text-[11px] font-bold text-content dark:text-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all" 
+                                                className="input h-10" 
                                             />
                                         </div>
                                     ))}
@@ -160,13 +160,13 @@ export default function SettingsTab({ notify }) {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {FIELDS_EMPRESA.slice(3).map(([key, label, type, placeholder]) => (
                                         <div key={key} className={key === "store_address" ? "md:col-span-2" : ""}>
-                                            <label className="text-[10px] font-black text-content-subtle uppercase tracking-widest mb-1.5 block px-1 opacity-60">{label}</label>
+                                            <label className="label">{label}</label>
                                             <input 
                                                 type={type} 
                                                 placeholder={placeholder}
                                                 value={settings[key] || ""}
                                                 onChange={e => setSettings(p => ({ ...p, [key]: e.target.value }))}
-                                                className="w-full bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/5 rounded-xl px-4 h-10 text-[11px] font-bold text-content dark:text-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all" 
+                                                className="input h-10" 
                                             />
                                         </div>
                                     ))}
@@ -174,13 +174,13 @@ export default function SettingsTab({ notify }) {
                             </div>
 
                             <div className="flex justify-end pt-2">
-                                <button 
+                                <Button 
                                     onClick={saveSettings} 
                                     disabled={loading}
-                                    className="h-10 px-8 bg-brand-500 text-black font-black uppercase text-[11px] tracking-widest rounded-xl hover:shadow-lg hover:shadow-brand-500/20 transition-all active:scale-95 disabled:opacity-50"
+                                    className="h-10 px-8"
                                 >
                                     {loading ? "Sincronizando..." : "Guardar Cambios"}
-                                </button>
+                                </Button>
                             </div>
                         </div>
 
@@ -244,14 +244,14 @@ export default function SettingsTab({ notify }) {
                             <div className="space-y-4 mb-8">
                                 {FIELDS_FACTURA.map(([key, label, type, placeholder]) => (
                                     <div key={key}>
-                                        <label className="text-[10px] font-black text-content-subtle uppercase tracking-widest mb-1.5 block px-1 opacity-60">{label}</label>
+                                        <label className="label">{label}</label>
                                         {type === "textarea" || key === "receipt_footer" ? (
                                              <textarea 
                                                 rows={3}
                                                 placeholder={placeholder}
                                                 value={settings[key] || ""}
                                                 onChange={e => setSettings(p => ({ ...p, [key]: e.target.value }))}
-                                                className="w-full bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/5 rounded-xl p-4 text-[11px] font-bold text-content dark:text-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all resize-none" 
+                                                className="input min-h-[96px] p-4 resize-none" 
                                             />
                                         ) : (
                                             <input 
@@ -259,7 +259,7 @@ export default function SettingsTab({ notify }) {
                                                 placeholder={placeholder}
                                                 value={settings[key] || ""}
                                                 onChange={e => setSettings(p => ({ ...p, [key]: e.target.value }))}
-                                                className="w-full bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/5 rounded-xl px-4 h-10 text-[11px] font-bold text-content dark:text-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all" 
+                                                className="input h-10" 
                                             />
                                         )}
                                     </div>
@@ -267,13 +267,13 @@ export default function SettingsTab({ notify }) {
                             </div>
                             
                             <div className="flex justify-end border-t border-border/10 pt-6">
-                                <button 
+                                <Button 
                                     onClick={saveSettings} 
                                     disabled={loading}
-                                    className="h-10 px-8 bg-brand-500 text-black font-black uppercase text-[11px] tracking-widest rounded-xl hover:shadow-lg hover:shadow-brand-500/20 transition-all active:scale-95 disabled:opacity-50"
+                                    className="h-10 px-8"
                                 >
                                     {loading ? "Sincronizando..." : "Actualizar Configuración de Factura"}
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     </div>

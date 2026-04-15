@@ -27,18 +27,14 @@ export default function LoginScreen({ onLogin }) {
   const onKey = e => e.key === "Enter" && handleSubmit();
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-[#0a0a0a]">
-      
-      {/* Dynamic Background Elements */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-500/20 blur-[120px] rounded-full animate-pulse" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[120px] rounded-full" />
-      
-      {/* Overlay Mesh */}
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+    <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-surface-2 dark:bg-surface-dark text-content">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_22%)] pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.08),transparent_22%)] pointer-events-none" />
+      <div className="absolute inset-0 opacity-20 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.06),transparent_24%)]" />
 
       <button
         onClick={toggle}
-        className="fixed top-6 right-6 p-2.5 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-white hover:bg-white/10 transition-all z-50"
+        className="fixed top-6 right-6 p-2.5 rounded-xl bg-surface-1/90 border border-border text-content-subtle hover:text-content hover:bg-surface-2 transition-all z-50"
       >
         {dark ? (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
@@ -47,10 +43,10 @@ export default function LoginScreen({ onLogin }) {
         )}
       </button>
 
-      <div className="w-full max-w-sm relative z-10 px-6">
+      <div className="w-full max-w-md relative z-10 px-6">
         
         {/* Brand Header */}
-        <div className="text-center mb-10">
+        <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-[28px] bg-gradient-to-br from-brand-400 to-brand-600 shadow-[0_0_50px_rgba(20,184,166,0.3)] mb-6 rotate-3 hover:rotate-0 transition-transform duration-500">
             <svg className="w-10 h-10 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -65,18 +61,18 @@ export default function LoginScreen({ onLogin }) {
         </div>
 
         {/* Glass Card */}
-        <div className="bg-white/[0.03] backdrop-blur-2xl border border-white/10 rounded-[32px] p-8 shadow-2xl overflow-hidden relative group">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-brand-500/50 to-transparent" />
+        <div className="card p-8 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-brand-500/60 to-transparent" />
           
           <div className="space-y-6">
             <div className="space-y-2">
-                <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Identidad de Acceso</label>
+                <label className="label text-white/40 ml-1">Identidad de Acceso</label>
                 <div className="relative group/input">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/20 group-focus-within/input:text-brand-500 transition-colors">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-content-subtle group-focus-within/input:text-brand-500 transition-colors">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                     </div>
                     <input 
-                        className="w-full h-14 bg-white/5 border border-white/5 rounded-2xl pl-12 pr-4 text-white placeholder-white/20 outline-none focus:border-brand-500/50 focus:bg-white/10 transition-all font-medium"
+                        className="input h-14 pl-12 pr-4 text-[13px]"
                         placeholder="Nombre de usuario"
                         value={form.username}
                         onChange={e => setForm(p => ({ ...p, username: e.target.value }))}
@@ -87,13 +83,13 @@ export default function LoginScreen({ onLogin }) {
             </div>
 
             <div className="space-y-2">
-                <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Clave de Seguridad</label>
+                <label className="label text-white/40 ml-1">Clave de Seguridad</label>
                 <div className="relative group/input">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/20 group-focus-within/input:text-brand-500 transition-colors">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-content-subtle group-focus-within/input:text-brand-500 transition-colors">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                     </div>
                     <input 
-                        className="w-full h-14 bg-white/5 border border-white/5 rounded-2xl pl-12 pr-12 text-white placeholder-white/20 outline-none focus:border-brand-500/50 focus:bg-white/10 transition-all font-medium"
+                        className="input h-14 pl-12 pr-12 text-[13px]"
                         type={showPass ? "text" : "password"}
                         placeholder="••••••••"
                         value={form.password}
@@ -124,7 +120,7 @@ export default function LoginScreen({ onLogin }) {
             <button
               onClick={handleSubmit}
               disabled={loading || !form.username || !form.password}
-              className="group relative w-full h-14 bg-brand-500 hover:bg-brand-400 disabled:bg-white/5 rounded-2xl text-black font-black uppercase tracking-widest text-xs transition-all shadow-[0_0_30px_rgba(20,184,166,0.2)] active:scale-95 disabled:cursor-not-allowed"
+              className="btn btn-primary w-full h-14"
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">

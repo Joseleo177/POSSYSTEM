@@ -190,7 +190,7 @@ const create = async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { name, price, stock, category_id, unit, qty_step,
-            cost_price, profit_margin, package_size, package_unit, min_stock, is_combo, combo_items, is_service } = req.body;
+            cost_price, profit_margin, package_size, package_unit, min_stock, is_combo, combo_items, is_service, barcode } = req.body;
 
     if (!name || price == null) {
       await t.rollback();
@@ -215,6 +215,7 @@ const create = async (req, res) => {
       min_stock: parseFloat(min_stock) || 0,
       is_combo: isComboBool,
       is_service: isServiceBool,
+      barcode: barcode || null,
     }, { transaction: t });
 
     if (isComboBool && combo_items) {
@@ -246,7 +247,7 @@ const update = async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { name, price, category_id, unit, qty_step,
-            cost_price, profit_margin, package_size, package_unit, min_stock, is_combo, combo_items, is_service } = req.body;
+            cost_price, profit_margin, package_size, package_unit, min_stock, is_combo, combo_items, is_service, barcode } = req.body;
 
     const product = await Product.findByPk(req.params.id, { transaction: t });
     if (!product) {
@@ -281,6 +282,7 @@ const update = async (req, res) => {
       min_stock: parseFloat(min_stock) || 0,
       is_combo: isComboBool,
       is_service: isServiceBool,
+      barcode: barcode || null,
     }, { transaction: t });
 
     if (isComboBool && combo_items !== undefined) {
