@@ -36,7 +36,8 @@ const { tenantStorage } = require('../utils/tenantStorage');
 const tenantModels = [
   'Employee', 'Category', 'Product', 'Bank', 'PaymentMethod', 'Warehouse', 
   'Customer', 'PaymentJournal', 'Serie', 'Sale', 'Purchase', 'Payment', 
-  'CashSession', 'Expense', 'ProductLot', 'PurchasePayment', 'StockTransfer'
+  'CashSession', 'Expense', 'ProductLot', 'PurchasePayment', 'StockTransfer',
+  'ExpenseCategory', 'Return', 'ReturnItem', 'Setting'
 ];
 
 const applyTenantFilter = (modelName, options) => {
@@ -112,7 +113,8 @@ if (Company) {
   const tenantModels = [
     Employee, Category, Product, Bank, PaymentMethod, Warehouse, 
     Customer, PaymentJournal, Serie, Sale, Purchase, Payment, 
-    CashSession, Expense, ProductLot, PurchasePayment, StockTransfer
+    CashSession, Expense, ProductLot, PurchasePayment, StockTransfer,
+    ExpenseCategory, Return, ReturnItem, Setting
   ];
   tenantModels.forEach(model => {
     if (model) {

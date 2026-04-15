@@ -11,6 +11,7 @@ module.exports = (sequelize, DataTypes) => {
     employee_id: { type: DataTypes.INTEGER },
     reason: { type: DataTypes.STRING(500) },
     total: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 },
+    company_id: { type: DataTypes.INTEGER, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

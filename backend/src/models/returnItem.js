@@ -13,7 +13,8 @@ module.exports = (sequelize, DataTypes) => {
     name: { type: DataTypes.STRING(300), allowNull: false },
     price: { type: DataTypes.DECIMAL(12, 4), allowNull: false },
     qty: { type: DataTypes.DECIMAL(10, 3), allowNull: false },
-    subtotal: { type: DataTypes.DECIMAL(12, 2), allowNull: false }
+    subtotal: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
+    company_id: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,
     tableName: 'return_items',

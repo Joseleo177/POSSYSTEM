@@ -10,7 +10,8 @@ module.exports = (sequelize, DataTypes) => {
   ExpenseCategory.init({
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     name: { type: DataTypes.STRING(100), allowNull: false },
-    active: { type: DataTypes.BOOLEAN, defaultValue: true }
+    active: { type: DataTypes.BOOLEAN, defaultValue: true },
+    company_id: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,
     tableName: 'expense_categories',
