@@ -66,14 +66,15 @@ app.use("/api/auth/login", loginLimiter);   // strict limiter on login
 app.use("/api/auth",       require("./routes/auth"));
 
 // ── Protected routes ──────────────────────────────────────────
-const { auth } = require("./middleware/auth");
+const { auth, permit } = require("./middleware/auth");
+const checkSubscription = require("./middleware/checkSubscription");
 
-app.use("/api/products",         auth, require("./routes/products"));
-app.use("/api/sales",            auth, require("./routes/sales"));
-app.use("/api/sales",            auth, require("./routes/returns"));   // devoluciones
-app.use("/api/categories",       auth, require("./routes/categories"));
-app.use("/api/customers",        auth, require("./routes/customers"));
-app.use("/api/dashboard",        auth, require("./routes/dashboard"));
+app.use("/api/products",         auth, checkSubscription, require("./routes/products"));
+app.use("/api/sales",            auth, checkSubscription, require("./routes/sales"));
+app.use("/api/sales",            auth, checkSubscription, require("./routes/returns"));   // devoluciones
+app.use("/api/categories",       auth, checkSubscription, require("./routes/categories"));
+app.use("/api/customers",        auth, checkSubscription, require("./routes/customers"));
+app.use("/api/dashboard",        auth, checkSubscription, require("./routes/dashboard"));
 app.use("/api/employees",        require("./routes/employees"));        // auth+permit dentro
 app.use("/api/currencies",       require("./routes/currencies"));       // auth+permit dentro
 app.use("/api/settings",         require("./routes/settings"));         // auth+permit dentro

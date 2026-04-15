@@ -1,4 +1,5 @@
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const { Company, Employee, Role, Currency } = require("../models");
 
 // GET /api/companies
@@ -46,7 +47,7 @@ const create = async (req, res) => {
       { code: 'VES', name: 'Bolívar Venezolano', symbol: 'Bs.', exchange_rate: 36.0, is_base: false, active: true, company_id: company.id }
     ]);
 
-    const rawPassword = "admin" + company.id;
+    const rawPassword = crypto.randomBytes(6).toString('hex'); // 12-char random password
     const password_hash = await bcrypt.hash(rawPassword, 10);
     const username = `admin_${company.id}`;
     

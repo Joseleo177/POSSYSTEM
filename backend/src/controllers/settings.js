@@ -57,6 +57,8 @@ const uploadLogo = async (req, res) => {
     const ext = path.extname(req.file.originalname).toLowerCase();
     const filename = `logo_${Date.now()}${ext}`;
 
+    let logoValue;
+
     if (isSupabase()) {
       // Eliminar logo anterior de Supabase
       if (old && old.startsWith("http")) {

@@ -1,7 +1,8 @@
 const jwt = require("jsonwebtoken");
 const { tenantStorage } = require("../utils/tenantStorage");
 
-const SECRET = process.env.JWT_SECRET || "supersecretkey_change_in_production";
+const SECRET = process.env.JWT_SECRET;
+if (!SECRET) throw new Error('JWT_SECRET environment variable is required');
 
 // Verifica token y carga req.employee
 const auth = (req, res, next) => {

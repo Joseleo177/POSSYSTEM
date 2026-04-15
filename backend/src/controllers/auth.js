@@ -2,7 +2,8 @@ const bcrypt = require("bcryptjs");
 const jwt    = require("jsonwebtoken");
 const { Employee, Role, Warehouse } = require("../models");
 
-const SECRET  = process.env.JWT_SECRET || "supersecretkey_change_in_production";
+const SECRET  = process.env.JWT_SECRET;
+if (!SECRET) throw new Error('JWT_SECRET environment variable is required');
 const EXPIRES = "12h";
 
 // POST /api/auth/login

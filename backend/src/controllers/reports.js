@@ -2,18 +2,29 @@ const { Sale, SaleItem, Product, Customer, Employee, Purchase, PurchaseItem, Pro
 const { Op } = Sequelize;
 
 // ── Helpers ──────────────────────────────────────────────────
+
+// Sanitize date input to prevent SQL injection — only allows YYYY-MM-DD
+function sanitizeDate(val) {
+  if (!val) return null;
+  const match = String(val).match(/^(\d{4}-\d{2}-\d{2})$/);
+  return match ? match[1] : null;
+}
+
 function dateWhere(date_from, date_to) {
-  if (!date_from && !date_to) return {};
+  const df = sanitizeDate(date_from);
+  const dt = sanitizeDate(date_to);
+  if (!df && !dt) return {};
   const w = {};
-  if (date_from) w[Op.gte] = date_from;
-  if (date_to)   w[Op.lt]  = Sequelize.literal(`('${date_to}'::date + INTERVAL '1 day')`);
+  if (df) w[Op.gte] = df;
+  if (dt) w[Op.lt]  = Sequelize.literal(`('${dt}'::date + INTERVAL '1 day')`);
   return { created_at: w };
 }
 
 // ── GET /api/reports/sales ────────────────────────────────────
 const getSalesReport = async (req, res) => {
   try {
-    const { date_from, date_to } = req.query;
+    const date_from = sanitizeDate(req.query.date_from);
+    const date_to   = sanitizeDate(req.query.date_to);
     const company_id = req.employee?.company_id ?? null;
     const isSuperuser = !!req.is_superuser;
     const tc = !isSuperuser && company_id ? `AND company_id = :cid` : '';
@@ -144,7 +155,9 @@ const getSalesReport = async (req, res) => {
 // ── GET /api/reports/products ─────────────────────────────────
 const getProductsReport = async (req, res) => {
   try {
-    const { date_from, date_to, limit = 20 } = req.query;
+    const { limit = 20 } = req.query;
+    const date_from = sanitizeDate(req.query.date_from);
+    const date_to   = sanitizeDate(req.query.date_to);
     const company_id = req.employee?.company_id ?? null;
     const isSuperuser = !!req.is_superuser;
     const tcS = !isSuperuser && company_id ? `AND s.company_id = :cid` : '';
@@ -313,7 +326,8 @@ const getReceivablesReport = async (req, res) => {
 // ── GET /api/reports/purchases ────────────────────────────────
 const getPurchasesReport = async (req, res) => {
   try {
-    const { date_from, date_to } = req.query;
+    const date_from = sanitizeDate(req.query.date_from);
+    const date_to   = sanitizeDate(req.query.date_to);
     const company_id = req.employee?.company_id ?? null;
     const isSuperuser = !!req.is_superuser;
     const tc = !isSuperuser && company_id ? `AND company_id = :cid` : '';
@@ -501,7 +515,8 @@ const getInventoryReport = async (req, res) => {
 // ── GET /api/reports/margins ──────────────────────────────────
 const getMarginsReport = async (req, res) => {
   try {
-    const { date_from, date_to } = req.query;
+    const date_from = sanitizeDate(req.query.date_from);
+    const date_to   = sanitizeDate(req.query.date_to);
     const company_id = req.employee?.company_id ?? null;
     const isSuperuser = !!req.is_superuser;
     const tcS = !isSuperuser && company_id ? `AND s.company_id = :cid` : '';
@@ -604,7 +619,9 @@ const getMarginsReport = async (req, res) => {
 // ── GET /api/reports/customers-analysis ──────────────────────
 const getCustomersAnalysis = async (req, res) => {
   try {
-    const { date_from, date_to, inactive_days = 45 } = req.query;
+    const { inactive_days = 45 } = req.query;
+    const date_from = sanitizeDate(req.query.date_from);
+    const date_to   = sanitizeDate(req.query.date_to);
     const company_id = req.employee?.company_id ?? null;
     const isSuperuser = !!req.is_superuser;
     const tc = !isSuperuser && company_id ? `AND company_id = :cid` : '';
@@ -731,7 +748,8 @@ const getCustomersAnalysis = async (req, res) => {
 // ── GET /api/reports/audit ────────────────────────────────────
 const getAuditReport = async (req, res) => {
   try {
-    const { date_from, date_to } = req.query;
+    const date_from = sanitizeDate(req.query.date_from);
+    const date_to   = sanitizeDate(req.query.date_to);
     const company_id = req.employee?.company_id ?? null;
     const isSuperuser = !!req.is_superuser;
     const tcS = !isSuperuser && company_id ? `AND s.company_id = :cid` : '';
