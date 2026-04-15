@@ -106,7 +106,7 @@ tenantModels.forEach(modelName => {
 });
 
 // Centralized associations
-const { Company, Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment } = db;
+const { Company, Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment, Setting } = db;
 
 // ── Company Associations ────────────────────────────────────────
 if (Company) {
@@ -240,7 +240,7 @@ if (Sale && Serie && SerieRange) {
   Sale.belongsTo(SerieRange, { foreignKey: 'serie_range_id' });
 }
 
-const { Setting } = db;
+
 
 if (CashSession && Employee && Warehouse && CashSessionJournal && PaymentJournal) {
   CashSession.belongsTo(Employee,  { as: 'employee',  foreignKey: 'employee_id' });
