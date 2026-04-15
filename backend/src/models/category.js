@@ -18,6 +18,10 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       unique: true
     },
+    company_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
     color: {
       type: DataTypes.STRING(20),
       allowNull: true,

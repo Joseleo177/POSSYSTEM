@@ -31,14 +31,96 @@ fs
     db[model.name] = model;
   });
 
+const { tenantStorage } = require('../utils/tenantStorage');
+
+const tenantModels = [
+  'Employee', 'Category', 'Product', 'Bank', 'PaymentMethod', 'Warehouse', 
+  'Customer', 'PaymentJournal', 'Serie', 'Sale', 'Purchase', 'Payment', 
+  'CashSession', 'Expense', 'ProductLot', 'PurchasePayment', 'StockTransfer'
+];
+
+const applyTenantFilter = (modelName, options) => {
+  const store = tenantStorage.getStore();
+  if (store && store.company_id && tenantModels.includes(modelName)) {
+    if (!options.where) options.where = {};
+    options.where.company_id = store.company_id;
+  }
+};
+
+// NOTE: sequelize global beforeFind does NOT populate options.model in Sequelize v6,
+// so the filter must be registered per-model (see below after models are loaded).
+sequelize.addHook('beforeUpdate',      (instance, options) => applyTenantFilter(instance.constructor.name, options));
+sequelize.addHook('beforeDestroy',     (instance, options) => applyTenantFilter(instance.constructor.name, options));
+sequelize.addHook('beforeBulkUpdate',  (options) => {
+  // options.model is a class, not undefined, for bulk hooks
+  applyTenantFilter(options.model?.name, options);
+});
+sequelize.addHook('beforeBulkDestroy', (options) => {
+  applyTenantFilter(options.model?.name, options);
+});
+
+
+sequelize.addHook('beforeCreate', (instance, options) => {
+  const store = tenantStorage.getStore();
+  if (store && store.company_id && tenantModels.includes(instance.constructor.name)) {
+    if (!instance.company_id) {
+      instance.company_id = store.company_id;
+    }
+  }
+});
+
+sequelize.addHook('beforeBulkCreate', (instances, options) => {
+  const store = tenantStorage.getStore();
+  if (store && store.company_id) {
+    instances.forEach(instance => {
+      if (tenantModels.includes(instance.constructor.name) && !instance.company_id) {
+        instance.company_id = store.company_id;
+      }
+    });
+  }
+});
+
 Object.keys(db).forEach(modelName => {
   if (db[modelName].associate) {
     db[modelName].associate(db);
   }
 });
 
+// Register per-model beforeFind hooks so `this.name` is available (global beforeFind
+// in Sequelize v6 does NOT expose options.model, making tenant filtering impossible).
+tenantModels.forEach(modelName => {
+  const model = db[modelName];
+  if (!model) return;
+
+  const hookFn = function(options) {
+    const store = tenantStorage.getStore();
+    if (store && store.company_id) {
+      if (!options.where) options.where = {};
+      options.where.company_id = store.company_id;
+    }
+  };
+
+  model.addHook('beforeFind', hookFn);
+  model.addHook('beforeCount', hookFn);
+});
+
 // Centralized associations
-const { Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment } = db;
+const { Company, Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment } = db;
+
+// ── Company Associations ────────────────────────────────────────
+if (Company) {
+  const tenantModels = [
+    Employee, Category, Product, Bank, PaymentMethod, Warehouse, 
+    Customer, PaymentJournal, Serie, Sale, Purchase, Payment, 
+    CashSession, Expense, ProductLot, PurchasePayment, StockTransfer
+  ];
+  tenantModels.forEach(model => {
+    if (model) {
+      model.belongsTo(Company, { foreignKey: 'company_id' });
+      Company.hasMany(model, { foreignKey: 'company_id' });
+    }
+  });
+}
 
 if(Return && Sale && Employee && ReturnItem && Product) {
   Return.belongsTo(Sale, { foreignKey: 'sale_id' });

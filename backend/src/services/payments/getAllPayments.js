@@ -1,11 +1,16 @@
 const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Sequelize, Op } = require("./shared");
 
-module.exports = async function getAllPayments(query) {
+module.exports = async function getAllPayments(query, tenant = {}) {
   const { date_from, date_to, limit = 100, offset = 0, search } = query;
+  const { company_id, isSuperuser } = tenant;
   const andClauses = [
     // Excluir egresos de cambio (amount < 0) del historial visible
     { amount: { [Op.gt]: 0 } },
   ];
+
+  if (!isSuperuser && company_id) {
+    andClauses.push({ company_id });
+  }
 
   if (date_from) andClauses.push(Sequelize.literal(`("Payment"."created_at" AT TIME ZONE 'America/Caracas')::date >= '${date_from}'`));
   if (date_to)   andClauses.push(Sequelize.literal(`("Payment"."created_at" AT TIME ZONE 'America/Caracas')::date <= '${date_to}'`));

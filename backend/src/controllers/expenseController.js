@@ -5,8 +5,11 @@ const { Op } = require('sequelize');
 exports.getAll = async (req, res, next) => {
   try {
     const { limit = 50, offset = 0, date_from, date_to, search, status, category_id } = req.query;
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
 
     const where = {};
+    if (!isSuperuser && company_id) where.company_id = company_id;
     if (status)      where.status = status;
     if (category_id) where.category_id = category_id;
     if (search)      where.description = { [Op.iLike]: `%${search}%` };

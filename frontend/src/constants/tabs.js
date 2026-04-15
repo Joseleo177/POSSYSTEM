@@ -9,5 +9,6 @@ export const ALL_TABS = [
     { key: "Contabilidad", label: "Contabilidad", mobileLabel: "Contab.", perms: ["sales", "reports", "config"] },
     { key: "Reportes", label: "Reportes", mobileLabel: "Reportes", perms: ["reports", "config", "inventory"] },
     { key: "Empleados", label: "Empleados", mobileLabel: "Staff", adminOnly: true },
+    { key: "Empresas", label: "Empresas", mobileLabel: "Empresas", superuserOnly: true },
     { key: "Configuración", label: "Configuración", mobileLabel: "Config.", perms: ["config"] },
 ];

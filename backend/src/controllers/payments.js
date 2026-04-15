@@ -3,7 +3,9 @@ const paymentsService = require("../services/payments");
 // GET /api/payments — historial de pagos registrados
 const getAll = async (req, res) => {
   try {
-    const result = await paymentsService.getAllPayments(req.query);
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const result = await paymentsService.getAllPayments(req.query, { company_id, isSuperuser });
     res.json({ ok: true, data: result.data, total: result.total });
   } catch (err) {
     console.error(err);
@@ -14,7 +16,9 @@ const getAll = async (req, res) => {
 // GET /api/payments/pending — facturas pendientes o parciales
 const getPending = async (req, res) => {
   try {
-    const result = await paymentsService.getPendingPayments(req.query);
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const result = await paymentsService.getPendingPayments(req.query, { company_id, isSuperuser });
     res.json({ ok: true, data: result.data, total: result.total });
   } catch (err) {
     console.error(err);

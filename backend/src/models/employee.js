@@ -13,6 +13,8 @@ module.exports = (sequelize, DataTypes) => {
     email: { type: DataTypes.STRING(150), unique: true },
     phone: { type: DataTypes.STRING(20) },
     role_id: { type: DataTypes.INTEGER, allowNull: false },
+    company_id: { type: DataTypes.INTEGER, allowNull: true },
+    is_superuser: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }

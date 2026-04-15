@@ -9,6 +9,7 @@ import ClientesPage from "../pages/ClientesPage";
 import ContabilidadPage from "../pages/ContabilidadPage";
 import ConfigPage from "../pages/ConfigPage";
 import ReportesPage from "../pages/ReportesPage";
+import CompaniesPage from "../pages/CompaniesPage";
 
 export const PAGE_COMPONENTS = {
     Dashboard: DashboardPage,
@@ -20,5 +21,6 @@ export const PAGE_COMPONENTS = {
     Contabilidad: ContabilidadPage,
     Reportes: ReportesPage,
     Empleados: EmpleadosPage,
+    Empresas: CompaniesPage,
     "Configuración": ConfigPage,
 };

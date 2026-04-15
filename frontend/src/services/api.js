@@ -261,4 +261,9 @@ export const api = {
     create:         (body)      => request("/expenses",              { method: "POST", body: JSON.stringify(body) }),
     void:           (id)        => request(`/expenses/${id}`,        { method: "DELETE" }),
   },
+  companies: {
+    getAll: ()          => request("/companies"),
+    create: (body)      => request("/companies",       { method: "POST", body: JSON.stringify(body) }),
+    update: (id, body)  => request(`/companies/${id}`, { method: "PUT",  body: JSON.stringify(body) }),
+  },
 };

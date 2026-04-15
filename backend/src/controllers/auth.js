@@ -28,17 +28,19 @@ const login = async (req, res) => {
       return res.status(401).json({ ok: false, message: "Contraseña incorrecta" });
 
     const payload = {
-      id:          emp.id,
-      username:    emp.username,
-      full_name:   emp.full_name,
-      role:        emp.Role?.name  ?? null,
-      role_label:  emp.Role?.label ?? null,
-      permissions: emp.Role?.permissions ?? {},
-      warehouses:  emp.Warehouses || []
+      id:           emp.id,
+      username:     emp.username,
+      full_name:    emp.full_name,
+      role:         emp.Role?.name  ?? null,
+      role_label:   emp.Role?.label ?? null,
+      permissions:  emp.Role?.permissions ?? {},
+      warehouses:   emp.Warehouses || [],
+      company_id:   emp.company_id,
+      is_superuser: !!emp.is_superuser
     };
 
     const token = jwt.sign(payload, SECRET, { expiresIn: EXPIRES });
-    const refresh_token = jwt.sign({ id: emp.id }, SECRET, { expiresIn: '7d' });
+    const refresh_token = jwt.sign({ id: emp.id, company_id: emp.company_id }, SECRET, { expiresIn: '7d' });
     res.json({ ok: true, token, refresh_token, employee: payload });
   } catch (err) {
     console.error(err);
@@ -93,17 +95,19 @@ const refresh = async (req, res) => {
     if (!emp || !emp.active) return res.status(401).json({ ok: false, message: "Usuario inválido o inactivo" });
 
     const payload = {
-      id:          emp.id,
-      username:    emp.username,
-      full_name:   emp.full_name,
-      role:        emp.Role?.name  ?? null,
-      role_label:  emp.Role?.label ?? null,
-      permissions: emp.Role?.permissions ?? {},
-      warehouses:  emp.Warehouses || []
+      id:           emp.id,
+      username:     emp.username,
+      full_name:    emp.full_name,
+      role:         emp.Role?.name  ?? null,
+      role_label:   emp.Role?.label ?? null,
+      permissions:  emp.Role?.permissions ?? {},
+      warehouses:   emp.Warehouses || [],
+      company_id:   emp.company_id,
+      is_superuser: !!emp.is_superuser
     };
 
     const token = jwt.sign(payload, SECRET, { expiresIn: EXPIRES });
-    const new_refresh_token = jwt.sign({ id: emp.id }, SECRET, { expiresIn: '7d' });
+    const new_refresh_token = jwt.sign({ id: emp.id, company_id: emp.company_id }, SECRET, { expiresIn: '7d' });
 
     res.json({ ok: true, token, refresh_token: new_refresh_token });
   } catch (err) {

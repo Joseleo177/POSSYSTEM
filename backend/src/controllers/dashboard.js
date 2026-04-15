@@ -4,15 +4,18 @@ const { Op } = Sequelize;
 // GET /api/dashboard
 const getDashboard = async (req, res) => {
   try {
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
     const now     = new Date();
     const today   = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const week    = new Date(today); week.setDate(week.getDate() - 7);
     const month   = new Date(today); month.setDate(month.getDate() - 30);
 
     // ── KPIs de ventas ─────────────────────────────────────────
+    const tenantWhere = (!isSuperuser && company_id) ? { company_id } : {};
     const [kpiToday, kpiMonth] = await Promise.all([
       Sale.findOne({
-        where: { created_at: { [Op.gte]: today }, status: { [Op.ne]: 'anulado' } },
+        where: { ...tenantWhere, created_at: { [Op.gte]: today }, status: { [Op.ne]: 'anulado' } },
         attributes: [
           [Sequelize.fn("COUNT", Sequelize.col("id")), "count"],
           [Sequelize.fn("COALESCE", Sequelize.fn("SUM", Sequelize.col("total")), 0), "revenue"],
@@ -20,7 +23,7 @@ const getDashboard = async (req, res) => {
         raw: true,
       }),
       Sale.findOne({
-        where: { created_at: { [Op.gte]: month }, status: { [Op.ne]: 'anulado' } },
+        where: { ...tenantWhere, created_at: { [Op.gte]: month }, status: { [Op.ne]: 'anulado' } },
         attributes: [
           [Sequelize.fn("COUNT", Sequelize.col("id")), "count"],
           [Sequelize.fn("COALESCE", Sequelize.fn("SUM", Sequelize.col("total")), 0), "revenue"],
@@ -30,21 +33,22 @@ const getDashboard = async (req, res) => {
     ]);
 
     // ── Ingresos Reales vs Egresos ─────────────────────────────
+    const tenantClause   = !isSuperuser && company_id ? `AND company_id = :company_id` : '';
     const [incomeToday, incomeMonth, expenseToday, expenseMonth] = await Promise.all([
-      sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total FROM payments WHERE created_at >= :today`, { replacements: { today }, type: Sequelize.QueryTypes.SELECT }),
-      sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total FROM payments WHERE created_at >= :month`, { replacements: { month }, type: Sequelize.QueryTypes.SELECT }),
-      sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) as total FROM expenses WHERE created_at >= :today AND status = 'activo'`, { replacements: { today }, type: Sequelize.QueryTypes.SELECT }),
-      sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) as total FROM expenses WHERE created_at >= :month AND status = 'activo'`, { replacements: { month }, type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total FROM payments WHERE created_at >= :today ${tenantClause}`, { replacements: { today, company_id }, type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total FROM payments WHERE created_at >= :month ${tenantClause}`, { replacements: { month, company_id }, type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) as total FROM expenses WHERE created_at >= :today AND status = 'activo' ${tenantClause}`, { replacements: { today, company_id }, type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) as total FROM expenses WHERE created_at >= :month AND status = 'activo' ${tenantClause}`, { replacements: { month, company_id }, type: Sequelize.QueryTypes.SELECT }),
     ]);
 
     // ── Cash in Hand (Saldo neto total disponible) ──────────────
     const cashInHand = await sequelize.query(`
         SELECT (
-          (SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) FROM payments)
+          (SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) FROM payments ${!isSuperuser && company_id ? 'WHERE company_id = :company_id' : ''})
           -
-          (SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) FROM expenses WHERE status = 'activo')
+          (SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) FROM expenses WHERE status = 'activo' ${!isSuperuser && company_id ? 'AND company_id = :company_id' : ''})
         ) as total
-    `, { type: Sequelize.QueryTypes.SELECT });
+    `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 
     // ── Top 5 productos más vendidos (30 días) ─────────────────
     const topProducts = await SaleItem.findAll({
@@ -57,9 +61,10 @@ const getDashboard = async (req, res) => {
       include: [{
         model: Sale,
         attributes: [],
-        where: { 
-            created_at: { [Op.gte]: month }, 
-            status: { [Op.notIn]: ['anulado', 'eliminado'] } 
+        where: {
+            ...tenantWhere,
+            created_at: { [Op.gte]: month },
+            status: { [Op.notIn]: ['anulado', 'eliminado'] }
         },
         required: true,
       }],
@@ -75,21 +80,23 @@ const getDashboard = async (req, res) => {
               COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS revenue
        FROM sales
-       WHERE created_at >= NOW() - INTERVAL '30 days' 
+       WHERE created_at >= NOW() - INTERVAL '30 days'
          AND status NOT IN ('anulado', 'eliminado')
+         ${!isSuperuser && company_id ? 'AND company_id = :company_id' : ''}
        GROUP BY CAST(created_at AS DATE)
        ORDER BY day ASC
-    `, { type: Sequelize.QueryTypes.SELECT });
+    `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 
     // ── Cuentas por cobrar (facturas pendientes) ───────────────
     // Usamos una consulta SQL directa para evitar problemas de alias con Sequelize
     const pendingResults = await sequelize.query(`
-        SELECT 
+        SELECT
             COUNT(id) as count,
             COALESCE(SUM(total - (SELECT COALESCE(SUM(amount), 0) FROM payments p WHERE p.sale_id = s.id)), 0) as balance
         FROM sales s
         WHERE s.status IN ('pendiente', 'parcial')
-    `, { type: Sequelize.QueryTypes.SELECT });
+        ${!isSuperuser && company_id ? 'AND s.company_id = :company_id' : ''}
+    `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 
     // ── Productos con stock bajo (Suma Global) ─────────────────
     const lowStock = await sequelize.query(`
@@ -97,15 +104,16 @@ const getDashboard = async (req, res) => {
         FROM products p
         LEFT JOIN product_stock ps ON ps.product_id = p.id
         WHERE p.min_stock > 0
+        ${!isSuperuser && company_id ? 'AND p.company_id = :company_id' : ''}
         GROUP BY p.id, p.name, p.unit, p.min_stock
         HAVING COALESCE(SUM(ps.qty), 0) < p.min_stock
         ORDER BY total_stock ASC
         LIMIT 10
-    `, { type: Sequelize.QueryTypes.SELECT });
+    `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 
     // ── Compras del mes ───────────────────────────────────────
     const purchasesMonth = await Purchase.findOne({
-      where: { created_at: { [Op.gte]: month } },
+      where: { ...tenantWhere, created_at: { [Op.gte]: month } },
       attributes: [
         [Sequelize.fn("COUNT", Sequelize.col("id")), "count"],
         [Sequelize.fn("COALESCE", Sequelize.fn("SUM", Sequelize.col("total")), 0), "total"],

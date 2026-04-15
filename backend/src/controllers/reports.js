@@ -14,6 +14,13 @@ function dateWhere(date_from, date_to) {
 const getSalesReport = async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tc = !isSuperuser && company_id ? `AND company_id = :cid` : '';
+    const tcS = !isSuperuser && company_id ? `AND s.company_id = :cid` : '';
+    const tcS2 = !isSuperuser && company_id ? `AND s2.company_id = :cid` : '';
+    const tcP = !isSuperuser && company_id ? `AND p.company_id = :cid` : '';
+    const rep = { cid: company_id };
     const where = dateWhere(date_from, date_to);
 
     const [summary, byMethod, byDay, byEmployee, byHour] = await Promise.all([
@@ -22,9 +29,9 @@ const getSalesReport = async (req, res) => {
       sequelize.query(
         `SELECT
            COUNT(*)::int AS total_sales,
-           (COALESCE(SUM(CASE WHEN status = 'pagado' THEN total ELSE 0 END), 0) - 
-            COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id 
-                      WHERE s2.status = 'pagado' 
+           (COALESCE(SUM(CASE WHEN status = 'pagado' THEN total ELSE 0 END), 0) -
+            COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id
+                      WHERE s2.status = 'pagado' ${tcS2}
                         ${date_from ? `AND s2.created_at >= '${date_from}'` : ""}
                         ${date_to   ? `AND s2.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
                      ), 0))::float AS total_revenue,
@@ -33,16 +40,16 @@ const getSalesReport = async (req, res) => {
            COALESCE(MIN(CASE WHEN status = 'pagado' THEN total END), 0)::float AS min_sale,
            COUNT(CASE WHEN status IN ('pendiente','parcial') THEN 1 END)::int AS pending_count,
            COALESCE(SUM(CASE WHEN status IN ('pendiente','parcial') THEN total ELSE 0 END), 0)::float AS pending_amount,
-           COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id 
-                      WHERE s2.status = 'pagado' 
+           COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id
+                      WHERE s2.status = 'pagado' ${tcS2}
                         ${date_from ? `AND s2.created_at >= '${date_from}'` : ""}
                         ${date_to   ? `AND s2.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
                      ), 0)::float AS total_returned
          FROM sales
-         WHERE TRUE
+         WHERE TRUE ${tc}
            ${date_from ? `AND created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Por diario de pago (tabla payments + payment_journals)
@@ -55,12 +62,12 @@ const getSalesReport = async (req, res) => {
          FROM payments p
          LEFT JOIN payment_journals pj ON p.payment_journal_id = pj.id
          JOIN sales s ON p.sale_id = s.id
-         WHERE TRUE
+         WHERE TRUE ${tcS}
            ${date_from ? `AND s.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND s.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY pj.id, pj.name, pj.type
          ORDER BY total DESC`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Por día (solo ventas pagadas)
@@ -69,12 +76,12 @@ const getSalesReport = async (req, res) => {
                 COUNT(*)::int    AS count,
                 COALESCE(SUM(total), 0)::float AS revenue
          FROM sales
-         WHERE status = 'pagado'
+         WHERE status = 'pagado' ${tc}
            ${date_from ? `AND created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY DATE(created_at)
          ORDER BY day ASC`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Por empleado (solo ventas pagadas)
@@ -85,12 +92,12 @@ const getSalesReport = async (req, res) => {
                 COALESCE(AVG(s.total), 0)::float AS avg_ticket
          FROM sales s
          LEFT JOIN employees e ON s.employee_id = e.id
-         WHERE s.status = 'pagado'
+         WHERE s.status = 'pagado' ${tcS}
            ${date_from ? `AND s.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND s.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY e.id, e.full_name
          ORDER BY revenue DESC`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Por hora del día (solo ventas pagadas, hora local Venezuela UTC-4)
@@ -99,12 +106,12 @@ const getSalesReport = async (req, res) => {
                 COUNT(*)::int AS count,
                 COALESCE(SUM(total), 0)::float AS revenue
          FROM sales
-         WHERE status = 'pagado'
+         WHERE status = 'pagado' ${tc}
            ${date_from ? `AND created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Caracas')
          ORDER BY hour ASC`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
     ]);
 
@@ -138,6 +145,11 @@ const getSalesReport = async (req, res) => {
 const getProductsReport = async (req, res) => {
   try {
     const { date_from, date_to, limit = 20 } = req.query;
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tcS = !isSuperuser && company_id ? `AND s.company_id = :cid` : '';
+    const tcP = !isSuperuser && company_id ? `AND p.company_id = :cid` : '';
+    const rep = { cid: company_id };
 
     const [topByRevenue, topByQty, slowMovers, stockValue] = await Promise.all([
 
@@ -153,13 +165,13 @@ const getProductsReport = async (req, res) => {
          FROM sale_items si
          JOIN sales s ON si.sale_id = s.id
          LEFT JOIN products p ON si.product_id = p.id
-         WHERE TRUE
+         WHERE TRUE ${tcS}
            ${date_from ? `AND s.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND s.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY si.product_id, si.name, p.category_id
          ORDER BY total_revenue DESC
          LIMIT ${parseInt(limit)}`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Top por cantidad vendida
@@ -170,13 +182,13 @@ const getProductsReport = async (req, res) => {
                 COALESCE(SUM(si.subtotal), 0)::float AS total_revenue
          FROM sale_items si
          JOIN sales s ON si.sale_id = s.id
-         WHERE TRUE
+         WHERE TRUE ${tcS}
            ${date_from ? `AND s.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND s.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY si.product_id, si.name
          ORDER BY total_qty DESC
          LIMIT ${parseInt(limit)}`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Productos sin movimiento (tienen stock pero no aparecen en ventas del período)
@@ -185,19 +197,19 @@ const getProductsReport = async (req, res) => {
                 p.cost_price
          FROM products p
          WHERE p.is_service = false
-           AND p.is_combo = false
+           AND p.is_combo = false ${tcP}
            AND (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id) > 0
            AND p.id NOT IN (
              SELECT DISTINCT si.product_id
              FROM sale_items si
              JOIN sales s ON si.sale_id = s.id
-             WHERE TRUE
+             WHERE TRUE ${tcS}
                ${date_from ? `AND s.created_at >= '${date_from}'` : ""}
                ${date_to   ? `AND s.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
            )
-         ORDER BY p.stock DESC
+         ORDER BY p.name ASC
          LIMIT 20`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Valor total del inventario
@@ -207,8 +219,8 @@ const getProductsReport = async (req, res) => {
            COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id) * price), 0)::float AS total_value_sale,
            COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id) * COALESCE(cost_price, 0)), 0)::float AS total_value_cost
          FROM products p
-         WHERE is_combo = false AND is_service = false`,
-        { type: Sequelize.QueryTypes.SELECT }
+         WHERE is_combo = false AND is_service = false ${tcP}`,
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
     ]);
 
@@ -230,6 +242,11 @@ const getProductsReport = async (req, res) => {
 // ── GET /api/reports/receivables ─────────────────────────────
 const getReceivablesReport = async (req, res) => {
   try {
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tcS = !isSuperuser && company_id ? `AND s.company_id = :cid` : '';
+    const rep = { cid: company_id };
+
     const [summary, byCustomer, aging] = await Promise.all([
 
       // Resumen
@@ -240,8 +257,8 @@ const getReceivablesReport = async (req, res) => {
            COALESCE(SUM(total), 0)::float AS total_billed,
            COALESCE(SUM((SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = s.id)), 0)::float AS total_collected
          FROM sales s
-         WHERE status IN ('pendiente', 'parcial')`,
-        { type: Sequelize.QueryTypes.SELECT }
+         WHERE status IN ('pendiente', 'parcial') ${tcS}`,
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Por cliente
@@ -258,10 +275,10 @@ const getReceivablesReport = async (req, res) => {
            MAX(s.created_at) AS latest_invoice
          FROM sales s
          LEFT JOIN customers c ON s.customer_id = c.id
-         WHERE s.status IN ('pendiente', 'parcial')
+         WHERE s.status IN ('pendiente', 'parcial') ${tcS}
          GROUP BY c.id, c.name, c.phone, c.rif
          ORDER BY balance DESC`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Aging (antigüedad de deuda)
@@ -274,8 +291,8 @@ const getReceivablesReport = async (req, res) => {
            COUNT(CASE WHEN NOW() - created_at > INTERVAL '60 days' THEN 1 END)::int                                   AS d60_plus_count,
            COALESCE(SUM(CASE WHEN NOW() - created_at > INTERVAL '60 days'  THEN total - (SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = s.id) ELSE 0 END), 0)::float AS d60_plus_amount
          FROM sales s
-         WHERE status IN ('pendiente', 'parcial')`,
-        { type: Sequelize.QueryTypes.SELECT }
+         WHERE status IN ('pendiente', 'parcial') ${tcS}`,
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
     ]);
 
@@ -297,6 +314,11 @@ const getReceivablesReport = async (req, res) => {
 const getPurchasesReport = async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tc = !isSuperuser && company_id ? `AND company_id = :cid` : '';
+    const tcP = !isSuperuser && company_id ? `AND p.company_id = :cid` : '';
+    const rep = { cid: company_id };
 
     const [summary, bySupplier, byDay, topProducts] = await Promise.all([
 
@@ -308,10 +330,10 @@ const getPurchasesReport = async (req, res) => {
            COALESCE(AVG(total), 0)::float AS avg_order,
            COALESCE(MAX(total), 0)::float AS max_order
          FROM purchases
-         WHERE TRUE
+         WHERE TRUE ${tc}
            ${date_from ? `AND created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Por proveedor
@@ -322,13 +344,13 @@ const getPurchasesReport = async (req, res) => {
            COALESCE(SUM(p.total), 0)::float AS total_cost
          FROM purchases p
          LEFT JOIN customers c ON p.supplier_id = c.id
-         WHERE TRUE
+         WHERE TRUE ${tcP}
            ${date_from ? `AND p.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND p.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY c.name, p.supplier_name
          ORDER BY total_cost DESC
          LIMIT 20`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Por día
@@ -337,12 +359,12 @@ const getPurchasesReport = async (req, res) => {
                 COUNT(*)::int AS count,
                 COALESCE(SUM(total), 0)::float AS cost
          FROM purchases
-         WHERE TRUE
+         WHERE TRUE ${tc}
            ${date_from ? `AND created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY DATE(created_at)
          ORDER BY day ASC`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Productos más comprados
@@ -355,13 +377,13 @@ const getPurchasesReport = async (req, res) => {
            COALESCE(SUM(pi.package_qty * pi.package_price), 0)::float AS total_cost
          FROM purchase_items pi
          JOIN purchases p ON pi.purchase_id = p.id
-         WHERE TRUE
+         WHERE TRUE ${tcP}
            ${date_from ? `AND p.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND p.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY pi.product_id, pi.product_name
          ORDER BY total_cost DESC
          LIMIT 15`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
     ]);
 
@@ -384,19 +406,25 @@ const getPurchasesReport = async (req, res) => {
 const getInventoryReport = async (req, res) => {
   try {
     const { days = 30, warehouse_id, category_id, limit = 50, offset = 0, view = "all", search = "" } = req.query;
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tcP = !isSuperuser && company_id ? `AND p.company_id = :cid` : '';
+    const tcS = !isSuperuser && company_id ? `AND s.company_id = :cid` : '';
+    const rep = { cid: company_id };
 
     const stockFieldByWarehouse = warehouse_id ? `COALESCE(ps.qty, 0)` : `(SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id)`;
     const stockField = stockFieldByWarehouse;
     const stockJoin = warehouse_id ? `JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = ${parseInt(warehouse_id)}` : ``;
     const catFilter = category_id ? `AND p.category_id = ${parseInt(category_id)}` : "";
-    const searchFilter = search ? `AND p.name ILIKE '%${search}%'` : "";
+    const searchFilter = search ? `AND p.name ILIKE '%${search.replace(/'/g, "''")}%'` : "";
+    const slowSubquery = `SELECT DISTINCT si.product_id FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE s.created_at >= NOW() - (${parseInt(days)} * INTERVAL '1 day') ${tcS}`;
 
     // Queries para los KPIs (Siempre se ejecutan para mantener los indicadores arriba)
     const [criticalCount, zeroCount, slowCount, lockedValue] = await Promise.all([
-      sequelize.query(`SELECT COUNT(*)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND p.min_stock > 0 AND ${stockField} < p.min_stock ${catFilter} ${searchFilter}`, { type: Sequelize.QueryTypes.SELECT }),
-      sequelize.query(`SELECT COUNT(*)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND (${stockField} IS NULL OR ${stockField} <= 0) ${catFilter} ${searchFilter}`, { type: Sequelize.QueryTypes.SELECT }),
-      sequelize.query(`SELECT COUNT(p.id)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (SELECT DISTINCT si.product_id FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE s.created_at >= NOW() - (${parseInt(days)} * INTERVAL '1 day')) ${catFilter} ${searchFilter}`, { type: Sequelize.QueryTypes.SELECT }),
-      sequelize.query(`SELECT COALESCE(SUM(${stockField} * COALESCE(p.cost_price, p.price)), 0)::float AS value FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (SELECT DISTINCT si.product_id FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE s.created_at >= NOW() - (${parseInt(days)} * INTERVAL '1 day')) ${catFilter} ${searchFilter}`, { type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COUNT(*)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND p.min_stock > 0 AND ${stockField} < p.min_stock ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COUNT(*)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND (${stockField} IS NULL OR ${stockField} <= 0) ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COUNT(p.id)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (${slowSubquery}) ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
+      sequelize.query(`SELECT COALESCE(SUM(${stockField} * COALESCE(p.cost_price, p.price)), 0)::float AS value FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (${slowSubquery}) ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
     ]);
 
     let listData = {};
@@ -406,45 +434,45 @@ const getInventoryReport = async (req, res) => {
       listData.critical_stock = await sequelize.query(
         `SELECT p.id, p.name, ${stockField} AS stock, p.min_stock, p.unit, p.price, COALESCE(c.name,'Sin categoría') AS category_name, (p.min_stock - ${stockField}) AS needed
          FROM products p LEFT JOIN categories c ON p.category_id = c.id ${stockJoin}
-         WHERE p.is_service = false AND p.is_combo = false AND p.min_stock > 0 AND ${stockField} < p.min_stock ${catFilter} ${searchFilter}
+         WHERE p.is_service = false AND p.is_combo = false AND p.min_stock > 0 AND ${stockField} < p.min_stock ${tcP} ${catFilter} ${searchFilter}
          ORDER BY (p.min_stock - ${stockField}) DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       );
     }
     if (view === "all" || view === "zero") {
       listData.zero_stock = await sequelize.query(
         `SELECT p.id, p.name, ${stockField} AS stock, p.min_stock, p.unit, COALESCE(c.name,'Sin categoría') AS category_name
          FROM products p LEFT JOIN categories c ON p.category_id = c.id ${stockJoin}
-         WHERE p.is_service = false AND p.is_combo = false AND (${stockField} IS NULL OR ${stockField} <= 0) ${catFilter} ${searchFilter}
+         WHERE p.is_service = false AND p.is_combo = false AND (${stockField} IS NULL OR ${stockField} <= 0) ${tcP} ${catFilter} ${searchFilter}
          ORDER BY p.name ASC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       );
     }
     if (view === "all" || view === "top") {
       listData.top_rotation = await sequelize.query(
         `SELECT p.id, p.name, ${stockField} AS stock, p.unit, COALESCE(SUM(si.quantity), 0)::float AS units_sold, COALESCE(SUM(si.subtotal), 0)::float AS revenue
          FROM products p ${stockJoin} JOIN sale_items si ON si.product_id = p.id JOIN sales s ON si.sale_id = s.id
-         WHERE s.created_at >= NOW() - (${parseInt(days)} * INTERVAL '1 day') AND p.is_service = false AND p.is_combo = false ${catFilter} ${searchFilter}
+         WHERE s.created_at >= NOW() - (${parseInt(days)} * INTERVAL '1 day') AND p.is_service = false AND p.is_combo = false ${tcS} ${tcP} ${catFilter} ${searchFilter}
          GROUP BY p.id, p.name, ${stockField}, p.unit ORDER BY units_sold DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       );
     }
     if (view === "all" || view === "slow") {
       listData.low_rotation = await sequelize.query(
         `SELECT p.id, p.name, ${stockField} AS stock, p.price, COALESCE(p.cost_price, 0) AS cost_price, COALESCE(c.name,'Sin categoría') AS category_name, ${stockField} * COALESCE(p.cost_price, p.price) AS value_locked
          FROM products p LEFT JOIN categories c ON p.category_id = c.id ${stockJoin}
-         WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (SELECT DISTINCT si.product_id FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE s.created_at >= NOW() - (${parseInt(days)} * INTERVAL '1 day')) ${catFilter} ${searchFilter}
+         WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (${slowSubquery}) ${tcP} ${catFilter} ${searchFilter}
          ORDER BY value_locked DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       );
     }
     if (view === "all" || view === "category") {
       listData.by_category = await sequelize.query(
         `SELECT COALESCE(c.name,'Sin categoría') AS category_name, COUNT(p.id)::int AS product_count, COALESCE(SUM(${stockField}), 0)::float AS total_units, COALESCE(SUM(${stockField} * COALESCE(p.cost_price, 0)), 0)::float AS value_cost, COALESCE(SUM(${stockField} * p.price), 0)::float AS value_sale
          FROM products p LEFT JOIN categories c ON p.category_id = c.id ${stockJoin}
-         WHERE p.is_service = false AND p.is_combo = false ${catFilter} ${searchFilter}
+         WHERE p.is_service = false AND p.is_combo = false ${tcP} ${catFilter} ${searchFilter}
          GROUP BY c.name ORDER BY value_cost DESC`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       );
     }
 
@@ -474,6 +502,10 @@ const getInventoryReport = async (req, res) => {
 const getMarginsReport = async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tcS = !isSuperuser && company_id ? `AND s.company_id = :cid` : '';
+    const rep = { cid: company_id };
 
     const [byProduct, byCategory, summary] = await Promise.all([
 
@@ -496,14 +528,14 @@ const getMarginsReport = async (req, res) => {
          JOIN sales s ON si.sale_id = s.id
          LEFT JOIN products p ON si.product_id = p.id
          LEFT JOIN categories c ON p.category_id = c.id
-         WHERE TRUE
+         WHERE TRUE ${tcS}
            ${date_from ? `AND s.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND s.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
            AND p.cost_price IS NOT NULL AND p.cost_price > 0
          GROUP BY si.product_id, si.name, c.name
          ORDER BY gross_margin DESC
          LIMIT 30`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Margen por categoría
@@ -522,12 +554,12 @@ const getMarginsReport = async (req, res) => {
          JOIN sales s ON si.sale_id = s.id
          LEFT JOIN products p ON si.product_id = p.id
          LEFT JOIN categories c ON p.category_id = c.id
-         WHERE TRUE
+         WHERE TRUE ${tcS}
            ${date_from ? `AND s.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND s.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY c.name
          ORDER BY gross_margin DESC`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Resumen general de márgenes
@@ -544,10 +576,10 @@ const getMarginsReport = async (req, res) => {
          FROM sale_items si
          JOIN sales s ON si.sale_id = s.id
          LEFT JOIN products p ON si.product_id = p.id
-         WHERE p.cost_price IS NOT NULL AND p.cost_price > 0
+         WHERE p.cost_price IS NOT NULL AND p.cost_price > 0 ${tcS}
            ${date_from ? `AND s.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND s.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
     ]);
 
@@ -573,6 +605,12 @@ const getMarginsReport = async (req, res) => {
 const getCustomersAnalysis = async (req, res) => {
   try {
     const { date_from, date_to, inactive_days = 45 } = req.query;
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tc = !isSuperuser && company_id ? `AND company_id = :cid` : '';
+    const tcS = !isSuperuser && company_id ? `AND s.company_id = :cid` : '';
+    const tcC = !isSuperuser && company_id ? `AND c.company_id = :cid` : '';
+    const rep = { cid: company_id };
 
     const [topCustomers, inactiveCustomers, newCustomers, ticketStats, repeatRate] = await Promise.all([
 
@@ -586,13 +624,13 @@ const getCustomersAnalysis = async (req, res) => {
            MAX(s.created_at) AS last_purchase
          FROM customers c
          JOIN sales s ON s.customer_id = c.id
-         WHERE c.type = 'cliente'
+         WHERE c.type = 'cliente' ${tcS}
            ${date_from ? `AND s.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND s.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY c.id, c.name, c.phone, c.rif
          ORDER BY total_spent DESC
          LIMIT 20`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Clientes inactivos: compraron antes pero NO en los últimos N días
@@ -605,12 +643,12 @@ const getCustomersAnalysis = async (req, res) => {
            EXTRACT(DAY FROM NOW() - MAX(s.created_at))::int AS days_inactive
          FROM customers c
          JOIN sales s ON s.customer_id = c.id
-         WHERE c.type = 'cliente'
+         WHERE c.type = 'cliente' ${tcS}
          GROUP BY c.id, c.name, c.phone, c.rif
          HAVING MAX(s.created_at) < NOW() - (${parseInt(inactive_days)} * INTERVAL '1 day')
          ORDER BY days_inactive DESC
          LIMIT 30`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Clientes nuevos en el período (primera compra dentro del período)
@@ -622,13 +660,13 @@ const getCustomersAnalysis = async (req, res) => {
            COALESCE(SUM(s.total), 0)::float AS total_spent
          FROM customers c
          JOIN sales s ON s.customer_id = c.id
-         WHERE c.type = 'cliente'
+         WHERE c.type = 'cliente' ${tcC}
            ${date_from ? `AND c.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND c.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY c.id, c.name, c.phone
          ORDER BY first_purchase DESC
          LIMIT 20`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Distribución de ticket promedio
@@ -644,12 +682,12 @@ const getCustomersAnalysis = async (req, res) => {
            COUNT(*)::int AS count,
            COALESCE(SUM(total), 0)::float AS revenue
          FROM sales
-         WHERE TRUE
+         WHERE TRUE ${tc}
            ${date_from ? `AND created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY range
          ORDER BY MIN(total)`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Tasa de clientes recurrentes vs únicos
@@ -661,15 +699,15 @@ const getCustomersAnalysis = async (req, res) => {
          JOIN (
            SELECT customer_id, COUNT(*) AS purchase_count
            FROM sales
-           WHERE customer_id IS NOT NULL
+           WHERE customer_id IS NOT NULL ${tc}
              ${date_from ? `AND created_at >= '${date_from}'` : ""}
              ${date_to   ? `AND created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
            GROUP BY customer_id
          ) sub ON s.customer_id = sub.customer_id
-         WHERE TRUE
+         WHERE TRUE ${tcS}
            ${date_from ? `AND s.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND s.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
     ]);
 
@@ -694,6 +732,10 @@ const getCustomersAnalysis = async (req, res) => {
 const getAuditReport = async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tcS = !isSuperuser && company_id ? `AND s.company_id = :cid` : '';
+    const rep = { cid: company_id };
 
     const [returnsSummary, returnsList, byEmployee, discounts] = await Promise.all([
 
@@ -704,10 +746,11 @@ const getAuditReport = async (req, res) => {
            COALESCE(SUM(r.total), 0)::float AS total_returned,
            COALESCE(AVG(r.total), 0)::float AS avg_return
          FROM returns r
-         WHERE TRUE
+         JOIN sales s ON r.sale_id = s.id
+         WHERE TRUE ${tcS}
            ${date_from ? `AND r.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND r.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Lista de devoluciones
@@ -724,12 +767,12 @@ const getAuditReport = async (req, res) => {
          LEFT JOIN employees e ON r.employee_id = e.id
          LEFT JOIN sales s ON r.sale_id = s.id
          LEFT JOIN customers c ON s.customer_id = c.id
-         WHERE TRUE
+         WHERE TRUE ${tcS}
            ${date_from ? `AND r.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND r.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          ORDER BY r.created_at DESC
          LIMIT 50`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Rendimiento detallado por empleado
@@ -744,12 +787,12 @@ const getAuditReport = async (req, res) => {
            COUNT(s.id) FILTER (WHERE s.discount_amount > 0)::int AS discounted_sales
          FROM sales s
          LEFT JOIN employees e ON s.employee_id = e.id
-         WHERE TRUE
+         WHERE TRUE ${tcS}
            ${date_from ? `AND s.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND s.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          GROUP BY e.id, e.full_name
          ORDER BY revenue DESC`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
 
       // Ventas con descuento (señal de alerta)
@@ -765,12 +808,12 @@ const getAuditReport = async (req, res) => {
          FROM sales s
          LEFT JOIN employees e ON s.employee_id = e.id
          LEFT JOIN customers c ON s.customer_id = c.id
-         WHERE s.discount_amount > 0
+         WHERE s.discount_amount > 0 ${tcS}
            ${date_from ? `AND s.created_at >= '${date_from}'` : ""}
            ${date_to   ? `AND s.created_at <  ('${date_to}'::date + INTERVAL '1 day')` : ""}
          ORDER BY discount_pct DESC
          LIMIT 30`,
-        { type: Sequelize.QueryTypes.SELECT }
+        { replacements: rep, type: Sequelize.QueryTypes.SELECT }
       ),
     ]);
 

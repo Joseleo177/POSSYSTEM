@@ -19,6 +19,7 @@ module.exports = (sequelize, DataTypes) => {
     payment_method_id: { type: DataTypes.INTEGER },
     payment_journal_id: { type: DataTypes.INTEGER },
     warehouse_id: { type: DataTypes.INTEGER },
+    company_id: { type: DataTypes.INTEGER, allowNull: true },
     status:             { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'pendiente' },
     serie_id:           { type: DataTypes.INTEGER },
     serie_range_id:     { type: DataTypes.INTEGER },

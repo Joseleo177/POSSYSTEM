@@ -12,7 +12,12 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(100),
       primaryKey: true
     },
-    value: DataTypes.TEXT
+    value: DataTypes.TEXT,
+    company_id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      allowNull: false
+    }
   }, {
     sequelize,
     tableName: 'settings',

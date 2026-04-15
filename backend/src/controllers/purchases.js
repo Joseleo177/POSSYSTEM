@@ -4,7 +4,11 @@ const { Purchase, PurchaseItem, ProductLot, Employee, Warehouse, Customer, Produ
 const getAll = async (req, res) => {
   try {
     const { limit = 50, offset = 0 } = req.query;
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tenantWhere = (!isSuperuser && company_id) ? { company_id } : {};
     const { count, rows: purchases } = await Purchase.findAndCountAll({
+      where: tenantWhere,
       include: [
         { model: Employee, attributes: ['full_name'], required: false },
         { model: Customer, as: 'Supplier', attributes: ['name', 'rif'], required: false },

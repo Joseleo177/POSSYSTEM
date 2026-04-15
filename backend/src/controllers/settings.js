@@ -8,7 +8,10 @@ const getSupabaseStorage = () => require("../config/supabase");
 // GET /api/settings
 const getAll = async (req, res) => {
   try {
-    const rows = await Setting.findAll({ order: [['key', 'ASC']] });
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const where = (!isSuperuser && company_id) ? { company_id } : {};
+    const rows = await Setting.findAll({ where, order: [['key', 'ASC']] });
     const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
     if (settings.logo_filename) {
       // Si es URL completa (Supabase) la usamos directo, si no construimos ruta local
@@ -27,10 +30,11 @@ const getAll = async (req, res) => {
 const update = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
+    const company_id = req.employee?.company_id ?? null;
     const entries = Object.entries(req.body).filter(([k]) => k !== "logo_filename" && k !== "logo_url");
 
     for (const [key, value] of entries) {
-      await Setting.upsert({ key, value: value ?? "" }, { transaction });
+      await Setting.upsert({ key, value: value ?? "", company_id }, { transaction });
     }
 
     await transaction.commit();
@@ -77,7 +81,8 @@ const uploadLogo = async (req, res) => {
       logoValue = filename;
     }
 
-    await Setting.upsert({ key: 'logo_filename', value: logoValue });
+    const company_id = req.employee?.company_id ?? null;
+    await Setting.upsert({ key: 'logo_filename', value: logoValue, company_id });
 
     res.json({
       ok: true,

@@ -18,16 +18,17 @@ const auditLog = (req, res, next) => {
         try {
           const { sequelize } = require("../models");
           await sequelize.query(
-            `INSERT INTO audit_logs (employee_id, employee_name, method, path, ip, status_code)
-             VALUES (:empId, :empName, :method, :path, :ip, :status)`,
+            `INSERT INTO audit_logs (employee_id, employee_name, method, path, ip, status_code, company_id)
+             VALUES (:empId, :empName, :method, :path, :ip, :status, :companyId)`,
             {
               replacements: {
-                empId:   req.employee.id,
-                empName: req.employee.full_name || req.employee.username,
-                method:  req.method,
-                path:    req.path,
-                ip:      req.ip || req.headers["x-forwarded-for"] || "unknown",
-                status:  res.statusCode,
+                empId:     req.employee.id,
+                empName:   req.employee.full_name || req.employee.username,
+                method:    req.method,
+                path:      req.path,
+                ip:        req.ip || req.headers["x-forwarded-for"] || "unknown",
+                status:    res.statusCode,
+                companyId: req.employee.company_id || null,
               },
               type: sequelize.QueryTypes.INSERT,
             }

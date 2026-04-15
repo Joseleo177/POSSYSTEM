@@ -64,6 +64,10 @@ const getStock = async (req, res) => {
     const warehouseId = parseInt(req.params.id);
     const { search, limit = 50, offset = 0 } = req.query;
 
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tcp = (!isSuperuser && company_id) ? ` AND p.company_id = ${parseInt(company_id)}` : '';
+
     const replacements = { wid: warehouseId, limit: parseInt(limit), offset: parseInt(offset) };
     let searchFilter = "";
     if (search && search.trim()) {
@@ -80,7 +84,7 @@ const getStock = async (req, res) => {
       FROM product_stock ps
       JOIN products p ON p.id = ps.product_id
       LEFT JOIN categories c ON c.id = p.category_id
-      WHERE ps.warehouse_id = :wid
+      WHERE ps.warehouse_id = :wid ${tcp}
       ${searchFilter}
     `, { replacements: countReplacements, type: Sequelize.QueryTypes.SELECT });
     
@@ -96,7 +100,7 @@ const getStock = async (req, res) => {
       FROM product_stock ps
       JOIN products p ON p.id = ps.product_id
       LEFT JOIN categories c ON c.id = p.category_id
-      WHERE ps.warehouse_id = :wid
+      WHERE ps.warehouse_id = :wid ${tcp}
       ${searchFilter}
       ORDER BY c.name ASC NULLS LAST, p.name ASC
       LIMIT :limit OFFSET :offset
@@ -120,7 +124,7 @@ const getStock = async (req, res) => {
         JOIN products p ON p.id = pci.product_id
         LEFT JOIN product_stock ps2
           ON ps2.product_id = pci.product_id AND ps2.warehouse_id = :wid
-        WHERE pci.combo_id IN (${comboIds.join(',')})
+        WHERE pci.combo_id IN (${comboIds.join(',')}) ${tcp}
       `, { replacements: { wid: warehouseId }, type: Sequelize.QueryTypes.SELECT });
 
       const byCombo = {};
@@ -516,6 +520,10 @@ const getProducts = async (req, res) => {
     const { search, category, limit = 30, offset = 0 } = req.query;
     const warehouseId = parseInt(req.params.id);
 
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tcp = (!isSuperuser && company_id) ? ` AND p.company_id = ${parseInt(company_id)}` : '';
+
     // Construir filtros
     const filters = [];
     const replacements = {
@@ -541,7 +549,7 @@ const getProducts = async (req, res) => {
       FROM products p
       LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = :wid
       ${countJoin}
-      WHERE (p.is_service = true OR ps.product_id IS NOT NULL)
+      WHERE (p.is_service = true OR ps.product_id IS NOT NULL) ${tcp}
       ${whereExtra}
     `, { replacements, type: Sequelize.QueryTypes.SELECT });
 
@@ -563,7 +571,7 @@ const getProducts = async (req, res) => {
         FROM sale_items
         GROUP BY product_id
       ) si_agg ON si_agg.product_id = p.id
-      WHERE (p.is_service = true OR ps.product_id IS NOT NULL)
+      WHERE (p.is_service = true OR ps.product_id IS NOT NULL) ${tcp}
       ${whereExtra}
       ORDER BY total_sold DESC, p.name ASC
       LIMIT :limit OFFSET :offset
@@ -589,7 +597,7 @@ const getProducts = async (req, res) => {
         JOIN products p ON p.id = pci.product_id
         LEFT JOIN product_stock ps2
           ON ps2.product_id = pci.product_id AND ps2.warehouse_id = :wid
-        WHERE pci.combo_id IN (:cids)
+        WHERE pci.combo_id IN (:cids) ${tcp}
       `, { replacements: { wid: warehouseId, cids: comboIds }, type: Sequelize.QueryTypes.SELECT });
 
       // Agrupar por combo y calcular el mínimo de kits posibles

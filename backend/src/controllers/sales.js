@@ -13,7 +13,9 @@ const getOne = async (req, res) => {
 // GET /api/sales
 const getAll = async (req, res) => {
   try {
-    const result = await salesService.getAllSales(req.query);
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const result = await salesService.getAllSales(req.query, { company_id, isSuperuser });
     res.json({ ok: true, data: result.data, total: result.total });
   } catch (err) {
     console.error(err);

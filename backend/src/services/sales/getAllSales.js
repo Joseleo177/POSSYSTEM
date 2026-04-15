@@ -1,9 +1,14 @@
 const { Sale, SaleItem, Customer, Employee, Currency, Warehouse, Serie, Sequelize, Op, PAYMENT_METHODS } = require("./shared");
 
-module.exports = async function getAllSales(query) {
+module.exports = async function getAllSales(query, tenant = {}) {
   const { limit = 50, offset = 0, date_from, date_to, payment_method, status, serie_id, search } = query;
+  const { company_id, isSuperuser } = tenant;
 
   const andClauses = [];
+
+  if (!isSuperuser && company_id) {
+    andClauses.push({ company_id });
+  }
 
   if (date_from) andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date >= '${date_from}'`));
   if (date_to)   andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date <= '${date_to}'`));

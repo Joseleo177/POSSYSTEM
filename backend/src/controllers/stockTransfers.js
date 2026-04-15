@@ -5,8 +5,11 @@ const { Op } = Sequelize;
 const getAll = async (req, res) => {
   try {
     const { warehouse_id, product_id, limit = 100 } = req.query;
-    
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+
     const where = {};
+    if (!isSuperuser && company_id) where.company_id = company_id;
     if (warehouse_id) {
       where[Op.or] = [
         { from_warehouse_id: warehouse_id },
@@ -92,7 +95,8 @@ const create = async (req, res) => {
       product_name: product.name,
       qty: qtyN,
       note: note || null,
-      employee_id: req.employee?.id || null
+      employee_id: req.employee?.id || null,
+      company_id: req.employee?.company_id || null
     }, { transaction });
 
     await transaction.commit();

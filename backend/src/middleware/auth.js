@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { tenantStorage } = require("../utils/tenantStorage");
 
 const SECRET = process.env.JWT_SECRET || "supersecretkey_change_in_production";
 
@@ -10,12 +11,22 @@ const auth = (req, res, next) => {
 
   try {
     const token = header.slice(7);
-    req.employee = jwt.verify(token, SECRET);
-    next();
+    const decoded = jwt.verify(token, SECRET);
+    req.employee = decoded;
+    
+    // Inyectar contexto tenant
+    req.company_id = decoded.company_id;
+    req.is_superuser = !!decoded.is_superuser;
+    
+    // Configurar contexto asíncrono para Sequelize (evita tener que pasar options.company_id manualmente en cada consulta)
+    tenantStorage.run({ company_id: decoded.company_id, is_superuser: req.is_superuser }, () => {
+      next();
+    });
   } catch {
     res.status(401).json({ ok: false, message: "Token inválido o expirado" });
   }
 };
+
 
 // Verifica que el empleado tenga alguno de los permisos indicados
 const permit = (...perms) => (req, res, next) => {

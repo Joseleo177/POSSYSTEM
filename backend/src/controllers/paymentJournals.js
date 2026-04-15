@@ -3,7 +3,11 @@ const { PaymentJournal, Currency, Bank, Sale, Sequelize } = require("../models")
 // GET /api/payment-journals
 const getAll = async (req, res) => {
   try {
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tenantWhere = (!isSuperuser && company_id) ? { company_id } : {};
     const journals = await PaymentJournal.findAll({
+      where: tenantWhere,
       include: [
         { model: Currency, attributes: ['code', 'symbol', 'is_base'], required: false },
         { model: Bank, attributes: ['name'], required: false }
@@ -97,37 +101,42 @@ const remove = async (req, res) => {
 const summary = async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tc = (!isSuperuser && company_id) ? `AND p.company_id = ${parseInt(company_id)}` : '';
+    const tce = (!isSuperuser && company_id) ? `AND e.company_id = ${parseInt(company_id)}` : '';
+    const tenantWhere = (!isSuperuser && company_id) ? { company_id } : {};
 
-    const pDateClause = date_from && date_to 
-      ? `AND p."created_at" >= '${date_from}' AND p."created_at" < ('${date_to}'::date + INTERVAL '1 day')` 
+    const pDateClause = date_from && date_to
+      ? `AND p."created_at" >= '${date_from}' AND p."created_at" < ('${date_to}'::date + INTERVAL '1 day')`
       : (date_from ? `AND p."created_at" >= '${date_from}'` : (date_to ? `AND p."created_at" < ('${date_to}'::date + INTERVAL '1 day')` : ''));
-    
-    const eDateClause = date_from && date_to 
-      ? `AND e."created_at" >= '${date_from}' AND e."created_at" < ('${date_to}'::date + INTERVAL '1 day')` 
+
+    const eDateClause = date_from && date_to
+      ? `AND e."created_at" >= '${date_from}' AND e."created_at" < ('${date_to}'::date + INTERVAL '1 day')`
       : (date_from ? `AND e."created_at" >= '${date_from}'` : (date_to ? `AND e."created_at" < ('${date_to}'::date + INTERVAL '1 day')` : ''));
 
     const journals = await PaymentJournal.findAll({
       attributes: [
         'id', 'name', 'type', 'bank_id', 'color', 'currency_id',
         [Sequelize.literal(`(
-          SELECT COUNT(id) FROM payments p WHERE p.payment_journal_id = "PaymentJournal".id ${pDateClause}
+          SELECT COUNT(id) FROM payments p WHERE p.payment_journal_id = "PaymentJournal".id ${pDateClause} ${tc}
         )`), 'tx_count'],
         [Sequelize.literal(`(
-          (SELECT COALESCE(SUM("amount" * COALESCE("exchange_rate", 1)), 0) FROM payments p WHERE p.payment_journal_id = "PaymentJournal".id ${pDateClause})
+          (SELECT COALESCE(SUM("amount" * COALESCE("exchange_rate", 1)), 0) FROM payments p WHERE p.payment_journal_id = "PaymentJournal".id ${pDateClause} ${tc})
           -
-          (SELECT COALESCE(SUM("amount" * COALESCE("rate", 1)), 0) FROM expenses e WHERE e.payment_journal_id = "PaymentJournal".id AND e.status = 'activo' ${eDateClause})
+          (SELECT COALESCE(SUM("amount" * COALESCE("rate", 1)), 0) FROM expenses e WHERE e.payment_journal_id = "PaymentJournal".id AND e.status = 'activo' ${eDateClause} ${tce})
         )`), 'total_ingresos'],
         [Sequelize.literal(`(
-          (SELECT COALESCE(SUM("amount" * COALESCE("exchange_rate", 1)), 0) FROM payments p WHERE p.payment_journal_id = "PaymentJournal".id AND p.created_at >= CURRENT_DATE)
+          (SELECT COALESCE(SUM("amount" * COALESCE("exchange_rate", 1)), 0) FROM payments p WHERE p.payment_journal_id = "PaymentJournal".id AND p.created_at >= CURRENT_DATE ${tc})
           -
-          (SELECT COALESCE(SUM("amount" * COALESCE("rate", 1)), 0) FROM expenses e WHERE e.payment_journal_id = "PaymentJournal".id AND e.status = 'activo' AND e.created_at >= CURRENT_DATE)
+          (SELECT COALESCE(SUM("amount" * COALESCE("rate", 1)), 0) FROM expenses e WHERE e.payment_journal_id = "PaymentJournal".id AND e.status = 'activo' AND e.created_at >= CURRENT_DATE ${tce})
         )`), 'ingresos_hoy'],
       ],
       include: [
         { model: Currency, attributes: ['code', 'symbol', 'is_base', 'exchange_rate'], required: false },
         { model: Bank,     attributes: ['name'],                                        required: false }
       ],
-      where: { active: true },
+      where: { active: true, ...tenantWhere },
       order: [['sort_order', 'ASC'], ['id', 'ASC']]
     });
 
@@ -166,6 +175,13 @@ const movements = async (req, res) => {
     });
     if (!journal) return res.status(404).json({ ok: false, message: "Diario no encontrado" });
 
+    const company_id = req.employee?.company_id ?? null;
+    const isSuperuser = !!req.is_superuser;
+    const tc = (!isSuperuser && company_id) ? ` AND p.company_id = ${parseInt(company_id)}` : '';
+    const te = (!isSuperuser && company_id) ? ` AND e.company_id = ${parseInt(company_id)}` : '';
+    const tp = (!isSuperuser && company_id) ? ` AND payment_journal_id = :id AND company_id = ${parseInt(company_id)}` : ' AND payment_journal_id = :id';
+    const texp = (!isSuperuser && company_id) ? ` AND payment_journal_id = :id AND company_id = ${parseInt(company_id)}` : ' AND payment_journal_id = :id';
+
     // Construir cláusulas de fecha
     let datePay = '';
     let dateExp = '';
@@ -181,9 +197,9 @@ const movements = async (req, res) => {
     // Contar el total para paginación
     const [countResult] = await sequelize.query(`
       SELECT (
-        (SELECT COUNT(*) FROM payments p WHERE p.payment_journal_id = :id ${datePay})
+        (SELECT COUNT(*) FROM payments p WHERE p.payment_journal_id = :id ${datePay} ${tc})
         +
-        (SELECT COUNT(*) FROM expenses e WHERE e.payment_journal_id = :id ${dateExp})
+        (SELECT COUNT(*) FROM expenses e WHERE e.payment_journal_id = :id ${dateExp} ${te})
       ) as total
     `, { replacements: { id }, type: Sequelize.QueryTypes.SELECT });
 
@@ -205,7 +221,7 @@ const movements = async (req, res) => {
         FROM payments p
         LEFT JOIN sales s ON s.id = p.sale_id
         LEFT JOIN customers c ON c.id = p.customer_id
-        WHERE p.payment_journal_id = :id ${datePay}
+        WHERE p.payment_journal_id = :id ${datePay} ${tc}
 
         UNION ALL
 
@@ -222,7 +238,7 @@ const movements = async (req, res) => {
           e.notes,
           e.status
         FROM expenses e
-        WHERE e.payment_journal_id = :id ${dateExp}
+        WHERE e.payment_journal_id = :id ${dateExp} ${te}
       ) AS movements
       ORDER BY date ASC
       LIMIT :limit OFFSET :offset
@@ -237,9 +253,9 @@ const movements = async (req, res) => {
     if (parseInt(offset) > 0) {
       const [prev] = await sequelize.query(`
         SELECT (
-          (SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) FROM payments WHERE payment_journal_id = :id)
+          (SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) FROM payments WHERE 1=1 ${tp})
           -
-          (SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) FROM expenses WHERE payment_journal_id = :id AND status = 'activo')
+          (SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) FROM expenses WHERE status = 'activo' ${texp})
         ) as balance
       `, { replacements: { id }, type: Sequelize.QueryTypes.SELECT });
       prevBalance = parseFloat(prev?.balance || 0);
@@ -251,9 +267,9 @@ const movements = async (req, res) => {
     if (date_from) {
       const [prevBal] = await sequelize.query(`
         SELECT (
-          COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE payment_journal_id = :id AND created_at < :date_from), 0)
+          COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE created_at < :date_from ${tp}), 0)
           -
-          COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM expenses WHERE payment_journal_id = :id AND status = 'activo' AND created_at < :date_from), 0)
+          COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM expenses WHERE status = 'activo' AND created_at < :date_from ${texp}), 0)
         ) as balance
       `, { replacements: { id, date_from }, type: Sequelize.QueryTypes.SELECT });
       runningBalance = parseFloat(prevBal?.balance || 0);

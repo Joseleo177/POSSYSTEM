@@ -1,11 +1,16 @@
 const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Sequelize, Op } = require("./shared");
 
-module.exports = async function getPendingPayments(query) {
+module.exports = async function getPendingPayments(query, tenant = {}) {
   const { limit = 100, offset = 0, date_from, date_to, search } = query;
+  const { company_id, isSuperuser } = tenant;
 
   const andClauses = [
     { status: { [Op.in]: ["pendiente", "parcial"] } },
   ];
+
+  if (!isSuperuser && company_id) {
+    andClauses.push({ company_id });
+  }
 
   if (date_from) andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date >= '${date_from}'`));
   if (date_to)   andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date <= '${date_to}'`));

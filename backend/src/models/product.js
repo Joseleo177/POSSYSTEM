@@ -13,6 +13,7 @@ module.exports = (sequelize, DataTypes) => {
     unit: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'unidad' },
     qty_step: { type: DataTypes.DECIMAL(10, 3), allowNull: false, defaultValue: 1.000 },
     category_id: { type: DataTypes.INTEGER },
+    company_id: { type: DataTypes.INTEGER, allowNull: true },
     image_filename: { type: DataTypes.STRING(255) },
     cost_price: { type: DataTypes.DECIMAL(10, 2) },
     profit_margin: { type: DataTypes.DECIMAL(5, 2) },

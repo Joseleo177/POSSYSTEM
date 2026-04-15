@@ -20,6 +20,7 @@ module.exports = (sequelize, DataTypes) => {
     category_id: { type: DataTypes.INTEGER, allowNull: false },
     payment_journal_id: { type: DataTypes.INTEGER, allowNull: true },
     employee_id: { type: DataTypes.INTEGER, allowNull: false },
+    company_id:  { type: DataTypes.INTEGER, allowNull: true },
     notes:       { type: DataTypes.TEXT, allowNull: true },
     status:      { type: DataTypes.STRING(20), defaultValue: 'activo' },
   }, {

@@ -8,6 +8,7 @@ export function useTabs(employee, can, setReceipt) {
     const canAny = (perms = []) => perms.some((p) => can(p));
 
     const visibleTabs = ALL_TABS.filter((t) => {
+        if (t.superuserOnly) return !!employee?.is_superuser;
         if (t.adminOnly) return !!employee?.permissions?.all;
         return canAny(t.perms);
     });
