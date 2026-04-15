@@ -7,7 +7,7 @@ module.exports = (sequelize, DataTypes) => {
   }
   Warehouse.init({
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    name: { type: DataTypes.STRING(200), allowNull: false, unique: true },
+    name: { type: DataTypes.STRING(200), allowNull: false },
     company_id: { type: DataTypes.INTEGER, allowNull: true },
     description: { type: DataTypes.TEXT },
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
@@ -17,7 +17,13 @@ module.exports = (sequelize, DataTypes) => {
     sequelize,
     tableName: 'warehouses',
     modelName: 'Warehouse',
-    timestamps: false
+    timestamps: false,
+    indexes: [
+      {
+        unique: true,
+        fields: ['name', 'company_id']
+      }
+    ]
   });
   return Warehouse;
 };

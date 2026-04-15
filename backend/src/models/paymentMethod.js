@@ -7,8 +7,8 @@ module.exports = (sequelize, DataTypes) => {
   }
   PaymentMethod.init({
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    name: { type: DataTypes.STRING(100), allowNull: false, unique: true },
-    code: { type: DataTypes.STRING(50), allowNull: false, unique: true },
+    name: { type: DataTypes.STRING(100), allowNull: false },
+    code: { type: DataTypes.STRING(50), allowNull: false },
     color: { type: DataTypes.STRING(7), allowNull: false, defaultValue: '#555555' },
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     sort_order: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
@@ -17,7 +17,17 @@ module.exports = (sequelize, DataTypes) => {
     sequelize,
     tableName: 'payment_methods',
     modelName: 'PaymentMethod',
-    timestamps: false
+    timestamps: false,
+    indexes: [
+      {
+        unique: true,
+        fields: ['name', 'company_id']
+      },
+      {
+        unique: true,
+        fields: ['code', 'company_id']
+      }
+    ]
   });
   return PaymentMethod;
 };

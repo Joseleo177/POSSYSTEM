@@ -15,8 +15,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     name: {
       type: DataTypes.STRING(100),
-      allowNull: false,
-      unique: true
+      allowNull: false
     },
     company_id: {
       type: DataTypes.INTEGER,
@@ -31,7 +30,13 @@ module.exports = (sequelize, DataTypes) => {
     sequelize,
     tableName: 'categories',
     modelName: 'Category',
-    timestamps: false
+    timestamps: false,
+    indexes: [
+      {
+        unique: true,
+        fields: ['name', 'company_id']
+      }
+    ]
   });
   return Category;
 };

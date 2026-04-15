@@ -11,9 +11,9 @@ module.exports = (sequelize, DataTypes) => {
     name: { type: DataTypes.STRING(200), allowNull: false },
     company_id: { type: DataTypes.INTEGER, allowNull: true },
     phone: { type: DataTypes.STRING(20) },
-    email: { type: DataTypes.STRING(150), unique: true },
+    email: { type: DataTypes.STRING(150) },
     address: { type: DataTypes.TEXT },
-    rif: { type: DataTypes.STRING(15), unique: true },
+    rif: { type: DataTypes.STRING(15) },
     tax_name: { type: DataTypes.STRING(200) },
     tax_regime: { type: DataTypes.STRING(100) },
     notes: { type: DataTypes.TEXT },
@@ -23,7 +23,17 @@ module.exports = (sequelize, DataTypes) => {
     sequelize,
     tableName: 'customers',
     modelName: 'Customer',
-    timestamps: false
+    timestamps: false,
+    indexes: [
+      {
+        unique: true,
+        fields: ['email', 'company_id']
+      },
+      {
+        unique: true,
+        fields: ['rif', 'company_id']
+      }
+    ]
   });
   return Customer;
 };

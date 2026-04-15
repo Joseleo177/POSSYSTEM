@@ -22,13 +22,19 @@ module.exports = (sequelize, DataTypes) => {
     is_combo: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     is_service: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     min_stock: { type: DataTypes.DECIMAL(10, 3), allowNull: false, defaultValue: 0 },
-    barcode: { type: DataTypes.STRING(50), allowNull: true, unique: true },
+    barcode: { type: DataTypes.STRING(50), allowNull: true },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,
     tableName: 'products',
     modelName: 'Product',
-    timestamps: false
+    timestamps: false,
+    indexes: [
+      {
+        unique: true,
+        fields: ['barcode', 'company_id']
+      }
+    ]
   });
   return Product;
 };
