@@ -7,6 +7,7 @@ module.exports = (sequelize, DataTypes) => {
   }
   CashSession.init({
     id:           { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    company_id: { type: DataTypes.INTEGER, allowNull: true },
     employee_id:  { type: DataTypes.INTEGER },
     warehouse_id: { type: DataTypes.INTEGER },
     status:       { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'open' },

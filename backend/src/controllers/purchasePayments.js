@@ -111,7 +111,7 @@ const createPayment = async (req, res) => {
       balance: balance < 0 ? 0 : balance,
     });
   } catch (err) {
-    await t.rollback();
+    await t.rollback(); console.error('PAYMENT ERROR:', err);
     const status = /requerido|no encontrada|ya fue|excede|mayor/i.test(err.message) ? 400 : 500;
     res.status(status).json({ ok: false, message: err.message });
   }

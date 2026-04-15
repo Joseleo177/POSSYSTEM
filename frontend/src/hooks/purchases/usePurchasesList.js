@@ -50,11 +50,24 @@ export function usePurchasesList({
             try {
                 const r = await api.purchases.getOne(id);
                 setDetail(r.data);
+                // Sincronizar el ítem en la lista principal para evitar datos desactualizados
+                setPurchases(prev =>
+                    prev.map(p =>
+                        p.id === id
+                            ? {
+                                  ...p,
+                                  payment_status: r.data.payment_status,
+                                  amount_paid: r.data.amount_paid,
+                                  balance: r.data.balance,
+                              }
+                            : p
+                    )
+                );
             } catch (e) {
                 notify(e.message, "err");
             }
         },
-        [notify, setDetail]
+        [notify, setDetail, setPurchases]
     );
 
     // ───────────────────────────────────────────────

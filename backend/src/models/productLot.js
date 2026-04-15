@@ -10,6 +10,7 @@ module.exports = (sequelize, DataTypes) => {
   }
   ProductLot.init({
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    company_id: { type: DataTypes.INTEGER, allowNull: true },
     product_id: { type: DataTypes.INTEGER, allowNull: false },
     warehouse_id: { type: DataTypes.INTEGER, allowNull: false },
     lot_number: { type: DataTypes.STRING(100), allowNull: false },

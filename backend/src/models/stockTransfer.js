@@ -14,6 +14,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
     },
     product_id: DataTypes.INTEGER,
+    company_id: { type: DataTypes.INTEGER, allowNull: true },
     product_name: {
       type: DataTypes.STRING(200),
       allowNull: false

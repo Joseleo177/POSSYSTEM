@@ -7,6 +7,7 @@ module.exports = (sequelize, DataTypes) => {
   }
   Payment.init({
     id:                 { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    company_id: { type: DataTypes.INTEGER, allowNull: true },
     sale_id:            { type: DataTypes.INTEGER, allowNull: false },
     customer_id:        { type: DataTypes.INTEGER },
     amount:             { type: DataTypes.DECIMAL(12, 2), allowNull: false },

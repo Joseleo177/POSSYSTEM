@@ -7,6 +7,7 @@ module.exports = (sequelize, DataTypes) => {
   }
   Purchase.init({
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    company_id: { type: DataTypes.INTEGER, allowNull: true },
     supplier_id: { type: DataTypes.INTEGER },
     supplier_name: { type: DataTypes.STRING(200) },
     notes: { type: DataTypes.TEXT },
