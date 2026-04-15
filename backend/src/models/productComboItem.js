@@ -17,6 +17,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.NUMERIC(10, 3),
       allowNull: false,
     },
+    company_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    }
   }, {
     tableName: "product_combo_items",
     timestamps: false,

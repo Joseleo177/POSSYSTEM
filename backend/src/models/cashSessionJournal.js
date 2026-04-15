@@ -13,6 +13,7 @@ module.exports = (sequelize, DataTypes) => {
     closing_amount:  { type: DataTypes.DECIMAL(12,2) },
     expected_amount: { type: DataTypes.DECIMAL(12,2) },
     difference:      { type: DataTypes.DECIMAL(12,2) },
+    company_id:      { type: DataTypes.INTEGER, allowNull: true },
   }, {
     sequelize,
     tableName:  'cash_session_journals',

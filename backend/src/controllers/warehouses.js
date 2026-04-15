@@ -124,7 +124,7 @@ const getStock = async (req, res) => {
         JOIN products p ON p.id = pci.product_id
         LEFT JOIN product_stock ps2
           ON ps2.product_id = pci.product_id AND ps2.warehouse_id = :wid
-        WHERE pci.combo_id IN (${comboIds.join(',')}) ${tcp}
+        WHERE pci.combo_id IN (${comboIds.join(',')}) ${tcp} AND pci.company_id = p.company_id
       `, { replacements: { wid: warehouseId }, type: Sequelize.QueryTypes.SELECT });
 
       const byCombo = {};
@@ -597,7 +597,7 @@ const getProducts = async (req, res) => {
         JOIN products p ON p.id = pci.product_id
         LEFT JOIN product_stock ps2
           ON ps2.product_id = pci.product_id AND ps2.warehouse_id = :wid
-        WHERE pci.combo_id IN (:cids) ${tcp}
+        WHERE pci.combo_id IN (:cids) ${tcp} AND pci.company_id = p.company_id
       `, { replacements: { wid: warehouseId, cids: comboIds }, type: Sequelize.QueryTypes.SELECT });
 
       // Agrupar por combo y calcular el mínimo de kits posibles

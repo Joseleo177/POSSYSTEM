@@ -37,7 +37,8 @@ const tenantModels = [
   'Employee', 'Category', 'Product', 'Bank', 'PaymentMethod', 'Warehouse', 
   'Customer', 'PaymentJournal', 'Serie', 'Sale', 'Purchase', 'Payment', 
   'CashSession', 'Expense', 'ProductLot', 'PurchasePayment', 'StockTransfer',
-  'ExpenseCategory', 'Return', 'ReturnItem', 'Setting', 'Currency'
+  'ExpenseCategory', 'Return', 'ReturnItem', 'Setting', 'Currency',
+  'ProductStock', 'EmployeeWarehouse', 'UserSerie', 'ProductComboItem', 'CashSessionJournal'
 ];
 
 const applyTenantFilter = (modelName, options) => {
@@ -114,7 +115,8 @@ if (Company) {
     Employee, Category, Product, Bank, PaymentMethod, Warehouse, 
     Customer, PaymentJournal, Serie, Sale, Purchase, Payment, 
     CashSession, Expense, ProductLot, PurchasePayment, StockTransfer,
-    ExpenseCategory, Return, ReturnItem, Setting, Currency
+    ExpenseCategory, Return, ReturnItem, Setting, Currency,
+    ProductStock, EmployeeWarehouse, UserSerie, ProductComboItem, CashSessionJournal
   ];
   tenantModels.forEach(model => {
     if (model) {

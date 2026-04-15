@@ -193,12 +193,12 @@ const getProductsReport = async (req, res) => {
 
       // Productos sin movimiento (tienen stock pero no aparecen en ventas del período)
       sequelize.query(
-        `SELECT p.id, p.name, (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id) AS stock, p.price, p.min_stock,
+        `SELECT p.id, p.name, (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id) AS stock, p.price, p.min_stock,
                 p.cost_price
          FROM products p
          WHERE p.is_service = false
            AND p.is_combo = false ${tcP}
-           AND (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id) > 0
+           AND (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id) > 0
            AND p.id NOT IN (
              SELECT DISTINCT si.product_id
              FROM sale_items si
@@ -216,8 +216,8 @@ const getProductsReport = async (req, res) => {
       sequelize.query(
         `SELECT
            COUNT(*)::int AS product_count,
-           COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id) * price), 0)::float AS total_value_sale,
-           COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id) * COALESCE(cost_price, 0)), 0)::float AS total_value_cost
+           COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id) * price), 0)::float AS total_value_sale,
+           COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id) * COALESCE(cost_price, 0)), 0)::float AS total_value_cost
          FROM products p
          WHERE is_combo = false AND is_service = false ${tcP}`,
         { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -412,7 +412,7 @@ const getInventoryReport = async (req, res) => {
     const tcS = !isSuperuser && company_id ? `AND s.company_id = :cid` : '';
     const rep = { cid: company_id };
 
-    const stockFieldByWarehouse = warehouse_id ? `COALESCE(ps.qty, 0)` : `(SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id)`;
+    const stockFieldByWarehouse = warehouse_id ? `COALESCE(ps.qty, 0)` : `(SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id)`;
     const stockField = stockFieldByWarehouse;
     const stockJoin = warehouse_id ? `JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = ${parseInt(warehouse_id)}` : ``;
     const catFilter = category_id ? `AND p.category_id = ${parseInt(category_id)}` : "";
