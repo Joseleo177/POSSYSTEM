@@ -1,6 +1,6 @@
 const {
   Sale, SaleItem, Product, ProductStock, Employee, Customer, Currency, Warehouse, ProductComboItem,
-  Return, ReturnItem, Sequelize, sequelize,
+  Return, ReturnItem, Payment, Sequelize, sequelize,
 } = require("../models");
 
 // POST /api/sales/:id/return

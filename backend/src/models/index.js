@@ -65,8 +65,12 @@ sequelize.addHook('beforeBulkDestroy', (options) => {
 sequelize.addHook('beforeCreate', (instance, options) => {
   const store = tenantStorage.getStore();
   if (store && store.company_id && tenantModels.includes(instance.constructor.name)) {
-    if (!instance.company_id) {
-      instance.company_id = store.company_id;
+    if (!instance.getDataValue('company_id')) {
+      instance.setDataValue('company_id', store.company_id);
+    }
+    // Ensure company_id is included in the INSERT column list
+    if (options.fields && !options.fields.includes('company_id')) {
+      options.fields.push('company_id');
     }
   }
 });
@@ -74,11 +78,17 @@ sequelize.addHook('beforeCreate', (instance, options) => {
 sequelize.addHook('beforeBulkCreate', (instances, options) => {
   const store = tenantStorage.getStore();
   if (store && store.company_id) {
+    let patched = false;
     instances.forEach(instance => {
-      if (tenantModels.includes(instance.constructor.name) && !instance.company_id) {
-        instance.company_id = store.company_id;
+      if (tenantModels.includes(instance.constructor.name) && !instance.getDataValue('company_id')) {
+        instance.setDataValue('company_id', store.company_id);
+        patched = true;
       }
     });
+    // Ensure company_id is included in the INSERT column list
+    if (patched && options.fields && !options.fields.includes('company_id')) {
+      options.fields.push('company_id');
+    }
   }
 });
 
