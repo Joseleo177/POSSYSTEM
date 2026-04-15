@@ -1,5 +1,5 @@
 const bcrypt = require("bcryptjs");
-const { Company, Employee, Role } = require("../models");
+const { Company, Employee, Role, Currency } = require("../models");
 
 // GET /api/companies
 const getAll = async (req, res) => {
@@ -39,6 +39,12 @@ const create = async (req, res) => {
     // Create default user for the new company
     let adminRole = await Role.findOne({ where: { name: 'admin' } });
     let roleId = adminRole ? adminRole.id : 1; 
+
+    // Seed default currencies for this specific company
+    await Currency.bulkCreate([
+      { code: 'USD', name: 'Dólar Americano', symbol: '$', exchange_rate: 1.0, is_base: true, active: true, company_id: company.id },
+      { code: 'VES', name: 'Bolívar Venezolano', symbol: 'Bs.', exchange_rate: 36.0, is_base: false, active: true, company_id: company.id }
+    ]);
 
     const rawPassword = "admin" + company.id;
     const password_hash = await bcrypt.hash(rawPassword, 10);
