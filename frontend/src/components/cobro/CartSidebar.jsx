@@ -1,5 +1,6 @@
 import CustomSelect from "../ui/CustomSelect";
 import { fmtQtyUnit } from "../../helpers/unitFormatter";
+import { resolveImageUrl } from "../../helpers";
 
 export default function CartSidebar({
     mobileTab, setMobileTab,
@@ -190,7 +191,7 @@ export default function CartSidebar({
                         cart.map(i => (
                             <div key={i.id} className="bg-surface-1 dark:bg-white/5 p-3 rounded-[24px] flex items-center gap-3 group transition-all border border-black/5 dark:border-white/5">
                                 <div className="w-12 h-12 rounded-xl bg-surface-2 dark:bg-white/5 flex items-center justify-center shrink-0 overflow-hidden relative">
-                                    {i.image_url ? <img src={i.image_url} className="w-full h-full object-cover" alt={i.name} /> : <div className="text-sm opacity-20 dark:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>}
+                                    {i.image_url ? <img src={resolveImageUrl(i.image_url)} className="w-full h-full object-cover" alt={i.name} /> : <div className="text-sm opacity-20 dark:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>}
                                     <button onClick={() => removeFromCart(i.id)} className="absolute inset-0 bg-danger/80 text-white opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                                     </button>

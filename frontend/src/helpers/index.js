@@ -3,3 +3,4 @@ export * from "./numbers";
 export * from "./dates";
 export * from "./prices";
 export * from "./stock";
+export * from "./image";

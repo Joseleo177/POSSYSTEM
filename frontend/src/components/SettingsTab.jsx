@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import Page from "./ui/Page";
 import { Button } from "./ui/Button";
+import { resolveImageUrl } from "../helpers";
 
 const SECTIONS = [
     ["empresa", "Empresa"],
@@ -191,7 +192,7 @@ export default function SettingsTab({ notify }) {
                                 <label className="cursor-pointer group block">
                                     <div className="w-full h-40 bg-surface-2 dark:bg-white/5 border-2 border-dashed border-border/40 dark:border-white/10 rounded-2xl flex flex-col items-center justify-center overflow-hidden mb-3 group-hover:border-brand-500/50 transition-all duration-300 relative group-hover:bg-brand-500/[0.02]">
                                         {settings.logo_url
-                                            ? <img src={settings.logo_url} alt="logo" className="max-w-full max-h-full object-contain p-4 transition-transform group-hover:scale-105" />
+                                            ? <img src={resolveImageUrl(settings.logo_url)} alt="logo" className="max-w-full max-h-full object-contain p-4 transition-transform group-hover:scale-105" />
                                             : <div className="text-center animate-pulse">
                                                 <div className="w-12 h-12 rounded-full bg-brand-500/10 text-brand-500 flex items-center justify-center mx-auto mb-2 group-hover:bg-brand-500 group-hover:text-black transition-all">
                                                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -211,7 +212,7 @@ export default function SettingsTab({ notify }) {
                                 <div className="bg-surface-2 dark:bg-[#151515] rounded-xl p-6 text-center border border-border/20 dark:border-white/5 shadow-inner">
                                     <div className="flex flex-col items-center">
                                         {settings.logo_url ? (
-                                            <img src={settings.logo_url} alt="logo" className="h-10 w-auto mb-3 object-contain" />
+                                            <img src={resolveImageUrl(settings.logo_url)} alt="logo" className="h-10 w-auto mb-3 object-contain" />
                                         ) : (
                                             <div className="w-10 h-10 rounded-full border border-dashed border-border/40 mb-3 flex items-center justify-center text-[10px] text-content-subtle opacity-30">NO LOGO</div>
                                         )}

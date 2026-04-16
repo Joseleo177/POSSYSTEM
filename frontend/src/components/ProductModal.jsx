@@ -3,6 +3,7 @@ import Modal from "./ui/Modal";
 import { api } from "../services/api";
 import CustomSelect from "./ui/CustomSelect";
 import { calcSalePrice as calcSalePriceHelper } from "../helpers";
+import { resolveImageUrl } from "../helpers";
 
 const UNITS = ["UNIDAD", "KG", "LITRO", "METRO"];
 const PKG_UNITS = ["CAJA", "BULTO", "PAQUETE", "DOCENA", "MEDIA CAJA", "FARDO", "SACO"];
@@ -68,7 +69,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         quantity: c.quantity
                     })) : []
                 });
-                setImagePreview(editData.image_url || null);
+                setImagePreview(resolveImageUrl(editData.image_url) || null);
             } else {
                 setForm(EMPTY);
                 setImagePreview(null);

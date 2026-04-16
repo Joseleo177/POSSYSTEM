@@ -1,6 +1,6 @@
 import Modal from "./ui/Modal";
 import { useApp } from "../context/AppContext";
-import { fmtMoney, fmtDate } from "../helpers";
+import { fmtMoney, fmtDate, resolveImageUrl } from "../helpers";
 
 const fmt = fmtMoney;
 
@@ -85,7 +85,7 @@ function printReceipt(sale, companyInfo, displayCurrency) {
  </style>
 </head>
 <body>
- ${companyInfo?.logo_url ? `<div style="text-align:center;margin-bottom:8px"><img src="${companyInfo.logo_url}" style="max-height:60px;max-width:200px;object-fit:contain" /></div>` : ""}
+ ${companyInfo?.logo_url ? `<div style="text-align:center;margin-bottom:8px"><img src="${resolveImageUrl(companyInfo.logo_url)}" style="max-height:60px;max-width:200px;object-fit:contain" /></div>` : ""}
  <div class="store-name">${storeName}</div>
  ${companyInfo?.rif ? `<div style="text-align:center;font-size:11px;margin-bottom:2px">RIF: ${companyInfo.rif}</div>` : ""}
  ${companyInfo?.slogan ? `<div style="text-align:center;font-size:10px;font-style:italic;color:#555;margin-bottom:4px">${companyInfo.slogan}</div>` : ""}
@@ -180,7 +180,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
             {/* Encabezado empresa */}
             <div className="text-center mb-4 pb-4 border-b border-border/20 dark:border-white/10">
                 {companyInfo?.logo_url && (
-                    <img src={companyInfo.logo_url} alt="logo" className=" mx-auto mb-2 object-contain" />
+                    <img src={resolveImageUrl(companyInfo.logo_url)} alt="logo" className=" mx-auto mb-2 object-contain" />
                 )}
                 <div className="text-sm font-black text-content dark:text-content-dark tracking-wide">{storeName}</div>
                 {companyInfo?.rif && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">RIF: {companyInfo.rif}</div>}

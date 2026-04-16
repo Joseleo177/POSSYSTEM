@@ -2,6 +2,7 @@ import { useRef, useEffect } from "react";
 import CustomSelect from "../ui/CustomSelect";
 import KeyboardLegend from "./KeyboardLegend";
 import { fmtQtyUnit } from "../../helpers/unitFormatter";
+import { resolveImageUrl } from "../../helpers";
 
 export default function ProductGrid({
     mobileTab, setMobileTab, cart,
@@ -95,7 +96,7 @@ export default function ProductGrid({
                              >
                                 <div className="aspect-[4/3] lg:aspect-square relative overflow-hidden bg-surface-2 dark:bg-black/20">
                                     {p.image_url ? (
-                                        <img src={p.image_url} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                        <img src={resolveImageUrl(p.image_url)} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center opacity-10 dark:text-white">
                                             <svg className="w-6 h-6 lg:w-10 lg:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>

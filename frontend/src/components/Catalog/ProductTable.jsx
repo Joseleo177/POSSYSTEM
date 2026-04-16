@@ -1,4 +1,4 @@
-import { fmtBase } from "../../helpers";
+import { fmtBase, resolveImageUrl } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 
 export default function ProductTable({ products, canManageProducts, openEditProduct, setDeleteProductDialog }) {
@@ -21,7 +21,7 @@ export default function ProductTable({ products, canManageProducts, openEditProd
                     <tr key={p.id} className="group hover:bg-white/[0.02] transition-colors">
                         <td className="px-4 py-2">
                             <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-[11px] font-black border border-white/5">
-                                {p.image_url ? <img src={p.image_url} className="w-full h-full object-cover rounded-lg" /> : p.name.charAt(0)}
+                                {p.image_url ? <img src={resolveImageUrl(p.image_url)} className="w-full h-full object-cover rounded-lg" /> : p.name.charAt(0)}
                             </div>
                         </td>
                         <td className="px-4 py-2">
