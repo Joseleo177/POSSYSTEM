@@ -24,6 +24,19 @@ export default function ProductGrid({
         openQtyModal(p);
     };
 
+    // Scroll automático al item seleccionado
+    useEffect(() => {
+        if (selectedIndex < 0) return;
+        // Si estamos cerca del final y hay más productos, revelar el sentinel
+        // para que el IntersectionObserver dispare loadMore (igual que con el mouse)
+        if (hasMore && selectedIndex >= filteredProducts.length - 4) {
+            sentinelRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        } else {
+            const el = document.querySelector(`[data-product-idx="${selectedIndex}"]`);
+            if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+    }, [selectedIndex, filteredProducts.length, hasMore]);
+
     // IntersectionObserver — dispara loadMore cuando el sentinel entra en pantalla
     useEffect(() => {
         if (!sentinelRef.current) return;
@@ -90,10 +103,11 @@ export default function ProductGrid({
                         <div className="text-[11px] font-black tracking-widest uppercase text-center dark:text-white">No se encontraron productos</div>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1.5 lg:gap-4 pb-10">
+                    <div data-product-grid className="grid grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1.5 lg:gap-4 pb-10">
                         {filteredProducts.map((p, idx) => (
                             <div
                                 key={p.id}
+                                data-product-idx={idx}
                                 onClick={() => handleSelect(p)}
                                 className={`group bg-white dark:bg-white/5 rounded-2xl lg:rounded-[32px] overflow-hidden border transition-all cursor-pointer active:scale-95
                                     ${idx === selectedIndex ? "border-brand-500 ring-2 lg:ring-4 ring-brand-500/10 shadow-2xl -translate-y-0.5 lg:-translate-y-1 scale-[1.02]" : "border-black/5 dark:border-white/5 hover:border-brand-500/50"}`}

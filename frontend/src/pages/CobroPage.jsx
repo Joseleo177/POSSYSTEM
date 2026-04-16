@@ -61,10 +61,10 @@ export default function CobroPage() {
         filteredProducts: products.filteredProducts,
         selectedIndex: products.selectedIndex,
         setSelectedIndex: products.setSelectedIndex,
-        addToCart, checkout,
+        checkout,
         showConfirmCheckout, setShowConfirmCheckout,
         setSearch: products.setSearch,
-        setShowPayModal: () => {},   // gestionado dentro de SaleConfirmModal
+        setShowPayModal: () => {},
         searchInputRef,
         customers: customer.customers,
         selectedCustIdx: customer.selectedCustIdx,

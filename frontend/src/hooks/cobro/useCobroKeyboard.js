@@ -3,7 +3,7 @@ import { useEffect } from "react";
 export function useCobroKeyboard({
     cart, receipt, holdCart,
     filteredProducts, selectedIndex, setSelectedIndex,
-    addToCart, checkout,
+    checkout,
     showConfirmCheckout, setShowConfirmCheckout,
     setSearch, setShowPayModal,
     searchInputRef,
@@ -13,7 +13,7 @@ export function useCobroKeyboard({
 }) {
     useEffect(() => {
         const handleKeyDown = (e) => {
-            const isInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
+            if (e.key === "F1") { e.preventDefault(); setSelectedIndex(-1); searchInputRef.current?.focus(); return; }
 
             // Navegación en buscador de clientes
             if (e.target.id === "customer-search-input") {
@@ -27,32 +27,39 @@ export function useCobroKeyboard({
                 return;
             }
 
-            if (e.key === "F1") { e.preventDefault(); setSelectedIndex(-1); searchInputRef.current?.focus(); }
             if (e.key === "F2") { e.preventDefault(); document.getElementById("customer-search-input")?.focus(); }
             if (e.key === "F4") { e.preventDefault(); holdCart(); }
             if (e.key === "F10") { e.preventDefault(); if (cart.length > 0) setShowConfirmCheckout(true); }
             if (e.key === "Escape") {
-                setSearch(""); setSelectedIndex(-1);
-                setShowPayModal(false); setShowConfirmCheckout(false);
+                setSearch("");
+                setSelectedIndex(-1);
+                setShowPayModal(false);
+                setShowConfirmCheckout(false);
                 searchInputRef.current?.focus();
             }
 
-            // Navegación en grilla
-            if (e.key === "ArrowDown") {
-                if (e.target === searchInputRef.current) { e.preventDefault(); setSelectedIndex(0); }
-                else if (selectedIndex >= 0) { e.preventDefault(); setSelectedIndex(p => Math.min(p + 4, filteredProducts.length - 1)); }
-            }
-            if (e.key === "ArrowUp" && selectedIndex >= 0) {
+            // Navegación horizontal en grilla
+            if (e.key === "ArrowRight") {
                 e.preventDefault();
-                setSelectedIndex(p => Math.max(p - 4, -1));
-                if (selectedIndex < 4) searchInputRef.current?.focus();
+                if (selectedIndex < 0) {
+                    setSelectedIndex(0);
+                } else {
+                    setSelectedIndex(p => Math.min(p + 1, filteredProducts.length - 1));
+                }
             }
-            if (e.key === "ArrowRight" && selectedIndex >= 0) { e.preventDefault(); setSelectedIndex(p => Math.min(p + 1, filteredProducts.length - 1)); }
-            if (e.key === "ArrowLeft" && selectedIndex >= 0) { e.preventDefault(); setSelectedIndex(p => Math.max(p - 1, 0)); }
+            if (e.key === "ArrowLeft") {
+                e.preventDefault();
+                if (selectedIndex > 0) {
+                    setSelectedIndex(p => p - 1);
+                } else {
+                    setSelectedIndex(-1);
+                    searchInputRef.current?.focus();
+                }
+            }
 
             if (e.key === "Enter") {
                 if (showConfirmCheckout) { e.preventDefault(); setShowConfirmCheckout(false); checkout(); return; }
-                if (selectedIndex >= 0 && e.target === searchInputRef.current) {
+                if (selectedIndex >= 0) {
                     e.preventDefault();
                     const p = filteredProducts[selectedIndex];
                     if (p) {
@@ -62,15 +69,14 @@ export function useCobroKeyboard({
                         }
                         openQtyModal(p);
                     }
-                } else if (!isInput && cart.length > 0 && !receipt) {
-                    setShowConfirmCheckout(true);
                 }
             }
         };
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [cart, holdCart, receipt, selectedIndex, filteredProducts, addToCart, showConfirmCheckout,
+    }, [cart, holdCart, receipt, selectedIndex, filteredProducts, showConfirmCheckout,
         checkout, customers, selectedCustIdx, setSelectedCustomer, setCustomers, setCustSearch,
-        setSelectedCustIdx, setSelectedIndex, setSearch, setShowPayModal, setShowConfirmCheckout, searchInputRef, openQtyModal]);
+        setSelectedCustIdx, setSelectedIndex, setSearch, setShowPayModal, setShowConfirmCheckout,
+        searchInputRef, openQtyModal, notify]);
 }
