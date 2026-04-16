@@ -55,22 +55,21 @@ export default function QuantityModal({ isOpen, onClose, item, onSave }) {
     };
 
     return (
-        <Modal open={isOpen} onClose={onClose} title={`Cantidad: ${item.name}`}>
-            <div className="flex flex-col gap-6 py-2">
+        <Modal open={isOpen} onClose={onClose} title={`Cantidad: ${item.name}`} width={380}>
+            <div className="flex flex-col gap-4 py-1">
                 
-                {/* Visual Unit Badge */}
-                <div className="flex justify-center">
-                    <div className="px-4 py-1.5 rounded-full bg-brand-500/10 text-brand-500 text-[10px] font-black uppercase tracking-widest border border-brand-500/20">
-                        Producto por {unit}
+                <div className="flex justify-center -mt-1">
+                    <div className="px-3 py-1 rounded-md bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 text-[9px] font-black uppercase tracking-widest border border-border/40 dark:border-white/5">
+                        {unit}
                     </div>
                 </div>
 
                 {/* Main Input Control */}
                 <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between gap-5 px-2">
+                    <div className="flex items-center justify-between gap-4 px-1">
                         <button 
                             onClick={() => adjust(-1)}
-                            className="w-14 h-14 rounded-2xl bg-surface-2 dark:bg-white/5 flex items-center justify-center text-xl font-black text-content dark:text-white active:scale-90 transition-all border border-black/5 dark:border-white/5 shadow-sm hover:bg-surface-3 dark:hover:bg-white/10"
+                            className="w-10 h-10 rounded-lg bg-surface-2 dark:bg-white/5 flex items-center justify-center text-lg font-black text-content dark:text-white active:scale-95 transition-all border border-border/40 dark:border-white/5 shadow-sm hover:bg-surface-3 dark:hover:bg-white/10"
                         >
                             -
                         </button>
@@ -90,15 +89,15 @@ export default function QuantityModal({ isOpen, onClose, item, onSave }) {
                                         handleSave();
                                     }
                                 }}
-                                className="w-full bg-transparent text-center text-5xl font-display font-black dark:text-white border-none outline-none focus:ring-0 placeholder:opacity-20"
+                                className="w-full bg-transparent text-center text-3xl font-display font-black dark:text-white border-none outline-none focus:ring-0 placeholder:opacity-20 tabular-nums"
                                 placeholder="0"
                             />
-                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-16 h-1 bg-brand-500 rounded-full opacity-40 group-focus-within:opacity-100 transition-all animate-pulse" />
+                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-12 h-0.5 bg-brand-500 rounded-full opacity-40 group-focus-within:opacity-100 transition-all" />
                         </div>
 
                         <button 
                             onClick={() => adjust(1)}
-                            className="w-14 h-14 rounded-2xl bg-brand-500 text-brand-900 flex items-center justify-center text-xl font-black active:scale-90 transition-all shadow-lg shadow-brand-500/20 hover:brightness-110"
+                            className="w-10 h-10 rounded-lg bg-brand-500 text-black flex items-center justify-center text-lg font-black active:scale-95 transition-all shadow-md shadow-brand-500/10 hover:brightness-105"
                         >
                             +
                         </button>
@@ -106,19 +105,19 @@ export default function QuantityModal({ isOpen, onClose, item, onSave }) {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex flex-col gap-3 pt-2">
+                <div className="flex flex-col gap-2 pt-2">
                     <button
                         onClick={handleSave}
-                        className="w-full h-14 bg-brand-500 text-brand-900 rounded-2xl font-black uppercase tracking-wider shadow-xl shadow-brand-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 hover:brightness-110"
+                        className="w-full h-10 bg-brand-500 text-black rounded-lg font-black text-[11px] uppercase tracking-wider shadow-md shadow-brand-500/10 active:scale-98 transition-all flex items-center justify-center gap-2 hover:brightness-105"
                     >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                         Confirmar Cantidad
                     </button>
                     <button
                         onClick={onClose}
-                        className="w-full h-10 text-content-subtle dark:text-content-dark-muted rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-surface-2 dark:hover:bg-white/5 transition-all"
+                        className="w-full h-8 text-content-subtle dark:text-content-dark-muted rounded-lg font-black uppercase tracking-widest text-[9px] hover:bg-surface-2 dark:hover:bg-white/5 transition-all"
                     >
-                        Cancelar
+                        Cerrar (ESC)
                     </button>
                 </div>
             </div>
