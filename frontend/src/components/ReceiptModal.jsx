@@ -53,96 +53,143 @@ function printReceipt(sale, companyInfo, displayCurrency) {
  <td style="text-align:right">${fmtP(i.price)}</td>
  <td style="text-align:right">${fmtP(i.subtotal)}</td>
  </tr>
- `).join("");
-
-    const html = `<!DOCTYPE html>
+ `).join(""); const html = `<!DOCTYPE html>
 <html>
 <head>
- <meta charset="utf-8" />
- <title>Factura ${s.invoice_number || s.id}</title>
- <style>
- * { margin: 0; padding: 0; box-sizing: border-box; }
- body { font-family: 'Courier New', monospace; font-size: 12px; color: #000; background: #fff; padding: 20px; max-width: 380px; margin: 0 auto; }
- .store-name { font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 4px; }
- .receipt-title { text-align: center; font-size: 13px; letter-spacing: 2px; margin-bottom: 12px; border-bottom: 2px dashed #000; padding-bottom: 10px; }
- .meta { font-size: 11px; margin-bottom: 10px; }
- .meta div { display: flex; justify-content: space-between; margin-bottom: 3px; }
- .customer { background: #f5f5f5; padding: 8px; margin-bottom: 10px; border-radius: 3px; font-size: 11px; }
- .customer .label { font-weight: bold; margin-bottom: 3px; }
- table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
- thead tr { border-bottom: 1px solid #000; }
- th { font-size: 10px; padding: 4px 6px; text-align: left; }
- th:nth-child(2) { text-align: center; }
- th:nth-child(3), th:nth-child(4) { text-align: right; }
- td { padding: 4px 6px; font-size: 11px; border-bottom: 1px dashed #ccc; }
- .totals { border-top: 2px solid #000; padding-top: 8px; }
- .totals .row { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 12px; }
- .totals .row.total { font-weight: bold; font-size: 14px; border-top: 1px solid #000; padding-top: 6px; margin-top: 4px; }
- .totals .row.discount { color: #c00; }
- .payment { border-top: 1px dashed #000; padding-top: 8px; margin-top: 8px; font-size: 11px; }
- .payment .row { display: flex; justify-content: space-between; margin-bottom: 3px; }
- .footer { text-align: center; margin-top: 16px; font-size: 11px; color: #555; border-top: 1px dashed #000; padding-top: 10px; }
- </style>
+    <meta charset="utf-8" />
+    <title>Factura ${s.invoice_number || s.id}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap');
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Outfit', sans-serif; 
+            font-size: 11px; 
+            line-height: 1.2;
+            color: #000; 
+            background: white; 
+            width: 302px; /* 80mm aprox */
+            margin: 0 auto;
+            padding: 10px;
+        }
+        
+        .header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 8px; }
+        .logo { max-height: 50px; max-width: 80px; object-fit: contain; }
+        .header-content { flex: 1; text-align: left; }
+        .store-name { font-size: 14px; font-weight: 800; text-transform: uppercase; line-height: 1; margin-bottom: 2px; }
+        .store-rif { font-size: 10px; font-weight: 700; color: #000; margin-bottom: 1px; }
+        .store-slogan { font-size: 9px; font-weight: 700; font-style: italic; color: #000; margin-bottom: 2px; }
+        .store-info { font-size: 9px; color: #000; line-height: 1.2; font-weight: 500; }
+
+        .doc-header { text-align: center; margin: 8px 0; }
+        .doc-title { font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+        .doc-warning { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }
+
+        .meta { margin-bottom: 8px; font-size: 10.5px; }
+        .meta-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+        .meta-label { color: #555; font-weight: 500; }
+        .meta-value { font-weight: 700; text-align: right; }
+
+        table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+        th { 
+            font-size: 9px; 
+            font-weight: 800; 
+            text-transform: uppercase;
+            padding: 6px 4px; 
+            text-align: left; 
+            border-bottom: 1.5px solid #000;
+        }
+        th:nth-child(2) { text-align: center; }
+        th:nth-child(3), th:nth-child(4) { text-align: right; }
+        
+        td { 
+            padding: 5px 4px; 
+            font-size: 10px; 
+            vertical-align: top;
+            border-bottom: 0.5px dashed #eee;
+        }
+        .item-name { font-weight: 600; line-height: 1.2; }
+        .td-center { text-align: center; }
+        .td-right { text-align: right; }
+
+        .totals { border-top: 1.5px solid #000; padding-top: 6px; }
+        .total-row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 11px; }
+        .total-row.big { font-weight: 800; font-size: 14px; margin-top: 4px; padding-top: 4px; border-top: 1px solid #eee; }
+        .total-row.discount { color: #000; font-style: italic; }
+
+        .footer { 
+            text-align: center; 
+            margin-top: 15px; 
+            font-size: 9px; 
+            color: #333; 
+            font-weight: 500;
+            border-top: 1px dashed #ccc; 
+            padding-top: 8px; 
+        }
+    </style>
 </head>
 <body>
- ${companyInfo?.logo_url ? `<div style="text-align:center;margin-bottom:8px"><img src="${resolveImageUrl(companyInfo.logo_url)}" style="max-height:60px;max-width:200px;object-fit:contain" /></div>` : ""}
- <div class="store-name">${storeName}</div>
- ${companyInfo?.rif ? `<div style="text-align:center;font-size:11px;margin-bottom:2px">RIF: ${companyInfo.rif}</div>` : ""}
- ${companyInfo?.slogan ? `<div style="text-align:center;font-size:10px;font-style:italic;color:#555;margin-bottom:4px">${companyInfo.slogan}</div>` : ""}
- ${companyInfo?.address ? `<div style="text-align:center;font-size:10px;color:#555">${companyInfo.address}</div>` : ""}
- ${companyInfo?.city ? `<div style="text-align:center;font-size:10px;color:#555">${companyInfo.city}</div>` : ""}
- ${(companyInfo?.phone || companyInfo?.phone2) ? `<div style="text-align:center;font-size:10px;color:#555">${[companyInfo.phone, companyInfo.phone2].filter(Boolean).join(" / ")}</div>` : ""}
- ${companyInfo?.email ? `<div style="text-align:center;font-size:10px;color:#555;margin-bottom:2px">${companyInfo.email}</div>` : ""}
- <div class="receipt-title">COMPROBANTE DE VENTA</div>
+    <div class="header">
+        ${companyInfo?.logo_url ? `<img src="${resolveImageUrl(companyInfo.logo_url)}" class="logo" />` : ""}
+        <div class="header-content">
+            <div class="store-name">${storeName}</div>
+            ${companyInfo?.slogan ? `<div class="store-slogan">"${companyInfo.slogan}"</div>` : ""}
+            ${companyInfo?.rif ? `<div class="store-rif">RIF: ${companyInfo.rif}</div>` : ""}
+            <div class="store-info">
+                ${companyInfo?.address ? `<div>${companyInfo.address}</div>` : ""}
+                ${companyInfo?.city ? `<span>${companyInfo.city}</span>` : ""}
+                ${(companyInfo?.phone || companyInfo?.phone2) ? `<span> | ${[companyInfo.phone, companyInfo.phone2].filter(Boolean).join(" / ")}</span>` : ""}
+            </div>
+        </div>
+    </div>
 
- <div class="meta">
- <div><span>Factura N°:</span><span><b>${s.invoice_number || `#${s.id}`}</b></span></div>
- <div><span>Fecha:</span><span>${dateStr}</span></div>
- ${s.employee_name ? `<div><span>Vendedor:</span><span>${s.employee_name}</span></div>` : ""}
- ${s.journal_name ? `<div><span>Diario:</span><span>${s.journal_name}</span></div>` : ""}
- </div>
+    <div class="doc-header">
+        <div class="doc-title">TICKET DE CAJA</div>
+        <div class="doc-warning">*** DOCUMENTO NO FISCAL ***</div>
+    </div>
 
- ${s.customer_name ? `
- <div class="customer">
- <div class="label">CLIENTE</div>
- <div>${s.customer_rif ? s.customer_rif + " - " : ""}${s.customer_name}</div>
- </div>
- ` : ""}
+    <div class="meta">
+        <div class="meta-row"><span class="meta-label">Recibo Nº:</span><span class="meta-value">${s.invoice_number || `#${s.id}`}</span></div>
+        <div class="meta-row"><span class="meta-label">Fecha Emisión:</span><span class="meta-value">${dateStr}</span></div>
+        ${s.employee_name ? `<div class="meta-row"><span class="meta-label">Cajero:</span><span class="meta-value">${s.employee_name}</span></div>` : ""}
+        ${s.journal_name ? `<div class="meta-row"><span class="meta-label">Método/Pago:</span><span class="meta-value">${s.journal_name}</span></div>` : ""}
+        ${s.customer_rif ? `<div class="meta-row"><span class="meta-label">CI/RIF:</span><span class="meta-value">${s.customer_rif}</span></div>` : ""}
+        ${s.customer_name ? `<div class="meta-row"><span class="meta-label">Cliente:</span><span class="meta-value">${s.customer_name}</span></div>` : ""}
+    </div>
 
- <table>
- <thead>
- <tr>
- <th>Producto</th>
- <th>Cant.</th>
- <th>P.U.</th>
- <th>Total</th>
- </tr>
- </thead>
- <tbody>${itemsRows}</tbody>
- </table>
+    <table>
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th>Cant</th>
+                <th>P.U.</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${s.items.map(i => `
+                <tr>
+                    <td><div class="item-name">${i.name}</div></td>
+                    <td class="td-center">${i.quantity}</td>
+                    <td class="td-right">${fmtP(i.price)}</td>
+                    <td class="td-right"><b>${fmtP(i.subtotal)}</b></td>
+                </tr>
+            `).join("")}
+        </tbody>
+    </table>
 
- <div class="totals">
- <div class="row">
- <span>SUBTOTAL</span><span>${fmtP(s.total + s.discount)}</span>
- </div>
- ${s.discount > 0 ? `
- <div class="row discount">
- <span>DESCUENTO</span><span>-${fmtP(s.discount)}</span>
- </div>
- ` : ""}
-  <div class="row total">
-  <span>TOTAL</span><span>${fmtP(s.total)}</span>
-  </div>
-  ${effectiveRate > 1 ? `
-  <div class="row" style="font-size:11px;opacity:0.8;margin-top:2px;justify-content:flex-end;gap:5px">
-    <span>Equiv. USD:</span><span>${fmt(s.total, "$")}</span>
-  </div>
-  ` : ""}
-  </div>
+    <div class="totals">
+        <div class="total-row"><span>SUBTOTAL</span><span>${fmtP(s.total + s.discount)}</span></div>
+        ${s.discount > 0 ? `<div class="total-row discount"><span>DESCUENTO</span><span>-${fmtP(s.discount)}</span></div>` : ""}
+        <div class="total-row big"><span>TOTAL</span><span>${fmtP(s.total)}</span></div>
+        ${effectiveRate > 1 ? `
+            <div class="total-row" style="margin-top:2px; font-weight:600; font-size:9px; opacity:0.7; justify-content: flex-end; gap: 4px;">
+                <span>EQUIV. USD:</span><span>${fmt(s.total, "$")}</span>
+            </div>
+        ` : ""}
+    </div>
 
-
-
- <div class="footer">${companyInfo?.footer || "¡Gracias por su compra!"}</div>
+    <div class="footer">${companyInfo?.footer || "¡Gracias por su compra!<br>Vuelva pronto"}</div>
 </body>
 </html>`;
 
@@ -176,11 +223,11 @@ export default function ReceiptModal({ open, onClose, sale }) {
     const invoiceLabel = s.invoice_number || `#${s.id}`;
 
     return (
-        <Modal open={open} onClose={onClose} title={`FACTURA ${invoiceLabel}`} width={500}>
+        <Modal open={open} onClose={onClose} title={`FACTURA ${invoiceLabel}`} width={380}>
             {/* Encabezado empresa */}
-            <div className="text-center mb-4 pb-4 border-b border-border/20 dark:border-white/10">
+            <div className="text-center mb-3 pb-3 border-b border-border/10 dark:border-white/5">
                 {companyInfo?.logo_url && (
-                    <img src={resolveImageUrl(companyInfo.logo_url)} alt="logo" className=" mx-auto mb-2 object-contain" />
+                    <img src={resolveImageUrl(companyInfo.logo_url)} alt="logo" className="mx-auto mb-2 max-h-16 w-auto object-contain" />
                 )}
                 <div className="text-sm font-black text-content dark:text-content-dark tracking-wide">{storeName}</div>
                 {companyInfo?.rif && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">RIF: {companyInfo.rif}</div>}
@@ -196,17 +243,17 @@ export default function ReceiptModal({ open, onClose, sale }) {
             </div>
 
             {/* Metadata */}
-            <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-4 mb-4 space-y-2">
-                <div className="flex justify-between items-center py-1.5 text-sm">
+            <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-3 mb-3 space-y-1">
+                <div className="flex justify-between items-center py-1 text-xs">
                     <span className="text-content-muted dark:text-content-dark-muted">Factura N°</span>
-                    <span className="text-content dark:text-content-dark font-medium">{invoiceLabel}</span>
+                    <span className="text-content dark:text-content-dark font-black tracking-tight">{invoiceLabel}</span>
                 </div>
-                <div className="flex justify-between items-center py-1.5 text-sm">
+                <div className="flex justify-between items-center py-1 text-xs">
                     <span className="text-content-muted dark:text-content-dark-muted">Fecha</span>
                     <span className="text-content dark:text-content-dark font-medium">{dateStr}</span>
                 </div>
                 {s.employee_name && (
-                    <div className="flex justify-between items-center py-1.5 text-sm">
+                    <div className="flex justify-between items-center py-1 text-xs">
                         <span className="text-content-muted dark:text-content-dark-muted">Vendedor</span>
                         <span className="text-content dark:text-content-dark font-medium">{s.employee_name}</span>
                     </div>
@@ -229,16 +276,16 @@ export default function ReceiptModal({ open, onClose, sale }) {
 
             {/* Cliente */}
             {s.customer_name && (
-                <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg px-4 py-2.5 mb-4 text-sm">
-                    <span className="text-content-muted dark:text-content-dark-muted text-xs tracking-wider">CLIENTE: </span>
-                    <span className="text-content dark:text-content-dark font-medium">
+                <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg px-3 py-2 mb-3 text-xs">
+                    <span className="text-content-muted dark:text-content-dark-muted text-[10px] font-black uppercase tracking-wider block mb-0.5">CLIENTE</span>
+                    <span className="text-content dark:text-content-dark font-bold leading-none">
                         {s.customer_rif ? s.customer_rif + " - " : ""}{s.customer_name}
                     </span>
                 </div>
             )}
 
             {/* Items */}
-            <table className="w-full border-collapse mb-4 text-sm">
+            <table className="w-full border-collapse mb-3 text-xs">
                 <thead>
                     <tr className="border-b border-border dark:border-border-dark text-content-muted dark:text-content-dark-muted text-xs">
                         <th className="text-left px-1.5 py-1">Producto</th>
@@ -260,21 +307,21 @@ export default function ReceiptModal({ open, onClose, sale }) {
             </table>
 
             {/* Totales */}
-            <div className="border-t border-border dark:border-border-dark pt-2.5 mb-4">
-                <div className="flex justify-between items-center py-1 text-sm">
+            <div className="border-t border-border/10 dark:border-white/5 pt-2 mb-3">
+                <div className="flex justify-between items-center py-0.5 text-xs">
                     <span className="text-content-muted dark:text-content-dark-muted">Subtotal</span>
                     <span className="text-content dark:text-content-dark font-medium">{fmtP(s.total + s.discount)}</span>
                 </div>
                 {s.discount > 0 && (
-                    <div className="flex justify-between items-center py-1 text-sm text-danger">
+                    <div className="flex justify-between items-center py-0.5 text-xs text-danger">
                         <span className="font-medium">Descuento</span>
                         <span className="font-bold">-{fmtP(s.discount)}</span>
                     </div>
                 )}
-                <div className="flex justify-between items-center py-1.5 border-t border-border dark:border-border-dark mt-1 pt-1.5">
-                    <span className="text-content dark:text-content-dark font-semibold text-sm">TOTAL</span>
+                <div className="flex justify-between items-center py-1.5 border-t border-border/10 dark:border-white/5 mt-1 pt-1.5">
+                    <span className="text-content dark:text-content-dark font-black text-xs uppercase tracking-tighter">TOTAL</span>
                     <div className="text-right">
-                        <div className="text-content dark:text-white font-bold text-sm leading-none">{fmtP(s.total)}</div>
+                        <div className="text-content dark:text-white font-black text-sm leading-none">{fmtP(s.total)}</div>
                         {!isBase && (
                             <div className="text-[10px] font-bold text-content-subtle dark:text-brand-500/60 mt-1">
                                 EQUIV. {fmt(s.total, "$")}

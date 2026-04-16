@@ -130,16 +130,18 @@ export default function PriceLabelsView({ products, onClose }) {
             <style dangerouslySetInnerHTML={{ __html: `
                 @media print {
                     @page { 
-                        margin: 0; 
+                        margin: 0mm; 
                         size: letter; 
                     }
                     html, body { 
                         margin: 0 !important;
                         padding: 0 !important;
-                        height: auto !important;
-                        min-height: 100% !important;
+                        height: 100%;
+                        width: 100%;
                         visibility: hidden !important;
                         background: white !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
                     }
                     
                     /* Solo el área de impresión y sus hijos son visibles */
@@ -152,9 +154,9 @@ export default function PriceLabelsView({ products, onClose }) {
                         left: 0 !important;
                         top: 0 !important;
                         width: 215.9mm !important;
-                        background: white !important;
-                        padding: 0 !important;
                         margin: 0 !important;
+                        padding: 0 !important;
+                        background: white !important;
                     }
 
                     .print\\:hidden { display: none !important; }
@@ -169,16 +171,18 @@ export default function PriceLabelsView({ products, onClose }) {
                     .page-break { 
                         display: grid !important;
                         page-break-after: always !important;
+                        page-break-before: avoid !important;
                         break-after: page !important;
                         page-break-inside: avoid !important;
                         width: 215.9mm !important;
                         height: 279.4mm !important;
                         margin: 0 !important;
-                        padding: 4mm !important;
+                        padding: 5mm !important; /* Margen físico para la impresora */
                         box-sizing: border-box !important;
                         background: white !important;
                         border: none !important;
                         box-shadow: none !important;
+                        overflow: hidden !important;
                     }
                 }
             ` }} />
