@@ -123,9 +123,9 @@ export function CartProvider({ children }) {
   }, []);
 
   const addToCart = useCallback((product, customQty = null) => {
-    if (!activeWarehouse) return notify("Selecciona un almacén antes de cobrar", "err");
-    if (!product.is_service && parseFloat(product.stock) <= 0) return notify("Sin stock disponible", "err");
-    
+    if (!activeWarehouse) { notify("Selecciona un almacén antes de cobrar", "err"); return false; }
+    if (!product.is_service && parseFloat(product.stock) <= 0) { notify("Sin stock disponible", "err"); return false; }
+
     const step = parseFloat(product.qty_step) || 1;
     const initialQty = customQty !== null ? parseFloat(customQty) : step;
 
@@ -139,9 +139,11 @@ export function CartProvider({ children }) {
     }
 
     if (!validateCartStock(newCart)) {
-      return notify("Stock insuficiente de este producto o sus ingredientes", "err");
+      notify("Stock insuficiente de este producto o sus ingredientes", "err");
+      return false;
     }
     setCart(newCart);
+    return true;
   }, [activeWarehouse, notify, validateCartStock, cart]);
 
   const removeFromCart = useCallback((id) => {
@@ -173,10 +175,10 @@ export function CartProvider({ children }) {
   const setQtyDirect = useCallback((id, raw) => {
     if (raw === "") {
       setCart(cart.map(i => i.id === id ? { ...i, qty: "" } : i));
-      return;
+      return true;
     }
     let targetNq = parseFloat(raw);
-    if (isNaN(targetNq) || targetNq < 0) return;
+    if (isNaN(targetNq) || targetNq < 0) return false;
 
     let changeOccurred = false;
     const newCart = cart.map(i => {
@@ -190,11 +192,13 @@ export function CartProvider({ children }) {
       return { ...i, qty: nq };
     });
 
-    if (!changeOccurred) return;
+    if (!changeOccurred) return true;
     if (!validateCartStock(newCart)) {
-      return notify("Stock límite alcanzado", "err");
+      notify("Stock límite alcanzado", "err");
+      return false;
     }
     setCart(newCart);
+    return true;
   }, [notify, validateCartStock, cart]);
 
   const clearCart = useCallback(() => {

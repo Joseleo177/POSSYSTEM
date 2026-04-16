@@ -16,7 +16,8 @@ export default function ProductGrid({
     const sentinelRef = useRef(null);
 
     const handleSelect = (p) => {
-        // En PC y Mobile, siempre abrimos el modal para pedir cantidad de inmediato
+        // No abrir si no hay stock (ni es servicio ni combo)
+        if (!p.is_service && !p.is_combo && parseFloat(p.stock) <= 0) return;
         openQtyModal(p);
     };
 

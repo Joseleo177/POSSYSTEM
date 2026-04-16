@@ -206,10 +206,9 @@ export default function CobroPage() {
                 onSave={(id, q) => {
                     const isInCart = cart.find(i => i.id === id);
                     if (isInCart) {
-                        setQtyDirect(id, q);
+                        return setQtyDirect(id, q);
                     } else {
-                        // Si no está, lo agregamos (el item pasado viene del catálogo)
-                        addToCart(qtyModalItem, q);
+                        return addToCart(qtyModalItem, q);
                     }
                 }}
             />

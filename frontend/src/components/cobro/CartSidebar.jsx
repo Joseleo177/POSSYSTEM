@@ -129,10 +129,9 @@ export default function CartSidebar({
                             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-content-subtle opacity-60 z-20 pointer-events-none">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                             </div>
-                            <button onClick={() => { setCustomerEditData({ _fromCobro: true }); setCustomerModal(true); }} className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-brand-500/10 text-brand-500 hover:bg-brand-500 hover:text-white transition-colors flex items-center justify-center text-xl font-bold z-20">+</button>
                         </>
                     )}
-                    {!selectedCustomer && customers.length > 0 && (
+                    {!selectedCustomer && custSearch.trim().length > 0 && (
                         <div className="absolute top-full left-0 right-0 mt-1 bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-xl shadow-2xl z-[100] max-h-56 overflow-y-auto">
                             {customers.map((c, idx) => (
                                 <button
@@ -146,6 +145,13 @@ export default function CartSidebar({
                                     <div className="text-[11px] text-content-muted mt-0.5">{c.rif || "Sin datos adicionales"}</div>
                                 </button>
                             ))}
+                            <button
+                                onClick={() => { setCustomerEditData({ name: custSearch, _fromCobro: true }); setCustomerModal(true); setCustSearch(""); }}
+                                className={`w-full text-left px-4 py-3 cursor-pointer text-sm font-bold text-warning flex items-center gap-2 hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors ${customers.length > 0 ? "border-t border-border dark:border-border-dark" : ""}`}
+                            >
+                                <span className="text-lg bg-warning/10 text-warning w-6 h-6 flex items-center justify-center rounded-md">+</span>
+                                Crear "{custSearch}"
+                            </button>
                         </div>
                     )}
                 </div>

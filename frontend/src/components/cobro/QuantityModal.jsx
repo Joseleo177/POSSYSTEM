@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Modal from "../ui/Modal";
 
 /**
@@ -26,8 +26,9 @@ export default function QuantityModal({ isOpen, onClose, item, onSave }) {
         if (!isNaN(num) && num >= 0) {
             // Si es unidad, bulto, etc., forzamos entero
             if (isInteger) num = Math.floor(num);
-            onSave(item.id, parseFloat(num.toFixed(3)));
-            onClose();
+            const ok = onSave(item.id, parseFloat(num.toFixed(3)));
+            // Solo cerrar si el padre no rechazó (retorna false = stock insuficiente)
+            if (ok !== false) onClose();
         }
     };
 
@@ -54,7 +55,7 @@ export default function QuantityModal({ isOpen, onClose, item, onSave }) {
     };
 
     return (
-        <Modal open={isOpen} onClose={onClose} title={`Cantidad: ${item.name}`} width={420}>
+        <Modal open={isOpen} onClose={onClose} title={`Cantidad: ${item.name}`}>
             <div className="flex flex-col gap-6 py-2">
                 
                 {/* Visual Unit Badge */}
