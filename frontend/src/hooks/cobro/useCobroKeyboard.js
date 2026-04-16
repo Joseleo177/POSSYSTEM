@@ -9,7 +9,7 @@ export function useCobroKeyboard({
     searchInputRef,
     customers, selectedCustIdx, setSelectedCustIdx,
     setSelectedCustomer, setCustomers, setCustSearch,
-    openQtyModal,
+    openQtyModal, notify,
 }) {
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -56,6 +56,10 @@ export function useCobroKeyboard({
                     e.preventDefault();
                     const p = filteredProducts[selectedIndex];
                     if (p) {
+                        const hasUnlimitedStock = p.is_service || (p.is_combo && p.stock === null);
+                        if (!hasUnlimitedStock && parseFloat(p.stock) <= 0) {
+                            return notify("Producto sin existencias", "error");
+                        }
                         openQtyModal(p);
                     }
                 } else if (!isInput && cart.length > 0 && !receipt) {

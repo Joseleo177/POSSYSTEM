@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import Modal from "./ui/Modal";
 import { Button } from "./ui/Button";
 import { api } from "../services/api";
+import { useApp } from "../context/AppContext";
 import CustomSelect from "./ui/CustomSelect";
 import { calcSalePrice as calcSalePriceHelper } from "../helpers";
 import { resolveImageUrl } from "../helpers";
@@ -15,6 +16,7 @@ const EMPTY = {
 };
 
 export default function ProductModal({ open, onClose, onSave, editData, categories, loading }) {
+    const { notify } = useApp();
     const [form, setForm] = useState(EMPTY);
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
@@ -99,6 +101,13 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const handleImageChange = (e) => {
         const f = e.target.files[0];
         if (!f) return;
+
+        // Validar tamaño: 1MB máximo
+        if (f.size > 1024 * 1024) {
+            e.target.value = ""; // Limpiar input
+            return notify("La imagen seleccionada es muy pesada (máximo 1MB)", "err");
+        }
+
         setImageFile(f);
         setImagePreview(URL.createObjectURL(f));
     };

@@ -73,6 +73,7 @@ export default function CobroPage() {
         setCustomers: customer.setCustomers,
         setCustSearch: customer.setCustSearch,
         openQtyModal: setQtyModalItem,
+        notify,
     });
 
     // ── Sin almacén asignado ───────────────────────────────────
@@ -152,6 +153,7 @@ export default function CobroPage() {
                 loadMore={products.loadMore}
                 loadingMore={products.loadingMore}
                 hasMore={products.hasMore}
+                notify={notify}
             />
 
             {/* Modales */}

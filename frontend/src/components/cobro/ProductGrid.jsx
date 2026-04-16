@@ -12,12 +12,15 @@ export default function ProductGrid({
     filteredProducts, selectedIndex,
     openQtyModal, convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt,
     loadMore, loadingMore, hasMore,
+    notify,
 }) {
     const sentinelRef = useRef(null);
 
     const handleSelect = (p) => {
         // Bloquear si stock es 0 o menos, salvo: servicio, o combo con stock null (todos sus ingredientes son servicios)
-        if (!p.is_service && !(p.is_combo && p.stock === null) && parseFloat(p.stock) <= 0) return;
+        if (!p.is_service && !(p.is_combo && p.stock === null) && parseFloat(p.stock) <= 0) {
+            return notify("Producto sin existencias", "error");
+        }
         openQtyModal(p);
     };
 
