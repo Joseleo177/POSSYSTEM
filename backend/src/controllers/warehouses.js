@@ -163,7 +163,7 @@ const getStock = async (req, res) => {
       price: parseFloat(p.price || 0),
       cost_price: p.is_combo ? (comboCostMap[p.product_id] ?? 0) : parseFloat(p.cost_price || 0),
       category_name: p.category_name,
-      image_url: p.image_filename ? `/uploads/${p.image_filename}` : null
+      image_url: p.image_filename ? (p.image_filename.startsWith('http') ? p.image_filename : `/uploads/${p.image_filename}`) : null
     }));
 
     res.json({ ok: true, data, total: count });
@@ -648,7 +648,7 @@ const getProducts = async (req, res) => {
       is_combo: p.is_combo,
       is_service: p.is_service,
       combo_items: p.is_combo ? (comboItemsMap[p.id] || []) : [],
-      image_url: p.image_filename ? `/uploads/${p.image_filename}` : null
+      image_url: p.image_filename ? (p.image_filename.startsWith('http') ? p.image_filename : `/uploads/${p.image_filename}`) : null
     }));
 
     res.json({ ok: true, data, total: parseInt(count) });
