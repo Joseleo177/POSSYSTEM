@@ -87,7 +87,11 @@ async function request(path, options = {}) {
 
 function buildProductForm(body, imageFile, removeImage) {
   const fd = new FormData();
-  Object.entries(body).forEach(([k, v]) => { if (v != null && v !== "") fd.append(k, v); });
+  Object.entries(body).forEach(([k, v]) => {
+    if (v == null || v === "") return;
+    // Los arrays deben ir como JSON para que el backend pueda parsearlos
+    fd.append(k, Array.isArray(v) ? JSON.stringify(v) : v);
+  });
   if (imageFile) fd.append("image", imageFile);
   if (removeImage) fd.append("remove_image", "true");
   return fd;

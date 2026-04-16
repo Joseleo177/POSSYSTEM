@@ -102,8 +102,10 @@ export function CartProvider({ children }) {
     const usage = {};
     for (const item of newCart) {
       if (item.is_service) continue;
+      if (item.is_combo && item.stock === null) continue; // combo de solo-servicios, sin límite
       if (item.is_combo && item.combo_items) {
         for (const ing of item.combo_items) {
+          if (ing.ingredient_is_service) continue; // ingrediente servicio, no limita
           if (!usage[ing.ingredient_id]) {
             usage[ing.ingredient_id] = { used: 0, maxStock: ing.ingredient_stock };
           }
@@ -124,7 +126,9 @@ export function CartProvider({ children }) {
 
   const addToCart = useCallback((product, customQty = null) => {
     if (!activeWarehouse) { notify("Selecciona un almacén antes de cobrar", "err"); return false; }
-    if (!product.is_service && parseFloat(product.stock) <= 0) { notify("Sin stock disponible", "err"); return false; }
+    // stock === null significa combo de solo-servicios (sin límite de stock)
+    const hasUnlimitedStock = product.is_service || (product.is_combo && product.stock === null);
+    if (!hasUnlimitedStock && parseFloat(product.stock) <= 0) { notify("Sin stock disponible", "err"); return false; }
 
     const step = parseFloat(product.qty_step) || 1;
     const initialQty = customQty !== null ? parseFloat(customQty) : step;

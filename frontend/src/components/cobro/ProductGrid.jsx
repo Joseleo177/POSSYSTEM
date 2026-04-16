@@ -10,14 +10,14 @@ export default function ProductGrid({
     searchInputRef,
     selectedCat, setSelectedCat, categories,
     filteredProducts, selectedIndex,
-    addToCart, openQtyModal, convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt,
+    openQtyModal, convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt,
     loadMore, loadingMore, hasMore,
 }) {
     const sentinelRef = useRef(null);
 
     const handleSelect = (p) => {
-        // No abrir si no hay stock (ni es servicio ni combo)
-        if (!p.is_service && !p.is_combo && parseFloat(p.stock) <= 0) return;
+        // Bloquear si stock es 0 o menos, salvo: servicio, o combo con stock null (todos sus ingredientes son servicios)
+        if (!p.is_service && !(p.is_combo && p.stock === null) && parseFloat(p.stock) <= 0) return;
         openQtyModal(p);
     };
 

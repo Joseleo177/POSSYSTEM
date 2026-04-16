@@ -592,7 +592,8 @@ const getProducts = async (req, res) => {
           pci.product_id AS ingredient_id,
           pci.quantity,
           COALESCE(ps2.qty, 0) AS ingredient_stock,
-          p.cost_price AS ingredient_cost
+          p.cost_price AS ingredient_cost,
+          p.is_service AS ingredient_is_service
         FROM product_combo_items pci
         JOIN products p ON p.id = pci.product_id
         LEFT JOIN product_stock ps2
@@ -609,26 +610,30 @@ const getProducts = async (req, res) => {
 
       comboIds.forEach(cid => {
         const rows = byCombo[cid] || [];
-        comboItemsMap[cid] = rows.map(r => ({ 
-          ingredient_id: r.ingredient_id, 
+        comboItemsMap[cid] = rows.map(r => ({
+          ingredient_id: r.ingredient_id,
           quantity: parseFloat(r.quantity) || 1,
-          ingredient_stock: parseFloat(r.ingredient_stock) || 0
+          ingredient_stock: parseFloat(r.ingredient_stock) || 0,
+          ingredient_is_service: !!r.ingredient_is_service,
         }));
 
-        if (rows.length === 0) { 
-          ingredientStockMap[cid] = 0; 
+        if (rows.length === 0) {
+          ingredientStockMap[cid] = 0;
           comboCostMap[cid] = 0;
-          return; 
+          return;
         }
         let min = Infinity;
         let totalCost = 0;
         for (const r of rows) {
           const ingQty = parseFloat(r.quantity) || 1;
+          totalCost += parseFloat(r.ingredient_cost || 0) * ingQty;
+          // Los servicios no tienen stock almacenable — no limitan el combo
+          if (r.ingredient_is_service) continue;
           const possible = Math.floor(parseFloat(r.ingredient_stock) / ingQty);
           if (possible < min) min = possible;
-          totalCost += parseFloat(r.ingredient_cost || 0) * ingQty;
         }
-        ingredientStockMap[cid] = min === Infinity ? 0 : min;
+        // Si todos los ingredientes son servicios, min sigue siendo Infinity → stock ilimitado
+        ingredientStockMap[cid] = min === Infinity ? Infinity : min;
         comboCostMap[cid] = totalCost;
       });
     }
@@ -641,7 +646,7 @@ const getProducts = async (req, res) => {
       qty_step: parseFloat(p.qty_step || 1),
       image_filename: p.image_filename,
       cost_price: p.is_combo ? (comboCostMap[p.id] ?? 0) : parseFloat(p.cost_price || 0),
-      stock: p.is_combo ? (ingredientStockMap[p.id] ?? 0) : (parseFloat(p.qty) || 0),
+      stock: p.is_combo ? (ingredientStockMap[p.id] === Infinity ? null : (ingredientStockMap[p.id] ?? 0)) : (parseFloat(p.qty) || 0),
       sales: parseFloat(p.total_sold),
       category_name: p.category_name,
       category_id: p.category_id,
