@@ -18,7 +18,7 @@ export function useCobroKeyboard({
             // Navegación en buscador de clientes
             if (e.target.id === "customer-search-input") {
                 if (e.key === "ArrowDown") { e.preventDefault(); setSelectedCustIdx(p => Math.min(p + 1, customers.length - 1)); }
-                if (e.key === "ArrowUp")   { e.preventDefault(); setSelectedCustIdx(p => Math.max(p - 1, 0)); }
+                if (e.key === "ArrowUp") { e.preventDefault(); setSelectedCustIdx(p => Math.max(p - 1, 0)); }
                 if (e.key === "Enter" && selectedCustIdx >= 0) {
                     e.preventDefault();
                     const c = customers[selectedCustIdx];
@@ -27,9 +27,9 @@ export function useCobroKeyboard({
                 return;
             }
 
-            if (e.key === "F1")  { e.preventDefault(); setSelectedIndex(-1); searchInputRef.current?.focus(); }
-            if (e.key === "F2")  { e.preventDefault(); document.getElementById("customer-search-input")?.focus(); }
-            if (e.key === "F4")  { e.preventDefault(); holdCart(); }
+            if (e.key === "F1") { e.preventDefault(); setSelectedIndex(-1); searchInputRef.current?.focus(); }
+            if (e.key === "F2") { e.preventDefault(); document.getElementById("customer-search-input")?.focus(); }
+            if (e.key === "F4") { e.preventDefault(); holdCart(); }
             if (e.key === "F10") { e.preventDefault(); if (cart.length > 0) setShowConfirmCheckout(true); }
             if (e.key === "Escape") {
                 setSearch(""); setSelectedIndex(-1);
@@ -48,7 +48,7 @@ export function useCobroKeyboard({
                 if (selectedIndex < 4) searchInputRef.current?.focus();
             }
             if (e.key === "ArrowRight" && selectedIndex >= 0) { e.preventDefault(); setSelectedIndex(p => Math.min(p + 1, filteredProducts.length - 1)); }
-            if (e.key === "ArrowLeft"  && selectedIndex >= 0) { e.preventDefault(); setSelectedIndex(p => Math.max(p - 1, 0)); }
+            if (e.key === "ArrowLeft" && selectedIndex >= 0) { e.preventDefault(); setSelectedIndex(p => Math.max(p - 1, 0)); }
 
             if (e.key === "Enter") {
                 if (showConfirmCheckout) { e.preventDefault(); setShowConfirmCheckout(false); checkout(); return; }
@@ -58,7 +58,7 @@ export function useCobroKeyboard({
                     if (p) {
                         const hasUnlimitedStock = p.is_service || (p.is_combo && p.stock === null);
                         if (!hasUnlimitedStock && parseFloat(p.stock) <= 0) {
-                            return notify("Producto sin existencias", "error");
+                            return notify("Este producto no tiene existencias en el inventario", "error");
                         }
                         openQtyModal(p);
                     }

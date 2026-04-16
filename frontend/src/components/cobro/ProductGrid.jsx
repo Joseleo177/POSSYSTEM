@@ -19,7 +19,7 @@ export default function ProductGrid({
     const handleSelect = (p) => {
         // Bloquear si stock es 0 o menos, salvo: servicio, o combo con stock null (todos sus ingredientes son servicios)
         if (!p.is_service && !(p.is_combo && p.stock === null) && parseFloat(p.stock) <= 0) {
-            return notify("Producto sin existencias", "error");
+            return notify("Este producto no tiene existencias en el inventario", "error");
         }
         openQtyModal(p);
     };
@@ -97,7 +97,7 @@ export default function ProductGrid({
                                 onClick={() => handleSelect(p)}
                                 className={`group bg-white dark:bg-white/5 rounded-2xl lg:rounded-[32px] overflow-hidden border transition-all cursor-pointer active:scale-95
                                     ${idx === selectedIndex ? "border-brand-500 ring-2 lg:ring-4 ring-brand-500/10 shadow-2xl -translate-y-0.5 lg:-translate-y-1 scale-[1.02]" : "border-black/5 dark:border-white/5 hover:border-brand-500/50"}`}
-                             >
+                            >
                                 <div className="aspect-[4/3] lg:aspect-square relative overflow-hidden bg-surface-2 dark:bg-black/20">
                                     {p.image_url ? (
                                         <img src={resolveImageUrl(p.image_url)} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />

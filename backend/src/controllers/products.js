@@ -198,6 +198,7 @@ const getOne = async (req, res) => {
 const create = async (req, res) => {
   const t = await sequelize.transaction();
   try {
+    const company_id = req.employee?.company_id ?? null;
     const { name, price, stock, category_id, unit, qty_step,
             cost_price, profit_margin, package_size, package_unit, min_stock, is_combo, combo_items, is_service, barcode } = req.body;
 
@@ -233,7 +234,8 @@ const create = async (req, res) => {
         const itemsToCreate = parsedItems.map(i => ({
           combo_id: product.id,
           product_id: i.product_id,
-          quantity: i.quantity
+          quantity: i.quantity,
+          company_id,
         }));
         await ProductComboItem.bulkCreate(itemsToCreate, { transaction: t });
       }
@@ -246,8 +248,8 @@ const create = async (req, res) => {
     });
   } catch (err) {
     await t.rollback();
-    console.error(err);
-    res.status(500).json({ ok: false, message: "Error al crear producto" });
+    console.error("ERROR create product:", err);
+    res.status(500).json({ ok: false, message: err.message || "Error al crear producto" });
   }
 };
 
@@ -255,6 +257,7 @@ const create = async (req, res) => {
 const update = async (req, res) => {
   const t = await sequelize.transaction();
   try {
+    const company_id = req.employee?.company_id ?? null;
     const { name, price, category_id, unit, qty_step,
             cost_price, profit_margin, package_size, package_unit, min_stock, is_combo, combo_items, is_service, barcode } = req.body;
 
@@ -302,7 +305,8 @@ const update = async (req, res) => {
         const itemsToCreate = parsedItems.map(i => ({
           combo_id: product.id,
           product_id: i.product_id,
-          quantity: i.quantity
+          quantity: i.quantity,
+          company_id,
         }));
         await ProductComboItem.bulkCreate(itemsToCreate, { transaction: t });
       }
@@ -317,8 +321,8 @@ const update = async (req, res) => {
     });
   } catch (err) {
     await t.rollback();
-    console.error(err);
-    res.status(500).json({ ok: false, message: "Error al actualizar producto" });
+    console.error("ERROR update product:", err);
+    res.status(500).json({ ok: false, message: err.message || "Error al actualizar producto" });
   }
 };
 
