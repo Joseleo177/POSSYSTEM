@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import Modal from "./ui/Modal";
+import { Button } from "./ui/Button";
 import { api } from "../services/api";
 import CustomSelect from "./ui/CustomSelect";
 import { calcSalePrice as calcSalePriceHelper } from "../helpers";
@@ -174,15 +175,16 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     </div>
 
                     {/* Información Principal */}
+                    {/* Información Principal */}
                     <div className="flex-1 space-y-3">
-                        <div>
-                            <label className="label">Nombre del Artículo / Referencia</label>
-                            <input value={form.name} onChange={e => set("name", e.target.value)} autoFocus className="input " placeholder="Ej. Computadora Portátil Gamer X-1..." />
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <div>
-                                <label className="label">Categoría Vinculada</label>
+                        {/* Fila 1 */}
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                            <div className="col-span-12 md:col-span-8">
+                                <label className="label">Nombre del Artículo / Referencia</label>
+                                <input value={form.name} onChange={e => set("name", e.target.value)} autoFocus className="input " placeholder="Ej. Computadora Portátil Gamer X-1..." />
+                            </div>
+                            <div className="col-span-12 md:col-span-4">
+                                <label className="label">Categoría</label>
                                 <div className="relative group">
                                     <CustomSelect
                                         value={form.category_id}
@@ -193,6 +195,10 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                     />
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Fila 2 */}
+                        <div className={`grid grid-cols-1 gap-3 items-end ${editData?.id && !form.is_combo && !form.is_service ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
                             <div>
                                 <label className="label">Unidad de Medida</label>
                                 <div className="relative">
@@ -209,11 +215,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 <label className="label">Código de Barras</label>
                                 <input value={form.barcode} onChange={e => set("barcode", e.target.value)} className="input" placeholder="Ej. 123456789012" />
                             </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
                             <div>
-                                <label className="label">Precio de Venta Público</label>
+                                <label className="label">Precio de Venta</label>
                                 <div className="relative group">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                         <span className="text-content-subtle font-bold">$</span>
@@ -221,13 +224,12 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                     <input value={form.price} onChange={e => set("price", e.target.value)} type="number" step="0.01" className="input !pl-8" placeholder="0.00" />
                                 </div>
                             </div>
-
                             {editData?.id && !form.is_combo && !form.is_service && (
                                 <div>
                                     <label className="label">Stock Actual</label>
                                     <div className="bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border border-border/40 rounded-lg px-3 flex justify-between items-center cursor-not-allowed opacity-80 h-10">
                                         <span className="text-sm font-bold">{form.stock ?? 0} <span className="text-[10px] uppercase opacity-60 ml-1">{form.unit}</span></span>
-                                        <span className="text-[10px] bg-black/10 dark:bg-white/10 px-2 py-0.5 rounded uppercase font-bold tracking-wide">Solo Lectura</span>
+                                        <span className="text-[10px] bg-black/10 dark:bg-white/10 px-2 py-0.5 rounded uppercase font-bold tracking-wide">Lectura</span>
                                     </div>
                                 </div>
                             )}
@@ -411,19 +413,20 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
                 {/* ── Footer de Acción ── */}
                 <div className="flex gap-3 justify-end mt-3 pt-3 border-t border-border/40 dark:border-border-dark/40">
-                    <button onClick={onClose} className="btn-sm btn-secondary">
+                    <Button onClick={onClose} variant="ghost" className="border border-border/40 dark:border-white/10 min-w-[100px]">
                         Cancelar
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                         onClick={handleSave} disabled={loading}
-                        className={`btn-sm btn-primary min-w-[160px] ${loading ? "opacity-60 cursor-not-allowed" : ""}`}
+                        variant="primary"
+                        className="min-w-[160px]"
                     >
                         {loading ? (
-                            <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <svg className="animate-spin h-4 w-4 text-black" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         ) : (
                             isEdit ? "Guardar Cambios" : "Registrar Producto"
                         )}
-                    </button>
+                    </Button>
                 </div>
 
             </div>
