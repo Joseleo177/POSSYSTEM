@@ -1,4 +1,5 @@
 const path = require("path");
+const fs   = require("fs");
 const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, Sequelize, ProductComboItem, sequelize } = require("../models");
 const Op = Sequelize.Op;
 
@@ -49,8 +50,16 @@ async function handleImageUpload(file) {
     const url = await getSupabaseStorage().uploadImage(file.buffer, filename, file.mimetype);
     return url;
   } else {
-    // Con diskStorage el archivo ya está guardado, retornamos el filename
-    return file.filename;
+    // Modo Local: Guardar en disco manualmente ya que multer usa memoryStorage
+    const uploadsDir = path.join(__dirname, "../../uploads");
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+    
+    const ext = path.extname(file.originalname).toLowerCase();
+    const filename = `product_${Date.now()}${ext}`;
+    const p = path.join(uploadsDir, filename);
+    fs.writeFileSync(p, file.buffer);
+    
+    return filename;
   }
 }
 

@@ -51,11 +51,12 @@ const uploadLogo = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ ok: false, message: "No se recibió imagen" });
 
-    const setting = await Setting.findByPk('logo_filename');
+    const company_id = req.employee?.company_id ?? null;
+    const setting = await Setting.findOne({ where: { key: 'logo_filename', company_id } });
     const old = setting?.value;
 
     const ext = path.extname(req.file.originalname).toLowerCase();
-    const filename = `logo_${Date.now()}${ext}`;
+    const filename = `logo_${company_id}_${Date.now()}${ext}`;
 
     let logoValue;
 
@@ -83,7 +84,6 @@ const uploadLogo = async (req, res) => {
       logoValue = filename;
     }
 
-    const company_id = req.employee?.company_id ?? null;
     await Setting.upsert({ key: 'logo_filename', value: logoValue, company_id });
 
     res.json({
