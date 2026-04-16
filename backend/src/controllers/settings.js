@@ -91,8 +91,8 @@ const uploadLogo = async (req, res) => {
       logo_url: logoValue.startsWith("http") ? logoValue : `/uploads/${logoValue}`,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, message: "Error al subir logo" });
+    console.error("ERROR uploadLogo:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
+    res.status(500).json({ ok: false, message: err.message || "Error al subir logo" });
   }
 };
 
