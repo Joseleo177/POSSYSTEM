@@ -93,7 +93,7 @@ export default function CobroPage() {
             saleBalance={saleBalance}
             baseCurrency={baseCurrency}
             currentCurrency={currentCurrency}
-            onNext={() => { setReceipt(null); setSaleBalance(null); }}
+            onNext={() => { setReceipt(null); setSaleBalance(null); products.reload(); }}
             onPay={(res) => setSaleBalance({ amount_paid: res.amount_paid, balance: res.balance, status: res.sale_status })}
         />
     );

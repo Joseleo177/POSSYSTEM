@@ -45,6 +45,10 @@ export function useCobroProducts(activeWarehouse, notify) {
 
     const hasMore = products.length < total;
 
+    const reload = useCallback(() => {
+        loadProducts(debouncedSearch, debouncedCat, 0, true);
+    }, [loadProducts, debouncedSearch, debouncedCat]);
+
     return {
         products,
         search, setSearch,
@@ -54,5 +58,6 @@ export function useCobroProducts(activeWarehouse, notify) {
         loadMore,
         loadingMore,
         hasMore,
+        reload,
     };
 }
