@@ -61,7 +61,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify }) {
     }
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
 
             {/* ── Columna izquierda: Producto ── */}
             <div className="space-y-3">
@@ -127,14 +127,18 @@ export default function AdjustmentsView({ selectedWarehouse, notify }) {
                 {/* Tipo: Restar / Sumar */}
                 <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => setForm(p => ({ ...p, type: "out" }))}
-                        className={`h-16 rounded-lg border flex flex-col items-center justify-center gap-1.5 transition-all ${form.type === "out" ? "border-danger/40 bg-danger/5 text-danger" : "border-border/20 dark:border-white/5 text-content-subtle dark:text-white/30 hover:border-danger/20"}`}>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <span className="text-[10px] font-black uppercase tracking-wide">Restar Stock</span>
+                        className={`h-10 rounded-lg border flex flex-col items-center justify-center gap-1 transition-all ${form.type === "out" ? "border-danger/40 bg-danger/5 text-danger" : "border-border/20 dark:border-white/5 text-content-subtle dark:text-white/30 hover:border-danger/20"}`}>
+                        <div className="flex items-center gap-1.5">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span className="text-[10px] font-black uppercase tracking-wide">Restar Stock</span>
+                        </div>
                     </button>
                     <button onClick={() => setForm(p => ({ ...p, type: "in" }))}
-                        className={`h-16 rounded-lg border flex flex-col items-center justify-center gap-1.5 transition-all ${form.type === "in" ? "border-success/40 bg-success/5 text-success" : "border-border/20 dark:border-white/5 text-content-subtle dark:text-white/30 hover:border-success/20"}`}>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <span className="text-[10px] font-black uppercase tracking-wide">Sumar Stock</span>
+                        className={`h-10 rounded-lg border flex flex-col items-center justify-center gap-1 transition-all ${form.type === "in" ? "border-success/40 bg-success/5 text-success" : "border-border/20 dark:border-white/5 text-content-subtle dark:text-white/30 hover:border-success/20"}`}>
+                        <div className="flex items-center gap-1.5">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span className="text-[10px] font-black uppercase tracking-wide">Sumar Stock</span>
+                        </div>
                     </button>
                 </div>
 
