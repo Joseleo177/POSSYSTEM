@@ -8,6 +8,7 @@ import Modal from "../components/ui/Modal";
 import { useDebounce } from "../hooks/useDebounce";
 import { api } from "../services/api";
 import { useApp } from "../context/AppContext";
+import PriceLabelsView from "../components/Catalog/PriceLabelsView";
 
 const TABS = [
     { id: "products", label: "Productos" },
@@ -204,6 +205,9 @@ export default function CatalogPage() {
     const [productModal, setProductModal] = useState(false);
     const [productEditData, setProductEditData] = useState(null);
     const [deleteProductDialog, setDeleteProductDialog] = useState(null);
+    const [selectedProducts, setSelectedProducts] = useState([]);
+    const [printingLabels, setPrintingLabels] = useState(false);
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
 
     // Almacenes con acceso (solo los que el empleado tiene asignados)
     const availableWarehouses = employee?.warehouses || [];
@@ -250,6 +254,29 @@ export default function CatalogPage() {
         } catch (e) { notify(e.message, "err"); }
     };
 
+    // Handlers para selección masiva
+    const toggleSelect = (id) => {
+        const product = products.find(p => p.id === id);
+        if (!product) return;
+
+        setSelectedProducts(prev => {
+            const exists = prev.find(x => x.id === id);
+            return exists ? prev.filter(x => x.id !== id) : [...prev, product];
+        });
+    };
+
+    const selectAll = () => {
+        const pageIds = products.map(p => p.id);
+        const allPageSelected = pageIds.every(id => selectedProducts.find(x => x.id === id));
+
+        if (allPageSelected) {
+            setSelectedProducts(prev => prev.filter(p => !pageIds.includes(p.id)));
+        } else {
+            const newToAdd = products.filter(p => !selectedProducts.find(x => x.id === p.id));
+            setSelectedProducts(prev => [...prev, ...newToAdd]);
+        }
+    };
+
     return (
         <div className="h-full flex flex-col bg-transparent">
 
@@ -260,11 +287,36 @@ export default function CatalogPage() {
                         <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest leading-none mb-1">Módulo</div>
                         <h1 className="text-sm font-black uppercase tracking-tight text-content dark:text-white">Catálogo</h1>
                     </div>
-                    {activeTab === "products" && can("products") && (
-                        <Button onClick={() => { setProductEditData(null); setProductModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
-                            + Nuevo Producto
+                    <div className="flex gap-2">
+                        {selectedProducts.length > 0 && (
+                            <Button 
+                                onClick={() => setPrintingLabels(true)} 
+                                variant="ghost"
+                                className="h-8 px-3 text-[10px] shadow-none bg-info/10 text-info border border-info/30 hover:bg-info hover:text-black"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                                Imprimir ({selectedProducts.length})
+                            </Button>
+                        )}
+                        
+                        <Button 
+                            onClick={() => {
+                                setIsSelectionMode(!isSelectionMode);
+                                if (isSelectionMode) setSelectedProducts([]); // Limpiar al salir
+                            }} 
+                            variant="ghost"
+                            className={`h-8 px-3 text-[10px] shadow-none border ${isSelectionMode ? 'bg-brand-500 text-black border-brand-500' : 'bg-surface-3 dark:bg-white/5 text-content-subtle border-white/5 hover:bg-white/10'}`}
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            {isSelectionMode ? 'Cancelar Selección' : 'Seleccionar'}
                         </Button>
-                    )}
+
+                        {activeTab === "products" && can("products") && (
+                            <Button onClick={() => { setProductEditData(null); setProductModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
+                                + Nuevo Producto
+                            </Button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Tabs */}
@@ -353,6 +405,10 @@ export default function CatalogPage() {
                                 canManageProducts={can("products")}
                                 openEditProduct={(p) => { setProductEditData(p); setProductModal(true); }}
                                 setDeleteProductDialog={setDeleteProductDialog}
+                                selectedProducts={selectedProducts.map(p => p.id)}
+                                onToggleSelect={toggleSelect}
+                                onSelectAll={selectAll}
+                                isSelectionMode={isSelectionMode}
                             />
                         </div>
 
@@ -422,6 +478,16 @@ export default function CatalogPage() {
                 onCancel={() => setDeleteProductDialog(null)}
                 type="danger"
             />
+
+            {/* Modal de Impresión Masiva de Etiquetas */}
+            {printingLabels && (
+                <div id="print-section">
+                    <PriceLabelsView 
+                        products={selectedProducts} 
+                        onClose={() => setPrintingLabels(false)} 
+                    />
+                </div>
+            )}
         </div>
     );
 }

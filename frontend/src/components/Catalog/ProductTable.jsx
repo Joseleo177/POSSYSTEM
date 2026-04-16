@@ -1,14 +1,29 @@
 import { fmtBase, resolveImageUrl } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 
-export default function ProductTable({ products, canManageProducts, openEditProduct, setDeleteProductDialog }) {
+export default function ProductTable({ 
+    products, canManageProducts, openEditProduct, setDeleteProductDialog,
+    selectedProducts = [], onToggleSelect, onSelectAll, isSelectionMode = false
+}) {
     const { baseCurrency } = useApp();
     const fmtPrice = (n) => fmtBase(n, baseCurrency);
+
+    const allSelected = products.length > 0 && products.every(p => selectedProducts.includes(p.id));
 
     return (
         <table className="w-full text-left border-collapse">
             <thead className="sticky top-0 z-10 bg-surface-2 dark:bg-surface-dark-2 backdrop-blur-md">
                 <tr className="border-b border-border/30 dark:border-white/5">
+                    {isSelectionMode && (
+                        <th className="px-4 py-2.5 w-10">
+                            <input 
+                                type="checkbox" 
+                                checked={allSelected} 
+                                onChange={onSelectAll}
+                                className="w-4 h-4 rounded border-border/40 bg-white/5 text-brand-500 focus:ring-brand-500/20"
+                            />
+                        </th>
+                    )}
                     <th className="px-4 py-2.5 w-12" />
                     <th className="px-4 py-2.5 text-[11px] font-black uppercase text-content-subtle">Producto</th>
                     <th className="px-4 py-2.5 text-[11px] font-black uppercase text-content-subtle">Stock</th>
@@ -19,6 +34,16 @@ export default function ProductTable({ products, canManageProducts, openEditProd
             <tbody className="divide-y divide-border/10">
                 {products.map(p => (
                     <tr key={p.id} className="group hover:bg-white/[0.02] transition-colors">
+                        {isSelectionMode && (
+                            <td className="px-4 py-2 text-center">
+                                <input 
+                                    type="checkbox" 
+                                    checked={selectedProducts.includes(p.id)} 
+                                    onChange={() => onToggleSelect(p.id)}
+                                    className="w-4 h-4 rounded border-border/40 bg-white/5 text-brand-500 focus:ring-brand-500/20"
+                                />
+                            </td>
+                        )}
                         <td className="px-4 py-2">
                             <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-[11px] font-black border border-white/5">
                                 {p.image_url ? <img src={resolveImageUrl(p.image_url)} className="w-full h-full object-cover rounded-lg" /> : p.name.charAt(0)}
