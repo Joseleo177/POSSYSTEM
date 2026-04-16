@@ -138,31 +138,26 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const filteredProducts = ingredientResults;
 
     return (
-        <Modal open={open} onClose={onClose} title={isEdit ? "Edición de Producto" : "Nuevo Producto"} width={780}>
+        <Modal open={open} onClose={onClose} title={isEdit ? "Edición de Producto" : "Nuevo Producto"} width={720}>
             <div className="flex flex-col gap-3">
 
                 {/* ── Sección Principal: Imagen + Datos ── */}
                 <div className="flex flex-col lg:flex-row gap-4">
-
-                    {/* Imagen Subida Premium */}
+                    {/* Imagen Subida */}
                     <div className="flex-shrink-0 flex flex-col items-center">
                         <label className="block cursor-pointer relative group">
-                            <div className="w-[80px] h-[80px] rounded-[24px] overflow-hidden bg-surface-2 dark:bg-surface-dark-2 border-2 border-dashed border-border/60 dark:border-white/5 flex items-center justify-center hover:border-brand-500/50 transition-all duration-500 shadow-inner group-hover:shadow-brand-500/10">
+                            <div className="w-[100px] h-[100px] rounded-xl overflow-hidden bg-surface-2 dark:bg-surface-dark-2 border border-dashed border-border/60 dark:border-white/10 flex items-center justify-center hover:border-brand-500/50 transition-all shadow-sm">
                                 {imagePreview ? (
                                     <>
-                                        <img src={imagePreview} alt="preview" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                                        <div className="absolute inset-0 bg-brand-900/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center backdrop-blur-sm">
-                                            <svg className="w-8 h-8 text-white mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                            <span className="text-white text-[11px] font-black tracking-wide uppercase">Reemplazar</span>
+                                        <img src={imagePreview} alt="preview" className="w-full h-full object-cover group-hover:opacity-60 transition-opacity" />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center">
+                                            <svg className="w-6 h-6 text-white mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="text-center flex flex-col items-center text-content-subtle dark:text-content-dark-muted group-hover:text-brand-500 transition-all duration-300">
-                                        <div className="w-10 rounded-full bg-white dark:bg-surface-dark-3 border border-border/40 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-sm">
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                                        </div>
-                                        <div className="text-[11px] font-black uppercase tracking-wide">Subir Imagen</div>
-                                        <div className="text-[10px] mt-1 opacity-50 font-bold tracking-wider">JPG, PNG</div>
+                                    <div className="text-center flex flex-col items-center text-content-subtle dark:text-content-dark-muted group-hover:text-brand-500 transition-colors">
+                                        <svg className="w-6 h-6 mb-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                        <div className="text-[10px] font-bold uppercase tracking-wide">Imagen</div>
                                     </div>
                                 )}
                             </div>
@@ -218,21 +213,21 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
                             <div>
-                                <label className="label">Precio de Venta Público (PVPR)</label>
+                                <label className="label">Precio de Venta Público</label>
                                 <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                        <span className="text-brand-500 font-black tracking-wide">$</span>
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <span className="text-content-subtle font-bold">$</span>
                                     </div>
-                                    <input value={form.price} onChange={e => set("price", e.target.value)} type="number" step="0.01" className="input !pl-10 !pr-4 !text-sm !font-black !text-brand-500 !bg-brand-500/5 !border-brand-500/20 focus:!ring-brand-500/30 transition-all" placeholder="0.00" />
+                                    <input value={form.price} onChange={e => set("price", e.target.value)} type="number" step="0.01" className="input !pl-8" placeholder="0.00" />
                                 </div>
                             </div>
 
                             {editData?.id && !form.is_combo && !form.is_service && (
                                 <div>
-                                    <label className="label">Stock Global (Acumulado)</label>
-                                    <div className="bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border border-border/40 rounded-lg px-4 flex justify-between items-center cursor-not-allowed opacity-80 h-10">
-                                        <span className="text-lg font-black">{form.stock ?? 0} <span className="text-[11px] opacity-40 uppercase tracking-wide">{form.unit}</span></span>
-                                        <span className="text-[10px] bg-black/10 dark:bg-white/10 px-2 py-1 rounded-lg font-black uppercase tracking-wide">Lectura</span>
+                                    <label className="label">Stock Actual</label>
+                                    <div className="bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border border-border/40 rounded-lg px-3 flex justify-between items-center cursor-not-allowed opacity-80 h-10">
+                                        <span className="text-sm font-bold">{form.stock ?? 0} <span className="text-[10px] uppercase opacity-60 ml-1">{form.unit}</span></span>
+                                        <span className="text-[10px] bg-black/10 dark:bg-white/10 px-2 py-0.5 rounded uppercase font-bold tracking-wide">Solo Lectura</span>
                                     </div>
                                 </div>
                             )}
@@ -241,29 +236,29 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 </div>
 
                 {/* ── Toggles de Tipo (Servicio / Combo) ── */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
                     {/* Toggle Servicio */}
-                    <div className={`p-4 rounded-lg border transition-all flex items-center justify-between gap-4 ${form.is_service ? "bg-amber-500/10 border-amber-500/30" : "bg-surface-2 dark:bg-white/5 border-border/60 dark:border-white/5"}`}>
+                    <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${form.is_service ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
                         <div>
-                            <div className="text-[11px] font-black text-content dark:text-content-dark uppercase tracking-wide">Registro como Servicio</div>
-                            <div className="text-[11px] text-content-subtle dark:text-content-dark-muted font-bold mt-0.5 opacity-70">Desactiva el seguimiento de inventario.</div>
+                            <div className="text-xs font-bold text-content dark:text-content-dark">Servicio</div>
+                            <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5">No afecta inventario.</div>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer scale-90">
+                        <label className="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" className="sr-only peer" checked={form.is_service} onChange={e => set("is_service", e.target.checked)} />
-                            <div className="w-12 h-7 bg-surface-3 dark:bg-white/10 rounded-full border-2 border-transparent transition-all duration-300 peer-checked:bg-amber-500 after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 shadow-inner"></div>
+                            <div className="w-9 h-5 bg-border/50 peer-focus:outline-none dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
                         </label>
                     </div>
 
                     {/* Toggle Combo */}
                     {!form.is_service && (
-                        <div className={`p-4 rounded-lg border transition-all flex items-center justify-between gap-4 ${form.is_combo ? "bg-brand-500/10 border-brand-500/30" : "bg-surface-2 dark:bg-white/5 border-border/60 dark:border-white/5"}`}>
+                        <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${form.is_combo ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
                             <div>
-                                <div className="text-[11px] font-black text-content dark:text-content-dark uppercase tracking-wide">Producto Compuesto</div>
-                                <div className="text-[11px] text-content-subtle dark:text-content-dark-muted font-bold mt-0.5 opacity-70">Combina stock de ingredientes.</div>
+                                <div className="text-xs font-bold text-content dark:text-content-dark">Producto Compuesto</div>
+                                <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5">Compuesto por otros ítems.</div>
                             </div>
-                            <label className="relative inline-flex items-center cursor-pointer scale-90">
+                            <label className="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" className="sr-only peer" checked={form.is_combo} onChange={e => set("is_combo", e.target.checked)} disabled={isEdit && form.combo_items.length > 0} />
-                                <div className="w-12 h-7 bg-surface-3 dark:bg-white/10 rounded-full border-2 border-transparent transition-all duration-300 peer-checked:bg-brand-500 after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 shadow-inner"></div>
+                                <div className="w-9 h-5 bg-border/50 peer-focus:outline-none dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
                             </label>
                         </div>
                     )}
@@ -271,41 +266,36 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
                 {/* ── Si NO es combo y NO es servicio: Mostrar Costos. Si es Combo: Mostrar Componentes ── */}
                 {!form.is_combo && !form.is_service ? (
-                    <div className="space-y-3 animate-in fade-in duration-500">
+                    <div className="space-y-3 animate-in fade-in duration-300">
                         {/* ── Rentabilidad ── */}
-                        <div className="bg-surface-2 dark:bg-white/5 rounded-lg p-4 border border-border/40 dark:border-white/5 shadow-sm">
-                            <div className="flex items-center gap-2.5 mb-3">
-                                <div className="w-7 h-7 rounded-lg bg-green-500/10 text-green-500 flex items-center justify-center shadow-sm border border-white/20">
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                </div>
-                                <h3 className="text-[10px] font-black tracking-wide uppercase text-content-subtle dark:text-content-dark-muted">Modelo de Negocio y Rentabilidad</h3>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
+                            <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">Costos y Rentabilidad</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="label">Costo Unitario</label>
                                         <div className="relative">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle font-black text-xs">$</span>
-                                            <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.01" className="input !pl-6 !font-black !bg-white dark:!bg-surface-dark-3" placeholder="0.00" />
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">$</span>
+                                            <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.01" className="input !pl-6" placeholder="0.00" />
                                         </div>
                                     </div>
                                     <div>
                                         <label className="label">Margen (%)</label>
                                         <div className="relative">
-                                            <input value={form.profit_margin} onChange={e => handleCostOrMarginChange("profit_margin", e.target.value)} type="number" step="0.1" className="input !pr-6 !font-black !bg-white dark:!bg-surface-dark-3 text-center" placeholder="0" />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle font-black text-xs">%</span>
+                                            <input value={form.profit_margin} onChange={e => handleCostOrMarginChange("profit_margin", e.target.value)} type="number" step="0.1" className="input pr-6" placeholder="0" />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">%</span>
                                         </div>
                                     </div>
                                 </div>
                                 <div
-                                    className={`flex flex-col justify-center p-3 px-4 rounded-lg border-2 border-dashed transition-all group cursor-pointer ${suggestedPrice ? "bg-green-500/5 border-green-500/30 hover:bg-green-500/10" : "bg-surface-1 dark:bg-white/5 border-border/40 opacity-50"}`}
+                                    className={`flex flex-col justify-center p-3 px-4 rounded-lg border transition-all cursor-pointer ${suggestedPrice ? "bg-green-500/5 border-green-500/20 hover:bg-green-500/10" : "bg-surface-2 dark:bg-white/5 border-border/40 opacity-60"}`}
                                     onClick={() => { if (suggestedPrice) set("price", suggestedPrice); }}
                                 >
-                                    <div className="flex justify-between items-center mb-0.5">
-                                        <span className="text-[11px] font-black uppercase tracking-wide text-green-600 dark:text-green-400">PVP Sugerido</span>
-                                        {suggestedPrice && <span className="bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-black uppercase opacity-0 group-hover:opacity-100 transition-all">Aplicar</span>}
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-[10px] font-bold uppercase tracking-wide text-green-600 dark:text-green-400">PVP Sugerido</span>
+                                        {suggestedPrice && <span className="text-[10px] bg-green-500 text-white px-1.5 py-0.5 rounded font-bold uppercase transition-all">Aplicar</span>}
                                     </div>
-                                    <div className="text-xl font-black text-green-600 dark:text-green-400 font-display tabular-nums tracking-tighter">
+                                    <div className="text-lg font-bold text-green-600 dark:text-green-400 tabular-nums">
                                         {suggestedPrice ? `$${suggestedPrice}` : "—"}
                                     </div>
                                 </div>
@@ -314,90 +304,64 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
                         {/* ── Configuración Avanzada ── */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="bg-surface-2 dark:bg-white/5 rounded-lg p-4 border border-border/40 dark:border-white/5">
-                                <div className="flex items-center gap-2.5 mb-2.5">
-                                    <div className="w-7 h-7 rounded-lg bg-brand-500/10 text-brand-500 flex items-center justify-center shadow-sm border border-white/20">
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
-                                    </div>
-                                    <h3 className="text-[10px] font-black tracking-wide uppercase text-content-subtle dark:text-content-dark-muted">Unidades de Embalaje</h3>
-                                </div>
+                            <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
+                                <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">Unidades de Embalaje</h3>
                                 <div className="flex gap-2">
                                     <div className="flex-1">
-                                        <input list="pkg-units-list" value={form.package_unit} onChange={e => set("package_unit", e.target.value)} placeholder="Ej. Caja, Bulto..." className="input !font-bold dark:text-white" />
+                                        <input list="pkg-units-list" value={form.package_unit} onChange={e => set("package_unit", e.target.value)} placeholder="Ej. Caja, Bulto..." className="input" />
                                         <datalist id="pkg-units-list">{PKG_UNITS.map(u => <option key={u} value={u} />)}</datalist>
                                     </div>
-                                    <div className="w-20 relative">
-                                        <input value={form.package_size} onChange={e => set("package_size", e.target.value)} type="number" placeholder="Cant." className="input !font-black text-center dark:text-white" />
-                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-content-subtle dark:text-content-dark-muted font-black opacity-30 uppercase">uds</span>
+                                    <div className="w-24 relative">
+                                        <input value={form.package_size} onChange={e => set("package_size", e.target.value)} type="number" placeholder="Cant." className="input text-center" />
+                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-content-subtle font-bold uppercase">uds</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="bg-surface-2 dark:bg-white/5 rounded-lg p-4 border-2 border-dashed border-danger/15 dark:border-danger/10">
-                                <div className="flex items-center gap-2.5 mb-2.5">
-                                    <div className="w-7 h-7 rounded-lg bg-danger/10 text-danger flex items-center justify-center shadow-sm border border-white/20">
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                                    </div>
-                                    <h3 className="text-[10px] font-black tracking-wide uppercase text-content-subtle dark:text-content-dark-muted">Alerta de Reposición</h3>
-                                </div>
+                            <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
+                                <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">Alerta de Reposición</h3>
                                 <div className="relative">
-                                    <input value={form.min_stock} onChange={e => set("min_stock", e.target.value)} type="number" className="input !font-black !border-danger/20 focus:!ring-danger/20 dark:text-white" placeholder="Min. para notificar..." />
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-danger/40 dark:text-danger/60 font-black uppercase">Registros</span>
+                                    <input value={form.min_stock} onChange={e => set("min_stock", e.target.value)} type="number" className="input" placeholder="Min. para notificar..." />
                                 </div>
                             </div>
                         </div>
                     </div>
                 ) : form.is_combo ? (
-                    /* ── Interfaz de Ingredientes (Combo Premium) ── */
-                    <div className="bg-surface-2 dark:bg-white/5 rounded-[40px] p-5 border border-brand-500/20 shadow-sm animate-in slide-in-from-bottom-6 duration-500">
-                        <div className="flex items-center justify-between mb-5">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 rounded-[20px] bg-brand-500 text-white flex items-center justify-center shadow-lg shadow-brand-500/30 font-bold">
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-black tracking-wide uppercase text-content dark:text-white font-display">Fórmula del Producto Compuesto</h3>
-                                    <div className="text-[11px] text-content-subtle dark:text-content-dark-muted font-bold uppercase tracking-wide mt-1 opacity-60">Define los componentes que se descontarán automáticamente</div>
-                                </div>
-                            </div>
+                    /* ── Interfaz de Ingredientes (Combo) ── */
+                    <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5 animate-in slide-in-from-bottom-2 duration-300">
+                        <div className="mb-4">
+                            <h3 className="text-sm font-bold text-content dark:text-white">Fórmula del Producto</h3>
+                            <div className="text-xs text-content-subtle mt-0.5">Selecciona los componentes que lo integran</div>
                         </div>
 
-                        <div className="space-y-6">
+                        <div className="space-y-4">
                             {/* Buscador de Ingredientes */}
                             <div className="relative" ref={ingredientRef}>
                                 <input
                                     value={searchIngredient}
                                     onChange={e => { setSearchIngredient(e.target.value); setShowDropdown(true); }}
                                     onFocus={() => setShowDropdown(true)}
-                                    placeholder="Buscar componentes por nombre o código..."
-                                    className="input !pl-14 !pr-6 !rounded-lg border-brand-500/30 focus:border-brand-500 dark:text-white"
+                                    placeholder="Buscar componente..."
+                                    className="input pl-10"
                                 />
-                                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-brand-500/50">
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                                 </div>
 
                                 {showDropdown && searchIngredient.trim() !== "" && (
-                                    <div className="absolute z-50 w-full mt-3 bg-white dark:bg-surface-dark-2 border border-border dark:border-white/5 rounded-[32px] shadow-2xl p-2 max-h-[280px] overflow-y-auto animate-in zoom-in-95 backdrop-blur-xl">
+                                    <div className="absolute z-50 w-full mt-1 bg-white dark:bg-surface-dark-2 border border-border dark:border-white/10 rounded-lg shadow-lg p-1 max-h-[200px] overflow-y-auto">
                                         {loadingIngredients ? (
-                                            <div className="p-8 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-60">Buscando...</div>
+                                            <div className="p-4 text-center text-xs text-content-subtle">Buscando...</div>
                                         ) : filteredProducts.length === 0 ? (
-                                            <div className="p-10 text-center flex flex-col items-center gap-2">
-                                                <span className="text-3xl opacity-20 text-brand-500">
-                                                    <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                                </span>
-                                                <div className="text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin Coincidencias</div>
-                                            </div>
+                                            <div className="p-4 text-center text-xs text-content-subtle">Sin resultados</div>
                                         ) : (
                                             filteredProducts.map(p => (
-                                                <div key={p.id} onClick={() => addIngredient(p)} className="p-4 hover:bg-brand-500/10 rounded-[20px] cursor-pointer flex justify-between items-center transition-all group active:scale-98">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-sm font-black text-content dark:text-content-dark group-hover:text-brand-500 transition-colors">{p.name}</span>
-                                                        <span className="text-[11px] text-content-subtle dark:text-content-dark-muted font-black uppercase tracking-wide mt-0.5 opacity-60">{p.category_name || "General"}</span>
+                                                <div key={p.id} onClick={() => addIngredient(p)} className="p-2 hover:bg-surface-2 dark:hover:bg-white/5 rounded-lg cursor-pointer flex justify-between items-center transition-colors">
+                                                    <div>
+                                                        <div className="text-sm font-medium">{p.name}</div>
+                                                        <div className="text-[10px] text-content-subtle">{p.category_name || "General"}</div>
                                                     </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-xs font-black text-brand-500 opacity-60">${p.price}</span>
-                                                        <span className="w-8 h-8 rounded-full bg-brand-500 text-white flex items-center justify-center font-bold shadow-md shadow-brand-500/20 group-hover:scale-110 transition-transform">+</span>
-                                                    </div>
+                                                    <span className="text-xs font-medium text-brand-500">${p.price}</span>
                                                 </div>
                                             ))
                                         )}
@@ -405,49 +369,39 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 )}
                             </div>
 
-                            {/* Lista de ingredientes Premium */}
+                            {/* Lista de ingredientes */}
                             {form.combo_items.length === 0 ? (
-                                <div className="py-16 border-2 border-dashed border-border/40 dark:border-white/5 rounded-[40px] flex flex-col items-center justify-center text-center bg-surface-1 dark:bg-white/2">
-                                    <div className="w-20 h-20 rounded-full bg-surface-2 dark:bg-white/5 flex items-center justify-center mb-3 text-brand-500 opacity-20">
-                                        <svg className="w-12 " fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-                                    </div>
-                                    <h4 className="text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-content-dark-muted">Receta Vacía</h4>
-                                    <p className="text-[11px] text-content-subtle/60 dark:text-content-dark-muted/40 font-bold mt-1 uppercase tracking-wider">Comienza agregando componentes arriba</p>
+                                <div className="py-8 border border-dashed border-border/40 dark:border-white/10 rounded-xl text-center">
+                                    <div className="text-xs text-content-subtle">No hay componentes añadidos</div>
                                 </div>
                             ) : (
-                                <div className="space-y-3">
-                                    <div className="flex px-8 text-[11px] font-black tracking-wide uppercase text-content-subtle/50 mb-2">
-                                        <div className="flex-1">Componente / Ingrediente</div>
-                                        <div className="w-32 text-center">Dosificación</div>
-                                        <div className="w-12"></div>
+                                <div className="space-y-2">
+                                    <div className="flex px-3 text-[10px] font-bold text-content-subtle uppercase mb-1">
+                                        <div className="flex-1">Componente</div>
+                                        <div className="w-24 text-center">Cant.</div>
+                                        <div className="w-8"></div>
                                     </div>
                                     {form.combo_items.map((item, idx) => (
-                                        <div key={idx} className="flex items-center gap-4 bg-white dark:bg-surface-dark-3 p-4 px-8 rounded-[24px] border border-border/40 dark:border-white/5 shadow-sm transition-all hover:shadow-md animate-in slide-in-from-right-4 duration-400" style={{ animationDelay: `${idx * 50}ms` }}>
-                                            <div className="flex-1 flex flex-col">
-                                                <span className="text-sm font-black text-content dark:text-content-dark truncate uppercase tracking-tight" title={item.name}>{item.name}</span>
-                                                <span className="text-[11px] font-black text-content-subtle uppercase tracking-wide opacity-60">ID #00{item.product_id}</span>
+                                        <div key={idx} className="flex items-center gap-3 bg-surface-2 dark:bg-surface-dark-3 p-2 px-3 rounded-lg border border-border/40 dark:border-white/5">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium truncate">{item.name}</div>
                                             </div>
-                                            <div className="flex items-center gap-3 w-40">
-                                                <div className="w-32 relative">
-                                                    <input
-                                                        value={item.quantity}
-                                                        onChange={e => updateIngredientQty(item.product_id, e.target.value)}
-                                                        type="number"
-                                                        step={item.unit === 'unidad' || item.unit === 'uds' ? "1" : "0.001"}
-                                                        className="input !rounded-lg !text-sm !font-black text-center bg-surface-2 dark:bg-surface-dark-2 dark:text-white border-2 border-brand-500/20 focus:border-brand-500"
-                                                    />
-                                                </div>
-                                                <span className="text-[11px] text-content-subtle/60 font-black uppercase tracking-wide w-12 truncate">{item.unit || "uds"}</span>
+                                            <div className="flex items-center gap-2 w-24">
+                                                <input
+                                                    value={item.quantity}
+                                                    onChange={e => updateIngredientQty(item.product_id, e.target.value)}
+                                                    type="number"
+                                                    step={item.unit === 'unidad' || item.unit === 'uds' ? "1" : "0.001"}
+                                                    className="input !h-8 text-center text-sm"
+                                                />
                                             </div>
-                                            <button onClick={() => removeIngredient(item.product_id)} className="w-10 flex items-center justify-center text-danger/40 hover:text-danger hover:bg-danger/10 rounded-lg transition-all active:scale-90">
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            <button onClick={() => removeIngredient(item.product_id)} className="w-8 h-8 flex items-center justify-center text-content-muted hover:text-danger hover:bg-danger/10 rounded-md transition-colors">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                             </button>
                                         </div>
                                     ))}
-                                    <div className="pt-6 flex justify-end">
-                                        <div className="bg-brand-500/10 px-8 rounded-lg border border-brand-500/20">
-                                            <span className="text-[11px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-wide">Total Componentes: {form.combo_items.length}</span>
-                                        </div>
+                                    <div className="flex justify-end pt-2">
+                                        <span className="text-xs font-medium text-content-subtle">Total unidades: {form.combo_items.length}</span>
                                     </div>
                                 </div>
                             )}
