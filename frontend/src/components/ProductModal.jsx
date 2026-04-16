@@ -17,6 +17,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const [form, setForm] = useState(EMPTY);
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
+    const [removeImage, setRemoveImage] = useState(false);
 
     // Combo states
     const [searchIngredient, setSearchIngredient] = useState("");
@@ -75,6 +76,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 setImagePreview(null);
             }
             setImageFile(null);
+            setRemoveImage(false);
             setSearchIngredient("");
         }
     }, [open, editData]);
@@ -100,7 +102,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         setImagePreview(URL.createObjectURL(f));
     };
 
-    const handleSave = () => onSave(form, imageFile);
+    const handleSave = () => onSave(form, imageFile, removeImage);
 
     const isEdit = !!editData;
 
@@ -168,7 +170,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         </label>
                         {imagePreview && (
                             <button
-                                onClick={(e) => { e.preventDefault(); setImageFile(null); setImagePreview(null); }}
+                                onClick={(e) => { e.preventDefault(); setImageFile(null); setImagePreview(null); setRemoveImage(true); }}
                                 className="mt-3 text-[11px] font-black text-danger uppercase tracking-wide opacity-60 hover:opacity-100 transition-opacity flex items-center gap-1.5"
                             >
                                 <span className="text-xs">×</span> Eliminar

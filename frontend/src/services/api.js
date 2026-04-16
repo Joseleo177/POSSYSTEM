@@ -85,10 +85,11 @@ async function request(path, options = {}) {
   return data;
 }
 
-function buildProductForm(body, imageFile) {
+function buildProductForm(body, imageFile, removeImage) {
   const fd = new FormData();
   Object.entries(body).forEach(([k, v]) => { if (v != null && v !== "") fd.append(k, v); });
   if (imageFile) fd.append("image", imageFile);
+  if (removeImage) fd.append("remove_image", "true");
   return fd;
 }
 
@@ -106,7 +107,7 @@ export const api = {
   products: {
     getAll:  (params = {})         => request("/products?" + new URLSearchParams(params)),
     create:  (body, imageFile)     => request("/products",      { method: "POST", body: buildProductForm(body, imageFile) }),
-    update:  (id, body, imageFile) => request(`/products/${id}`,{ method: "PUT",  body: buildProductForm(body, imageFile) }),
+    update:  (id, body, imageFile, removeImage) => request(`/products/${id}`,{ method: "PUT",  body: buildProductForm(body, imageFile, removeImage) }),
     remove:  (id)                  => request(`/products/${id}`,{ method: "DELETE" }),
   },
   categories: {

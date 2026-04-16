@@ -227,10 +227,10 @@ export default function CatalogPage() {
     const startItem = (page - 1) * limit + 1;
     const endItem = Math.min(page * limit, totalProducts);
 
-    const saveProduct = async (form, imageFile) => {
+    const saveProduct = async (form, imageFile, removeImage) => {
         try {
             if (productEditData) {
-                await api.products.update(productEditData.id, form, imageFile);
+                await api.products.update(productEditData.id, form, imageFile, removeImage);
                 notify("Producto actualizado");
             } else {
                 await api.products.create(form, imageFile);
