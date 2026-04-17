@@ -19,17 +19,17 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
   return (
     <div ref={ref} className={`relative ${className} ${disabled ? "opacity-40 pointer-events-none" : ""}`}>
       {/* Gatillo del Select - Radio Estructurado */}
-      <div 
+      <div
         onClick={() => setOpen(!open)}
-        className={`h-10 text-[11px] cursor-pointer flex items-center justify-between transition-all duration-300 border px-3 rounded-lg
-          ${open 
-            ? "border-brand-500 bg-brand-500/5 ring-1 ring-brand-500/20 shadow-lg shadow-brand-500/5" 
-            : "bg-surface-1 dark:bg-white/[0.02] hover:bg-surface-2 dark:hover:bg-white/[0.05] border-border/10 dark:border-white/5"}
+        className={`h-9 text-[11px] cursor-pointer flex items-center justify-between transition-all duration-200 border px-3 rounded-md
+          ${open
+            ? "border-brand-500 bg-brand-500/5 ring-[3px] ring-brand-500/15"
+            : "bg-white dark:bg-[#12141a] border-border/80 dark:border-white/5 hover:border-brand-500/40"}
         `}
       >
-        <span className={selectedOption 
-          ? "text-content dark:text-white font-bold uppercase tracking-tight" 
-          : "text-content-subtle opacity-40 font-bold uppercase tracking-widest text-[9px]"
+        <span className={selectedOption
+          ? "text-content dark:text-content-dark font-bold uppercase tracking-tight"
+          : "text-content-subtle/50 dark:text-content-dark-muted/30 font-medium"
         }>
           {selectedOption ? selectedOption.label : placeholder}
         </span>

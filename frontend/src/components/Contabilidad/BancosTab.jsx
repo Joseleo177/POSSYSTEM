@@ -71,31 +71,28 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
         )}
       </div>
 
-      <div className="flex-1 overflow-auto">
+      <div className="card-premium overflow-auto flex-1">
       {banks.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 opacity-20">
           <div className="text-xs font-black uppercase tracking-wide">Sin bancos registrados</div>
         </div>
       ) : (
-        <table className="w-full text-left border-collapse">
+        <table className="table-pos">
             <thead className="sticky top-0 z-10">
-              <tr className="bg-surface-2 dark:bg-surface-dark-2">
+              <tr>
                 {["Nombre del Banco", "Código", "Cuentas / Diarios", "Estado", can("config") && "Acciones"].filter(Boolean).map(h => (
-                  <th
-                    key={h}
-                    className={`px-4 py-3 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 border-b border-border/40 dark:border-white/5 ${h === "Acciones" ? "text-right" : h === "Cuentas / Diarios" || h === "Estado" ? "text-center" : ""}`}
-                  >
+                  <th key={h} className={h === "Acciones" ? "text-right pr-6" : h === "Cuentas / Diarios" || h === "Estado" ? "text-center" : "text-left"}>
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-border/20 dark:divide-white/5">
+            <tbody>
               {banks.map((b) => {
                 const isEdit = bankEditId === b.id;
                 return (
-                  <tr key={b.id} className="hover:bg-brand-500/[0.02] transition-colors group">
-                    <td className="px-4 py-3">
+                  <tr key={b.id} className="group">
+                    <td>
                       {isEdit ? (
                         <input
                           autoFocus
@@ -108,7 +105,7 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
                         <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{b.name}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       {isEdit ? (
                         <input
                           value={bankForm.code}
@@ -118,28 +115,28 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
                           onKeyDown={e => e.key === "Enter" && saveBank()}
                         />
                       ) : (
-                        <span className="text-[10px] font-black text-content-subtle opacity-40 uppercase tracking-widest py-1 px-3 bg-surface-3 dark:bg-surface-dark-2 rounded border border-border/40">
+                        <span className="badge badge-neutral shadow-none">
                           {b.code || "—"}
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="text-center">
                       <span className="text-brand-500 font-black text-[11px]">{b.journals_count ?? 0}</span>
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`text-[10px] font-black uppercase tracking-wide px-2.5 py-1 rounded-lg border ${b.active ? "text-success border-success/30 bg-success/5" : "text-danger border-danger/30 bg-danger/5"}`}>
+                    <td className="text-center">
+                      <span className={`badge shadow-none ${b.active ? "badge-success" : "badge-danger"}`}>
                         {b.active ? "Activo" : "Inactivo"}
                       </span>
                     </td>
                     {can("config") && (
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <td className="text-right pr-6">
+                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           {isEdit ? (
                             <>
-                              <button onClick={saveBank} disabled={bankSaving} className="w-7 h-7 rounded-lg flex items-center justify-center bg-success/10 text-success hover:bg-success hover:text-white transition-all" title="Guardar">
+                              <button onClick={saveBank} disabled={bankSaving} className="p-2 rounded-xl transition-all text-content-subtle hover:text-success hover:bg-success/10 active:scale-90" title="Guardar">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                               </button>
-                              <button onClick={closeForm} className="w-7 h-7 rounded-lg flex items-center justify-center bg-surface-3 text-content-muted hover:bg-danger/10 hover:text-danger transition-all" title="Cancelar">
+                              <button onClick={closeForm} className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90" title="Cancelar">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                               </button>
                             </>
@@ -147,21 +144,21 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
                             <>
                               <button
                                 onClick={() => { setBankEditId(b.id); setBankForm({ name: b.name, code: b.code || "" }); }}
-                                className="w-7 h-7 rounded-lg flex items-center justify-center bg-brand-500/10 text-brand-500 hover:bg-brand-500 hover:text-black transition-all"
+                                className="p-2 rounded-xl transition-all text-content-subtle hover:text-warning hover:bg-warning/10 active:scale-90"
                                 title="Editar"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                               </button>
                               <button
                                 onClick={() => toggleBank(b)}
-                                className="w-7 h-7 rounded-lg flex items-center justify-center bg-info/10 text-info hover:bg-info hover:text-black transition-all"
+                                className="p-2 rounded-xl transition-all text-content-subtle hover:text-info hover:bg-info/10 active:scale-90"
                                 title={b.active ? "Desactivar" : "Activar"}
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M18.364 5.636a9 9 0 11-12.728 0M12 9v4" /></svg>
                               </button>
                               <button
                                 onClick={() => setDeleteConfirm(b)}
-                                className="w-7 h-7 rounded-lg flex items-center justify-center bg-danger/10 text-danger hover:bg-danger hover:text-white transition-all"
+                                className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90"
                                 title="Eliminar"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>

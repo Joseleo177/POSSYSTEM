@@ -80,24 +80,24 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
             {subheader}
             <div className="flex-1 flex flex-col overflow-hidden min-h-0">
                 <div className="card-premium overflow-auto flex-1 border-none shadow-none rounded-none bg-transparent">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="sticky top-0 z-10 bg-surface-2 dark:bg-surface-dark-2">
+                    <table className="table-pos">
+                        <thead className="sticky top-0 z-10">
                             <tr>
                                 {["Referencia", "Estado / Tipo", "Cliente", "Fecha", "Monto", "Acciones"].map(h => (
-                                    <th key={h} className={`px-4 py-4 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 border-b border-border/40 dark:border-white/5 ${h === "Acciones" || h === "Monto" ? "text-right" : ""}`}>{h}</th>
+                                    <th key={h} className={h === "Acciones" || h === "Monto" ? "text-right pr-6" : "text-left"}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-border/10 dark:divide-white/5">
+                        <tbody>
                             {loading ? (
-                                <tr><td colSpan={6} className="px-6 py-20 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">Sincronizando movimientos...</td></tr>
+                                <tr><td colSpan={6} className="py-20 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">Sincronizando movimientos...</td></tr>
                             ) : data.length === 0 ? (
-                                <tr><td colSpan={6} className="px-6 py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic opacity-40">Sin movimientos en esta vista</td></tr>
+                                <tr><td colSpan={6} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic opacity-40">Sin movimientos en esta vista</td></tr>
                             ) : data.map(item => {
                                 const isInvoice = viewType === "pendientes";
                                 return (
-                                    <tr key={`${viewType}-${item.id}`} className="group hover:bg-brand-500/[0.02] transition-colors">
-                                        <td className="px-4 py-3">
+                                    <tr key={`${viewType}-${item.id}`} className="group">
+                                        <td>
                                             <span className="text-[11px] font-black text-brand-500 tracking-tight">
                                                 {item.invoice_number || (isInvoice ? `Factura #${item.id}` : `Cobro #${item.id}`)}
                                             </span>
@@ -105,21 +105,21 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                                 <div className="text-[9px] font-black text-content-subtle opacity-40 uppercase tracking-tighter mt-0.5">Ref: {item.reference_number}</div>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3">
-                                            <span className={`text-[10px] font-black uppercase tracking-wide px-2.5 py-1 rounded-lg border ${isInvoice
-                                                ? item.status === "parcial" ? "text-warning border-warning/30 bg-warning/5" : "text-danger border-danger/30 bg-danger/5"
-                                                : "text-info border-info/30 bg-info/5"}`}>
+                                        <td>
+                                            <span className={`badge shadow-none ${isInvoice
+                                                ? item.status === "parcial" ? "badge-warning" : "badge-danger"
+                                                : "badge-info"}`}>
                                                 {isInvoice ? (item.status === "parcial" ? "Parcial" : "Pendiente") : "Cobro Realizado"}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 truncate max-w-[200px]">
+                                        <td className="truncate max-w-[200px]">
                                             <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight truncate block">{item.customer_name || "Consumidor Final"}</span>
                                             {item.journal_name && <span className="text-[9px] font-black opacity-30 uppercase">{item.journal_name}</span>}
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td>
                                             <span className="text-[11px] font-bold text-content-subtle uppercase">{new Date(item.created_at).toLocaleDateString()}</span>
                                         </td>
-                                        <td className="px-4 py-3 text-right">
+                                        <td className="text-right pr-6">
                                             <span className={`text-[11px] font-black tabular-nums ${isInvoice ? "text-brand-500" : "text-success"}`}>
                                                 {isInvoice ? fmtPrice(item.total) : fmtPayment(item)}
                                             </span>
@@ -127,12 +127,12 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                                 <div className="text-[10px] font-bold text-danger tabular-nums">Debe: {fmtPrice(item.balance)}</div>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-right">
+                                        <td className="text-right pr-6">
                                             <div className="flex items-center justify-end gap-1.5">
                                                 {isInvoice ? (
                                                     <>
-                                                        <button onClick={() => setReceiptSale(item)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-surface-2 dark:bg-white/5 border border-border/30 dark:border-white/10 text-content-subtle hover:text-brand-500 hover:border-brand-500/30 transition-all" title="Ver Factura">
-                                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                                        <button onClick={() => setReceiptSale(item)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 active:scale-90" title="Ver Factura">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                                         </button>
                                                         <button onClick={() => setPayModal(item)} className="h-7 px-3 rounded-lg bg-success text-black text-[10px] font-black uppercase tracking-wide transition-all active:scale-90 flex items-center gap-1 shadow-lg shadow-success/20">
                                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
@@ -143,8 +143,8 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                                     <>
                                                         <button onClick={() => setPayDetail(item)} className="h-7 px-3 rounded-lg bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black text-[10px] font-black uppercase tracking-wide transition-all">Detalle</button>
                                                         {can("admin") && (
-                                                            <button onClick={() => setDeleteDialog(item.id)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all" title="Eliminar">
-                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                            <button onClick={() => setDeleteDialog(item.id)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90" title="Eliminar">
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                             </button>
                                                         )}
                                                     </>

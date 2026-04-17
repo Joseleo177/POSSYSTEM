@@ -112,7 +112,7 @@
   .badge-danger  { @apply badge badge-info; } /* Fallback or fix */
   .badge-danger  { @apply badge bg-danger/10 text-danger border-danger/20; }
   .badge-info    { @apply badge bg-info/10 text-info border-info/20; }
-  .badge-neutral { @apply badge bg-surface-3 text-content-muted border-border; }
+  .badge-neutral { @apply badge bg-surface-3 text-content-muted border-border dark:bg-white/5 dark:text-white/40 dark:border-white/10; }
 
   /* ── Tablas de Grado Comercial ── */
   .table-pos { @apply w-full text-sm; }

@@ -163,31 +163,29 @@ export default function ContabilidadPage() {
  return (
  <div className="h-full flex flex-col ">
 
- {/* ── Header compacto ─────────────────────────── */}
+ {/* ── Header ─────────────────────────── */}
  <div className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between gap-3 border-b border-border/30 dark:border-white/5">
  <div>
- <div className="text-[11px] font-black text-brand-500 uppercase tracking-wide leading-none mb-0.5">MÓDULO FINANCIERO</div>
- <h1 className="text-sm font-black text-content dark:text-white uppercase tracking-tight leading-none">Contabilidad</h1>
+ <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest leading-none mb-1">MÓDULO FINANCIERO</div>
+ <h1 className="text-sm font-black uppercase tracking-tight">Contabilidad</h1>
  </div>
  </div>
 
- {/* ── Tabs compactos ───────────────────────────── */}
- <div className="shrink-0 px-4 py-1.5 border-b border-border/20 dark:border-white/5 bg-surface-1/30 dark:bg-white/[0.02]">
- <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+ {/* ── Tabs ───────────────────────────── */}
+ <div className="shrink-0 flex gap-1 px-4 border-b border-border/20 dark:border-white/5 overflow-x-auto no-scrollbar">
  {visibleSubPages.map(p => (
  <button
  key={p}
  onClick={() => setSubPage(p)}
- className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wide whitespace-nowrap transition-all ${
+ className={`px-4 py-2 text-[11px] font-black uppercase tracking-wide border-b-2 whitespace-nowrap transition-all ${
  subPage === p
- ? "bg-brand-500 text-black shadow-[0_0_12px_rgba(20,184,166,0.3)]"
- : "text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white hover:bg-surface-2 dark:hover:bg-white/5"
+ ? "border-brand-500 text-brand-500"
+ : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
  }`}
  >
  {p}
  </button>
  ))}
- </div>
  </div>
 
  {/* ── Contenido del sub-módulo ─────────────────── */}
