@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
+import DatePicker from "../ui/DatePicker";
 
 const PLANS = ["Básico", "Premium", "Ilimitado"];
 const STATUSES = ["Demo", "Activa", "Suspendida", "Vencida"];
@@ -118,11 +119,10 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                         </div>
                         <div>
                             <label className="label">VENCE EL</label>
-                            <input
-                                type="date"
-                                className="input h-10 font-mono text-[11px]"
+                            <DatePicker
                                 value={form.expires_at}
-                                onChange={e => setForm({ ...form, expires_at: e.target.value })}
+                                onChange={v => setForm({ ...form, expires_at: v })}
+                                className="w-full"
                             />
                         </div>
                         <div>

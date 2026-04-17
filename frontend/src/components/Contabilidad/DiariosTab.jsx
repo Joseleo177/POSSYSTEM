@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { api } from "../../services/api";
-import Page from "../ui/Page";
 import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
@@ -45,22 +44,25 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
   };
 
   return (
-    <Page
-      module="GESTIÓN CONTABLE"
-      title="Diarios y Cajas"
-      actions={can("config") && (
-        <Button onClick={() => { setEditJournal(null); setNewJournal(EMPTY_JOURNAL); setShowModal(true); }}>
-          + Nuevo Diario
-        </Button>
-      )}
-    >
+    <>
+      <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex items-center justify-between gap-3">
+        <span className="text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
+          {journals.length} diario{journals.length !== 1 ? "s" : ""}
+        </span>
+        {can("config") && (
+          <Button onClick={() => { setEditJournal(null); setNewJournal(EMPTY_JOURNAL); setShowModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
+            + Nuevo Diario
+          </Button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-auto">
       {journals.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 opacity-20">
           <div className="text-xs font-black uppercase tracking-wide">No hay diarios configurados</div>
         </div>
       ) : (
-        <div className="card-premium overflow-auto flex-1">
-          <table className="w-full text-left border-collapse">
+        <table className="w-full text-left border-collapse">
             <thead className="sticky top-0 z-10">
               <tr className="bg-surface-2 dark:bg-surface-dark-2">
                 <th className="w-12 px-4 py-3 border-b border-border/40 dark:border-white/5" />
@@ -80,7 +82,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
                 return (
                   <tr key={j.id} className="hover:bg-brand-500/[0.02] transition-colors group">
                     <td className="px-4 py-3">
-                      <div className="w-4 h-4 rounded-md shadow-sm" style={{ background: j.color }} />
+                      <div className="w-4 h-4 rounded-full shadow-sm" style={{ background: j.color }} />
                     </td>
                     <td className="px-4 py-3">
                       {isEdit ? (
@@ -91,27 +93,27 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
                           className="input"
                         />
                       ) : (
-                        <span className="font-bold text-xs text-content dark:text-content-dark uppercase tracking-wide">{j.name}</span>
+                        <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{j.name}</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       {(() => {
                         const m = methodByCode[j.type];
-                        return <span className="text-content-muted dark:text-content-dark-muted font-medium text-xs">{m ? `${m.icon || ""} ${m.name}`.trim() : (j.type || "—")}</span>;
+                        return <span className="text-[10px] font-black text-content-subtle opacity-60 uppercase tracking-wide">{m ? `${m.icon || ""} ${m.name}`.trim() : (j.type || "—")}</span>;
                       })()}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-content-muted dark:text-content-dark-muted text-xs">{j.bank_name || j.bank || "—"}</span>
+                      <span className="text-[10px] font-black text-content-subtle opacity-40 uppercase tracking-widest">{j.bank_name || j.bank || "—"}</span>
                     </td>
                     <td className="px-4 py-3 text-center">
                       {j.currency_code ? (
-                        <span className="px-2 py-0.5 bg-brand-500/5 text-brand-500 rounded-md border border-brand-500/10 font-black text-[11px]">
+                        <span className="px-2 py-0.5 bg-brand-500/5 text-brand-500 rounded-md border border-brand-500/10 font-black text-[10px] uppercase tracking-wider">
                           {j.currency_symbol} {j.currency_code}
                         </span>
-                      ) : <span className="opacity-30 text-xs">—</span>}
+                      ) : <span className="opacity-30 text-[10px]">—</span>}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`text-[11px] font-black uppercase tracking-wide px-2.5 py-1 rounded-lg border ${j.active ? "text-success border-success/30 bg-success/5" : "text-danger border-danger/30 bg-danger/5"}`}>
+                      <span className={`text-[10px] font-black uppercase tracking-wide px-2.5 py-1 rounded-lg border ${j.active ? "text-success border-success/30 bg-success/5" : "text-danger border-danger/30 bg-danger/5"}`}>
                         {j.active ? "Activo" : "Inactivo"}
                       </span>
                     </td>
@@ -147,8 +149,8 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
               })}
             </tbody>
           </table>
-        </div>
       )}
+      </div>
 
       {/* Modal: crear / editar */}
       <Modal
@@ -229,6 +231,6 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
         type="danger"
         confirmText="Sí, eliminar"
       />
-    </Page>
+    </>
   );
 }

@@ -3,6 +3,7 @@ import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import Modal from "../ui/Modal";
 import CustomSelect from "../ui/CustomSelect";
+import DatePicker from "../ui/DatePicker";
 
 const getEmpty = () => ({
   received_amount: "",
@@ -153,11 +154,10 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
 
         {/* Fecha */}
         <Field label="FECHA DE REFERENCIA *">
-          <input
-            type="date"
+          <DatePicker
             value={form.reference_date}
-            onChange={e => setForm(p => ({ ...p, reference_date: e.target.value }))}
-            className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all"
+            onChange={v => setForm(p => ({ ...p, reference_date: v }))}
+            className="w-full"
           />
         </Field>
 

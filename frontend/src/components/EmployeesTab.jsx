@@ -60,67 +60,67 @@ export default function EmployeesTab({ notify }) {
             actions={<Button onClick={openNew}>+ Nuevo Empleado</Button>}
         >
             <div className="card-premium overflow-auto flex-1">
-                <table className="w-full text-left border-collapse">
-                    <thead className="sticky top-0 z-10">
-                        <tr className="bg-surface-2 dark:bg-surface-dark-2">
-                            {["Identificación", "Rol", "Contacto", "Estado", "Acciones"].map(h => (
-                                <th
-                                    key={h}
-                                    className={`px-6 py-3 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 border-b border-border/40 dark:border-white/5 ${h === "Acciones" ? "text-right" : ""}`}
-                                >
-                                    {h}
-                                </th>
-                            ))}
+                <table className="table-pos">
+                    <thead>
+                        <tr>
+                            <th className="text-left">Identificación</th>
+                            <th className="text-left">Rol</th>
+                            <th className="text-left">Contacto</th>
+                            <th className="text-center">Estado</th>
+                            <th className="text-right w-[140px] pr-6">Acciones</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border/10 dark:divide-white/5">
                         {employees.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-6 py-20 text-center text-content-subtle text-xs font-bold uppercase tracking-wide italic opacity-40">
-                                    No se han registrado empleados en el sistema
+                                <td colSpan={5} className="py-20 text-center">
+                                    <div className="flex flex-col items-center gap-3 opacity-30">
+                                        <svg className="w-10 h-10 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                        <div className="text-[11px] font-black uppercase tracking-widest text-content-subtle">No se han registrado empleados en el sistema</div>
+                                    </div>
                                 </td>
                             </tr>
                         ) : employees.map((e) => (
                             <tr key={e.id} className="group hover:bg-brand-500/[0.02] transition-colors">
-                                <td className="px-6 py-4">
-                                    <div className="flex flex-col">
-                                        <span className="text-sm font-black text-content dark:text-heading-dark tracking-tight uppercase group-hover:text-brand-500 transition-colors">{e.full_name}</span>
-                                        <span className="text-[11px] font-black text-content-subtle mt-1 opacity-60">@{e.username}</span>
+                                <td>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center text-[11px] font-black text-brand-500 uppercase shrink-0">
+                                            {e.full_name?.charAt(0)}
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-black text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">{e.full_name}</span>
+                                            <span className="text-[10px] font-bold text-content-subtle opacity-50 mt-0.5">@{e.username}</span>
+                                        </div>
                                     </div>
                                 </td>
-                                <td className="px-6 py-4">
-                                    <span className="px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wide border bg-surface-2 dark:bg-white/5 border-border/20 text-content dark:text-white/70">
+                                <td>
+                                    <span className="badge badge-info shadow-none">
                                         {e.role_label}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4">
+                                <td>
                                     <div className="flex flex-col gap-0.5">
                                         <span className="text-[11px] font-bold text-content dark:text-content-dark">{e.email || "—"}</span>
-                                        {e.phone && <span className="text-[11px] text-content-subtle tabular-nums">{e.phone}</span>}
+                                        {e.phone && <span className="text-[10px] font-bold text-content-subtle opacity-50 tabular-nums">{e.phone}</span>}
                                     </div>
                                 </td>
-                                <td className="px-6 py-4">
-                                    <span className={[
-                                        "text-[11px] font-black uppercase tracking-wide px-2.5 py-1 rounded-lg border",
-                                        e.active
-                                            ? "text-success border-success/30 bg-success/5"
-                                            : "text-danger border-danger/30 bg-danger/5",
-                                    ].join(" ")}>
-                                        {e.active ? "En Servicio" : "Fuera de Línea"}
+                                <td className="text-center">
+                                    <span className={`badge shadow-none ${e.active ? "badge-success" : "badge-danger"}`}>
+                                        {e.active ? "En Servicio" : "Inactivo"}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 text-right">
-                                    <div className="flex items-center justify-end gap-2">
+                                <td className="text-right pr-6">
+                                    <div className="flex items-center justify-end gap-1">
                                         <button
                                             onClick={() => openEdit(e)}
-                                            className="w-7 h-7 rounded-lg flex items-center justify-center bg-brand-500/10 text-brand-500 hover:bg-brand-500 hover:text-black transition-all"
+                                            className="p-2 hover:bg-warning/10 rounded-xl transition-all text-content-subtle hover:text-warning active:scale-90"
                                             title="Editar"
                                         >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                         </button>
                                         <button
                                             onClick={() => setDeleteConfirm(e)}
-                                            className="w-7 h-7 rounded-lg flex items-center justify-center bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all"
+                                            className="p-2 hover:bg-danger/10 rounded-xl transition-all text-content-subtle hover:text-danger active:scale-90"
                                             title="Eliminar"
                                         >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>

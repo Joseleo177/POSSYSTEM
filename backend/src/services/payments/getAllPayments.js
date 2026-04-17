@@ -33,6 +33,8 @@ module.exports = async function getAllPayments(query, tenant = {}) {
     limit: parseInt(limit, 10),
     offset: parseInt(offset, 10),
     order: [["created_at", "DESC"]],
+    subQuery: false,
+    distinct: true,
     include: [
       { model: Customer, attributes: ["name", "rif"], required: false },
       { model: Employee, attributes: ["full_name"], required: false },

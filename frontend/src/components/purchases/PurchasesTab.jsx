@@ -28,11 +28,36 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
         savingProduct,
     } = state;
 
+    const getPageTitle = () => {
+        if (view === "detail") return `RECIBO DE COMPRA #${state.detail?.id}`;
+        if (view === "new") return "NUEVO RECIBO DE COMPRA";
+        return "Listado de Compras";
+    };
+
+    const getPageActions = () => {
+        if (view === "list") return <Button onClick={state.openNew}>+ NUEVO RECIBO</Button>;
+        if (view === "detail" || view === "new") {
+            return (
+                <Button variant="ghost" onClick={() => state.setView("list")} className="h-10 px-4">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                    VOLVER AL LISTADO
+                </Button>
+            );
+        }
+        return null;
+    };
+
     return (
-        <Page module="INFORMACIÓN DEL RECIBO" title="Compras" actions={view === "list" ? <Button onClick={state.openNew}>+ NUEVO RECIBO</Button> : null}>
-            {view === "list" && <PurchasesTable state={state} />}
-            {view === "detail" && <PurchaseDetails state={state} />}
-            {view === "new" && <PurchaseForm state={state} />}
+        <Page 
+            module="MÓDULO DE COMPRAS" 
+            title={getPageTitle()} 
+            actions={getPageActions()}
+        >
+            <div className={`flex-1 flex flex-col min-h-0 ${view !== "list" ? "p-4 overflow-auto" : ""}`}>
+                {view === "list" && <PurchasesTable state={state} />}
+                {view === "detail" && <PurchaseDetails state={state} />}
+                {view === "new" && <PurchaseForm state={state} />}
+            </div>
 
             <CustomerModal
                 open={supplierModal}
@@ -61,8 +86,8 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                     state.setCancelConfirm(null);
                 }}
                 type="danger"
-                confirmText="Anular"
-                cancelText="Cancelar"
+                confirmText="SI, ANULAR"
+                cancelText="CANCELAR"
             />
         </Page>
     );

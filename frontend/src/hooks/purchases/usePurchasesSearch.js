@@ -27,15 +27,16 @@ export function usePurchasesSearch({
         }
 
         let active = true;
-        setSearching(true);
 
         const delayDebounceFn = setTimeout(async () => {
+            if (!active) return;
+            setSearching(true);
             try {
                 const r = await api.products.getAll({
                     search: productSearch,
                     is_combo: false,
                     is_service: false,
-                    limit: 8,
+                    limit: 20,
                 });
                 if (active) setProductResults(r.data || r);
             } catch (error) {
@@ -46,7 +47,7 @@ export function usePurchasesSearch({
             } finally {
                 if (active) setSearching(false);
             }
-        }, 300);
+        }, 400);
 
         return () => {
             active = false;
@@ -71,7 +72,7 @@ export function usePurchasesSearch({
                 const r = await api.customers.getAll({
                     search: supplierSearch,
                     type: "proveedor",
-                    limit: 6,
+                    limit: 15,
                 });
                 if (active) setSupplierResults(r.data || r);
             } catch (err) {

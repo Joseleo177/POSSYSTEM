@@ -5,76 +5,84 @@ export default function WarehouseGrid({ warehouses, openAssign, startEdit, setDe
                 <div
                     key={w.id}
                     className={[
-                        "group relative bg-white dark:bg-surface-dark-2 border border-border dark:border-white/5 rounded-lg p-3 shadow-sm transition-all duration-300 hover:shadow-md hover:shadow-brand-500/10 hover:-translate-y-0.5 overflow-hidden",
+                        "card-premium group relative p-4 transition-all duration-300 hover:shadow-premium-dark/20 hover:-translate-y-1 overflow-hidden block",
                         w.active ? "opacity-100" : "opacity-50 grayscale",
                     ].join(" ")}
                 >
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-brand-500/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-brand-500/10 transition-colors" />
-
                     <div className="relative z-10">
-                        <div className="flex justify-between items-start mb-2">
+                        {/* Header del Card */}
+                        <div className="flex justify-between items-start mb-4">
                             <div className="flex-1 min-w-0 pr-4">
-                                <div className="font-black text-sm text-content dark:text-heading-dark uppercase tracking-wider truncate group-hover:text-brand-500 transition-colors">{w.name}</div>
-                                {w.description && <div className="text-[11px] text-content-subtle mt-1 italic truncate">{w.description}</div>}
+                                <div className="font-black text-[13px] text-content dark:text-white uppercase tracking-tight truncate group-hover:text-brand-500 transition-colors uppercase">
+                                    {w.name}
+                                </div>
+                                {w.description && (
+                                    <div className="text-[10px] font-medium text-content-subtle mt-0.5 truncate italic">
+                                        {w.description}
+                                    </div>
+                                )}
                             </div>
                             <span className={[
-                                "text-[9px] font-black uppercase tracking-wide px-2 py-1 rounded border",
-                                w.active
-                                    ? "text-success border-success/30 bg-success/5"
-                                    : "text-danger border-danger/30 bg-danger/5",
+                                "badge shadow-none",
+                                w.active ? "badge-success" : "badge-danger",
                             ].join(" ")}>
                                 {w.active ? "Activo" : "Inactivo"}
                             </span>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-1.5 mb-3">
-                            <div className="bg-surface-2 dark:bg-surface-dark-3/50 py-2 px-1 rounded-lg text-center border border-border/30 dark:border-white/5">
-                                <div className="text-lg font-black text-brand-500">{w.product_count || 0}</div>
-                                <div className="text-[10px] font-medium text-content-subtle uppercase tracking-wide mt-0.5">Productos</div>
-                            </div>
-                            <div className="bg-surface-2 dark:bg-surface-dark-3/50 py-2 px-1 rounded-lg text-center border border-border/30 dark:border-white/5">
-                                <div className="text-lg font-black text-info">{parseFloat(w.total_stock || 0).toFixed(0)}</div>
-                                <div className="text-[10px] font-medium text-content-subtle uppercase tracking-wide mt-0.5">Items</div>
-                            </div>
-                            <div className="bg-surface-2 dark:bg-surface-dark-3/50 py-2 px-1 rounded-lg text-center border border-border/30 dark:border-white/5">
-                                <div className="text-lg font-black text-violet-500">{(w.assigned_employees || []).length}</div>
-                                <div className="text-[10px] font-medium text-content-subtle uppercase tracking-wide mt-0.5">Empleados</div>
-                            </div>
+                        {/* Métricas Principales */}
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                            {[
+                                { val: w.product_count, lab: "Productos", color: "text-brand-500" },
+                                { val: parseFloat(w.total_stock || 0).toFixed(0), lab: "Existencias", color: "text-brand-500" },
+                                { val: (w.assigned_employees || []).length, lab: "Usuarios", color: "text-brand-500" }
+                            ].map((met, idx) => (
+                                <div key={idx} className="bg-surface-2 dark:bg-white/[0.03] py-2.5 px-1 rounded-xl text-center border border-border/40 dark:border-white/5">
+                                    <div className={`text-base font-black tabular-nums ${met.color}`}>{met.val || 0}</div>
+                                    <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mt-0.5">{met.lab}</div>
+                                </div>
+                            ))}
                         </div>
 
-                        <div className="flex flex-wrap gap-1.5 pt-3 border-t border-border/20">
+                        {/* Botones de Acción Estándar */}
+                        <div className="flex flex-wrap gap-2 pt-4 border-t border-border/10 dark:border-white/5">
                             <button
                                 onClick={() => { setSelectedWarehouse(w); setSubTab("stock"); }}
-                                className="flex-1 min-w-[80px] py-1.5 rounded-lg bg-info/10 text-info text-[10px] font-black uppercase tracking-wide hover:bg-info hover:text-black transition-all"
+                                className="flex-1 h-9 rounded-xl bg-brand-500/10 text-brand-500 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all flex items-center justify-center gap-1.5"
                             >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                                 Stock
                             </button>
                             <button
                                 onClick={() => openAssign(w)}
-                                className="flex-1 min-w-[80px] py-1.5 rounded-lg bg-violet-500/10 text-violet-400 text-[10px] font-black uppercase tracking-wide hover:bg-violet-500 hover:text-black transition-all"
+                                className="flex-1 h-9 rounded-xl bg-violet-500/10 text-violet-400 text-[10px] font-black uppercase tracking-widest hover:bg-violet-500 hover:text-black transition-all flex items-center justify-center gap-1.5"
                             >
-                                Empleados
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                                Usuarios
                             </button>
                             <button
                                 onClick={() => { setSelectedWarehouse(w); setSubTab("ajustes"); }}
-                                className="flex-1 min-w-[80px] py-1.5 rounded-lg bg-warning/10 text-warning text-[10px] font-black uppercase tracking-wide hover:bg-warning hover:text-black transition-all"
+                                className="h-9 w-9 rounded-xl bg-warning/10 text-warning hover:bg-warning hover:text-black transition-all flex items-center justify-center border border-warning/20"
+                                title="Ajustes"
                             >
-                                Ajustes
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                             </button>
-                            <button
-                                onClick={() => startEdit(w)}
-                                className="p-1.5 rounded-lg bg-surface-3 dark:bg-surface-dark-3 text-content-subtle hover:text-brand-500 transition-all border border-border/20"
-                                title="Editar"
-                            >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                            </button>
-                            <button
-                                onClick={() => setDeleteConfirm(w)}
-                                className="p-1.5 rounded-lg bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-black transition-all"
-                                title="Eliminar"
-                            >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
+                            <div className="flex gap-1 ml-auto">
+                                <button
+                                    onClick={() => startEdit(w)}
+                                    className="w-9 h-9 rounded-xl bg-surface-3 dark:bg-white/5 text-content-subtle hover:text-brand-500 transition-all border border-border/20 dark:border-white/5 flex items-center justify-center"
+                                    title="Editar"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                </button>
+                                <button
+                                    onClick={() => setDeleteConfirm(w)}
+                                    className="w-9 h-9 rounded-xl bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-black transition-all flex items-center justify-center"
+                                    title="Eliminar"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

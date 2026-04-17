@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fmtNumber, fmtInt, todayISO } from "../../helpers";
+import GlobalDateRangePicker from "../../components/ui/DateRangePicker";
 
 // ── Helpers ───────────────────────────────────────────────────
 export const fmt$ = (n) => `$${fmtNumber(n, 2)}`;
@@ -38,36 +39,7 @@ export function defaultRange(days = 30) {
 // ── Componentes UI reutilizables ──────────────────────────────
 
 export function DateRangePicker({ from, to, onChange }) {
- const presets = [
- { label: "Hoy", days: 0 },
- { label: "7 d", days: 7 },
- { label: "30 d", days: 30 },
- ];
- const applyPreset = (days) => {
- const t = todayISO();
- if (days === 0) { onChange(t, t); return; }
- const d = new Date(); d.setDate(d.getDate() - days);
- onChange(d.toISOString().slice(0, 10), t);
- };
- return (
- <div className="flex items-center gap-3 shrink-0">
- <div className="flex gap-1">
- {presets.map(p => (
- <button key={p.label} onClick={() => applyPreset(p.days)}
- className="px-2 py-1 text-[11px] font-black uppercase tracking-wide rounded-md border border-border dark:border-white/5 bg-surface-3 dark:bg-white/5 text-content-muted dark:text-content-dark-muted hover:border-brand-500 hover:text-brand-500 transition-all">
- {p.label}
- </button>
- ))}
- </div>
- <div className="flex items-center gap-2">
- <input type="date" value={from} onChange={e => onChange(e.target.value, to)}
- className="bg-surface-3 dark:bg-white/5 border border-border dark:border-white/5 text-[11px] font-black rounded-md py-1 px-2 text-content dark:text-white outline-none focus:ring-2 focus:ring-brand-500/20" />
- <span className="text-content-subtle dark:text-white/20">→</span>
- <input type="date" value={to} onChange={e => onChange(from, e.target.value)}
- className="bg-surface-3 dark:bg-white/5 border border-border dark:border-white/5 text-[11px] font-black rounded-md py-1 px-2 text-content dark:text-white outline-none focus:ring-2 focus:ring-brand-500/20" />
- </div>
- </div>
- );
+ return <GlobalDateRangePicker from={from} to={to} onRangeChange={(f, t) => onChange(f, t)} />;
 }
 
 export function KpiCard({ label, value, sub, icon, color = "text-brand-500", delta: d }) {

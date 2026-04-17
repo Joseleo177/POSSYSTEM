@@ -120,55 +120,55 @@ export default function CompaniesPage() {
                     </div>
                 ) : (
                     <div className="card-premium overflow-hidden">
-                        <table className="w-full text-left border-collapse">
-                            <thead className="sticky top-0 z-10 bg-surface-2 dark:bg-surface-dark-2">
+                        <table className="table-pos">
+                            <thead>
                                 <tr>
-                                    {["ID", "Empresa / RIF", "Plan / Vencimiento", "Estado", "Acción"].map(h => (
-                                        <th key={h} className={`px-5 py-3 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 border-b border-border/40 dark:border-white/5 ${h === "Acción" ? "text-right" : ""}`}>
-                                            {h}
-                                        </th>
-                                    ))}
+                                    <th className="text-left w-16">#</th>
+                                    <th className="text-left">Empresa / RIF</th>
+                                    <th className="text-left">Plan / Vencimiento</th>
+                                    <th className="text-center">Estado</th>
+                                    <th className="text-right w-[100px] pr-6">Acción</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border/10 dark:divide-white/5">
                                 {filtered.map(c => (
                                     <tr key={c.id} className="group hover:bg-brand-500/[0.02] transition-colors">
-                                        <td className="px-5 py-4">
+                                        <td>
                                             <span className="text-[10px] font-black font-mono text-content-subtle opacity-50 tabular-nums">#{String(c.id).padStart(3, '0')}</span>
                                         </td>
-                                        <td className="px-5 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="text-[13px] font-black text-content dark:text-white leading-tight mb-0.5">{c.name}</span>
-                                                <span className="text-[10px] font-bold text-content-subtle dark:text-white/30 tabular-nums uppercase tracking-wider">RIF: {c.tax_id || "N/A"}</span>
+                                        <td>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center text-[11px] font-black text-brand-500 uppercase shrink-0">
+                                                    {c.name?.charAt(0)}
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-black text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">{c.name}</span>
+                                                    <span className="text-[10px] font-bold text-content-subtle opacity-50 tabular-nums uppercase tracking-wider mt-0.5">RIF: {c.tax_id || "N/A"}</span>
+                                                </div>
                                             </div>
                                         </td>
-                                        <td className="px-5 py-4">
-                                            <div className="flex flex-col">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <span className="px-1.5 py-0.5 rounded bg-brand-500/10 text-brand-500 text-[9px] font-black uppercase tracking-widest border border-brand-500/20">
-                                                        {c.plan_name || "Básico"}
-                                                    </span>
-                                                </div>
-                                                <span className="text-[10px] font-bold text-content-subtle dark:text-white/30 tabular-nums">
+                                        <td>
+                                            <div className="flex flex-col gap-1">
+                                                <span className="badge badge-info shadow-none w-fit">
+                                                    {c.plan_name || "Básico"}
+                                                </span>
+                                                <span className="text-[10px] font-bold text-content-subtle opacity-50 tabular-nums">
                                                     Vence: {c.expires_at ? new Date(c.expires_at).toLocaleDateString() : "Ilimitado"}
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-5 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <div className={`w-1.5 h-1.5 rounded-full ${c.subscription_status === 'Activa' || c.subscription_status === 'Ilimitado' ? 'bg-success shadow-[0_0_8px_rgba(var(--success-rgb),0.5)]' : 'bg-danger'}`} />
-                                                <span className={`text-[10px] font-black uppercase tracking-widest ${c.subscription_status === 'Activa' || c.subscription_status === 'Ilimitado' ? 'text-success' : 'text-danger'}`}>
-                                                    {c.subscription_status || 'Demo'}
-                                                </span>
-                                            </div>
+                                        <td className="text-center">
+                                            <span className={`badge shadow-none ${c.subscription_status === 'Activa' || c.subscription_status === 'Ilimitado' ? 'badge-success' : 'badge-warning'}`}>
+                                                {c.subscription_status || 'Demo'}
+                                            </span>
                                         </td>
-                                        <td className="px-5 py-4 text-right">
-                                            <button 
+                                        <td className="text-right pr-6">
+                                            <button
                                                 onClick={() => openEdit(c)}
-                                                className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black transition-all"
+                                                className="p-2 hover:bg-warning/10 rounded-xl transition-all text-content-subtle hover:text-warning active:scale-90"
                                                 title="Editar"
                                             >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                             </button>
                                         </td>
                                     </tr>

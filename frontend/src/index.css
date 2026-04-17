@@ -116,9 +116,9 @@
 
   /* ── Tablas de Grado Comercial ── */
   .table-pos { @apply w-full text-sm; }
-  .table-pos thead th { 
-    @apply text-left text-[11px] font-bold text-content-subtle uppercase tracking-wider py-2.5 px-3 
-           bg-surface-2/50 dark:bg-surface-dark-3/50 border-b border-border dark:border-border-dark; 
+  .table-pos thead th {
+    @apply text-[11px] font-bold text-content-subtle uppercase tracking-wider py-2.5 px-3
+           bg-surface-2/50 dark:bg-surface-dark-3/50 border-b border-border dark:border-border-dark;
   }
   .table-pos tbody td { 
     @apply py-2.5 px-3 border-b border-border/40 dark:border-border-dark/40 

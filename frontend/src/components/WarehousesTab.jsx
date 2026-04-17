@@ -10,6 +10,7 @@ import TransfersView from "./warehouses/TransfersView";
 import WarehouseModal from "./warehouses/WarehouseModal";
 import AddStockModal from "./warehouses/AddStockModal";
 import TransferModal from "./warehouses/TransferModal";
+import AdjustmentsView from "./warehouses/AdjustmentsView";
 import ConfirmModal from "./ui/ConfirmModal";
 import Modal from "./ui/Modal";
 
@@ -36,7 +37,9 @@ export default function WarehousesTab({ notify }) {
         addStockModal, setAddStockModal, openAddStock,
         addStockForm, setAddStockForm, addStockSearch, setAddStockSearch, addStockResults,
         addStockProduct, setAddStockProduct, selectAddStockProduct, doAddStock, savingStock,
-        transfers, loadTransfers, products,
+        transfers, loadTransfers,
+        transferProductSearch, setTransferProductSearch, transferProductResults, setTransferProductResults,
+        transferProductSelected, setTransferProductSelected,
         transferForm, setTransferForm, transferModal, setTransferModal, loadingTransfer, doTransfer
     } = useWarehouseOps(notify, selectedWarehouse, loadWarehouses);
 
@@ -97,11 +100,24 @@ export default function WarehousesTab({ notify }) {
                         handleEditStock={handleEditStock}
                         handleDeleteStock={handleDeleteStock}
                         openAddStock={openAddStock}
+                        page={stockPage}
+                        setPage={setStockPage}
+                        totalItems={totalStockItems}
+                        totalPages={Math.ceil(totalStockItems / stockLimit)}
+                        limit={stockLimit}
+                        loadStock={loadStock}
                     />
                 )}
 
                 {subTab === "transferencias" && (
                     <TransfersView transfers={transfers} />
+                )}
+
+                {subTab === "ajustes" && (
+                    <AdjustmentsView 
+                        selectedWarehouse={selectedWarehouse}
+                        notify={notify}
+                    />
                 )}
             </div>
 
@@ -133,7 +149,12 @@ export default function WarehousesTab({ notify }) {
                 open={transferModal}
                 onClose={() => setTransferModal(false)}
                 warehouses={warehouses}
-                products={products}
+                transferProductSearch={transferProductSearch}
+                setTransferProductSearch={setTransferProductSearch}
+                transferProductResults={transferProductResults}
+                setTransferProductResults={setTransferProductResults}
+                transferProductSelected={transferProductSelected}
+                setTransferProductSelected={setTransferProductSelected}
                 transferForm={transferForm}
                 setTransferForm={setTransferForm}
                 doTransfer={doTransfer}

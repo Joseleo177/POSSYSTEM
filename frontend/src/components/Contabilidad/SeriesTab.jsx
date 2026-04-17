@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { api } from "../../services/api";
-import Page from "../ui/Page";
 import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
@@ -68,31 +67,35 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
   };
 
   return (
-    <Page
-      module="CONFIGURACIÓN FISCAL"
-      title="Series y Correlativos"
-      actions={canConfig && (
-        <Button onClick={() => { setEditSerie(null); setSerieForm(EMPTY_SERIE); setShowModal(true); }}>
-          + Nueva Serie
-        </Button>
-      )}
-    >
+    <>
+      <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex items-center justify-between gap-3">
+        <span className="text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
+          {allSeries.length} serie{allSeries.length !== 1 ? "s" : ""}
+        </span>
+        {canConfig && (
+          <Button onClick={() => { setEditSerie(null); setSerieForm(EMPTY_SERIE); setShowModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
+            + Nueva Serie
+          </Button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-auto px-4 py-3">
       {allSeries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 opacity-20">
           <div className="text-xs font-black uppercase tracking-wide">No hay series configuradas</div>
         </div>
       ) : (
-        <div className="space-y-4 py-2">
+        <div className="space-y-4">
           {allSeries.map(serie => (
             <div key={serie.id} className="bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/5 rounded-lg overflow-hidden shadow-sm">
               {/* Cabecera de la serie */}
               <div className="px-4 py-3 flex items-center justify-between gap-4 bg-surface-1/50 dark:bg-white/[0.02] border-b border-border/20">
                 <div className="flex flex-col">
                   <div className="flex items-center gap-2">
-                    <span className="font-black text-xs text-brand-500 uppercase">{serie.prefix}</span>
-                    <span className="font-black text-[12px] text-content dark:text-white uppercase tracking-tight">{serie.name}</span>
+                    <span className="text-[10px] font-black text-brand-500 uppercase tracking-widest opacity-60">{serie.prefix}</span>
+                    <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{serie.name}</span>
                   </div>
-                  <div className="text-[10px] font-bold text-content-subtle opacity-60 uppercase tracking-widest mt-0.5">
+                  <div className="text-[9px] font-black text-content-subtle opacity-40 uppercase tracking-widest mt-0.5">
                     {serie.padding} dígitos · {(serie.SerieRanges || []).filter(r => r.active).length} rangos activos
                   </div>
                 </div>
@@ -209,6 +212,7 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
           ))}
         </div>
       )}
+      </div>
 
       {/* Modal: crear / editar */}
       <Modal
@@ -272,6 +276,6 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
         type="danger"
         confirmText="Sí, eliminar"
       />
-    </Page>
+    </>
   );
 }
