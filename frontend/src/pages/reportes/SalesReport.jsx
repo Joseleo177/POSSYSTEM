@@ -27,7 +27,7 @@ export default function SalesReport() {
  <div className="flex-1 min-h-0 space-y-3 overflow-auto">
  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
  <KpiCard label="Volumen de Ventas" value={fmtN(s.total_sales)} icon="" color="text-brand-500" />
- <KpiCard label="Ingresos Brutos" value={fmt$(s.total_revenue)} icon="" color="text-green-500" />
+ <KpiCard label="Ingresos Brutos" value={fmt$(s.total_revenue)} sub={s.total_returned > 0 ? `Devol.: ${fmt$(s.total_returned)}` : null} icon="" color="text-green-500" />
  <KpiCard label="Ticket Promedio" value={fmt$(s.avg_ticket)} sub={`Máx: ${fmt$(s.max_sale)}`} icon="" color="text-blue-500" />
  <KpiCard label="Cuentas x Cobrar" value={fmt$(s.pending_amount)} sub={`${s.pending_count} facturas`} icon="" color="text-danger" />
  </div>

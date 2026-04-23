@@ -99,18 +99,20 @@ export default function SettingsTab({ notify }) {
     const base = currencies.find(c => c.is_base);
 
     const subheader = (
-        <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2 bg-surface-1/50 dark:bg-white/[0.01]">
-            <div className="flex items-center gap-1 bg-surface-2 dark:bg-white/5 p-1 rounded-xl border border-border/30 dark:border-white/10">
-                {SECTIONS.map(([key, label]) => (
-                    <button
-                        key={key}
-                        onClick={() => setSection(key)}
-                        className={`btn btn-sm ${section === key ? 'bg-brand-500 text-black shadow-lg shadow-brand-500/20' : 'btn-ghost'} transition-all`}
-                    >
-                        {label}
-                    </button>
-                ))}
-            </div>
+        <div className="flex gap-1 px-4 border-b border-border/20 dark:border-white/5">
+            {SECTIONS.map(([key, label]) => (
+                <button
+                    key={key}
+                    onClick={() => setSection(key)}
+                    className={`text-[11px] font-black uppercase tracking-wide border-b-2 px-3 py-2.5 transition-all ${
+                        section === key
+                            ? "border-brand-500 text-brand-500"
+                            : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+                    }`}
+                >
+                    {label}
+                </button>
+            ))}
         </div>
     );
 

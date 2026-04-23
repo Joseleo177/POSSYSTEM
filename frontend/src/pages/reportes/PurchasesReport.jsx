@@ -3,7 +3,7 @@ import { api } from "../../services/api";
 import { buildPurchasesExcel } from "../../helpers/excel";
 import {
  fmt$, fmtN,
- useReport, defaultRange,
+ useReport, defaultRange, usePagination, Pagination,
  DateRangePicker, KpiCard, SectionHeader, Card, Loading, ExportButton,
 } from "./reportes.utils";
 
@@ -11,6 +11,8 @@ export default function PurchasesReport() {
  const [range, setRange] = useState(defaultRange(30));
  const { data, loading, error } = useReport(api.reports.purchases, { date_from: range.from, date_to: range.to }, [range]);
  const s = data?.summary;
+ const supplierPag = usePagination(data?.by_supplier ?? [], 20);
+ const productPag = usePagination(data?.top_products ?? [], 20);
 
  return (
  <div className="h-full flex flex-col space-y-4 overflow-auto">
@@ -32,7 +34,7 @@ export default function PurchasesReport() {
  </div>
 
  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
- <Card className="!p-0 overflow-auto">
+ <Card className="!p-0 min-h-0 flex flex-col">
  <div className="p-3 border-b border-border dark:border-white/5">
  <SectionHeader title="Principales Aliados" sub="Gasto acumulado" />
  </div>
@@ -45,7 +47,9 @@ export default function PurchasesReport() {
  </tr>
  </thead>
  <tbody className="divide-y divide-border/20 dark:divide-white/5">
- {data.by_supplier.slice(0, 10).map((sup, i) => (
+ {supplierPag.total === 0
+ ? <tr><td colSpan={2} className="px-4 py-10 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin compras en este período</td></tr>
+ : supplierPag.paginated.map((sup, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{sup.supplier_name}</td>
  <td className="px-4 py-2 text-right tabular-nums text-danger font-black text-[11px]">{fmt$(sup.total_cost)}</td>
@@ -54,9 +58,10 @@ export default function PurchasesReport() {
  </tbody>
  </table>
  </div>
+ <Pagination page={supplierPag.page} totalPages={supplierPag.totalPages} total={supplierPag.total} onPage={supplierPag.setPage} />
  </Card>
 
- <Card className="!p-0 overflow-auto">
+ <Card className="!p-0 min-h-0 flex flex-col">
  <div className="p-3 border-b border-border dark:border-white/5">
  <SectionHeader title="Abastecimiento" sub="Mayor volumen de compra" />
  </div>
@@ -69,7 +74,9 @@ export default function PurchasesReport() {
  </tr>
  </thead>
  <tbody className="divide-y divide-border/20 dark:divide-white/5">
- {data.top_products.slice(0, 10).map((p, i) => (
+ {productPag.total === 0
+ ? <tr><td colSpan={2} className="px-4 py-10 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin productos comprados</td></tr>
+ : productPag.paginated.map((p, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.product_name}</td>
  <td className="px-4 py-2 text-right tabular-nums text-blue-500 font-black text-[11px]">{fmt$(p.total_cost)}</td>
@@ -78,6 +85,7 @@ export default function PurchasesReport() {
  </tbody>
  </table>
  </div>
+ <Pagination page={productPag.page} totalPages={productPag.totalPages} total={productPag.total} onPage={productPag.setPage} />
  </Card>
  </div>
  </div>

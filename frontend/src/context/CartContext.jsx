@@ -274,7 +274,7 @@ export function CartProvider({ children }) {
     setLoading(true);
     try {
       const res = await api.sales.create({
-        items: cart.map(i => ({ product_id: i.id, quantity: parseFloat(i.qty) || 0 })),
+        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty) })),
         paid: 0,
         customer_id: selectedCustomer?.id || null,
         employee_id: employee?.id || null,

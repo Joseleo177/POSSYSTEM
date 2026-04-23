@@ -158,6 +158,33 @@ export function BarChart({ data, xKey, yKey, color = "#fabd2f", height = 160 }) 
  return <canvas ref={ref} className="w-full" style={{ height }} />;
 }
 
+export function usePagination(items = [], pageSize = 25) {
+ const [page, setPage] = useState(1);
+ const total = items.length;
+ const totalPages = Math.max(1, Math.ceil(total / pageSize));
+ const safePage = Math.min(page, totalPages);
+ const paginated = items.slice((safePage - 1) * pageSize, safePage * pageSize);
+ return { page: safePage, setPage, totalPages, total, paginated };
+}
+
+export function Pagination({ page, totalPages, total, onPage }) {
+ if (totalPages <= 1) return null;
+ return (
+  <div className="shrink-0 px-4 py-2 border-t border-border dark:border-white/5 bg-surface-2/50 dark:bg-white/[0.02] flex items-center justify-between rounded-b-xl">
+   <div className="text-[10px] font-black text-content-subtle uppercase tracking-widest">
+    Total: <span className="text-content dark:text-white">{total}</span>
+   </div>
+   <div className="flex items-center gap-1.5">
+    <button disabled={page === 1} onClick={() => onPage(1)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">«</button>
+    <button disabled={page === 1} onClick={() => onPage(page - 1)} className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">Ant.</button>
+    <div className="px-3 h-7 flex items-center justify-center text-[10px] font-black text-brand-500 bg-brand-500/10 rounded-lg border border-brand-500/20">Pág {page}/{totalPages}</div>
+    <button disabled={page === totalPages} onClick={() => onPage(page + 1)} className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">Sig.</button>
+    <button disabled={page === totalPages} onClick={() => onPage(totalPages)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">»</button>
+   </div>
+  </div>
+ );
+}
+
 export function HeatmapHours({ data }) {
  if (!data?.length) return null;
  const maxRev = Math.max(...data.map(d => d.revenue), 1);

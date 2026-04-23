@@ -4,7 +4,7 @@ import { buildAuditExcel } from "../../helpers/excel";
 import { fmtDate } from "../../helpers";
 import {
  fmt$, fmtN,
- useReport, defaultRange,
+ useReport, defaultRange, usePagination, Pagination,
  DateRangePicker, KpiCard, SectionHeader, Card, Loading, ExportButton,
 } from "./reportes.utils";
 
@@ -13,6 +13,10 @@ export default function AuditReport() {
  const { data, loading, error } = useReport(api.reports.audit, { date_from: range.from, date_to: range.to }, [range]);
  const [view, setView] = useState("employees");
  const rs = data?.returns_summary;
+ const returnsPag = usePagination(data?.returns_list ?? []);
+ const discountsPag = usePagination(data?.discounts ?? []);
+
+ const handleViewChange = (k) => { setView(k); returnsPag.setPage(1); discountsPag.setPage(1); };
 
  return (
  <div className="h-full flex flex-col space-y-4 overflow-auto">
@@ -35,7 +39,7 @@ export default function AuditReport() {
 
  <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide shrink-0">
  {[["employees", "Vendedores"], ["returns", "Devoluciones"], ["discounts", "Descuentos"]].map(([k, l]) => (
- <button key={k} onClick={() => setView(k)}
+ <button key={k} onClick={() => handleViewChange(k)}
  className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all whitespace-nowrap border
  ${view === k ? "bg-brand-500 text-black border-brand-500" : "bg-surface-3 dark:bg-white/5 border-transparent text-content-muted dark:text-content-dark-muted opacity-60 hover:opacity-100"}`}>
  {l}
@@ -43,7 +47,7 @@ export default function AuditReport() {
  ))}
  </div>
 
- <Card className="!p-0 overflow-auto min-h-0 flex flex-col">
+ <Card className="!p-0 min-h-0 flex flex-col">
  <div className="p-3 border-b border-border dark:border-white/5">
  <SectionHeader
  title={view === "employees" ? "Rendimiento" : view === "returns" ? "Control Merma" : "Supervisión"}
@@ -67,6 +71,13 @@ export default function AuditReport() {
  ))}
  </tr>
  )}
+ {view === "discounts" && (
+ <tr className="border-b border-border/40 dark:border-white/5">
+ {["ID / Cliente", "Vendedor", "Descuento", "Total", "Fecha"].map((h, i) => (
+ <th key={h} className={`px-4 py-2 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted ${i >= 2 && i <= 3 ? "text-right" : i === 4 ? "text-center" : ""}`}>{h}</th>
+ ))}
+ </tr>
+ )}
  </thead>
  <tbody className="divide-y divide-border/20 dark:divide-white/5">
  {view === "employees" && data.by_employee.map((e, i) => (
@@ -78,7 +89,9 @@ export default function AuditReport() {
  <td className="px-4 py-2 text-right tabular-nums text-danger font-bold text-[11px]">{parseFloat(e.total_discounts) > 0 ? fmt$(e.total_discounts) : "—"}</td>
  </tr>
  ))}
- {view === "returns" && data.returns_list.map((r, i) => (
+ {view === "returns" && (returnsPag.total === 0
+ ? <tr><td colSpan={4} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin devoluciones en este período</td></tr>
+ : returnsPag.paginated.map((r, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2">
  <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{r.customer_name || "Venta Casual"}</div>
@@ -88,10 +101,26 @@ export default function AuditReport() {
  <td className="px-4 py-2 text-right tabular-nums text-danger font-black text-[11px]">{fmt$(r.total)}</td>
  <td className="px-4 py-2 text-center text-[10px] font-black text-content-subtle uppercase">{fmtDate(r.created_at)}</td>
  </tr>
- ))}
+ )))}
+ {view === "discounts" && (discountsPag.total === 0
+ ? <tr><td colSpan={5} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin descuentos aplicados en este período</td></tr>
+ : discountsPag.paginated.map((d, i) => (
+ <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
+ <td className="px-4 py-2">
+ <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{d.customer_name || "Venta Casual"}</div>
+ <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase">#{d.id}</div>
+ </td>
+ <td className="px-4 py-2 text-[11px] text-content-subtle uppercase font-black">{d.employee_name || "—"}</td>
+ <td className="px-4 py-2 text-right tabular-nums text-danger font-black text-[11px]">{fmt$(d.discount_amount)}</td>
+ <td className="px-4 py-2 text-right tabular-nums text-green-500 font-black text-[11px]">{fmt$(d.total)}</td>
+ <td className="px-4 py-2 text-center text-[10px] font-black text-content-subtle uppercase">{fmtDate(d.created_at)}</td>
+ </tr>
+ )))}
  </tbody>
  </table>
  </div>
+ {view === "returns" && <Pagination page={returnsPag.page} totalPages={returnsPag.totalPages} total={returnsPag.total} onPage={returnsPag.setPage} />}
+ {view === "discounts" && <Pagination page={discountsPag.page} totalPages={discountsPag.totalPages} total={discountsPag.total} onPage={discountsPag.setPage} />}
  </Card>
  </div>
  )}

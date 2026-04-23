@@ -62,7 +62,7 @@ export default function PurchaseItemFields({ state }) {
                     <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle opacity-50 px-1">Costo x Empaque ($)</label>
                     <input
                         type="number"
-                        min="0"
+                        min="0.01"
                         step="0.01"
                         value={itemForm.package_price}
                         onChange={(e) => setIF("package_price", e.target.value)}

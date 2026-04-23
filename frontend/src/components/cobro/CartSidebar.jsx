@@ -122,7 +122,31 @@ export default function CartSidebar({
                                 spellCheck={false}
                                 autoComplete="off"
                                 value={custSearch}
-                                onChange={e => setCustSearch(e.target.value)}
+                                onChange={e => { setCustSearch(e.target.value); setSelectedCustIdx(-1); }}
+                                onKeyDown={e => {
+                                    if (!custSearch.trim()) return;
+                                    const total = customers.length + 1; // +1 for "Crear"
+                                    if (e.key === "ArrowDown") {
+                                        e.preventDefault();
+                                        setSelectedCustIdx(i => Math.min(i + 1, total - 1));
+                                    } else if (e.key === "ArrowUp") {
+                                        e.preventDefault();
+                                        setSelectedCustIdx(i => Math.max(i - 1, -1));
+                                    } else if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        if (selectedCustIdx >= 0 && selectedCustIdx < customers.length) {
+                                            const c = customers[selectedCustIdx];
+                                            setSelectedCustomer(c); setCustomers([]); setCustSearch(""); setSelectedCustIdx(-1);
+                                        } else if (selectedCustIdx === customers.length || customers.length === 0) {
+                                            setCustomerEditData({ name: custSearch, _fromCobro: true }); setCustomerModal(true); setCustSearch(""); setSelectedCustIdx(-1);
+                                        } else if (customers.length === 1) {
+                                            const c = customers[0];
+                                            setSelectedCustomer(c); setCustomers([]); setCustSearch(""); setSelectedCustIdx(-1);
+                                        }
+                                    } else if (e.key === "Escape") {
+                                        setCustSearch(""); setSelectedCustIdx(-1);
+                                    }
+                                }}
                                 placeholder="CLIENTE... (F2)"
                                 className="input !h-10 !pl-10 relative z-10 !text-xs"
                             />
@@ -146,8 +170,8 @@ export default function CartSidebar({
                                 </button>
                             ))}
                             <button
-                                onClick={() => { setCustomerEditData({ name: custSearch, _fromCobro: true }); setCustomerModal(true); setCustSearch(""); }}
-                                className={`w-full text-left px-4 py-3 cursor-pointer text-sm font-bold text-warning flex items-center gap-2 hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors ${customers.length > 0 ? "border-t border-border dark:border-border-dark" : ""}`}
+                                onClick={() => { setCustomerEditData({ name: custSearch, _fromCobro: true }); setCustomerModal(true); setCustSearch(""); setSelectedCustIdx(-1); }}
+                                className={`w-full text-left px-4 py-3 cursor-pointer text-sm font-bold text-warning flex items-center gap-2 transition-colors ${customers.length > 0 ? "border-t border-border dark:border-border-dark" : ""} ${selectedCustIdx === customers.length ? "bg-warning/10" : "hover:bg-surface-3 dark:hover:bg-surface-dark-3"}`}
                             >
                                 <span className="text-lg bg-warning/10 text-warning w-6 h-6 flex items-center justify-center rounded-md">+</span>
                                 Crear "{custSearch}"
@@ -225,6 +249,8 @@ export default function CartSidebar({
                                     <input
                                         id={`qty-input-${i.id}`}
                                         type="number"
+                                        inputMode="decimal"
+                                        min="0"
                                         value={i.qty}
                                         readOnly={window.innerWidth < 1024}
                                         onClick={() => handleQtyModal(i)}

@@ -5,12 +5,11 @@ import { ALL_TABS } from "../constants/tabs";
 export function useTabs(employee, can, setReceipt) {
     const [tab, setTab] = useState("Dashboard");
 
-    const canAny = (perms = []) => perms.some((p) => can(p));
-
     const visibleTabs = ALL_TABS.filter((t) => {
         if (t.superuserOnly) return !!employee?.is_superuser;
-        if (t.adminOnly) return !!employee?.permissions?.all;
-        return canAny(t.perms);
+        if (t.adminOnly)     return !!employee?.permissions?.all;
+        if (t.perm === null) return !!employee;
+        return can(t.perm);
     });
 
     const activeTabVisible = visibleTabs.some((t) => t.key === tab);

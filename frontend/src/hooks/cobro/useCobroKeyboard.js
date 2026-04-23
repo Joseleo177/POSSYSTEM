@@ -59,6 +59,22 @@ export function useCobroKeyboard({
 
             if (e.key === "Enter") {
                 if (showConfirmCheckout) { e.preventDefault(); setShowConfirmCheckout(false); checkout(); return; }
+
+                // Caso especial: Lector de Barras (Buscador con 1 solo resultado)
+                if (e.target.id === "product-search-input" && selectedIndex < 0 && filteredProducts.length === 1) {
+                    e.preventDefault();
+                    const p = filteredProducts[0];
+                    if (p) {
+                        const hasUnlimitedStock = p.is_service || (p.is_combo && p.stock === null);
+                        if (!hasUnlimitedStock && parseFloat(p.stock) <= 0) {
+                            return notify("Este producto no tiene existencias en el inventario", "error");
+                        }
+                        setSearch(""); // Limpiar búsqueda para el siguiente escaneo
+                        openQtyModal(p);
+                        return;
+                    }
+                }
+
                 if (selectedIndex >= 0) {
                     e.preventDefault();
                     const p = filteredProducts[selectedIndex];

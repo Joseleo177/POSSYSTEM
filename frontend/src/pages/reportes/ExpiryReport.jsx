@@ -76,11 +76,11 @@ export default function ExpiryReport() {
                             <div className={`absolute top-0 right-0 px-4 py-1.5 rounded-bl-2xl text-[9px] font-black tracking-widest uppercase ${status.class}`}>
                                 {status.icon} {status.label}
                             </div>
-                            
+
                             <div className="flex flex-col h-full">
                                 <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-1 opacity-60">Lote: {lot.lot} · {lot.warehouse}</div>
                                 <h3 className="text-sm font-black dark:text-white uppercase mb-4 leading-tight">{lot.product}</h3>
-                                
+
                                 <div className="mt-auto pt-4 border-t border-black/5 dark:border-white/5 flex items-end justify-between">
                                     <div>
                                         <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mb-1">Stock en Lote</div>
@@ -99,7 +99,6 @@ export default function ExpiryReport() {
 
             {filteredLots.length === 0 && (
                 <div className="p-20 text-center border-2 border-dashed border-black/5 dark:border-white/5 rounded-[40px]">
-                    <div className="text-4xl mb-4 opacity-20">🎉</div>
                     <p className="text-[11px] font-black uppercase tracking-widest text-content-subtle">No hay alertas críticas en este momento</p>
                 </div>
             )}

@@ -95,14 +95,14 @@ export function usePurchasesForm({
         if (!itemForm.product)
             return notify("Selecciona un producto", "err");
 
-        if (!itemForm.package_size)
-            return notify("Indica unidades por paquete", "err");
+        if (!itemForm.package_size || parseFloat(itemForm.package_size) <= 0)
+            return notify("Unidades por empaque debe ser mayor a 0", "err");
 
-        if (!itemForm.package_price)
-            return notify("Indica precio por paquete", "err");
+        if (!itemForm.package_price || parseFloat(itemForm.package_price) <= 0)
+            return notify("El costo por empaque debe ser mayor a 0", "err");
 
         if (!itemForm.package_qty || parseFloat(itemForm.package_qty) <= 0)
-            return notify("Cantidad debe ser mayor a 0", "err");
+            return notify("Cantidad de empaques debe ser mayor a 0", "err");
 
         const calc = calcPurchaseItem(itemForm);
 

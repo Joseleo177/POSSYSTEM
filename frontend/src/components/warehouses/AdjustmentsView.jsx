@@ -86,28 +86,28 @@ export default function AdjustmentsView({ selectedWarehouse, notify }) {
                             onChange={e => { setSearch(e.target.value); setSelectedProduct(null); }}
                             className="input h-10 pl-9 font-medium"
                         />
-                    </div>
 
-                    {/* Resultados de búsqueda */}
-                    {results.length > 0 && !selectedProduct && (
-                        <div className="card-premium divide-y divide-border/10 dark:divide-white/5 animate-in fade-in zoom-in-95 duration-200 shadow-xl">
-                            {results.map(p => (
-                                <button key={p.id} onClick={() => { setSelectedProduct(p); setResults([]); }}
-                                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-brand-500/[0.03] transition-colors text-left group">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-surface-3 dark:bg-white/5 flex items-center justify-center text-content-subtle">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                        {/* Resultados de búsqueda — flotante para no desplazar el layout */}
+                        {results.length > 0 && !selectedProduct && (
+                            <div className="absolute z-50 top-full left-0 right-0 mt-1 card-premium divide-y divide-border/10 dark:divide-white/5 animate-in fade-in zoom-in-95 duration-200 shadow-xl max-h-72 overflow-y-auto">
+                                {results.map(p => (
+                                    <button key={p.id} onClick={() => { setSelectedProduct(p); setResults([]); }}
+                                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-brand-500/[0.03] transition-colors text-left group">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-surface-3 dark:bg-white/5 flex items-center justify-center text-content-subtle">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                                            </div>
+                                            <div>
+                                                <div className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">{p.name}</div>
+                                                <div className="text-[10px] text-content-subtle font-bold uppercase tracking-tighter opacity-70">En stock: {p.stock} {p.unit}</div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <div className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">{p.name}</div>
-                                            <div className="text-[10px] text-content-subtle font-bold uppercase tracking-tighter opacity-70">En stock: {p.stock} {p.unit}</div>
-                                        </div>
-                                    </div>
-                                    <svg className="w-3.5 h-3.5 text-content-subtle opacity-30 group-hover:opacity-100 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                                        <svg className="w-3.5 h-3.5 text-content-subtle opacity-30 group-hover:opacity-100 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
                     {/* Producto seleccionado (Active State) */}
                     {selectedProduct && (

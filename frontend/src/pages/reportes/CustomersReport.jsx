@@ -3,7 +3,7 @@ import { api } from "../../services/api";
 import { buildCustomersExcel } from "../../helpers/excel";
 import {
  fmt$, fmtN, pct,
- useReport, defaultRange,
+ useReport, defaultRange, usePagination, Pagination,
  DateRangePicker, KpiCard, SectionHeader, Card, Loading, ExportButton,
 } from "./reportes.utils";
 
@@ -13,6 +13,16 @@ export default function CustomersReport() {
  const { data, loading, error } = useReport(api.reports.customersAnalysis, { date_from: range.from, date_to: range.to, inactive_days: inactiveDays }, [range, inactiveDays]);
  const [view, setView] = useState("top");
  const rr = data?.repeat_rate;
+ const topPag = usePagination(data?.top_customers ?? []);
+ const inactivePag = usePagination(data?.inactive_customers ?? []);
+ const newPag = usePagination(data?.new_customers ?? []);
+
+ const handleViewChange = (k) => {
+  setView(k);
+  topPag.setPage(1);
+  inactivePag.setPage(1);
+  newPag.setPage(1);
+ };
 
  return (
  <div className="h-full flex flex-col space-y-4 overflow-auto">
@@ -35,7 +45,7 @@ export default function CustomersReport() {
 
  <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide shrink-0">
  {[["top", "Rank Elite"], ["inactive", "Reactivar"], ["new", "Nuevos"], ["ticket", "Segmentación"]].map(([k, l]) => (
- <button key={k} onClick={() => setView(k)}
+ <button key={k} onClick={() => handleViewChange(k)}
  className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all whitespace-nowrap border
  ${view === k ? "bg-brand-500 text-black border-brand-500" : "bg-surface-3 dark:bg-white/5 border-transparent text-content-muted dark:text-content-dark-muted opacity-60 hover:opacity-100"}`}>
  {l}
@@ -43,7 +53,7 @@ export default function CustomersReport() {
  ))}
  </div>
 
- <Card className="!p-0 overflow-auto min-h-0 flex flex-col">
+ <Card className="!p-0 min-h-0 flex flex-col">
  <div className="p-3 border-b border-border dark:border-white/5">
  <SectionHeader
  title={view === "top" ? "Ranking Elite" : view === "inactive" ? "Campaña Reactivación" : view === "new" ? "Nuevos Prospectos" : "Segmentación"}
@@ -67,9 +77,23 @@ export default function CustomersReport() {
  ))}
  </tr>
  )}
+ {view === "new" && (
+ <tr className="border-b border-border/40 dark:border-white/5">
+ {["Cliente", "Teléfono", "1ra Compra", "Compras", "Total"].map((h, i) => (
+ <th key={h} className={`px-4 py-2 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted ${i >= 2 ? "text-right" : ""}`}>{h}</th>
+ ))}
+ </tr>
+ )}
+ {view === "ticket" && (
+ <tr className="border-b border-border/40 dark:border-white/5">
+ {["Rango de Ticket", "Transacciones", "Ingresos", "% Total"].map((h, i) => (
+ <th key={h} className={`px-4 py-2 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted ${i >= 1 ? "text-right" : ""}`}>{h}</th>
+ ))}
+ </tr>
+ )}
  </thead>
  <tbody className="divide-y divide-border/20 dark:divide-white/5">
- {view === "top" && data.top_customers.map((c, i) => (
+ {view === "top" && topPag.paginated.map((c, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2">
  <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{c.name}</div>
@@ -81,7 +105,7 @@ export default function CustomersReport() {
  <td className="px-4 py-2 text-center text-[11px] font-black text-content-subtle uppercase">{new Date(c.last_purchase).toLocaleDateString("es-VE")}</td>
  </tr>
  ))}
- {view === "inactive" && data.inactive_customers.map((c, i) => (
+ {view === "inactive" && inactivePag.paginated.map((c, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2">
  <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{c.name}</div>
@@ -95,10 +119,36 @@ export default function CustomersReport() {
  </td>
  </tr>
  ))}
+ {view === "new" && (data.new_customers.length === 0
+ ? <tr><td colSpan={5} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin clientes nuevos en este período</td></tr>
+ : newPag.paginated.map((c, i) => (
+ <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
+ <td className="px-4 py-2 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{c.name}</td>
+ <td className="px-4 py-2 text-[11px] text-content-subtle">{c.phone || "—"}</td>
+ <td className="px-4 py-2 text-right text-[11px] font-black text-content-subtle tabular-nums">{new Date(c.first_purchase).toLocaleDateString("es-VE")}</td>
+ <td className="px-4 py-2 text-right tabular-nums text-[11px] font-black text-brand-500">{c.purchase_count}</td>
+ <td className="px-4 py-2 text-right tabular-nums text-green-500 font-black text-[11px]">{fmt$(c.total_spent)}</td>
+ </tr>
+ )))}
+ {view === "ticket" && (() => {
+ const totalRev = data.ticket_distribution.reduce((s, r) => s + r.revenue, 0);
+ return data.ticket_distribution.length === 0
+ ? <tr><td colSpan={4} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin datos de distribución</td></tr>
+ : data.ticket_distribution.map((t, i) => (
+ <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
+ <td className="px-4 py-2 font-black text-[11px] uppercase tracking-wider text-brand-500">{t.range}</td>
+ <td className="px-4 py-2 text-right tabular-nums text-[11px] font-black text-content dark:text-white">{t.count}</td>
+ <td className="px-4 py-2 text-right tabular-nums text-green-500 font-black text-[11px]">{fmt$(t.revenue)}</td>
+ <td className="px-4 py-2 text-right tabular-nums text-[11px] font-black text-content-subtle">{pct(t.revenue, totalRev)}%</td>
+ </tr>
+ ));
+ })()}
  </tbody>
  </table>
- {(view === "new" || view === "ticket") && <div className="p-10 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-20">Segmentación Completa en Reporte Maestro</div>}
  </div>
+ {view === "top" && <Pagination page={topPag.page} totalPages={topPag.totalPages} total={topPag.total} onPage={topPag.setPage} />}
+ {view === "inactive" && <Pagination page={inactivePag.page} totalPages={inactivePag.totalPages} total={inactivePag.total} onPage={inactivePag.setPage} />}
+ {view === "new" && <Pagination page={newPag.page} totalPages={newPag.totalPages} total={newPag.total} onPage={newPag.setPage} />}
  </Card>
  </div>
  )}

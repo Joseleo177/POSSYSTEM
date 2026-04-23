@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Modal from "./ui/Modal";
 import { Button } from "./ui/Button";
-import { api } from "../services/api";
 import { useApp } from "../context/AppContext";
 import CustomSelect from "./ui/CustomSelect";
-import { calcSalePrice as calcSalePriceHelper } from "../helpers";
-import { resolveImageUrl } from "../helpers";
+import { calcSalePrice as calcSalePriceHelper, resolveImageUrl } from "../helpers";
+import ComboItemsEditor from "./ComboItemsEditor";
 
 const UNITS = ["UNIDAD", "KG", "LITRO", "METRO"];
 const PKG_UNITS = ["CAJA", "BULTO", "PAQUETE", "DOCENA", "MEDIA CAJA", "FARDO", "SACO"];
@@ -22,31 +21,6 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const [imagePreview, setImagePreview] = useState(null);
     const [removeImage, setRemoveImage] = useState(false);
 
-    // Combo states
-    const [searchIngredient, setSearchIngredient] = useState("");
-    const [ingredientResults, setIngredientResults] = useState([]);
-    const [loadingIngredients, setLoadingIngredients] = useState(false);
-    const [showDropdown, setShowDropdown] = useState(false);
-    const ingredientRef = useRef(null);
-    const ingredientTimer = useRef(null);
-
-    // Búsqueda debounced de ingredientes (server-side, no carga todo el catálogo)
-    useEffect(() => {
-        if (!form.is_combo || !searchIngredient.trim()) {
-            setIngredientResults([]);
-            return;
-        }
-        clearTimeout(ingredientTimer.current);
-        ingredientTimer.current = setTimeout(async () => {
-            setLoadingIngredients(true);
-            try {
-                const r = await api.products.getAll({ search: searchIngredient, is_combo: false, limit: 10 });
-                setIngredientResults(r.data.filter(p => p.id !== editData?.id));
-            } catch {}
-            finally { setLoadingIngredients(false); }
-        }, 250);
-        return () => clearTimeout(ingredientTimer.current);
-    }, [searchIngredient, form.is_combo, editData?.id]);
 
     useEffect(() => {
         if (open) {
@@ -80,17 +54,15 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             }
             setImageFile(null);
             setRemoveImage(false);
-            setSearchIngredient("");
+
         }
     }, [open, editData]);
 
     const set = (key, val) => setForm(p => ({ ...p, [key]: val }));
 
-    const calcSalePrice = calcSalePriceHelper;
-
     const handleCostOrMarginChange = (key, val) => {
         const next = { ...form, [key]: val };
-        const suggested = calcSalePrice(
+        const suggested = calcSalePriceHelper(
             key === "cost_price" ? val : form.cost_price,
             key === "profit_margin" ? val : form.profit_margin
         );
@@ -112,40 +84,15 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         setImagePreview(URL.createObjectURL(f));
     };
 
-    const handleSave = () => onSave(form, imageFile, removeImage);
+    const handleSave = () => {
+        if (parseFloat(form.price) <= 0 || form.price === "") return notify("El precio de venta debe ser mayor a 0", "err");
+        if (form.cost_price !== "" && parseFloat(form.cost_price) < 0) return notify("El costo unitario no puede ser negativo", "err");
+        onSave(form, imageFile, removeImage);
+    };
 
     const isEdit = !!editData;
 
-    const suggestedPrice = calcSalePrice(form.cost_price, form.profit_margin);
-
-    // Funciones de Combo
-    const addIngredient = (prod) => {
-        if (form.combo_items.find(i => i.product_id === prod.id)) return;
-        setForm({ ...form, combo_items: [...form.combo_items, { product_id: prod.id, name: prod.name, unit: prod.unit || "uds", quantity: 1 }] });
-        setSearchIngredient("");
-        setShowDropdown(false);
-    };
-
-    const removeIngredient = (id) => {
-        setForm({ ...form, combo_items: form.combo_items.filter(i => i.product_id !== id) });
-    };
-
-    const updateIngredientQty = (id, q) => {
-        const val = parseFloat(q);
-        if (val < 0) return; // Evitar negativos
-        setForm({ ...form, combo_items: form.combo_items.map(i => i.product_id === id ? { ...i, quantity: q } : i) });
-    };
-
-    // Click outside listener para el dropdown
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (ingredientRef.current && !ingredientRef.current.contains(event.target)) setShowDropdown(false);
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-
-    const filteredProducts = ingredientResults;
+    const suggestedPrice = calcSalePriceHelper(form.cost_price, form.profit_margin);
 
     return (
         <Modal open={open} onClose={onClose} title={isEdit ? "Edición de Producto" : "Nuevo Producto"} width={720}>
@@ -230,7 +177,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                         <span className="text-content-subtle font-bold">$</span>
                                     </div>
-                                    <input value={form.price} onChange={e => set("price", e.target.value)} type="number" step="0.01" className="input !pl-8" placeholder="0.00" />
+                                    <input value={form.price} onChange={e => set("price", e.target.value)} type="number" step="0.01" min="0.01" className="input !pl-8" placeholder="0.00" />
                                 </div>
                             </div>
                             {editData?.id && !form.is_combo && !form.is_service && (
@@ -287,7 +234,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         <label className="label">Costo Unitario</label>
                                         <div className="relative">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">$</span>
-                                            <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.01" className="input !pl-6" placeholder="0.00" />
+                                            <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.01" min="0" className="input !pl-6" placeholder="0.00" />
                                         </div>
                                     </div>
                                     <div>
@@ -338,86 +285,11 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         </div>
                     </div>
                 ) : form.is_combo ? (
-                    /* ── Interfaz de Ingredientes (Combo) ── */
-                    <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5 animate-in slide-in-from-bottom-2 duration-300">
-                        <div className="mb-4">
-                            <h3 className="text-sm font-bold text-content dark:text-white">Fórmula del Producto</h3>
-                            <div className="text-xs text-content-subtle mt-0.5">Selecciona los componentes que lo integran</div>
-                        </div>
-
-                        <div className="space-y-4">
-                            {/* Buscador de Ingredientes */}
-                            <div className="relative" ref={ingredientRef}>
-                                <input
-                                    value={searchIngredient}
-                                    onChange={e => { setSearchIngredient(e.target.value); setShowDropdown(true); }}
-                                    onFocus={() => setShowDropdown(true)}
-                                    placeholder="Buscar componente..."
-                                    className="input pl-10"
-                                />
-                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                </div>
-
-                                {showDropdown && searchIngredient.trim() !== "" && (
-                                    <div className="absolute z-50 w-full mt-1 bg-white dark:bg-surface-dark-2 border border-border dark:border-white/10 rounded-lg shadow-lg p-1 max-h-[200px] overflow-y-auto">
-                                        {loadingIngredients ? (
-                                            <div className="p-4 text-center text-xs text-content-subtle">Buscando...</div>
-                                        ) : filteredProducts.length === 0 ? (
-                                            <div className="p-4 text-center text-xs text-content-subtle">Sin resultados</div>
-                                        ) : (
-                                            filteredProducts.map(p => (
-                                                <div key={p.id} onClick={() => addIngredient(p)} className="p-2 hover:bg-surface-2 dark:hover:bg-white/5 rounded-lg cursor-pointer flex justify-between items-center transition-colors">
-                                                    <div>
-                                                        <div className="text-sm font-medium">{p.name}</div>
-                                                        <div className="text-[10px] text-content-subtle">{p.category_name || "General"}</div>
-                                                    </div>
-                                                    <span className="text-xs font-medium text-brand-500">${p.price}</span>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Lista de ingredientes */}
-                            {form.combo_items.length === 0 ? (
-                                <div className="py-8 border border-dashed border-border/40 dark:border-white/10 rounded-xl text-center">
-                                    <div className="text-xs text-content-subtle">No hay componentes añadidos</div>
-                                </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    <div className="flex px-3 text-[10px] font-bold text-content-subtle uppercase mb-1">
-                                        <div className="flex-1">Componente</div>
-                                        <div className="w-24 text-center">Cant.</div>
-                                        <div className="w-8"></div>
-                                    </div>
-                                    {form.combo_items.map((item, idx) => (
-                                        <div key={idx} className="flex items-center gap-3 bg-surface-2 dark:bg-surface-dark-3 p-2 px-3 rounded-lg border border-border/40 dark:border-white/5">
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-medium truncate">{item.name}</div>
-                                            </div>
-                                            <div className="flex items-center gap-2 w-24">
-                                                <input
-                                                    value={item.quantity}
-                                                    onChange={e => updateIngredientQty(item.product_id, e.target.value)}
-                                                    type="number"
-                                                    step={item.unit === 'unidad' || item.unit === 'uds' ? "1" : "0.001"}
-                                                    className="input !h-8 text-center text-sm"
-                                                />
-                                            </div>
-                                            <button onClick={() => removeIngredient(item.product_id)} className="w-8 h-8 flex items-center justify-center text-content-muted hover:text-danger hover:bg-danger/10 rounded-md transition-colors">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                            </button>
-                                        </div>
-                                    ))}
-                                    <div className="flex justify-end pt-2">
-                                        <span className="text-xs font-medium text-content-subtle">Total unidades: {form.combo_items.length}</span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    <ComboItemsEditor
+                        comboItems={form.combo_items}
+                        onChange={items => set("combo_items", items)}
+                        excludeId={editData?.id}
+                    />
                 ) : null}
 
                 {/* ── Footer de Acción ── */}

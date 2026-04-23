@@ -2,7 +2,7 @@ import { api } from "../../services/api";
 import { buildReceivablesExcel } from "../../helpers/excel";
 import {
  fmt$, fmtN, pct,
- useReport,
+ useReport, usePagination, Pagination,
  KpiCard, SectionHeader, Card, Loading, ExportButton,
 } from "./reportes.utils";
 
@@ -10,6 +10,7 @@ export default function ReceivablesReport() {
  const { data, loading, error } = useReport(api.reports.receivables, {}, []);
  const s = data?.summary;
  const a = data?.aging;
+ const custPag = usePagination(data?.by_customer ?? []);
 
  return (
  <div className="h-full flex flex-col space-y-4 overflow-auto">
@@ -42,7 +43,7 @@ export default function ReceivablesReport() {
  ))}
  </div>
 
- <Card className="!p-0 overflow-auto min-h-0 flex flex-col">
+ <Card className="!p-0 min-h-0 flex flex-col">
  <div className="p-3 border-b border-border dark:border-white/5">
  <SectionHeader title="Antigüedad de Cartera" sub="Gestión de cobranza por cliente" />
  </div>
@@ -56,7 +57,9 @@ export default function ReceivablesReport() {
  </tr>
  </thead>
  <tbody className="divide-y divide-border/20 dark:divide-white/5">
- {data.by_customer.map((c, i) => {
+ {custPag.total === 0
+ ? <tr><td colSpan={4} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin cuentas por cobrar pendientes</td></tr>
+ : custPag.paginated.map((c, i) => {
  const daysDiff = Math.floor((Date.now() - new Date(c.oldest_invoice)) / 86400000);
  return (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
@@ -77,6 +80,7 @@ export default function ReceivablesReport() {
  </tbody>
  </table>
  </div>
+ <Pagination page={custPag.page} totalPages={custPag.totalPages} total={custPag.total} onPage={custPag.setPage} />
  </Card>
  </div>
  )}

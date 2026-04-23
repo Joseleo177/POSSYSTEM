@@ -112,9 +112,9 @@ export default function ProductSearch({ state }) {
 
                 {/* Grid de Formulario de Item */}
                 <div className={`space-y-3 transition-all duration-300 ${!itemForm.product ? "opacity-30 pointer-events-none select-none" : ""}`}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-4 gap-3">
                         <div className="space-y-1">
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle opacity-50 px-1">Empaque</label>
+                            <label className="label !text-[10px]">Empaque</label>
                             <CustomSelect
                                 value={itemForm.package_unit || ""}
                                 onChange={(val) => setIF("package_unit", val)}
@@ -161,7 +161,7 @@ export default function ProductSearch({ state }) {
                     </div>
 
                     {/* Cálculos y Proyecciones */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-4 gap-3">
                         <div className="bg-surface-1 dark:bg-white/[0.02] p-3 rounded-xl border border-border/10">
                             <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle mb-2 block">Margen Sugerido</label>
                             <div className="relative">

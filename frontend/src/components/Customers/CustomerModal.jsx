@@ -1,6 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
+
+const DOC_PREFIXES = ["V", "E", "J", "G", "P"];
+const RIF_PREFIXES = ["J", "G", "P"];
 
 const EMPTY = {
   type: "cliente",
@@ -8,6 +11,7 @@ const EMPTY = {
   phone: "",
   email: "",
   address: "",
+  doc_prefix: "V",
   rif: "",
   tax_name: "",
   notes: "",
@@ -15,27 +19,49 @@ const EMPTY = {
 
 export default function CustomerModal({ open, onClose, onSave, editData, loading }) {
   const [form, setForm] = useState(EMPTY);
+  const nameRef = useRef(null);
 
   useEffect(() => {
     if (open) {
       if (editData?.id) {
-        // Si hay ID, estamos editando
-        setForm({ ...editData });
+        const fullRif = editData.rif || "";
+        const match = fullRif.match(/^([VEJGP])-(.*)$/);
+        setForm({
+          ...editData,
+          doc_prefix: match ? match[1] : "V",
+          rif: match ? match[2] : fullRif,
+        });
       } else {
-        // Si no hay ID, es un registro nuevo
         setForm({
           ...EMPTY,
           type: editData?._newType || "cliente",
-          name: editData?._newName || ""
+          name: editData?._newName || editData?.name || "",
         });
       }
+      setTimeout(() => nameRef.current?.focus(), 80);
     }
   }, [open, editData]);
 
-  const set = (key) => (e) => setForm(p => ({ ...p, [key]: e.target.value }));
-
   const isProveedor = form.type === "proveedor";
   const isEdit = !!editData?.id;
+  const isRif = RIF_PREFIXES.includes(form.doc_prefix);
+  const maxRifLen = isRif ? 9 : 8;
+  const canSave = !!form.name.trim();
+
+  const handleSave = () => {
+    if (!canSave) return;
+    onSave({
+      ...form,
+      name: (form.name || "").trim(),
+      phone: (form.phone || "").trim(),
+      email: (form.email || "").trim(),
+      address: (form.address || "").trim(),
+      notes: (form.notes || "").trim(),
+      rif: form.rif ? `${form.doc_prefix}-${form.rif}` : "",
+    });
+  };
+
+  const onEnterSave = e => { if (e.key === "Enter") handleSave(); };
 
   return (
     <Modal
@@ -45,7 +71,7 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
       width={520}
     >
       <div className="space-y-5">
-        {/* Selector de Tipo Segmentado Premium */}
+        {/* Selector de Tipo Segmentado */}
         <div className="flex p-1 bg-surface-3 dark:bg-white/5 rounded-xl border border-border/10">
           <button
             onClick={() => setForm(p => ({ ...p, type: "cliente" }))}
@@ -71,33 +97,60 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
           {/* Nombre */}
           <div className="col-span-2">
             <label className={`label mb-1.5 ${isProveedor ? "text-violet-500" : "text-brand-500"}`}>
-              Razón Social / Nombre Completo <span className="text-danger">*</span>
+              {isProveedor ? "Razón Social / Empresa" : "Nombre completo"} <span className="text-danger">*</span>
             </label>
             <input
+              ref={nameRef}
               value={form.name}
-              onChange={set("name")}
-              className={`input h-10 font-black uppercase tracking-tight ${isProveedor ? "focus:border-violet-500/50" : ""}`}
-              placeholder="Ej: Inversiones Globales C.A."
+              onChange={e => setForm(p => ({ ...p, name: e.target.value.toUpperCase() }))}
+              onKeyDown={onEnterSave}
+              autoComplete="name"
+              className={`input h-10 font-black tracking-tight ${isProveedor ? "focus:border-violet-500/50" : ""}`}
+              placeholder={isProveedor ? "Ej: INVERSIONES GLOBALES C.A." : "Ej: JUAN PÉREZ"}
             />
           </div>
 
           {/* RIF / Documento */}
           <div>
-            <label className="label mb-1.5 opacity-70">Identificación (RIF/CI)</label>
-            <input
-              value={form.rif}
-              onChange={set("rif")}
-              className="input h-10 font-bold uppercase tabular-nums"
-              placeholder="V-00000000-0"
-            />
+            <label className="label mb-1.5 opacity-70">
+              {isRif ? "RIF" : "Cédula de identidad"}
+            </label>
+            <div className="flex gap-2">
+              <select
+                value={form.doc_prefix}
+                onChange={e => {
+                  const newPrefix = e.target.value;
+                  const newMax = RIF_PREFIXES.includes(newPrefix) ? 9 : 8;
+                  setForm(p => ({ ...p, doc_prefix: newPrefix, rif: p.rif.slice(0, newMax) }));
+                }}
+                className="input h-10 w-20 font-black text-center cursor-pointer"
+              >
+                {DOC_PREFIXES.map(p => (
+                  <option key={p} value={p}>{p}-</option>
+                ))}
+              </select>
+              <input
+                value={form.rif}
+                onChange={e => setForm(p => ({ ...p, rif: e.target.value.replace(/\D/g, "") }))}
+                onKeyDown={onEnterSave}
+                maxLength={maxRifLen}
+                inputMode="numeric"
+                className="input h-10 font-bold tabular-nums flex-1"
+                placeholder={"0".repeat(maxRifLen)}
+              />
+            </div>
           </div>
 
           {/* Teléfono */}
           <div>
-            <label className="label mb-1.5 opacity-70">Teléfono móvil</label>
+            <label className="label mb-1.5 opacity-70">Teléfono</label>
             <input
               value={form.phone}
-              onChange={set("phone")}
+              onChange={e => setForm(p => ({ ...p, phone: e.target.value.replace(/[^\d\s+\-()]/g, "") }))}
+              onKeyDown={onEnterSave}
+              inputMode="tel"
+              autoComplete="tel"
+              maxLength={20}
               className="input h-10 font-bold tabular-nums"
               placeholder="+58 412 0000000"
             />
@@ -108,8 +161,12 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
             <label className="label mb-1.5 opacity-70">Correo electrónico</label>
             <input
               value={form.email}
-              onChange={set("email")}
-              className="input h-10 font-bold lowercase"
+              onChange={e => setForm(p => ({ ...p, email: e.target.value.toLowerCase() }))}
+              onKeyDown={onEnterSave}
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              className="input h-10 font-bold"
               placeholder="ejemplo@dominio.com"
             />
           </div>
@@ -119,7 +176,7 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
             <label className="label mb-1.5 opacity-70">Observaciones internas</label>
             <textarea
               value={form.notes}
-              onChange={set("notes")}
+              onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
               rows={2}
               className="input min-h-[80px] py-3 resize-none text-[11px] font-medium leading-relaxed"
               placeholder="Detalles adicionales sobre este contacto..."
@@ -138,8 +195,9 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
           CANCELAR
         </Button>
         <Button
-          onClick={() => onSave(form)}
+          onClick={handleSave}
           loading={loading}
+          disabled={!canSave}
           className={`h-10 px-8 shadow-xl font-black tracking-[0.2em] text-[10px] uppercase ${isProveedor ? "bg-violet-600 hover:bg-violet-700 shadow-violet-600/20" : ""}`}
         >
           {isEdit ? "GUARDAR CAMBIOS" : "REGISTRAR CONTACTO"}

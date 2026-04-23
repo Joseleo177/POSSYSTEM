@@ -1,6 +1,6 @@
 import { useState } from "react";
+import Page from "../components/ui/Page";
 
-// ── Módulos de reporte ────────────────────────────────────────
 import SalesReport from "./reportes/SalesReport";
 import InventoryReport from "./reportes/InventoryReport";
 import MarginsReport from "./reportes/MarginsReport";
@@ -12,73 +12,51 @@ import CashSessionsReport from "./reportes/CashSessionsReport";
 import ExpiryReport from "./reportes/ExpiryReport";
 
 const TABS = [
- { key: "ventas", label: "Ventas" },
- { key: "inventario", label: "Inventario" },
- { key: "margenes", label: "Márgenes" },
- { key: "clientes", label: "Clientes" },
- { key: "auditoria", label: "Auditoría" },
- { key: "cobrar", label: "Cobrar" },
- { key: "compras", label: "Compras" },
- { key: "sesiones", label: "Cajas" },
- { key: "vencimientos", label: "Vencimientos" },
+  { key: "ventas",       label: "Ventas" },
+  { key: "inventario",   label: "Inventario" },
+  { key: "margenes",     label: "Márgenes" },
+  { key: "clientes",     label: "Clientes" },
+  { key: "auditoria",    label: "Auditoría" },
+  { key: "cobrar",       label: "Cobrar" },
+  { key: "compras",      label: "Compras" },
+  { key: "sesiones",     label: "Cajas" },
+  { key: "vencimientos", label: "Vencimientos" },
 ];
 
 export default function ReportesPage() {
- const [tab, setTab] = useState("ventas");
+  const [tab, setTab] = useState("ventas");
 
- return (
- // h-full: fills the <main> container in App.jsx which is already h-full + overflow-hidden
- <div className="h-full flex flex-col bg-surface-2 dark:bg-surface-dark text-content dark:text-white overflow-hidden">
+  const subheader = (
+    <div className="flex gap-1 px-4 border-b border-border/20 dark:border-white/5 overflow-x-auto">
+      {TABS.map(t => (
+        <button
+          key={t.key}
+          onClick={() => setTab(t.key)}
+          className={`text-[11px] font-black uppercase tracking-wide border-b-2 px-3 py-2.5 whitespace-nowrap transition-all ${
+            tab === t.key
+              ? "border-brand-500 text-brand-500"
+              : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
 
- {/* ── Header compacto ────────────────────────────── */}
- <div className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between border-b border-border/30 dark:border-white/5">
- <div>
- <div className="text-[11px] font-black text-brand-500 uppercase tracking-wide leading-none mb-0.5">
- MÓDULO DE ANALÍTICA
- </div>
- <h1 className="text-sm font-black text-content dark:text-white uppercase tracking-tight leading-none">
- Reportes Estratégicos
- </h1>
- </div>
- <div className="hidden md:block">
- <span className="text-[10px] font-bold text-content-subtle dark:text-white/20 uppercase tracking-wide">
- Inteligencia en tiempo real
- </span>
- </div>
- </div>
-
- {/* ── Tabs ────────────────────────────────────────── */}
- <div className="shrink-0 px-4 py-1.5 border-b border-border/20 dark:border-white/5 bg-surface-3/30 dark:bg-white/[0.02]">
- <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
- {TABS.map(t => (
- <button
- key={t.key}
- onClick={() => setTab(t.key)}
- className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wide whitespace-nowrap transition-all ${
- tab === t.key
- ? "bg-brand-500 text-black shadow-[0_0_16px_rgba(20,184,166,0.35)]"
- : "text-content-muted dark:text-white/30 hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/5"
- }`}
- >
- {t.label}
- </button>
- ))}
- </div>
- </div>
-
- {/* ── Contenido del reporte activo ─────────────────── */}
- {/* flex-1 + min-h-0 permite que el hijo ocupe el espacio restante sin desbordarse */}
- <div className="flex-1 min-h-0 p-3 overflow-y-auto">
- {tab === "ventas" && <SalesReport />}
- {tab === "inventario" && <InventoryReport />}
- {tab === "margenes" && <MarginsReport />}
- {tab === "clientes" && <CustomersReport />}
- {tab === "auditoria" && <AuditReport />}
- {tab === "cobrar" && <ReceivablesReport />}
- {tab === "compras" && <PurchasesReport />}
- {tab === "sesiones" && <CashSessionsReport />}
- {tab === "vencimientos" && <ExpiryReport />}
- </div>
- </div>
- );
+  return (
+    <Page module="MÓDULO DE ANALÍTICA" title="Reportes Estratégicos" subheader={subheader}>
+      <div className="flex-1 min-h-0 overflow-y-auto p-3">
+        {tab === "ventas"       && <SalesReport />}
+        {tab === "inventario"   && <InventoryReport />}
+        {tab === "margenes"     && <MarginsReport />}
+        {tab === "clientes"     && <CustomersReport />}
+        {tab === "auditoria"    && <AuditReport />}
+        {tab === "cobrar"       && <ReceivablesReport />}
+        {tab === "compras"      && <PurchasesReport />}
+        {tab === "sesiones"     && <CashSessionsReport />}
+        {tab === "vencimientos" && <ExpiryReport />}
+      </div>
+    </Page>
+  );
 }

@@ -116,4 +116,27 @@ const remove = async (req, res) => {
   }
 };
 
-module.exports = { getAll, getRoles, create, update, remove };
+// PUT /api/employees/roles/:id
+const updateRole = async (req, res) => {
+  try {
+    const { Role } = require("../models");
+    const role = await Role.findByPk(req.params.id);
+    if (!role) return res.status(404).json({ ok: false, message: "Rol no encontrado" });
+
+    const { label, permissions } = req.body;
+    if (role.name === "admin")
+      return res.status(400).json({ ok: false, message: "No se puede modificar el rol admin" });
+
+    const updates = {};
+    if (label)       updates.label       = label;
+    if (permissions) updates.permissions = permissions;
+
+    await role.update(updates);
+    res.json({ ok: true, data: role });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, message: "Error al actualizar el rol" });
+  }
+};
+
+module.exports = { getAll, getRoles, create, update, remove, updateRole };

@@ -5,12 +5,11 @@ import ReceiptModal from "../../components/ReceiptModal";
 import { fmtDate } from "../../helpers";
 import {
  fmt$,
- SectionHeader, Loading,
+ SectionHeader, Loading, usePagination, Pagination,
 } from "./reportes.utils";
 
 export default function CashSessionsReport() {
  const { notify } = useApp();
- const [limit, setLimit] = useState(50);
  const [sessions, setSessions] = useState([]);
  const [loading, setLoading] = useState(false);
  const [selectedSession, setSelectedSession] = useState(null);
@@ -18,18 +17,19 @@ export default function CashSessionsReport() {
  const [loadingSummary, setLoadingSummary] = useState(false);
  const [receiptSale, setReceiptSale] = useState(null);
  const [loadingReceipt, setLoadingReceipt] = useState(false);
+ const sessionsPag = usePagination(sessions, 20);
 
  const loadSessions = useCallback(async () => {
  setLoading(true);
  try {
- const r = await api.cashSessions.history({ limit });
+ const r = await api.cashSessions.history({});
  setSessions(r.data);
  } catch (e) {
  console.error(e);
  } finally {
  setLoading(false);
  }
- }, [limit]);
+ }, []);
 
  useEffect(() => { loadSessions(); }, [loadSessions]);
 
@@ -61,18 +61,7 @@ export default function CashSessionsReport() {
 
  return (
  <div className="h-full flex flex-col space-y-3 overflow-auto">
- <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 shrink-0">
- <div className="text-[11px] font-black text-content-muted dark:text-content-subtle uppercase tracking-wide">Historial de Cierres Recientes</div>
- <div className="flex items-center gap-2">
- <div className="flex items-center gap-1.5 bg-surface-3 dark:bg-white/5 px-2 py-1 rounded-lg border border-border dark:border-white/5">
- <span className="text-[10px] font-black text-content-subtle uppercase">Límite</span>
- <select value={limit} onChange={e => setLimit(e.target.value)}
- className="bg-transparent border-none text-[11px] font-black focus:ring-0 cursor-pointer p-0 pr-4 text-content dark:text-white">
- <option value="20">20</option>
- <option value="50">50</option>
- <option value="100">100</option>
- </select>
- </div>
+ <div className="flex justify-end shrink-0">
  <button onClick={loadSessions}
  className="p-1.5 rounded-lg bg-surface-3 dark:bg-white/5 border border-border dark:border-white/5 hover:bg-brand-500/10 text-content-subtle hover:text-brand-500 transition-all">
  <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -80,9 +69,8 @@ export default function CashSessionsReport() {
  </svg>
  </button>
  </div>
- </div>
 
- <div className="flex-1 min-h-0 bg-white dark:bg-white/[0.02] rounded-xl border border-border dark:border-white/5 overflow-auto flex flex-col">
+ <div className="flex-1 min-h-0 bg-white dark:bg-white/[0.02] rounded-xl border border-border dark:border-white/5 flex flex-col">
  <div className="overflow-x-auto flex-1 scrollbar-hide">
  <table className="w-full text-left border-collapse min-w-[700px]">
  <thead className="sticky top-0 z-10 bg-surface-2 dark:bg-surface-dark-2 border-b border-border dark:border-white/5">
@@ -95,8 +83,8 @@ export default function CashSessionsReport() {
  <tbody className="divide-y divide-border/20 dark:divide-white/5">
  {loading ? (
  <tr><td colSpan="5" className="p-10 text-center"><Loading /></td></tr>
- ) : sessions.length > 0 ? (
- sessions.map((s) => (
+ ) : sessionsPag.total > 0 ? (
+ sessionsPag.paginated.map((s) => (
  <tr key={s.id} className="group hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2.5">
  <div className="text-[11px] font-black text-content dark:text-white group-hover:text-brand-500 transition-colors">CIERRE #{s.id}</div>
@@ -127,6 +115,7 @@ export default function CashSessionsReport() {
  </tbody>
  </table>
  </div>
+ <Pagination page={sessionsPag.page} totalPages={sessionsPag.totalPages} total={sessionsPag.total} onPage={sessionsPag.setPage} />
  </div>
 
  {selectedSession && (

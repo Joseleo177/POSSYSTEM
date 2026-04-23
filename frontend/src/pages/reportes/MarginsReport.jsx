@@ -3,7 +3,7 @@ import { api } from "../../services/api";
 import { buildMarginsExcel } from "../../helpers/excel";
 import {
  fmt$, fmtN,
- useReport, defaultRange,
+ useReport, defaultRange, usePagination, Pagination,
  DateRangePicker, KpiCard, SectionHeader, Card, Loading, ExportButton,
 } from "./reportes.utils";
 
@@ -12,6 +12,16 @@ export default function MarginsReport() {
  const { data, loading, error } = useReport(api.reports.margins, { date_from: range.from, date_to: range.to }, [range]);
  const [view, setView] = useState("top");
  const s = data?.summary;
+
+ const byProductDesc = data?.by_product ?? [];
+ const byProductAsc = [...byProductDesc].sort((a, b) => parseFloat(a.margin_pct) - parseFloat(b.margin_pct));
+ const topPag = usePagination(byProductDesc);
+ const bottomPag = usePagination(byProductAsc);
+ const catPag = usePagination(data?.by_category ?? []);
+
+ const handleViewChange = (k) => { setView(k); topPag.setPage(1); bottomPag.setPage(1); catPag.setPage(1); };
+
+ const activePag = view === "top" ? topPag : view === "bottom" ? bottomPag : catPag;
 
  return (
  <div className="h-full flex flex-col space-y-4 overflow-auto">
@@ -34,7 +44,7 @@ export default function MarginsReport() {
 
  <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide shrink-0">
  {[["top", "Mayor Margen"], ["bottom", "Menor Margen"], ["category", "Categorías"]].map(([k, l]) => (
- <button key={k} onClick={() => setView(k)}
+ <button key={k} onClick={() => handleViewChange(k)}
  className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all whitespace-nowrap border
  ${view === k ? "bg-brand-500 text-black border-brand-500" : "bg-surface-3 dark:bg-white/5 border-transparent text-content-muted dark:text-content-dark-muted opacity-60 hover:opacity-100"}`}>
  {l}
@@ -42,7 +52,7 @@ export default function MarginsReport() {
  ))}
  </div>
 
- <Card className="!p-0 overflow-auto min-h-0 flex flex-col">
+ <Card className="!p-0 min-h-0 flex flex-col">
  <div className="p-3 border-b border-border dark:border-white/5">
  <SectionHeader title={view === "top" ? "Alta Rentabilidad" : view === "bottom" ? "Optimización" : "Rentabilidad Sectorizada"}
  sub="Basado en costo de reposición actual" />
@@ -67,13 +77,9 @@ export default function MarginsReport() {
  )}
  </thead>
  <tbody className="divide-y divide-border/20 dark:divide-white/5">
- {(view === "top" || view === "bottom") && (() => {
-   const sorted = view === "top"
-     ? data.by_product.slice(0, 20)
-     : [...data.by_product].sort((a, b) => parseFloat(a.margin_pct) - parseFloat(b.margin_pct)).slice(0, 20);
-   return sorted.map((p, i) => (
+ {(view === "top" || view === "bottom") && activePag.paginated.map((p, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
- <td className="px-4 py-2"><div className="w-6 h-6 rounded-lg bg-surface-3 dark:bg-white/5 flex items-center justify-center text-[10px] font-black text-brand-500">{i + 1}</div></td>
+ <td className="px-4 py-2"><div className="w-6 h-6 rounded-lg bg-surface-3 dark:bg-white/5 flex items-center justify-center text-[10px] font-black text-brand-500">{(activePag.page - 1) * 25 + i + 1}</div></td>
  <td className="px-4 py-2">
  <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.product_name}</div>
  <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase">{p.category_name}</div>
@@ -87,9 +93,8 @@ export default function MarginsReport() {
  </span>
  </td>
  </tr>
- ));
- })()}
- {view === "category" && data.by_category.map((c, i) => (
+ ))}
+ {view === "category" && catPag.paginated.map((c, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2 font-black text-[11px] uppercase tracking-wider text-brand-500">{c.category_name}</td>
  <td className="px-4 py-2 text-right tabular-nums text-[11px] text-content dark:text-white font-black">{fmt$(c.revenue)}</td>
@@ -104,6 +109,7 @@ export default function MarginsReport() {
  </tbody>
  </table>
  </div>
+ <Pagination page={activePag.page} totalPages={activePag.totalPages} total={activePag.total} onPage={activePag.setPage} />
  </Card>
  </div>
  )}

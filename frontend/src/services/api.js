@@ -139,11 +139,12 @@ export const api = {
     getReturns:    (id)       => request(`/sales/${id}/returns`),
   },
   employees: {
-    getAll:   ()          => request("/employees"),
-    getRoles: ()          => request("/employees/roles"),
-    create:   (body)      => request("/employees",       { method: "POST", body: JSON.stringify(body) }),
-    update:   (id, body)  => request(`/employees/${id}`, { method: "PUT",  body: JSON.stringify(body) }),
-    remove:   (id)        => request(`/employees/${id}`, { method: "DELETE" }),
+    getAll:      ()          => request("/employees"),
+    getRoles:    ()          => request("/employees/roles"),
+    create:      (body)      => request("/employees",            { method: "POST",   body: JSON.stringify(body) }),
+    update:      (id, body)  => request(`/employees/${id}`,      { method: "PUT",    body: JSON.stringify(body) }),
+    remove:      (id)        => request(`/employees/${id}`,      { method: "DELETE" }),
+    updateRole:  (id, body)  => request(`/employees/roles/${id}`,{ method: "PUT",    body: JSON.stringify(body) }),
   },
   currencies: {
     getAll:       ()         => request("/currencies"),
