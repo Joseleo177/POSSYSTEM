@@ -1,10 +1,13 @@
+import { useState } from "react";
 import { Button } from "../ui/Button";
 import { exportToCSV } from "../../utils/exportUtils";
 import { fmtBase, fmtSale as fmtSaleHelper } from "../../helpers";
 import { useApp } from "../../context/AppContext";
+import SaleDetailModal from "./SaleDetailModal";
 
 export default function CustomerDetail({ detail, detailSales, onClose, onPay }) {
     const { baseCurrency } = useApp();
+    const [selectedSaleId, setSelectedSaleId] = useState(null);
 
     const fmtPrice = (n) => fmtBase(n, baseCurrency);
     const fmtSale = (sale, amount) => fmtSaleHelper(sale, amount, baseCurrency);
@@ -30,6 +33,7 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay }) 
     };
 
     return (
+        <>
         <div className="h-full flex flex-col animate-in fade-in duration-300">
             {/* Header */}
             <div className="shrink-0 px-4 pt-3 pb-2 flex justify-between items-center border-b border-border/30 dark:border-white/5 print-hidden">
@@ -100,7 +104,11 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay }) 
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                             {pendingSales.map(sale => (
-                                <div key={sale.id} className="bg-white dark:bg-surface-dark-2 border border-border/50 hover:border-danger/30 transition-all rounded-xl p-3 shadow-sm">
+                                <div
+                                    key={sale.id}
+                                    className="bg-white dark:bg-surface-dark-2 border border-border/50 hover:border-brand-500/40 transition-all rounded-xl p-3 shadow-sm cursor-pointer"
+                                    onClick={() => setSelectedSaleId(sale.id)}
+                                >
                                     <div className="flex justify-between items-start mb-2">
                                         <div>
                                             <div className="text-[11px] font-black text-content-subtle mb-0.5 tracking-wide uppercase opacity-60">Factura #{sale.id}</div>
@@ -116,7 +124,10 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay }) 
                                             <div className="text-sm font-black text-danger tabular-nums">{fmtSale(sale, sale.balance)}</div>
                                         </div>
                                     </div>
-                                    <Button onClick={() => onPay(sale)} className="w-full mt-2 !py-1.5 !bg-success/10 !text-success border border-success/20 !text-[11px] hover:!bg-success hover:!text-black">
+                                    <Button
+                                        onClick={(e) => { e.stopPropagation(); onPay(sale); }}
+                                        className="w-full mt-2 !py-1.5 !bg-success/10 !text-success border border-success/20 !text-[11px] hover:!bg-success hover:!text-black"
+                                    >
                                         Registrar Cobro
                                     </Button>
                                 </div>
@@ -134,19 +145,36 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay }) 
                     {paidSales.length === 0
                         ? <div className="col-span-full text-center text-content-subtle/40 py-8 text-[11px] font-black uppercase tracking-wide">Sin pagos finalizados</div>
                         : paidSales.map(sale => (
-                            <div key={sale.id} className="bg-white dark:bg-surface-dark-3 border border-border/40 rounded-xl p-3">
+                            <div
+                                key={sale.id}
+                                onClick={() => setSelectedSaleId(sale.id)}
+                                className="bg-white dark:bg-surface-dark-3 border border-border/40 hover:border-brand-500/50 hover:shadow-md dark:hover:border-brand-500/30 rounded-xl p-3 cursor-pointer transition-all group"
+                            >
                                 <div className="flex justify-between items-center mb-1.5">
-                                    <span className="text-[11px] font-black text-content-subtle/60 uppercase tracking-wide">#{sale.id}</span>
+                                    <span className="text-[11px] font-black text-content-subtle/60 uppercase tracking-wide group-hover:text-brand-500 transition-colors">#{sale.id}</span>
                                     <span className="px-1.5 py-0.5 rounded-full bg-success/10 text-success text-[11px] font-black uppercase border border-success/20">PAGADO</span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-[11px] text-content-subtle/70 italic">{new Date(sale.created_at).toLocaleDateString("es-VE")}</span>
                                     <span className="text-sm font-black text-success tabular-nums">{fmtSale(sale, sale.total)}</span>
                                 </div>
+                                <div className="mt-2 pt-2 border-t border-border/10 dark:border-white/5 flex items-center gap-1 text-[10px] text-content-subtle dark:text-white/20 font-black uppercase tracking-wide group-hover:text-brand-500 transition-colors">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                    Ver detalle
+                                </div>
                             </div>
                         ))}
                 </div>
             </div>
         </div>
+
+        {/* Modal de detalle de venta */}
+        {selectedSaleId && (
+            <SaleDetailModal
+                saleId={selectedSaleId}
+                onClose={() => setSelectedSaleId(null)}
+            />
+        )}
+        </>
     );
 }

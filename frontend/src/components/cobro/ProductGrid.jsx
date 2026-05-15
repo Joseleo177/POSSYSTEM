@@ -13,6 +13,7 @@ export default function ProductGrid({
     openQtyModal, convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt,
     loadMore, loadingMore, hasMore,
     notify,
+    activePromos = [],
 }) {
     const sentinelRef = useRef(null);
 
@@ -121,6 +122,24 @@ export default function ProductGrid({
                                             <svg className="w-6 h-6 lg:w-10 lg:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                         </div>
                                     )}
+
+                                    {/* Ribbon de promoción */}
+                                    {(() => {
+                                        const promo = activePromos.find(pr => pr.product_ids?.includes(p.id));
+                                        if (!promo) return null;
+                                        const label = promo.type === "percentage"
+                                            ? `${promo.discount_pct}% OFF`
+                                            : `${promo.buy_qty}x${promo.get_qty}`;
+                                        return (
+                                            <div className="absolute top-0 left-0 overflow-hidden w-[52px] h-[52px] lg:w-[72px] lg:h-[72px] pointer-events-none">
+                                                <div className="absolute -left-[18px] lg:-left-[22px] top-[12px] lg:top-[16px] w-[80px] lg:w-[110px] bg-brand-500 text-white text-[6px] lg:text-[9px] font-black uppercase tracking-wide text-center py-[3px] lg:py-[4px] shadow-lg -rotate-45 leading-none">
+                                                    {label}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Badge de stock bajo */}
                                     {p.stock <= 5 && !p.is_service && (
                                         <div className={`absolute top-1 lg:top-2 right-1 lg:right-2 text-white text-[6px] lg:text-[10px] font-black px-1 lg:px-1.5 py-0.5 rounded-full shadow-lg uppercase tracking-tighter ${p.stock <= 0 ? "bg-danger" : "bg-orange-500"}`}>
                                             {fmtQtyUnit(p.stock, p.unit)}
