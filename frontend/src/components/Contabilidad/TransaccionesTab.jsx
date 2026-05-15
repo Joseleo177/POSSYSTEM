@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { useTransacciones } from "../../hooks/contabilidad/useTransacciones";
 import ReturnModal from "../ReturnModal";
 import ConfirmModal from "../ui/ConfirmModal";
+import PaymentFormModal from "../PaymentFormModal";
 import { Button } from "../ui/Button";
 import { fmtDateShort } from "../../helpers";
 import DateRangePicker from "../ui/DateRangePicker";
@@ -29,6 +30,8 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
         cancelSale, loadSales, handleExportCSV,
         hasFilters, totalPages,
     } = useTransacciones({ notify });
+
+    const [payModal, setPayModal] = useState(null);
 
     const subheader = (
         <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2">
@@ -142,6 +145,11 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                                 >
                                                     {saleDetail?.id === sale.id ? "Cerrar" : "Detalles"}
                                                 </button>
+                                                {(sale.status === 'pendiente' || sale.status === 'parcial') && (
+                                                    <button onClick={() => setPayModal(sale)} className="h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all bg-success/10 text-success border-success/20 hover:bg-success hover:text-black">
+                                                        Pagar
+                                                    </button>
+                                                )}
                                                 <button onClick={() => setReceiptSale(sale)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 active:scale-90" title="Ver Recibo">
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                                 </button>
@@ -194,6 +202,14 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
 
             {returnSale && (
                 <ReturnModal open={!!returnSale} onClose={() => setReturnSale(null)} sale={returnSale} onReturnSuccess={loadSales} notify={notify} />
+            )}
+
+            {payModal && (
+                <PaymentFormModal
+                    sale={payModal}
+                    onClose={() => setPayModal(null)}
+                    onSuccess={() => { setPayModal(null); loadSales(); }}
+                />
             )}
 
             <ConfirmModal

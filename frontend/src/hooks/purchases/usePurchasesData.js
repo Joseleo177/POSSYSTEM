@@ -7,22 +7,31 @@ export function usePurchasesData({
     purchasesPage,
     setWarehouses,
     setCategories,
+    listSearch,
+    listStatus,
+    listDateFrom,
+    listDateTo,
     notify,
 }) {
     const LIMIT = 50;
 
     // ───────────────────────────────────────────────
-    // CARGAR LISTA DE COMPRAS (paginada)
+    // CARGAR LISTA DE COMPRAS (paginada + filtros)
     // ───────────────────────────────────────────────
     const loadPurchases = useCallback(async (page = purchasesPage) => {
         try {
-            const r = await api.purchases.getAll({ limit: LIMIT, offset: (page - 1) * LIMIT });
+            const params = { limit: LIMIT, offset: (page - 1) * LIMIT };
+            if (listSearch?.trim()) params.search = listSearch.trim();
+            if (listStatus)         params.status = listStatus;
+            if (listDateFrom)       params.date_from = listDateFrom;
+            if (listDateTo)         params.date_to = listDateTo;
+            const r = await api.purchases.getAll(params);
             setPurchases(r.data);
             if (r.total !== undefined) setPurchasesTotal(r.total);
         } catch (e) {
             notify(e.message, "err");
         }
-    }, [notify, setPurchases, setPurchasesTotal, purchasesPage]);
+    }, [notify, setPurchases, setPurchasesTotal, purchasesPage, listSearch, listStatus, listDateFrom, listDateTo]);
 
     // ───────────────────────────────────────────────
     // CARGAR ALMACENES

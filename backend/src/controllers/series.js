@@ -93,6 +93,21 @@ const addRange = async (req, res) => {
     if (end <= start) throw new Error("end_number debe ser mayor que start_number");
     const serie = await Serie.findByPk(req.params.id);
     if (!serie) throw new Error("Serie no encontrada");
+
+    // Validar solapamiento con rangos existentes de la misma serie
+    const overlap = await SerieRange.findOne({
+      where: {
+        serie_id: serie.id,
+        start_number: { [Op.lte]: end },
+        end_number:   { [Op.gte]: start },
+      },
+    });
+    if (overlap) {
+      const pad = serie.padding || 4;
+      const fmt = (n) => `${serie.prefix}-${String(n).padStart(pad, "0")}`;
+      throw new Error(`El rango se solapa con uno existente (${fmt(overlap.start_number)} → ${fmt(overlap.end_number)})`);
+    }
+
     const range = await SerieRange.create({ serie_id: serie.id, start_number: start, end_number: end, current_number: start });
     res.json({ ok: true, data: range });
   } catch (err) {

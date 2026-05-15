@@ -1,5 +1,6 @@
-const { Expense, ExpenseCategory, PaymentJournal, Employee, Currency } = require('../models');
+const { Expense, ExpenseCategory, PaymentJournal, Employee, Currency, PurchasePayment } = require('../models');
 const { Op } = require('sequelize');
+const { recalcPurchaseStatus } = require('../services/purchasePayments/purchasePaymentService');
 
 // ── Listar egresos (paginado + filtros) ──────────────────────
 exports.getAll = async (req, res, next) => {
@@ -125,6 +126,14 @@ exports.voidExpense = async (req, res, next) => {
     if (expense.status === 'anulado') return res.status(400).json({ ok: false, message: 'Ya está anulado' });
 
     await expense.update({ status: 'anulado' });
+
+    // Si el egreso proviene de un pago a proveedor, recalcular el estado de la compra
+    if (expense.reference?.startsWith('purchase_payment:')) {
+      const paymentId = parseInt(expense.reference.split(':')[1]);
+      const payment = await PurchasePayment.findByPk(paymentId);
+      if (payment) await recalcPurchaseStatus(payment.purchase_id);
+    }
+
     res.json({ ok: true, message: 'Egreso anulado' });
   } catch (err) { next(err); }
 };

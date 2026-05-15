@@ -48,6 +48,18 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
 
   const addRange = async (serieId) => {
     if (!rangeForm.start_number || !rangeForm.end_number) return notify("Inicio y fin son requeridos", "err");
+    const start = parseInt(rangeForm.start_number);
+    const end   = parseInt(rangeForm.end_number);
+    if (end <= start) return notify("El fin debe ser mayor que el inicio", "err");
+
+    const serie = allSeries.find(s => s.id === serieId);
+    const overlap = (serie?.SerieRanges || []).find(r => start <= r.end_number && end >= r.start_number);
+    if (overlap) {
+      const pad = serie.padding || 4;
+      const fmt = (n) => `${serie.prefix}-${String(n).padStart(pad, "0")}`;
+      return notify(`Se solapa con ${fmt(overlap.start_number)} → ${fmt(overlap.end_number)}`, "err");
+    }
+
     try {
       await api.series.addRange(serieId, rangeForm);
       notify("Rango añadido"); setRangeForm(EMPTY_RANGE); loadAllSeries();

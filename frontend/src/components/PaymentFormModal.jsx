@@ -30,6 +30,9 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const payRate = (!payCur || payCur.is_base) ? 1 : parseFloat(payCur.exchange_rate || 1);
   const paySym = payCur?.symbol || baseCurrency?.symbol || "$";
 
+  const selectedJournal = activeJournals.find(j => j.id === form.payment_journal_id);
+  const isCash = selectedJournal?.type === "efectivo";
+
   const balanceUsd = parseFloat(sale?.balance ?? sale?.total ?? 0);
 
   const receivedNum = parseFloat(String(form.received_amount).replace(",", "."));
@@ -47,7 +50,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     if (!form.payment_journal_id) return notify("Selecciona el método de pago", "err");
     if (!form.amount) return notify("El monto es requerido", "err");
     if (!form.reference_date) return notify("La fecha de referencia es requerida", "err");
-    if (!form.reference_number?.trim()) return notify("El número de referencia es requerido", "err");
+    if (!isCash && !form.reference_number?.trim()) return notify("El número de referencia es requerido", "err");
     if (changeBase > 0 && !form.keep_change && !form.change_journal_id) return notify("Selecciona el diario del que saldrá el cambio", "err");
 
     const finalAmountBase = form.keep_change ? Math.min(receivedBase, balanceUsd) : amountBase;
@@ -78,7 +81,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
 
   const canSubmit = !loading && form.payment_journal_id &&
     !isNaN(amountNum) && amountNum > 0 &&
-    form.reference_date && form.reference_number?.trim() &&
+    form.reference_date && (isCash || form.reference_number?.trim()) &&
     (changeBase <= 0 || form.keep_change || form.change_journal_id);
 
   // Para mostrar los montos de la factura
@@ -256,16 +259,18 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
           />
         </Field>
 
-        {/* N° Referencia */}
-        <Field label="N° REFERENCIA *">
-          <input
-            type="text"
-            value={form.reference_number}
-            onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
-            placeholder="Ej: 000123456"
-            className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
-          />
-        </Field>
+        {/* N° Referencia (oculto si es efectivo) */}
+        {!isCash && (
+          <Field label="N° REFERENCIA *">
+            <input
+              type="text"
+              value={form.reference_number}
+              onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
+              placeholder="Ej: 000123456"
+              className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+            />
+          </Field>
+        )}
 
         {/* Notas */}
         <Field label="NOTAS">

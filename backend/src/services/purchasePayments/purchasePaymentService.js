@@ -1,11 +1,30 @@
 const { PurchasePayment, Purchase, PaymentJournal, Currency, Employee, Expense, ExpenseCategory, sequelize } = require("../../models");
 
 async function getPurchaseAmountPaid(purchase_id, t) {
-  const result = await PurchasePayment.sum("amount", {
-    where: { purchase_id },
-    ...(t ? { transaction: t } : {}),
-  });
-  return parseFloat(result || 0);
+  // Solo cuenta pagos cuyo Expense vinculado sigue activo (o no tiene Expense)
+  const [row] = await sequelize.query(
+    `SELECT COALESCE(SUM(pp.amount), 0) AS total
+       FROM purchase_payments pp
+       LEFT JOIN expenses e ON e.reference = 'purchase_payment:' || pp.id::text
+      WHERE pp.purchase_id = :purchase_id
+        AND (e.status IS NULL OR e.status = 'activo')`,
+    {
+      replacements: { purchase_id },
+      type: sequelize.QueryTypes.SELECT,
+      ...(t ? { transaction: t } : {}),
+    }
+  );
+  return parseFloat(row?.total || 0);
+}
+
+async function recalcPurchaseStatus(purchaseId, t) {
+  const purchase = await Purchase.findByPk(purchaseId, { transaction: t, lock: t ? true : undefined });
+  if (!purchase) return null;
+  const paid  = await getPurchaseAmountPaid(purchase.id, t);
+  const total = parseFloat(purchase.total);
+  const newStatus = paid <= 0 ? "pendiente" : paid >= total - 0.001 ? "pagado" : "parcial";
+  await purchase.update({ payment_status: newStatus }, { transaction: t });
+  return newStatus;
 }
 
 async function getPayments(purchaseId) {
@@ -39,7 +58,6 @@ async function createPayment(purchaseId, body, employeeId) {
   const payAmt = parseFloat(amount);
   if (!payAmt || payAmt <= 0)            { const e = new Error("El monto debe ser mayor a 0"); e.status = 400; throw e; }
   if (!reference_date)                    { const e = new Error("La fecha de referencia es requerida"); e.status = 400; throw e; }
-  if (!reference_number?.trim())          { const e = new Error("El número de referencia es requerido"); e.status = 400; throw e; }
 
   const t = await sequelize.transaction();
   try {
@@ -127,4 +145,4 @@ async function removePayment(paymentId) {
   }
 }
 
-module.exports = { getPayments, createPayment, removePayment };
+module.exports = { getPayments, createPayment, removePayment, recalcPurchaseStatus };

@@ -104,11 +104,10 @@ export default function SettingsTab({ notify }) {
                 <button
                     key={key}
                     onClick={() => setSection(key)}
-                    className={`text-[11px] font-black uppercase tracking-wide border-b-2 px-3 py-2.5 transition-all ${
-                        section === key
+                    className={`text-[11px] font-black uppercase tracking-wide border-b-2 px-3 py-2.5 transition-all ${section === key
                             ? "border-brand-500 text-brand-500"
                             : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
-                    }`}
+                        }`}
                 >
                     {label}
                 </button>
@@ -285,7 +284,7 @@ export default function SettingsTab({ notify }) {
                                 <span className="text-[10px] font-black uppercase tracking-widest text-content dark:text-white">Tipos de Cambio</span>
                                 <div className="flex items-center gap-2">
                                     {lastRefresh && (
-                                        <span className="text-[9px] font-black text-content-subtle uppercase tracking-widest opacity-40">Sync: {lastRefresh.toLocaleTimeString()}</span>
+                                        <span className="text-[9px] font-black text-content-subtle uppercase tracking-widest opacity-40">Última actualización: {lastRefresh.toLocaleTimeString()}</span>
                                     )}
                                     <button
                                         onClick={autoRefreshRates}

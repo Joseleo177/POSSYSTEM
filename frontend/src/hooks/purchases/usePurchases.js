@@ -33,6 +33,10 @@ export function usePurchases(notify, onProductsUpdated) {
   const [purchases, setPurchases] = useState([]);
   const [purchasesTotal, setPurchasesTotal] = useState(0);
   const [purchasesPage, setPurchasesPage] = useState(1);
+  const [listSearch, setListSearch] = useState("");
+  const [listStatus, setListStatus] = useState("");
+  const [listDateFrom, setListDateFrom] = useState("");
+  const [listDateTo, setListDateTo] = useState("");
   const [detail, setDetail] = useState(null);
 
   // Almacenes / categorías
@@ -71,6 +75,10 @@ export function usePurchases(notify, onProductsUpdated) {
     purchasesPage,
     setWarehouses,
     setCategories,
+    listSearch,
+    listStatus,
+    listDateFrom,
+    listDateTo,
     notify,
   });
 
@@ -193,10 +201,18 @@ export function usePurchases(notify, onProductsUpdated) {
     setSelectedWarehouseId,
     categories,
 
-    // paginación compras
+    // paginación + filtros de lista
     purchasesTotal,
     purchasesPage,
     setPurchasesPage,
+    listSearch,
+    setListSearch,
+    listStatus,
+    setListStatus,
+    listDateFrom,
+    setListDateFrom,
+    listDateTo,
+    setListDateTo,
 
     // sub-hooks (orden importante: los wrappers van DESPUÉS)
     ...list,

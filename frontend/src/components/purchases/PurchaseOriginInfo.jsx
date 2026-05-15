@@ -7,9 +7,9 @@ export default function PurchaseOriginInfo({ detail }) {
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
 
             {/* Proveedor y Observaciones */}
-            <div className="md:col-span-4 card-premium flex flex-col justify-between">
+            <div className="md:col-span-4 card-premium p-6 flex flex-col justify-between">
                 <div>
-                    <div className="text-[10px] font-bold text-content-subtle dark:text-content-dark-muted uppercase tracking-[0.15em] mb-4">
+                    <div className="text-[10px] font-black text-brand-500 uppercase tracking-[0.15em] mb-4">
                         Identidad del Proveedor
                     </div>
 
@@ -35,8 +35,8 @@ export default function PurchaseOriginInfo({ detail }) {
             </div>
 
             {/* Información Operativa */}
-            <div className="md:col-span-4 card-premium flex flex-col gap-6">
-                <div className="text-[10px] font-bold text-content-subtle dark:text-content-dark-muted uppercase tracking-[0.15em]">Trazabilidad</div>
+            <div className="md:col-span-4 card-premium p-6 flex flex-col gap-6">
+                <div className="text-[10px] font-black text-brand-500 uppercase tracking-[0.15em]">Trazabilidad</div>
 
                 <div className="grid grid-cols-1 gap-4">
                     {/* Almacén */}

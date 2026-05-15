@@ -1,9 +1,11 @@
+import { useState } from "react";
 import PurchasesTable from "./PurchasesTable";
 import PurchaseDetails from "./PurchaseDetails";
 import PurchaseForm from "./PurchaseForm";
 import ConfirmModal from "../ui/ConfirmModal";
 import CustomerModal from "../Customers/CustomerModal";
 import ProductModal from "../ProductModal";
+import DateRangePicker from "../ui/DateRangePicker";
 import { Button } from "../ui/Button";
 import Page from "../ui/Page";
 
@@ -11,6 +13,16 @@ import { usePurchases } from "../../hooks/purchases/usePurchases";
 
 export default function PurchasesTab({ notify, onProductsUpdated }) {
     const state = usePurchases(notify, onProductsUpdated);
+    const [showFilterDrop, setShowFilterDrop] = useState(false);
+
+    const hasFilters = !!(state.listStatus || state.listDateFrom || state.listDateTo);
+    const filtersCount = (state.listStatus ? 1 : 0) + ((state.listDateFrom || state.listDateTo) ? 1 : 0);
+    const clearFilters = () => {
+        state.setListStatus("");
+        state.setListDateFrom("");
+        state.setListDateTo("");
+        state.setPurchasesPage(1);
+    };
 
     const {
         view,
@@ -54,7 +66,86 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
             actions={getPageActions()}
         >
             <div className={`flex-1 flex flex-col min-h-0 ${view !== "list" ? "p-4 overflow-auto" : ""}`}>
-                {view === "list" && <PurchasesTable state={state} />}
+                {view === "list" && (
+                    <div className="flex-1 min-h-0 flex flex-col">
+                        {/* Subheader: buscador + dropdown de filtros */}
+                        <div className="shrink-0 px-6 py-4 border-b border-border/10 dark:border-white/5 bg-surface-3/30 dark:bg-white/[0.01] flex flex-wrap items-center gap-3">
+                            <div className="relative max-w-md flex-1 min-w-[240px] group">
+                                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle opacity-40 group-focus-within:text-brand-500 group-focus-within:opacity-100 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                <input
+                                    value={state.listSearch}
+                                    onChange={e => { state.setListSearch(e.target.value); state.setPurchasesPage(1); }}
+                                    className="input h-10 pl-10 font-medium w-full"
+                                    placeholder="Buscar por #, proveedor, RIF o notas..."
+                                />
+                            </div>
+
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowFilterDrop(p => !p)}
+                                    className={[
+                                        "h-10 px-3 rounded-lg text-[11px] font-black uppercase tracking-wide border flex items-center gap-2 transition-all",
+                                        hasFilters
+                                            ? "bg-brand-500/10 text-brand-500 border-brand-500/30"
+                                            : "bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"
+                                    ].join(" ")}
+                                >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                                    Filtros
+                                    {hasFilters && (
+                                        <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">
+                                            {filtersCount}
+                                        </span>
+                                    )}
+                                </button>
+                                {showFilterDrop && (
+                                    <>
+                                        <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
+                                        <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                                            <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado de Pago</div>
+                                                <div className="grid grid-cols-2 gap-1.5">
+                                                    {[
+                                                        { id: "pagado",    label: "Pagado" },
+                                                        { id: "parcial",   label: "Parcial" },
+                                                        { id: "pendiente", label: "Pendiente" },
+                                                    ].map(f => {
+                                                        const active = state.listStatus === f.id;
+                                                        return (
+                                                            <button key={f.id}
+                                                                onClick={() => { state.setListStatus(active ? "" : f.id); state.setPurchasesPage(1); }}
+                                                                className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${active ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                                                {f.label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                            <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Rango de Fecha</div>
+                                                <DateRangePicker
+                                                    from={state.listDateFrom}
+                                                    to={state.listDateTo}
+                                                    setFrom={v => { state.setListDateFrom(v); state.setPurchasesPage(1); }}
+                                                    setTo={v => { state.setListDateTo(v); state.setPurchasesPage(1); }}
+                                                />
+                                            </div>
+                                            <div className="px-4 py-2">
+                                                <button onClick={clearFilters} className="w-full py-1.5 text-[10px] font-black uppercase tracking-wide text-danger hover:bg-danger/5 rounded-lg transition-colors">
+                                                    Limpiar todo
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        <PurchasesTable state={state} />
+                    </div>
+                )}
                 {view === "detail" && <PurchaseDetails state={state} />}
                 {view === "new" && <PurchaseForm state={state} />}
             </div>

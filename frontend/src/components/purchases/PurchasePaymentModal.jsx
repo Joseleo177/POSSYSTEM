@@ -30,6 +30,9 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
   const payRate = (!payCur || payCur.is_base) ? 1 : parseFloat(payCur.exchange_rate || 1);
   const paySym  = payCur?.symbol || baseCurrency?.symbol || "$";
 
+  const selectedJournal = activeJournals.find(j => j.id === form.payment_journal_id);
+  const isCash = selectedJournal?.type === "efectivo";
+
   const balanceUsd = parseFloat(purchase?.balance ?? purchase?.total ?? 0);
 
   const receivedNum = parseFloat(String(form.received_amount).replace(",", "."));
@@ -41,7 +44,7 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
     if (!form.payment_journal_id) return notify("Selecciona el diario de pago", "err");
     if (!form.received_amount)    return notify("El monto es requerido", "err");
     if (!form.reference_date)     return notify("La fecha de referencia es requerida", "err");
-    if (!form.reference_number?.trim()) return notify("El número de referencia es requerido", "err");
+    if (!isCash && !form.reference_number?.trim()) return notify("El número de referencia es requerido", "err");
 
     setLoading(true);
     try {
@@ -51,7 +54,7 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
         exchange_rate:      payRate,
         payment_journal_id: parseInt(form.payment_journal_id),
         reference_date:     form.reference_date,
-        reference_number:   form.reference_number.trim(),
+        reference_number:   form.reference_number?.trim() || null,
         notes:              form.notes?.trim() || null,
       });
       if (res.payment_status === "pagado") notify("¡Compra pagada completamente!");
@@ -64,7 +67,7 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
 
   const canSubmit = !loading && form.payment_journal_id &&
     !isNaN(receivedNum) && receivedNum > 0 &&
-    form.reference_date && form.reference_number?.trim();
+    form.reference_date && (isCash || form.reference_number?.trim());
 
   // Display helpers
   const infoRate = form.pay_currency_id ? payRate : 1;
@@ -161,16 +164,18 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
           />
         </Field>
 
-        {/* N° Referencia */}
-        <Field label="N° REFERENCIA *">
-          <input
-            type="text"
-            value={form.reference_number}
-            onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
-            placeholder="Ej: 000123456"
-            className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
-          />
-        </Field>
+        {/* N° Referencia (oculto si es efectivo) */}
+        {!isCash && (
+          <Field label="N° REFERENCIA *">
+            <input
+              type="text"
+              value={form.reference_number}
+              onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
+              placeholder="Ej: 000123456"
+              className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+            />
+          </Field>
+        )}
 
         {/* Notas */}
         <Field label="NOTAS">

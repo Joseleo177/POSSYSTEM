@@ -2,17 +2,38 @@ const {
   Purchase, PurchaseItem, ProductLot, Employee, Warehouse, Customer,
   Product, ProductStock, ProductComboItem, PurchasePayment, Sequelize, sequelize
 } = require("../../models");
+const { Op } = Sequelize;
 
-async function getAll({ limit = 50, offset = 0 }, req) {
+async function getAll({ limit = 50, offset = 0, search, status, date_from, date_to }, req) {
   const company_id  = req.employee?.company_id ?? null;
   const isSuperuser = !!req.is_superuser;
-  const tenantWhere = (!isSuperuser && company_id) ? { company_id } : {};
+  const where = (!isSuperuser && company_id) ? { company_id } : {};
+
+  if (status) where.payment_status = status;
+  if (date_from || date_to) {
+    where.created_at = {};
+    if (date_from) where.created_at[Op.gte] = new Date(date_from);
+    if (date_to)   where.created_at[Op.lte] = new Date(new Date(date_to).setHours(23, 59, 59, 999));
+  }
+
+  const supplierWhere = {};
+  if (search?.trim()) {
+    const term = `%${search.trim()}%`;
+    const orConds = [
+      { '$Supplier.name$': { [Op.iLike]: term } },
+      { '$Supplier.rif$': { [Op.iLike]: term } },
+      { notes:             { [Op.iLike]: term } },
+    ];
+    const asInt = parseInt(search);
+    if (!isNaN(asInt)) orConds.push({ id: asInt });
+    where[Op.or] = orConds;
+  }
 
   const { count, rows: purchases } = await Purchase.findAndCountAll({
-    where: tenantWhere,
+    where,
     include: [
       { model: Employee,     attributes: ['full_name'], required: false },
-      { model: Customer, as: 'Supplier', attributes: ['name', 'rif'], required: false },
+      { model: Customer, as: 'Supplier', attributes: ['name', 'rif'], required: false, where: Object.keys(supplierWhere).length ? supplierWhere : undefined },
       { model: Warehouse,    attributes: ['name'],      required: false },
       { model: PurchaseItem, attributes: [],            required: false }
     ],
@@ -29,12 +50,15 @@ async function getAll({ limit = 50, offset = 0 }, req) {
 
   const purchaseIds = purchases.map(p => p.id);
   const paidSums = purchaseIds.length
-    ? await PurchasePayment.findAll({
-        attributes: ['purchase_id', [Sequelize.fn('SUM', Sequelize.col('amount')), 'paid']],
-        where: { purchase_id: purchaseIds },
-        group: ['purchase_id'],
-        raw: true,
-      })
+    ? await sequelize.query(
+        `SELECT pp.purchase_id, COALESCE(SUM(pp.amount), 0) AS paid
+           FROM purchase_payments pp
+           LEFT JOIN expenses e ON e.reference = 'purchase_payment:' || pp.id::text
+          WHERE pp.purchase_id IN (:ids)
+            AND (e.status IS NULL OR e.status = 'activo')
+          GROUP BY pp.purchase_id`,
+        { replacements: { ids: purchaseIds }, type: sequelize.QueryTypes.SELECT }
+      )
     : [];
   const paidMap = {};
   paidSums.forEach(r => { paidMap[r.purchase_id] = parseFloat(r.paid || 0); });
