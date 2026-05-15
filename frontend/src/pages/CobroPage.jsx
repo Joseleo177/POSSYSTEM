@@ -15,10 +15,12 @@ import ProductGrid         from "../components/cobro/ProductGrid";
 import SaleConfirmModal    from "../components/cobro/SaleConfirmModal";
 import CustomerModal       from "../components/Customers/CustomerModal";
 import HeldCartsModal      from "../components/HeldCartsModal";
+import PendingSalesModal   from "../components/cobro/PendingSalesModal";
 import AperturaCajaModal   from "../components/AperturaCajaModal";
 import CierreCajaModal     from "../components/CierreCajaModal";
-import ConfirmModal        from "../components/ui/ConfirmModal";
-import QuantityModal       from "../components/cobro/QuantityModal";
+import CheckoutTypeModal       from "../components/cobro/CheckoutTypeModal";
+import QuotationConfirmModal  from "../components/cobro/QuotationConfirmModal";
+import QuantityModal          from "../components/cobro/QuantityModal";
 
 const fmt = fmtMoney;
 
@@ -34,19 +36,22 @@ export default function CobroPage() {
         selectedSerieId, selectSerie, mySeries, loadMySeries,
         selectedCustomer, setSelectedCustomer,
         employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
-        checkout, loading, receipt, setReceipt,
+        checkout, saveQuotation, loading, receipt, setReceipt,
         heldCarts, holdCart, takeHeldCart, removeHeldCart,
+        activePromos, loadActivePromos, promoLineDiscount, promoDiscount,
     } = useCart();
 
     // ── Carga inicial ──────────────────────────────────────────
-    useEffect(() => { loadEmployeeWarehouses(); loadMySeries(); }, [loadEmployeeWarehouses, loadMySeries]);
+    useEffect(() => { loadEmployeeWarehouses(); loadMySeries(); loadActivePromos(); }, [loadEmployeeWarehouses, loadMySeries, loadActivePromos]);
 
     // ── Estado local ───────────────────────────────────────────
     const [mobileTab, setMobileTab]               = useState("products");
     const [showConfirmCheckout, setShowConfirmCheckout] = useState(false);
     const [showHeldModal, setShowHeldModal]        = useState(false);
     const [saleBalance, setSaleBalance]            = useState(null);
+    const [savedQuotation, setSavedQuotation]      = useState(null);
     const [qtyModalItem, setQtyModalItem]          = useState(null);
+    const [showPendingSales, setShowPendingSales]  = useState(false);
     const searchInputRef                           = useRef(null);
 
     // ── Hooks de capa ──────────────────────────────────────────
@@ -85,6 +90,14 @@ export default function CobroPage() {
             <div className="font-black text-xl tracking-wide text-brand-500 uppercase">Sin Acceso a Almacén</div>
             <p className="text-sm text-content-subtle max-w-sm leading-relaxed font-medium">Tu usuario no tiene almacenes asignados.</p>
         </div>
+    );
+
+    // ── Modal post-cotización ──────────────────────────────────
+    if (savedQuotation) return (
+        <QuotationConfirmModal
+            quotation={savedQuotation}
+            onNext={() => { setSavedQuotation(null); products.reload(); }}
+        />
     );
 
     // ── Modal post-venta ───────────────────────────────────────
@@ -128,12 +141,16 @@ export default function CobroPage() {
                 cashSession={session.cashSession}
                 setShowCierre={session.setShowCierre}
                 setShowHeldModal={setShowHeldModal}
+                setShowPendingSales={setShowPendingSales}
                 heldCarts={heldCarts}
                 loading={loading}
                 setShowConfirmCheckout={setShowConfirmCheckout}
                 holdCart={holdCart}
                 openQtyModal={setQtyModalItem}
                 searchInputRef={searchInputRef}
+                activePromos={activePromos}
+                promoLineDiscount={promoLineDiscount}
+                promoDiscount={promoDiscount}
             />
 
             <ProductGrid
@@ -154,6 +171,7 @@ export default function CobroPage() {
                 loadingMore={products.loadingMore}
                 hasMore={products.hasMore}
                 notify={notify}
+                activePromos={activePromos}
             />
 
             {/* Modales */}
@@ -161,6 +179,27 @@ export default function CobroPage() {
                 open={customer.customerModal}
                 onClose={() => customer.setCustomerModal(false)}
                 onSave={customer.saveCustomer}
+            />
+            <PendingSalesModal
+                open={showPendingSales}
+                onClose={() => setShowPendingSales(false)}
+                baseCurrency={baseCurrency}
+                onSelect={(sale) => {
+                    setShowPendingSales(false);
+                    setReceipt({
+                        ...sale,
+                        customerName: sale.customer_name,
+                        customerRif:  sale.customer_rif,
+                        currency:     activeCurrencies?.find(c => c.id === sale.currency_id) || baseCurrency,
+                        exchangeRate: parseFloat(sale.exchange_rate || 1),
+                        serie:        sale.serie_name ? { name: sale.serie_name } : null,
+                    });
+                    setSaleBalance({
+                        amount_paid: parseFloat(sale.amount_paid || 0),
+                        balance:     parseFloat(sale.balance ?? sale.total),
+                        status:      sale.status,
+                    });
+                }}
             />
             <HeldCartsModal
                 open={showHeldModal}
@@ -170,15 +209,17 @@ export default function CobroPage() {
                 onRemove={removeHeldCart}
                 baseCurrency={baseCurrency}
             />
-            <ConfirmModal
-                isOpen={showConfirmCheckout}
-                title="Venta"
-                message="¿Realizar cobro?"
-                onConfirm={() => { setShowConfirmCheckout(false); checkout(); }}
-                onCancel={() => setShowConfirmCheckout(false)}
-                type="primary"
-                confirmText="Procesar"
-                cancelText="Atrás"
+            <CheckoutTypeModal
+                open={showConfirmCheckout}
+                onClose={() => setShowConfirmCheckout(false)}
+                onSelectFactura={() => {
+                    setShowConfirmCheckout(false);
+                    checkout();
+                }}
+                onSelectCotizacion={() => {
+                    setShowConfirmCheckout(false);
+                    saveQuotation(q => setSavedQuotation(q));
+                }}
             />
             {session.showApertura && (
                 <AperturaCajaModal

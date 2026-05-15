@@ -44,9 +44,11 @@ const getMy = async (req, res) => {
 // POST /api/series
 const create = async (req, res) => {
   try {
-    const { name, prefix, padding } = req.body;
+    const { name, prefix, padding, type } = req.body;
     if (!name || !prefix) throw new Error("name y prefix son requeridos");
-    const serie = await Serie.create({ name, prefix: prefix.toUpperCase(), padding: parseInt(padding) || 4 });
+    const validTypes = ['factura', 'nc'];
+    const serieType = validTypes.includes(type) ? type : 'factura';
+    const serie = await Serie.create({ name, prefix: prefix.toUpperCase(), padding: parseInt(padding) || 4, type: serieType });
     res.json({ ok: true, data: serie });
   } catch (err) {
     res.status(400).json({ ok: false, message: err.message });
@@ -58,12 +60,14 @@ const update = async (req, res) => {
   try {
     const serie = await Serie.findByPk(req.params.id);
     if (!serie) throw new Error("Serie no encontrada");
-    const { name, prefix, padding, active } = req.body;
+    const { name, prefix, padding, active, type } = req.body;
+    const validTypes = ['factura', 'nc'];
     await serie.update({
       name:    name    ?? serie.name,
       prefix:  prefix  ? prefix.toUpperCase() : serie.prefix,
       padding: padding ? parseInt(padding) : serie.padding,
       active:  active  !== undefined ? active : serie.active,
+      type:    validTypes.includes(type) ? type : serie.type,
     });
     res.json({ ok: true, data: serie });
   } catch (err) {

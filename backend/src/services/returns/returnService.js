@@ -1,6 +1,6 @@
 const {
   Sale, SaleItem, Product, ProductStock, Employee,
-  Return, ReturnItem, Payment, ProductComboItem, sequelize, Sequelize,
+  Return, ReturnItem, Payment, ProductComboItem, Serie, SerieRange, sequelize, Sequelize,
 } = require("../../models");
 
 async function createReturn({ saleId, items, reason, employee_id }) {
@@ -39,11 +39,45 @@ async function createReturn({ saleId, items, reason, employee_id }) {
       returnLines.push({ sale_item_id, product_id: si.product_id, name: si.name, price: si.price, qty: parsedQty, subtotal });
     }
 
+    // Consume NC series if configured for this company
+    let nc_number = null;
+    try {
+      const ncSerie = await Serie.findOne({
+        where: { type: 'nc', active: true, company_id: sale.company_id || null },
+        transaction,
+      });
+      if (ncSerie) {
+        const ncRange = await SerieRange.findOne({
+          where: {
+            serie_id: ncSerie.id,
+            active: true,
+            current_number: { [Sequelize.Op.lte]: Sequelize.col('end_number') },
+          },
+          order: [['start_number', 'ASC']],
+          lock: true,
+          transaction,
+        });
+        if (ncRange) {
+          const num = ncRange.current_number;
+          nc_number = `${ncSerie.prefix}-${String(num).padStart(ncSerie.padding, '0')}`;
+          const next = num + 1;
+          await ncRange.update(
+            next > ncRange.end_number
+              ? { current_number: next, active: false }
+              : { current_number: next },
+            { transaction }
+          );
+        }
+      }
+    } catch { /* serie opcional — no interrumpe la devolución */ }
+
     const returnRecord = await Return.create({
       sale_id:     saleId,
       employee_id: employee_id || null,
       reason:      reason || null,
+      nc_number:   nc_number,
       total:       parseFloat(returnTotal.toFixed(2)),
+      company_id:  sale.company_id || null,
     }, { transaction });
 
     for (const line of returnLines) {
@@ -116,7 +150,7 @@ async function createReturn({ saleId, items, reason, employee_id }) {
     await transaction.commit();
     return {
       message: `Devolución registrada exitosamente. Total: ${returnTotal.toFixed(2)}`,
-      data:    { return_id: returnRecord.id, total: returnTotal, items: returnLines },
+      data:    { return_id: returnRecord.id, nc_number, total: returnTotal, items: returnLines },
     };
   } catch (err) {
     await transaction.rollback();

@@ -27,12 +27,24 @@ export function CartProvider({ children }) {
     if (!employee) return;
     try {
       const r = await api.series.getMy();
-      setMySeries(r.data || []);
+      const series = r.data || [];
+      setMySeries(series);
+      if (series.length > 0) setSelectedSerieId(prev => prev ?? series[0].id);
     } catch (e) { console.error(e); }
   }, [employee]);
 
   const selectSerie = useCallback((serieId) => {
     setSelectedSerieId(prev => prev === serieId ? null : serieId);
+  }, []);
+
+  // ── Promociones activas ────────────────────────────────────
+  const [activePromos, setActivePromos] = useState([]);
+
+  const loadActivePromos = useCallback(async () => {
+    try {
+      const r = await api.promotions.getActive();
+      setActivePromos(r.data || []);
+    } catch (e) { console.error(e); }
   }, []);
 
   // ── Descuento global ──────────────────────────────────────
@@ -259,10 +271,58 @@ export function CartProvider({ children }) {
   const subtotalBase = cart.reduce((s, i) => s + parseFloat(i.price) * i.qty, 0);
   const discountAmount = discountEnabled && parseFloat(discountPct) > 0
     ? subtotalBase * (parseFloat(discountPct) / 100) : 0;
-  const totalBase = subtotalBase - discountAmount;
+
+  const promoLineDiscount = useCallback((item) => {
+    for (const promo of activePromos) {
+      if (!promo.product_ids?.includes(item.id)) continue;
+      if (promo.type === 'percentage')
+        return item.price * item.qty * (parseFloat(promo.discount_pct) / 100);
+      if (promo.type === 'buy_x_get_y') {
+        const free = Math.floor(item.qty / (promo.buy_qty + promo.get_qty)) * promo.get_qty;
+        return free * item.price;
+      }
+    }
+    return 0;
+  }, [activePromos]);
+
+  const promoDiscount = cart.reduce((s, i) => s + promoLineDiscount(i), 0);
+  const totalBase = subtotalBase - discountAmount - promoDiscount;
   const totalDisplay = convertToDisplay(totalBase);
   const totalSecondary = convertToSecondary(totalBase);
 
+
+  // ── Guardar cotización ────────────────────────────────────
+  const saveQuotation = useCallback(async (onSuccess) => {
+    if (!cart.length) return notify("El carrito está vacío", "err");
+    if (!activeWarehouse) return notify("Selecciona un almacén antes de continuar", "err");
+
+    setLoading(true);
+    try {
+      const res = await api.quotations.create({
+        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({
+          product_id:   i.id,
+          product_name: i.name,
+          quantity:     parseFloat(i.qty),
+          price:        parseFloat(i.price),
+        })),
+        customer_id:     selectedCustomer?.id || null,
+        customer_name:   selectedCustomer?.name || null,
+        customer_rif:    selectedCustomer?.rif || null,
+        employee_id:     employee?.id || null,
+        currency_id:     currentCurrency?.id || null,
+        exchange_rate:   exchangeRate,
+        warehouse_id:    activeWarehouse.id,
+        discount_amount: discountAmount,
+      });
+      clearCart();
+      onSuccess?.(res.data);
+    } catch (e) {
+      notify(e.message, "err");
+    } finally {
+      setLoading(false);
+    }
+  }, [cart, activeWarehouse, selectedCustomer, employee, currentCurrency, exchangeRate,
+    discountAmount, notify, clearCart]);
 
   // ── Generar factura (sin pago aún) ─────────────────────────
   const checkout = useCallback(async (onSuccess) => {
@@ -319,12 +379,14 @@ export function CartProvider({ children }) {
       convertToDisplay, convertToBase, convertToSecondary,
       // Serie
       selectedSerieId, setSelectedSerieId, selectSerie, mySeries, loadMySeries,
+      // Promociones
+      activePromos, loadActivePromos, promoLineDiscount, promoDiscount,
       // Cliente
       selectedCustomer, setSelectedCustomer,
       // Almacén
       employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
       // Checkout
-      checkout, loading, receipt, setReceipt,
+      checkout, saveQuotation, loading, receipt, setReceipt,
       // Hold Cart
       heldCarts, holdCart, takeHeldCart, removeHeldCart,
     }}>

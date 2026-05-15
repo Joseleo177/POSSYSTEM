@@ -1,5 +1,5 @@
-const { Payment, Sale, sequelize, getSaleBalance } = require("./shared");
-const { Expense, ExpenseCategory, PaymentJournal, Currency } = require("../../models");
+const { Payment, Sale, Sequelize, sequelize, getSaleBalance } = require("./shared");
+const { Expense, ExpenseCategory, PaymentJournal, Currency, Serie, SerieRange } = require("../../models");
 
 module.exports = async function createPayment(body) {
   const t = await sequelize.transaction();
@@ -29,6 +29,34 @@ module.exports = async function createPayment(body) {
     if (!sale) throw new Error("Factura no encontrada");
     if (sale.status === "pagado") throw new Error("Esta factura ya fue pagada");
     if (sale.status === "anulado") throw new Error("Esta factura está anulada");
+
+    // Asignar correlativo al confirmar el primer pago de un borrador
+    if (sale.status === 'borrador' && sale.serie_id) {
+      const serie = await Serie.findByPk(sale.serie_id, { transaction: t });
+      if (serie && serie.active) {
+        const activeRange = await SerieRange.findOne({
+          where: {
+            serie_id: sale.serie_id,
+            active: true,
+            current_number: { [Sequelize.Op.lte]: Sequelize.col('end_number') },
+          },
+          order: [['start_number', 'ASC']],
+          lock: true,
+          transaction: t,
+        });
+        if (!activeRange) throw new Error(`Serie "${serie.name}" agotada. Añade un nuevo rango en Contabilidad.`);
+
+        const correlativeNumber = activeRange.current_number;
+        const invoiceNumber = `${serie.prefix}-${String(correlativeNumber).padStart(serie.padding, '0')}`;
+        const nextNumber = correlativeNumber + 1;
+        await activeRange.update(
+          nextNumber > activeRange.end_number ? { current_number: nextNumber, active: false } : { current_number: nextNumber },
+          { transaction: t }
+        );
+        await sale.update({ invoice_number: invoiceNumber, correlative_number: correlativeNumber, serie_range_id: activeRange.id }, { transaction: t });
+        sale.invoice_number = invoiceNumber;
+      }
+    }
 
     const payAmt = parseFloat(amount);
     if (payAmt <= 0) throw new Error("El monto debe ser mayor a 0");

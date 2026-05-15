@@ -12,8 +12,10 @@ const {
   ProductComboItem,
   Sequelize,
   sequelize,
+  Op,
   PAYMENT_METHODS,
 } = require("./shared");
+const { Promotion } = require("../../models");
 
 module.exports = async function createSale(body) {
   const transaction = await sequelize.transaction();
@@ -29,32 +31,34 @@ module.exports = async function createSale(body) {
     const serie = await Serie.findByPk(serie_id, { transaction });
     if (!serie || !serie.active) throw new Error("Serie no encontrada o inactiva");
 
-    const activeRange = await SerieRange.findOne({
-      where: {
-        serie_id,
-        active: true,
-        current_number: { [Sequelize.Op.lte]: Sequelize.col("end_number") },
-      },
-      order: [["start_number", "ASC"]],
-      lock: true,
-      transaction,
-    });
-    if (!activeRange) throw new Error(`Serie "${serie.name}" agotada. Añade un nuevo rango en Contabilidad.`);
-
-    const correlativeNumber = activeRange.current_number;
-    const paddedNumber = String(correlativeNumber).padStart(serie.padding, "0");
-    const invoiceNumber = `${serie.prefix}-${paddedNumber}`;
-
-    const nextNumber = correlativeNumber + 1;
-    if (nextNumber > activeRange.end_number) {
-      await activeRange.update({ current_number: nextNumber, active: false }, { transaction });
-    } else {
-      await activeRange.update({ current_number: nextNumber }, { transaction });
-    }
-
     const method = PAYMENT_METHODS.includes(payment_method) ? payment_method : "efectivo";
     const discAmt = parseFloat(discount_amount) || 0;
     const rate = parseFloat(exchange_rate) || 1;
+
+    // Cargar promociones activas para esta venta
+    const now = new Date();
+    const activePromos = await Promotion.findAll({
+      where: {
+        active: true,
+        starts_at: { [Op.lte]: now },
+        [Op.or]: [{ ends_at: null }, { ends_at: { [Op.gte]: now } }],
+      },
+      include: [{ model: Product, through: { attributes: [] }, attributes: ['id'] }],
+      transaction,
+    });
+
+    const calcLineDiscount = (productId, unitPrice, qty, promos) => {
+      for (const promo of promos) {
+        if (!promo.Products.some(p => p.id === productId)) continue;
+        if (promo.type === 'percentage')
+          return parseFloat((unitPrice * qty * parseFloat(promo.discount_pct) / 100).toFixed(2));
+        if (promo.type === 'buy_x_get_y') {
+          const freeUnits = Math.floor(qty / (promo.buy_qty + promo.get_qty)) * promo.get_qty;
+          return parseFloat((freeUnits * unitPrice).toFixed(2));
+        }
+      }
+      return 0;
+    };
 
     let total = 0;
     const enrichedItems = [];
@@ -64,8 +68,9 @@ module.exports = async function createSale(body) {
       if (!product) throw new Error(`Producto ${item.product_id} no encontrado`);
 
       if (product.is_service) {
-        total += parseFloat(product.price) * item.quantity;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true });
+        const lineDiscount = calcLineDiscount(product.id, parseFloat(product.price), item.quantity, activePromos);
+        total += parseFloat(product.price) * item.quantity - lineDiscount;
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, lineDiscount });
       } else if (product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
         if (!comboItems || comboItems.length === 0) {
@@ -91,8 +96,9 @@ module.exports = async function createSale(body) {
           ingredientsData.push({ ingredient, qtyNeeded, stockEntry });
         }
 
-        total += parseFloat(product.price) * item.quantity;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData });
+        const lineDiscount = calcLineDiscount(product.id, parseFloat(product.price), item.quantity, activePromos);
+        total += parseFloat(product.price) * item.quantity - lineDiscount;
+        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscount });
       } else {
         const stockEntry = await ProductStock.findOne({
           where: { warehouse_id, product_id: product.id },
@@ -105,8 +111,9 @@ module.exports = async function createSale(body) {
           throw new Error(`Stock insuficiente para "${product.name}" en este almacén. Disponible: ${currentQty}`);
         }
 
-        total += parseFloat(product.price) * item.quantity;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry });
+        const lineDiscount = calcLineDiscount(product.id, parseFloat(product.price), item.quantity, activePromos);
+        total += parseFloat(product.price) * item.quantity - lineDiscount;
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscount });
       }
     }
 
@@ -129,9 +136,7 @@ module.exports = async function createSale(body) {
         payment_method: method,
         warehouse_id,
         serie_id: serie.id,
-        serie_range_id: activeRange.id,
-        correlative_number: correlativeNumber,
-        invoice_number: invoiceNumber,
+        status: 'borrador',
       },
       { transaction }
     );
@@ -144,7 +149,7 @@ module.exports = async function createSale(body) {
           name: entry.product.name,
           price: entry.product.price,
           quantity: entry.qty,
-          discount: 0,
+          discount: entry.lineDiscount || 0,
         },
         { transaction }
       );

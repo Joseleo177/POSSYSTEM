@@ -4,3 +4,5 @@ export * from "./dates";
 export * from "./prices";
 export * from "./stock";
 export * from "./image";
+export * from "./printQuotation";
+export * from "./printNotaCredito";

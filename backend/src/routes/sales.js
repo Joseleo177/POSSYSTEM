@@ -6,6 +6,7 @@ router.get("/",          ctrl.getAll);
 router.get("/stats",     permit("sales", "reports", "config"), ctrl.getStats);
 router.get("/:id",       ctrl.getOne);
 router.post("/",         permit("sales", "config"), ctrl.create);
+router.patch("/:id",     permit("sales", "admin", "config"), ctrl.update);
 router.delete("/:id",    permit("sales", "admin", "config"), ctrl.cancel);
 
 module.exports = router;

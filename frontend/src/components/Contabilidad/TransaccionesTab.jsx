@@ -3,10 +3,12 @@ import { useTransacciones } from "../../hooks/contabilidad/useTransacciones";
 import ReturnModal from "../ReturnModal";
 import ConfirmModal from "../ui/ConfirmModal";
 import PaymentFormModal from "../PaymentFormModal";
+import EditSaleModal from "../cobro/EditSaleModal";
 import { Button } from "../ui/Button";
 import { fmtDateShort } from "../../helpers";
 import DateRangePicker from "../ui/DateRangePicker";
 import Pagination from "../ui/Pagination";
+import { api } from "../../services/api";
 
 const STATUS_BADGE = {
     pagado:   "badge-success",
@@ -14,6 +16,7 @@ const STATUS_BADGE = {
     anulado:  "badge-neutral",
     devuelto: "badge-warning",
     pendiente:"badge-danger",
+    borrador: "badge-neutral",
 };
 
 export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, setReceiptSale }) {
@@ -32,6 +35,17 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
     } = useTransacciones({ notify });
 
     const [payModal, setPayModal] = useState(null);
+    const [editModal, setEditModal] = useState(null);
+    const [loadingReturn, setLoadingReturn] = useState(null);
+
+    const openReturnModal = async (sale) => {
+        setLoadingReturn(sale.id);
+        try {
+            const res = await api.sales.getOne(sale.id);
+            setReturnSale(res.data);
+        } catch { setReturnSale(sale); }
+        setLoadingReturn(null);
+    };
 
     const subheader = (
         <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2">
@@ -64,7 +78,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado</div>
                                 <div className="grid grid-cols-2 gap-1.5">
-                                    {[{ id: 'pendiente', label: 'Pendiente' }, { id: 'parcial', label: 'Parcial' }, { id: 'pagado', label: 'Pagado' }, { id: 'anulado', label: 'Anulado' }].map(f => (
+                                    {[{ id: 'borrador', label: 'Borrador' }, { id: 'pendiente', label: 'Pendiente' }, { id: 'parcial', label: 'Parcial' }, { id: 'pagado', label: 'Pagado' }, { id: 'anulado', label: 'Anulado' }].map(f => (
                                         <button key={f.id} onClick={() => toggleFilter(f.id)}
                                             className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${activeFilters.includes(f.id) ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
                                             {f.label}
@@ -145,14 +159,27 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                                 >
                                                     {saleDetail?.id === sale.id ? "Cerrar" : "Detalles"}
                                                 </button>
-                                                {(sale.status === 'pendiente' || sale.status === 'parcial') && (
+                                                {(sale.status === 'borrador' || sale.status === 'pendiente' || sale.status === 'parcial') && (
                                                     <button onClick={() => setPayModal(sale)} className="h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all bg-success/10 text-success border-success/20 hover:bg-success hover:text-black">
                                                         Pagar
+                                                    </button>
+                                                )}
+                                                {sale.status === 'borrador' && (
+                                                    <button onClick={() => setEditModal(sale)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 active:scale-90" title="Editar borrador">
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                                     </button>
                                                 )}
                                                 <button onClick={() => setReceiptSale(sale)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 active:scale-90" title="Ver Recibo">
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                                 </button>
+                                                {(sale.status === 'pagado' || sale.status === 'parcial' || sale.status === 'devuelto') && (
+                                                    <button onClick={() => openReturnModal(sale)} disabled={loadingReturn === sale.id} className="p-2 rounded-xl transition-all text-content-subtle hover:text-warning hover:bg-warning/10 active:scale-90 disabled:opacity-40" title="Devolver">
+                                                        {loadingReturn === sale.id
+                                                            ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                                                            : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                                                        }
+                                                    </button>
+                                                )}
                                                 {can("admin") && sale.status !== 'anulado' && (
                                                     <button onClick={() => setCancelConfirm(sale)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90" title="Anular">
                                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -211,6 +238,14 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                     onSuccess={() => { setPayModal(null); loadSales(); }}
                 />
             )}
+
+            <EditSaleModal
+                open={!!editModal}
+                onClose={() => setEditModal(null)}
+                sale={editModal}
+                notify={notify}
+                onSaved={loadSales}
+            />
 
             <ConfirmModal
                 isOpen={!!cancelConfirm}

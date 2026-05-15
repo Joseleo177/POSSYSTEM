@@ -7,7 +7,8 @@ import { useTabs } from "../hooks/useTabs";
 import LoginScreen from "../components/LoginScreen";
 import NotificationToast from "../layout/NotificationToast";
 import HeaderMobile from "../layout/HeaderMobile";
-import Sidebar from "../layout/Sidebar";
+import TopBar from "../layout/TopBar";
+import AppLauncher from "../layout/AppLauncher";
 import BottomTabs from "../layout/BottomTabs";
 import MainContent from "../layout/MainContent";
 
@@ -17,6 +18,7 @@ export default function PosApp() {
     const { dark, toggle } = useTheme();
 
     const { tab: safeTab, goTab, visibleTabs } = useTabs(employee, can, setReceipt);
+    const [showLauncher, setShowLauncher] = React.useState(false);
 
     if (!authChecked)
         return (
@@ -41,6 +43,14 @@ export default function PosApp() {
         <div className="h-screen flex flex-col overflow-hidden bg-surface-2 dark:bg-surface-dark text-content dark:text-content-dark font-sans">
             <NotificationToast notification={notification} />
 
+            <AppLauncher
+                open={showLauncher}
+                onClose={() => setShowLauncher(false)}
+                visibleTabs={visibleTabs}
+                safeTab={safeTab}
+                goTab={goTab}
+            />
+
             <HeaderMobile
                 settings={settings}
                 visibleTabs={visibleTabs}
@@ -51,21 +61,19 @@ export default function PosApp() {
                 logout={logout}
             />
 
-            <div className="flex-1 flex min-h-0 overflow-hidden">
-                <Sidebar
-                    settings={settings}
-                    storeName={storeName}
-                    visibleTabs={visibleTabs}
-                    safeTab={safeTab}
-                    goTab={goTab}
-                    employee={employee}
-                    dark={dark}
-                    toggle={toggle}
-                    logout={logout}
-                />
+            <TopBar
+                settings={settings}
+                storeName={storeName}
+                safeTab={safeTab}
+                visibleTabs={visibleTabs}
+                employee={employee}
+                dark={dark}
+                toggle={toggle}
+                logout={logout}
+                onOpenLauncher={() => setShowLauncher(true)}
+            />
 
-                <MainContent safeTab={safeTab} />
-            </div>
+            <MainContent safeTab={safeTab} />
 
             <BottomTabs visibleTabs={visibleTabs} safeTab={safeTab} goTab={goTab} />
         </div>

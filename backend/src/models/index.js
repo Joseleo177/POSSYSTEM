@@ -34,11 +34,12 @@ fs
 const { tenantStorage } = require('../utils/tenantStorage');
 
 const tenantModels = [
-  'Employee', 'Category', 'Product', 'Bank', 'PaymentMethod', 'Warehouse', 
-  'Customer', 'PaymentJournal', 'Serie', 'Sale', 'Purchase', 'Payment', 
+  'Employee', 'Category', 'Product', 'Bank', 'PaymentMethod', 'Warehouse',
+  'Customer', 'PaymentJournal', 'Serie', 'Sale', 'Purchase', 'Payment',
   'CashSession', 'Expense', 'ProductLot', 'PurchasePayment', 'StockTransfer',
   'ExpenseCategory', 'Return', 'ReturnItem', 'Setting', 'Currency',
-  'ProductStock', 'EmployeeWarehouse', 'UserSerie', 'ProductComboItem', 'CashSessionJournal'
+  'ProductStock', 'EmployeeWarehouse', 'UserSerie', 'ProductComboItem', 'CashSessionJournal',
+  'Quotation', 'Promotion',
 ];
 
 const applyTenantFilter = (modelName, options) => {
@@ -117,16 +118,17 @@ tenantModels.forEach(modelName => {
 });
 
 // Centralized associations
-const { Company, Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment, Setting } = db;
+const { Company, Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment, Setting, Quotation, QuotationItem, Promotion, PromotionProduct } = db;
 
 // ── Company Associations ────────────────────────────────────────
 if (Company) {
   const tenantModels = [
-    Employee, Category, Product, Bank, PaymentMethod, Warehouse, 
-    Customer, PaymentJournal, Serie, Sale, Purchase, Payment, 
+    Employee, Category, Product, Bank, PaymentMethod, Warehouse,
+    Customer, PaymentJournal, Serie, Sale, Purchase, Payment,
     CashSession, Expense, ProductLot, PurchasePayment, StockTransfer,
     ExpenseCategory, Return, ReturnItem, Setting, Currency,
-    ProductStock, EmployeeWarehouse, UserSerie, ProductComboItem, CashSessionJournal
+    ProductStock, EmployeeWarehouse, UserSerie, ProductComboItem, CashSessionJournal,
+    Quotation, Promotion
   ];
   tenantModels.forEach(model => {
     if (model) {
@@ -267,6 +269,16 @@ if (Expense && ExpenseCategory && PaymentJournal && Employee && Currency) {
   PaymentJournal.hasMany(Expense, { foreignKey: 'payment_journal_id' });
 }
 
+if (Quotation && QuotationItem && Customer && Employee && Warehouse && Currency && Sale) {
+  Quotation.hasMany(QuotationItem, { foreignKey: 'quotation_id', as: 'items', onDelete: 'CASCADE' });
+  QuotationItem.belongsTo(Quotation, { foreignKey: 'quotation_id' });
+  Quotation.belongsTo(Customer,  { foreignKey: 'customer_id' });
+  Quotation.belongsTo(Employee,  { foreignKey: 'employee_id' });
+  Quotation.belongsTo(Warehouse, { foreignKey: 'warehouse_id' });
+  Quotation.belongsTo(Currency,  { foreignKey: 'currency_id' });
+  Quotation.belongsTo(Sale,      { foreignKey: 'converted_sale_id', as: 'convertedSale' });
+}
+
 if (PurchasePayment && Purchase && PaymentJournal && Currency && Employee) {
   Purchase.hasMany(PurchasePayment, { foreignKey: 'purchase_id' });
   PurchasePayment.belongsTo(Purchase,        { foreignKey: 'purchase_id' });
@@ -274,6 +286,11 @@ if (PurchasePayment && Purchase && PaymentJournal && Currency && Employee) {
   PurchasePayment.belongsTo(Currency,        { foreignKey: 'currency_id' });
   PurchasePayment.belongsTo(Employee,        { foreignKey: 'employee_id' });
   PaymentJournal.hasMany(PurchasePayment,    { foreignKey: 'payment_journal_id' });
+}
+
+if (Promotion && PromotionProduct && Product) {
+  Promotion.belongsToMany(Product, { through: PromotionProduct, foreignKey: 'promotion_id', otherKey: 'product_id' });
+  Product.belongsToMany(Promotion, { through: PromotionProduct, foreignKey: 'product_id',   otherKey: 'promotion_id' });
 }
 
 db.sequelize = sequelize;

@@ -130,9 +130,15 @@ export const api = {
   },
   sales: {
     getAll:      (params={}) => request("/sales?"       + new URLSearchParams(params)),
+    getPending:  (params={}) => {
+      const sp = new URLSearchParams(params);
+      ["borrador", "pendiente", "parcial"].forEach(s => sp.append("status", s));
+      return request("/sales?" + sp);
+    },
     getStats:    (params={}) => request("/sales/stats?" + new URLSearchParams(params)),
     getOne:      (id)        => request(`/sales/${id}`),
     create:      (body)      => request("/sales",        { method: "POST",   body: JSON.stringify(body) }),
+    update:      (id, body)  => request(`/sales/${id}`,  { method: "PATCH",  body: JSON.stringify(body) }),
     cancel:      (id)        => request(`/sales/${id}`,  { method: "DELETE" }),
     // Devoluciones
     createReturn:  (id, body) => request(`/sales/${id}/return`,  { method: "POST", body: JSON.stringify(body) }),
@@ -271,5 +277,23 @@ export const api = {
     getAll: ()          => request("/companies"),
     create: (body)      => request("/companies",       { method: "POST", body: JSON.stringify(body) }),
     update: (id, body)  => request(`/companies/${id}`, { method: "PUT",  body: JSON.stringify(body) }),
+  },
+
+  // ── Cotizaciones ─────────────────────────────────────────────
+  quotations: {
+    getAll:   (params={}) => request("/quotations?" + new URLSearchParams(params)),
+    getOne:   (id)        => request(`/quotations/${id}`),
+    create:   (body)      => request("/quotations",             { method: "POST",  body: JSON.stringify(body) }),
+    cancel:   (id)        => request(`/quotations/${id}/cancel`,{ method: "PATCH" }),
+    convert:  (id, body)  => request(`/quotations/${id}/convert`,{ method: "POST", body: JSON.stringify(body) }),
+  },
+
+  // ── Promociones ───────────────────────────────────────────────
+  promotions: {
+    getAll:    ()         => request("/promotions"),
+    getActive: ()         => request("/promotions/active"),
+    create:    (body)     => request("/promotions",       { method: "POST",   body: JSON.stringify(body) }),
+    update:    (id, body) => request(`/promotions/${id}`, { method: "PUT",    body: JSON.stringify(body) }),
+    remove:    (id)       => request(`/promotions/${id}`, { method: "DELETE" }),
   },
 };

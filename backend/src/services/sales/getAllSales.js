@@ -13,7 +13,10 @@ module.exports = async function getAllSales(query, tenant = {}) {
   if (date_from) andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date >= '${date_from}'`));
   if (date_to)   andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date <= '${date_to}'`));
   if (payment_method && PAYMENT_METHODS.includes(payment_method)) andClauses.push({ payment_method });
-  if (status)   andClauses.push({ status });
+  if (status) {
+    const statuses = Array.isArray(status) ? status : [status];
+    andClauses.push(statuses.length === 1 ? { status: statuses[0] } : { status: { [Op.in]: statuses } });
+  }
   if (serie_id) andClauses.push({ serie_id: parseInt(serie_id, 10) });
 
   if (search) {

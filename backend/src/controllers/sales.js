@@ -1,5 +1,16 @@
 const salesService = require("../services/sales");
 
+// PATCH /api/sales/:id
+const update = async (req, res) => {
+  try {
+    const data = await salesService.updateSale(req.params.id, req.body);
+    res.json({ ok: true, data });
+  } catch (err) {
+    const status = err.status || (/insuficiente|no encontrad/i.test(err.message) ? 400 : 500);
+    res.status(status).json({ ok: false, message: err.message });
+  }
+};
+
 // GET /api/sales/:id
 const getOne = async (req, res) => {
   try {
@@ -56,4 +67,4 @@ const cancel = async (req, res) => {
   }
 };
 
-module.exports = { getOne, getAll, getStats, create, cancel };
+module.exports = { getOne, getAll, getStats, create, cancel, update };

@@ -14,8 +14,9 @@ import DiariosTab from "../components/Contabilidad/DiariosTab";
 import BancosTab from "../components/Contabilidad/BancosTab";
 import MetodosTab from "../components/Contabilidad/MetodosTab";
 import EgresosTab from "../components/Contabilidad/EgresosTab";
+import CotizacionesTab from "../components/Contabilidad/CotizacionesTab";
 
-const SUB_PAGES = ["Estado de Cuenta", "Egresos", "Transacciones", "Pagos", "Series", "Diarios", "Tipos de pago", "Bancos"];
+const SUB_PAGES = ["Estado de Cuenta", "Egresos", "Transacciones", "Cotizaciones", "Pagos", "Series", "Diarios", "Tipos de pago", "Bancos"];
 
 export default function ContabilidadPage() {
  const {
@@ -65,6 +66,7 @@ export default function ContabilidadPage() {
  const visibleSubPages = canConfig
  ? SUB_PAGES
  : SUB_PAGES.filter((p) => !["Series", "Diarios", "Tipos de pago", "Bancos"].includes(p));
+ // Cotizaciones visible para todos
 
  useEffect(() => {
  if (!visibleSubPages.includes(subPage)) {
@@ -101,6 +103,15 @@ export default function ContabilidadPage() {
  fmtSale={fmtSale}
  allSeries={allSeries}
  setReceiptSale={setReceiptSale}
+ />
+ );
+ case "Cotizaciones":
+ return (
+ <CotizacionesTab
+ notify={notify}
+ can={can}
+ fmtPrice={fmtPrice}
+ allSeries={allSeries}
  />
  );
  case "Pagos":

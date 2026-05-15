@@ -9,12 +9,14 @@ import Pagination from "../components/ui/Pagination";
 import ConfirmModal from "../components/ui/ConfirmModal";
 import ProductTable from "../components/Catalog/ProductTable";
 import CategoriesTab from "../components/Catalog/CategoriesTab";
+import PromotionsTab from "../components/Catalog/PromotionsTab";
 import ProductModal from "../components/ProductModal";
 import PriceLabelsView from "../components/Catalog/PriceLabelsView";
 
 const TABS = [
     { id: "products",   label: "Productos" },
     { id: "categories", label: "Categorías" },
+    { id: "promotions", label: "Promociones" },
 ];
 
 export default function CatalogPage() {
@@ -244,6 +246,11 @@ export default function CatalogPage() {
             {/* Tab: Categorías */}
             {activeTab === "categories" && (
                 <CategoriesTab notify={notify} can={can} />
+            )}
+
+            {/* Tab: Promociones */}
+            {activeTab === "promotions" && (
+                <PromotionsTab notify={notify} can={can} />
             )}
 
             <ProductModal

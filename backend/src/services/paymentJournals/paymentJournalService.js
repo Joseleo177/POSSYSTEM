@@ -153,7 +153,7 @@ async function getMovements(req) {
     SELECT (
       (SELECT COUNT(*) FROM payments p WHERE p.payment_journal_id = :id ${datePay} ${tc})
       +
-      (SELECT COUNT(*) FROM expenses e WHERE e.payment_journal_id = :id ${dateExp} ${te})
+      (SELECT COUNT(*) FROM expenses e WHERE e.payment_journal_id = :id AND e.status = 'activo' ${dateExp} ${te})
     ) as total
   `, { replacements: { id }, type: Sequelize.QueryTypes.SELECT });
 
@@ -191,7 +191,7 @@ async function getMovements(req) {
         e.notes,
         e.status
       FROM expenses e
-      WHERE e.payment_journal_id = :id ${dateExp} ${te}
+      WHERE e.payment_journal_id = :id AND e.status = 'activo' ${dateExp} ${te}
     ) AS movements
     ORDER BY date ASC
     LIMIT :limit OFFSET :offset

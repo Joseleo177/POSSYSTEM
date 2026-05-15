@@ -58,7 +58,8 @@ export function useCobroKeyboard({
             }
 
             if (e.key === "Enter") {
-                if (showConfirmCheckout) { e.preventDefault(); setShowConfirmCheckout(false); checkout(); return; }
+                // CheckoutTypeModal handles its own Enter key — skip when it's open
+                if (showConfirmCheckout) return;
 
                 // Caso especial: Lector de Barras (Buscador con 1 solo resultado)
                 if (e.target.id === "product-search-input" && selectedIndex < 0 && filteredProducts.length === 1) {

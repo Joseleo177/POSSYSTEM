@@ -88,6 +88,8 @@ app.use("/api/reports",          require("./routes/reports"));          // auth 
 app.use("/api/cash-sessions",    require("./routes/cashSessions"));     // auth dentro
 app.use("/api/expenses",         require("./routes/expenses"));          // auth dentro
 app.use("/api/companies",        require("./routes/companies"));         // auth+superuser dentro
+app.use("/api/quotations",       require("./routes/quotations"));        // auth dentro
+app.use("/api/promotions",       require("./routes/promotions"));        // auth dentro
 
 // ── Health check ──────────────────────────────────────────────
 app.get("/health", async (req, res) => {

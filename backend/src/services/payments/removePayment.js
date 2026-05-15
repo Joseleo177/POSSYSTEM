@@ -15,7 +15,7 @@ module.exports = async function removePayment(id) {
     const remainingPaid = parseFloat(await Payment.sum("amount", { where: { sale_id: sale.id }, transaction: t }) || 0);
     const saleTotal = parseFloat(sale.total);
     let newStatus;
-    if (remainingPaid <= 0) newStatus = "pendiente";
+    if (remainingPaid <= 0) newStatus = sale.invoice_number ? "pendiente" : "borrador";
     else if (remainingPaid >= saleTotal - 0.01) newStatus = "pagado";
     else newStatus = "parcial";
 

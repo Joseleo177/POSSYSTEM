@@ -15,10 +15,11 @@ export default function CartSidebar({
     custSearch, setCustSearch, customers, setCustomers,
     selectedCustIdx, setSelectedCustIdx,
     setCustomerEditData, setCustomerModal,
-    cashSession, setShowCierre, setShowHeldModal, heldCarts,
+    cashSession, setShowCierre, setShowHeldModal, heldCarts, setShowPendingSales,
     loading, setShowConfirmCheckout, holdCart,
     openQtyModal,
     searchInputRef,
+    activePromos = [], promoLineDiscount, promoDiscount = 0,
 }) {
     const handleQtyModal = (item) => {
         // En móviles, disparamos el modal. En desktop, el input inline es suficiente pero el modal no estorba.
@@ -53,6 +54,9 @@ export default function CartSidebar({
                     </div>
                     {cashSession && (
                         <div className="flex items-center gap-2">
+                            <button onClick={() => setShowPendingSales(true)} className="relative w-9 h-9 rounded-full bg-surface-2 dark:bg-white/5 flex items-center justify-center hover:bg-warning hover:text-black transition-all" title="Facturas pendientes">
+                                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                            </button>
                             <button onClick={() => setShowHeldModal(true)} className="relative w-9 h-9 rounded-full bg-surface-2 dark:bg-white/5 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all" title="Cuentas en espera">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2m9-.828l-1.414-1.414M3.707 18.293V21h2.707l14.586-14.586a2 2 0 10-2.828-2.828L3.707 18.293z" /></svg>
                                 {heldCarts.length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-500 text-brand-900 text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-[#0c0c0c]">{heldCarts.length}</span>}
@@ -230,12 +234,25 @@ export default function CartSidebar({
                                     className="flex-1 min-w-0 cursor-pointer lg:cursor-default"
                                     onClick={() => handleQtyModal(i)}
                                 >
-                                    <div className="text-[11px] font-black truncate dark:text-white uppercase tracking-wide leading-tight">{i.name}</div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <div className="text-[11px] font-black truncate dark:text-white uppercase tracking-wide leading-tight">{i.name}</div>
+                                        {activePromos.find(p => p.product_ids?.includes(i.id)) && (() => {
+                                            const promo = activePromos.find(p => p.product_ids?.includes(i.id));
+                                            return (
+                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-success/10 text-success border border-success/20 shrink-0">
+                                                    {promo.type === 'percentage' ? `-${promo.discount_pct}%` : `${promo.buy_qty}×${promo.buy_qty + promo.get_qty}`}
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
                                     <div className="flex flex-col mt-0.5">
                                         <div className="text-[9px] font-black text-brand-500 uppercase flex items-center gap-1">
                                             <span>{fmtQtyUnit(i.qty, i.unit)}</span>
                                             <span className="opacity-40">@</span>
                                             <span>{fmt(convertToDisplay(i.price), currSym)}</span>
+                                            {promoLineDiscount && promoLineDiscount(i) > 0 && (
+                                                <span className="text-success">-{fmt(convertToDisplay(promoLineDiscount(i)), currSym)}</span>
+                                            )}
                                         </div>
                                         {secondaryCurrency && (
                                             <div className="text-[8px] font-bold text-content-subtle dark:text-content-dark-muted opacity-40 -mt-0.5">
@@ -287,6 +304,12 @@ export default function CartSidebar({
                                 <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide">SUBTOTAL</span>
                                 <span className="text-[11px] lg:text-xs font-black tabular-nums">{fmt(convertToDisplay(subtotalBase), currSym)}</span>
                             </div>
+                            {promoDiscount > 0 && (
+                                <div className="flex justify-between items-center text-success">
+                                    <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide">Promociones</span>
+                                    <span className="text-[11px] lg:text-xs font-black tabular-nums">-{fmt(convertToDisplay(promoDiscount), currSym)}</span>
+                                </div>
+                            )}
                             {discountEnabled && discountAmount > 0 && (
                                 <div className="flex justify-between items-center text-brand-500">
                                     <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide">DESC. ({discountPct}%)</span>

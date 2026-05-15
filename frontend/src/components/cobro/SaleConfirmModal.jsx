@@ -14,11 +14,13 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
 
     const currentBalance = saleBalance?.balance ?? parseFloat(receipt?.total || 0);
     const currentStatus  = saleBalance?.status  ?? "pendiente";
-    const statusLabel    = currentStatus === "pagado" ? "Completado" : currentStatus === "parcial" ? "Abono Parcial" : "Pendiente";
+    const statusLabel    = currentStatus === "pagado" ? "Completado" : currentStatus === "parcial" ? "Abono Parcial" : currentStatus === "borrador" ? "Borrador" : "Pendiente";
     const badgeClass     = currentStatus === "pagado"
         ? "bg-green-500/10 text-green-500 border-green-500/20"
         : currentStatus === "parcial"
         ? "bg-brand-500/10 text-brand-500 border-brand-500/20"
+        : currentStatus === "borrador"
+        ? "bg-surface-3 text-content-muted border-border dark:bg-white/5 dark:text-white/40 dark:border-white/10"
         : "bg-danger/10 text-danger border-danger/20";
 
     return (
@@ -26,7 +28,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
             <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 rounded-xl shadow-2xl border border-border/20 dark:border-white/5 overflow-hidden">
 
                 {/* Header */}
-                <div className={`px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3 ${currentStatus === "pagado" ? "bg-success/5" : "bg-danger/5"}`}>
+                <div className={`px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3 ${currentStatus === "pagado" ? "bg-success/5" : currentStatus === "borrador" ? "bg-surface-2/50" : "bg-danger/5"}`}>
                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${badgeClass}`}>
                         {currentStatus === "pagado"
                             ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
@@ -35,7 +37,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     </div>
                     <div>
                         <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Transacción Registrada</div>
-                        <div className="text-sm font-black text-content dark:text-white">Orden #{receipt.invoice_number || receipt.id}</div>
+                        <div className="text-sm font-black text-content dark:text-white">{receipt.invoice_number ? `Orden ${receipt.invoice_number}` : `Borrador #${receipt.id}`}</div>
                     </div>
                     <div className={`ml-auto text-[11px] font-black uppercase tracking-wide px-2.5 py-1 rounded-lg border ${badgeClass}`}>
                         {statusLabel}

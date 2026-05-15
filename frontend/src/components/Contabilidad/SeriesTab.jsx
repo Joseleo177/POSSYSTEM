@@ -4,7 +4,12 @@ import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
 
-const EMPTY_SERIE = { name: "", prefix: "", padding: 4 };
+const EMPTY_SERIE = { name: "", prefix: "", padding: 4, type: "factura" };
+
+const SERIE_TYPES = [
+  { value: "factura", label: "Factura / Recibo", color: "brand" },
+  { value: "nc",      label: "Nota de Crédito",  color: "warning" },
+];
 const EMPTY_RANGE = { start_number: "", end_number: "" };
 
 export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEmployees }) {
@@ -106,6 +111,10 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-black text-brand-500 uppercase tracking-widest opacity-60">{serie.prefix}</span>
                     <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{serie.name}</span>
+                    {serie.type === "nc"
+                      ? <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide bg-warning/10 text-warning border border-warning/20">N/C</span>
+                      : <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide bg-brand-500/10 text-brand-500 border border-brand-500/20">FAC</span>
+                    }
                   </div>
                   <div className="text-[9px] font-black text-content-subtle opacity-40 uppercase tracking-widest mt-0.5">
                     {serie.padding} dígitos · {(serie.SerieRanges || []).filter(r => r.active).length} rangos activos
@@ -234,12 +243,34 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
         width={420}
       >
         <div className="mb-3">
+          <div className="label mb-1">Tipo de serie *</div>
+          <div className="flex gap-2">
+            {SERIE_TYPES.map(t => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setForm(p => ({ ...p, type: t.value }))}
+                className={[
+                  "flex-1 py-2.5 rounded-xl border-2 text-[11px] font-black uppercase tracking-wide transition-all",
+                  form.type === t.value
+                    ? t.value === "nc"
+                      ? "border-warning bg-warning/10 text-warning"
+                      : "border-brand-500 bg-brand-500/10 text-brand-500"
+                    : "border-border/40 dark:border-white/10 text-content-subtle hover:border-border dark:hover:border-white/20"
+                ].join(" ")}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mb-3">
           <div className="label mb-1">Nombre de la serie *</div>
           <input
             autoFocus
             value={form.name}
             onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-            placeholder="ej. Facturación Principal"
+            placeholder={form.type === "nc" ? "ej. Notas de Crédito" : "ej. Facturación Principal"}
             className="input"
           />
         </div>
