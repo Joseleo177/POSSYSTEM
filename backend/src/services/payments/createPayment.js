@@ -61,14 +61,6 @@ module.exports = async function createPayment(body) {
     const payAmt = parseFloat(amount);
     if (payAmt <= 0) throw new Error("El monto debe ser mayor a 0");
 
-    const alreadyPaid = await getSaleBalance(sale_id, t);
-    const totalPaidNow = parseFloat((alreadyPaid + payAmt).toFixed(2));
-    const saleTotal = parseFloat(sale.total);
-
-    if (totalPaidNow > saleTotal + 0.001) {
-      throw new Error(`El monto excede el saldo pendiente. Saldo: ${(saleTotal - alreadyPaid).toFixed(2)}`);
-    }
-
     const changeAmt = parseFloat(change_given || 0);
 
     // Validar que si hay cambio, se indicó de dónde sale
@@ -76,7 +68,21 @@ module.exports = async function createPayment(body) {
       throw new Error("Debes seleccionar el diario del que saldrá el cambio");
     }
 
-    // Registrar el cobro (amount = lo que abona a la factura, en moneda base)
+    const saleTotal    = parseFloat(sale.total);
+    const alreadyPaid  = await getSaleBalance(sale_id, t);
+    // getSaleBalance ya descuenta change_given de pagos previos.
+    // El crédito neto de este pago = lo físicamente recibido menos el cambio entregado.
+    const netCredit    = Math.min(parseFloat((payAmt - changeAmt).toFixed(4)), saleTotal - alreadyPaid);
+    const totalPaidNow = parseFloat((alreadyPaid + netCredit).toFixed(2));
+
+    if (netCredit < -0.001) {
+      throw new Error("El cambio no puede superar el monto recibido");
+    }
+    if (totalPaidNow > saleTotal + 0.001) {
+      throw new Error(`El monto excede el saldo pendiente. Saldo: ${(saleTotal - alreadyPaid).toFixed(2)}`);
+    }
+
+    // Registrar el cobro (amount = monto físico recibido en el diario de pago)
     const payment = await Payment.create(
       {
         sale_id,
@@ -149,11 +155,12 @@ module.exports = async function createPayment(body) {
       );
     }
 
-    const newStatus = totalPaidNow >= saleTotal - 0.001 ? "pagado" : "parcial";
+    const newStatus = totalPaidNow >= saleTotal - 0.02 ? "pagado" : "parcial";
     await sale.update({ status: newStatus }, { transaction: t });
     await t.commit();
 
-    const balance = parseFloat((saleTotal - totalPaidNow).toFixed(2));
+    const rawBalance = parseFloat((saleTotal - totalPaidNow).toFixed(2));
+    const balance = rawBalance <= 0.02 ? 0 : rawBalance;
     return {
       payment,
       sale_status: newStatus,

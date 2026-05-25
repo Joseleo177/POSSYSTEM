@@ -5,8 +5,8 @@ import { fmtDateShort } from "../../helpers";
 
 const LIMIT = 50;
 
-export function useEgresos({ notify, journals }) {
-    const [expenses, setExpenses] = useState([]);
+export function useIngresos({ notify, journals }) {
+    const [incomes, setIncomes] = useState([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(false);
@@ -20,14 +20,13 @@ export function useEgresos({ notify, journals }) {
     const [activeCats, setActiveCats] = useState([]);
     const [showFilterDrop, setShowFilterDrop] = useState(false);
     const [voidConfirm, setVoidConfirm] = useState(null);
-    const [deleteConfirm, setDeleteConfirm] = useState(null);
 
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "" });
     const [saving, setSaving] = useState(false);
 
     const selectedJournal = form.payment_journal_id ? journals?.find(j => j.id == form.payment_journal_id) : null;
-    const currentRate = selectedJournal?.exchange_rate || 1;
+    const currentRate   = selectedJournal?.exchange_rate || 1;
     const currentSymbol = selectedJournal?.currency_symbol || "Ref.";
 
     useEffect(() => {
@@ -38,26 +37,26 @@ export function useEgresos({ notify, journals }) {
     useEffect(() => { setPage(1); }, [debouncedSearch, histDateFrom, histDateTo, activeFilters, activeCats]);
 
     useEffect(() => {
-        api.expenses.getCategories().then(r => setCategories(r.data || [])).catch(() => {});
+        api.incomes.getCategories().then(r => setCategories(r.data || [])).catch(() => {});
     }, []);
 
-    const loadExpenses = useCallback(async () => {
+    const loadIncomes = useCallback(async () => {
         setLoading(true);
         try {
             const params = { limit: LIMIT, offset: (page - 1) * LIMIT };
-            if (histDateFrom)          params.date_from    = histDateFrom;
-            if (histDateTo)            params.date_to      = histDateTo;
-            if (debouncedSearch)       params.search       = debouncedSearch;
-            if (activeFilters.length)  params.status       = activeFilters[0];
-            if (activeCats.length)     params.category_id  = activeCats[0];
-            const r = await api.expenses.getAll(params);
-            setExpenses(r.data);
+            if (histDateFrom)         params.date_from   = histDateFrom;
+            if (histDateTo)           params.date_to     = histDateTo;
+            if (debouncedSearch)      params.search      = debouncedSearch;
+            if (activeFilters.length) params.status      = activeFilters[0];
+            if (activeCats.length)    params.category_id = activeCats[0];
+            const r = await api.incomes.getAll(params);
+            setIncomes(r.data);
             setTotal(r.total || 0);
         } catch (e) { notify(e.message, "err"); }
         finally { setLoading(false); }
     }, [histDateFrom, histDateTo, debouncedSearch, activeFilters, activeCats, page, notify]);
 
-    useEffect(() => { loadExpenses(); }, [loadExpenses]);
+    useEffect(() => { loadIncomes(); }, [loadIncomes]);
 
     const toggleFilter = (id) => setActiveFilters(p => p.includes(id) ? [] : [id]);
     const toggleCat    = (id) => setActiveCats(p => p.includes(id) ? [] : [id]);
@@ -72,12 +71,7 @@ export function useEgresos({ notify, journals }) {
     };
 
     const handleVoid = async (id) => {
-        try { await api.expenses.void(id); notify("Egreso anulado"); loadExpenses(); }
-        catch (e) { notify(e.message, "err"); }
-    };
-
-    const handleDelete = async (id) => {
-        try { await api.expenses.delete(id); notify("Egreso eliminado"); loadExpenses(); }
+        try { await api.incomes.void(id); notify("Ingreso anulado"); loadIncomes(); }
         catch (e) { notify(e.message, "err"); }
     };
 
@@ -88,7 +82,7 @@ export function useEgresos({ notify, journals }) {
         try {
             const inputAmount = parseFloat(form.amount);
             const baseAmount = currentRate !== 1 ? inputAmount / currentRate : inputAmount;
-            await api.expenses.create({
+            await api.incomes.create({
                 description: form.description,
                 amount: baseAmount,
                 category_id: parseInt(form.category_id),
@@ -98,29 +92,29 @@ export function useEgresos({ notify, journals }) {
                 currency_id: selectedJournal?.currency_id || null,
                 rate: currentRate,
             });
-            notify("Egreso registrado correctamente");
+            notify("Ingreso registrado correctamente");
             setShowCreate(false);
             setForm({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "" });
-            loadExpenses();
+            loadIncomes();
         } catch (e) { notify(e.message, "err"); }
         finally { setSaving(false); }
     };
 
     const handleExportCSV = () => {
         const headers = ['Referencia', 'Fecha', 'Descripción', 'Categoría', 'Diario', 'Estado', 'Monto'];
-        const rows = expenses.map(e => [
+        const rows = incomes.map(e => [
             e.reference || '-', fmtDateShort(e.created_at),
             e.description, e.category_name, e.journal_name || '-',
             e.status, e.amount,
         ]);
-        exportToCSV('Historial_Egresos', rows, headers);
+        exportToCSV('Historial_Ingresos', rows, headers);
     };
 
     const totalPages = Math.ceil(total / LIMIT);
     const hasFilters = activeFilters.length > 0 || activeCats.length > 0 || !!histDateFrom || !!histDateTo;
 
     return {
-        expenses, total, page, setPage, loading, LIMIT,
+        incomes, total, page, setPage, loading, LIMIT,
         categories,
         histDateFrom, setHistDateFrom,
         histDateTo, setHistDateTo,
@@ -128,12 +122,11 @@ export function useEgresos({ notify, journals }) {
         activeFilters, activeCats,
         showFilterDrop, setShowFilterDrop,
         voidConfirm, setVoidConfirm,
-        deleteConfirm, setDeleteConfirm,
         showCreate, setShowCreate,
         form, setForm, saving,
         selectedJournal, currentRate, currentSymbol,
         toggleFilter, toggleCat, clearFilters,
-        handleVoid, handleDelete, handleCreate, handleExportCSV,
+        handleVoid, handleCreate, handleExportCSV,
         hasFilters, totalPages,
     };
 }

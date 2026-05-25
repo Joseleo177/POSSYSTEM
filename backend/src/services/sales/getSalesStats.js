@@ -5,8 +5,12 @@ module.exports = async function getSalesStats(query) {
   const where = {};
   if (date_from || date_to) {
     where.created_at = {};
+    const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;
     if (date_from) where.created_at[Op.gte] = date_from;
-    if (date_to) where.created_at[Op.lt] = Sequelize.literal(`('${date_to}'::date + INTERVAL '1 day')`);
+    if (date_to) {
+      const safeTo = sd(date_to);
+      if (safeTo) where.created_at[Op.lt] = Sequelize.literal(`('${safeTo}'::date + INTERVAL '1 day')`);
+    }
   }
 
   const stats = await Sale.findOne({

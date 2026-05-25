@@ -36,9 +36,9 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
   const balanceUsd = parseFloat(purchase?.balance ?? purchase?.total ?? 0);
 
   const receivedNum = parseFloat(String(form.received_amount).replace(",", "."));
-  const amountBase  = !isNaN(receivedNum) && receivedNum > 0
-    ? parseFloat(Math.min(receivedNum / payRate, balanceUsd).toFixed(4))
-    : 0;
+  const amountRaw   = !isNaN(receivedNum) && receivedNum > 0 ? receivedNum / payRate : 0;
+  const amountBase  = parseFloat(amountRaw.toFixed(6));
+  const isCapped    = amountRaw > balanceUsd + 0.001;
 
   const submit = async () => {
     if (!form.payment_journal_id) return notify("Selecciona el diario de pago", "err");
@@ -151,6 +151,11 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
           {payCur && !payCur.is_base && amountBase > 0 && (
             <p className="text-[10px] font-bold text-success mt-1">
               ≈ {baseCurrency?.symbol}{amountBase.toFixed(2)} {baseCurrency?.code} · tasa {payRate}
+            </p>
+          )}
+          {isCapped && (
+            <p className="text-[10px] font-bold text-warning mt-1">
+              Excede el saldo ({baseCurrency?.symbol || "Ref."}{balanceUsd.toFixed(2)}). El excedente quedará como egreso adicional.
             </p>
           )}
         </Field>

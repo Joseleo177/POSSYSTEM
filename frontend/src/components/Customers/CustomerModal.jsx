@@ -171,6 +171,19 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
             />
           </div>
 
+          {/* Dirección */}
+          <div className="col-span-2">
+            <label className="label mb-1.5 opacity-70">Dirección</label>
+            <input
+              value={form.address}
+              onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
+              onKeyDown={onEnterSave}
+              autoComplete="street-address"
+              className="input h-10 font-bold"
+              placeholder="Av. Principal, Casa / Local #..."
+            />
+          </div>
+
           {/* Notas */}
           <div className="col-span-2">
             <label className="label mb-1.5 opacity-70">Observaciones internas</label>

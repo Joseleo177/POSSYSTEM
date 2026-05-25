@@ -1,116 +1,94 @@
-import { useState, useCallback, useEffect } from "react";
-import JournalSummary from "./JournalSummary";
-import JournalMovementsModal from "./JournalMovementsModal";
-import { api } from "../../services/api";
+import { useIngresos } from "../../hooks/contabilidad/useIngresos";
+import ConfirmModal from "../ui/ConfirmModal";
+import { Button } from "../ui/Button";
+import { fmtDateShort } from "../../helpers";
 import DateRangePicker from "../ui/DateRangePicker";
+import Modal from "../ui/Modal";
+import CustomSelect from "../ui/CustomSelect";
+import Pagination from "../ui/Pagination";
 
-export default function IngresosTab({ notify, fmtPrice, allSeries }) {
- const [histDateFrom, setHistDateFrom] = useState("");
- const [histDateTo, setHistDateTo] = useState("");
- const [summaryView, setSummaryView] = useState("diarios");
- const [journalSummData, setJournalSummData] = useState([]);
- const [sales, setSales] = useState([]);
- const [selectedJournalId, setSelectedJournalId] = useState(null);
- const [showFilterDrop, setShowFilterDrop] = useState(false);
+const STATUS_BADGE = {
+    activo:  "badge-success",
+    anulado: "badge-neutral",
+};
 
- const loadSalesForSummary = useCallback(async () => {
- try {
- const params = {};
- if (histDateFrom) params.date_from = histDateFrom;
- if (histDateTo) params.date_to = histDateTo;
- const r = await api.sales.getAll(params);
- setSales(r.data);
- } catch (e) { notify(e.message, "err"); }
- }, [histDateFrom, histDateTo, notify]);
-
- useEffect(() => { loadSalesForSummary(); }, [loadSalesForSummary]);
-
-    const hasFilters = !!(histDateFrom || histDateTo || summaryView !== "diarios");
-
-    const clearFilters = () => {
-        setHistDateFrom("");
-        setHistDateTo("");
-        setSummaryView("diarios");
-        setShowFilterDrop(false);
-    };
-
-    const VIEWS = [
-        { id: "diarios", label: "Diarios",  icon: <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
-        { id: "bancos",  label: "Bancos",   icon: <path strokeLinecap="round" strokeLinejoin="round" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" /> },
-        { id: "series",  label: "Series",   icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /> },
-    ];
-
-    const activeCount = (summaryView !== "diarios" ? 1 : 0) + (histDateFrom || histDateTo ? 1 : 0);
+export default function IngresosTab({ notify, can, fmtPrice, journals }) {
+    const {
+        incomes, total, page, setPage, loading, LIMIT,
+        categories,
+        histDateFrom, setHistDateFrom, histDateTo, setHistDateTo,
+        searchTerm, setSearchTerm,
+        activeFilters, activeCats,
+        showFilterDrop, setShowFilterDrop,
+        voidConfirm, setVoidConfirm,
+        showCreate, setShowCreate,
+        form, setForm, saving,
+        currentSymbol,
+        toggleFilter, toggleCat, clearFilters,
+        handleVoid, handleCreate, handleExportCSV,
+        hasFilters, totalPages,
+    } = useIngresos({ notify, journals });
 
     const subheader = (
-        <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex items-center gap-2">
-            <div className="relative ml-auto">
-                <button
-                    onClick={() => setShowFilterDrop(p => !p)}
-                    className={[
-                        "h-8 px-3 rounded-lg text-[11px] font-black uppercase tracking-wide border flex items-center gap-2 transition-all",
-                        hasFilters
-                            ? "bg-brand-500/10 text-brand-500 border-brand-500/30"
-                            : "bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"
-                    ].join(" ")}
-                >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                    </svg>
-                    Filtros
-                    {activeCount > 0 && (
-                        <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">
-                            {activeCount}
-                        </span>
-                    )}
-                </button>
+        <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[200px]">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input type="text" placeholder="Buscar por descripción o referencia..." value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)} className="input h-8 pl-8 text-[11px] w-full" />
+            </div>
 
+            <div className="relative">
+                <button onClick={() => setShowFilterDrop(p => !p)}
+                    className={["h-8 px-3 rounded-lg text-[11px] font-black uppercase tracking-wide border flex items-center gap-2 transition-all",
+                        hasFilters ? "bg-brand-500/10 text-brand-500 border-brand-500/30"
+                            : "bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"].join(" ")}>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                    Filtros
+                    {hasFilters && <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">{activeFilters.length + activeCats.length + (histDateFrom || histDateTo ? 1 : 0)}</span>}
+                </button>
                 {showFilterDrop && (
                     <>
                         <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
                         <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
-                            {/* Vista */}
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Vista</div>
-                                <div className="grid grid-cols-3 gap-1.5">
-                                    {VIEWS.map(v => (
-                                        <button
-                                            key={v.id}
-                                            onClick={() => { setSummaryView(v.id); setShowFilterDrop(false); }}
-                                            className={[
-                                                "px-2 py-2 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all flex flex-col items-center gap-1",
-                                                summaryView === v.id
-                                                    ? "bg-brand-500 text-black border-brand-500"
-                                                    : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"
-                                            ].join(" ")}
-                                        >
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>{v.icon}</svg>
-                                            {v.label}
+                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado</div>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                    {[{ id: 'activo', label: 'Activo' }, { id: 'anulado', label: 'Anulado' }].map(f => (
+                                        <button key={f.id} onClick={() => toggleFilter(f.id)}
+                                            className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${activeFilters.includes(f.id) ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                            {f.label}
                                         </button>
                                     ))}
                                 </div>
                             </div>
-
-                            {/* Rango de fechas */}
+                            <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Categoría</div>
+                                <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto custom-scrollbar">
+                                    {categories.map(c => (
+                                        <button key={c.id} onClick={() => toggleCat(c.id)}
+                                            className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all truncate ${activeCats.includes(c.id) ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                            {c.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Rango de Fecha</div>
-                                <DateRangePicker
-                                    from={histDateFrom}
-                                    to={histDateTo}
-                                    setFrom={setHistDateFrom}
-                                    setTo={setHistDateTo}
-                                />
+                                <DateRangePicker from={histDateFrom} to={histDateTo} setFrom={setHistDateFrom} setTo={setHistDateTo} />
                             </div>
-
-                            {/* Limpiar */}
                             <div className="px-4 py-2">
-                                <button onClick={clearFilters} className="w-full py-1.5 text-[10px] font-black uppercase tracking-wide text-danger hover:bg-danger/5 rounded-lg transition-colors">
-                                    Limpiar todo
-                                </button>
+                                <button onClick={clearFilters} className="w-full py-1.5 text-[10px] font-black uppercase tracking-wide text-danger hover:bg-danger/5 rounded-lg transition-colors">Limpiar todo</button>
                             </div>
                         </div>
                     </>
                 )}
+            </div>
+
+            <div className="ml-auto flex items-center gap-2">
+                <Button className="h-8 px-3 text-[10px] bg-surface-2 dark:bg-white/5 text-content-subtle border border-border/30 dark:border-white/10 hover:text-content shadow-none" onClick={handleExportCSV}>CSV</Button>
+                <Button className="h-8 px-3 text-[10px]" onClick={() => setShowCreate(true)}>+ Nuevo Ingreso</Button>
             </div>
         </div>
     );
@@ -118,140 +96,111 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
     return (
         <div className="h-full flex flex-col overflow-hidden">
             {subheader}
-            <div className="flex-1 min-h-0 overflow-auto p-4 custom-scrollbar">
-                {summaryView === "diarios" && (
-                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        <div className="flex items-center gap-2 mb-4">
-                            <div className="h-4 w-1.5 bg-brand-500 rounded-full" />
-                            <span className="text-[11px] font-black uppercase tracking-widest text-content dark:text-white text-shadow-sm">Análisis de Distribución por Diarios</span>
-                        </div>
-                        <JournalSummary
-                            dateFrom={histDateFrom}
-                            dateTo={histDateTo}
-                            onData={setJournalSummData}
-                            onSelectJournal={(j) => setSelectedJournalId(j.id)}
-                        />
-                    </div>
-                )}
-
-                {summaryView === "bancos" && (() => {
-                    const byBank = {};
-                    journalSummData.forEach(j => {
-                        const key = j.bank_name || "Sin banco";
-                        if (!byBank[key]) byBank[key] = { journals: [] };
-                        byBank[key].journals.push(j);
-                    });
-                    const entries = Object.entries(byBank);
-                    if (!entries.length) return (
-                        <div className="flex flex-col items-center justify-center py-20 opacity-40">
-                            <div className="text-[11px] font-black uppercase tracking-wide text-content-muted italic">Sin datos bancarios registrados en este rango</div>
-                        </div>
-                    );
-                    return (
-                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <div className="flex items-center gap-2 mb-4">
-                                <div className="h-4 w-1.5 bg-info rounded-full" />
-                                <span className="text-[11px] font-black uppercase tracking-widest text-content dark:text-white">Distribución Consolidada por Bancos</span>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                {entries.map(([bank, d]) => {
-                                    const totalPagos = d.journals.reduce((s, j) => s + parseFloat(j.total_ingresos || 0), 0);
-                                    const countPagos = d.journals.reduce((s, j) => s + parseInt(j.tx_count || 0), 0);
-                                    const hoy = d.journals.reduce((s, j) => s + parseFloat(j.ingresos_hoy || 0), 0);
-                                    const sym = d.journals[0]?.currency_symbol || "Ref.";
-                                    const fmtB = n => `${sym}${Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-                                    return (
-                                        <div key={bank} className="group bg-white dark:bg-surface-dark-3 rounded-2xl p-5 border border-border/40 dark:border-white/10 shadow-sm hover:shadow-xl hover:border-info/30 transition-all duration-300 relative overflow-hidden">
-                                            <div className="absolute top-0 right-0 w-24 h-24 bg-info/5 rounded-full -mr-12 -mt-12 transition-transform group-hover:scale-150 duration-500" />
-                                            
-                                            <div className="flex items-center gap-4 mb-5 relative">
-                                                <div className="w-10 h-10 rounded-xl bg-info/10 text-info flex items-center justify-center shrink-0 shadow-inner">
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" /></svg>
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="text-xs font-black text-content dark:text-white uppercase tracking-tight truncate">{bank}</div>
-                                                    <div className="text-[10px] font-bold text-content-subtle uppercase tracking-widest opacity-60">Consolidado</div>
-                                                </div>
-                                            </div>
-
-                                            <div className="mb-5 relative">
-                                                <div className="text-[10px] font-black text-content-subtle uppercase tracking-widest mb-1">Total Ingresos</div>
-                                                <div className="text-2xl font-black text-info tracking-tighter tabular-nums">{fmtB(totalPagos)}</div>
-                                            </div>
-
-                                            <div className="flex flex-wrap gap-1.5 mb-5 relative">
-                                                {d.journals.map(j => (
-                                                    <span key={j.id} className="px-2 py-1 bg-surface-2 dark:bg-white/5 text-[9px] font-black text-content-subtle dark:text-white/40 rounded-lg border border-border/40 dark:border-white/5 uppercase tracking-tighter">
-                                                        {j.name}
-                                                    </span>
-                                                ))}
-                                            </div>
-
-                                            <div className="flex justify-between items-end pt-4 border-t border-border/20 dark:border-white/5 relative">
-                                                <div>
-                                                    <div className="text-[10px] font-black text-content-subtle uppercase tracking-widest mb-0.5">Volumen</div>
-                                                    <div className="text-xs font-black text-content dark:text-white tabular-nums">{countPagos} <span className="opacity-40">TX</span></div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className="text-[10px] font-black text-success/60 uppercase tracking-widest mb-0.5">Hoy</div>
-                                                    <div className="text-xs font-black text-success tabular-nums">+{fmtB(hoy)}</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    );
-                })()}
-
-                {summaryView === "series" && (() => {
-                    const bySerie = {};
-                    sales.forEach(s => {
-                        const key = s.serie_name || "Sin serie";
-                        if (!bySerie[key]) bySerie[key] = { count: 0, total: 0, prefix: s.serie_prefix || "" };
-                        bySerie[key].count++;
-                        bySerie[key].total += parseFloat(s.total || 0);
-                    });
-                    const entries = Object.entries(bySerie);
-                    if (!entries.length) return (
-                        <div className="flex flex-col items-center justify-center py-20 opacity-40">
-                            <div className="text-[11px] font-black uppercase tracking-wide text-content-muted italic">Sin facturación emitida en este periodo</div>
-                        </div>
-                    );
-                    return (
-                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                             <div className="flex items-center gap-2 mb-4">
-                                <div className="h-4 w-1.5 bg-brand-500 rounded-full" />
-                                <span className="text-[11px] font-black uppercase tracking-widest text-content dark:text-white">Facturación por Series de Documentos</span>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                {entries.map(([serie, d]) => (
-                                    <div key={serie} className="bg-white dark:bg-surface-dark-3 border border-border/40 dark:border-white/10 rounded-2xl p-5 shadow-sm hover:border-brand-500/30 transition-all duration-300 group">
-                                        <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-4 flex items-center justify-between">
-                                            <span className="flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
-                                                {serie}
-                                            </span>
-                                            <span className="opacity-20 group-hover:opacity-100 transition-opacity">#{d.prefix || 'S'}</span>
-                                        </div>
-                                        <div className="mb-5">
-                                            <div className="text-[10px] font-black text-content-subtle uppercase tracking-widest mb-1">Total Facturado</div>
-                                            <div className="text-2xl font-black text-content dark:text-white tracking-tighter tabular-nums">{fmtPrice(d.total)}</div>
-                                        </div>
-                                        <div className="flex items-center gap-2 py-2 px-3 bg-surface-2 dark:bg-white/5 rounded-xl w-fit border border-border/30 dark:border-white/10 group-hover:bg-brand-500/10 transition-colors">
-                                            <span className="text-xs font-black text-brand-500">{d.count}</span>
-                                            <span className="text-[10px] font-black text-content-subtle dark:text-white/40 uppercase tracking-widest">Documentos</span>
-                                        </div>
-                                    </div>
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                <div className="card-premium overflow-auto flex-1 border-none shadow-none rounded-none bg-transparent">
+                    <table className="table-pos min-w-[680px]">
+                        <thead className="sticky top-0 z-10">
+                            <tr>
+                                {["Referencia", "Estado", "Descripción", "Categoría", "Diario", "Fecha", "Monto", "Acciones"].map(h => (
+                                    <th key={h} className={h === "Acciones" || h === "Monto" ? "text-right pr-6" : "text-left"}>{h}</th>
                                 ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loading ? (
+                                <tr><td colSpan={8} className="py-20 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">Sincronizando ingresos...</td></tr>
+                            ) : incomes.length === 0 ? (
+                                <tr><td colSpan={8} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic opacity-40">Sin ingresos registrados</td></tr>
+                            ) : incomes.map(inc => (
+                                <tr key={inc.id} className="group">
+                                    <td><span className="text-[11px] font-black text-brand-500 tracking-tight">{inc.reference || `#${inc.id}`}</span></td>
+                                    <td><span className={`badge shadow-none ${STATUS_BADGE[inc.status] || 'badge-success'}`}>{inc.status}</span></td>
+                                    <td className="truncate max-w-[200px]">
+                                        <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight truncate">{inc.description}</span>
+                                        {inc.notes && <div className="text-[9px] font-bold text-content-subtle opacity-50 mt-0.5 truncate">{inc.notes}</div>}
+                                    </td>
+                                    <td><span className="text-[10px] font-black text-content-subtle uppercase tracking-wide">{inc.category_name}</span></td>
+                                    <td><span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{inc.journal_name || "—"}</span></td>
+                                    <td><span className="text-[11px] font-bold text-content-subtle uppercase">{fmtDateShort(inc.created_at)}</span></td>
+                                    <td className="text-right pr-6">
+                                        <div className="flex flex-col items-end">
+                                            {inc.rate && inc.rate !== 1 ? (
+                                                <>
+                                                    <span className="text-[11px] font-black text-success tabular-nums pb-0.5">+{inc.currency_symbol} {(inc.amount * inc.rate).toFixed(2)}</span>
+                                                    <span className="text-[9px] font-bold text-content-subtle opacity-60 tabular-nums">+{fmtPrice(inc.amount)}</span>
+                                                </>
+                                            ) : (
+                                                <span className="text-[11px] font-black text-success tabular-nums pb-0.5">+{fmtPrice(inc.amount)}</span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="text-right pr-6">
+                                        {can("admin") && inc.status !== 'anulado' && (
+                                            <button onClick={() => setVoidConfirm(inc)}
+                                                className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90" title="Anular">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            </button>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <Pagination page={page} totalPages={totalPages} total={total} limit={LIMIT} onPageChange={setPage} />
+            </div>
+
+            <Modal open={showCreate} onClose={() => setShowCreate(false)} title="REGISTRAR INGRESO" width={440}>
+                <div className="space-y-4">
+                    <div>
+                        <label className="label">Descripción *</label>
+                        <input className="input" placeholder="Ej: Transferencia entre cuentas" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="label">Monto{currentSymbol ? ` (${currentSymbol})` : ""} *</label>
+                            <div className="relative">
+                                {currentSymbol && <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[12px] font-black text-content-subtle dark:text-white/30 pointer-events-none">{currentSymbol}</span>}
+                                <input type="number" step="0.01" min="0" placeholder="0.00"
+                                    className={`input ${currentSymbol ? "pl-8" : ""}`}
+                                    value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
                             </div>
                         </div>
-                    );
-                })()}
-            </div>
-            <JournalMovementsModal journalId={selectedJournalId} onClose={() => setSelectedJournalId(null)} />
+                        <div>
+                            <label className="label">Referencia</label>
+                            <input className="input" placeholder="Nro. de operación" value={form.reference} onChange={e => setForm(p => ({ ...p, reference: e.target.value }))} />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="label">Categoría *</label>
+                            <CustomSelect value={form.category_id} onChange={v => setForm(p => ({ ...p, category_id: v }))} placeholder="Seleccionar..." options={categories.map(c => ({ value: String(c.id), label: c.name }))} />
+                        </div>
+                        <div>
+                            <label className="label">Diario</label>
+                            <CustomSelect value={form.payment_journal_id} onChange={v => setForm(p => ({ ...p, payment_journal_id: v }))} placeholder="Sin diario" options={[{ value: "", label: "Sin diario" }, ...(journals || []).map(j => ({ value: String(j.id), label: j.name }))]} />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="label">Notas</label>
+                        <textarea className="input resize-none min-h-[72px]" placeholder="Observaciones adicionales..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+                    </div>
+                    <div className="flex gap-2.5 pt-2 border-t border-border/20 dark:border-white/5">
+                        <Button variant="ghost" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button>
+                        <Button className="flex-[2]" onClick={handleCreate} disabled={saving}>{saving ? "Guardando..." : "Registrar Ingreso"}</Button>
+                    </div>
+                </div>
+            </Modal>
+
+            <ConfirmModal
+                isOpen={!!voidConfirm}
+                title="¿Anular ingreso?"
+                message={`¿Estás seguro de que deseas anular el ingreso "${voidConfirm?.description}"? Este proceso no se puede revertir.`}
+                onConfirm={async () => { await handleVoid(voidConfirm.id); setVoidConfirm(null); }}
+                onCancel={() => setVoidConfirm(null)}
+                type="danger"
+                confirmText="Sí, anular ingreso"
+            />
         </div>
     );
 }

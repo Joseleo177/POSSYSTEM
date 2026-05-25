@@ -67,7 +67,7 @@ export default function JournalSummary({ dateFrom, dateTo, onData, onSelectJourn
             </div>
 
             <div className="mb-5 relative">
-              <div className="text-[10px] font-black text-content-subtle uppercase tracking-widest mb-1">Saldo Acumulado</div>
+              <div className="text-[10px] font-black text-content-subtle uppercase tracking-widest mb-1">Saldo Neto</div>
               <div className="text-2xl font-black tracking-tighter tabular-nums" style={{ color: journalColor }}>
                 {fmtJ(j.total_ingresos)}
               </div>
@@ -79,8 +79,10 @@ export default function JournalSummary({ dateFrom, dateTo, onData, onSelectJourn
                 <span className="text-xs font-black text-content dark:text-white tabular-nums">{j.tx_count} <span className="opacity-30">TX</span></span>
               </div>
               <div className="flex flex-col items-end">
-                <span className="text-[10px] font-black text-success/60 uppercase tracking-widest mb-0.5">Ingreso Hoy</span>
-                <span className="text-xs font-black text-success tabular-nums">+{fmtJ(j.ingresos_hoy)}</span>
+                <span className="text-[10px] font-black text-success/60 uppercase tracking-widest mb-0.5">Flujo Hoy</span>
+                <span className={`text-xs font-black tabular-nums ${j.ingresos_hoy >= 0 ? 'text-success' : 'text-danger'}`}>
+                  {j.ingresos_hoy >= 0 ? '+' : ''}{fmtJ(j.ingresos_hoy)}
+                </span>
               </div>
             </div>
 

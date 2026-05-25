@@ -73,7 +73,7 @@ function SalesChart({ data }) {
     return <canvas ref={canvasRef} className="w-full h-48 block" />;
 }
 
-function KpiCard({ label, value, sub, subValue, color = "text-brand-500", icon }) {
+function KpiCard({ label, valueBase, valueLocal, baseSym, localSym, sub, subValue, color = "text-brand-500", icon }) {
     return (
         <div className="bg-white dark:bg-surface-dark-3 border border-border/40 dark:border-white/10 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
             <div className={`absolute top-0 right-0 w-16 h-16 opacity-[0.03] -mr-4 -mt-4 rounded-full bg-current ${color}`} />
@@ -83,10 +83,13 @@ function KpiCard({ label, value, sub, subValue, color = "text-brand-500", icon }
                 </div>
                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-60 truncate">{label}</div>
             </div>
-            <div className={`text-xl font-black tabular-nums tracking-tighter mb-1 ${color}`}>{value}</div>
+            <div className={`text-xl font-black tabular-nums tracking-tighter leading-tight ${color}`}>{baseSym}{fmt(valueBase)}</div>
+            {valueLocal !== undefined && localSym !== baseSym && (
+                <div className="text-[13px] font-black tabular-nums text-content-subtle dark:text-white/40 mb-1">{localSym}{fmt(valueLocal)}</div>
+            )}
             {sub && (
-                <div className="flex items-center justify-between text-[9px] font-bold text-content-subtle uppercase tracking-widest border-t border-border/10 pt-2 opacity-50">
-                    <span>{label === "Alertas" ? "Estado" : "Volumen"}</span>
+                <div className="flex items-center justify-between text-[9px] font-bold text-content-subtle uppercase tracking-widest border-t border-border/10 pt-2 mt-1 opacity-50">
+                    <span>Volumen</span>
                     <span className="text-content dark:text-white tabular-nums">{subValue} {sub}</span>
                 </div>
             )}
@@ -100,10 +103,10 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // income y cash_in_hand = amount × exchange_rate → moneda local (no base)
-    const localCur = activeCurrencies?.find(c => !c.is_base);
-    const baseSym  = baseCurrency?.symbol  || "Ref.";
-    const localSym = localCur?.symbol      || baseSym;
+    const localCur  = activeCurrencies?.find(c => !c.is_base);
+    const baseSym   = baseCurrency?.symbol || "Ref.";
+    const localSym  = localCur?.symbol     || baseSym;
+    const localRate = parseFloat(localCur?.exchange_rate || 1);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -152,7 +155,10 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <KpiCard
                         label="Facturación Hoy"
-                        value={`${baseSym}${fmt(kpi.today.revenue)}`}
+                        valueBase={kpi.today.revenue}
+                        valueLocal={kpi.today.revenue * localRate}
+                        baseSym={baseSym}
+                        localSym={localSym}
                         sub="TX"
                         subValue={kpi.today.sales}
                         color="text-info"
@@ -160,15 +166,21 @@ export default function DashboardPage() {
                     />
                     <KpiCard
                         label="Cobranza Real Hoy"
-                        value={`${localSym}${fmt(kpi.today.income)}`}
-                        sub="Ingreso"
-                        subValue="Neto"
+                        valueBase={kpi.today.income}
+                        valueLocal={kpi.today.income * localRate}
+                        baseSym={baseSym}
+                        localSym={localSym}
+                        sub="TX"
+                        subValue={kpi.today.sales}
                         color="text-success"
                         icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                     />
                     <KpiCard
                         label="Saldo Disp. en Cajas"
-                        value={`${localSym}${fmt(kpi.cash_in_hand)}`}
+                        valueBase={kpi.cash_in_hand}
+                        valueLocal={kpi.cash_in_hand * localRate}
+                        baseSym={baseSym}
+                        localSym={localSym}
                         sub="Fondo"
                         subValue="Total"
                         color="text-brand-400"
@@ -176,7 +188,10 @@ export default function DashboardPage() {
                     />
                     <KpiCard
                         label="Cuentas por Cobrar"
-                        value={`${baseSym}${fmt(pending_bills.balance)}`}
+                        valueBase={pending_bills.balance}
+                        valueLocal={pending_bills.balance * localRate}
+                        baseSym={baseSym}
+                        localSym={localSym}
                         sub="Facturas"
                         subValue={pending_bills.count}
                         color="text-danger"

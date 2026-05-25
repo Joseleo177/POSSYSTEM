@@ -39,7 +39,7 @@ const tenantModels = [
   'CashSession', 'Expense', 'ProductLot', 'PurchasePayment', 'StockTransfer',
   'ExpenseCategory', 'Return', 'ReturnItem', 'Setting', 'Currency',
   'ProductStock', 'EmployeeWarehouse', 'UserSerie', 'ProductComboItem', 'CashSessionJournal',
-  'Quotation', 'Promotion',
+  'Quotation', 'Promotion', 'Income', 'IncomeCategory',
 ];
 
 const applyTenantFilter = (modelName, options) => {

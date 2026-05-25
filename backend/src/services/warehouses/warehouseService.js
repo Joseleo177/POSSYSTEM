@@ -4,47 +4,47 @@ const {
 const { Op } = Sequelize;
 
 async function getAll() {
-  const warehouses = await Warehouse.findAll({
-    attributes: [
-      'id', 'name', 'description', 'active', 'sort_order', 'created_at',
-      [Sequelize.fn('COUNT', Sequelize.literal('DISTINCT "ProductStocks"."product_id"')), 'product_count'],
-      [Sequelize.fn('COALESCE', Sequelize.fn('SUM', Sequelize.col('ProductStocks.qty')), 0), 'total_stock']
-    ],
-    include: [
-      { model: ProductStock, attributes: [], required: false },
-      { model: EmployeeWarehouse, attributes: ['employee_id'], required: false }
-    ],
-    group: ['Warehouse.id', 'EmployeeWarehouses.employee_id', 'EmployeeWarehouses.warehouse_id'],
-    order: [['sort_order', 'ASC'], ['name', 'ASC']],
-    subQuery: false
+  // Tres queries paralelas y simples en lugar de un GROUP BY con doble JOIN.
+  // La versión anterior generaba un producto cartesiano sobre product_stock
+  // que escalaba mal con el tamaño del inventario.
+  const [warehouses, stockAggs, assignments] = await Promise.all([
+    Warehouse.findAll({
+      attributes: ['id', 'name', 'description', 'active', 'sort_order', 'created_at'],
+      order: [['sort_order', 'ASC'], ['name', 'ASC']],
+      raw: true,
+    }),
+    sequelize.query(
+      `SELECT warehouse_id,
+              COUNT(DISTINCT product_id)::int AS product_count,
+              COALESCE(SUM(qty), 0)::float    AS total_stock
+         FROM product_stock
+         GROUP BY warehouse_id`,
+      { type: Sequelize.QueryTypes.SELECT }
+    ),
+    sequelize.query(
+      `SELECT warehouse_id, employee_id FROM employee_warehouses`,
+      { type: Sequelize.QueryTypes.SELECT }
+    ),
+  ]);
+
+  const aggByWh = new Map(stockAggs.map(r => [r.warehouse_id, r]));
+  const empsByWh = new Map();
+  for (const row of assignments) {
+    if (!empsByWh.has(row.warehouse_id)) empsByWh.set(row.warehouse_id, []);
+    empsByWh.get(row.warehouse_id).push({ employee_id: row.employee_id });
+  }
+
+  const data = warehouses.map(w => {
+    const agg = aggByWh.get(w.id);
+    return {
+      ...w,
+      product_count: agg ? agg.product_count : 0,
+      total_stock:   agg ? agg.total_stock   : 0,
+      assigned_employees: empsByWh.get(w.id) || [],
+    };
   });
 
-  const processed = [];
-  const map = new Map();
-
-  warehouses.forEach(w => {
-    const id = w.id;
-    if (!map.has(id)) {
-      const item = w.toJSON();
-      item.assigned_employees = w.EmployeeWarehouses?.length
-        ? w.EmployeeWarehouses.map(ew => ({ employee_id: ew.employee_id }))
-        : [];
-      item.product_count = parseInt(item.product_count || 0);
-      item.total_stock = parseFloat(item.total_stock || 0);
-      delete item.EmployeeWarehouses;
-      map.set(id, item);
-      processed.push(item);
-    } else {
-      const item = map.get(id);
-      w.EmployeeWarehouses?.forEach(ew => {
-        if (!item.assigned_employees.find(e => e.employee_id === ew.employee_id)) {
-          item.assigned_employees.push({ employee_id: ew.employee_id });
-        }
-      });
-    }
-  });
-
-  return { data: processed };
+  return { data };
 }
 
 async function getByEmployee(employeeId) {

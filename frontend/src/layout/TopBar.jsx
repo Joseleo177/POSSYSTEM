@@ -3,9 +3,27 @@ import React from "react";
 import { resolveImageUrl } from "../helpers";
 import { ROLE_COLORS, DEFAULT_ROLE_CLASS } from "../constants/roles";
 
-export default function TopBar({ settings, storeName, safeTab, visibleTabs, employee, dark, toggle, logout, onOpenLauncher }) {
+function useDateTick() {
+    const [now, setNow] = React.useState(new Date());
+    React.useEffect(() => {
+        const id = setInterval(() => setNow(new Date()), 60_000);
+        return () => clearInterval(id);
+    }, []);
+    return now;
+}
+
+export default function TopBar({ settings, storeName, safeTab, visibleTabs, employee, dark, toggle, logout, onOpenLauncher, currencies = [] }) {
     const roleClass = ROLE_COLORS[employee?.role] || DEFAULT_ROLE_CLASS;
     const activeTab = visibleTabs.find((t) => t.key === safeTab);
+
+    const now = useDateTick();
+    const dateStr = now.toLocaleDateString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+    const baseCurrency = currencies.find(c => c.is_base);
+    const localCurrency = currencies.find(c => c.active && !c.is_base);
+    const rateStr = localCurrency
+        ? `${localCurrency.symbol || localCurrency.name}/${baseCurrency?.symbol || "Ref."}: ${parseFloat(localCurrency.exchange_rate).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
+        : null;
 
     return (
         <header className="hidden md:flex items-center gap-3 h-14 px-4 shrink-0 bg-white dark:bg-surface-dark-2 border-b border-border dark:border-border-dark">
@@ -53,8 +71,26 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
                 {activeTab?.label ?? ""}
             </span>
 
-            {/* Spacer */}
-            <div className="flex-1" />
+            {/* Center: date + exchange rate */}
+            <div className="flex-1 flex justify-center items-center gap-0">
+                {(dateStr || rateStr) && (
+                    <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-surface-2 dark:bg-white/5 border border-border/30 dark:border-white/10 select-none">
+                        <svg className="w-3 h-3 text-content-subtle opacity-50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-[11px] font-bold text-content dark:text-white/70 tabular-nums">{dateStr}</span>
+                        {rateStr && (
+                            <>
+                                <span className="text-[10px] text-content-subtle opacity-40 mx-0.5">|</span>
+                                <svg className="w-3 h-3 text-brand-500 opacity-70 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className="text-[11px] font-bold text-brand-500 tabular-nums">{rateStr}</span>
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
 
             {/* Employee info */}
             <div className="flex items-center gap-2 shrink-0">

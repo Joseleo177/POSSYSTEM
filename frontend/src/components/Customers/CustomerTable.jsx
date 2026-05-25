@@ -38,7 +38,7 @@ export default function CustomerTable({
                                     <div className="text-[12px] font-black uppercase tracking-tight text-content dark:text-white group-hover:text-brand-500 transition-colors">
                                         {c.name}
                                     </div>
-                                    <div className="text-[10px] text-content-subtle font-bold opacity-60 uppercase">{c.city || "Sin ciudad"}</div>
+                                    {c.city && <div className="text-[10px] text-content-subtle font-bold opacity-60 uppercase">{c.city}</div>}
                                 </td>
                                 <td className="hidden lg:table-cell text-[11px] font-bold text-content-subtle opacity-50 tabular-nums">
                                     {c.rif || "S/N"}

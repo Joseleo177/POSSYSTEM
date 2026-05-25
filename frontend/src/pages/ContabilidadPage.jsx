@@ -6,6 +6,7 @@ import { fmtBase, fmtSale as fmtSaleHelper, fmtPayment as fmtPaymentHelper } fro
 
 
 // Sub-components
+import EstadoCuentaTab from "../components/Contabilidad/EstadoCuentaTab";
 import IngresosTab from "../components/Contabilidad/IngresosTab";
 import TransaccionesTab from "../components/Contabilidad/TransaccionesTab";
 import PagosTab from "../components/Contabilidad/PagosTab";
@@ -17,7 +18,7 @@ import EgresosTab from "../components/Contabilidad/EgresosTab";
 import CotizacionesTab from "../components/Contabilidad/CotizacionesTab";
 import NotasCreditoTab from "../components/Contabilidad/NotasCreditoTab";
 
-const SUB_PAGES = ["Estado de Cuenta", "Egresos", "Transacciones", "Notas de Crédito", "Cotizaciones", "Pagos", "Series", "Diarios", "Tipos de pago", "Bancos"];
+const SUB_PAGES = ["Estado de Cuenta", "Ingresos", "Egresos", "Facturas", "Notas de Crédito", "Cotizaciones", "Pagos", "Series", "Diarios", "Tipos de pago", "Bancos"];
 
 export default function ContabilidadPage() {
  const {
@@ -78,11 +79,14 @@ export default function ContabilidadPage() {
  const renderContent = () => {
  switch (subPage) {
  case "Estado de Cuenta":
+ return <EstadoCuentaTab />;
+ case "Ingresos":
  return (
  <IngresosTab
  notify={notify}
+ can={can}
  fmtPrice={fmtPrice}
- allSeries={allSeries}
+ journals={journals}
  />
  );
  case "Egresos":
@@ -94,7 +98,7 @@ export default function ContabilidadPage() {
  journals={journals}
  />
  );
- case "Transacciones":
+ case "Facturas":
  return (
  <TransaccionesTab
  notify={notify}

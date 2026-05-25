@@ -14,6 +14,7 @@ const getEmpty = () => ({
   // Cambio
   received_amount: "",
   change_journal_id: "",
+  change_amount_override: "", // monto real a entregar (en moneda del diario de cambio)
   keep_change: false,
 });
 
@@ -46,6 +47,20 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     : 0;
   const changeDisplay = changeBase * payRate;
 
+  // Moneda del diario de cambio (para mostrar equivalencia en Bs, etc.)
+  const changeJournalObj  = form.change_journal_id ? activeJournals.find(j => j.id === form.change_journal_id) : null;
+  const changeJournalCur  = changeJournalObj?.currency_id ? activeCurrencies.find(c => c.id === parseInt(changeJournalObj.currency_id)) : null;
+  const changeJournalRate = (!changeJournalCur || changeJournalCur.is_base) ? 1 : parseFloat(changeJournalCur.exchange_rate || 1);
+  const changeJournalSym  = changeJournalCur?.symbol || baseCurrency?.symbol || "Ref.";
+  const exactChangeInJournalCur = parseFloat((changeBase * changeJournalRate).toFixed(2));
+
+  // Monto real que ingresó el cajero (puede redondearlo al billete más cercano)
+  const overrideNum   = parseFloat(String(form.change_amount_override || "").replace(",", "."));
+  const validOverride = !isNaN(overrideNum) && overrideNum > 0;
+  const actualChangeBase = (changeBase > 0 && validOverride)
+    ? overrideNum / changeJournalRate
+    : changeBase;
+
   const submit = async () => {
     if (!form.payment_journal_id) return notify("Selecciona el método de pago", "err");
     if (!form.amount) return notify("El monto es requerido", "err");
@@ -54,12 +69,17 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     if (changeBase > 0 && !form.keep_change && !form.change_journal_id) return notify("Selecciona el diario del que saldrá el cambio", "err");
 
     const finalAmountBase = form.keep_change ? Math.min(receivedBase, balanceUsd) : amountBase;
+    // Cuando hay cambio desde otro diario, el diario de pago recibe el monto físico completo
+    // (ej: cliente da 10, se registra +10 en CAJA DIVISA; el cambio de CAJA BS lo descuenta el egreso)
+    const payAmountToSend = (changeBase > 0 && !form.keep_change && form.change_journal_id)
+      ? receivedBase
+      : finalAmountBase;
 
     setLoading(true);
     try {
       const res = await api.payments.create({
         sale_id: sale.id,
-        amount: finalAmountBase,
+        amount: payAmountToSend,
         currency_id: payCur?.id || null,
         exchange_rate: payRate,
         reference_date: form.reference_date,
@@ -67,7 +87,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
         notes: form.notes || null,
         payment_journal_id: form.payment_journal_id || null,
         received_amount: receivedBase > 0 ? receivedBase : undefined,
-        change_given: (changeBase > 0 && !form.keep_change) ? changeBase : undefined,
+        change_given: (changeBase > 0 && !form.keep_change) ? actualChangeBase : undefined,
         change_journal_id: (changeBase > 0 && !form.keep_change) ? form.change_journal_id : undefined,
         surplus_kept: (changeBase > 0 && form.keep_change) ? changeBase : undefined,
       });
@@ -126,6 +146,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
                       amount: newAmt,
                       received_amount: newAmt,
                       change_journal_id: "",
+                      change_amount_override: "",
                     }));
                   }}
                   style={active && j.color ? { borderColor: j.color, backgroundColor: j.color, color: "#000" } : undefined}
@@ -189,7 +210,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
             {/* Toggle dar cambio / quedarse */}
             <div className="flex p-1 bg-white/[0.02] dark:bg-white/[0.04] rounded-xl border border-white/[0.06]">
               <button type="button"
-                onClick={() => setForm(p => ({ ...p, keep_change: false, change_journal_id: "" }))}
+                onClick={() => setForm(p => ({ ...p, keep_change: false, change_journal_id: "", change_amount_override: "" }))}
                 className={[
                   "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
                   !form.keep_change
@@ -200,7 +221,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
                 Dar cambio
               </button>
               <button type="button"
-                onClick={() => setForm(p => ({ ...p, keep_change: true, change_journal_id: "" }))}
+                onClick={() => setForm(p => ({ ...p, keep_change: true, change_journal_id: "", change_amount_override: "" }))}
                 className={[
                   "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
                   form.keep_change
@@ -219,7 +240,12 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
                 <div className="flex flex-wrap gap-1.5">
                   {activeJournals.map(j => (
                     <button key={j.id} type="button"
-                      onClick={() => setForm(p => ({ ...p, change_journal_id: j.id }))}
+                      onClick={() => {
+                        const cjCur = j.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
+                        const cjRate = (!cjCur || cjCur.is_base) ? 1 : parseFloat(cjCur.exchange_rate || 1);
+                        const exact  = parseFloat((changeBase * cjRate).toFixed(2));
+                        setForm(p => ({ ...p, change_journal_id: j.id, change_amount_override: String(exact) }));
+                      }}
                       className={[
                         "px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide border-2 transition-all",
                         form.change_journal_id === j.id
@@ -233,6 +259,34 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
                 </div>
                 {!form.change_journal_id && (
                   <p className="text-[10px] font-black text-danger mt-1.5">Selecciona de dónde saldrá el cambio</p>
+                )}
+
+                {/* Monto a entregar desde el diario seleccionado */}
+                {form.change_journal_id && (
+                  <div className="mt-3 pt-3 border-t border-warning/20 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-warning/70 uppercase tracking-widest">Cambio exacto</span>
+                      <span className="text-[12px] font-black text-warning tabular-nums">
+                        {changeJournalSym}{exactChangeInJournalCur.toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-warning/70 uppercase tracking-widest mb-1.5">
+                        Monto real a entregar ({changeJournalSym})
+                      </p>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={form.change_amount_override}
+                        placeholder={exactChangeInJournalCur.toFixed(2)}
+                        onChange={e => {
+                          const val = e.target.value.replace(/[^\d.,]/g, "");
+                          setForm(p => ({ ...p, change_amount_override: val }));
+                        }}
+                        className="w-full h-9 bg-white/[0.02] dark:bg-white/[0.04] border border-warning/40 rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-warning/70 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
             )}

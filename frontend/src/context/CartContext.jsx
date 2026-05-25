@@ -372,6 +372,9 @@ export function CartProvider({ children }) {
         serie,
       });
 
+      // Venta concretada: invalidamos la clave para que el próximo
+      // cobro use una nueva (en errores la dejamos viva para reintentos).
+      pendingKeyRef.current = null;
       clearCart();
       onSuccess?.();
     } catch (e) {

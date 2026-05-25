@@ -118,6 +118,17 @@ exports.create = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ── Eliminar egreso (solo si está anulado) ───────────────────
+exports.deleteExpense = async (req, res, next) => {
+  try {
+    const expense = await Expense.findByPk(req.params.id);
+    if (!expense) return res.status(404).json({ ok: false, message: 'Egreso no encontrado' });
+    if (expense.status !== 'anulado') return res.status(400).json({ ok: false, message: 'Solo se pueden eliminar egresos anulados' });
+    await expense.destroy();
+    res.json({ ok: true, message: 'Egreso eliminado permanentemente' });
+  } catch (err) { next(err); }
+};
+
 // ── Anular egreso ────────────────────────────────────────────
 exports.voidExpense = async (req, res, next) => {
   try {

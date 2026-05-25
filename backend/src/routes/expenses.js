@@ -7,7 +7,8 @@ router.use(auth);
 router.get('/',           ctrl.getAll);
 router.get('/categories', ctrl.getCategories);
 router.post('/categories', permit('config'), ctrl.upsertCategory);
-router.post('/',          permit('sales', 'config'), ctrl.create);
-router.delete('/:id',    permit('admin', 'config'), ctrl.voidExpense);
+router.post('/',                   permit('sales', 'config'),  ctrl.create);
+router.delete('/:id/permanent',   permit('admin', 'config'),  ctrl.deleteExpense);
+router.delete('/:id',             permit('admin', 'config'),  ctrl.voidExpense);
 
 module.exports = router;

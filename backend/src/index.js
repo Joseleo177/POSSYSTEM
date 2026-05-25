@@ -91,6 +91,7 @@ app.use("/api/companies",        require("./routes/companies"));         // auth
 app.use("/api/quotations",       require("./routes/quotations"));        // auth dentro
 app.use("/api/promotions",       require("./routes/promotions"));        // auth dentro
 app.use("/api/credit-notes",     require("./routes/creditNotes"));       // auth dentro
+app.use("/api/incomes",          require("./routes/incomes"));            // auth dentro
 
 // ── Health check ──────────────────────────────────────────────
 app.get("/health", async (req, res) => {

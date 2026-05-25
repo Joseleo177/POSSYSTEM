@@ -3,6 +3,7 @@ import PurchaseItemsTable from "./PurchaseItemsTable";
 import PurchasePaymentModal from "./PurchasePaymentModal";
 import ProductSelectorModal from "./ProductSelectorModal";
 import ConfirmModal from "../ui/ConfirmModal";
+import Modal from "../ui/Modal";
 import CustomSelect from "../ui/CustomSelect";
 import { api } from "../../services/api";
 import { fmtDateShort } from "../../helpers";
@@ -28,6 +29,7 @@ export default function PurchaseDetails({ state }) {
   const [loadingPay, setLoadingPay]     = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [payDetail, setPayDetail]         = useState(null);
 
   // ── Borrador local state ──
   const [localItems, setLocalItems]             = useState([]);
@@ -60,7 +62,7 @@ export default function PurchaseDetails({ state }) {
 
   // Supplier search
   useEffect(() => {
-    if (detail?.status !== "borrador" || !supQuery.trim()) { setSupHits([]); return; }
+    if (!["borrador", "pendiente"].includes(detail?.status) || !supQuery.trim()) { setSupHits([]); return; }
     let active = true;
     const t = setTimeout(async () => {
       try {
@@ -545,7 +547,11 @@ export default function PurchaseDetails({ state }) {
                     const sym    = cur?.symbol || baseCurrency?.symbol || "Ref.";
                     const isBase = !cur || cur.is_base;
                     return (
-                      <div key={p.id} className="px-5 py-3.5 flex items-center gap-3 group hover:bg-white/[0.02] transition-colors">
+                      <div
+                        key={p.id}
+                        onClick={() => setPayDetail(p)}
+                        className="px-5 py-3.5 flex items-center gap-3 group hover:bg-white/[0.03] cursor-pointer transition-colors"
+                      >
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.journal_color || "#22c55e" }} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -568,7 +574,7 @@ export default function PurchaseDetails({ state }) {
                           )}
                         </div>
                         <button
-                          onClick={() => setDeleteConfirm(p)}
+                          onClick={e => { e.stopPropagation(); setDeleteConfirm(p); }}
                           className="w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-danger/10 text-danger transition-all active:scale-90 shrink-0"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
@@ -621,6 +627,71 @@ export default function PurchaseDetails({ state }) {
         confirmText="Eliminar"
         cancelText="Cancelar"
       />
+
+      {/* ── DETALLE DE PAGO ── */}
+      {payDetail && (
+        <PayDetailModal
+          payment={payDetail}
+          activeCurrencies={activeCurrencies}
+          baseCurrency={baseCurrency}
+          onClose={() => setPayDetail(null)}
+          onDelete={() => { setPayDetail(null); setDeleteConfirm(payDetail); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PayDetailModal({ payment: pd, activeCurrencies, baseCurrency, onClose, onDelete }) {
+  const rate   = parseFloat(pd.exchange_rate || 1);
+  const cur    = activeCurrencies?.find(c => c.id === pd.currency_id);
+  const sym    = cur?.symbol || baseCurrency?.symbol || "Ref.";
+  const isBase = !cur || cur.is_base;
+
+  return (
+    <Modal open onClose={onClose} title="DETALLE DE PAGO" width={380}>
+      <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] divide-y divide-border/10 dark:divide-white/[0.05]">
+        <DRow label="Diario">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: pd.journal_color || "#22c55e" }} />
+            {pd.journal_name || "—"}
+          </span>
+        </DRow>
+        <DRow label="Monto abonado">
+          <span className="text-success font-black">
+            {!isBase
+              ? `${sym}${(parseFloat(pd.amount) * rate).toFixed(2)} · Ref. ${parseFloat(pd.amount).toFixed(2)}`
+              : `Ref. ${parseFloat(pd.amount).toFixed(2)}`}
+          </span>
+        </DRow>
+        {!isBase && (
+          <DRow label="Tasa aplicada">
+            <span className="tabular-nums">{rate.toFixed(4)} {cur?.code || ""}</span>
+          </DRow>
+        )}
+        <DRow label="Fecha de referencia">{fmtDateShort(pd.reference_date || pd.created_at)}</DRow>
+        <DRow label="N° Referencia">{pd.reference_number || <span className="opacity-30">—</span>}</DRow>
+        <DRow label="Empleado">{pd.employee_name || <span className="opacity-30">—</span>}</DRow>
+        {pd.notes && <DRow label="Notas"><span className="italic opacity-70">{pd.notes}</span></DRow>}
+        <DRow label="Registrado">{pd.created_at ? new Date(pd.created_at).toLocaleString("es-VE") : "—"}</DRow>
+      </div>
+      <div className="mt-4 flex justify-end">
+        <button
+          onClick={onDelete}
+          className="h-8 px-4 rounded-xl border border-danger/30 text-danger text-[10px] font-black uppercase tracking-wide hover:bg-danger/10 transition-all"
+        >
+          Eliminar pago
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function DRow({ label, children }) {
+  return (
+    <div className="flex items-start justify-between gap-4 px-4 py-2.5">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-content-subtle opacity-40 whitespace-nowrap shrink-0 mt-0.5">{label}</span>
+      <span className="text-[12px] font-bold text-content dark:text-white text-right">{children}</span>
     </div>
   );
 }

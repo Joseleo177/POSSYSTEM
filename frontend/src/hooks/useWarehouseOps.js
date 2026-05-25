@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../services/api";
 import { useDebounce } from "./useDebounce";
 import { fmtQty } from "../helpers";
@@ -13,8 +13,12 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   // ── Stock ──────────────────────────────────────────────────
   const [stock, setStock]               = useState([]);
   const [stockSearch, setStockSearch]   = useState("");
-  const debouncedStockSearch            = useDebounce(stockSearch, 400);
+  const debouncedStockSearch            = useDebounce(stockSearch, 250);
   const [loadingStock, setLoadingStock] = useState(false);
+  // Ref con el último término debounced para que loadStock mantenga
+  // identidad estable y no dispare efectos en cadena al teclear.
+  const searchRef = useRef("");
+  useEffect(() => { searchRef.current = debouncedStockSearch; }, [debouncedStockSearch]);
   const [stockPage, setStockPage]       = useState(1);
   const [totalStockItems, setTotalStockItems] = useState(0);
   const stockLimit = 50;
@@ -44,22 +48,24 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   const [transferModal, setTransferModal]     = useState(false);
 
   // ── Loaders ────────────────────────────────────────────────
+  // Identidad estable: lee el término de búsqueda desde el ref para que
+  // los consumidores con loadStock en dependencias no se re-disparen.
   const loadStock = useCallback(async (warehouseId, p = 1) => {
     if (!warehouseId) return;
     setLoadingStock(true);
     setStockPage(p);
     try {
-      const q = { 
-        limit: stockLimit, 
+      const q = {
+        limit: stockLimit,
         offset: (p - 1) * stockLimit,
-        search: debouncedStockSearch.trim() 
+        search: (searchRef.current || "").trim(),
       };
       const r = await api.warehouses.getStock(warehouseId, q);
       setStock(r.data || []);
       setTotalStockItems(r.total || 0);
     } catch (e) { notify(e.message, "err"); }
     finally { setLoadingStock(false); }
-  }, [notify, debouncedStockSearch, stockLimit]);
+  }, [notify, stockLimit]);
 
   const loadTransfers = useCallback(async () => {
     try {
@@ -69,9 +75,12 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   }, [notify]);
 
   // ── Effects ────────────────────────────────────────────────
+  // El cambio de almacén lo maneja WarehousesTab (evita doble fetch).
+  // Aquí sólo refrescamos cuando cambia la búsqueda debounceada.
   useEffect(() => {
     if (selectedWarehouse) loadStock(selectedWarehouse.id, 1);
-  }, [selectedWarehouse, loadStock]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedStockSearch]);
   useEffect(() => {
     if (!debouncedTransferProductSearch.trim()) { setTransferProductResults([]); return; }
     // Filtra solo productos con stock en el almacén de origen seleccionado

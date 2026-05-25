@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
-import ReceiptModal from "../../components/ReceiptModal";
+import SaleDetailModal from "../../components/Customers/SaleDetailModal";
 import { fmtDate } from "../../helpers";
 import {
  fmt$,
@@ -15,8 +15,7 @@ export default function CashSessionsReport() {
  const [selectedSession, setSelectedSession] = useState(null);
  const [summaryData, setSummaryData] = useState(null);
  const [loadingSummary, setLoadingSummary] = useState(false);
- const [receiptSale, setReceiptSale] = useState(null);
- const [loadingReceipt, setLoadingReceipt] = useState(false);
+ const [detailSaleId, setDetailSaleId] = useState(null);
  const sessionsPag = usePagination(sessions, 20);
 
  const loadSessions = useCallback(async () => {
@@ -46,18 +45,6 @@ export default function CashSessionsReport() {
  }
  };
 
- const openReceipt = async (saleId) => {
- setLoadingReceipt(true);
- try {
- const r = await api.sales.getOne(saleId);
- if (r.ok && r.data) setReceiptSale(r.data);
- else notify("No se encontró la data de la venta", "err");
- } catch (e) {
- notify("Error al cargar venta: " + e.message, "err");
- } finally {
- setLoadingReceipt(false);
- }
- };
 
  return (
  <div className="h-full flex flex-col space-y-3 overflow-auto">
@@ -120,72 +107,77 @@ export default function CashSessionsReport() {
 
  {selectedSession && (
  <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
- <div className="bg-white dark:bg-surface-dark-2 w-full max-w-2xl rounded-2xl shadow-2xl overflow-auto border border-border dark:border-white/5">
- <div className="p-4 border-b border-border dark:border-white/5 flex items-center justify-between bg-surface-2 dark:bg-white/5">
+ <div className="bg-white dark:bg-surface-dark-2 w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] border border-border dark:border-white/5">
+
+ {/* Header */}
+ <div className="shrink-0 px-5 py-4 border-b border-border dark:border-white/5 flex items-center justify-between bg-surface-2 dark:bg-white/5 rounded-t-2xl">
  <div>
- <div className="text-[11px] font-black text-brand-500 uppercase tracking-wide mb-0.5">RESUMEN DE CAJA</div>
+ <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-0.5">RESUMEN DE CAJA</div>
  <h3 className="text-sm font-black text-content dark:text-white uppercase tracking-tight">#{selectedSession.id} — {selectedSession.warehouse?.name}</h3>
  </div>
  <button onClick={() => { setSelectedSession(null); setSummaryData(null); }}
  className="w-8 h-8 rounded-full bg-surface-3 dark:bg-white/10 flex items-center justify-center hover:bg-danger hover:text-white text-content-muted transition-all">✕</button>
  </div>
 
- <div className="p-5 overflow-auto max-h-[70vh]">
+ {/* Body scrollable */}
+ <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
  {loadingSummary ? (
  <Loading />
  ) : summaryData ? (
- <div className="space-y-6">
+ <div className="space-y-5">
+
+ {/* KPIs */}
  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
  {[
  { label: "Total Venta", value: fmt$(summaryData.sales.total_sales), color: "text-brand-500", sub: `${summaryData.sales.sale_count} rec.` },
- { label: "Recibido", value: fmt$(summaryData.sales.total_paid), color: "text-green-500", sub: `${summaryData.sales.paid_count} items` },
+ { label: "Recibido", value: fmt$(summaryData.sales.total_paid), color: "text-success", sub: `${summaryData.sales.paid_count} items` },
  { label: "Pendiente", value: fmt$(summaryData.sales.total_pending), color: "text-warning", sub: `${summaryData.sales.pending_count} items` },
- { label: "Turno", value: `${new Date(selectedSession.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} / ${new Date(selectedSession.closed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, color: "text-content dark:text-white text-xs", sub: "" },
+ { label: "Turno", value: `${new Date(selectedSession.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} / ${new Date(selectedSession.closed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, color: "text-content dark:text-white", sub: "" },
  ].map(item => (
- <div key={item.label} className="p-3 bg-surface-2 dark:bg-white/5 rounded-2xl border border-border/20 dark:border-white/5 text-center">
- <div className="text-[10px] font-black text-content-muted dark:text-content-dark-muted uppercase tracking-wide mb-1">{item.label}</div>
- <div className={`text-sm font-black font-display ${item.color}`}>{item.value}</div>
- {item.sub && <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase">{item.sub}</div>}
+ <div key={item.label} className="p-3 bg-surface-2 dark:bg-white/5 rounded-xl border border-border/20 dark:border-white/5 text-center">
+ <div className="text-[10px] font-black text-content-muted uppercase tracking-wide mb-1">{item.label}</div>
+ <div className={`text-sm font-black ${item.color}`}>{item.value}</div>
+ {item.sub && <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase mt-0.5">{item.sub}</div>}
  </div>
  ))}
  </div>
 
- <div className="space-y-3">
+ {/* Ventas del turno */}
+ <div className="space-y-2">
  <SectionHeader title="Listado de Ventas del Turno" sub="Auditoría granular de transacciones" />
- <div className="rounded-xl border border-border dark:border-white/5 overflow-auto">
- <table className="w-full text-left min-w-[640px]">
+ <div className="rounded-xl border border-border dark:border-white/5 overflow-hidden">
+ <table className="w-full text-left">
  <thead className="bg-surface-2 dark:bg-white/5">
  <tr>
- {["ID / Cliente", "Estado", "Monto", "Hora", "Acción"].map((h, i) => (
- <th key={h} className={`px-4 py-3 text-[11px] font-black uppercase tracking-wide text-content-muted ${i === 1 || i === 3 ? "text-center" : i === 2 || i === 4 ? "text-right" : ""}`}>{h}</th>
+ {["ID / Cliente", "Estado", "Monto", "Hora", "Detalle"].map((h, i) => (
+ <th key={h} className={`px-4 py-2.5 text-[10px] font-black uppercase tracking-wide text-content-muted ${i === 1 || i === 3 ? "text-center" : i === 2 || i === 4 ? "text-right" : ""}`}>{h}</th>
  ))}
  </tr>
  </thead>
- <tbody className="divide-y divide-border/20 dark:divide-white/5">
+ <tbody className="divide-y divide-border/10 dark:divide-white/5">
  {summaryData.sales_list?.length > 0 ? (
  summaryData.sales_list.map((sale, sIdx) => (
- <tr key={sIdx} className="hover:bg-surface-2 dark:hover:bg-white/5 transition-colors">
- <td className="px-4 py-3">
- <div className="text-[11px] font-black uppercase tabular-nums text-content dark:text-white">#{sale.invoice_number || sale.id}</div>
- <div className="text-[11px] font-bold text-content-subtle opacity-60">{sale.customer_name || "Venta Casual"}</div>
+ <tr key={sIdx} className="hover:bg-surface-2/50 dark:hover:bg-white/[0.03] transition-colors">
+ <td className="px-4 py-2.5">
+ <div className="text-[11px] font-black uppercase tabular-nums text-content dark:text-white">{sale.invoice_number || `#${sale.id}`}</div>
+ <div className="text-[10px] font-bold text-content-subtle opacity-60">{sale.customer_name || "Venta Casual"}</div>
  </td>
- <td className="px-4 py-3 text-center">
+ <td className="px-4 py-2.5 text-center">
  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${(sale.status?.toLowerCase() === 'pagada' || sale.status?.toLowerCase() === 'pagado') ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
  {sale.status}
  </span>
  </td>
- <td className="px-4 py-3 text-right">
- <div className="text-xs font-black text-green-500 tabular-nums">{fmt$(sale.total)}</div>
+ <td className="px-4 py-2.5 text-right">
+ <div className="text-[11px] font-black text-success tabular-nums">{fmt$(sale.total)}</div>
  </td>
- <td className="px-4 py-3 text-center">
- <div className="text-[11px] font-bold text-content-subtle">{new Date(sale.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+ <td className="px-4 py-2.5 text-center">
+ <div className="text-[10px] font-bold text-content-subtle tabular-nums">{new Date(sale.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
  </td>
- <td className="px-4 py-3 text-right">
- <button onClick={() => openReceipt(sale.id)}
- className="p-1.5 rounded-lg bg-surface-3 dark:bg-white/10 text-content-subtle hover:text-brand-500 transition-colors">
+ <td className="px-4 py-2.5 text-right">
+ <button onClick={() => setDetailSaleId(sale.id)}
+ className="p-1.5 rounded-lg bg-surface-3 dark:bg-white/10 text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 transition-colors" title="Ver detalle">
  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
- <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
- <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+ <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
  </svg>
  </button>
  </td>
@@ -199,29 +191,35 @@ export default function CashSessionsReport() {
  </div>
  </div>
 
- <div className="space-y-3">
+ {/* Conciliación */}
+ <div className="space-y-2">
  <SectionHeader title="Conciliación por Diario" sub="Comparativa entre monto esperado y declarado" />
- <div className="rounded-xl border border-border dark:border-white/5 overflow-auto">
- <table className="w-full text-left min-w-[640px]">
+ <div className="rounded-xl border border-border dark:border-white/5 overflow-hidden">
+ <table className="w-full text-left">
  <thead className="bg-surface-2 dark:bg-white/5">
  <tr>
- {["Diario", "Inicio", "Ventas", "Esperado", "Declarado", "Dif."].map((h, i) => (
- <th key={h} className={`px-4 py-3 text-[11px] font-black uppercase tracking-wide text-content-muted ${i >= 1 && i <= 4 ? "text-right" : i === 5 ? "text-center" : ""}`}>{h}</th>
+ {["Diario", "Inicio", "Ventas", "Cambio", "Esperado", "Declarado", "Dif."].map((h, i) => (
+ <th key={h} className={`px-4 py-2.5 text-[10px] font-black uppercase tracking-wide text-content-muted ${i >= 1 && i <= 5 ? "text-right" : i === 6 ? "text-center" : ""}`}>{h}</th>
  ))}
  </tr>
  </thead>
- <tbody className="divide-y divide-border/20 dark:divide-white/5">
+ <tbody className="divide-y divide-border/10 dark:divide-white/5">
  {summaryData.journal_summary.map((js, idx) => (
- <tr key={idx} className="text-xs font-black text-content dark:text-white">
- <td className="px-4 py-3 flex items-center gap-3">
+ <tr key={idx} className="text-[11px] font-black text-content dark:text-white">
+ <td className="px-4 py-2.5 flex items-center gap-2.5">
  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: js.journal_color }} />
  {js.journal_name}
  </td>
- <td className="px-4 py-3 text-right text-content-subtle tabular-nums">{js.opening_amount.toFixed(2)}</td>
- <td className="px-4 py-3 text-right text-brand-500 tabular-nums">+{js.cash_in.toFixed(2)}</td>
- <td className="px-4 py-3 text-right text-content dark:text-white tabular-nums">{js.expected_amount.toFixed(2)}</td>
- <td className="px-4 py-3 text-right text-green-500 tabular-nums">{js.closing_amount?.toFixed(2) || "0.00"}</td>
- <td className={`px-4 py-3 text-center tabular-nums ${(js.difference || 0) < 0 ? "text-danger" : (js.difference || 0) > 0 ? "text-success" : "text-content-subtle opacity-40"}`}>
+ <td className="px-4 py-2.5 text-right text-content-subtle tabular-nums">{js.opening_amount.toFixed(2)}</td>
+ <td className="px-4 py-2.5 text-right text-brand-500 tabular-nums">+{js.cash_in.toFixed(2)}</td>
+ <td className="px-4 py-2.5 text-right tabular-nums">
+ {(js.change_out || 0) > 0
+  ? <span className="text-danger">−{(js.change_out).toFixed(2)}</span>
+  : <span className="text-content-subtle opacity-30">—</span>}
+ </td>
+ <td className="px-4 py-2.5 text-right tabular-nums">{js.expected_amount.toFixed(2)}</td>
+ <td className="px-4 py-2.5 text-right text-success tabular-nums">{js.closing_amount?.toFixed(2) || "0.00"}</td>
+ <td className={`px-4 py-2.5 text-center tabular-nums ${(js.difference || 0) < 0 ? "text-danger" : (js.difference || 0) > 0 ? "text-success" : "text-content-subtle opacity-40"}`}>
  {(js.difference || 0) === 0 ? "OK" : (js.difference || 0).toFixed(2)}
  </td>
  </tr>
@@ -230,13 +228,15 @@ export default function CashSessionsReport() {
  </table>
  </div>
  </div>
+
  </div>
  ) : null}
  </div>
 
- <div className="p-4 bg-surface-2 dark:bg-white/5 border-t border-border dark:border-white/5 flex justify-end">
+ {/* Footer */}
+ <div className="shrink-0 px-5 py-3 bg-surface-2 dark:bg-white/5 border-t border-border dark:border-white/5 flex justify-end rounded-b-2xl">
  <button onClick={() => { setSelectedSession(null); setSummaryData(null); }}
- className="px-6 py-2.5 bg-surface-3 dark:bg-white/10 rounded-xl text-[11px] font-black uppercase tracking-wide text-content dark:text-white hover:bg-surface-3 transition-all border border-border dark:border-white/5">
+ className="px-6 py-2 bg-surface-3 dark:bg-white/10 rounded-xl text-[11px] font-black uppercase tracking-wide text-content dark:text-white hover:bg-danger/10 hover:text-danger transition-all border border-border dark:border-white/5">
  Cerrar
  </button>
  </div>
@@ -244,8 +244,8 @@ export default function CashSessionsReport() {
  </div>
  )}
 
- {receiptSale && (
- <ReceiptModal open={!!receiptSale} onClose={() => setReceiptSale(null)} sale={receiptSale} />
+ {detailSaleId && (
+ <SaleDetailModal saleId={detailSaleId} onClose={() => setDetailSaleId(null)} />
  )}
  </div>
  );

@@ -64,10 +64,30 @@ module.exports = async function getSessionSummary(id) {
     }
   );
 
+  const changeOutByJournal = await sequelize.query(
+    `
+      SELECT p.change_journal_id AS journal_id,
+             COALESCE(SUM(p.change_given * COALESCE(cur.exchange_rate, 1)), 0)::float AS total_out
+      FROM payments p
+      JOIN sales s ON p.sale_id = s.id
+      LEFT JOIN payment_journals pj ON p.change_journal_id = pj.id
+      LEFT JOIN currencies cur ON pj.currency_id = cur.id
+      WHERE p.change_journal_id IS NOT NULL
+        AND s.warehouse_id = :wid AND s.employee_id = :eid
+        AND p.created_at >= :openedAt AND p.created_at < :closedAt
+      GROUP BY p.change_journal_id
+    `,
+    {
+      type: Sequelize.QueryTypes.SELECT,
+      replacements: { wid, eid, openedAt: openedAt.toISOString(), closedAt: closedAt.toISOString() },
+    }
+  );
+
   const journalSummary = (session.journals || []).map((sj) => {
     const collected = paymentsByJournal.find((p) => p.id === sj.journal_id);
     const cashIn = parseFloat(collected?.total || 0);
-    const expected = parseFloat(sj.opening_amount || 0) + cashIn;
+    const changeOut = parseFloat(changeOutByJournal.find((c) => c.journal_id === sj.journal_id)?.total_out || 0);
+    const expected = parseFloat(sj.opening_amount || 0) + cashIn - changeOut;
     return {
       journal_id: sj.journal_id,
       journal_name: sj.journal?.name,
@@ -75,6 +95,7 @@ module.exports = async function getSessionSummary(id) {
       currency_symbol: sj.journal?.Currency?.symbol || collected?.currency_symbol || "Ref.",
       opening_amount: parseFloat(sj.opening_amount || 0),
       cash_in: cashIn,
+      change_out: changeOut,
       expected_amount: parseFloat(expected.toFixed(2)),
       closing_amount: sj.closing_amount != null ? parseFloat(sj.closing_amount) : null,
       difference: sj.difference != null ? parseFloat(sj.difference) : null,

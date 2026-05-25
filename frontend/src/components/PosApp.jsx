@@ -13,7 +13,7 @@ import BottomTabs from "../layout/BottomTabs";
 import MainContent from "../layout/MainContent";
 
 export default function PosApp() {
-    const { employee, authChecked, login, logout, can, notification, storeName, settings } = useApp();
+    const { employee, authChecked, login, logout, can, notification, storeName, settings, currencies } = useApp();
     const { setReceipt } = useCart();
     const { dark, toggle } = useTheme();
 
@@ -71,6 +71,7 @@ export default function PosApp() {
                 toggle={toggle}
                 logout={logout}
                 onOpenLauncher={() => setShowLauncher(true)}
+                currencies={currencies}
             />
 
             <MainContent safeTab={safeTab} />

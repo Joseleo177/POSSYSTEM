@@ -12,14 +12,18 @@ module.exports = async function getPendingPayments(query, tenant = {}) {
     andClauses.push({ company_id });
   }
 
-  if (date_from) andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date >= '${date_from}'`));
-  if (date_to)   andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date <= '${date_to}'`));
+  const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;
+  const safeFrom = sd(date_from);
+  const safeTo   = sd(date_to);
+  if (safeFrom) andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date >= '${safeFrom}'`));
+  if (safeTo)   andClauses.push(Sequelize.literal(`("Sale"."created_at" AT TIME ZONE 'America/Caracas')::date <= '${safeTo}'`));
 
   if (search) {
-    const esc = search.replace(/'/g, "''");
+    const safe = search.slice(0, 100).replace(/[\x00-\x1f\\]/g, '');
+    const esc  = safe.replace(/'/g, "''");
     andClauses.push({
       [Op.or]: [
-        { invoice_number: { [Op.iLike]: `%${search}%` } },
+        { invoice_number: { [Op.iLike]: `%${safe}%` } },
         Sequelize.literal(`"Sale"."customer_id" IN (SELECT id FROM customers WHERE name ILIKE '%${esc}%' OR rif ILIKE '%${esc}%')`),
       ],
     });

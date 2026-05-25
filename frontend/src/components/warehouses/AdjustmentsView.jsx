@@ -11,7 +11,7 @@ const REASONS = [
     { value: "error",      label: "Error en Pedido" },
 ];
 
-export default function AdjustmentsView({ selectedWarehouse, notify }) {
+export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWarehouse }) {
     const [search, setSearch] = useState("");
     const [results, setResults] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState(null);
@@ -62,6 +62,24 @@ export default function AdjustmentsView({ selectedWarehouse, notify }) {
 
     return (
         <div className="flex-1 flex flex-col min-h-0 bg-white/[0.01]">
+            {/* ── Franja de contexto: indica el almacén activo sin ocupar mucho espacio ── */}
+            <div className="shrink-0 px-4 h-9 border-b border-warning/15 bg-warning/[0.03] flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0 text-[10px] font-black uppercase tracking-widest">
+                    <svg className="w-3.5 h-3.5 text-warning shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                    <span className="text-warning/80">Ajustando:</span>
+                    <span className="text-content dark:text-white truncate">{selectedWarehouse.name}</span>
+                </div>
+                {onChangeWarehouse && (
+                    <button
+                        onClick={onChangeWarehouse}
+                        className="shrink-0 h-6 px-2.5 rounded-md text-warning hover:bg-warning hover:text-black text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5"
+                    >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m-4 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                        Cambiar
+                    </button>
+                )}
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 overflow-auto">
 
                 {/* ── Columna izquierda: Selección de Producto ── */}

@@ -21,11 +21,12 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
         activeFilters, activeCats,
         showFilterDrop, setShowFilterDrop,
         voidConfirm, setVoidConfirm,
+        deleteConfirm, setDeleteConfirm,
         showCreate, setShowCreate,
         form, setForm, saving,
         currentSymbol,
         toggleFilter, toggleCat, clearFilters,
-        handleVoid, handleCreate, handleExportCSV,
+        handleVoid, handleDelete, handleCreate, handleExportCSV,
         hasFilters, totalPages,
     } = useEgresos({ notify, journals });
 
@@ -169,12 +170,19 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                                         </div>
                                     </td>
                                     <td className="text-right pr-6">
-                                        <div className="flex items-center justify-end">
+                                        <div className="flex items-center justify-end gap-1">
                                             {can("admin") && exp.status !== 'anulado' && (
                                                 <button onClick={() => setVoidConfirm(exp)}
                                                     className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90"
                                                     title="Anular">
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            )}
+                                            {can("admin") && exp.status === 'anulado' && (
+                                                <button onClick={() => setDeleteConfirm(exp)}
+                                                    className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90"
+                                                    title="Eliminar permanentemente">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                                 </button>
                                             )}
                                         </div>
@@ -242,6 +250,16 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                 onCancel={() => setVoidConfirm(null)}
                 type="danger"
                 confirmText="Sí, anular egreso"
+            />
+
+            <ConfirmModal
+                isOpen={!!deleteConfirm}
+                title="¿Eliminar egreso?"
+                message={`Esto eliminará permanentemente el egreso "${deleteConfirm?.description}". Esta acción no se puede deshacer.`}
+                onConfirm={async () => { await handleDelete(deleteConfirm.id); setDeleteConfirm(null); }}
+                onCancel={() => setDeleteConfirm(null)}
+                type="danger"
+                confirmText="Sí, eliminar"
             />
         </div>
     );

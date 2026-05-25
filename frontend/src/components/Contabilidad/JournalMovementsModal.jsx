@@ -34,7 +34,7 @@ export default function JournalMovementsModal({ journalId, onClose }) {
         try {
             const params = { limit: LIMIT, offset: (page - 1) * LIMIT };
             if (dateFrom) params.date_from = dateFrom;
-            if (dateTo) params.date_to = dateTo;
+            if (dateTo)   params.date_to   = dateTo;
             const r = await api.journals.getMovements(journalId, params);
             setMovements(r.data || []);
             setJournal(r.journal || null);
@@ -52,7 +52,6 @@ export default function JournalMovementsModal({ journalId, onClose }) {
     if (!journalId) return null;
 
     const totalPages = Math.ceil(total / LIMIT);
-    const lastBalance = movements.length > 0 ? movements[movements.length - 1].balance : 0;
 
     return (
         <>
@@ -91,7 +90,7 @@ export default function JournalMovementsModal({ journalId, onClose }) {
                             <div className="text-right">
                                 <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest">Saldo Actual</div>
                                 <div className="text-lg font-black tabular-nums tracking-tighter" style={{ color: journal?.color || "#14b8a6" }}>
-                                    {fmtLocal(lastBalance)}
+                                    {fmtLocal(journal?.current_balance ?? 0)}
                                 </div>
                             </div>
                             <button

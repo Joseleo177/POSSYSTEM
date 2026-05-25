@@ -36,7 +36,7 @@ const getAll = async (req, res) => {
 const getRoles = async (req, res) => {
   try {
     const roles = await Role.findAll({
-      attributes: ['id', 'name', 'label'],
+      attributes: ['id', 'name', 'label', 'permissions'],
       order: [['id', 'ASC']]
     });
     res.json({ ok: true, data: roles });

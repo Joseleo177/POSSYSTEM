@@ -66,17 +66,15 @@ async function createPayment(purchaseId, body, employeeId, companyId) {
     if (purchase.payment_status === "pagado") { const e = new Error("Esta compra ya fue pagada completamente"); e.status = 400; throw e; }
 
     const alreadyPaid    = await getPurchaseAmountPaid(purchase.id, t);
-    const totalPaidNow   = parseFloat((alreadyPaid + payAmt).toFixed(2));
     const purchaseTotal  = parseFloat(purchase.total);
-
-    if (totalPaidNow > purchaseTotal + 0.001) {
-      const e = new Error(`El monto excede el saldo pendiente. Saldo: ${(purchaseTotal - alreadyPaid).toFixed(2)}`);
-      e.status = 400; throw e;
-    }
+    const pendingBalance = parseFloat((purchaseTotal - alreadyPaid).toFixed(4));
+    // Amount credited toward the purchase balance (capped); expense records the full cash out
+    const purchasePayAmt = parseFloat(Math.min(payAmt, pendingBalance).toFixed(4));
+    const totalPaidNow   = parseFloat((alreadyPaid + purchasePayAmt).toFixed(2));
 
     const payment = await PurchasePayment.create({
       purchase_id:        purchase.id,
-      amount:             payAmt,
+      amount:             purchasePayAmt,
       currency_id:        currency_id || null,
       exchange_rate:      parseFloat(exchange_rate) || 1,
       payment_journal_id: payment_journal_id || null,
@@ -99,7 +97,7 @@ async function createPayment(purchaseId, body, employeeId, companyId) {
     await Expense.create({
       reference:          `purchase_payment:${payment.id}`,
       description:        `Pago a proveedor — ${supplierName} (Compra #${purchase.id})`,
-      amount:             payAmt,
+      amount:             payAmt,   // full cash paid out (may exceed purchase balance)
       currency_id:        currency_id || null,
       rate:               parseFloat(exchange_rate) || 1,
       category_id:        supplierCat.id,
@@ -114,8 +112,8 @@ async function createPayment(purchaseId, body, employeeId, companyId) {
     await purchase.update({ payment_status: newStatus }, { transaction: t });
     await t.commit();
 
-    const balance = parseFloat((purchaseTotal - totalPaidNow).toFixed(2));
-    return { data: payment, payment_status: newStatus, amount_paid: totalPaidNow, balance: balance < 0 ? 0 : balance };
+    const remaining = parseFloat((purchaseTotal - totalPaidNow).toFixed(2));
+    return { data: payment, payment_status: newStatus, amount_paid: totalPaidNow, balance: remaining < 0 ? 0 : remaining };
   } catch (err) {
     await t.rollback();
     throw err;

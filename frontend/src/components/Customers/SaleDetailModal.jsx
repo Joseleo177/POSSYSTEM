@@ -199,20 +199,73 @@ export default function SaleDetailModal({ saleId, onClose }) {
                                     <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-2 mt-4">
                                         Pagos registrados ({payments.length})
                                     </div>
-                                    <div className="space-y-1.5">
-                                        {payments.map((p, idx) => (
-                                            <div key={idx} className="flex justify-between items-center bg-surface-2/50 dark:bg-white/[0.03] rounded-xl px-3 py-2 border border-border/10 dark:border-white/5">
-                                                <div>
-                                                    <div className="text-[11px] font-bold text-content dark:text-white">
-                                                        {p.PaymentMethod?.name || p.method || "Pago"}
+                                    <div className="space-y-2">
+                                        {payments.map((p, idx) => {
+                                            const payRate    = p.exchange_rate || 1;
+                                            const paySym     = p.journal_sym || baseCurrency?.symbol || "Ref.";
+                                            const changeRate = p.change_journal_rate || 1;
+                                            const changeSym  = p.change_journal_sym || baseCurrency?.symbol || "Ref.";
+                                            const hasChange  = p.change_given > 0 && p.change_journal_name;
+                                            const diffCcy    = hasChange && paySym !== changeSym;
+
+                                            const payNative    = p.amount * payRate;
+                                            const changeNative = hasChange ? p.change_given * changeRate : null;
+                                            // cross equivalences: pago en moneda del cambio / cambio en moneda del pago
+                                            const payInChangeCcy  = diffCcy ? p.amount * changeRate   : null;
+                                            const changeInPayCcy  = diffCcy ? p.change_given * payRate : null;
+
+                                            const fmtCcy = (n, sym) =>
+                                                `${sym}${Number(n).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+                                            return (
+                                                <div key={idx} className="bg-surface-2/50 dark:bg-white/[0.03] rounded-xl px-3 py-2.5 border border-border/10 dark:border-white/5 space-y-1.5">
+                                                    {/* Cobro */}
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <div className="text-[11px] font-bold text-content dark:text-white flex items-center gap-1.5">
+                                                                {p.journal_color && (
+                                                                    <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: p.journal_color }} />
+                                                                )}
+                                                                {p.journal_name || "Pago"}
+                                                            </div>
+                                                            <div className="text-[10px] text-content-subtle dark:text-white/30">
+                                                                {new Date(p.created_at).toLocaleDateString("es-VE")}
+                                                                {p.reference_number && ` · Ref: ${p.reference_number}`}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="text-[13px] font-black text-success tabular-nums">{fmtCcy(payNative, paySym)}</div>
+                                                            {diffCcy && (
+                                                                <div className="text-[10px] font-bold text-content-subtle dark:text-white/30 tabular-nums">
+                                                                    ≈ {fmtCcy(payInChangeCcy, changeSym)}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <div className="text-[10px] text-content-subtle dark:text-white/30">
-                                                        {new Date(p.created_at).toLocaleDateString("es-VE")}
-                                                    </div>
+                                                    {/* Cambio entregado */}
+                                                    {hasChange && changeNative !== null && (
+                                                        <div className="flex justify-between items-start pt-1.5 border-t border-border/10 dark:border-white/5">
+                                                            <div className="flex items-center gap-1.5">
+                                                                {p.change_journal_color && (
+                                                                    <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: p.change_journal_color }} />
+                                                                )}
+                                                                <span className="text-[10px] font-bold text-warning/80 uppercase tracking-wide">
+                                                                    Cambio desde {p.change_journal_name}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="text-[11px] font-black text-warning tabular-nums">-{fmtCcy(changeNative, changeSym)}</div>
+                                                                {diffCcy && (
+                                                                    <div className="text-[10px] font-bold text-content-subtle dark:text-white/30 tabular-nums">
+                                                                        ≈ -{fmtCcy(changeInPayCcy, paySym)}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <span className="text-[13px] font-black text-success tabular-nums">{fmt(p.amount)}</span>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}

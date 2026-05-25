@@ -29,17 +29,17 @@ async function getDashboard({ company_id, isSuperuser }) {
   ]);
 
   const [incomeToday, incomeMonth, expenseToday, expenseMonth] = await Promise.all([
-    sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total FROM payments WHERE created_at >= :today ${tenantClause}`,   { replacements: { today, company_id }, type: Sequelize.QueryTypes.SELECT }),
-    sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total FROM payments WHERE created_at >= :month ${tenantClause}`,   { replacements: { month, company_id }, type: Sequelize.QueryTypes.SELECT }),
-    sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) as total FROM expenses WHERE created_at >= :today AND status = 'activo' ${tenantClause}`, { replacements: { today, company_id }, type: Sequelize.QueryTypes.SELECT }),
-    sequelize.query(`SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) as total FROM expenses WHERE created_at >= :month AND status = 'activo' ${tenantClause}`, { replacements: { month, company_id }, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE created_at >= :today ${tenantClause}`,   { replacements: { today, company_id }, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE created_at >= :month ${tenantClause}`,   { replacements: { month, company_id }, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE created_at >= :today AND status = 'activo' ${tenantClause}`, { replacements: { today, company_id }, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE created_at >= :month AND status = 'activo' ${tenantClause}`, { replacements: { month, company_id }, type: Sequelize.QueryTypes.SELECT }),
   ]);
 
   const cashInHand = await sequelize.query(`
     SELECT (
-      (SELECT COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) FROM payments ${!isSuperuser && company_id ? "WHERE company_id = :company_id" : ""})
+      (SELECT COALESCE(SUM(amount), 0) FROM payments ${!isSuperuser && company_id ? "WHERE company_id = :company_id" : ""})
       -
-      (SELECT COALESCE(SUM(amount * COALESCE(rate, 1)), 0) FROM expenses WHERE status = 'activo' ${!isSuperuser && company_id ? "AND company_id = :company_id" : ""})
+      (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE status = 'activo' ${!isSuperuser && company_id ? "AND company_id = :company_id" : ""})
     ) as total
   `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 

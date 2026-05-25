@@ -268,13 +268,23 @@ export const api = {
     history:    (params) => request("/cash-sessions/history?"        + new URLSearchParams(params)),
   },
 
+  // ── Ingresos ─────────────────────────────────────────────────
+  incomes: {
+    getAll:         (params={}) => request("/incomes?"              + new URLSearchParams(params)),
+    getCategories:  ()          => request("/incomes/categories"),
+    upsertCategory: (body)      => request("/incomes/categories",    { method: "POST", body: JSON.stringify(body) }),
+    create:         (body)      => request("/incomes",               { method: "POST", body: JSON.stringify(body) }),
+    void:           (id)        => request(`/incomes/${id}`,         { method: "DELETE" }),
+  },
+
   // ── Egresos ──────────────────────────────────────────────────
   expenses: {
     getAll:         (params={}) => request("/expenses?"             + new URLSearchParams(params)),
     getCategories:  ()          => request("/expenses/categories"),
     upsertCategory: (body)      => request("/expenses/categories",   { method: "POST", body: JSON.stringify(body) }),
     create:         (body)      => request("/expenses",              { method: "POST", body: JSON.stringify(body) }),
-    void:           (id)        => request(`/expenses/${id}`,        { method: "DELETE" }),
+    void:           (id)        => request(`/expenses/${id}`,           { method: "DELETE" }),
+    delete:         (id)        => request(`/expenses/${id}/permanent`, { method: "DELETE" }),
   },
   companies: {
     getAll: ()          => request("/companies"),

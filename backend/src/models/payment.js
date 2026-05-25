@@ -10,7 +10,7 @@ module.exports = (sequelize, DataTypes) => {
     company_id: { type: DataTypes.INTEGER, allowNull: true },
     sale_id:            { type: DataTypes.INTEGER, allowNull: false },
     customer_id:        { type: DataTypes.INTEGER },
-    amount:             { type: DataTypes.DECIMAL(12, 2), allowNull: false },
+    amount:             { type: DataTypes.DECIMAL(12, 6), allowNull: false },
     currency_id:        { type: DataTypes.INTEGER },
     exchange_rate:      { type: DataTypes.DECIMAL(12, 6), allowNull: false, defaultValue: 1.0 },
     payment_journal_id: { type: DataTypes.INTEGER },

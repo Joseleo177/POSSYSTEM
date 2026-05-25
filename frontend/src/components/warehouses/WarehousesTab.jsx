@@ -80,7 +80,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
     const pageTitle = subTab === "transferencias"
         ? "Transferencias"
         : subTab === "ajustes"
-        ? "Ajustes de Inventario"
+        ? `Ajustes · ${selectedWarehouse?.name || ""}`
         : subTab === "stock"
         ? `Stock · ${selectedWarehouse?.name || ""}`
         : "Gestión de Almacenes";
@@ -125,9 +125,10 @@ export default function WarehousesTab({ notify, currentEmployee }) {
             )}
 
             {subTab === "ajustes" && (
-                <AdjustmentsView 
+                <AdjustmentsView
                     selectedWarehouse={selectedWarehouse}
                     notify={notify}
+                    onChangeWarehouse={() => { setSelectedWarehouse(null); setSubTab("almacenes"); }}
                 />
             )}
 
