@@ -72,8 +72,8 @@ async function getAll({ limit = 50, offset = 0, search, status, order_status, da
     pp.warehouse_name         = pp.Warehouse?.name     ?? null;
     pp.item_count             = parseInt(pp.item_count || 0);
     const amountPaid = paidMap[pp.id] || 0;
-    pp.amount_paid = parseFloat(amountPaid.toFixed(2));
-    pp.balance     = parseFloat(Math.max(0, parseFloat(pp.total) - amountPaid).toFixed(2));
+    pp.amount_paid = parseFloat(amountPaid.toFixed(6));
+    pp.balance     = parseFloat(Math.max(0, parseFloat(pp.total) - amountPaid).toFixed(6));
     ['Employee','Supplier','Warehouse','PurchaseItems'].forEach(k => delete pp[k]);
     return pp;
   });
@@ -103,8 +103,8 @@ async function getOne(id) {
   ['Employee','Warehouse','PurchaseItems'].forEach(k => delete data[k]);
 
   const amountPaid = await PurchasePayment.sum('amount', { where: { purchase_id: data.id } }) || 0;
-  data.amount_paid = parseFloat(parseFloat(amountPaid).toFixed(2));
-  data.balance     = parseFloat(Math.max(0, parseFloat(data.total) - amountPaid).toFixed(2));
+  data.amount_paid = parseFloat(parseFloat(amountPaid).toFixed(6));
+  data.balance     = parseFloat(Math.max(0, parseFloat(data.total) - amountPaid).toFixed(6));
 
   return { data };
 }

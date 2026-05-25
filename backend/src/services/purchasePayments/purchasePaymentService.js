@@ -67,10 +67,10 @@ async function createPayment(purchaseId, body, employeeId, companyId) {
 
     const alreadyPaid    = await getPurchaseAmountPaid(purchase.id, t);
     const purchaseTotal  = parseFloat(purchase.total);
-    const pendingBalance = parseFloat((purchaseTotal - alreadyPaid).toFixed(4));
+    const pendingBalance = purchaseTotal - alreadyPaid;
     // Amount credited toward the purchase balance (capped); expense records the full cash out
-    const purchasePayAmt = parseFloat(Math.min(payAmt, pendingBalance).toFixed(4));
-    const totalPaidNow   = parseFloat((alreadyPaid + purchasePayAmt).toFixed(2));
+    const purchasePayAmt = Math.min(payAmt, pendingBalance);
+    const totalPaidNow   = parseFloat((alreadyPaid + purchasePayAmt).toFixed(6));
 
     const payment = await PurchasePayment.create({
       purchase_id:        purchase.id,

@@ -76,11 +76,11 @@ export default function PurchasesTable({ state }) {
 
                                 <td className="text-right">
                                     <div className="font-bold text-brand-500 text-xs tabular-nums tracking-tighter">
-                                        ${Number(p.total).toFixed(2)}
+                                        Ref.{Number(p.total).toFixed(2)}
                                     </div>
                                     {p.amount_paid > 0 && p.payment_status !== "pagado" && (
-                                        <div className="text-[9px] font-bold text-success tabular-nums opacity-60">
-                                            +${Number(p.amount_paid).toFixed(2)}
+                                        <div className="text-[9px] font-bold text-warning tabular-nums opacity-70">
+                                            −Ref.{Number(p.amount_paid).toFixed(2)} abonado
                                         </div>
                                     )}
                                 </td>
