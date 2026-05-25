@@ -76,7 +76,7 @@ export default function CotizacionesTab({ notify, can, fmtPrice, allSeries }) {
                 {showFilterDrop && (
                     <>
                         <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
-                        <div className="absolute top-full left-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                        <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado</div>
                                 <div className="grid grid-cols-3 gap-1.5">
@@ -118,7 +118,7 @@ export default function CotizacionesTab({ notify, can, fmtPrice, allSeries }) {
             {subheader}
             <div className="flex-1 flex flex-col overflow-hidden min-h-0">
                 <div className="card-premium overflow-auto flex-1 border-none shadow-none rounded-none bg-transparent">
-                    <table className="table-pos">
+                    <table className="table-pos min-w-[680px]">
                         <thead className="sticky top-0 z-10">
                             <tr>
                                 {["#", "Estado", "Cliente", "Fecha", "Total", "Acciones"].map(h => (

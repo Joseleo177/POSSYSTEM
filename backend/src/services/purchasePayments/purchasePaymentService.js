@@ -32,7 +32,7 @@ async function getPayments(purchaseId) {
     where: { purchase_id: purchaseId },
     include: [
       { model: PaymentJournal, attributes: ["id", "name", "color", "currency_id"] },
-      { model: Currency,       attributes: ["id", "code", "symbol", "exchange_rate"] },
+      { model: Currency,       attributes: ["id", "code", "symbol"] },
       { model: Employee,       attributes: ["id", "full_name"] },
     ],
     order: [["created_at", "ASC"]],
@@ -42,7 +42,7 @@ async function getPayments(purchaseId) {
     const j = p.toJSON();
     j.journal_name    = j.PaymentJournal?.name  ?? null;
     j.journal_color   = j.PaymentJournal?.color ?? null;
-    j.currency_symbol = j.Currency?.symbol      ?? "$";
+    j.currency_symbol = j.Currency?.symbol      ?? "Ref.";
     j.currency_code   = j.Currency?.code        ?? null;
     j.employee_name   = j.Employee?.full_name   ?? null;
     delete j.PaymentJournal; delete j.Currency; delete j.Employee;
@@ -52,7 +52,7 @@ async function getPayments(purchaseId) {
   return { data };
 }
 
-async function createPayment(purchaseId, body, employeeId) {
+async function createPayment(purchaseId, body, employeeId, companyId) {
   const { amount, currency_id, exchange_rate, payment_journal_id, reference_date, reference_number, notes } = body;
 
   const payAmt = parseFloat(amount);
@@ -81,14 +81,15 @@ async function createPayment(purchaseId, body, employeeId) {
       exchange_rate:      parseFloat(exchange_rate) || 1,
       payment_journal_id: payment_journal_id || null,
       employee_id:        employeeId || null,
+      company_id:         companyId || null,
       reference_date,
       reference_number:   reference_number?.trim() || null,
       notes:              notes?.trim() || null,
     }, { transaction: t });
 
     const [supplierCat] = await ExpenseCategory.findOrCreate({
-      where:    { name: "Pagos a Proveedores" },
-      defaults: { name: "Pagos a Proveedores", active: true },
+      where:    { name: "Pagos a Proveedores", company_id: companyId },
+      defaults: { name: "Pagos a Proveedores", active: true, company_id: companyId },
       transaction: t,
     });
 
@@ -103,7 +104,8 @@ async function createPayment(purchaseId, body, employeeId) {
       rate:               parseFloat(exchange_rate) || 1,
       category_id:        supplierCat.id,
       payment_journal_id: payment_journal_id || null,
-      employee_id:        employeeId || 1,
+      employee_id:        employeeId || null,
+      company_id:         companyId || null,
       notes:              `Ref: ${purchaseRef}${notes?.trim() ? ` · ${notes.trim()}` : ""}`,
       status:             "activo",
     }, { transaction: t });

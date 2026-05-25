@@ -77,7 +77,7 @@ export default function ComboItemsEditor({ comboItems, onChange, excludeId }) {
                                         <div className="text-sm font-medium">{p.name}</div>
                                         <div className="text-[10px] text-content-subtle">{p.category_name || "General"}</div>
                                     </div>
-                                    <span className="text-xs font-medium text-brand-500">${p.price}</span>
+                                    <span className="text-xs font-medium text-brand-500">Ref. {p.price}</span>
                                 </div>
                             ))}
                         </div>

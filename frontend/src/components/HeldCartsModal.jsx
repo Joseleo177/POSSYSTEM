@@ -4,8 +4,8 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
-            <div className="w-full max-w-md bg-white dark:bg-[#0c0c0c] rounded-3xl shadow-2xl border border-white/5 overflow-hidden flex flex-col max-h-[70vh]">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="w-full max-w-md bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[70vh] animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out">
 
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between bg-surface-1 dark:bg-white/[0.02]">
@@ -33,7 +33,7 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                     ) : (
                         carts.map(c => {
                             const total = c.items.reduce((acc, i) => acc + (parseFloat(i.price) * i.qty), 0);
-                            const sym = c.currency?.symbol || baseCurrency?.symbol || "$";
+                            const sym = c.currency?.symbol || baseCurrency?.symbol || "Ref.";
 
                             return (
                                 <div key={c.id} className="bg-surface-1 dark:bg-white/[0.03] px-4 py-3 rounded-2xl border border-black/5 dark:border-white/5 flex items-center gap-4 group hover:border-brand-500/30 transition-all">

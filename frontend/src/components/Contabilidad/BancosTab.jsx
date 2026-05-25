@@ -77,7 +77,7 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
           <div className="text-xs font-black uppercase tracking-wide">Sin bancos registrados</div>
         </div>
       ) : (
-        <table className="table-pos">
+        <table className="table-pos min-w-[680px]">
             <thead className="sticky top-0 z-10">
               <tr>
                 {["Nombre del Banco", "Código", "Cuentas / Diarios", "Estado", can("config") && "Acciones"].filter(Boolean).map(h => (

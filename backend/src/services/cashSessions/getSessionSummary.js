@@ -72,7 +72,7 @@ module.exports = async function getSessionSummary(id) {
       journal_id: sj.journal_id,
       journal_name: sj.journal?.name,
       journal_color: sj.journal?.color,
-      currency_symbol: sj.journal?.Currency?.symbol || collected?.currency_symbol || "$",
+      currency_symbol: sj.journal?.Currency?.symbol || collected?.currency_symbol || "Ref.",
       opening_amount: parseFloat(sj.opening_amount || 0),
       cash_in: cashIn,
       expected_amount: parseFloat(expected.toFixed(2)),

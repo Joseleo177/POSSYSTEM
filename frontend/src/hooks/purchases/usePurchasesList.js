@@ -28,9 +28,6 @@ export function usePurchasesList({
     notes,
     resetForm,
 }) {
-    // ───────────────────────────────────────────────
-    // ABRIR DETALLE
-    // ───────────────────────────────────────────────
     const openDetail = useCallback(
         async id => {
             try {
@@ -44,18 +41,17 @@ export function usePurchasesList({
         [notify, setDetail, setView]
     );
 
-    // Refrescar detalle sin cambiar de vista (usado tras registrar un pago)
     const refreshDetail = useCallback(
         async id => {
             try {
                 const r = await api.purchases.getOne(id);
                 setDetail(r.data);
-                // Sincronizar el ítem en la lista principal para evitar datos desactualizados
                 setPurchases(prev =>
                     prev.map(p =>
                         p.id === id
                             ? {
                                   ...p,
+                                  status: r.data.status,
                                   payment_status: r.data.payment_status,
                                   amount_paid: r.data.amount_paid,
                                   balance: r.data.balance,
@@ -70,14 +66,11 @@ export function usePurchasesList({
         [notify, setDetail, setPurchases]
     );
 
-    // ───────────────────────────────────────────────
-    // ANULAR COMPRA
-    // ───────────────────────────────────────────────
     const cancelPurchase = useCallback(
         async id => {
             try {
                 await api.purchases.cancel(id);
-                notify("Compra anulada ✓");
+                notify("Orden eliminada ✓");
                 await loadPurchases();
                 onProductsUpdated?.();
             } catch (e) {
@@ -87,85 +80,132 @@ export function usePurchasesList({
         [notify, loadPurchases, onProductsUpdated]
     );
 
-    const cancelPurchaseAction = cancelPurchase;
-
-    // ───────────────────────────────────────────────
-    // GUARDAR COMPRA
-    // ───────────────────────────────────────────────
-    const savePurchase = useCallback(
-        async () => {
-            if (!items.length)
-                return notify("Agrega al menos un producto", "err");
-
-            if (!selectedWarehouseId)
-                return notify("Selecciona el almacén destino", "err");
-
+    const confirmOrder = useCallback(
+        async id => {
             setLoading(true);
-
             try {
-                await api.purchases.create({
-                    supplier_id: selectedSupplier?.id,
-                    supplier_name: selectedSupplier?.name,
-                    notes: notes || undefined,
-                    warehouse_id: parseInt(selectedWarehouseId),
-                    items: items.map(i => ({
-                        product_id: i.product.id,
-                        package_unit: i.package_unit,
-                        package_size: parseFloat(i.package_size),
-                        package_qty: parseFloat(i.package_qty),
-                        package_price: parseFloat(i.package_price),
-                        profit_margin: parseFloat(i.profit_margin),
-                        update_price: i.update_price,
-                        lot_number: i.lot_number,
-                        expiration_date: i.expiration_date,
-                    })),
-                });
-
-                notify("Compra registrada ✓");
-
-                // recargar lista
-                await loadPurchases();
-
-                // notificar a inventario
-                onProductsUpdated?.();
-
-                // limpiar formulario y volver a la lista
-                resetForm?.();
-                setView("list");
+                const r = await api.purchases.confirm(id);
+                notify("Orden confirmada ✓");
+                setDetail(r.data);
+                setPurchases(prev => prev.map(p => p.id === id ? { ...p, status: "pendiente" } : p));
             } catch (e) {
                 notify(e.message, "err");
             } finally {
                 setLoading(false);
             }
         },
-        [
-            items,
-            selectedWarehouseId,
-            selectedSupplier,
-            notes,
-            notify,
-            loadPurchases,
-            onProductsUpdated,
-            resetForm,
-            setLoading,
-            setView,
-        ]
+        [notify, setDetail, setLoading, setPurchases]
+    );
+
+    const receivePurchase = useCallback(
+        async id => {
+            setLoading(true);
+            try {
+                const r = await api.purchases.receive(id);
+                notify("Mercancía recibida y stock actualizado ✓");
+                setDetail(r.data);
+                setPurchases(prev => prev.map(p => p.id === id ? { ...p, status: "recibido" } : p));
+                onProductsUpdated?.();
+            } catch (e) {
+                notify(e.message, "err");
+            } finally {
+                setLoading(false);
+            }
+        },
+        [notify, setDetail, setLoading, setPurchases, onProductsUpdated]
+    );
+
+    const _buildItemsPayload = (items) =>
+        items.map(i => ({
+            product_id: i.product.id,
+            package_unit: i.package_unit,
+            package_size: parseFloat(i.package_size),
+            package_qty: parseFloat(i.package_qty),
+            package_price: parseFloat(i.package_price) || 0,
+            profit_margin: parseFloat(i.profit_margin) || 0,
+            lot_number: i.lot_number || null,
+            expiration_date: i.expiration_date || null,
+        }));
+
+    const savePurchase = useCallback(
+        async () => {
+            if (!items.length)
+                return notify("Agrega al menos un producto", "err");
+
+            setLoading(true);
+            try {
+                const r = await api.purchases.create({
+                    supplier_id: selectedSupplier?.id,
+                    supplier_name: selectedSupplier?.name,
+                    notes: notes || undefined,
+                    warehouse_id: selectedWarehouseId ? parseInt(selectedWarehouseId) : undefined,
+                    status: "borrador",
+                    items: _buildItemsPayload(items),
+                });
+                notify("Borrador guardado ✓");
+                resetForm?.();
+                loadPurchases();
+                const newId = r?.data?.id ?? r?.id;
+                if (newId) {
+                    const detail = await api.purchases.getOne(newId);
+                    setDetail(detail.data);
+                    setView("detail");
+                } else {
+                    setView("list");
+                }
+            } catch (e) {
+                notify(e.message, "err");
+            } finally {
+                setLoading(false);
+            }
+        },
+        [items, selectedWarehouseId, selectedSupplier, notes, notify, loadPurchases, resetForm, setLoading, setView, setDetail]
+    );
+
+    const updateDraft = useCallback(
+        async (draftId) => {
+            if (!items.length)
+                return notify("Agrega al menos un producto", "err");
+
+            setLoading(true);
+            try {
+                await api.purchases.update(draftId, {
+                    supplier_id: selectedSupplier?.id,
+                    supplier_name: selectedSupplier?.name,
+                    notes: notes || undefined,
+                    warehouse_id: selectedWarehouseId ? parseInt(selectedWarehouseId) : undefined,
+                    items: _buildItemsPayload(items),
+                });
+                notify("Borrador actualizado ✓");
+                resetForm?.();
+                loadPurchases();
+                const detail = await api.purchases.getOne(draftId);
+                setDetail(detail.data);
+                setView("detail");
+            } catch (e) {
+                notify(e.message, "err");
+            } finally {
+                setLoading(false);
+            }
+        },
+        [items, selectedWarehouseId, selectedSupplier, notes, notify, loadPurchases, resetForm, setLoading, setView, setDetail]
     );
 
     return {
-        // estados
         purchases,
         detail,
         view,
         loading,
         cancelConfirm,
 
-        // acciones
         openDetail,
         refreshDetail,
         cancelPurchase,
-        cancelPurchaseAction,
+        cancelPurchaseAction: cancelPurchase,
+        confirmOrder,
+        receivePurchase,
         savePurchase,
+        updateDraft,
         setCancelConfirm,
     };
 }

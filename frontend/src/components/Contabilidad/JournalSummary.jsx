@@ -26,7 +26,7 @@ export default function JournalSummary({ dateFrom, dateTo, onData, onSelectJourn
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       {data.map(j => {
-        const sym = j.currency_symbol || "$";
+        const sym = j.currency_symbol || "Ref.";
         const fmtJ = n => `${sym}${Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         const journalColor = j.color || "#14b8a6";
 

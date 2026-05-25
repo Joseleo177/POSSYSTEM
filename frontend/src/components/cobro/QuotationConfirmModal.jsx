@@ -9,7 +9,7 @@ export default function QuotationConfirmModal({ quotation, onNext }) {
     const receiptRate   = parseFloat(quotation?.exchange_rate || 1);
     const receiptIsBase = receiptRate <= 1;
     const displayCurrency = activeCurrencies?.find(c => !c.is_base) || baseCurrency;
-    const sym = receiptIsBase ? (baseCurrency?.symbol || "$") : (displayCurrency?.symbol || "$");
+    const sym = receiptIsBase ? (baseCurrency?.symbol || "Ref.") : (displayCurrency?.symbol || "Ref.");
     const rate = receiptIsBase ? 1 : parseFloat(receiptRate > 1 ? receiptRate : (displayCurrency?.exchange_rate || 1));
     const fmt = n => `${sym}${Number(parseFloat(n || 0) * rate).toFixed(2)}`;
 
@@ -26,8 +26,8 @@ export default function QuotationConfirmModal({ quotation, onNext }) {
     };
 
     return (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
-            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 rounded-xl shadow-2xl border border-border/20 dark:border-white/5 overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out">
 
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3 bg-brand-500/5">

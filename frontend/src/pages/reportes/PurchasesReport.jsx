@@ -39,7 +39,7 @@ export default function PurchasesReport() {
  <SectionHeader title="Principales Aliados" sub="Gasto acumulado" />
  </div>
  <div className="overflow-x-auto">
- <table className="w-full text-left border-collapse">
+ <table className="w-full text-left border-collapse min-w-[600px]">
  <thead className="bg-surface-2 dark:bg-surface-dark-2/50">
  <tr className="border-b border-border/40 dark:border-white/5">
  <th className="px-4 py-2 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted">Proveedor</th>
@@ -66,7 +66,7 @@ export default function PurchasesReport() {
  <SectionHeader title="Abastecimiento" sub="Mayor volumen de compra" />
  </div>
  <div className="overflow-x-auto">
- <table className="w-full text-left border-collapse">
+ <table className="w-full text-left border-collapse min-w-[600px]">
  <thead className="bg-surface-2 dark:bg-surface-dark-2/50">
  <tr className="border-b border-border/40 dark:border-white/5">
  <th className="px-4 py-2 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted">Producto</th>

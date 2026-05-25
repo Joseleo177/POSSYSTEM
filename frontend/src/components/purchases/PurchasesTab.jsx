@@ -15,10 +15,11 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     const state = usePurchases(notify, onProductsUpdated);
     const [showFilterDrop, setShowFilterDrop] = useState(false);
 
-    const hasFilters = !!(state.listStatus || state.listDateFrom || state.listDateTo);
-    const filtersCount = (state.listStatus ? 1 : 0) + ((state.listDateFrom || state.listDateTo) ? 1 : 0);
+    const hasFilters = !!(state.listStatus || state.listOrderStatus || state.listDateFrom || state.listDateTo);
+    const filtersCount = (state.listStatus ? 1 : 0) + (state.listOrderStatus ? 1 : 0) + ((state.listDateFrom || state.listDateTo) ? 1 : 0);
     const clearFilters = () => {
         state.setListStatus("");
+        state.setListOrderStatus("");
         state.setListDateFrom("");
         state.setListDateTo("");
         state.setPurchasesPage(1);
@@ -41,13 +42,17 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     } = state;
 
     const getPageTitle = () => {
-        if (view === "detail") return `RECIBO DE COMPRA #${state.detail?.id}`;
-        if (view === "new") return "NUEVO RECIBO DE COMPRA";
+        if (view === "detail") {
+            const os = state.detail?.status || "recibido";
+            const prefix = os === "borrador" ? "BORRADOR" : os === "pendiente" ? "ORDEN" : "RECIBO";
+            return `${prefix} #${state.detail?.id}`;
+        }
+        if (view === "new") return state.editingDraftId ? `EDITAR BORRADOR #${state.editingDraftId}` : "NUEVA ORDEN DE COMPRA";
         return "Listado de Compras";
     };
 
     const getPageActions = () => {
-        if (view === "list") return <Button onClick={state.openNew}>+ NUEVO RECIBO</Button>;
+        if (view === "list") return <Button onClick={state.openNew}>+ NUEVA ORDEN</Button>;
         if (view === "detail" || view === "new") {
             return (
                 <Button variant="ghost" onClick={() => state.setView("list")} className="h-10 px-4">
@@ -105,12 +110,31 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                         <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
                                         <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
                                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado de Orden</div>
+                                                <div className="grid grid-cols-3 gap-1.5">
+                                                    {[
+                                                        { id: "borrador",  label: "Borrador" },
+                                                        { id: "pendiente", label: "Pendiente" },
+                                                        { id: "recibido",  label: "Recibido" },
+                                                    ].map(f => {
+                                                        const active = state.listOrderStatus === f.id;
+                                                        return (
+                                                            <button key={f.id}
+                                                                onClick={() => { state.setListOrderStatus(active ? "" : f.id); state.setPurchasesPage(1); }}
+                                                                className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${active ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                                                {f.label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                            <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado de Pago</div>
-                                                <div className="grid grid-cols-2 gap-1.5">
+                                                <div className="grid grid-cols-3 gap-1.5">
                                                     {[
                                                         { id: "pagado",    label: "Pagado" },
                                                         { id: "parcial",   label: "Parcial" },
-                                                        { id: "pendiente", label: "Pendiente" },
+                                                        { id: "pendiente", label: "Debe" },
                                                     ].map(f => {
                                                         const active = state.listStatus === f.id;
                                                         return (
@@ -169,15 +193,19 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
 
             <ConfirmModal
                 isOpen={!!state.cancelConfirm}
-                title="Anular compra"
-                message="¿Seguro que deseas anular este recibo?"
+                title={state.cancelConfirm?.status === "recibido" ? "Anular compra recibida" : "Eliminar orden"}
+                message={
+                    state.cancelConfirm?.status === "recibido"
+                        ? "Esta compra ya fue recibida. Eliminarla revertirá el stock. ¿Seguro que deseas continuar?"
+                        : "¿Seguro que deseas eliminar esta orden? No se afectará el stock."
+                }
                 onCancel={() => state.setCancelConfirm(null)}
                 onConfirm={() => {
                     state.cancelPurchaseAction(state.cancelConfirm.id);
                     state.setCancelConfirm(null);
                 }}
                 type="danger"
-                confirmText="SI, ANULAR"
+                confirmText="SÍ, ELIMINAR"
                 cancelText="CANCELAR"
             />
         </Page>

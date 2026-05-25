@@ -28,7 +28,7 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
 
   const payCur  = activeCurrencies.find(c => c.id === parseInt(form.pay_currency_id));
   const payRate = (!payCur || payCur.is_base) ? 1 : parseFloat(payCur.exchange_rate || 1);
-  const paySym  = payCur?.symbol || baseCurrency?.symbol || "$";
+  const paySym  = payCur?.symbol || baseCurrency?.symbol || "Ref.";
 
   const selectedJournal = activeJournals.find(j => j.id === form.payment_journal_id);
   const isCash = selectedJournal?.type === "efectivo";
@@ -71,14 +71,14 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
 
   // Display helpers
   const infoRate = form.pay_currency_id ? payRate : 1;
-  const infoSym  = form.pay_currency_id ? paySym  : (baseCurrency?.symbol || "$");
+  const infoSym  = form.pay_currency_id ? paySym  : (baseCurrency?.symbol || "Ref.");
   const fmt = (usd) => `${infoSym}${(Number(usd || 0) * infoRate).toFixed(2)}`;
 
   return (
     <Modal open={!!purchase} onClose={onClose} title="PAGAR A PROVEEDOR" width={440}>
 
       {/* Resumen de la compra */}
-      <div className="rounded-xl bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/5 p-4 mb-5 space-y-1.5">
+      <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 mb-5 space-y-1.5">
         {purchase.supplier_name && (
           <Row label="Proveedor" value={purchase.supplier_name} />
         )}
@@ -146,7 +146,7 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
               setForm(p => ({ ...p, received_amount: val }));
             }}
             placeholder={`${paySym}0.00`}
-            className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
           />
           {payCur && !payCur.is_base && amountBase > 0 && (
             <p className="text-[10px] font-bold text-success mt-1">
@@ -172,7 +172,7 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
               value={form.reference_number}
               onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
               placeholder="Ej: 000123456"
-              className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
             />
           </Field>
         )}
@@ -184,7 +184,7 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
             value={form.notes}
             onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
             placeholder="Observaciones..."
-            className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
           />
         </Field>
       </div>

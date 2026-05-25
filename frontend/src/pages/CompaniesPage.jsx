@@ -119,8 +119,8 @@ export default function CompaniesPage() {
                         </div>
                     </div>
                 ) : (
-                    <div className="card-premium overflow-hidden">
-                        <table className="table-pos">
+                    <div className="card-premium overflow-auto">
+                        <table className="table-pos min-w-[680px]">
                             <thead>
                                 <tr>
                                     <th className="text-left w-16">#</th>

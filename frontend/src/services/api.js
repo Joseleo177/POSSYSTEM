@@ -170,10 +170,13 @@ export const api = {
   purchases: {
     getAll:         (params = {}) => request("/purchases?" + new URLSearchParams(params)),
     getOne:         (id)          => request(`/purchases/${id}`),
-    create:         (body)        => request("/purchases",                  { method: "POST",   body: JSON.stringify(body) }),
-    cancel:         (id)          => request(`/purchases/${id}`,            { method: "DELETE" }),
+    create:         (body)        => request("/purchases",                      { method: "POST",   body: JSON.stringify(body) }),
+    update:         (id, body)    => request(`/purchases/${id}`,                { method: "PATCH",  body: JSON.stringify(body) }),
+    confirm:        (id)          => request(`/purchases/${id}/confirm`,        { method: "PATCH" }),
+    receive:        (id)          => request(`/purchases/${id}/receive`,        { method: "PATCH" }),
+    cancel:         (id)          => request(`/purchases/${id}`,                { method: "DELETE" }),
     getPayments:    (id)          => request(`/purchases/${id}/payments`),
-    createPayment:  (id, body)    => request(`/purchases/${id}/payments`,   { method: "POST",   body: JSON.stringify(body) }),
+    createPayment:  (id, body)    => request(`/purchases/${id}/payments`,       { method: "POST",   body: JSON.stringify(body) }),
     removePayment:  (paymentId)   => request(`/purchase-payments/${paymentId}`, { method: "DELETE" }),
   },
   settings: {
@@ -295,5 +298,10 @@ export const api = {
     create:    (body)     => request("/promotions",       { method: "POST",   body: JSON.stringify(body) }),
     update:    (id, body) => request(`/promotions/${id}`, { method: "PUT",    body: JSON.stringify(body) }),
     remove:    (id)       => request(`/promotions/${id}`, { method: "DELETE" }),
+  },
+
+  // ── Notas de Crédito ──────────────────────────────────────────
+  creditNotes: {
+    getAll: (params = {}) => request("/credit-notes?" + new URLSearchParams(params)),
   },
 };

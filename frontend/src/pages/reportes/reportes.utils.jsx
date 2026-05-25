@@ -3,7 +3,7 @@ import { fmtNumber, fmtInt, todayISO } from "../../helpers";
 import GlobalDateRangePicker from "../../components/ui/DateRangePicker";
 
 // ── Helpers ───────────────────────────────────────────────────
-export const fmt$ = (n) => `$${fmtNumber(n, 2)}`;
+export const fmt$ = (n) => `Ref. ${fmtNumber(n, 2)}`;
 export const fmtN = (n) => fmtInt(n);
 export const pct = (part, total) => total > 0 ? ((part / total) * 100).toFixed(1) : "0.0";
 export const delta = (curr, prev) => prev > 0 ? (((curr - prev) / prev) * 100).toFixed(1) : null;

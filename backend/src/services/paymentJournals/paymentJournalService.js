@@ -235,7 +235,7 @@ async function getMovements(req) {
       name:            jj.name,
       color:           jj.color,
       currency_code:   jj.Currency?.code   || null,
-      currency_symbol: jj.Currency?.symbol || '$',
+      currency_symbol: jj.Currency?.symbol || 'Ref.',
       bank_name:       jj.Bank?.name       || null,
     },
     data,

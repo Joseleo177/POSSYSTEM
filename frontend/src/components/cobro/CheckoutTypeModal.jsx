@@ -56,8 +56,8 @@ export default function CheckoutTypeModal({ open, onClose, onSelectFactura, onSe
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-surface-1 dark:bg-surface-dark-1 border border-border/30 dark:border-white/10 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out">
 
                 <div className="text-center mb-5">
                     <div className="w-12 h-12 rounded-[16px] bg-brand-500/10 text-brand-500 flex items-center justify-center mx-auto mb-3">

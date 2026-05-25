@@ -11,7 +11,7 @@ export default function ProductTable({
     const allSelected = products.length > 0 && products.every(p => selectedProducts.includes(p.id));
 
     return (
-        <table className="table-pos">
+        <table className="table-pos min-w-[720px]">
             <thead>
                 <tr>
                     {isSelectionMode && (

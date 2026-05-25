@@ -91,7 +91,7 @@ export default function ClientesPage() {
                 <PaymentFormModal
                     sale={payModal}
                     onClose={() => setPayModal(null)}
-                    onSuccess={() => { setPayModal(null); refreshDetail(); }}
+                    onSuccess={() => { setPayModal(null); refreshDetail(detail?.id); }}
                 />
             )}
 

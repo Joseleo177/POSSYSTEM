@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useRef } from "react";
 import { api } from "../services/api";
 import { useApp } from "./AppContext";
 
@@ -11,6 +11,10 @@ export function CartProvider({ children }) {
   const [cart, setCart] = useState([]);
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
+  // Clave de idempotencia: se mantiene entre reintentos del mismo cobro
+  // y se renueva sólo cuando la venta se concreta con éxito.
+  const pendingKeyRef = useRef(null);
   const [heldCarts, setHeldCarts] = useState([]);
 
   // ── Moneda seleccionada ────────────────────────────────────
@@ -27,7 +31,8 @@ export function CartProvider({ children }) {
     if (!employee) return;
     try {
       const r = await api.series.getMy();
-      const series = r.data || [];
+      // El POS solo emite facturas — las series de nota de crédito no aplican aquí
+      const series = (r.data || []).filter(s => s.type !== "nc");
       setMySeries(series);
       if (series.length > 0) setSelectedSerieId(prev => prev ?? series[0].id);
     } catch (e) { console.error(e); }
@@ -326,12 +331,23 @@ export function CartProvider({ children }) {
 
   // ── Generar factura (sin pago aún) ─────────────────────────
   const checkout = useCallback(async (onSuccess) => {
+    // Guard contra doble envío: evita ventas duplicadas por doble clic
+    // o por la tecla Enter disparada dos veces antes de que termine la petición.
+    if (submittingRef.current) return;
     if (!cart.length) return notify("El carrito está vacío", "err");
     if (!activeWarehouse) return notify("Selecciona un almacén antes de continuar", "err");
     if (!selectedCustomer) return notify("El cliente es requerido", "err");
     if (!selectedSerieId) return notify("La serie es requerida", "err");
 
+    submittingRef.current = true;
     setLoading(true);
+    // Se genera una vez y se reutiliza en reintentos del mismo cobro:
+    // si un reintento ya había creado la venta, el backend la devuelve
+    // en lugar de duplicarla.
+    if (!pendingKeyRef.current) {
+      pendingKeyRef.current =
+        (crypto?.randomUUID?.() ?? `k-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    }
     try {
       const res = await api.sales.create({
         items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty) })),
@@ -343,6 +359,7 @@ export function CartProvider({ children }) {
         serie_id: selectedSerieId,
         warehouse_id: activeWarehouse.id,
         discount_amount: discountAmount,
+        idempotency_key: pendingKeyRef.current,
       });
 
       const serie = mySeries.find(s => s.id === selectedSerieId);
@@ -361,6 +378,7 @@ export function CartProvider({ children }) {
       notify(e.message, "err");
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   }, [cart, activeWarehouse, selectedCustomer, selectedSerieId,
     employee, currentCurrency, exchangeRate,

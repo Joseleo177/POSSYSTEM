@@ -27,7 +27,7 @@ export function useEgresos({ notify, journals }) {
 
     const selectedJournal = form.payment_journal_id ? journals?.find(j => j.id == form.payment_journal_id) : null;
     const currentRate = selectedJournal?.exchange_rate || 1;
-    const currentSymbol = selectedJournal?.currency_symbol || "$";
+    const currentSymbol = selectedJournal?.currency_symbol || "Ref.";
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);

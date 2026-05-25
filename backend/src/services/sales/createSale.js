@@ -17,12 +17,46 @@ const {
 } = require("./shared");
 const { Promotion } = require("../../models");
 
+// Devuelve la venta con todas sus relaciones, en el formato plano que
+// espera el frontend. Reutilizado por la respuesta normal y la idempotente.
+async function formatSale(saleId) {
+  const fullSale = await Sale.findByPk(saleId, {
+    include: [
+      { model: Customer, attributes: ["name", "rif"] },
+      { model: Employee, attributes: ["full_name"] },
+      { model: Currency, attributes: ["symbol", "code"] },
+      { model: Warehouse, attributes: ["name"] },
+      { model: Serie, attributes: ["name", "prefix", "padding"] },
+      { model: SaleItem },
+    ],
+  });
+
+  const data = fullSale.toJSON();
+  data.customer_name = data.Customer?.name ?? null;
+  data.customer_rif  = data.Customer?.rif ?? null;
+  data.employee_name = data.Employee?.full_name ?? null;
+  data.currency_symbol = data.Currency?.symbol ?? null;
+  data.currency_code = data.Currency?.code ?? null;
+  data.warehouse_name = data.Warehouse?.name ?? null;
+  data.serie_name = data.Serie?.name ?? null;
+  data.items = data.SaleItems ?? [];
+  ["Customer", "Employee", "Currency", "Warehouse", "Serie", "SaleItems"].forEach((k) => delete data[k]);
+  return data;
+}
+
 module.exports = async function createSale(body) {
+  const { items, paid, customer_id, employee_id, currency_id, exchange_rate, payment_method, serie_id, discount_amount, warehouse_id, idempotency_key } =
+    body;
+
+  // Idempotencia: si ya existe una venta con esta clave, devolverla sin
+  // crear una nueva. Cubre reintentos de red y doble envío del cliente.
+  if (idempotency_key) {
+    const existing = await Sale.findOne({ where: { idempotency_key } });
+    if (existing) return formatSale(existing.id);
+  }
+
   const transaction = await sequelize.transaction();
   try {
-    const { items, paid, customer_id, employee_id, currency_id, exchange_rate, payment_method, serie_id, discount_amount, warehouse_id } =
-      body;
-
     if (!items?.length) throw new Error("items es requerido");
     if (paid == null) throw new Error("paid es requerido");
     if (!warehouse_id) throw new Error("warehouse_id es requerido");
@@ -137,6 +171,7 @@ module.exports = async function createSale(body) {
         warehouse_id,
         serie_id: serie.id,
         status: 'borrador',
+        idempotency_key: idempotency_key || null,
       },
       { transaction }
     );
@@ -171,31 +206,16 @@ module.exports = async function createSale(body) {
 
     await transaction.commit();
 
-    const fullSale = await Sale.findByPk(sale.id, {
-      include: [
-        { model: Customer, attributes: ["name", "rif"] },
-        { model: Employee, attributes: ["full_name"] },
-        { model: Currency, attributes: ["symbol", "code"] },
-        { model: Warehouse, attributes: ["name"] },
-        { model: Serie, attributes: ["name", "prefix", "padding"] },
-        { model: SaleItem },
-      ],
-    });
-
-    const data = fullSale.toJSON();
-    data.customer_name = data.Customer?.name ?? null;
-    data.customer_rif  = data.Customer?.rif ?? null;
-    data.employee_name = data.Employee?.full_name ?? null;
-    data.currency_symbol = data.Currency?.symbol ?? null;
-    data.currency_code = data.Currency?.code ?? null;
-    data.warehouse_name = data.Warehouse?.name ?? null;
-    data.serie_name = data.Serie?.name ?? null;
-    data.items = data.SaleItems ?? [];
-    ["Customer", "Employee", "Currency", "Warehouse", "Serie", "SaleItems"].forEach((k) => delete data[k]);
-
-    return data;
+    return formatSale(sale.id);
   } catch (err) {
     await transaction.rollback();
+
+    // Carrera: dos peticiones simultáneas con la misma clave de idempotencia.
+    // La segunda viola el índice único; devolvemos la venta ya creada.
+    if (idempotency_key && err?.name === "SequelizeUniqueConstraintError") {
+      const existing = await Sale.findOne({ where: { idempotency_key } });
+      if (existing) return formatSale(existing.id);
+    }
     throw err;
   }
 };

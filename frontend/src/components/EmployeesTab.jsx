@@ -129,7 +129,7 @@ export default function EmployeesTab({ notify }) {
             {/* ── Sección Empleados ── */}
             {activeTab === "employees" && (
                 <div className="card-premium overflow-auto flex-1">
-                    <table className="table-pos">
+                    <table className="table-pos min-w-[680px]">
                         <thead>
                             <tr>
                                 <th className="text-left">Identificación</th>
@@ -294,7 +294,7 @@ export default function EmployeesTab({ notify }) {
                         />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                             <label className="label mb-1.5 opacity-70">Rol <span className="text-danger">*</span></label>
                             <select value={form.role_id} onChange={set("role_id")} className="input h-10 font-bold cursor-pointer">

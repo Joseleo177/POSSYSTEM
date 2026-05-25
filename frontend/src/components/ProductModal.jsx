@@ -254,7 +254,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         {suggestedPrice && <span className="text-[10px] bg-green-500 text-white px-1.5 py-0.5 rounded font-bold uppercase transition-all">Aplicar</span>}
                                     </div>
                                     <div className="text-lg font-bold text-green-600 dark:text-green-400 tabular-nums">
-                                        {suggestedPrice ? `$${suggestedPrice}` : "—"}
+                                        {suggestedPrice ? `Ref. ${suggestedPrice}` : "—"}
                                     </div>
                                 </div>
                             </div>

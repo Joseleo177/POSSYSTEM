@@ -72,7 +72,7 @@ export default function CategoriesTab({ notify, can }) {
                     </div>
                 ) : (
                     <div className="card-premium overflow-auto flex-1">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse min-w-[520px]">
                             <thead className="sticky top-0 z-10">
                                 <tr className="bg-surface-2 dark:bg-surface-dark-2">
                                     {["Color", "Nombre", "Productos", "Acciones"].map(h => (

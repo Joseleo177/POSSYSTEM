@@ -3,7 +3,7 @@ import Modal from "../ui/Modal";
 import { api } from "../../services/api";
 import { fmtNumber } from "../../helpers";
 
-const fmtPrice = (n) => `$${fmtNumber(parseFloat(n || 0))}`;
+const fmtPrice = (n) => `Ref. ${fmtNumber(parseFloat(n || 0))}`;
 
 export default function EditSaleModal({ open, onClose, sale, notify, onSaved }) {
     const [items, setItems] = useState([]);
@@ -99,7 +99,7 @@ export default function EditSaleModal({ open, onClose, sale, notify, onSaved }) 
             </p>
 
             {/* Items table */}
-            <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-[1rem] border border-border/40 overflow-hidden shadow-sm mb-4 max-h-[35vh] overflow-y-auto scrollbar-dark">
+            <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-[1rem] border border-border/40 overflow-x-auto shadow-sm mb-4 max-h-[35vh] overflow-y-auto scrollbar-dark">
                 <table className="w-full text-[11px] border-collapse min-w-[460px]">
                     <thead className="sticky top-0 bg-surface-3 dark:bg-surface-dark border-b border-border/40 z-10">
                         <tr>

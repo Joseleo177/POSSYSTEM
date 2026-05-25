@@ -62,7 +62,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
           <div className="text-xs font-black uppercase tracking-wide">No hay diarios configurados</div>
         </div>
       ) : (
-        <table className="table-pos">
+        <table className="table-pos min-w-[680px]">
             <thead className="sticky top-0 z-10">
               <tr>
                 <th className="w-12" />

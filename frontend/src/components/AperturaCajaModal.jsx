@@ -3,7 +3,7 @@ import { api } from "../services/api";
 import CustomSelect from "./ui/CustomSelect";
 import { Button } from "./ui/Button";
 
-export default function AperturaCajaModal({ employee, warehouses = [], initialWarehouse, onOpened, onWarehouseChange }) {
+export default function AperturaCajaModal({ employee, warehouses = [], initialWarehouse, onOpened, onWarehouseChange, onSkip }) {
     const [selectedWarehouseId, setSelectedWarehouseId] = useState(initialWarehouse?.id || "");
     const [journals, setJournals] = useState([]); // todos los de tipo efectivo
     const [selected, setSelected] = useState({}); // { [journal_id]: { checked, amount } }
@@ -66,18 +66,23 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
     const currentWh = warehouses.find(w => w.id === parseInt(selectedWarehouseId)) || initialWarehouse;
 
     return (
-        <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4 animate-in fade-in duration-300">
-            <div className="w-full max-w-md bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="w-full max-w-md bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out">
 
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3">
                     <div className="w-9 h-9 rounded-lg bg-success/10 border border-success/20 flex items-center justify-center shrink-0">
                         <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
                     </div>
-                    <div>
+                    <div className="flex-1">
                         <div className="text-[10px] font-black uppercase tracking-widest text-success opacity-70">Turno de Trabajo</div>
                         <div className="text-sm font-black text-content dark:text-white">Apertura de Caja</div>
                     </div>
+                    {onSkip && (
+                        <button onClick={onSkip} className="w-8 h-8 rounded-full bg-surface-2 dark:bg-white/5 flex items-center justify-center text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/10 transition-all shrink-0" title="Continuar sin abrir caja">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    )}
                 </div>
 
                 <div className="p-5 space-y-4">

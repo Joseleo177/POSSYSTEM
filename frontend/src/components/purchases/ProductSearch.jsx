@@ -48,7 +48,7 @@ export default function ProductSearch({ state }) {
                                     </div>
                                     {itemForm.product.cost_price && (
                                         <div className="text-[10px] font-bold text-content-subtle opacity-60 uppercase tracking-widest border-l border-border/20 pl-3">
-                                            Último Costo: <span className="text-brand-500 tabular-nums">${fmt2(itemForm.product.cost_price)}</span>
+                                            Último Costo: <span className="text-brand-500 tabular-nums">Ref. {fmt2(itemForm.product.cost_price)}</span>
                                         </div>
                                     )}
                                 </div>
@@ -91,7 +91,7 @@ export default function ProductSearch({ state }) {
                                             <div className="text-[10px] font-bold text-content-subtle opacity-50 mt-0.5 uppercase whitespace-nowrap overflow-hidden text-ellipsis tabular-nums">
                                                 Stock: {p.stock} {p.unit}
                                                 {p.package_unit && ` · Pack: ${p.package_unit} x${p.package_size}`}
-                                                {p.cost_price && ` · Anterior: $${fmt2(p.cost_price)}`}
+                                                {p.cost_price && ` · Anterior: Ref. ${fmt2(p.cost_price)}`}
                                             </div>
                                         </div>
                                     ))}
@@ -112,7 +112,7 @@ export default function ProductSearch({ state }) {
 
                 {/* Grid de Formulario de Item */}
                 <div className={`space-y-3 transition-all duration-300 ${!itemForm.product ? "opacity-30 pointer-events-none select-none" : ""}`}>
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div className="space-y-1">
                             <label className="label !text-[10px]">Empaque</label>
                             <CustomSelect
@@ -161,7 +161,7 @@ export default function ProductSearch({ state }) {
                     </div>
 
                     {/* Cálculos y Proyecciones */}
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div className="bg-surface-1 dark:bg-white/[0.02] p-3 rounded-xl border border-border/10">
                             <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle mb-2 block">Margen Sugerido</label>
                             <div className="relative">
@@ -250,7 +250,7 @@ export default function ProductSearch({ state }) {
                             </span>
                             {calc?.sale_price > 0 && (
                                 <span className="text-[9px] font-bold text-success uppercase leading-none mt-0.5">
-                                    Nuevo PVP: ${fmt2(calc.sale_price)}
+                                    Nuevo PVP: Ref. {fmt2(calc.sale_price)}
                                 </span>
                             )}
                         </div>
@@ -275,7 +275,7 @@ export default function ProductSearch({ state }) {
                     </div>
 
                     <div className="overflow-auto max-h-[360px]">
-                        <table className="table-pos">
+                        <table className="table-pos min-w-[720px]">
                             <thead>
                                 <tr>
                                     <th>Producto</th>
@@ -311,15 +311,15 @@ export default function ProductSearch({ state }) {
                                             {item.package_qty}
                                         </td>
                                         <td className="text-right tabular-nums text-[10px] font-bold opacity-60">
-                                            ${fmt2(item.unit_cost)}
+                                            Ref. {fmt2(item.unit_cost)}
                                         </td>
                                         <td className="text-center">
                                             <span className="badge badge-success !bg-success/5 !text-success shadow-none font-black tabular-nums scale-90 uppercase">
-                                                ${fmt2(item.sale_price)}
+                                                Ref. {fmt2(item.sale_price)}
                                             </span>
                                         </td>
                                         <td className="text-right font-black text-xs tabular-nums text-warning tracking-tighter pr-2">
-                                            ${fmt2(item.subtotal)}
+                                            Ref. {fmt2(item.subtotal)}
                                         </td>
                                         <td className="text-right pr-6">
                                             <button
@@ -343,7 +343,7 @@ export default function ProductSearch({ state }) {
                             </div>
                             <div>
                                 <div className="text-[10px] font-black uppercase tracking-[0.3em] text-content-subtle opacity-40 leading-none mb-0.5">Total del Recibo</div>
-                                <div className="text-2xl font-black text-brand-500 tabular-nums tracking-tighter leading-none">${fmt2(grandTotal)}</div>
+                                <div className="text-2xl font-black text-brand-500 tabular-nums tracking-tighter leading-none">Ref. {fmt2(grandTotal)}</div>
                             </div>
                         </div>
 

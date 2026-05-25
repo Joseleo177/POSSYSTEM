@@ -1,10 +1,13 @@
 /**
  * Formatea un número con símbolo de moneda.
+ * Los símbolos de más de un carácter (ej. "Ref.", "Bs.") llevan espacio.
  * @param {number} n - Monto
- * @param {string} symbol - Símbolo de moneda (default "$")
+ * @param {string} symbol - Símbolo de moneda (default "Ref.")
  */
-export const fmtMoney = (n, symbol = "$") =>
-  `${symbol}${Number(n || 0).toFixed(2)}`;
+export const fmtMoney = (n, symbol = "Ref.") => {
+  const sep = symbol.length > 1 ? " " : "";
+  return `${symbol}${sep}${Number(n || 0).toFixed(2)}`;
+};
 
 /**
  * Formatea un monto en la moneda base.
@@ -12,7 +15,7 @@ export const fmtMoney = (n, symbol = "$") =>
  * @param {object} baseCurrency - Objeto de moneda base { symbol }
  */
 export const fmtBase = (n, baseCurrency) =>
-  fmtMoney(n, baseCurrency?.symbol || "$");
+  fmtMoney(n, baseCurrency?.symbol || "Ref.");
 
 /**
  * Formatea un monto de venta según su moneda (base o alternativa).
@@ -26,7 +29,7 @@ export const fmtSale = (sale, amount, baseCurrency) => {
   if (isBase) return fmtBase(amount, baseCurrency);
   const sym  = sale.currency_symbol || "Bs.";
   const rate = parseFloat(sale.exchange_rate) || 1;
-  return `${sym}${(parseFloat(amount || 0) * rate).toFixed(2)}`;
+  return fmtMoney(parseFloat(amount || 0) * rate, sym);
 };
 
 /**
@@ -40,7 +43,7 @@ export const fmtPayment = (pay, baseCurrency) => {
   if (isBase) return fmtBase(pay.amount, baseCurrency);
   const sym  = pay.currency_symbol || "Bs.";
   const rate = parseFloat(pay.exchange_rate) || 1;
-  return `${sym}${(parseFloat(pay.amount || 0) * rate).toFixed(2)}`;
+  return fmtMoney(parseFloat(pay.amount || 0) * rate, sym);
 };
 
 /**

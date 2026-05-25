@@ -8,6 +8,25 @@ import { usePurchasesForm } from "./usePurchasesForm";
 import { usePurchasesCalc } from "./usePurchasesCalc";
 import { usePurchasesList } from "./usePurchasesList";
 
+// ───────────────────────────────────────────────
+// Convierte un item del backend al formato del formulario
+// ───────────────────────────────────────────────
+const toFormItem = (i) => ({
+  key: i.id,
+  product: { id: i.product_id, name: i.product_name },
+  package_unit: i.package_unit || "unidad",
+  package_size: String(i.package_size ?? ""),
+  package_qty: String(i.package_qty ?? 1),
+  package_price: String(i.package_price ?? ""),
+  profit_margin: i.profit_margin ?? 30,
+  lot_number: i.lot_number || "",
+  expiration_date: i.expiration_date || "",
+  unit_cost: i.unit_cost ?? 0,
+  sale_price: i.sale_price ?? 0,
+  total_units: i.total_units ?? 0,
+  subtotal: i.subtotal ?? 0,
+});
+
 // Constante
 const EMPTY_ITEM = {
   product: null,
@@ -28,6 +47,7 @@ export function usePurchases(notify, onProductsUpdated) {
   const [view, setView] = useState("list");
   const [cancelConfirm, setCancelConfirm] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [editingDraftId, setEditingDraftId] = useState(null);
 
   // Lista y detalle
   const [purchases, setPurchases] = useState([]);
@@ -35,6 +55,7 @@ export function usePurchases(notify, onProductsUpdated) {
   const [purchasesPage, setPurchasesPage] = useState(1);
   const [listSearch, setListSearch] = useState("");
   const [listStatus, setListStatus] = useState("");
+  const [listOrderStatus, setListOrderStatus] = useState("");
   const [listDateFrom, setListDateFrom] = useState("");
   const [listDateTo, setListDateTo] = useState("");
   const [detail, setDetail] = useState(null);
@@ -77,6 +98,7 @@ export function usePurchases(notify, onProductsUpdated) {
     setCategories,
     listSearch,
     listStatus,
+    listOrderStatus,
     listDateFrom,
     listDateTo,
     notify,
@@ -183,8 +205,38 @@ export function usePurchases(notify, onProductsUpdated) {
 
   const openNew = () => {
     form.resetForm();
+    setEditingDraftId(null);
     setView("new");
   };
+
+  const openEditDraft = useCallback(
+    (detail) => {
+      setItems((detail.items || []).map(toFormItem));
+      setSelectedWarehouseId(detail.warehouse_id ? String(detail.warehouse_id) : "");
+      setSelectedSupplier(
+        detail.supplier_id
+          ? { id: detail.supplier_id, name: detail.supplier_name, rif: null }
+          : null
+      );
+      setNotes(detail.notes || "");
+      setEditingDraftId(detail.id);
+      setView("new");
+    },
+    [setItems, setSelectedWarehouseId, setSelectedSupplier, setNotes, setView]
+  );
+
+  const savePurchase = useCallback(
+    () => {
+      if (editingDraftId) return list.updateDraft(editingDraftId);
+      return list.savePurchase();
+    },
+    [editingDraftId, list]
+  );
+
+  const addItemFromModal = useCallback(
+    (item) => setItems((prev) => [...prev, item]),
+    []
+  );
 
   // ───────────────────────────────────────────────
   // RETORNO FINAL
@@ -209,6 +261,8 @@ export function usePurchases(notify, onProductsUpdated) {
     setListSearch,
     listStatus,
     setListStatus,
+    listOrderStatus,
+    setListOrderStatus,
     listDateFrom,
     setListDateFrom,
     listDateTo,
@@ -224,6 +278,10 @@ export function usePurchases(notify, onProductsUpdated) {
     // wrappers — sobrescriben las versiones "crudas" de form/modals
     selectProduct,
     selectSupplier,
+    addItemFromModal,
+    savePurchase,
+    openEditDraft,
+    editingDraftId,
 
     // loading
     loading,

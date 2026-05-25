@@ -27,7 +27,7 @@ async function getAll({ search, type, limit = 100, offset = 0 }, req) {
         )`), "total_spent"],
         [Sequelize.literal(`(
           SELECT COALESCE(SUM(s.total - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.sale_id = s.id), 0)), 0)
-          FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('pendiente','parcial')
+          FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial')
         )`), "total_debt"],
       ]
     },
@@ -63,7 +63,7 @@ async function getOne(id) {
         [Sequelize.fn("MAX", Sequelize.col("Sales.created_at")), "last_purchase_at"],
         [Sequelize.literal(`(
           SELECT COALESCE(SUM(s.total - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.sale_id = s.id), 0)), 0)
-          FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('pendiente','parcial')
+          FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial')
         )`), "total_debt"],
       ]
     },

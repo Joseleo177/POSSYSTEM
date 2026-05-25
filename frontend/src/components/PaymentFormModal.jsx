@@ -24,11 +24,11 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
 
   const displayCur = activeCurrencies.find(c => !c.is_base) || baseCurrency;
   const defaultRate = (!displayCur || displayCur.is_base) ? 1 : parseFloat(displayCur.exchange_rate || 1);
-  const defaultSym = displayCur?.symbol || baseCurrency?.symbol || "$";
+  const defaultSym = displayCur?.symbol || baseCurrency?.symbol || "Ref.";
 
   const payCur = activeCurrencies.find(c => c.id === parseInt(form.pay_currency_id));
   const payRate = (!payCur || payCur.is_base) ? 1 : parseFloat(payCur.exchange_rate || 1);
-  const paySym = payCur?.symbol || baseCurrency?.symbol || "$";
+  const paySym = payCur?.symbol || baseCurrency?.symbol || "Ref.";
 
   const selectedJournal = activeJournals.find(j => j.id === form.payment_journal_id);
   const isCash = selectedJournal?.type === "efectivo";
@@ -93,7 +93,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     <Modal open={!!sale} onClose={onClose} title="REGISTRAR PAGO" width={460}>
 
       {/* Resumen de la factura */}
-      <div className="rounded-xl bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/5 p-4 mb-5 space-y-1.5">
+      <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 mb-5 space-y-1.5">
         <Row label="Factura" value={sale.invoice_number || `#${sale.id}`} />
         {sale.customer_name && <Row label="Cliente" value={sale.customer_name} />}
         <Row label="Total" value={fmt(sale.total)} />
@@ -164,7 +164,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
               setForm(p => ({ ...p, received_amount: val, amount: abono }));
             }}
             placeholder={`${paySym}0.00`}
-            className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
           />
         </Field>
 
@@ -187,7 +187,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
             </div>
 
             {/* Toggle dar cambio / quedarse */}
-            <div className="flex p-1 bg-surface-2 dark:bg-white/5 rounded-xl border border-white/5">
+            <div className="flex p-1 bg-white/[0.02] dark:bg-white/[0.04] rounded-xl border border-white/[0.06]">
               <button type="button"
                 onClick={() => setForm(p => ({ ...p, keep_change: false, change_journal_id: "" }))}
                 className={[
@@ -241,7 +241,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
 
         {/* Abono (readonly) */}
         <Field label="ABONO A LA FACTURA">
-          <div className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 flex items-center text-[13px] font-black text-content dark:text-white tabular-nums">
+          <div className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 flex items-center text-[13px] font-black text-content dark:text-white tabular-nums">
             {paySym}{(amountBase * payRate).toFixed(2)}
           </div>
           {payCur && !payCur.is_base && amountBase > 0 && (
@@ -267,7 +267,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
               value={form.reference_number}
               onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
               placeholder="Ej: 000123456"
-              className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
             />
           </Field>
         )}
@@ -279,7 +279,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
             value={form.notes}
             onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
             placeholder="Observaciones..."
-            className="w-full h-10 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
           />
         </Field>
       </div>

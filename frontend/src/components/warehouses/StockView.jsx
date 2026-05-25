@@ -44,7 +44,7 @@ export default function StockView({
             ) : (
                 <>
                     <div className="card-premium overflow-auto flex-1 mx-4 mb-2">
-                        <table className="table-pos">
+                        <table className="table-pos min-w-[680px]">
                             <thead>
                                 <tr>
                                     {["Producto", "Categoría", "Stock Actual", "P. Venta", "Acciones"].map(h => (

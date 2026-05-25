@@ -28,7 +28,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
     const [loading, setLoading]     = useState(false);
     const [search, setSearch]       = useState("");
     const [statusTab, setStatusTab] = useState("all");
-    const sym = baseCurrency?.symbol || "$";
+    const sym = baseCurrency?.symbol || "Ref.";
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -67,7 +67,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
 
     return (
         <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={e => e.target === e.currentTarget && onClose()}>
-            <div className="w-full max-w-3xl bg-[#0c0c0c] rounded-2xl border border-white/8 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" style={{ maxHeight: "85vh" }}>
+            <div className="w-full max-w-3xl bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out" style={{ maxHeight: "85vh" }}>
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 shrink-0">
@@ -130,7 +130,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                             <span className="text-[11px] font-bold">No hay facturas pendientes</span>
                         </div>
                     ) : (
-                        <table className="w-full text-left">
+                        <table className="w-full text-left min-w-[720px]">
                             <thead>
                                 <tr className="border-b border-white/5 text-[9px] font-black uppercase tracking-widest text-white/25 sticky top-0 bg-[#0c0c0c]">
                                     <th className="px-5 py-3">Factura</th>

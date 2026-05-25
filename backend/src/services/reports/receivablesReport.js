@@ -9,7 +9,7 @@ async function receivablesReport({ company_id, tcS, rep }) {
          COALESCE(SUM(total), 0)::float AS total_billed,
          COALESCE(SUM((SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = s.id)), 0)::float AS total_collected
        FROM sales s
-       WHERE status IN ('pendiente', 'parcial') ${tcS}`,
+       WHERE status IN ('borrador', 'pendiente', 'parcial') ${tcS}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -24,7 +24,7 @@ async function receivablesReport({ company_id, tcS, rep }) {
          MAX(s.created_at) AS latest_invoice
        FROM sales s
        LEFT JOIN customers c ON s.customer_id = c.id
-       WHERE s.status IN ('pendiente', 'parcial') ${tcS}
+       WHERE s.status IN ('borrador', 'pendiente', 'parcial') ${tcS}
        GROUP BY c.id, c.name, c.phone, c.rif
        ORDER BY balance DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -38,7 +38,7 @@ async function receivablesReport({ company_id, tcS, rep }) {
          COUNT(CASE WHEN NOW() - created_at > INTERVAL '60 days' THEN 1 END)::int AS d60_plus_count,
          COALESCE(SUM(CASE WHEN NOW() - created_at > INTERVAL '60 days' THEN total - (SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = s.id) ELSE 0 END), 0)::float AS d60_plus_amount
        FROM sales s
-       WHERE status IN ('pendiente', 'parcial') ${tcS}`,
+       WHERE status IN ('borrador', 'pendiente', 'parcial') ${tcS}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
   ]);

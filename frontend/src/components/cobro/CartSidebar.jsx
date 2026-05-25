@@ -15,7 +15,7 @@ export default function CartSidebar({
     custSearch, setCustSearch, customers, setCustomers,
     selectedCustIdx, setSelectedCustIdx,
     setCustomerEditData, setCustomerModal,
-    cashSession, setShowCierre, setShowHeldModal, heldCarts, setShowPendingSales,
+    cashSession, setShowCierre, setShowApertura, setShowHeldModal, heldCarts, setShowPendingSales,
     loading, setShowConfirmCheckout, holdCart,
     openQtyModal,
     searchInputRef,
@@ -44,29 +44,70 @@ export default function CartSidebar({
                     </button>
                 </div>
 
-                {/* Header checkout - Hidden on mobile to save space */}
-                <div className="hidden lg:flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-brand-500/10 flex items-center justify-center text-brand-500 border border-brand-500/20">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+                {/* Header - Hidden on mobile */}
+                <div className="hidden lg:flex items-center justify-between gap-2">
+                    {/* Título */}
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-500 shrink-0">
+                            <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
                         </div>
-                        <h2 className="text-[11px] font-black text-content dark:text-white tracking-wide uppercase">Checkout</h2>
+                        <div className="min-w-0">
+                            <div className="text-[13px] font-black text-content dark:text-white tracking-tight leading-none">POS</div>
+                            <div className="text-[9px] font-bold text-content-subtle dark:text-white/30 uppercase tracking-widest leading-none mt-0.5">Punto de Venta</div>
+                        </div>
                     </div>
-                    {cashSession && (
-                        <div className="flex items-center gap-2">
-                            <button onClick={() => setShowPendingSales(true)} className="relative w-9 h-9 rounded-full bg-surface-2 dark:bg-white/5 flex items-center justify-center hover:bg-warning hover:text-black transition-all" title="Facturas pendientes">
-                                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+
+                    {/* Acciones de sesión */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        {cashSession ? (
+                            <>
+                                {/* Facturas pendientes */}
+                                <button
+                                    onClick={() => setShowPendingSales(true)}
+                                    className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl bg-surface-2 dark:bg-white/5 hover:bg-amber-400/10 hover:text-amber-500 dark:hover:text-amber-400 text-content-subtle dark:text-white/40 transition-all"
+                                    title="Facturas pendientes"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                    <span className="text-[7px] font-black uppercase tracking-wide leading-none">Pendientes</span>
+                                </button>
+
+                                {/* Cuentas en espera */}
+                                <button
+                                    onClick={() => setShowHeldModal(true)}
+                                    className="relative flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl bg-surface-2 dark:bg-white/5 hover:bg-brand-500/10 hover:text-brand-500 text-content-subtle dark:text-white/40 transition-all"
+                                    title="Cuentas en espera"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    <span className="text-[7px] font-black uppercase tracking-wide leading-none">En espera</span>
+                                    {heldCarts.length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-[#0c0c0c]">{heldCarts.length}</span>}
+                                </button>
+
+                                {/* Caja abierta → cierre */}
+                                <button
+                                    onClick={() => setShowCierre(true)}
+                                    className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-all"
+                                >
+                                    <div className="flex items-center gap-1">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                        <span className="text-[10px] font-black uppercase tracking-wide text-green-500">Caja Abierta</span>
+                                    </div>
+                                    <span className="text-[7px] font-black uppercase tracking-wide text-green-500/50 leading-none">Cerrar turno</span>
+                                </button>
+                            </>
+                        ) : (
+                            /* Caja cerrada → apertura */
+                            <button
+                                onClick={() => setShowApertura(true)}
+                                className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl bg-danger/10 border border-danger/20 hover:bg-danger/20 transition-all"
+                            >
+                                <div className="flex items-center gap-1">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-danger" />
+                                    <span className="text-[10px] font-black uppercase tracking-wide text-danger">Caja Cerrada</span>
+                                </div>
+                                <span className="text-[7px] font-black uppercase tracking-wide text-danger/50 leading-none">Abrir turno</span>
                             </button>
-                            <button onClick={() => setShowHeldModal(true)} className="relative w-9 h-9 rounded-full bg-surface-2 dark:bg-white/5 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all" title="Cuentas en espera">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2m9-.828l-1.414-1.414M3.707 18.293V21h2.707l14.586-14.586a2 2 0 10-2.828-2.828L3.707 18.293z" /></svg>
-                                {heldCarts.length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-500 text-brand-900 text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-[#0c0c0c]">{heldCarts.length}</span>}
-                            </button>
-                            <button onClick={() => setShowCierre(true)} className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 px-4 py-2 rounded-full hover:bg-green-500/20 transition-all">
-                                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                <span className="text-[11px] font-black uppercase tracking-wide text-green-500">Sesión Abierta</span>
-                            </button>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
 
                 {/* Mobile session indicators */}

@@ -153,7 +153,7 @@ export default function CashSessionsReport() {
  <div className="space-y-3">
  <SectionHeader title="Listado de Ventas del Turno" sub="Auditoría granular de transacciones" />
  <div className="rounded-xl border border-border dark:border-white/5 overflow-auto">
- <table className="w-full text-left">
+ <table className="w-full text-left min-w-[640px]">
  <thead className="bg-surface-2 dark:bg-white/5">
  <tr>
  {["ID / Cliente", "Estado", "Monto", "Hora", "Acción"].map((h, i) => (
@@ -202,7 +202,7 @@ export default function CashSessionsReport() {
  <div className="space-y-3">
  <SectionHeader title="Conciliación por Diario" sub="Comparativa entre monto esperado y declarado" />
  <div className="rounded-xl border border-border dark:border-white/5 overflow-auto">
- <table className="w-full text-left">
+ <table className="w-full text-left min-w-[640px]">
  <thead className="bg-surface-2 dark:bg-white/5">
  <tr>
  {["Diario", "Inicio", "Ventas", "Esperado", "Declarado", "Dif."].map((h, i) => (

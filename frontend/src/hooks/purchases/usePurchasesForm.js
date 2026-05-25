@@ -134,6 +134,25 @@ export function usePurchasesForm({
     }, [setItems]);
 
     // ───────────────────────────────────────────────
+    // ACTUALIZAR ITEM (edición inline)
+    // ───────────────────────────────────────────────
+    const updateItem = useCallback((key, changes) => {
+        setItems(prev => prev.map(item => {
+            if (item.key !== key) return item;
+            const next     = { ...item, ...changes };
+            const pkgSize  = parseFloat(next.package_size)  || 1;
+            const pkgQty   = parseFloat(next.package_qty)   || 0;
+            const pkgPrice = parseFloat(next.package_price) || 0;
+            const margin   = parseFloat(next.profit_margin) || 0;
+            const unit_cost   = pkgPrice > 0 ? pkgPrice / pkgSize : 0;
+            const sale_price  = unit_cost * (1 + margin / 100);
+            const total_units = pkgQty * pkgSize;
+            const subtotal    = pkgQty * pkgPrice;
+            return { ...next, unit_cost, sale_price, total_units, subtotal };
+        }));
+    }, [setItems]);
+
+    // ───────────────────────────────────────────────
     // RESET COMPLETO DEL FORMULARIO
     // ───────────────────────────────────────────────
     const resetForm = useCallback(() => {
@@ -166,6 +185,7 @@ export function usePurchasesForm({
         selectProduct,
         addItem,
         removeItem,
+        updateItem,
         resetForm,
         setSelectedSupplier,
         setNotes,

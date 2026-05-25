@@ -43,7 +43,7 @@ export default function AppLauncher({ open, onClose, visibleTabs, safeTab, goTab
                 </div>
 
                 {/* Grid */}
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {visibleTabs.map((t) => {
                         const isActive = safeTab === t.key;
                         return (

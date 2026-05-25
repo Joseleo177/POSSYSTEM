@@ -4,7 +4,7 @@ export default function TransfersView({ transfers }) {
     return (
         <div className="flex-1 overflow-hidden flex flex-col py-3 px-4">
             <div className="card-premium overflow-auto flex-1">
-                <table className="table-pos">
+                <table className="table-pos min-w-[680px]">
                     <thead>
                         <tr>
                             {["Fecha", "Producto", "Origen", "Destino", "Cantidad", "Responsable"].map(h => (

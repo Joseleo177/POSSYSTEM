@@ -5,7 +5,7 @@ module.exports = async function getPendingPayments(query, tenant = {}) {
   const { company_id, isSuperuser } = tenant;
 
   const andClauses = [
-    { status: { [Op.in]: ["pendiente", "parcial"] } },
+    { status: { [Op.in]: ["borrador", "pendiente", "parcial"] } },
   ];
 
   if (!isSuperuser && company_id) {

@@ -59,7 +59,7 @@ export default function CobroPage() {
     const customer = useCobroCustomer(setSelectedCustomer, notify);
     const session  = useCobroSession(employee, activeWarehouse);
 
-    const currSym = currentCurrency?.symbol || baseCurrency?.symbol || "$";
+    const currSym = currentCurrency?.symbol || baseCurrency?.symbol || "Ref.";
 
     useCobroKeyboard({
         cart, receipt, holdCart,
@@ -108,7 +108,10 @@ export default function CobroPage() {
             baseCurrency={baseCurrency}
             currentCurrency={currentCurrency}
             onNext={() => { setReceipt(null); setSaleBalance(null); products.reload(); }}
-            onPay={(res) => setSaleBalance({ amount_paid: res.amount_paid, balance: res.balance, status: res.sale_status })}
+            onPay={(res) => {
+                setSaleBalance({ amount_paid: res.amount_paid, balance: res.balance, status: res.sale_status });
+                if (res.invoice_number) setReceipt(prev => ({ ...prev, invoice_number: res.invoice_number }));
+            }}
         />
     );
 
@@ -140,6 +143,7 @@ export default function CobroPage() {
                 setCustomerModal={customer.setCustomerModal}
                 cashSession={session.cashSession}
                 setShowCierre={session.setShowCierre}
+                setShowApertura={session.setShowApertura}
                 setShowHeldModal={setShowHeldModal}
                 setShowPendingSales={setShowPendingSales}
                 heldCarts={heldCarts}
@@ -233,6 +237,7 @@ export default function CobroPage() {
                         const wh = employeeWarehouses.find(w => w.id === s.warehouse_id);
                         if (wh) switchWarehouse(wh);
                     }}
+                    onSkip={() => session.setShowApertura(false)}
                 />
             )}
             {session.showCierre && session.cashSession && (

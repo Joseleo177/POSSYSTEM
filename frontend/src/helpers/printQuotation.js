@@ -6,7 +6,7 @@ export function printQuotationDoc(quot, companyInfo, baseCurrency, activeCurrenc
     const rate = isBase ? 1 : parseFloat(
         parseFloat(quot.exchange_rate) > 1 ? quot.exchange_rate : (displayCurrency?.exchange_rate || 1)
     );
-    const sym = isBase ? (baseCurrency?.symbol || "$") : (displayCurrency?.symbol || "$");
+    const sym = isBase ? (baseCurrency?.symbol || "Ref.") : (displayCurrency?.symbol || "Ref.");
     const fmtP = n => fmtMoney(parseFloat(n || 0) * rate, sym);
     const storeName = companyInfo?.name || "MI TIENDA POS";
     const dateStr = fmtDate(quot.created_at);
@@ -105,7 +105,7 @@ export function printQuotationDoc(quot, companyInfo, baseCurrency, activeCurrenc
         ${discount > 0 ? `<div class="total-row"><span>SUBTOTAL</span><span>${fmtP(subtotalBeforeDiscount)}</span></div>` : ""}
         ${discount > 0 ? `<div class="total-row discount"><span>DESCUENTO</span><span>-${fmtP(discount)}</span></div>` : ""}
         <div class="total-row big"><span>TOTAL</span><span>${fmtP(total)}</span></div>
-        ${rate > 1 ? `<div class="total-row" style="margin-top:2px;font-weight:600;font-size:9px;opacity:0.7;justify-content:flex-end;gap:4px;"><span>EQUIV. USD:</span><span>${fmtMoney(total, "$")}</span></div>` : ""}
+        ${rate > 1 ? `<div class="total-row" style="margin-top:2px;font-weight:600;font-size:9px;opacity:0.7;justify-content:flex-end;gap:4px;"><span>EQUIV. REF.:</span><span>${fmtMoney(total)}</span></div>` : ""}
     </div>
     <div class="footer">${companyInfo?.footer || "Cotización válida por 30 días · ¡Gracias por su preferencia!"}</div>
 </body>

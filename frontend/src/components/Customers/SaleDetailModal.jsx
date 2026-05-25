@@ -27,13 +27,16 @@ export default function SaleDetailModal({ saleId, onClose }) {
     const statusLabel = sale?.status === "pagado"   ? "Pagado"
                       : sale?.status === "parcial"  ? "Parcial"
                       : sale?.status === "pendiente"? "Pendiente"
+                      : sale?.status === "borrador" ? "Sin factura"
+                      : sale?.status === "anulado"  ? "Anulado"
+                      : sale?.status === "devuelto" ? "Devuelto"
                       : sale?.status ?? "—";
 
-    const statusClass = sale?.status === "pagado"
-        ? "bg-success/10 text-success border-success/20"
-        : sale?.status === "parcial"
-        ? "bg-warning/10 text-warning border-warning/20"
-        : "bg-danger/10 text-danger border-danger/20";
+    const statusClass = sale?.status === "pagado"   ? "bg-success/10 text-success border-success/20"
+                      : sale?.status === "parcial"  ? "bg-warning/10 text-warning border-warning/20"
+                      : sale?.status === "borrador" ? "bg-surface-3 dark:bg-white/5 text-content-subtle dark:text-white/40 border-border/30 dark:border-white/10"
+                      : sale?.status === "anulado"  ? "bg-surface-3 dark:bg-white/5 text-content-subtle dark:text-white/40 border-border/30 dark:border-white/10"
+                      : "bg-danger/10 text-danger border-danger/20";
 
     return (
         /* Backdrop */
@@ -43,7 +46,7 @@ export default function SaleDetailModal({ saleId, onClose }) {
         >
             {/* Panel */}
             <div
-                className="relative w-full max-w-lg bg-white dark:bg-[#111] rounded-2xl shadow-2xl border border-border/20 dark:border-white/5 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200"
+                className="relative w-full max-w-lg bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
@@ -143,10 +146,10 @@ export default function SaleDetailModal({ saleId, onClose }) {
                                                         )}
                                                     </div>
                                                     <div className="col-span-2 text-center text-[12px] font-bold text-content dark:text-white tabular-nums">
-                                                        {parseFloat(item.qty)}
+                                                        {parseFloat(item.quantity)}
                                                     </div>
                                                     <div className="col-span-2 text-right text-[11px] font-bold text-content-subtle dark:text-white/40 tabular-nums">
-                                                        {fmt(item.unit_price)}
+                                                        {fmt(item.price)}
                                                     </div>
                                                     <div className="col-span-3 text-right text-[12px] font-black text-content dark:text-white tabular-nums">
                                                         {fmt(item.subtotal)}

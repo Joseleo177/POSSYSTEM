@@ -15,7 +15,7 @@ export default function PurchasesTable({ state }) {
         return (
             <div className="flex flex-col items-center justify-center py-20 gap-3 opacity-30">
                 <svg className="w-12 h-12 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                <div className="text-[11px] font-black uppercase tracking-widest text-content-subtle">Sin recibos de compra registrados</div>
+                <div className="text-[11px] font-black uppercase tracking-widest text-content-subtle">Sin órdenes de compra registradas</div>
             </div>
         );
     }
@@ -24,7 +24,7 @@ export default function PurchasesTable({ state }) {
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
             {/* Contenedor de Tabla */}
             <div className="card-premium overflow-auto flex-1">
-                <table className="table-pos">
+                <table className="table-pos min-w-[720px]">
                     <thead>
                         <tr>
                             <th className="w-16 text-left">#</th>
@@ -33,6 +33,7 @@ export default function PurchasesTable({ state }) {
                             <th className="text-center">Items</th>
                             <th className="text-right">Total</th>
                             <th className="text-center">Estado</th>
+                            <th className="text-center">Pago</th>
                             <th className="text-left">Empleado</th>
                             <th className="text-left">Fecha</th>
                             <th className="text-right w-[140px] pr-6">Acciones</th>
@@ -86,14 +87,18 @@ export default function PurchasesTable({ state }) {
 
                                 <td className="text-center">
                                     {(() => {
+                                        const os = p.status || "recibido";
+                                        const oc = os === "recibido" ? "badge-success" : os === "pendiente" ? "badge-warning" : "bg-surface-3 dark:bg-white/10 text-content-subtle dark:text-white/40 shadow-none";
+                                        const ol = { borrador: "BORRADOR", pendiente: "PENDIENTE", recibido: "RECIBIDO" };
+                                        return <span className={`badge ${oc} shadow-none uppercase font-bold text-[9px] !px-2`}>{ol[os] || os}</span>;
+                                    })()}
+                                </td>
+                                <td className="text-center">
+                                    {(() => {
                                         const s = p.payment_status || "pendiente";
-                                        const badgeClass = s === "pagado" ? "badge-success" : s === "parcial" ? "badge-warning" : "badge-danger";
-                                        const labels = { pagado: "PAGADO", parcial: "PARCIAL", pendiente: "PENDIENTE" };
-                                        return (
-                                            <span className={`badge ${badgeClass} shadow-none uppercase font-bold text-[9px] !px-2`}>
-                                                {labels[s] || s}
-                                            </span>
-                                        );
+                                        const bc = s === "pagado" ? "badge-success" : s === "parcial" ? "badge-warning" : "badge-danger";
+                                        const bl = { pagado: "PAGADO", parcial: "PARCIAL", pendiente: "DEBE" };
+                                        return <span className={`badge ${bc} shadow-none uppercase font-bold text-[9px] !px-2`}>{bl[s] || s}</span>;
                                     })()}
                                 </td>
 

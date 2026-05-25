@@ -4,7 +4,7 @@ import { useApp } from "../../context/AppContext";
 
 export default function PriceLabelsView({ products, onClose }) {
     const { currencies, baseCurrency } = useApp();
-    const [selCurrency, setSelCurrency] = useState(baseCurrency || (currencies.length > 0 ? currencies[0] : { symbol: '$', exchange_rate: 1 }));
+    const [selCurrency, setSelCurrency] = useState(baseCurrency || (currencies.length > 0 ? currencies[0] : { symbol: 'Ref.', exchange_rate: 1 }));
 
     useEffect(() => {
         if (baseCurrency) setSelCurrency(baseCurrency);

@@ -128,11 +128,11 @@ export default function ProductGrid({
                                         const promo = activePromos.find(pr => pr.product_ids?.includes(p.id));
                                         if (!promo) return null;
                                         const label = promo.type === "percentage"
-                                            ? `${promo.discount_pct}% OFF`
-                                            : `${promo.buy_qty}x${promo.get_qty}`;
+                                            ? `-${promo.discount_pct}%`
+                                            : `${promo.buy_qty}+${promo.get_qty}`;
                                         return (
-                                            <div className="absolute top-0 left-0 overflow-hidden w-[52px] h-[52px] lg:w-[72px] lg:h-[72px] pointer-events-none">
-                                                <div className="absolute -left-[18px] lg:-left-[22px] top-[12px] lg:top-[16px] w-[80px] lg:w-[110px] bg-brand-500 text-white text-[6px] lg:text-[9px] font-black uppercase tracking-wide text-center py-[3px] lg:py-[4px] shadow-lg -rotate-45 leading-none">
+                                            <div className="absolute top-0 left-0 overflow-hidden w-[56px] h-[56px] lg:w-[76px] lg:h-[76px] pointer-events-none">
+                                                <div className="absolute -left-[20px] lg:-left-[24px] top-[13px] lg:top-[18px] w-[84px] lg:w-[114px] bg-amber-400 text-black text-[7px] lg:text-[10px] font-black uppercase tracking-wide text-center py-[3px] lg:py-[5px] shadow-md -rotate-45 leading-none">
                                                     {label}
                                                 </div>
                                             </div>

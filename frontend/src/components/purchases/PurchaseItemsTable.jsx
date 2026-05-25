@@ -1,83 +1,153 @@
 import { fmt2 } from "../../utils/purchaseUtils";
 
-export default function PurchaseItemsTable({ detail }) {
+export default function PurchaseItemsTable({
+    items = [],
+    orderStatus = "recibido",
+    onUpdate,
+    onDelete,
+    onEdit,
+    invoiceRate = 1,
+    invoiceSym = "Ref.",
+}) {
+    const isEditing   = orderStatus === "borrador" || orderStatus === "pendiente";
+    const showActions = isEditing;
+
     return (
-        <>
-            <div className="mb-3 flex items-center gap-3">
-                <div className="h-0.5 flex-1 bg-gradient-to-r from-warning/30 to-transparent"></div>
-                <div className="text-[11px] font-black text-warning tracking-wide uppercase">
-                    Productos Recibidos
-                </div>
-                <div className="h-0.5 flex-1 bg-gradient-to-l from-warning/30 to-transparent"></div>
-            </div>
+        <div className="overflow-x-auto">
+            <table className="w-full text-left min-w-[720px]">
+                <thead>
+                    <tr className="border-b border-border/20 dark:border-white/[0.06] text-[10px] font-black text-content-subtle dark:text-white/30 uppercase tracking-widest">
+                        <th className="px-4 py-3">Producto</th>
+                        {!isEditing && <th className="px-4 py-3">Lote / Vence</th>}
+                        <th className="px-4 py-3 text-center">Cant.</th>
+                        <th className="px-4 py-3 text-right w-36">
+                          Costo×Emp.{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70">({invoiceSym})</span> : ""}
+                        </th>
+                        <th className="px-4 py-3 text-right">C.Unit</th>
+                        <th className="px-4 py-3 text-right">P.Venta</th>
+                        {!isEditing && <th className="px-4 py-3 text-right">Total Uds.</th>}
+                        <th className="px-4 py-3 text-right">Subtotal</th>
+                        {showActions && <th className="px-4 py-3 w-20"></th>}
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-border/10 dark:divide-white/[0.04]">
+                    {items.map((item) => (
+                        <tr key={item.id ?? item.key} className="hover:bg-surface-2/30 dark:hover:bg-white/[0.02] transition-colors group">
 
-            <div className="card-premium overflow-hidden mb-12">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="border-b border-border/40 bg-surface-1 dark:bg-white/5 text-[11px] font-black text-content-subtle dark:text-content-dark-muted uppercase tracking-wide">
-                             <th className="px-6 py-4">Producto</th>
-                             <th className="px-6 py-4">Lote / Vence</th>
-                             <th className="px-6 py-4">Paquete</th>
-                             <th className="px-6 py-4">Cant.</th>
-                             <th className="px-6 py-4">Precio/paq.</th>
-                             <th className="px-6 py-4">Costo unit.</th>
-                             <th className="px-6 py-4">Margen</th>
-                             <th className="px-6 py-4">P. venta</th>
-                             <th className="px-6 py-4">Total uds.</th>
-                             <th className="px-6 py-4 text-right">Subtotal</th>
-                         </tr>
-                     </thead>
- 
-                     <tbody className="divide-y divide-border/10">
-                         {detail.items?.map((item) => (
-                             <tr key={item.id} className="hover:bg-surface-2 dark:hover:bg-white/5 transition-colors">
-                                 <td className="px-6 py-4 font-black text-content dark:text-white uppercase tracking-tight text-xs">
-                                     {item.product_name}
-                                 </td>
- 
-                                 <td className="px-6 py-4 text-[10px] font-black uppercase tracking-tight">
-                                     <div className="text-warning">L: {item.lot_number || "S/L"}</div>
-                                     <div className="opacity-50">{item.expiration_date || "S/V"}</div>
-                                 </td>
+                            {/* Producto + empaque */}
+                            <td className="px-4 py-3">
+                                <div className="text-xs font-black text-content dark:text-white uppercase tracking-tight">
+                                    {item.product_name}
+                                </div>
+                                <div className="text-[9px] font-medium text-content-subtle dark:text-white/30 uppercase mt-0.5">
+                                    {item.package_unit} × {item.package_size}
+                                </div>
+                            </td>
 
-                                <td className="px-6 py-4 text-[11px] font-bold text-content-subtle uppercase tracking-wide">
-                                    {item.package_unit} <span className="opacity-30">×</span> {item.package_size}
+                            {/* Lote / Vence (solo recibido/pendiente) */}
+                            {!isEditing && (
+                                <td className="px-4 py-3">
+                                    <div className="text-[10px] font-bold text-warning">{item.lot_number || "S/L"}</div>
+                                    <div className="text-[9px] text-content-subtle dark:text-white/30">{item.expiration_date || "S/V"}</div>
                                 </td>
+                            )}
 
-                                <td className="px-6 py-4 text-xs font-bold tabular-nums">
-                                    {item.package_qty}
-                                </td>
+                            {/* Cant. */}
+                            <td className="px-4 py-3 text-center">
+                                {isEditing ? (
+                                    <input
+                                        type="number" min="1" step="1"
+                                        value={item.package_qty}
+                                        onChange={e => onUpdate?.(item.id ?? item.key, { package_qty: e.target.value })}
+                                        className="w-14 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-content dark:text-white [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                    />
+                                ) : (
+                                    <span className="text-xs font-bold tabular-nums">{item.package_qty}</span>
+                                )}
+                            </td>
 
-                                <td className="px-6 py-4 text-xs font-black text-info tabular-nums">
-                                    ${fmt2(item.package_price)}
-                                </td>
+                            {/* Costo × Empaque */}
+                            <td className="px-4 py-3 text-right">
+                                {isEditing ? (
+                                    <div className="flex flex-col items-end gap-0.5">
+                                        <input
+                                            type="number" min="0" step="0.01"
+                                            value={invoiceRate > 1
+                                                ? fmt2(parseFloat(item.package_price || 0) * invoiceRate)
+                                                : +parseFloat(item.package_price || 0).toFixed(4)}
+                                            onChange={e => {
+                                                const raw = parseFloat(e.target.value || 0);
+                                                onUpdate?.(item.id ?? item.key, { package_price: invoiceRate > 1 ? raw / invoiceRate : e.target.value });
+                                            }}
+                                            className="w-full p-0 text-right text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-info [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                        />
+                                        {invoiceRate > 1 && parseFloat(item.package_price) > 0 && (
+                                            <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">≈ Ref. {fmt2(item.package_price)}</span>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <span className="text-xs font-black text-info tabular-nums">Ref. {fmt2(item.package_price)}</span>
+                                )}
+                            </td>
 
-                                <td className="px-6 py-4 text-xs font-bold text-content-subtle tabular-nums">
-                                    ${fmt2(item.unit_cost)}
-                                </td>
+                            {/* Costo Unitario (siempre computed) */}
+                            <td className="px-4 py-3 text-right text-[11px] font-bold tabular-nums text-content-subtle dark:text-white/40">
+                                {item.unit_cost > 0 ? `Ref. ${fmt2(item.unit_cost)}` : "—"}
+                            </td>
 
-                                <td className="px-6 py-4">
-                                    <span className="px-2 py-0.5 rounded-lg bg-surface-2 dark:bg-white/5 border border-border/20 text-[11px] font-black text-content-subtle uppercase tabular-nums">
-                                        {item.profit_margin}%
-                                    </span>
-                                </td>
+                            {/* Precio Venta */}
+                            <td className="px-4 py-3 text-right text-xs font-black text-success tabular-nums">
+                                {item.sale_price > 0 ? `Ref. ${fmt2(item.sale_price)}` : "—"}
+                            </td>
 
-                                <td className="px-6 py-4 text-xs font-black text-success tabular-nums">
-                                    ${fmt2(item.sale_price)}
+                            {/* Total Uds. (solo no-borrador) */}
+                            {!isEditing && (
+                                <td className="px-4 py-3 text-right text-xs font-bold text-brand-500 tabular-nums">
+                                    {item.total_units} <span className="text-[10px] opacity-40">u</span>
                                 </td>
+                            )}
 
-                                <td className="px-6 py-4 text-xs font-bold text-brand-500 tabular-nums">
-                                    {item.total_units} <span className="text-[11px] opacity-40 uppercase">u</span>
-                                </td>
+                            {/* Subtotal */}
+                            <td className="px-4 py-3 text-right">
+                                {invoiceRate > 1 && isEditing ? (
+                                    <div className="flex flex-col items-end gap-0.5">
+                                        <span className="text-sm font-black text-warning tabular-nums">{invoiceSym} {fmt2(parseFloat(item.subtotal) * invoiceRate)}</span>
+                                        <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">≈ Ref. {fmt2(item.subtotal)}</span>
+                                    </div>
+                                ) : (
+                                    <span className="text-sm font-black text-warning tabular-nums">Ref. {fmt2(item.subtotal)}</span>
+                                )}
+                            </td>
 
-                                <td className="px-6 py-4 text-right text-sm font-black text-warning tabular-nums font-display">
-                                    ${fmt2(item.subtotal)}
+                            {/* Acciones (solo borrador) */}
+                            {showActions && (
+                                <td className="px-4 py-3 text-center">
+                                    <div className="flex items-center justify-center gap-1">
+                                        <button
+                                            onClick={() => onEdit?.(item.id ?? item.key)}
+                                            className="w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-brand-500/10 text-brand-500 transition-all active:scale-90"
+                                            title="Editar línea"
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                        </button>
+                                        <button
+                                            onClick={() => onDelete?.(item.id ?? item.key)}
+                                            className="w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-danger/10 text-danger transition-all active:scale-90"
+                                            title="Eliminar línea"
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
                                 </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </>
+                            )}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
     );
 }

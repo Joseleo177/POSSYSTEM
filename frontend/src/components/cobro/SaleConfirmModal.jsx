@@ -9,11 +9,11 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
 
     const receiptRate   = parseFloat(receipt?.exchange_rate || 1);
     const receiptIsBase = !receipt?.currency || receipt.currency.is_base;
-    const receiptSym    = receiptIsBase ? (baseCurrency?.symbol || "$") : (receipt?.currency?.symbol || "$");
+    const receiptSym    = receiptIsBase ? (baseCurrency?.symbol || "Ref.") : (receipt?.currency?.symbol || "Ref.");
     const fmt = (n) => `${receiptSym}${Number(n * (receiptIsBase ? 1 : receiptRate)).toFixed(2)}`;
 
     const currentBalance = saleBalance?.balance ?? parseFloat(receipt?.total || 0);
-    const currentStatus  = saleBalance?.status  ?? "pendiente";
+    const currentStatus  = saleBalance?.status  ?? receipt?.status ?? "pendiente";
     const statusLabel    = currentStatus === "pagado" ? "Completado" : currentStatus === "parcial" ? "Abono Parcial" : currentStatus === "borrador" ? "Borrador" : "Pendiente";
     const badgeClass     = currentStatus === "pagado"
         ? "bg-green-500/10 text-green-500 border-green-500/20"
@@ -24,8 +24,8 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         : "bg-danger/10 text-danger border-danger/20";
 
     return (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
-            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 rounded-xl shadow-2xl border border-border/20 dark:border-white/5 overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out">
 
                 {/* Header */}
                 <div className={`px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3 ${currentStatus === "pagado" ? "bg-success/5" : currentStatus === "borrador" ? "bg-surface-2/50" : "bg-danger/5"}`}>

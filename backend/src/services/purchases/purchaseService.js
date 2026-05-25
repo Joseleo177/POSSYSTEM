@@ -4,12 +4,13 @@ const {
 } = require("../../models");
 const { Op } = Sequelize;
 
-async function getAll({ limit = 50, offset = 0, search, status, date_from, date_to }, req) {
+async function getAll({ limit = 50, offset = 0, search, status, order_status, date_from, date_to }, req) {
   const company_id  = req.employee?.company_id ?? null;
   const isSuperuser = !!req.is_superuser;
   const where = (!isSuperuser && company_id) ? { company_id } : {};
 
-  if (status) where.payment_status = status;
+  if (status)       where.payment_status = status;
+  if (order_status) where.status = order_status;
   if (date_from || date_to) {
     where.created_at = {};
     if (date_from) where.created_at[Op.gte] = new Date(date_from);
@@ -21,8 +22,8 @@ async function getAll({ limit = 50, offset = 0, search, status, date_from, date_
     const term = `%${search.trim()}%`;
     const orConds = [
       { '$Supplier.name$': { [Op.iLike]: term } },
-      { '$Supplier.rif$': { [Op.iLike]: term } },
-      { notes:             { [Op.iLike]: term } },
+      { '$Supplier.rif$':  { [Op.iLike]: term } },
+      { notes:              { [Op.iLike]: term } },
     ];
     const asInt = parseInt(search);
     if (!isNaN(asInt)) orConds.push({ id: asInt });
@@ -108,16 +109,100 @@ async function getOne(id) {
   return { data };
 }
 
+// Applies stock increments, lot tracking, price/cost updates and combo creation.
+// Called only when a purchase reaches status='recibido'.
+async function _applyStockAndPrices(purchase, items, transaction) {
+  for (const item of items) {
+    const {
+      product_id, total_units, unit_cost, profit_margin, sale_price,
+      package_size, package_unit, package_price, lot_number, expiration_date
+    } = item;
+
+    if (!product_id) continue;
+    const product = await Product.findByPk(product_id, { transaction, lock: true });
+    if (!product) continue;
+
+    if (!product.is_service) {
+      const [stockEntry] = await ProductStock.findOrCreate({
+        where: { warehouse_id: purchase.warehouse_id, product_id },
+        defaults: { qty: 0 },
+        transaction,
+        lock: true
+      });
+      await stockEntry.increment('qty', { by: total_units, transaction });
+
+      if (lot_number && expiration_date) {
+        const [lotEntry] = await ProductLot.findOrCreate({
+          where: { warehouse_id: purchase.warehouse_id, product_id, lot_number: String(lot_number), expiration_date },
+          defaults: { qty: 0 },
+          transaction,
+          lock: true
+        });
+        await lotEntry.increment('qty', { by: total_units, transaction });
+      }
+    }
+
+    await product.update({
+      cost_price: unit_cost,
+      profit_margin,
+      price: sale_price,
+      package_size,
+      package_unit: package_unit || 'unidad'
+    }, { transaction });
+
+    const isUnidad = !package_unit || package_unit.toLowerCase().trim() === 'unidad';
+    if (parseFloat(package_size) > 1 && !isUnidad) {
+      const pkgUnitName  = package_unit.charAt(0).toUpperCase() + package_unit.slice(1);
+      const comboName    = `${pkgUnitName} de ${product.name} (${package_size})`;
+      const comboSalePrice = parseFloat(package_price) * (1 + parseFloat(profit_margin || 0) / 100);
+
+      const [comboProduct, createdCombo] = await Product.findOrCreate({
+        where: { name: comboName, is_combo: true },
+        defaults: {
+          price: comboSalePrice,
+          stock: 0,
+          unit: 'unidad',
+          category_id: product.category_id,
+          image_filename: product.image_filename,
+          is_combo: true
+        },
+        transaction,
+        lock: true
+      });
+
+      if (createdCombo) {
+        await ProductComboItem.create({ combo_id: comboProduct.id, product_id: product.id, quantity: parseFloat(package_size) }, { transaction });
+      } else {
+        await comboProduct.update({ price: comboSalePrice }, { transaction });
+      }
+
+      await ProductStock.findOrCreate({
+        where: { warehouse_id: purchase.warehouse_id, product_id: comboProduct.id },
+        defaults: { qty: 0 },
+        transaction
+      });
+    }
+
+    if (!product.is_service) {
+      const totalStock = await ProductStock.sum('qty', { where: { product_id }, transaction });
+      await Product.update({ stock: totalStock || 0 }, { where: { id: product_id }, transaction });
+    }
+  }
+}
+
 async function createPurchase({ body, employee_id }) {
-  const { supplier_id, supplier_name, notes, items, warehouse_id } = body;
+  const { supplier_id, supplier_name, notes, items, warehouse_id, status: requestedStatus = 'borrador' } = body;
 
   if (!items?.length)  { const e = new Error("Debe incluir al menos un producto"); e.status = 400; throw e; }
-  if (!warehouse_id)   { const e = new Error("warehouse_id es requerido");          e.status = 400; throw e; }
+
+  const initialStatus = ['borrador', 'pendiente', 'recibido'].includes(requestedStatus) ? requestedStatus : 'borrador';
 
   const transaction = await sequelize.transaction();
   try {
-    const warehouse = await Warehouse.findByPk(warehouse_id, { transaction });
-    if (!warehouse || !warehouse.active) throw new Error("Almacén no encontrado o inactivo");
+    if (warehouse_id) {
+      const warehouse = await Warehouse.findByPk(warehouse_id, { transaction });
+      if (!warehouse || !warehouse.active) throw new Error("Almacén no encontrado o inactivo");
+    }
 
     let resolvedSupplierName = supplier_name || null;
     let resolvedSupplierId   = supplier_id ? parseInt(supplier_id) : null;
@@ -131,20 +216,21 @@ async function createPurchase({ body, employee_id }) {
       supplier_name: resolvedSupplierName,
       notes: notes || null,
       total: 0,
+      status: initialStatus,
       employee_id: employee_id || null,
-      warehouse_id
+      warehouse_id: warehouse_id || null
     }, { transaction });
 
     let grandTotal = 0;
+    const createdItems = [];
 
     for (const item of items) {
       const {
         product_id, package_unit, package_size, package_qty, package_price,
-        profit_margin, update_price = true,
-        lot_number, expiration_date
+        profit_margin, lot_number, expiration_date
       } = item;
 
-      if (!product_id || !package_size || !package_qty || !package_price)
+      if (!product_id || !package_size || !package_qty)
         throw new Error("Datos incompletos en línea de compra");
 
       const pkgSize  = parseFloat(package_size);
@@ -158,10 +244,10 @@ async function createPurchase({ body, employee_id }) {
       const subtotal    = pkgQty * pkgPrice;
       grandTotal += subtotal;
 
-      const product = await Product.findByPk(product_id, { transaction, lock: true });
+      const product = await Product.findByPk(product_id, { transaction });
       if (!product) throw new Error(`Producto ID ${product_id} no encontrado`);
 
-      await PurchaseItem.create({
+      const purchaseItem = await PurchaseItem.create({
         purchase_id: purchase.id,
         product_id,
         product_name: product.name,
@@ -178,70 +264,15 @@ async function createPurchase({ body, employee_id }) {
         expiration_date: expiration_date || null
       }, { transaction });
 
-      if (!product.is_service) {
-        const [stockEntry] = await ProductStock.findOrCreate({
-          where: { warehouse_id, product_id },
-          defaults: { qty: 0 },
-          transaction,
-          lock: true
-        });
-        await stockEntry.increment('qty', { by: total_units, transaction });
-
-        if (lot_number && expiration_date) {
-          const [lotEntry] = await ProductLot.findOrCreate({
-            where: { warehouse_id, product_id, lot_number: String(lot_number), expiration_date },
-            defaults: { qty: 0 },
-            transaction,
-            lock: true
-          });
-          await lotEntry.increment('qty', { by: total_units, transaction });
-        }
-      }
-
-      const updateData = { cost_price: unit_cost, profit_margin: margin, package_size: pkgSize, package_unit: package_unit || "unidad" };
-      if (update_price) updateData.price = sale_price;
-      await product.update(updateData, { transaction });
-
-      const isUnidad = !package_unit || package_unit.toLowerCase().trim() === 'unidad';
-      if (pkgSize > 1 && !isUnidad) {
-        const pkgUnitName  = package_unit.charAt(0).toUpperCase() + package_unit.slice(1);
-        const comboName    = `${pkgUnitName} de ${product.name} (${pkgSize})`;
-        const comboSalePrice = pkgPrice * (1 + margin / 100);
-
-        const [comboProduct, createdCombo] = await Product.findOrCreate({
-          where: { name: comboName, is_combo: true },
-          defaults: {
-            price: comboSalePrice,
-            stock: 0,
-            unit: 'unidad',
-            category_id: product.category_id,
-            image_filename: product.image_filename,
-            is_combo: true
-          },
-          transaction,
-          lock: true
-        });
-
-        if (createdCombo) {
-          await ProductComboItem.create({ combo_id: comboProduct.id, product_id: product.id, quantity: pkgSize }, { transaction });
-        } else if (update_price) {
-          await comboProduct.update({ price: comboSalePrice }, { transaction });
-        }
-
-        await ProductStock.findOrCreate({
-          where: { warehouse_id, product_id: comboProduct.id },
-          defaults: { qty: 0 },
-          transaction
-        });
-      }
-
-      if (!product.is_service) {
-        const totalStock = await ProductStock.sum('qty', { where: { product_id }, transaction });
-        await product.update({ stock: totalStock || 0 }, { transaction });
-      }
+      createdItems.push(purchaseItem);
     }
 
     await purchase.update({ total: grandTotal }, { transaction });
+
+    if (initialStatus === 'recibido') {
+      await _applyStockAndPrices(purchase, createdItems.map(i => i.toJSON()), transaction);
+    }
+
     await transaction.commit();
 
     const fullPurchase = await Purchase.findByPk(purchase.id, {
@@ -264,42 +295,151 @@ async function createPurchase({ body, employee_id }) {
   }
 }
 
-async function deletePurchase(id) {
+async function confirmOrder(id) {
+  const purchase = await Purchase.findByPk(id);
+  if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
+  if (purchase.status !== 'borrador') {
+    const e = new Error("Solo se pueden confirmar órdenes en estado borrador"); e.status = 400; throw e;
+  }
+  await purchase.update({ status: 'pendiente' });
+  return getOne(id);
+}
+
+async function receivePurchase(id) {
   const transaction = await sequelize.transaction();
   try {
     const purchase = await Purchase.findByPk(id, { transaction, lock: true });
     if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
-
-    const items = await PurchaseItem.findAll({ where: { purchase_id: purchase.id }, transaction });
-
-    for (const item of items) {
-      if (!item.product_id) continue;
-      const fullProd = await Product.findByPk(item.product_id, { transaction });
-      if (fullProd && !fullProd.is_service) {
-        const stockEntry = await ProductStock.findOne({
-          where: { warehouse_id: purchase.warehouse_id, product_id: item.product_id },
-          transaction,
-          lock: true
-        });
-        if (stockEntry) {
-          const currentQty  = parseFloat(stockEntry.qty || 0);
-          const qtyToSubtract = parseFloat(item.total_units || 0);
-          if (currentQty < qtyToSubtract)
-            throw new Error(`No se puede anular la compra: el producto "${item.product_name}" ya ha sido vendido o movido. Stock disponible: ${currentQty}, Requerido para anular: ${qtyToSubtract}`);
-          await stockEntry.decrement('qty', { by: qtyToSubtract, transaction });
-        }
-        const totalStock = await ProductStock.sum('qty', { where: { product_id: item.product_id }, transaction });
-        await Product.update({ stock: totalStock || 0 }, { where: { id: item.product_id }, transaction });
-      }
+    if (purchase.status === 'recibido') {
+      const e = new Error("Esta compra ya fue recibida"); e.status = 400; throw e;
     }
 
-    await purchase.destroy({ transaction });
+    const items = await PurchaseItem.findAll({ where: { purchase_id: id }, transaction });
+    await _applyStockAndPrices(purchase, items.map(i => i.toJSON()), transaction);
+    await purchase.update({ status: 'recibido' }, { transaction });
+
     await transaction.commit();
-    return { message: "Compra anulada y stock revertido" };
+    return getOne(id);
   } catch (err) {
     await transaction.rollback();
     throw err;
   }
 }
 
-module.exports = { getAll, getOne, createPurchase, deletePurchase };
+async function deletePurchase(id) {
+  const transaction = await sequelize.transaction();
+  try {
+    const purchase = await Purchase.findByPk(id, { transaction, lock: true });
+    if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
+
+    // Only revert stock if goods were actually received
+    if (purchase.status === 'recibido') {
+      const items = await PurchaseItem.findAll({ where: { purchase_id: purchase.id }, transaction });
+
+      for (const item of items) {
+        if (!item.product_id) continue;
+        const fullProd = await Product.findByPk(item.product_id, { transaction });
+        if (fullProd && !fullProd.is_service) {
+          const stockEntry = await ProductStock.findOne({
+            where: { warehouse_id: purchase.warehouse_id, product_id: item.product_id },
+            transaction,
+            lock: true
+          });
+          if (stockEntry) {
+            const currentQty    = parseFloat(stockEntry.qty || 0);
+            const qtyToSubtract = parseFloat(item.total_units || 0);
+            if (currentQty < qtyToSubtract)
+              throw new Error(`No se puede anular la compra: el producto "${item.product_name}" ya ha sido vendido o movido. Stock disponible: ${currentQty}, Requerido para anular: ${qtyToSubtract}`);
+            await stockEntry.decrement('qty', { by: qtyToSubtract, transaction });
+          }
+          const totalStock = await ProductStock.sum('qty', { where: { product_id: item.product_id }, transaction });
+          await Product.update({ stock: totalStock || 0 }, { where: { id: item.product_id }, transaction });
+        }
+      }
+    }
+
+    await purchase.destroy({ transaction });
+    await transaction.commit();
+    return { message: purchase.status === 'recibido' ? "Compra anulada y stock revertido" : "Orden eliminada" };
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
+}
+
+async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes, items }) {
+  const purchase = await Purchase.findByPk(id);
+  if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
+  if (!['borrador', 'pendiente'].includes(purchase.status)) {
+    const e = new Error("Solo se pueden editar órdenes en estado borrador o pendiente"); e.status = 400; throw e;
+  }
+
+  const transaction = await sequelize.transaction();
+  try {
+    let resolvedSupplierId   = supplier_id ? parseInt(supplier_id) : null;
+    let resolvedSupplierName = supplier_name || null;
+    if (resolvedSupplierId) {
+      const sup = await Customer.findOne({ where: { id: resolvedSupplierId, type: 'proveedor' }, transaction });
+      if (sup) resolvedSupplierName = sup.tax_name || sup.name;
+    }
+
+    await PurchaseItem.destroy({ where: { purchase_id: id }, transaction });
+
+    let grandTotal = 0;
+    if (items?.length) {
+      for (const item of items) {
+        const { product_id, package_unit, package_size, package_qty, package_price, profit_margin, lot_number, expiration_date } = item;
+        if (!product_id || !package_size || !package_qty)
+          throw new Error("Datos incompletos en línea de compra");
+
+        const pkgSize  = parseFloat(package_size);
+        const pkgQty   = parseFloat(package_qty);
+        const pkgPrice = parseFloat(package_price) || 0;
+        const margin   = parseFloat(profit_margin) || 0;
+        const unit_cost   = pkgPrice > 0 ? pkgPrice / pkgSize : 0;
+        const sale_price  = unit_cost * (1 + margin / 100);
+        const total_units = pkgQty * pkgSize;
+        const subtotal    = pkgQty * pkgPrice;
+        grandTotal += subtotal;
+
+        const product = await Product.findByPk(product_id, { transaction });
+        if (!product) throw new Error(`Producto ID ${product_id} no encontrado`);
+
+        await PurchaseItem.create({
+          purchase_id: id,
+          product_id,
+          product_name: product.name,
+          package_unit: package_unit || "unidad",
+          package_qty: pkgQty,
+          package_size: pkgSize,
+          package_price: pkgPrice,
+          unit_cost,
+          profit_margin: margin,
+          sale_price,
+          total_units,
+          subtotal,
+          lot_number: lot_number || null,
+          expiration_date: expiration_date || null
+        }, { transaction });
+      }
+    }
+
+    const updateData = {
+      supplier_id: resolvedSupplierId,
+      supplier_name: resolvedSupplierName,
+      notes: notes || null,
+      total: grandTotal,
+    };
+    if (warehouse_id) updateData.warehouse_id = parseInt(warehouse_id);
+    else updateData.warehouse_id = null;
+
+    await purchase.update(updateData, { transaction });
+    await transaction.commit();
+    return getOne(id);
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
+}
+
+module.exports = { getAll, getOne, createPurchase, updateDraft, confirmOrder, receivePurchase, deletePurchase };

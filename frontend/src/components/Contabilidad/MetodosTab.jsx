@@ -69,7 +69,7 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
           <div className="text-xs font-black uppercase tracking-wide">Sin métodos configurados</div>
         </div>
       ) : (
-        <table className="table-pos">
+        <table className="table-pos min-w-[680px]">
             <thead className="sticky top-0 z-10">
               <tr>
                 <th className="w-12" />

@@ -15,8 +15,9 @@ import BancosTab from "../components/Contabilidad/BancosTab";
 import MetodosTab from "../components/Contabilidad/MetodosTab";
 import EgresosTab from "../components/Contabilidad/EgresosTab";
 import CotizacionesTab from "../components/Contabilidad/CotizacionesTab";
+import NotasCreditoTab from "../components/Contabilidad/NotasCreditoTab";
 
-const SUB_PAGES = ["Estado de Cuenta", "Egresos", "Transacciones", "Cotizaciones", "Pagos", "Series", "Diarios", "Tipos de pago", "Bancos"];
+const SUB_PAGES = ["Estado de Cuenta", "Egresos", "Transacciones", "Notas de Crédito", "Cotizaciones", "Pagos", "Series", "Diarios", "Tipos de pago", "Bancos"];
 
 export default function ContabilidadPage() {
  const {
@@ -103,6 +104,13 @@ export default function ContabilidadPage() {
  fmtSale={fmtSale}
  allSeries={allSeries}
  setReceiptSale={setReceiptSale}
+ />
+ );
+ case "Notas de Crédito":
+ return (
+ <NotasCreditoTab
+ notify={notify}
+ fmtPrice={fmtPrice}
  />
  );
  case "Cotizaciones":

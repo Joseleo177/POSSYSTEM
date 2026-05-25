@@ -45,7 +45,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                 {showFilterDrop && (
                     <>
                         <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
-                        <div className="absolute top-full left-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                        <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Vista</div>
                                 <div className="flex bg-surface-2 dark:bg-white/5 p-0.5 rounded-lg border border-border/20 dark:border-white/5">
@@ -80,7 +80,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
             {subheader}
             <div className="flex-1 flex flex-col overflow-hidden min-h-0">
                 <div className="card-premium overflow-auto flex-1 border-none shadow-none rounded-none bg-transparent">
-                    <table className="table-pos">
+                    <table className="table-pos min-w-[680px]">
                         <thead className="sticky top-0 z-10">
                             <tr>
                                 {["Referencia", "Estado / Tipo", "Cliente", "Fecha", "Monto", "Acciones"].map(h => (
@@ -107,9 +107,15 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                         </td>
                                         <td>
                                             <span className={`badge shadow-none ${isInvoice
-                                                ? item.status === "parcial" ? "badge-warning" : "badge-danger"
+                                                ? item.status === "parcial"  ? "badge-warning"
+                                                : item.status === "borrador" ? "badge-neutral"
+                                                : "badge-danger"
                                                 : "badge-info"}`}>
-                                                {isInvoice ? (item.status === "parcial" ? "Parcial" : "Pendiente") : "Cobro Realizado"}
+                                                {isInvoice
+                                                    ? item.status === "parcial"  ? "Parcial"
+                                                    : item.status === "borrador" ? "Sin factura"
+                                                    : "Pendiente"
+                                                : "Cobro Realizado"}
                                             </span>
                                         </td>
                                         <td className="truncate max-w-[200px]">
@@ -131,9 +137,11 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                             <div className="flex items-center justify-end gap-1.5">
                                                 {isInvoice ? (
                                                     <>
-                                                        <button onClick={() => setReceiptSale(item)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 active:scale-90" title="Ver Factura">
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                                        </button>
+                                                        {item.status !== "borrador" && (
+                                                            <button onClick={() => setReceiptSale(item)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 active:scale-90" title="Ver Factura">
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                                            </button>
+                                                        )}
                                                         <button onClick={() => setPayModal(item)} className="h-7 px-3 rounded-lg bg-success text-black text-[10px] font-black uppercase tracking-wide transition-all active:scale-90 flex items-center gap-1 shadow-lg shadow-success/20">
                                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
                                                             Cobrar
@@ -169,7 +177,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                 const p = payDetail;
                 const isBase = !p.currency_code || p.currency_code === baseCurrency?.code;
                 const rate = parseFloat(p.exchange_rate) || 1;
-                const sym = p.currency_symbol || baseCurrency?.symbol || "$";
+                const sym = p.currency_symbol || baseCurrency?.symbol || "Ref.";
                 const fmtP = n => `${sym}${(Number(n || 0) * (isBase ? 1 : rate)).toFixed(2)}`;
                 return (
                     <Modal open={!!payDetail} onClose={() => setPayDetail(null)} title="Detalle del Cobro" width={400}>

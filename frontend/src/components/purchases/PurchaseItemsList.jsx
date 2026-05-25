@@ -24,7 +24,8 @@ export default function PurchaseItemsList({ state }) {
                 PRODUCTOS EN ESTE RECIBO
             </div>
 
-            <table className="table-pos text-xs">
+            <div className="overflow-x-auto">
+            <table className="table-pos min-w-[720px] text-xs">
                 <thead>
                     <tr>
                         {[
@@ -62,10 +63,10 @@ export default function PurchaseItemsList({ state }) {
                                 {item.package_qty}
                             </td>
 
-                            <td className="text-info">${fmt2(item.package_price)}</td>
+                            <td className="text-info">Ref. {fmt2(item.package_price)}</td>
 
                             <td className="text-content-muted dark:text-content-dark-muted">
-                                ${fmt2(item.unit_cost)}
+                                Ref. {fmt2(item.unit_cost)}
                             </td>
 
                             <td className="text-content-muted dark:text-content-dark-muted">
@@ -73,7 +74,7 @@ export default function PurchaseItemsList({ state }) {
                             </td>
 
                             <td className="text-success font-bold">
-                                ${fmt2(item.sale_price)}
+                                Ref. {fmt2(item.sale_price)}
                             </td>
 
                             <td className="text-content dark:text-content-dark">
@@ -81,7 +82,7 @@ export default function PurchaseItemsList({ state }) {
                             </td>
 
                             <td className="text-warning font-bold">
-                                ${fmt2(item.subtotal)}
+                                Ref. {fmt2(item.subtotal)}
                             </td>
 
                             <td>
@@ -96,6 +97,7 @@ export default function PurchaseItemsList({ state }) {
                     ))}
                 </tbody>
             </table>
+            </div>
 
             {/* TOTAL */}
             <div className="flex justify-end items-center gap-3 mt-4 pt-3 border-t border-border dark:border-border-dark">
@@ -104,7 +106,7 @@ export default function PurchaseItemsList({ state }) {
                         TOTAL COMPRA:{" "}
                     </span>
                     <span className="text-xl font-bold text-warning">
-                        ${fmt2(grandTotal)}
+                        Ref. {fmt2(grandTotal)}
                     </span>
                 </div>
 

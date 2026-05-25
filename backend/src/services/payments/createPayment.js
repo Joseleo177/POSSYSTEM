@@ -160,6 +160,7 @@ module.exports = async function createPayment(body) {
       amount_paid: totalPaidNow,
       balance: balance < 0 ? 0 : balance,
       change_given: changeAmt > 0 ? changeAmt : 0,
+      invoice_number: sale.invoice_number || null,
     };
   } catch (err) {
     await t.rollback();

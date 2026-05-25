@@ -138,7 +138,7 @@ export default function PromotionsTab({ notify, can }) {
                     </div>
                 ) : (
                     <div className="card-premium overflow-auto flex-1">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse min-w-[640px]">
                             <thead className="sticky top-0 z-10">
                                 <tr className="bg-surface-2 dark:bg-surface-dark-2">
                                     {["Nombre", "Tipo", "Detalle", "Productos", "Vigencia", "Estado", "Acciones"].map(h => (

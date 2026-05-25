@@ -5,7 +5,7 @@ export function printNotaCreditoDoc(returnData, sale, companyInfo, baseCurrency,
     const isBase = !displayCurrency || displayCurrency.is_base;
     const exchangeRate = parseFloat(sale?.exchange_rate || 1);
     const rate = isBase ? 1 : parseFloat(exchangeRate > 1 ? exchangeRate : (displayCurrency?.exchange_rate || 1));
-    const sym = isBase ? (baseCurrency?.symbol || "$") : (displayCurrency?.symbol || "$");
+    const sym = isBase ? (baseCurrency?.symbol || "Ref.") : (displayCurrency?.symbol || "Ref.");
     const fmtP = n => fmtMoney(parseFloat(n || 0) * rate, sym);
 
     const storeName = companyInfo?.name || "MI TIENDA POS";
@@ -109,7 +109,7 @@ export function printNotaCreditoDoc(returnData, sale, companyInfo, baseCurrency,
 
     <div class="totals">
         <div class="total-row big"><span>TOTAL ACREDITADO</span><span>${fmtP(total)}</span></div>
-        ${rate > 1 ? `<div class="total-row" style="margin-top:2px;font-weight:600;font-size:9px;opacity:0.7;justify-content:flex-end;gap:4px;"><span>EQUIV. USD:</span><span>${fmtMoney(total, "$")}</span></div>` : ""}
+        ${rate > 1 ? `<div class="total-row" style="margin-top:2px;font-weight:600;font-size:9px;opacity:0.7;justify-content:flex-end;gap:4px;"><span>EQUIV. REF.:</span><span>${fmtMoney(total)}</span></div>` : ""}
     </div>
 
     ${returnData.reason ? `<div class="reason-box"><b>Motivo:</b> ${returnData.reason}</div>` : ""}

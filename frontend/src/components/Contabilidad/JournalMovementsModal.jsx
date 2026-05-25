@@ -25,7 +25,7 @@ export default function JournalMovementsModal({ journalId, onClose }) {
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
 
-    const sym = journal?.currency_symbol || "$";
+    const sym = journal?.currency_symbol || "Ref.";
     const fmtLocal = (n) => `${sym}${Number(n).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     const load = useCallback(async () => {
@@ -57,12 +57,12 @@ export default function JournalMovementsModal({ journalId, onClose }) {
     return (
         <>
             {/* Backdrop */}
-            <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-md" onClick={onClose} />
+            <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
             {/* Panel */}
             <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
                 <div
-                    className="w-full max-w-5xl max-h-[90vh] bg-white dark:bg-surface-dark-2 rounded-2xl border border-border/40 dark:border-white/10 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                    className="w-full max-w-5xl max-h-[90vh] bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* ── Header ── */}
@@ -119,7 +119,7 @@ export default function JournalMovementsModal({ journalId, onClose }) {
 
                     {/* ── Tabla de movimientos ── */}
                     <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse min-w-[820px]">
                             <thead className="sticky top-0 z-10 bg-surface-2 dark:bg-surface-dark-2">
                                 <tr>
                                     {["Fecha", "Hora", "Tipo", "Referencia", "Concepto", "Debe (Egreso)", "Haber (Ingreso)", "Saldo"].map((h) => (

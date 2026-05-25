@@ -41,7 +41,7 @@ function printReceipt(sale, companyInfo, displayCurrency) {
         ? parseFloat(s.final_payment_rate)
         : parseFloat(s.exchange_rate || 1);
     const rate = (effectiveRate > 1) ? effectiveRate : parseFloat(displayCurrency?.exchange_rate || 1);
-    const sym = displayCurrency?.symbol || "$";
+    const sym = displayCurrency?.symbol || "Ref.";
     const code = displayCurrency?.code || "VES";
     const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
     const dateStr = fmtDate(s.created_at);
@@ -184,7 +184,7 @@ function printReceipt(sale, companyInfo, displayCurrency) {
         <div class="total-row big"><span>TOTAL</span><span>${fmtP(s.total)}</span></div>
         ${effectiveRate > 1 ? `
             <div class="total-row" style="margin-top:2px; font-weight:600; font-size:9px; opacity:0.7; justify-content: flex-end; gap: 4px;">
-                <span>EQUIV. USD:</span><span>${fmt(s.total, "$")}</span>
+                <span>EQUIV. REF.:</span><span>${fmt(s.total)}</span>
             </div>
         ` : ""}
     </div>
@@ -215,7 +215,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
         ? parseFloat(s.final_payment_rate)
         : parseFloat(s.exchange_rate || 1);
     const rate = isBase ? 1 : parseFloat(effectiveRate > 1 ? effectiveRate : (displayCurrency.exchange_rate || 1));
-    const sym = isBase ? (baseCurrency?.symbol || "$") : (displayCurrency.symbol || "$");
+    const sym = isBase ? (baseCurrency?.symbol || "Ref.") : (displayCurrency.symbol || "Ref.");
 
     // Todos los montos vienen en USD base → multiplicar por tasa de display
     const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
@@ -324,7 +324,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                         <div className="text-content dark:text-white font-black text-sm leading-none">{fmtP(s.total)}</div>
                         {!isBase && (
                             <div className="text-[10px] font-bold text-content-subtle dark:text-brand-500/60 mt-1">
-                                EQUIV. {fmt(s.total, "$")}
+                                EQUIV. {fmt(s.total)}
                             </div>
                         )}
                     </div>

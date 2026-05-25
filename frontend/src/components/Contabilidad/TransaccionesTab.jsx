@@ -4,6 +4,7 @@ import ReturnModal from "../ReturnModal";
 import ConfirmModal from "../ui/ConfirmModal";
 import PaymentFormModal from "../PaymentFormModal";
 import EditSaleModal from "../cobro/EditSaleModal";
+import SaleDetailModal from "../Customers/SaleDetailModal";
 import { Button } from "../ui/Button";
 import { fmtDateShort } from "../../helpers";
 import DateRangePicker from "../ui/DateRangePicker";
@@ -74,7 +75,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                 {showFilterDrop && (
                     <>
                         <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
-                        <div className="absolute top-full left-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                        <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado</div>
                                 <div className="grid grid-cols-2 gap-1.5">
@@ -112,7 +113,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
             {subheader}
             <div className="flex-1 flex flex-col overflow-hidden min-h-0">
                 <div className="card-premium overflow-auto flex-1 border-none shadow-none rounded-none bg-transparent">
-                    <table className="table-pos">
+                    <table className="table-pos min-w-[820px]">
                         <thead className="sticky top-0 z-10">
                             <tr>
                                 {["Factura", "Estado", "Cliente", "Fecha", "Total", "Acciones"].map(h => (
@@ -154,10 +155,10 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                         <td className="text-right pr-6">
                                             <div className="flex items-center justify-end gap-1.5">
                                                 <button
-                                                    onClick={() => setSaleDetail(saleDetail?.id === sale.id ? null : sale)}
-                                                    className={`h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all ${saleDetail?.id === sale.id ? "bg-brand-500 text-black border-brand-500" : "bg-brand-500/10 text-brand-500 border-brand-500/20 hover:bg-brand-500 hover:text-black"}`}
+                                                    onClick={() => setSaleDetail(sale)}
+                                                    className="h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all bg-brand-500/10 text-brand-500 border-brand-500/20 hover:bg-brand-500 hover:text-black"
                                                 >
-                                                    {saleDetail?.id === sale.id ? "Cerrar" : "Detalles"}
+                                                    Detalles
                                                 </button>
                                                 {(sale.status === 'borrador' || sale.status === 'pendiente' || sale.status === 'parcial') && (
                                                     <button onClick={() => setPayModal(sale)} className="h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all bg-success/10 text-success border-success/20 hover:bg-success hover:text-black">
@@ -188,36 +189,6 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                             </div>
                                         </td>
                                     </tr>
-                                    {saleDetail?.id === sale.id && (
-                                        <tr key={`detail-${sale.id}`}>
-                                            <td colSpan={6} className="px-4 pb-4 bg-surface-2/50 dark:bg-white/[0.02]">
-                                                <div className="rounded-lg border border-border/30 dark:border-white/5 overflow-hidden">
-                                                    <table className="w-full text-left border-collapse">
-                                                        <thead>
-                                                            <tr className="bg-surface-2 dark:bg-surface-dark-2 border-b border-border/20 dark:border-white/5 font-black uppercase text-[9px] text-content-subtle">
-                                                                <th className="px-4 py-2">Producto</th>
-                                                                <th className="px-4 py-2 text-center w-20">Cant.</th>
-                                                                <th className="px-4 py-2 text-right w-32">P. Unit.</th>
-                                                                <th className="px-4 py-2 text-right w-32">Subtotal</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-border/10 dark:divide-white/5">
-                                                            {(sale.items || []).map((item, idx) => (
-                                                                <tr key={idx} className="hover:bg-brand-500/[0.02]">
-                                                                    <td className="px-4 py-2 text-[10px] font-bold text-content dark:text-content-dark uppercase truncate max-w-[200px]">{item.name}</td>
-                                                                    <td className="px-4 py-2 text-center text-[10px] font-black text-content-subtle">{item.quantity}</td>
-                                                                    <td className="px-4 py-2 text-right text-[10px] font-bold text-content-subtle tabular-nums">{fmtPrice(item.price)}</td>
-                                                                    <td className="px-4 py-2 text-right text-[10px] font-black text-brand-500 tabular-nums">
-                                                                        {fmtPrice(item.subtotal ?? (parseFloat(item.price || 0) * parseFloat(item.quantity || 0)))}
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )}
                                 </React.Fragment>
                             ))}
                         </tbody>
@@ -256,6 +227,10 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                 type="danger"
                 confirmText="Sí, anular venta"
             />
+
+            {saleDetail && (
+                <SaleDetailModal saleId={saleDetail.id} onClose={() => setSaleDetail(null)} />
+            )}
         </div>
     );
 }

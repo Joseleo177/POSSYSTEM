@@ -7,7 +7,7 @@ const LIMIT = 50;
 export function usePagos({ notify }) {
     const [data, setData] = useState([]);
     const [total, setTotal] = useState(0);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     const [viewType, setViewType] = useState("historial");
     const [searchTerm, setSearchTerm] = useState("");
@@ -23,12 +23,18 @@ export function usePagos({ notify }) {
     const [query, setQuery] = useState({ viewType: "historial", search: "", dateFrom: "", dateTo: "", page: 1, refresh: 0 });
 
     useEffect(() => {
-        const timer = setTimeout(() => setQuery(q => ({ ...q, search: searchTerm, page: 1 })), 300);
+        const timer = setTimeout(() => setQuery(q => {
+            if (q.search === searchTerm) return q;
+            return { ...q, search: searchTerm, page: 1 };
+        }), 300);
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
     useEffect(() => {
-        setQuery(q => ({ ...q, viewType, dateFrom: payDateFrom, dateTo: payDateTo, page: 1 }));
+        setQuery(q => {
+            if (q.viewType === viewType && q.dateFrom === payDateFrom && q.dateTo === payDateTo) return q;
+            return { ...q, viewType, dateFrom: payDateFrom, dateTo: payDateTo, page: 1 };
+        });
     }, [viewType, payDateFrom, payDateTo]); // eslint-disable-line
 
     useEffect(() => {

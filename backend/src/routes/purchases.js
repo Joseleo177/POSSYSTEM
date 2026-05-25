@@ -8,6 +8,9 @@ router.use(auth);
 router.get("/",     permit("products", "inventory"), ctrl.getAll);
 router.get("/:id",  permit("products", "inventory"), ctrl.getOne);
 router.post("/",    permit("products", "inventory"), ctrl.create);
+router.patch("/:id",         permit("products", "inventory"), ctrl.updateDraft);
+router.patch("/:id/confirm", permit("products", "inventory"), ctrl.confirm);
+router.patch("/:id/receive", permit("products", "inventory"), ctrl.receive);
 router.delete("/:id", permit("admin", "products"),  ctrl.remove);
 
 // Pagos de compras

@@ -43,7 +43,7 @@ const create = async (req, res) => {
 
     // Seed default currencies for this specific company
     await Currency.bulkCreate([
-      { code: 'USD', name: 'Dólar Americano', symbol: '$', exchange_rate: 1.0, is_base: true, active: true, company_id: company.id },
+      { code: 'USD', name: 'Dólar Americano', symbol: 'Ref.', exchange_rate: 1.0, is_base: true, active: true, company_id: company.id },
       { code: 'VES', name: 'Bolívar Venezolano', symbol: 'Bs.', exchange_rate: 36.0, is_base: false, active: true, company_id: company.id }
     ]);
 

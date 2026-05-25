@@ -12,6 +12,6 @@ const wrap = (fn, status = 200) => async (req, res) => {
 
 module.exports = {
   getPayments:   wrap(req => getPayments(parseInt(req.params.id))),
-  createPayment: wrap(req => createPayment(parseInt(req.params.id), req.body, req.employee?.id ?? null), 201),
+  createPayment: wrap(req => createPayment(parseInt(req.params.id), req.body, req.employee?.id ?? null, req.employee?.company_id ?? null), 201),
   removePayment: wrap(req => removePayment(parseInt(req.params.id))),
 };

@@ -47,6 +47,7 @@ const create = async (req, res) => {
       sale_status: result.sale_status,
       amount_paid: result.amount_paid,
       balance: result.balance,
+      invoice_number: result.invoice_number,
     });
   } catch (err) {
     const status = /requerido|no encontrada|ya fue|anulada|excede|mayor/i.test(err.message) ? 400 : 500;

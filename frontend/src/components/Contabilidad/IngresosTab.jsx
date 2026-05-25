@@ -11,6 +11,7 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
  const [journalSummData, setJournalSummData] = useState([]);
  const [sales, setSales] = useState([]);
  const [selectedJournalId, setSelectedJournalId] = useState(null);
+ const [showFilterDrop, setShowFilterDrop] = useState(false);
 
  const loadSalesForSummary = useCallback(async () => {
  try {
@@ -24,33 +25,92 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
 
  useEffect(() => { loadSalesForSummary(); }, [loadSalesForSummary]);
 
-    const subheader = (
-        <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2">
-            {/* Rango de Fechas (Simulando el ancho del buscador para simetría) */}
-            <DateRangePicker 
-                from={histDateFrom} 
-                to={histDateTo} 
-                setFrom={setHistDateFrom} 
-                setTo={setHistDateTo}
-                className="flex-1 min-w-[200px] max-w-md"
-            />
+    const hasFilters = !!(histDateFrom || histDateTo || summaryView !== "diarios");
 
-            {/* Selector de Vista (Alineado a la derecha como los filtros) */}
-            <div className="ml-auto flex items-center gap-1.5">
-                {[
-                    { id: "diarios", label: "Diarios", icon: <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
-                    { id: "bancos", label: "Bancos", icon: <path d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" /> },
-                    { id: "series", label: "Series", icon: <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /> }
-                ].map(v => (
-                    <button
-                        key={v.id}
-                        onClick={() => setSummaryView(v.id)}
-                        className={`h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border transition-all ${summaryView === v.id ? 'bg-brand-500 text-black border-brand-500 shadow-lg shadow-brand-500/20' : 'bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white'}`}
-                    >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>{v.icon}</svg>
-                        {v.label}
-                    </button>
-                ))}
+    const clearFilters = () => {
+        setHistDateFrom("");
+        setHistDateTo("");
+        setSummaryView("diarios");
+        setShowFilterDrop(false);
+    };
+
+    const VIEWS = [
+        { id: "diarios", label: "Diarios",  icon: <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
+        { id: "bancos",  label: "Bancos",   icon: <path strokeLinecap="round" strokeLinejoin="round" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" /> },
+        { id: "series",  label: "Series",   icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /> },
+    ];
+
+    const activeCount = (summaryView !== "diarios" ? 1 : 0) + (histDateFrom || histDateTo ? 1 : 0);
+
+    const subheader = (
+        <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex items-center gap-2">
+            <div className="relative ml-auto">
+                <button
+                    onClick={() => setShowFilterDrop(p => !p)}
+                    className={[
+                        "h-8 px-3 rounded-lg text-[11px] font-black uppercase tracking-wide border flex items-center gap-2 transition-all",
+                        hasFilters
+                            ? "bg-brand-500/10 text-brand-500 border-brand-500/30"
+                            : "bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"
+                    ].join(" ")}
+                >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                    Filtros
+                    {activeCount > 0 && (
+                        <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">
+                            {activeCount}
+                        </span>
+                    )}
+                </button>
+
+                {showFilterDrop && (
+                    <>
+                        <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
+                        <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                            {/* Vista */}
+                            <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Vista</div>
+                                <div className="grid grid-cols-3 gap-1.5">
+                                    {VIEWS.map(v => (
+                                        <button
+                                            key={v.id}
+                                            onClick={() => { setSummaryView(v.id); setShowFilterDrop(false); }}
+                                            className={[
+                                                "px-2 py-2 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all flex flex-col items-center gap-1",
+                                                summaryView === v.id
+                                                    ? "bg-brand-500 text-black border-brand-500"
+                                                    : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"
+                                            ].join(" ")}
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>{v.icon}</svg>
+                                            {v.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Rango de fechas */}
+                            <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Rango de Fecha</div>
+                                <DateRangePicker
+                                    from={histDateFrom}
+                                    to={histDateTo}
+                                    setFrom={setHistDateFrom}
+                                    setTo={setHistDateTo}
+                                />
+                            </div>
+
+                            {/* Limpiar */}
+                            <div className="px-4 py-2">
+                                <button onClick={clearFilters} className="w-full py-1.5 text-[10px] font-black uppercase tracking-wide text-danger hover:bg-danger/5 rounded-lg transition-colors">
+                                    Limpiar todo
+                                </button>
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );
@@ -98,7 +158,7 @@ export default function IngresosTab({ notify, fmtPrice, allSeries }) {
                                     const totalPagos = d.journals.reduce((s, j) => s + parseFloat(j.total_ingresos || 0), 0);
                                     const countPagos = d.journals.reduce((s, j) => s + parseInt(j.tx_count || 0), 0);
                                     const hoy = d.journals.reduce((s, j) => s + parseFloat(j.ingresos_hoy || 0), 0);
-                                    const sym = d.journals[0]?.currency_symbol || "$";
+                                    const sym = d.journals[0]?.currency_symbol || "Ref.";
                                     const fmtB = n => `${sym}${Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
                                     return (

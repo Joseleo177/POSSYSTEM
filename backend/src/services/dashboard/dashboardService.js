@@ -75,7 +75,7 @@ async function getDashboard({ company_id, isSuperuser }) {
     SELECT COUNT(id) as count,
            COALESCE(SUM(total - (SELECT COALESCE(SUM(amount), 0) FROM payments p WHERE p.sale_id = s.id)), 0) as balance
     FROM sales s
-    WHERE s.status IN ('pendiente', 'parcial')
+    WHERE s.status IN ('borrador', 'pendiente', 'parcial')
     ${!isSuperuser && company_id ? "AND s.company_id = :company_id" : ""}
   `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 

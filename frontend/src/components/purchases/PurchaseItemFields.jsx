@@ -93,7 +93,7 @@ export default function PurchaseItemFields({ state }) {
                     <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle opacity-50 px-1">Costo Unitario</label>
                     <div className="card-premium h-10 flex flex-col justify-center px-4 bg-brand-500/[0.02] border-brand-500/10 rounded-lg">
                         <div className="text-xs font-bold text-brand-500 tabular-nums">
-                            {calc.unit_cost ? `$ ${fmt2(calc.unit_cost)}` : "$ 0"}
+                            {calc.unit_cost ? `Ref. ${fmt2(calc.unit_cost)}` : "Ref. 0"}
                         </div>
                         <div className="text-[8px] uppercase tracking-tighter opacity-40 font-bold">Cálculo Proyectado</div>
                     </div>
@@ -103,7 +103,7 @@ export default function PurchaseItemFields({ state }) {
                     <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle opacity-50 px-1">Precio de Venta</label>
                     <div className="card-premium h-10 flex flex-col justify-center px-4 bg-success/5 border-success/10">
                         <div className="text-xs font-bold text-success tabular-nums">
-                            {calc.sale_price ? `$ ${fmt2(calc.sale_price)}` : "$ 0"}
+                            {calc.sale_price ? `Ref. ${fmt2(calc.sale_price)}` : "Ref. 0"}
                         </div>
                         <div className="text-[8px] uppercase tracking-tighter opacity-40 font-bold text-success">Sincronización Activa</div>
                     </div>

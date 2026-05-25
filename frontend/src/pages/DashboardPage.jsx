@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../services/api";
 import { fmtNumber, fmtInt } from "../helpers";
+import { useApp } from "../context/AppContext";
 
 import Page from "../components/ui/Page";
 
@@ -94,9 +95,15 @@ function KpiCard({ label, value, sub, subValue, color = "text-brand-500", icon }
 }
 
 export default function DashboardPage() {
+    const { baseCurrency, activeCurrencies } = useApp();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+
+    // income y cash_in_hand = amount × exchange_rate → moneda local (no base)
+    const localCur = activeCurrencies?.find(c => !c.is_base);
+    const baseSym  = baseCurrency?.symbol  || "Ref.";
+    const localSym = localCur?.symbol      || baseSym;
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -143,35 +150,35 @@ export default function DashboardPage() {
                 
                 {/* ── Sección Financiera Crítica ── */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <KpiCard 
-                        label="Facturación Hoy" 
-                        value={`$${fmt(kpi.today.revenue)}`} 
-                        sub="TX" 
-                        subValue={kpi.today.sales} 
+                    <KpiCard
+                        label="Facturación Hoy"
+                        value={`${baseSym}${fmt(kpi.today.revenue)}`}
+                        sub="TX"
+                        subValue={kpi.today.sales}
                         color="text-info"
                         icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
                     />
-                    <KpiCard 
-                        label="Cobranza Real Hoy" 
-                        value={`$${fmt(kpi.today.income)}`} 
-                        sub="Ingreso" 
-                        subValue="Neto" 
+                    <KpiCard
+                        label="Cobranza Real Hoy"
+                        value={`${localSym}${fmt(kpi.today.income)}`}
+                        sub="Ingreso"
+                        subValue="Neto"
                         color="text-success"
                         icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                     />
-                    <KpiCard 
-                        label="Saldo Disp. en Cajas" 
-                        value={`$${fmt(kpi.cash_in_hand)}`} 
-                        sub="Fondo" 
-                        subValue="Total" 
+                    <KpiCard
+                        label="Saldo Disp. en Cajas"
+                        value={`${localSym}${fmt(kpi.cash_in_hand)}`}
+                        sub="Fondo"
+                        subValue="Total"
                         color="text-brand-400"
                         icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
                     />
-                    <KpiCard 
-                        label="Cuentas por Cobrar" 
-                        value={`$${fmt(pending_bills.balance)}`} 
-                        sub="Facturas" 
-                        subValue={pending_bills.count} 
+                    <KpiCard
+                        label="Cuentas por Cobrar"
+                        value={`${baseSym}${fmt(pending_bills.balance)}`}
+                        sub="Facturas"
+                        subValue={pending_bills.count}
                         color="text-danger"
                         icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                     />
@@ -184,7 +191,7 @@ export default function DashboardPage() {
                         <div className="flex items-center justify-between mb-6 relative">
                             <span className="text-[11px] font-black uppercase tracking-widest text-content dark:text-white">Tendencia de Facturación Global (30 Días)</span>
                             <div className="flex items-center gap-2">
-                                <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase tracking-widest leading-none">Total Mes: <span className="text-brand-500 ml-1">$ {fmt(kpi.month.revenue)}</span></div>
+                                <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase tracking-widest leading-none">Total Mes: <span className="text-brand-500 ml-1">{baseSym} {fmt(kpi.month.revenue)}</span></div>
                             </div>
                         </div>
                         <SalesChart data={sales_by_day} />
@@ -264,7 +271,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="flex items-center justify-between">
                             <div>
-                                <div className="text-2xl font-black text-warning tracking-tighter tabular-nums mb-1">$ {fmt(purchases_month.total)}</div>
+                                <div className="text-2xl font-black text-warning tracking-tighter tabular-nums mb-1">{baseSym} {fmt(purchases_month.total)}</div>
                                 <div className="text-[10px] font-black text-content-subtle uppercase tracking-widest opacity-60">Basado en {purchases_month.count} adquisiciones</div>
                             </div>
                             <div className="p-4 bg-surface-2 dark:bg-white/5 rounded-2xl border border-border/10">

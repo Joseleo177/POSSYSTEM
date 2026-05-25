@@ -296,7 +296,7 @@ export default function SettingsTab({ notify }) {
                                 </div>
                             </div>
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
+                                <table className="w-full text-left border-collapse min-w-[560px]">
                                     <thead>
                                         <tr className="bg-surface-2 dark:bg-white/[0.02]">
                                             {["Código", "Nombre", "Símbolo", "Tasa (1 USD =)", "Estado", ""].map(h => (
