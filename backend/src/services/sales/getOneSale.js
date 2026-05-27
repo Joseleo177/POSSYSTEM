@@ -79,7 +79,7 @@ module.exports = async function getOneSale(id) {
   // Totales financieros
   item.amount_paid = parseFloat(await Payment.sum('amount', { where: { sale_id: id } }) || 0);
   item.total_returned = parseFloat(await Return.sum('total', { where: { sale_id: id } }) || 0);
-  item.balance = parseFloat((parseFloat(item.total) - item.total_returned - item.amount_paid).toFixed(2));
+  item.balance = parseFloat((parseFloat(item.total) - item.total_returned - item.amount_paid).toFixed(6));
   if (item.balance < 0 || item.balance <= 0.02) item.balance = 0;
 
   return item;

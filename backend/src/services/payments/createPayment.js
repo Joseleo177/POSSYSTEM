@@ -72,8 +72,8 @@ module.exports = async function createPayment(body) {
     const alreadyPaid  = await getSaleBalance(sale_id, t);
     // getSaleBalance ya descuenta change_given de pagos previos.
     // El crédito neto de este pago = lo físicamente recibido menos el cambio entregado.
-    const netCredit    = Math.min(parseFloat((payAmt - changeAmt).toFixed(4)), saleTotal - alreadyPaid);
-    const totalPaidNow = parseFloat((alreadyPaid + netCredit).toFixed(2));
+    const netCredit    = Math.min(parseFloat((payAmt - changeAmt).toFixed(6)), saleTotal - alreadyPaid);
+    const totalPaidNow = parseFloat((alreadyPaid + netCredit).toFixed(6));
 
     if (netCredit < -0.001) {
       throw new Error("El cambio no puede superar el monto recibido");
@@ -159,7 +159,7 @@ module.exports = async function createPayment(body) {
     await sale.update({ status: newStatus }, { transaction: t });
     await t.commit();
 
-    const rawBalance = parseFloat((saleTotal - totalPaidNow).toFixed(2));
+    const rawBalance = parseFloat((saleTotal - totalPaidNow).toFixed(6));
     const balance = rawBalance <= 0.02 ? 0 : rawBalance;
     return {
       payment,

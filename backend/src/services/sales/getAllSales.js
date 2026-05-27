@@ -70,7 +70,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
     item.items = item.SaleItems ?? [];
     item.amount_paid = parseFloat(item.amount_paid || 0);
     const totalRet = parseFloat(item.total_returned || 0);
-    item.balance = parseFloat((parseFloat(item.total) - totalRet - item.amount_paid).toFixed(2));
+    item.balance = parseFloat((parseFloat(item.total) - totalRet - item.amount_paid).toFixed(6));
     ["Customer", "Employee", "Currency", "Warehouse", "Serie", "SaleItems"].forEach((k) => delete item[k]);
     return item;
   });

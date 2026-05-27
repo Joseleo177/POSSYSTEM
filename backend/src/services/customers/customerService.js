@@ -108,7 +108,7 @@ async function getCustomerPurchases(id, { limit = 50, offset = 0 }) {
     sale.currency_symbol = sale.Currency?.symbol ?? null;
     sale.currency_code   = sale.Currency?.code   ?? null;
     sale.amount_paid     = parseFloat(sale.amount_paid || 0);
-    sale.balance         = parseFloat((parseFloat(sale.total) - sale.amount_paid).toFixed(2));
+    sale.balance         = parseFloat((parseFloat(sale.total) - sale.amount_paid).toFixed(6));
     delete sale.SaleItems;
     delete sale.Currency;
     return sale;

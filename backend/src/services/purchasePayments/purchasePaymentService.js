@@ -112,7 +112,7 @@ async function createPayment(purchaseId, body, employeeId, companyId) {
     await purchase.update({ payment_status: newStatus }, { transaction: t });
     await t.commit();
 
-    const remaining = parseFloat((purchaseTotal - totalPaidNow).toFixed(2));
+    const remaining = parseFloat((purchaseTotal - totalPaidNow).toFixed(6));
     return { data: payment, payment_status: newStatus, amount_paid: totalPaidNow, balance: remaining < 0 ? 0 : remaining };
   } catch (err) {
     await t.rollback();
