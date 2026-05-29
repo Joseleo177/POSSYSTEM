@@ -190,6 +190,12 @@ export const api = {
       return request("/settings/logo", { method: "POST", body: fd });
     },
   },
+  backup: {
+    list:     ()           => request("/backup"),
+    trigger:  ()           => request("/backup/trigger", { method: "POST" }),
+    download: (filename)   => `${(import.meta.env.VITE_API_URL || "") + "/api"}/backup/download/${encodeURIComponent(filename)}`,
+    remove:   (filename)   => request(`/backup/${encodeURIComponent(filename)}`, { method: "DELETE" }),
+  },
   warehouses: {
     addStock: (id, body) => request(`/warehouses/${id}/stock`, { method: "POST", body: JSON.stringify(body) }),
     setStock: (id, productId, body) => request(`/warehouses/${id}/stock/${productId}`, { method: "PUT", body: JSON.stringify(body) }),

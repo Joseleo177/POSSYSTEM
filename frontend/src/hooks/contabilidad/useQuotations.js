@@ -14,7 +14,7 @@ export function useQuotations({ notify }) {
     const [dateFrom, setDateFrom]       = useState("");
     const [dateTo, setDateTo]           = useState("");
 
-    const [expandedId, setExpandedId]   = useState(null);
+    const [selectedQuot, setSelectedQuot]   = useState(null);
     const [cancelConfirm, setCancelConfirm] = useState(null);
     const [convertModal, setConvertModal]   = useState(null);
 
@@ -80,7 +80,7 @@ export function useQuotations({ notify }) {
         dateFrom, setDateFrom,
         dateTo, setDateTo,
         hasFilters, clearFilters,
-        expandedId, setExpandedId,
+        selectedQuot, setSelectedQuot,
         cancelConfirm, setCancelConfirm,
         convertModal, setConvertModal,
         cancelQuotation, convertQuotation,

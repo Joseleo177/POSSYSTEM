@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useApp } from "../../context/AppContext";
 import PurchasesTable from "./PurchasesTable";
 import PurchaseDetails from "./PurchaseDetails";
 import PurchaseForm from "./PurchaseForm";
@@ -14,6 +15,11 @@ import { usePurchases } from "../../hooks/purchases/usePurchases";
 export default function PurchasesTab({ notify, onProductsUpdated }) {
     const state = usePurchases(notify, onProductsUpdated);
     const [showFilterDrop, setShowFilterDrop] = useState(false);
+
+    const { pendingAction, setPendingAction } = useApp();
+    useEffect(() => {
+        if (pendingAction === "compras:nuevo") { state.openNew(); setPendingAction(null); }
+    }, [pendingAction]);
 
     const hasFilters = !!(state.listStatus || state.listOrderStatus || state.listDateFrom || state.listDateTo);
     const filtersCount = (state.listStatus ? 1 : 0) + (state.listOrderStatus ? 1 : 0) + ((state.listDateFrom || state.listDateTo) ? 1 : 0);

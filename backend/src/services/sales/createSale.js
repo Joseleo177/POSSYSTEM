@@ -15,6 +15,7 @@ const {
   Op,
   PAYMENT_METHODS,
 } = require("./shared");
+const { Quotation } = require("../../models");
 const { Promotion } = require("../../models");
 
 // Devuelve la venta con todas sus relaciones, en el formato plano que
@@ -45,7 +46,7 @@ async function formatSale(saleId) {
 }
 
 module.exports = async function createSale(body) {
-  const { items, paid, customer_id, employee_id, currency_id, exchange_rate, payment_method, serie_id, discount_amount, warehouse_id, idempotency_key } =
+  const { items, paid, customer_id, employee_id, currency_id, exchange_rate, payment_method, serie_id, discount_amount, warehouse_id, idempotency_key, quotation_id } =
     body;
 
   // Idempotencia: si ya existe una venta con esta clave, devolverla sin
@@ -205,6 +206,15 @@ module.exports = async function createSale(body) {
     }
 
     await transaction.commit();
+
+    // Si la venta viene de una cotización, marcarla como convertida
+    // (debe ir después del commit para que sale.id exista en la BD)
+    if (quotation_id) {
+      await Quotation.update(
+        { status: 'convertida', converted_sale_id: sale.id },
+        { where: { id: quotation_id, status: 'pendiente' } }
+      ).catch(e => console.error('[quotation convert]', e.message));
+    }
 
     return formatSale(sale.id);
   } catch (err) {

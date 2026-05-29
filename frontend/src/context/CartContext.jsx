@@ -16,6 +16,7 @@ export function CartProvider({ children }) {
   // y se renueva sólo cuando la venta se concreta con éxito.
   const pendingKeyRef = useRef(null);
   const [heldCarts, setHeldCarts] = useState([]);
+  const [quotationId, setQuotationId] = useState(null);
 
   // ── Moneda seleccionada ────────────────────────────────────
   const [selectedCurrency, setSelectedCurrency] = useState(null);
@@ -229,7 +230,46 @@ export function CartProvider({ children }) {
     setSelectedSerieId(null);
     setDiscountEnabled(false);
     setDiscountPct("");
+    setQuotationId(null);
   }, []);
+
+  // Pre-carga el carrito desde una cotización para editar antes de facturar
+  const loadFromQuotation = useCallback(async (quot) => {
+    if (!activeWarehouse) { notify("Selecciona un almacén antes de cargar la cotización", "err"); return; }
+    try {
+      const wid = quot.warehouse_id || activeWarehouse.id;
+      const res = await api.warehouses.getProducts(wid, { limit: 500 });
+      const warehouseProducts = res.data || [];
+      const productMap = Object.fromEntries(warehouseProducts.map(p => [p.id, p]));
+
+      const newCart = (quot.items || []).reduce((acc, item) => {
+        if (!item.product_id) return acc;
+        const prod = productMap[item.product_id];
+        if (!prod) return acc;
+        const qty = parseFloat(item.quantity) || 1;
+        const existing = acc.find(i => i.id === prod.id);
+        if (existing) {
+          return acc.map(i => i.id === prod.id ? { ...i, qty: i.qty + qty } : i);
+        }
+        return [...acc, { ...prod, price: parseFloat(item.price), qty }];
+      }, []);
+
+      setCart(newCart);
+      setQuotationId(quot.id);
+      if (quot.customer_id) {
+        setSelectedCustomer({ id: quot.customer_id, name: quot.customer_name, rif: quot.customer_rif });
+      }
+      if (quot.discount_amount > 0) {
+        const pct = parseFloat(quot.discount_amount) / parseFloat(quot.subtotal || quot.total) * 100;
+        if (!isNaN(pct) && pct > 0) {
+          setDiscountEnabled(true);
+          setDiscountPct(String(Math.round(pct * 100) / 100));
+        }
+      }
+    } catch (e) {
+      notify(e.message || "Error al cargar la cotización", "err");
+    }
+  }, [activeWarehouse, notify]);
 
   // ── Hold Cart ─────────────────────────────────────────────
   const holdCart = useCallback(() => {
@@ -360,6 +400,7 @@ export function CartProvider({ children }) {
         warehouse_id: activeWarehouse.id,
         discount_amount: discountAmount,
         idempotency_key: pendingKeyRef.current,
+        quotation_id: quotationId || null,
       });
 
       const serie = mySeries.find(s => s.id === selectedSerieId);
@@ -408,6 +449,8 @@ export function CartProvider({ children }) {
       employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
       // Checkout
       checkout, saveQuotation, loading, receipt, setReceipt,
+      // Quotation pre-load
+      loadFromQuotation, quotationId,
       // Hold Cart
       heldCarts, holdCart, takeHeldCart, removeHeldCart,
     }}>

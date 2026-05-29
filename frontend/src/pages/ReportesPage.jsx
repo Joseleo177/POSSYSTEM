@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useApp } from "../context/AppContext";
 import Page from "../components/ui/Page";
 
 import SalesReport from "./reportes/SalesReport";
@@ -25,6 +26,14 @@ const TABS = [
 
 export default function ReportesPage() {
   const [tab, setTab] = useState("ventas");
+  const { pendingAction, setPendingAction } = useApp();
+
+  useEffect(() => {
+    if (!pendingAction?.startsWith("reportes:")) return;
+    const target = pendingAction.slice("reportes:".length);
+    if (TABS.some(t => t.key === target)) setTab(target);
+    setPendingAction(null);
+  }, [pendingAction]);
 
   const subheader = (
     <div className="flex gap-1 px-4 border-b border-border/20 dark:border-white/5 overflow-x-auto">

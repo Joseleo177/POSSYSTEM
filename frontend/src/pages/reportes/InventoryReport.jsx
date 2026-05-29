@@ -342,18 +342,6 @@ export default function InventoryReport() {
                         ))
                       )}
 
-                      {view === "slow" && ((data.low_rotation || []).length === 0
-                        ? <EMPTY msg="Sin productos inmovilizados en este período" />
-                        : data.low_rotation.map((p, i) => (
-                          <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
-                            <td className="px-4 py-3 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.name}</td>
-                            <td className="px-4 py-3 text-[11px] text-content-subtle">{p.category_name}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-[11px] text-content-subtle">{fmtNumber(p.stock, 2)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums font-black text-orange-500 text-[11px]">{fmt$(p.value_locked)}</td>
-                          </tr>
-                        ))
-                      )}
-
                       {view === "category" && ((data.by_category || []).length === 0
                         ? <EMPTY msg="Sin categorías con stock" />
                         : data.by_category.map((c, i) => (

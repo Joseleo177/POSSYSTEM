@@ -1,5 +1,5 @@
 // src/components/PosApp.jsx
-import React from "react";
+import React, { useEffect } from "react";
 import { useTheme } from "../hooks/useTheme";
 import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
@@ -9,16 +9,37 @@ import NotificationToast from "../layout/NotificationToast";
 import HeaderMobile from "../layout/HeaderMobile";
 import TopBar from "../layout/TopBar";
 import AppLauncher from "../layout/AppLauncher";
+import CommandPalette from "../components/ui/CommandPalette";
 import BottomTabs from "../layout/BottomTabs";
 import MainContent from "../layout/MainContent";
 
 export default function PosApp() {
-    const { employee, authChecked, login, logout, can, notification, storeName, settings, currencies } = useApp();
-    const { setReceipt } = useCart();
+    const { employee, authChecked, login, logout, can, notification, storeName, settings, currencies, pendingNav, setPendingNav, pendingAction, setPendingAction, triggerAction } = useApp();
+    const { setReceipt, clearCart } = useCart();
     const { dark, toggle } = useTheme();
 
     const { tab: safeTab, goTab, visibleTabs } = useTabs(employee, can, setReceipt);
     const [showLauncher, setShowLauncher] = React.useState(false);
+    const [showPalette, setShowPalette]   = React.useState(false);
+
+    useEffect(() => {
+        if (pendingNav) { goTab(pendingNav); setPendingNav(null); }
+    }, [pendingNav]);
+
+    useEffect(() => {
+        if (pendingAction === "venta:nueva") { clearCart(); setPendingAction(null); }
+    }, [pendingAction]);
+
+    useEffect(() => {
+        const onKey = (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+                e.preventDefault();
+                setShowPalette(p => !p);
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, []);
 
     if (!authChecked)
         return (
@@ -42,6 +63,15 @@ export default function PosApp() {
     return (
         <div className="h-screen flex flex-col overflow-hidden bg-surface-2 dark:bg-surface-dark text-content dark:text-content-dark font-sans">
             <NotificationToast notification={notification} />
+
+            <CommandPalette
+                open={showPalette}
+                onClose={() => setShowPalette(false)}
+                visibleTabs={visibleTabs}
+                safeTab={safeTab}
+                goTab={goTab}
+                triggerAction={triggerAction}
+            />
 
             <AppLauncher
                 open={showLauncher}

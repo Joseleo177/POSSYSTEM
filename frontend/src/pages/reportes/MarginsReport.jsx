@@ -4,7 +4,7 @@ import { buildMarginsExcel } from "../../helpers/excel";
 import {
  fmt$, fmtN,
  useReport, defaultRange, usePagination, Pagination,
- DateRangePicker, KpiCard, SectionHeader, Card, Loading, ExportButton,
+ DateRangePicker, KpiCard, SectionHeader, Card, Loading, ExportButton, BarChart,
 } from "./reportes.utils";
 
 export default function MarginsReport() {
@@ -40,6 +40,49 @@ export default function MarginsReport() {
  <KpiCard label="Utilidad Bruta" value={fmt$(s.total_margin || 0)} icon="" color="text-green-500" />
  <KpiCard label="Ingresos de Operación" value={fmt$(s.total_revenue || 0)} icon="" color="text-blue-500" />
  <KpiCard label="Costo de Mercancía" value={fmt$(s.total_cost || 0)} icon="" color="text-danger" />
+ </div>
+
+ {/* ── Evolución de rentabilidad por día ── */}
+ <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+ <Card className="lg:col-span-2">
+ <SectionHeader title="Flujo de Rentabilidad" sub="Ingresos vs. utilidad diaria" />
+ {(data.by_day ?? []).length > 0 ? (
+ <div className="pt-2">
+ <BarChart data={data.by_day} xKey="day" yKey="profit" color="#22c55e" height={140} />
+ {(() => {
+ const peak = data.by_day.reduce((a, b) => parseFloat(b.profit) > parseFloat(a.profit) ? b : a, data.by_day[0]);
+ return (
+ <div className="mt-3 p-2 bg-green-500/5 rounded-xl border border-dashed border-green-500/20 flex items-center justify-between">
+ <span className="text-[10px] font-black uppercase tracking-wide text-content-subtle opacity-60">Mejor día</span>
+ <span className="text-[11px] font-black text-green-500">{peak.day} <span className="mx-1 opacity-20">/</span> {fmt$(peak.profit)}</span>
+ </div>
+ );
+ })()}
+ </div>
+ ) : (
+ <div className="h-[140px] flex items-center justify-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-40">Sin Data</div>
+ )}
+ </Card>
+
+ <Card>
+ <SectionHeader title="Resumen del Período" sub="Resultado neto" />
+ <div className="space-y-3 pt-2">
+ {[
+ { label: "Total Vendido", value: fmt$(s.total_revenue || 0), color: "text-blue-500" },
+ { label: "Costo Total", value: fmt$(s.total_cost || 0), color: "text-danger" },
+ { label: "Utilidad Bruta", value: fmt$(s.total_margin || 0), color: "text-green-500" },
+ ].map(row => (
+ <div key={row.label} className="flex justify-between items-center py-1.5 border-b border-border/20 dark:border-white/5 last:border-0">
+ <span className="text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-60">{row.label}</span>
+ <span className={`text-[13px] font-black tabular-nums ${row.color}`}>{row.value}</span>
+ </div>
+ ))}
+ <div className="mt-2 p-2 bg-green-500/5 rounded-xl border border-dashed border-green-500/20 flex items-center justify-between">
+ <span className="text-[10px] font-black uppercase tracking-wide text-content-subtle opacity-60">Por cada $100 vendido</span>
+ <span className="text-[13px] font-black text-green-500">${s.avg_margin_pct || 0} de ganancia</span>
+ </div>
+ </div>
+ </Card>
  </div>
 
  <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide shrink-0">

@@ -48,6 +48,25 @@ services:
         condition: service_healthy
     volumes:
       - uploads_data:/app/uploads
+      - ./backups:/app/backups
+
+  backup:
+    image: postgres:16-alpine
+    container_name: pos_backup
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:          ${POSTGRES_DB:-posdb}
+      POSTGRES_USER:        ${POSTGRES_USER:-posuser}
+      PGPASSWORD:           ${POSTGRES_PASSWORD:-pospassword}
+      BACKUP_KEEP_DAYS:     ${BACKUP_KEEP_DAYS:-7}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+    volumes:
+      - ./backups:/backups
+      - ./backup-entrypoint.sh:/backup-entrypoint.sh:ro
+    entrypoint: ["sh", "/backup-entrypoint.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend:
     build:

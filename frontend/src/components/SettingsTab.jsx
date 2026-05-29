@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
 import Page from "./ui/Page";
 import { Button } from "./ui/Button";
@@ -8,6 +8,7 @@ const SECTIONS = [
     ["empresa", "Empresa"],
     ["factura", "Factura"],
     ["currencies", "Monedas"],
+    ["respaldo", "Respaldo"],
 ];
 
 const FIELDS_EMPRESA = [
@@ -95,6 +96,47 @@ export default function SettingsTab({ notify }) {
             await load();
         } catch (e) { notify(e.message, "err"); }
     };
+
+    // ── Backup ─────────────────────────────────────────────────
+    const [backups, setBackups]           = useState([]);
+    const [backupLoading, setBackupLoading] = useState(false);
+    const [triggering, setTriggering]     = useState(false);
+
+    const loadBackups = useCallback(async () => {
+        setBackupLoading(true);
+        try {
+            const r = await api.backup.list();
+            setBackups(r.data || []);
+        } catch {} finally { setBackupLoading(false); }
+    }, []);
+
+    useEffect(() => { if (section === "respaldo") loadBackups(); }, [section]);
+
+    const triggerBackup = async () => {
+        setTriggering(true);
+        try {
+            await api.backup.trigger();
+            notify("Respaldo iniciado. Actualiza la lista en unos segundos.");
+            setTimeout(loadBackups, 5000);
+        } catch (e) { notify(e.message, "err"); }
+        finally { setTriggering(false); }
+    };
+
+    const deleteBackup = async (filename) => {
+        try {
+            await api.backup.remove(filename);
+            notify("Respaldo eliminado");
+            loadBackups();
+        } catch (e) { notify(e.message, "err"); }
+    };
+
+    const fmtSize = (bytes) => {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    };
+
+    const fmtDate = (d) => new Date(d).toLocaleString("es-VE", { dateStyle: "short", timeStyle: "short" });
 
     const base = currencies.find(c => c.is_base);
 
@@ -374,6 +416,107 @@ export default function SettingsTab({ notify }) {
                         </div>
                     </div>
                 )}
+                {/* ── Respaldo ── */}
+                {section === "respaldo" && (
+                    <div className="max-w-2xl animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-3">
+
+                        {/* Info + acción */}
+                        <div className="bg-white dark:bg-surface-dark-3 rounded-xl p-4 border border-border/40 dark:border-white/10 shadow-sm">
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-start gap-3">
+                                    <div className="w-9 h-9 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-500 shrink-0 mt-0.5">
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+                                            <path d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7z" />
+                                            <path d="M9 12l2 2 4-4M8 4v4h8V4" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div className="text-[11px] font-black uppercase tracking-widest text-content dark:text-white mb-0.5">Respaldo Automático</div>
+                                        <p className="text-[11px] text-content-subtle dark:text-white/40 leading-relaxed max-w-sm">
+                                            Los respaldos se generan automáticamente cada 24 h y se guardan en la carpeta <code className="bg-surface-2 dark:bg-white/10 px-1.5 py-0.5 rounded text-[10px] font-mono">POSSYSTEM/backups/</code>.
+                                            Se conservan los últimos 7 días.
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={triggerBackup}
+                                    disabled={triggering}
+                                    className="shrink-0 h-8 px-4 rounded-xl bg-brand-500 text-black text-[10px] font-black uppercase tracking-widest hover:brightness-110 disabled:opacity-50 transition-all active:scale-95"
+                                >
+                                    {triggering ? "Iniciando..." : "Hacer ahora"}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Lista de respaldos */}
+                        <div className="bg-white dark:bg-surface-dark-3 rounded-xl border border-border/40 dark:border-white/10 shadow-sm overflow-hidden">
+                            <div className="px-4 py-3 flex items-center justify-between border-b border-border/10">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-content dark:text-white">
+                                    Respaldos disponibles
+                                    {backups.length > 0 && <span className="ml-2 text-brand-500">({backups.length})</span>}
+                                </span>
+                                <button
+                                    onClick={loadBackups}
+                                    disabled={backupLoading}
+                                    className="h-6 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 hover:text-brand-500 transition-all"
+                                >
+                                    {backupLoading ? "Cargando..." : "Actualizar"}
+                                </button>
+                            </div>
+
+                            {backupLoading && backups.length === 0 ? (
+                                <div className="px-4 py-8 text-center text-[11px] font-bold text-content-subtle dark:text-white/25">Cargando...</div>
+                            ) : backups.length === 0 ? (
+                                <div className="px-4 py-8 text-center">
+                                    <div className="text-[11px] font-bold text-content-subtle dark:text-white/25">Sin respaldos aún</div>
+                                    <div className="text-[10px] text-content-subtle/60 dark:text-white/15 mt-1">El primer respaldo se genera al iniciar el servicio</div>
+                                </div>
+                            ) : (
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-surface-2 dark:bg-white/[0.02]">
+                                            {["Archivo", "Fecha", "Tamaño", ""].map(h => (
+                                                <th key={h} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-40">{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border/10 dark:divide-white/5">
+                                        {backups.map((b, i) => (
+                                            <tr key={b.filename} className={`hover:bg-brand-500/[0.02] transition-colors ${i === 0 ? "bg-success/[0.02]" : ""}`}>
+                                                <td className="px-4 py-2.5">
+                                                    <div className="flex items-center gap-2">
+                                                        {i === 0 && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-success/10 text-success border border-success/20 uppercase tracking-widest shrink-0">Último</span>}
+                                                        <span className="text-[11px] font-mono text-content dark:text-white/70 truncate max-w-[200px]">{b.filename}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-2.5 text-[11px] font-bold text-content-subtle dark:text-white/40 whitespace-nowrap">{fmtDate(b.created_at)}</td>
+                                                <td className="px-4 py-2.5 text-[11px] font-bold text-content-subtle dark:text-white/40 tabular-nums whitespace-nowrap">{fmtSize(b.size)}</td>
+                                                <td className="px-4 py-2.5">
+                                                    <div className="flex items-center gap-1.5 justify-end">
+                                                        <a
+                                                            href={`${api.backup.download(b.filename)}`}
+                                                            download={b.filename}
+                                                            className="h-6 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black transition-all"
+                                                        >
+                                                            Descargar
+                                                        </a>
+                                                        <button
+                                                            onClick={() => deleteBackup(b.filename)}
+                                                            className="w-6 h-6 rounded-lg flex items-center justify-center bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all"
+                                                        >
+                                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M6 18L18 6M6 6l12 12" /></svg>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+                )}
+
             </div>
         </Page>
     );

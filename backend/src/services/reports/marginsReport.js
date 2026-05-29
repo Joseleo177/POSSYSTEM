@@ -6,7 +6,7 @@ async function marginsReport({ date_from, date_to, company_id, tcS, rep }) {
   const dt = sanitizeDate(date_to);
   const dS = dateClause(df, dt, 's');
 
-  const [byProduct, byCategory, summary] = await Promise.all([
+  const [byProduct, byCategory, summary, byDay] = await Promise.all([
     sequelize.query(
       `SELECT
          si.product_id,
@@ -68,6 +68,24 @@ async function marginsReport({ date_from, date_to, company_id, tcS, rep }) {
        WHERE p.cost_price IS NOT NULL AND p.cost_price > 0 ${tcS} ${dS}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
+    sequelize.query(
+      `SELECT
+         DATE(s.created_at) AS day,
+         COALESCE(SUM(si.subtotal), 0)::float AS revenue,
+         COALESCE(SUM(si.quantity * COALESCE(p.cost_price, 0)), 0)::float AS cost,
+         COALESCE(SUM(si.subtotal) - SUM(si.quantity * COALESCE(p.cost_price, 0)), 0)::float AS profit,
+         CASE WHEN SUM(si.subtotal) > 0
+              THEN ROUND(((SUM(si.subtotal) - SUM(si.quantity * COALESCE(p.cost_price, 0))) / SUM(si.subtotal) * 100)::numeric, 1)
+              ELSE 0
+         END AS margin_pct
+       FROM sale_items si
+       JOIN sales s ON si.sale_id = s.id
+       LEFT JOIN products p ON si.product_id = p.id
+       WHERE s.status = 'pagado' ${tcS} ${dS}
+       GROUP BY DATE(s.created_at)
+       ORDER BY day ASC`,
+      { replacements: rep, type: Sequelize.QueryTypes.SELECT }
+    ),
   ]);
 
   const bottomMargin = [...byProduct]
@@ -79,6 +97,7 @@ async function marginsReport({ date_from, date_to, company_id, tcS, rep }) {
     by_product:    byProduct,
     bottom_margin: bottomMargin,
     by_category:   byCategory,
+    by_day:        byDay,
   };
 }
 

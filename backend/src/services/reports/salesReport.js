@@ -35,7 +35,7 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
        FROM payments p
        LEFT JOIN payment_journals pj ON p.payment_journal_id = pj.id
        JOIN sales s ON p.sale_id = s.id
-       WHERE TRUE ${tcS} ${dS}
+       WHERE p.payment_journal_id IS NOT NULL ${tcS} ${dS}
        GROUP BY pj.id, pj.name, pj.type
        ORDER BY total DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

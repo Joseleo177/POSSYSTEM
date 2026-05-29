@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { useCustomersLogic } from "../hooks/useCustomersLogic";
+import { useApp } from "../context/AppContext";
 import { fmtBase } from "../helpers";
 import { Button } from "../components/ui/Button";
 import Page from "../components/ui/Page";
@@ -20,6 +22,11 @@ export default function ClientesPage() {
         openNew, openEdit, onSave, closeModal,
         page, setPage, total, LIMIT
     } = useCustomersLogic();
+
+    const { pendingAction, setPendingAction } = useApp();
+    useEffect(() => {
+        if (pendingAction === "clientes:nuevo") { openNew("cliente"); setPendingAction(null); }
+    }, [pendingAction]);
 
     const fmtPrice = (n) => fmtBase(n, baseCurrency);
 

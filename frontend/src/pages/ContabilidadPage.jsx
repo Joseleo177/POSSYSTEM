@@ -27,6 +27,7 @@ export default function ContabilidadPage() {
  currencies, baseCurrency,
  banks, loadBanks,
  paymentMethods, loadPaymentMethods,
+ pendingAction, setPendingAction,
  } = useApp();
 
  const [allSeries, setAllSeries] = useState([]);
@@ -56,6 +57,13 @@ export default function ContabilidadPage() {
 
  const [subPage, setSubPage] = useState("Estado de Cuenta");
  const [dropOpen, setDropOpen] = useState(false);
+
+ useEffect(() => {
+   if (!pendingAction?.startsWith("contabilidad:")) return;
+   const target = pendingAction.slice("contabilidad:".length);
+   if (SUB_PAGES.includes(target)) setSubPage(target);
+   setPendingAction(null);
+ }, [pendingAction]);
  const [receiptSale, setReceiptSale] = useState(null);
 
  const fmtPrice = (n) => fmtBase(n, baseCurrency);

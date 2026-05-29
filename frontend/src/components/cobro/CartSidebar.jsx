@@ -29,7 +29,7 @@ export default function CartSidebar({
     };
     return (
         <aside className={`w-full h-full lg:w-[360px] bg-white dark:bg-[#0c0c0c] flex-col border-b lg:border-r border-border dark:border-white/5 shadow-[20px_0_60px_rgba(0,0,0,0.03)] z-20 shrink-0 order-2 lg:order-1 relative ${mobileTab === "cart" ? "flex" : "hidden"} lg:flex`}>
-            <div className="p-3 lg:p-4 space-y-2 lg:space-y-3 flex-1 flex flex-col overflow-hidden">
+            <div className="p-3 space-y-2 flex-1 flex flex-col overflow-hidden">
 
                 {/* Mobile toggle */}
                 <div className="lg:hidden flex items-center gap-2">
@@ -324,8 +324,8 @@ export default function CartSidebar({
                 </div>
 
                 {/* Footer: descuento + totales + botones */}
-                <div className="pt-2 lg:pt-3 border-t border-border/10 space-y-1.5 lg:space-y-2 pb-1 lg:pb-0">
-                    <div className="bg-surface-1 dark:bg-white/5 rounded-lg lg:rounded-xl p-2 lg:p-3 flex items-center justify-between gap-3 border border-black/5 dark:border-white/5">
+                <div className="pt-2 border-t border-border/10 space-y-1.5 pb-1">
+                    <div className="bg-surface-1 dark:bg-white/5 rounded-lg p-2 flex items-center justify-between gap-3 border border-black/5 dark:border-white/5">
                         <div className="flex items-center gap-3">
                             <button onClick={() => setDiscountEnabled(!discountEnabled)} className={`w-8 h-5 lg:w-10 lg:h-6 rounded-full transition-all relative ${discountEnabled ? "bg-brand-500" : "bg-surface-3 dark:bg-white/10"}`}>
                                 <div className={`absolute top-0.5 lg:top-1 left-0.5 lg:left-1 w-4 h-4 bg-white rounded-full transition-all ${discountEnabled ? "translate-x-3 lg:translate-x-4" : ""}`} />
@@ -339,8 +339,8 @@ export default function CartSidebar({
                             </div>
                         )}
                     </div>
-                    <div className="bg-surface-1 dark:bg-white/5 p-3 lg:p-4 rounded-xl lg:rounded-2xl border border-black/5 dark:border-white/10">
-                        <div className="space-y-1 lg:space-y-2 mb-2 lg:mb-4">
+                    <div className="bg-surface-1 dark:bg-white/5 p-3 rounded-xl border border-black/5 dark:border-white/10">
+                        <div className="space-y-1 mb-2">
                             <div className="flex justify-between items-center opacity-60 dark:text-content-dark-muted">
                                 <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide">SUBTOTAL</span>
                                 <span className="text-[11px] lg:text-xs font-black tabular-nums">{fmt(convertToDisplay(subtotalBase), currSym)}</span>
@@ -361,7 +361,7 @@ export default function CartSidebar({
                         <div className="flex justify-between items-end">
                             <span className="text-[10px] lg:text-[11px] font-black text-brand-500 uppercase tracking-wide">TOTAL</span>
                             <div className="flex flex-col items-end">
-                                <div className="text-lg lg:text-2xl font-black tracking-tighter tabular-nums font-display dark:text-white leading-none">{fmt(totalDisplay, currSym)}</div>
+                                <div className="text-xl font-black tracking-tighter tabular-nums font-display dark:text-white leading-none">{fmt(totalDisplay, currSym)}</div>
                                 {secondaryCurrency && (
                                     <div className="text-[10px] lg:text-xs font-bold text-content-subtle dark:text-brand-500/60 tabular-nums mt-0.5">
                                         ≈ {fmt(totalSecondary, secondaryCurrency.symbol)}
@@ -371,10 +371,10 @@ export default function CartSidebar({
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={holdCart} disabled={cart.length === 0} className="w-12 h-12 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl bg-surface-2 dark:bg-white/5 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all disabled:opacity-30 shrink-0">
-                            <svg className="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2m9-.828l-1.414-1.414M3.707 18.293V21h2.707l14.586-14.586a2 2 0 10-2.828-2.828L3.707 18.293z" /></svg>
+                        <button onClick={holdCart} disabled={cart.length === 0} className="w-12 h-12 rounded-xl bg-surface-2 dark:bg-white/5 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all disabled:opacity-30 shrink-0">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2m9-.828l-1.414-1.414M3.707 18.293V21h2.707l14.586-14.586a2 2 0 10-2.828-2.828L3.707 18.293z" /></svg>
                         </button>
-                        <button onClick={() => setShowConfirmCheckout(true)} disabled={loading || cart.length === 0} className="flex-1 bg-brand-500 text-brand-900 py-3 lg:py-3.5 rounded-xl lg:rounded-2xl font-black uppercase tracking-wide shadow-xl shadow-brand-500/20 active:scale-95 transition-all text-xs lg:text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button onClick={() => setShowConfirmCheckout(true)} disabled={loading || cart.length === 0} className="flex-1 bg-brand-500 text-brand-900 py-3 rounded-xl font-black uppercase tracking-wide shadow-xl shadow-brand-500/20 active:scale-95 transition-all text-xs lg:text-sm disabled:opacity-50 disabled:cursor-not-allowed">
                             {loading ? "..." : "FINALIZAR VENTA"}
                         </button>
                     </div>

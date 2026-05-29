@@ -27,6 +27,17 @@ export function AppProvider({ children }) {
     return !!employee.permissions?.[perm];
   }, [employee]);
 
+  // ── Navegación global ──────────────────────────────────────
+  const [pendingNav, setPendingNav] = useState(null);
+  const navigateTo = useCallback((tab) => setPendingNav(tab), []);
+
+  // ── Acciones pendientes (command palette) ──────────────────
+  const [pendingAction, setPendingAction] = useState(null);
+  const triggerAction = useCallback((tab, action) => {
+    setPendingNav(tab);
+    if (action) setPendingAction(action);
+  }, []);
+
   // ── Notificaciones ─────────────────────────────────────────
   const [notification, setNotification] = useState(null);
 
@@ -116,6 +127,10 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       // Auth
       employee, authChecked, login, logout, can,
+      // Nav
+      pendingNav, setPendingNav, navigateTo,
+      // Actions
+      pendingAction, setPendingAction, triggerAction,
       // Notify
       notification, notify,
       // Settings
