@@ -179,4 +179,12 @@ async function deleteCustomer(id) {
   return { message: "Registro eliminado exitosamente" };
 }
 
-module.exports = { getAll, getOne, getCustomerPurchases, createCustomer, updateCustomer, deleteCustomer };
+async function adjustCredit(id, amount) {
+  const customer = await Customer.findByPk(id);
+  if (!customer) { const e = new Error("Cliente no encontrado"); e.status = 404; throw e; }
+  if (isNaN(amount) || amount < 0) { const e = new Error("Monto inválido"); e.status = 400; throw e; }
+  await customer.update({ credit_balance: parseFloat(amount.toFixed(6)) });
+  return { data: customer };
+}
+
+module.exports = { getAll, getOne, getCustomerPurchases, createCustomer, updateCustomer, deleteCustomer, adjustCredit };

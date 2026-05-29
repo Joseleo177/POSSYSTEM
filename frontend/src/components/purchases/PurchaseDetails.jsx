@@ -28,8 +28,8 @@ export default function PurchaseDetails({ state }) {
   const [payments, setPayments]         = useState([]);
   const [loadingPay, setLoadingPay]     = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [payDetail, setPayDetail]         = useState(null);
+  const [deleteConfirm, setDeleteConfirm]   = useState(null);
+  const [payDetail, setPayDetail]           = useState(null);
 
   // ── Borrador local state ──
   const [localItems, setLocalItems]             = useState([]);
@@ -191,12 +191,11 @@ export default function PurchaseDetails({ state }) {
     }
   };
 
-  const handleReceivePendiente = async () => {
+  const handleReceivePendiente = () => {
     if (!localWarehouseId) {
       notify("Selecciona un almacén destino antes de recibir la mercancía", "err");
       return;
     }
-    if (isDirty) await saveDraftChanges();
     receivePurchase?.(detail.id);
   };
 
@@ -606,6 +605,7 @@ export default function PurchaseDetails({ state }) {
           editItem={editingItem}
           invoiceRate={invoiceRate}
           invoiceSym={invoiceSym}
+          showLotFields={orderStatus === "pendiente"}
         />
       )}
 
@@ -638,6 +638,7 @@ export default function PurchaseDetails({ state }) {
           onDelete={() => { setPayDetail(null); setDeleteConfirm(payDetail); }}
         />
       )}
+
     </div>
   );
 }

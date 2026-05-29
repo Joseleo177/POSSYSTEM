@@ -80,7 +80,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
     const pageTitle = subTab === "transferencias"
         ? "Transferencias"
         : subTab === "ajustes"
-        ? `Ajustes · ${selectedWarehouse?.name || ""}`
+        ? `Movimiento Manual · ${selectedWarehouse?.name || ""}`
         : subTab === "stock"
         ? `Stock · ${selectedWarehouse?.name || ""}`
         : "Gestión de Almacenes";

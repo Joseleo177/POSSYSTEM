@@ -10,6 +10,7 @@ export default function PurchaseItemsTable({
     invoiceSym = "Ref.",
 }) {
     const isEditing   = orderStatus === "borrador" || orderStatus === "pendiente";
+    const showLots    = orderStatus !== "borrador";
     const showActions = isEditing;
 
     return (
@@ -18,7 +19,7 @@ export default function PurchaseItemsTable({
                 <thead>
                     <tr className="border-b border-border/20 dark:border-white/[0.06] text-[10px] font-black text-content-subtle dark:text-white/30 uppercase tracking-widest">
                         <th className="px-4 py-3">Producto</th>
-                        {!isEditing && <th className="px-4 py-3">Lote / Vence</th>}
+                        {showLots && <th className="px-4 py-3">Lote / Vence</th>}
                         <th className="px-4 py-3 text-center">Cant.</th>
                         <th className="px-4 py-3 text-right w-36">
                           Costo×Emp.{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70">({invoiceSym})</span> : ""}
@@ -44,11 +45,11 @@ export default function PurchaseItemsTable({
                                 </div>
                             </td>
 
-                            {/* Lote / Vence (solo recibido/pendiente) */}
-                            {!isEditing && (
+                            {/* Lote / Vence */}
+                            {showLots && (
                                 <td className="px-4 py-3">
-                                    <div className="text-[10px] font-bold text-warning">{item.lot_number || "S/L"}</div>
-                                    <div className="text-[9px] text-content-subtle dark:text-white/30">{item.expiration_date || "S/V"}</div>
+                                    <div className="text-[10px] font-bold text-warning">{item.lot_number || <span className="opacity-30">S/L</span>}</div>
+                                    <div className="text-[9px] text-content-subtle dark:text-white/30">{item.expiration_date || <span className="opacity-30">S/V</span>}</div>
                                 </td>
                             )}
 

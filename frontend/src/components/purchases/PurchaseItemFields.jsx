@@ -120,7 +120,30 @@ export default function PurchaseItemFields({ state }) {
                 </div>
             </div>
 
-            {/* FILA 3: Opciones de Catálogo */}
+            {/* FILA 3: Lote y Vencimiento */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle opacity-50 px-1">N° de Lote <span className="normal-case opacity-60">(opcional)</span></label>
+                    <input
+                        type="text"
+                        value={itemForm.lot_number || ""}
+                        onChange={(e) => setIF("lot_number", e.target.value)}
+                        placeholder="Ej. LOT-2026-001"
+                        className="input h-10"
+                    />
+                </div>
+                <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle opacity-50 px-1">Fecha de Vencimiento <span className="normal-case opacity-60">(opcional)</span></label>
+                    <input
+                        type="date"
+                        value={itemForm.expiration_date || ""}
+                        onChange={(e) => setIF("expiration_date", e.target.value)}
+                        className="input h-10"
+                    />
+                </div>
+            </div>
+
+            {/* FILA 4: Opciones de Catálogo */}
             <div className="pt-2 border-t border-border/10">
                 <label className="flex items-center gap-3 cursor-pointer group">
                     <div className="relative">

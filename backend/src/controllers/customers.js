@@ -1,4 +1,4 @@
-const { getAll, getOne, getCustomerPurchases, createCustomer, updateCustomer, deleteCustomer } = require("../services/customers");
+const { getAll, getOne, getCustomerPurchases, createCustomer, updateCustomer, deleteCustomer, adjustCredit } = require("../services/customers");
 
 const wrap = (fn, status = 200) => async (req, res) => {
   try {
@@ -16,5 +16,6 @@ module.exports = {
   getPurchases: wrap(req => getCustomerPurchases(req.params.id, req.query)),
   create:       wrap(req => createCustomer(req.body), 201),
   update:       wrap(req => updateCustomer(req.params.id, req.body)),
+  adjustCredit: wrap(req => adjustCredit(req.params.id, parseFloat(req.body.amount ?? 0))),
   remove:       wrap(req => deleteCustomer(req.params.id)),
 };

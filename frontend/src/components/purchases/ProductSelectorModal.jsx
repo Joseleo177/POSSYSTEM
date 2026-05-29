@@ -3,6 +3,7 @@ import { api } from "../../services/api";
 import { calcPurchaseItem } from "../../helpers";
 import { PKG_UNITS } from "../../constants/pkg";
 import CustomSelect from "../ui/CustomSelect";
+import ProductModal from "../ProductModal";
 
 const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -12,6 +13,8 @@ const EMPTY_FORM = {
     package_qty: "1",
     package_price: "",
     profit_margin: "30",
+    lot_number: "",
+    expiration_date: "",
 };
 
 function stockColor(qty) {
@@ -35,7 +38,7 @@ function matchesStockFilter(stock, filter) {
     return true;
 }
 
-export default function ProductSelectorModal({ open, onClose, onAdd, existingItems = [], editItem = null, invoiceRate = 1, invoiceSym = "Ref." }) {
+export default function ProductSelectorModal({ open, onClose, onAdd, existingItems = [], editItem = null, invoiceRate = 1, invoiceSym = "Ref.", showLotFields = false }) {
     const [step, setStep]           = useState(1);
     const [search, setSearch]       = useState("");
     const [results, setResults]     = useState([]);
@@ -44,6 +47,9 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     const [form, setForm]           = useState(EMPTY_FORM);
     const [stockFilter, setStockFilter]         = useState("todos");
     const [showStockFilter, setShowStockFilter] = useState(false);
+    const [showProductModal, setShowProductModal] = useState(false);
+    const [categories, setCategories]             = useState([]);
+    const [savingNew, setSavingNew]               = useState(false);
 
     // Reset / init al abrir
     useEffect(() => {
@@ -58,16 +64,19 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                 cost_price: editItem.unit_cost ?? 0,
             });
             setForm({
-                package_unit:  editItem.package_unit  || "Unidad",
-                package_size:  String(editItem.package_size  ?? "1"),
-                package_qty:   String(editItem.package_qty   ?? "1"),
-                package_price: editItem.package_price != null ? String((parseFloat(editItem.package_price) * invoiceRate).toFixed(2)) : "",
-                profit_margin: String(editItem.profit_margin ?? "30"),
+                package_unit:    editItem.package_unit  || "Unidad",
+                package_size:    String(editItem.package_size  ?? "1"),
+                package_qty:     String(editItem.package_qty   ?? "1"),
+                package_price:   editItem.package_price != null ? String((parseFloat(editItem.package_price) * invoiceRate).toFixed(2)) : "",
+                profit_margin:   String(editItem.profit_margin ?? "30"),
+                lot_number:      editItem.lot_number      || "",
+                expiration_date: editItem.expiration_date || "",
             });
         } else {
             setStep(1); setSearch(""); setSelected(null); setForm(EMPTY_FORM);
         }
         setStockFilter("todos"); setShowStockFilter(false);
+        setShowProductModal(false);
     }, [open]);
 
     // Carga inicial + búsqueda debounceada
@@ -110,6 +119,25 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
 
     const pkgPriceBase = parseFloat(form.package_price) / invoiceRate;
     const calc = selected ? calcPurchaseItem({ ...form, package_price: pkgPriceBase, product: selected }) : null;
+
+    const openProductModal = async () => {
+        if (!categories.length) {
+            try { const r = await api.products.getCategories(); setCategories(r.data || []); } catch {}
+        }
+        setShowProductModal(true);
+    };
+
+    const handleProductSaved = async (form, imageFile) => {
+        setSavingNew(true);
+        try {
+            const res = await api.products.create(form, imageFile);
+            const newProd = res.data || res;
+            setShowProductModal(false);
+            setSearch("");
+            handleSelectProduct({ ...newProd, stock: newProd.stock ?? 0, cost_price: newProd.cost_price || 0 });
+        } catch (e) { alert(e.message); }
+        setSavingNew(false);
+    };
 
     const handleAdd = () => {
         if (!selected) return;
@@ -233,12 +261,19 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 </div>
                             )}
                             {!searching && visibleResults.length === 0 && (
-                                <div className="text-center py-8 text-[11px] font-bold text-content-subtle dark:text-white/30 uppercase tracking-wide">
-                                    {search.trim()
-                                        ? `Sin resultados para "${search}"`
-                                        : stockFilter !== "todos"
-                                            ? `Sin productos · ${STOCK_FILTERS.find(f => f.key === stockFilter)?.label}`
-                                            : "Sin productos"}
+                                <div className="py-6 space-y-3">
+                                    <p className="text-center text-[11px] font-bold text-content-subtle dark:text-white/30 uppercase tracking-wide">
+                                        {search.trim() ? `Sin resultados para "${search}"` : stockFilter !== "todos" ? `Sin productos · ${STOCK_FILTERS.find(f => f.key === stockFilter)?.label}` : "Sin productos"}
+                                    </p>
+                                    <div className="flex justify-center">
+                                        <button
+                                            onClick={openProductModal}
+                                            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-500 text-[11px] font-black uppercase tracking-wide hover:bg-brand-500 hover:text-black transition-all"
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4"/></svg>
+                                            Crear producto{search.trim() ? ` "${search.trim()}"` : ""}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                             <div className="grid grid-cols-1 gap-2">
@@ -390,15 +425,39 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 </div>
                             )}
 
-                            {/* Nota informativa para borradores */}
-                            <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-info/5 border border-info/10">
-                                <svg className="w-3.5 h-3.5 text-info/60 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <p className="text-[10px] font-medium text-info/60">
-                                    Lote y fecha de vencimiento se registran al <strong>recibir</strong> la mercancía.
-                                </p>
-                            </div>
+                            {/* Lote y vencimiento — solo en pendiente */}
+                            {showLotFields ? (
+                                <div className="grid grid-cols-2 gap-3 pt-1">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">N° de Lote</label>
+                                        <input
+                                            type="text"
+                                            value={form.lot_number || ""}
+                                            onChange={e => setF("lot_number", e.target.value)}
+                                            placeholder="Ej. LOT-2026-001"
+                                            className="input h-9 text-xs font-bold"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Fecha Vencimiento</label>
+                                        <input
+                                            type="date"
+                                            value={form.expiration_date || ""}
+                                            onChange={e => setF("expiration_date", e.target.value)}
+                                            className="input h-9 text-xs font-bold"
+                                        />
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-info/5 border border-info/10">
+                                    <svg className="w-3.5 h-3.5 text-info/60 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <p className="text-[10px] font-medium text-info/60">
+                                        Lote y fecha de vencimiento se registran al <strong>confirmar</strong> la orden.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -436,6 +495,16 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                     )}
                 </div>
             </div>
+
+            {showProductModal && (
+                <ProductModal
+                    open={showProductModal}
+                    onClose={() => setShowProductModal(false)}
+                    onSave={handleProductSaved}
+                    categories={categories}
+                    loading={savingNew}
+                />
+            )}
         </div>
     );
 }

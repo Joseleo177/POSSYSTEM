@@ -4,16 +4,30 @@ import { exportToCSV } from "../../utils/exportUtils";
 import { fmtBase, fmtSale as fmtSaleHelper } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import SaleDetailModal from "./SaleDetailModal";
+import { api } from "../../services/api";
 
 const SECTION = "bg-surface-2 dark:bg-white/[0.04] rounded-2xl border border-border/10 dark:border-white/[0.06]";
 const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-subtle opacity-40";
 
-export default function CustomerDetail({ detail, detailSales, onClose, onPay }) {
-    const { baseCurrency } = useApp();
+export default function CustomerDetail({ detail, detailSales, onClose, onPay, onRefresh }) {
+    const { baseCurrency, notify } = useApp();
     const [selectedSaleId, setSelectedSaleId] = useState(null);
+    const [clearingCredit, setClearingCredit] = useState(false);
+    const [confirmClear, setConfirmClear] = useState(false);
 
     const fmtPrice = (n) => fmtBase(n, baseCurrency);
     const fmtSale  = (sale, amount) => fmtSaleHelper(sale, amount, baseCurrency);
+
+    const handleClearCredit = async () => {
+        setClearingCredit(true);
+        try {
+            await api.customers.adjustCredit(detail.id, 0);
+            notify("Crédito anulado correctamente");
+            setConfirmClear(false);
+            onRefresh?.();
+        } catch (e) { notify(e.message, "err"); }
+        setClearingCredit(false);
+    };
 
     const safeSales    = detailSales || [];
     const pendingSales = safeSales.filter(s => s.status === "borrador" || s.status === "pendiente" || s.status === "parcial");
@@ -99,7 +113,30 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay }) 
                         {parseFloat(detail.credit_balance || 0) > 0.001 && (
                             <div className="text-right">
                                 <p className={`${LABEL} mb-0.5`}>Crédito Disponible</p>
-                                <p className="text-[15px] font-black text-brand-500 tabular-nums">{fmtPrice(detail.credit_balance)}</p>
+                                {confirmClear ? (
+                                    <div className="flex items-center gap-1.5 justify-end">
+                                        <span className="text-[10px] text-content-subtle dark:text-white/40">¿Anular?</span>
+                                        <button onClick={handleClearCredit} disabled={clearingCredit}
+                                            className="h-6 px-2 rounded-lg bg-danger text-white text-[10px] font-black uppercase transition-all hover:brightness-110 disabled:opacity-50">
+                                            {clearingCredit ? "…" : "Sí"}
+                                        </button>
+                                        <button onClick={() => setConfirmClear(false)}
+                                            className="h-6 px-2 rounded-lg border border-border/30 dark:border-white/10 text-[10px] font-black uppercase text-content-subtle hover:text-content dark:hover:text-white transition-all">
+                                            No
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 justify-end">
+                                        <p className="text-[15px] font-black text-brand-500 tabular-nums">{fmtPrice(detail.credit_balance)}</p>
+                                        <button onClick={() => setConfirmClear(true)}
+                                            title="Anular crédito"
+                                            className="w-5 h-5 rounded-md flex items-center justify-center text-content-subtle/40 hover:text-danger hover:bg-danger/10 transition-all">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
 

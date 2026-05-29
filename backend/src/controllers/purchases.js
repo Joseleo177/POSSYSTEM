@@ -1,4 +1,4 @@
-const { getAll, getOne, createPurchase, updateDraft, confirmOrder, receivePurchase, deletePurchase } = require("../services/purchases");
+const { getAll, getOne, createPurchase, updateDraft, confirmOrder, receivePurchase, updateItemLots, deletePurchase } = require("../services/purchases");
 
 const wrap = (fn, status = 200) => async (req, res) => {
   try {
@@ -17,5 +17,6 @@ module.exports = {
   updateDraft:  wrap(req => updateDraft(req.params.id, req.body)),
   confirm:      wrap(req => confirmOrder(req.params.id)),
   receive:      wrap(req => receivePurchase(req.params.id)),
+  updateLots:   wrap(req => updateItemLots(req.params.id, req.body.items || [])),
   remove:       wrap(req => deletePurchase(req.params.id)),
 };

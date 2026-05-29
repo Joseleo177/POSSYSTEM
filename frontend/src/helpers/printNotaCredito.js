@@ -51,8 +51,7 @@ export function printNotaCreditoDoc(returnData, sale, companyInfo, baseCurrency,
         .doc-header { text-align: center; margin: 8px 0; }
         .doc-title { font-size: 15px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
         .doc-subtitle { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
-        .ref-banner { background: #f5f5f5; border: 1px dashed #999; border-radius: 4px; padding: 5px 8px; margin: 8px 0; text-align: center; font-size: 10px; font-weight: 700; }
-        .meta { margin-bottom: 8px; font-size: 10.5px; }
+.meta { margin-bottom: 8px; font-size: 10.5px; }
         .meta-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
         .meta-label { color: #555; font-weight: 500; }
         .meta-value { font-weight: 700; text-align: right; }
@@ -91,10 +90,9 @@ export function printNotaCreditoDoc(returnData, sale, companyInfo, baseCurrency,
         <div class="doc-subtitle">*** DOCUMENTO NO FISCAL ***</div>
     </div>
 
-    <div class="ref-banner">Referencia a Factura: ${invoiceRef}</div>
-
     <div class="meta">
         <div class="meta-row"><span class="meta-label">N/C Nº:</span><span class="meta-value">${ncLabel}</span></div>
+        <div class="meta-row"><span class="meta-label">Ref. Factura:</span><span class="meta-value">${invoiceRef}</span></div>
         <div class="meta-row"><span class="meta-label">Fecha:</span><span class="meta-value">${dateStr}</span></div>
         ${sale?.customer_rif ? `<div class="meta-row"><span class="meta-label">CI/RIF:</span><span class="meta-value">${sale.customer_rif}</span></div>` : ""}
         ${sale?.customer_name ? `<div class="meta-row"><span class="meta-label">Cliente:</span><span class="meta-value">${sale.customer_name}</span></div>` : ""}
@@ -109,7 +107,6 @@ export function printNotaCreditoDoc(returnData, sale, companyInfo, baseCurrency,
 
     <div class="totals">
         <div class="total-row big"><span>TOTAL ACREDITADO</span><span>${fmtP(total)}</span></div>
-        ${rate > 1 ? `<div class="total-row" style="margin-top:2px;font-weight:600;font-size:9px;opacity:0.7;justify-content:flex-end;gap:4px;"><span>EQUIV. REF.:</span><span>${fmtMoney(total)}</span></div>` : ""}
     </div>
 
     ${returnData.reason ? `<div class="reason-box"><b>Motivo:</b> ${returnData.reason}</div>` : ""}

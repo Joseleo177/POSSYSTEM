@@ -76,6 +76,7 @@ export default function ClientesPage() {
                     detailSales={detailSales}
                     onClose={closeDetail}
                     onPay={setPayModal}
+                    onRefresh={() => refreshDetail(detail?.id)}
                 />
             )}
 

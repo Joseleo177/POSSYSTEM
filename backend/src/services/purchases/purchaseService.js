@@ -442,4 +442,18 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
   }
 }
 
-module.exports = { getAll, getOne, createPurchase, updateDraft, confirmOrder, receivePurchase, deletePurchase };
+async function updateItemLots(purchaseId, items) {
+  const purchase = await Purchase.findByPk(purchaseId);
+  if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
+  if (purchase.status === 'recibido') { const e = new Error("Esta compra ya fue recibida"); e.status = 400; throw e; }
+
+  for (const { id, lot_number, expiration_date } of items) {
+    await PurchaseItem.update(
+      { lot_number: lot_number || null, expiration_date: expiration_date || null },
+      { where: { id, purchase_id: purchaseId } }
+    );
+  }
+  return getOne(purchaseId);
+}
+
+module.exports = { getAll, getOne, createPurchase, updateDraft, confirmOrder, receivePurchase, updateItemLots, deletePurchase };

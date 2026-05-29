@@ -10,6 +10,7 @@ router.get("/:id",  permit("products", "inventory"), ctrl.getOne);
 router.post("/",    permit("products", "inventory"), ctrl.create);
 router.patch("/:id",         permit("products", "inventory"), ctrl.updateDraft);
 router.patch("/:id/confirm", permit("products", "inventory"), ctrl.confirm);
+router.patch("/:id/lots",    permit("products", "inventory"), ctrl.updateLots);
 router.patch("/:id/receive", permit("products", "inventory"), ctrl.receive);
 router.delete("/:id", permit("admin", "products"),  ctrl.remove);
 
