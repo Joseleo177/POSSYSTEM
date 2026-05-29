@@ -25,4 +25,11 @@ router.put  ("/:id/employees",        permit("admin", "config"), wh.assignEmploy
 router.post ("/transfer",            permit("inventory", "admin", "config"), wh.transfer);
 router.get  ("/transfers",           wh.getTransfers);
 
+// ── Sesiones de Movimiento Manual ─────────────────────────────
+router.get  ("/:id/sessions",                                permit("inventory", "admin", "config"), wh.getSessions);
+router.get  ("/:id/sessions/active",                         permit("inventory", "admin", "config"), wh.getActiveSession);
+router.post ("/:id/sessions",                                permit("inventory", "admin", "config"), wh.openSession);
+router.post ("/:id/sessions/:sessionId/lines",               permit("inventory", "admin", "config"), wh.addLine);
+router.patch("/:id/sessions/:sessionId/close",               permit("inventory", "admin", "config"), wh.closeSession);
+
 module.exports = router;

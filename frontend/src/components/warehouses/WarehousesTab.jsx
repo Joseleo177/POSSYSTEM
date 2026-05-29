@@ -21,6 +21,17 @@ export default function WarehousesTab({ notify, currentEmployee }) {
     const [warehouseModal, setWarehouseModal] = useState(false);
     const [selectedWarehouse, setSelectedWarehouse] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const [openSession, setOpenSession] = useState(null);     // sesión activa en AdjustmentsView
+    const [pendingNav, setPendingNav] = useState(null);       // navegación pendiente mientras hay sesión abierta
+
+    // Intercepta cambios de sub-tab: si hay sesión abierta con movimientos, pide confirmación
+    const requestSubTab = (newTab) => {
+        if (subTab === "ajustes" && openSession && (openSession.line_count > 0 || (openSession.lines?.length > 0))) {
+            setPendingNav(newTab);
+        } else {
+            setSubTab(newTab);
+        }
+    };
 
     const {
         warehouses, load: loadWarehouses,
@@ -90,7 +101,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
             module="MÓDULO DE INVENTARIO"
             title={pageTitle}
             actions={pageActions}
-            subheader={<WarehousesHeader subTab={subTab} setSubTab={setSubTab} />}
+            subheader={<WarehousesHeader subTab={subTab} setSubTab={requestSubTab} />}
         >
             {subTab === "almacenes" && (
                 <WarehouseGrid
@@ -99,7 +110,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                     startEdit={startEdit}
                     setDeleteConfirm={setDeleteConfirm}
                     setSelectedWarehouse={setSelectedWarehouse}
-                    setSubTab={setSubTab}
+                    setSubTab={requestSubTab}
                 />
             )}
 
@@ -128,7 +139,8 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                 <AdjustmentsView
                     selectedWarehouse={selectedWarehouse}
                     notify={notify}
-                    onChangeWarehouse={() => { setSelectedWarehouse(null); setSubTab("almacenes"); }}
+                    onChangeWarehouse={() => { setSelectedWarehouse(null); requestSubTab("almacenes"); }}
+                    onSessionChange={setOpenSession}
                 />
             )}
 
@@ -210,6 +222,17 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                 onCancel={() => setDeleteStockModal(null)}
                 type="danger"
                 confirmText="Sí, retirar producto"
+            />
+
+            <ConfirmModal
+                isOpen={!!pendingNav}
+                title="Sesión de ajustes abierta"
+                message={`Tienes una sesión con ${openSession?.line_count || openSession?.lines?.length || 0} movimiento(s) registrado(s). Debes cerrarla antes de salir o continuarás perdiéndola al recargar.`}
+                onConfirm={() => { setSubTab(pendingNav); setPendingNav(null); }}
+                onCancel={() => setPendingNav(null)}
+                type="warning"
+                confirmText="Salir de todas formas"
+                cancelText="Seguir ajustando"
             />
         </Page>
     );

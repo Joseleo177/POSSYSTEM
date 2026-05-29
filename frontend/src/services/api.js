@@ -204,6 +204,13 @@ export const api = {
     transfer:        (body)      => request("/warehouses/transfer",    { method: "POST",   body: JSON.stringify(body) }),
     getTransfers:    (params={}) => request("/warehouses/transfers?"   + new URLSearchParams(params)),
     getProducts: (id, params = {}) => request(`/warehouses/${id}/products?` + new URLSearchParams(params)),
+    sessions: {
+      getActive:  (id)                  => request(`/warehouses/${id}/sessions/active`),
+      open:       (id)                  => request(`/warehouses/${id}/sessions`,                       { method: "POST" }),
+      addLine:    (id, sessionId, body) => request(`/warehouses/${id}/sessions/${sessionId}/lines`,    { method: "POST", body: JSON.stringify(body) }),
+      close:      (id, sessionId, body) => request(`/warehouses/${id}/sessions/${sessionId}/close`,    { method: "PATCH", body: JSON.stringify(body) }),
+      getAll:     (id, params = {})     => request(`/warehouses/${id}/sessions?` + new URLSearchParams(params)),
+    },
   },
 
   // ── Bancos ──────────────────────────────────────────────────

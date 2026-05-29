@@ -2,6 +2,7 @@ const {
   getAll, getByEmployee, createWarehouse, updateWarehouse, deleteWarehouse, assignEmployees,
   getStock, getProducts, addStock, setStock, removeStock,
   createTransfer, getTransfers,
+  getActiveSession, openSession, addLine, closeSession, getSessions,
 } = require("../services/warehouses");
 
 const wrap = (fn, status = 200) => async (req, res) => {
@@ -28,4 +29,9 @@ module.exports = {
   removeStock:      wrap(req => removeStock(req)),
   transfer:         wrap(req => createTransfer(req), 201),
   getTransfers:     wrap(req => getTransfers(req)),
+  getActiveSession: wrap(req => getActiveSession(req.params.id, req)),
+  openSession:      wrap(req => openSession(req.params.id, req), 201),
+  addLine:          wrap(req => addLine(req.params.id, req.params.sessionId, req.body, req), 201),
+  closeSession:     wrap(req => closeSession(req.params.id, req.params.sessionId, req.body, req)),
+  getSessions:      wrap(req => getSessions(req.params.id, req.query, req)),
 };
