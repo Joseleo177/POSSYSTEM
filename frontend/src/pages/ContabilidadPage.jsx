@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 import ReceiptModal from "../components/ReceiptModal";
@@ -56,7 +56,14 @@ export default function ContabilidadPage() {
  }, [canConfig, loadAllSeries, loadAllEmployees]);
 
  const [subPage, setSubPage] = useState("Estado de Cuenta");
- const [dropOpen, setDropOpen] = useState(false);
+ const [openGroup, setOpenGroup] = useState(null);
+ const navRef = useRef(null);
+
+ useEffect(() => {
+   const handler = (e) => { if (navRef.current && !navRef.current.contains(e.target)) setOpenGroup(null); };
+   document.addEventListener("mousedown", handler);
+   return () => document.removeEventListener("mousedown", handler);
+ }, []);
 
  useEffect(() => {
    if (!pendingAction?.startsWith("contabilidad:")) return;
@@ -73,15 +80,17 @@ export default function ContabilidadPage() {
  const activeMethods = paymentMethods.filter(m => m.active);
  const activeBanks = banks.filter(b => b.active);
  const methodByCode = Object.fromEntries(paymentMethods.map(m => [m.code, m]));
- const visibleSubPages = canConfig
- ? SUB_PAGES
- : SUB_PAGES.filter((p) => !["Series", "Diarios", "Tipos de pago", "Bancos"].includes(p));
- // Cotizaciones visible para todos
+ const NAV_GROUPS = [
+   { label: "Movimientos", items: ["Estado de Cuenta", "Ingresos", "Egresos"] },
+   { label: "Ventas",      items: ["Facturas", "Notas de Crédito", "Cotizaciones"] },
+   { label: "Pagos",       items: null },
+   ...(canConfig ? [{ label: "Configuración", items: ["Series", "Tipos de pago", "Bancos", "Diarios"] }] : []),
+ ];
+
+ const visibleSubPages = NAV_GROUPS.flatMap(g => g.items ?? [g.label]);
 
  useEffect(() => {
- if (!visibleSubPages.includes(subPage)) {
- setSubPage(visibleSubPages[0] || "Estado de Cuenta");
- }
+   if (!visibleSubPages.includes(subPage)) setSubPage(visibleSubPages[0] || "Estado de Cuenta");
  }, [subPage, visibleSubPages]);
 
  const renderContent = () => {
@@ -202,21 +211,59 @@ export default function ContabilidadPage() {
  </div>
  </div>
 
- {/* ── Tabs ───────────────────────────── */}
- <div className="shrink-0 flex gap-1 px-4 border-b border-border/20 dark:border-white/5 overflow-x-auto no-scrollbar">
- {visibleSubPages.map(p => (
- <button
- key={p}
- onClick={() => setSubPage(p)}
- className={`px-4 py-2 text-[11px] font-black uppercase tracking-wide border-b-2 whitespace-nowrap transition-all ${
- subPage === p
- ? "border-brand-500 text-brand-500"
- : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
- }`}
- >
- {p}
- </button>
- ))}
+ {/* ── Nav agrupada ───────────────────── */}
+ <div ref={navRef} className="shrink-0 flex items-stretch gap-0 px-4 border-b border-border/20 dark:border-white/5">
+   {NAV_GROUPS.map(group => {
+     const isActive = group.items ? group.items.includes(subPage) : subPage === group.label;
+     const isOpen   = openGroup === group.label;
+
+     if (!group.items) {
+       return (
+         <button
+           key={group.label}
+           onClick={() => { setSubPage(group.label); setOpenGroup(null); }}
+           className={`px-4 py-2 text-[11px] font-black uppercase tracking-wide border-b-2 whitespace-nowrap transition-all ${
+             isActive ? "border-brand-500 text-brand-500" : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+           }`}
+         >
+           {group.label}
+         </button>
+       );
+     }
+
+     return (
+       <div key={group.label} className="relative">
+         <button
+           onClick={() => setOpenGroup(isOpen ? null : group.label)}
+           className={`flex items-center gap-1 px-4 py-2 text-[11px] font-black uppercase tracking-wide border-b-2 whitespace-nowrap transition-all ${
+             isActive ? "border-brand-500 text-brand-500" : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+           }`}
+         >
+           {group.label}
+           <svg className={`w-3 h-3 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+           </svg>
+         </button>
+         {isOpen && (
+           <div className="absolute top-full left-0 mt-1 bg-white dark:bg-surface-dark-3 border border-border/40 dark:border-white/10 rounded-xl shadow-lg shadow-black/10 z-50 py-1 min-w-[170px]">
+             {group.items.map(item => (
+               <button
+                 key={item}
+                 onClick={() => { setSubPage(item); setOpenGroup(null); }}
+                 className={`w-full text-left px-4 py-2 text-[11px] font-bold transition-colors rounded-lg ${
+                   subPage === item
+                     ? "text-brand-500 bg-brand-500/5"
+                     : "text-content dark:text-white/70 hover:bg-surface-2 dark:hover:bg-white/5"
+                 }`}
+               >
+                 {item}
+               </button>
+             ))}
+           </div>
+         )}
+       </div>
+     );
+   })}
  </div>
 
  {/* ── Contenido del sub-módulo ─────────────────── */}
