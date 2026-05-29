@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 import Modal from "./ui/Modal";
@@ -22,6 +22,15 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const { notify, baseCurrency, activeCurrencies, activeJournals } = useApp();
   const [form, setForm] = useState(getEmpty);
   const [loading, setLoading] = useState(false);
+  const [customerCredit, setCustomerCredit] = useState(0);
+  const [creditToApply, setCreditToApply] = useState("");
+
+  useEffect(() => {
+    if (!sale?.customer_id) { setCustomerCredit(0); setCreditToApply(""); return; }
+    api.customers.getOne(sale.customer_id)
+      .then(r => setCustomerCredit(parseFloat(r.data?.credit_balance || 0)))
+      .catch(() => setCustomerCredit(0));
+  }, [sale?.customer_id]);
 
   const displayCur = activeCurrencies.find(c => !c.is_base) || baseCurrency;
   const defaultRate = (!displayCur || displayCur.is_base) ? 1 : parseFloat(displayCur.exchange_rate || 1);
@@ -34,7 +43,10 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const selectedJournal = activeJournals.find(j => j.id === form.payment_journal_id);
   const isCash = selectedJournal?.type === "efectivo";
 
-  const balanceUsd = parseFloat(sale?.balance ?? sale?.total ?? 0);
+  const balanceUsd        = parseFloat(sale?.balance ?? sale?.total ?? 0);
+  const creditNum         = parseFloat(String(creditToApply).replace(",", ".")) || 0;
+  const creditApplied     = Math.min(Math.max(creditNum, 0), customerCredit, balanceUsd);
+  const pendingAfterCredit = Math.max(0, balanceUsd - creditApplied);
 
   const receivedNum = parseFloat(String(form.received_amount).replace(",", "."));
   const amountNum   = parseFloat(String(form.amount).replace(",", "."));
@@ -42,7 +54,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const receivedBase = !isNaN(receivedNum) ? receivedNum / payRate : 0;
   const amountBase   = !isNaN(amountNum) ? amountNum / payRate : 0;
 
-  const changeBase = receivedBase > amountBase && receivedBase > 0
+  const changeBase = receivedBase > amountBase && receivedBase > 0 && pendingAfterCredit > 0
     ? parseFloat((receivedBase - amountBase).toFixed(4))
     : 0;
   const changeDisplay = changeBase * payRate;
@@ -61,16 +73,18 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     ? overrideNum / changeJournalRate
     : changeBase;
 
+  const creditCoversAll = creditApplied >= balanceUsd - 0.001;
+
   const submit = async () => {
-    if (!form.payment_journal_id) return notify("Selecciona el método de pago", "err");
-    if (!form.amount) return notify("El monto es requerido", "err");
     if (!form.reference_date) return notify("La fecha de referencia es requerida", "err");
-    if (!isCash && !form.reference_number?.trim()) return notify("El número de referencia es requerido", "err");
+    if (!creditCoversAll) {
+      if (!form.payment_journal_id) return notify("Selecciona el método de pago", "err");
+      if (!form.amount) return notify("El monto es requerido", "err");
+      if (!isCash && !form.reference_number?.trim()) return notify("El número de referencia es requerido", "err");
+    }
     if (changeBase > 0 && !form.keep_change && !form.change_journal_id) return notify("Selecciona el diario del que saldrá el cambio", "err");
 
-    const finalAmountBase = form.keep_change ? Math.min(receivedBase, balanceUsd) : amountBase;
-    // Cuando hay cambio desde otro diario, el diario de pago recibe el monto físico completo
-    // (ej: cliente da 10, se registra +10 en CAJA DIVISA; el cambio de CAJA BS lo descuenta el egreso)
+    const finalAmountBase = form.keep_change ? Math.min(receivedBase, pendingAfterCredit) : amountBase;
     const payAmountToSend = (changeBase > 0 && !form.keep_change && form.change_journal_id)
       ? receivedBase
       : finalAmountBase;
@@ -78,36 +92,41 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     setLoading(true);
     try {
       const res = await api.payments.create({
-        sale_id: sale.id,
-        amount: payAmountToSend,
-        currency_id: payCur?.id || null,
-        exchange_rate: payRate,
-        reference_date: form.reference_date,
-        reference_number: form.reference_number || null,
-        notes: form.notes || null,
-        payment_journal_id: form.payment_journal_id || null,
-        received_amount: receivedBase > 0 ? receivedBase : undefined,
-        change_given: (changeBase > 0 && !form.keep_change) ? actualChangeBase : undefined,
-        change_journal_id: (changeBase > 0 && !form.keep_change) ? form.change_journal_id : undefined,
-        surplus_kept: (changeBase > 0 && form.keep_change) ? changeBase : undefined,
+        sale_id:            sale.id,
+        amount:             creditCoversAll ? 0 : payAmountToSend,
+        currency_id:        payCur?.id || null,
+        exchange_rate:      payRate,
+        reference_date:     form.reference_date,
+        reference_number:   form.reference_number || null,
+        notes:              form.notes || null,
+        payment_journal_id: creditCoversAll ? null : (form.payment_journal_id || null),
+        received_amount:    receivedBase > 0 ? receivedBase : undefined,
+        change_given:       (changeBase > 0 && !form.keep_change) ? actualChangeBase : undefined,
+        change_journal_id:  (changeBase > 0 && !form.keep_change) ? form.change_journal_id : undefined,
+        surplus_kept:       (changeBase > 0 && form.keep_change) ? changeBase : undefined,
+        credit_amount:      creditApplied > 0 ? creditApplied : undefined,
       });
       if (res.sale_status === "pagado") notify("¡Factura pagada completamente!");
       else notify("Pago parcial registrado");
       setForm(getEmpty());
+      setCreditToApply("");
       onSuccess?.(res);
     } catch (e) { notify(e.message, "err"); }
     setLoading(false);
   };
 
-  const canSubmit = !loading && form.payment_journal_id &&
-    !isNaN(amountNum) && amountNum > 0 &&
-    form.reference_date && (isCash || form.reference_number?.trim()) &&
-    (changeBase <= 0 || form.keep_change || form.change_journal_id);
+  const canSubmit = !loading && form.reference_date && (
+    creditCoversAll ||
+    (form.payment_journal_id && !isNaN(amountNum) && amountNum > 0 &&
+      (isCash || form.reference_number?.trim()) &&
+      (changeBase <= 0 || form.keep_change || form.change_journal_id))
+  );
 
   // Para mostrar los montos de la factura
   const infoRate = form.pay_currency_id ? payRate : defaultRate;
   const infoSym  = form.pay_currency_id ? paySym : defaultSym;
   const fmt = (usdAmt) => `${infoSym}${(Number(usdAmt || 0) * infoRate).toFixed(2)}`;
+  const fmtBase = (usdAmt) => `${baseCurrency?.symbol || "Ref."}${Number(usdAmt || 0).toFixed(2)}`;
 
   return (
     <Modal open={!!sale} onClose={onClose} title="REGISTRAR PAGO" width={460}>
@@ -120,14 +139,55 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
         {sale.amount_paid > 0 && (
           <Row label="Ya pagado" value={fmt(sale.amount_paid)} valueClass="text-success" />
         )}
+        {creditApplied > 0 && (
+          <Row label="Crédito aplicado" value={`−${fmt(creditApplied)}`} valueClass="text-brand-500 font-black" />
+        )}
         <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
-          <Row label="Saldo pendiente" value={fmt(balanceUsd)} valueClass="text-danger font-black" />
+          <Row label="Saldo pendiente" value={fmt(pendingAfterCredit)} valueClass="text-danger font-black" />
         </div>
       </div>
 
       <div className="space-y-4">
 
-        {/* Método de pago */}
+        {/* Crédito de cliente */}
+        {customerCredit > 0.001 && (
+          <div className="rounded-xl border-2 border-brand-500/30 bg-brand-500/5 p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-brand-500">
+                Crédito disponible
+              </span>
+              <span className="text-sm font-black text-brand-500 tabular-nums">
+                {fmtBase(customerCredit)}
+              </span>
+            </div>
+            <div className="flex gap-2 items-center">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={creditToApply}
+                onChange={e => setCreditToApply(e.target.value.replace(/[^\d.,]/g, ""))}
+                placeholder={fmtBase(Math.min(customerCredit, balanceUsd))}
+                className="flex-1 h-9 bg-white/[0.02] dark:bg-white/[0.04] border border-brand-500/30 rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+              />
+              <button
+                type="button"
+                onClick={() => setCreditToApply(String(Math.min(customerCredit, balanceUsd).toFixed(6)))}
+                className="px-3 h-9 rounded-xl bg-brand-500 text-black text-[10px] font-black uppercase tracking-wide hover:brightness-110 transition-all"
+              >
+                Aplicar todo
+              </button>
+            </div>
+            {creditApplied > 0 && creditCoversAll && (
+              <p className="text-[10px] font-black text-success">
+                ✓ El crédito cubre el saldo completo. No se requiere pago adicional.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Campos de pago — ocultos si el crédito cubre todo */}
+        {!creditCoversAll && (<>
+
         <Field label="MÉTODO DE PAGO *">
           <div className="flex flex-wrap gap-1.5">
             {activeJournals.map(j => {
@@ -138,7 +198,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
                     const newCurId = j.currency_id || baseCurrency?.id;
                     const newCur = activeCurrencies.find(c => c.id === parseInt(newCurId));
                     const newRate = (!newCur || newCur.is_base) ? 1 : parseFloat(newCur.exchange_rate || 1);
-                    const newAmt = (balanceUsd * newRate).toFixed(2);
+                    const newAmt = (pendingAfterCredit * newRate).toFixed(2);
                     setForm(p => ({
                       ...p,
                       payment_journal_id: j.id,
@@ -171,7 +231,6 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
           )}
         </Field>
 
-        {/* Monto recibido */}
         <Field label="MONTO RECIBIDO DEL CLIENTE *">
           <input
             type="text"
@@ -180,7 +239,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
             onChange={e => {
               const val = e.target.value.replace(/[^\d.,]/g, "");
               const num = parseFloat(val.replace(",", "."));
-              const maxInCur = balanceUsd * payRate;
+              const maxInCur = pendingAfterCredit * payRate;
               const abono = !isNaN(num) && num > 0 ? Math.min(num, maxInCur).toFixed(2) : "";
               setForm(p => ({ ...p, received_amount: val, amount: abono }));
             }}
@@ -325,6 +384,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
             />
           </Field>
         )}
+        </>)}
 
         {/* Notas */}
         <Field label="NOTAS">

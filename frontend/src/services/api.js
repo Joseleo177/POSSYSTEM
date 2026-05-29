@@ -141,8 +141,9 @@ export const api = {
     update:      (id, body)  => request(`/sales/${id}`,  { method: "PATCH",  body: JSON.stringify(body) }),
     cancel:      (id)        => request(`/sales/${id}`,  { method: "DELETE" }),
     // Devoluciones
-    createReturn:  (id, body) => request(`/sales/${id}/return`,  { method: "POST", body: JSON.stringify(body) }),
-    getReturns:    (id)       => request(`/sales/${id}/returns`),
+    createReturn:   (id, body) => request(`/sales/${id}/return`,   { method: "POST", body: JSON.stringify(body) }),
+    createExchange: (id, body) => request(`/sales/${id}/exchange`, { method: "POST", body: JSON.stringify(body) }),
+    getReturns:     (id)       => request(`/sales/${id}/returns`),
   },
   employees: {
     getAll:      ()          => request("/employees"),

@@ -1,5 +1,5 @@
 const { Payment, Sale, Sequelize, sequelize, getSaleBalance } = require("./shared");
-const { Expense, ExpenseCategory, PaymentJournal, Currency, Serie, SerieRange } = require("../../models");
+const { Expense, ExpenseCategory, PaymentJournal, Currency, Serie, SerieRange, Customer } = require("../../models");
 
 module.exports = async function createPayment(body) {
   const t = await sequelize.transaction();
@@ -19,11 +19,16 @@ module.exports = async function createPayment(body) {
       change_given,       // cambio a devolver (en moneda base)
       change_journal_id,  // diario del que sale el cambio
       surplus_kept,       // sobrante que se queda en caja (en moneda base)
+      // Crédito de cliente
+      credit_amount,      // monto a descontar del credit_balance del cliente
     } = body;
 
     if (!sale_id) throw new Error("sale_id es requerido");
-    if (!amount) throw new Error("El monto es requerido");
     if (!reference_date) throw new Error("La fecha de referencia es requerida");
+
+    const creditAmt = parseFloat(credit_amount || 0);
+    const hasJournalPayment = parseFloat(amount || 0) > 0;
+    if (!hasJournalPayment && creditAmt <= 0) throw new Error("El monto es requerido");
 
     const sale = await Sale.findByPk(sale_id, { transaction: t, lock: true });
     if (!sale) throw new Error("Factura no encontrada");
@@ -58,9 +63,7 @@ module.exports = async function createPayment(body) {
       }
     }
 
-    const payAmt = parseFloat(amount);
-    if (payAmt <= 0) throw new Error("El monto debe ser mayor a 0");
-
+    const payAmt   = parseFloat(amount || 0);
     const changeAmt = parseFloat(change_given || 0);
 
     // Validar que si hay cambio, se indicó de dónde sale
@@ -68,12 +71,43 @@ module.exports = async function createPayment(body) {
       throw new Error("Debes seleccionar el diario del que saldrá el cambio");
     }
 
-    const saleTotal    = parseFloat(sale.total);
-    const alreadyPaid  = await getSaleBalance(sale_id, t);
+    const saleTotal   = parseFloat(sale.total);
+    const alreadyPaid = await getSaleBalance(sale_id, t);
+    const pendingBalance = saleTotal - alreadyPaid;
+
+    // Aplicar crédito de cliente si viene en el body
+    let creditApplied = 0;
+    if (creditAmt > 0) {
+      if (!sale.customer_id) { const e = new Error("La venta no tiene cliente asignado"); e.status = 400; throw e; }
+      const customer = await Customer.findByPk(sale.customer_id, { transaction: t, lock: true });
+      if (!customer) { const e = new Error("Cliente no encontrado"); e.status = 404; throw e; }
+      const available = parseFloat(customer.credit_balance || 0);
+      if (creditAmt > available + 0.001) { const e = new Error(`Crédito insuficiente. Disponible: ${available.toFixed(2)}`); e.status = 400; throw e; }
+      creditApplied = parseFloat(Math.min(creditAmt, pendingBalance).toFixed(6));
+      await Customer.decrement({ credit_balance: creditApplied }, { where: { id: customer.id }, transaction: t });
+      await Payment.create({
+        sale_id,
+        customer_id:        sale.customer_id,
+        amount:             creditApplied,
+        currency_id:        sale.currency_id || null,
+        exchange_rate:      sale.exchange_rate || 1,
+        payment_journal_id: null,
+        employee_id:        employee_id || null,
+        reference_date,
+        reference_number:   null,
+        notes:              `Crédito de cliente aplicado`,
+        change_given:       null,
+        change_journal_id:  null,
+      }, { transaction: t });
+    }
+
     // getSaleBalance ya descuenta change_given de pagos previos.
     // El crédito neto de este pago = lo físicamente recibido menos el cambio entregado.
-    const netCredit    = Math.min(parseFloat((payAmt - changeAmt).toFixed(6)), saleTotal - alreadyPaid);
-    const totalPaidNow = parseFloat((alreadyPaid + netCredit).toFixed(6));
+    const pendingAfterCredit = pendingBalance - creditApplied;
+    const netCredit    = hasJournalPayment
+      ? Math.min(parseFloat((payAmt - changeAmt).toFixed(6)), pendingAfterCredit)
+      : 0;
+    const totalPaidNow = parseFloat((alreadyPaid + creditApplied + netCredit).toFixed(6));
 
     if (netCredit < -0.001) {
       throw new Error("El cambio no puede superar el monto recibido");
@@ -82,24 +116,27 @@ module.exports = async function createPayment(body) {
       throw new Error(`El monto excede el saldo pendiente. Saldo: ${(saleTotal - alreadyPaid).toFixed(2)}`);
     }
 
-    // Registrar el cobro (amount = monto físico recibido en el diario de pago)
-    const payment = await Payment.create(
-      {
-        sale_id,
-        customer_id: sale.customer_id,
-        amount: payAmt,
-        currency_id: currency_id || sale.currency_id || null,
-        exchange_rate: parseFloat(exchange_rate) || sale.exchange_rate || 1,
-        payment_journal_id: payment_journal_id || sale.payment_journal_id || null,
-        employee_id: employee_id || null,
-        reference_date,
-        reference_number: reference_number?.trim() || null,
-        notes: notes?.trim() || null,
-        change_given: changeAmt > 0 ? changeAmt : null,
-        change_journal_id: changeAmt > 0 ? change_journal_id : null,
-      },
-      { transaction: t }
-    );
+    // Registrar el cobro de diario (solo si hay monto de pago regular)
+    let payment = null;
+    if (hasJournalPayment) {
+      payment = await Payment.create(
+        {
+          sale_id,
+          customer_id: sale.customer_id,
+          amount: payAmt,
+          currency_id: currency_id || sale.currency_id || null,
+          exchange_rate: parseFloat(exchange_rate) || sale.exchange_rate || 1,
+          payment_journal_id: payment_journal_id || sale.payment_journal_id || null,
+          employee_id: employee_id || null,
+          reference_date,
+          reference_number: reference_number?.trim() || null,
+          notes: notes?.trim() || null,
+          change_given: changeAmt > 0 ? changeAmt : null,
+          change_journal_id: changeAmt > 0 ? change_journal_id : null,
+        },
+        { transaction: t }
+      );
+    }
 
     // Si hay cambio: registrar como egreso en el diario del cambio
     if (changeAmt > 0 && change_journal_id) {

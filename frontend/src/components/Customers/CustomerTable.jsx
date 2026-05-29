@@ -44,16 +44,24 @@ export default function CustomerTable({
                                     {c.rif || "S/N"}
                                 </td>
                                 <td>
-                                    {parseFloat(c.total_debt || 0) > 0 ? (
-                                        <div className="flex flex-col">
-                                            <span className="text-[11px] font-black text-danger tabular-nums">-{fmtPrice(c.total_debt)}</span>
-                                            <span className="text-[9px] font-bold uppercase text-danger/50">Por cobrar</span>
-                                        </div>
-                                    ) : (
-                                        <span className="badge badge-success shadow-none !bg-success/5 !text-success border-success/10 font-black uppercase tracking-widest">
-                                            Al día
-                                        </span>
-                                    )}
+                                    <div className="flex flex-col gap-0.5">
+                                        {parseFloat(c.total_debt || 0) > 0 ? (
+                                            <div className="flex flex-col">
+                                                <span className="text-[11px] font-black text-danger tabular-nums">-{fmtPrice(c.total_debt)}</span>
+                                                <span className="text-[9px] font-bold uppercase text-danger/50">Por cobrar</span>
+                                            </div>
+                                        ) : (
+                                            <span className="badge badge-success shadow-none !bg-success/5 !text-success border-success/10 font-black uppercase tracking-widest">
+                                                Al día
+                                            </span>
+                                        )}
+                                        {parseFloat(c.credit_balance || 0) > 0.001 && (
+                                            <div className="flex flex-col">
+                                                <span className="text-[11px] font-black text-brand-500 tabular-nums">{fmtPrice(c.credit_balance)}</span>
+                                                <span className="text-[9px] font-bold uppercase text-brand-500/50">Crédito</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </td>
                                 <td className="text-right pr-6">
                                     <div className="flex justify-end gap-1">

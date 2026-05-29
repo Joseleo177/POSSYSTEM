@@ -95,6 +95,14 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay }) 
                             <p className="text-[13px] font-black text-success tabular-nums">{fmtPrice(detail.total_spent)}</p>
                         </div>
 
+                        {/* Crédito disponible */}
+                        {parseFloat(detail.credit_balance || 0) > 0.001 && (
+                            <div className="text-right">
+                                <p className={`${LABEL} mb-0.5`}>Crédito Disponible</p>
+                                <p className="text-[15px] font-black text-brand-500 tabular-nums">{fmtPrice(detail.credit_balance)}</p>
+                            </div>
+                        )}
+
                         {/* Saldo — empujado a la derecha */}
                         <div className="ml-auto text-right">
                             <p className={`${LABEL} mb-0.5`}>Saldo Pendiente</p>

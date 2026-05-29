@@ -17,6 +17,7 @@ module.exports = (sequelize, DataTypes) => {
     tax_name: { type: DataTypes.STRING(200) },
     tax_regime: { type: DataTypes.STRING(100) },
     notes: { type: DataTypes.TEXT },
+    credit_balance: { type: DataTypes.DECIMAL(14, 6), allowNull: false, defaultValue: 0 },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

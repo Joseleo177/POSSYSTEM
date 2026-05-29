@@ -1,5 +1,5 @@
 const {
-  Sale, SaleItem, Product, ProductStock, Employee,
+  Sale, SaleItem, Product, ProductStock, Employee, Customer,
   Return, ReturnItem, Payment, ProductComboItem, Serie, SerieRange, sequelize, Sequelize,
 } = require("../../models");
 
@@ -129,22 +129,12 @@ async function createReturn({ saleId, items, reason, employee_id }) {
     }
     if (fullyReturned) await sale.update({ status: 'devuelto' }, { transaction });
 
-    // Auto-refund: negative payment up to what was actually paid
-    const totalPaid = await Payment.sum('amount', { where: { sale_id: saleId }, transaction }) || 0;
-    if (parseFloat(totalPaid) > 0) {
-      const refundAmount = Math.min(parseFloat(returnTotal), parseFloat(totalPaid));
-      await Payment.create({
-        sale_id:            saleId,
-        customer_id:        sale.customer_id,
-        amount:             -refundAmount,
-        currency_id:        sale.currency_id,
-        exchange_rate:      sale.exchange_rate,
-        payment_journal_id: sale.payment_journal_id,
-        employee_id:        employee_id || null,
-        reference_date:     new Date(),
-        reference_number:   `DEV-${returnRecord.id}`,
-        notes:              `Reembolso automático por devolución #${returnRecord.id}`,
-      }, { transaction });
+    // Acreditar al cliente: suma el total devuelto a su credit_balance
+    if (sale.customer_id) {
+      await Customer.increment(
+        { credit_balance: parseFloat(returnTotal.toFixed(6)) },
+        { where: { id: sale.customer_id }, transaction }
+      );
     }
 
     await transaction.commit();
