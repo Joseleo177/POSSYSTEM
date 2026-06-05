@@ -32,7 +32,7 @@ function normalizeSale(sale) {
 
 // displayCurrency: la moneda no-base (VES). Todos los montos del recibo se convierten a ella.
 // sale.total y item.price están siempre en USD base.
-function printReceipt(sale, companyInfo, displayCurrency) {
+function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
     const storeName = companyInfo?.name || "MI TIENDA POS";
     const s = normalizeSale(sale);
     // Pagado: usar tasa del último pago (cuando se cerró la deuda)
@@ -60,51 +60,55 @@ function printReceipt(sale, companyInfo, displayCurrency) {
     <title>Factura ${s.invoice_number || s.id}</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap');
-        
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Outfit', sans-serif; 
-            font-size: 11px; 
-            line-height: 1.2;
-            color: #000; 
-            background: white; 
-            width: 302px; /* 80mm aprox */
-            margin: 0 auto;
-            padding: 10px;
+
+        @page {
+            size: ${printerWidth === 58 ? "58mm" : "80mm"} auto;
+            margin: 0;
         }
-        
-        .header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 8px; }
-        .logo { max-height: 50px; max-width: 80px; object-fit: contain; }
-        .header-content { flex: 1; text-align: left; }
-        .store-name { font-size: 14px; font-weight: 800; text-transform: uppercase; line-height: 1; margin-bottom: 2px; }
-        .store-rif { font-size: 10px; font-weight: 700; color: #000; margin-bottom: 1px; }
-        .store-slogan { font-size: 9px; font-weight: 700; font-style: italic; color: #000; margin-bottom: 2px; }
-        .store-info { font-size: 9px; color: #000; line-height: 1.2; font-weight: 500; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            font-size: ${printerWidth === 58 ? "8px" : "11px"};
+            line-height: 1.3;
+            color: #000;
+            background: white;
+            width: ${printerWidth === 58 ? "44mm" : "72mm"};
+            margin: 0 auto;
+            padding: ${printerWidth === 58 ? "2mm" : "3mm"};
+        }
 
-        .doc-header { text-align: center; margin: 8px 0; }
-        .doc-title { font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
-        .doc-warning { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }
+        .header { display: flex; align-items: flex-start; gap: ${printerWidth === 58 ? "4px" : "8px"}; margin-bottom: ${printerWidth === 58 ? "6px" : "10px"}; border-bottom: 2px solid #000; padding-bottom: ${printerWidth === 58 ? "5px" : "8px"}; }
+        .logo { max-height: ${printerWidth === 58 ? "35px" : "50px"}; max-width: ${printerWidth === 58 ? "55px" : "80px"}; object-fit: contain; }
+        .header-content { flex: 1; text-align: left; min-width: 0; }
+        .store-name { font-size: ${printerWidth === 58 ? "10px" : "14px"}; font-weight: 800; text-transform: uppercase; line-height: 1; margin-bottom: 2px; }
+        .store-rif { font-size: ${printerWidth === 58 ? "7.5px" : "10px"}; font-weight: 700; color: #000; margin-bottom: 1px; }
+        .store-slogan { font-size: ${printerWidth === 58 ? "7px" : "9px"}; font-weight: 700; font-style: italic; color: #000; margin-bottom: 2px; }
+        .store-info { font-size: ${printerWidth === 58 ? "7px" : "9px"}; color: #000; line-height: 1.2; font-weight: 500; }
 
-        .meta { margin-bottom: 8px; font-size: 10.5px; }
+        .doc-header { text-align: center; margin: ${printerWidth === 58 ? "5px" : "8px"} 0; }
+        .doc-title { font-size: ${printerWidth === 58 ? "10px" : "13px"}; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+        .doc-warning { font-size: ${printerWidth === 58 ? "7px" : "9px"}; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }
+
+        .meta { margin-bottom: ${printerWidth === 58 ? "5px" : "8px"}; font-size: ${printerWidth === 58 ? "8px" : "10.5px"}; }
         .meta-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
         .meta-label { color: #555; font-weight: 500; }
         .meta-value { font-weight: 700; text-align: right; }
 
-        table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-        th { 
-            font-size: 9px; 
-            font-weight: 800; 
+        table { width: 100%; border-collapse: collapse; margin-bottom: ${printerWidth === 58 ? "5px" : "8px"}; }
+        th {
+            font-size: ${printerWidth === 58 ? "7px" : "9px"};
+            font-weight: 800;
             text-transform: uppercase;
-            padding: 6px 4px; 
-            text-align: left; 
+            padding: ${printerWidth === 58 ? "4px 2px" : "6px 4px"};
+            text-align: left;
             border-bottom: 1.5px solid #000;
         }
         th:nth-child(2) { text-align: center; }
         th:nth-child(3), th:nth-child(4) { text-align: right; }
-        
-        td { 
-            padding: 5px 4px; 
-            font-size: 10px; 
+
+        td {
+            padding: ${printerWidth === 58 ? "3px 2px" : "5px 4px"};
+            font-size: ${printerWidth === 58 ? "8px" : "10px"};
             vertical-align: top;
             border-bottom: 0.5px dashed #eee;
         }
@@ -112,19 +116,19 @@ function printReceipt(sale, companyInfo, displayCurrency) {
         .td-center { text-align: center; }
         .td-right { text-align: right; }
 
-        .totals { border-top: 1.5px solid #000; padding-top: 6px; }
-        .total-row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 11px; }
-        .total-row.big { font-weight: 800; font-size: 14px; margin-top: 4px; padding-top: 4px; border-top: 1px solid #eee; }
+        .totals { border-top: 1.5px solid #000; padding-top: ${printerWidth === 58 ? "4px" : "6px"}; }
+        .total-row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: ${printerWidth === 58 ? "8px" : "11px"}; }
+        .total-row.big { font-weight: 800; font-size: ${printerWidth === 58 ? "11px" : "14px"}; margin-top: 4px; padding-top: 4px; border-top: 1px solid #eee; }
         .total-row.discount { color: #000; font-style: italic; }
 
-        .footer { 
-            text-align: center; 
-            margin-top: 15px; 
-            font-size: 9px; 
-            color: #333; 
+        .footer {
+            text-align: center;
+            margin-top: ${printerWidth === 58 ? "8px" : "15px"};
+            font-size: ${printerWidth === 58 ? "7px" : "9px"};
+            color: #333;
             font-weight: 500;
-            border-top: 1px dashed #ccc; 
-            padding-top: 8px; 
+            border-top: 1px dashed #ccc;
+            padding-top: ${printerWidth === 58 ? "5px" : "8px"};
         }
     </style>
 </head>
@@ -193,7 +197,8 @@ function printReceipt(sale, companyInfo, displayCurrency) {
 </body>
 </html>`;
 
-    const win = window.open("", "_blank");
+    const paperPx = printerWidth === 58 ? 220 : 304;
+    const win = window.open("", "_blank", `width=${paperPx},height=900,scrollbars=no,resizable=no`);
     win.document.write(html);
     win.document.close();
     win.focus();
@@ -201,7 +206,7 @@ function printReceipt(sale, companyInfo, displayCurrency) {
 }
 
 export default function ReceiptModal({ open, onClose, sale }) {
-    const { storeName, companyInfo, baseCurrency, activeCurrencies } = useApp();
+    const { storeName, companyInfo, baseCurrency, activeCurrencies, printerWidth } = useApp();
     if (!open || !sale) return null;
 
     const s = normalizeSale(sale);
@@ -342,7 +347,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     CERRAR
                 </button>
                 <button
-                    onClick={() => printReceipt(sale, companyInfo, displayCurrency)}
+                    onClick={() => printReceipt(sale, companyInfo, displayCurrency, printerWidth)}
                     className="btn-md btn-primary w-full"
                     style={{ flex: 2 }}
                 >

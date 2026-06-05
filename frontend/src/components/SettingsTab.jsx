@@ -296,6 +296,28 @@ export default function SettingsTab({ notify }) {
                                     </div>
                                 ))}
                             </div>
+                            {/* Tipo de impresora */}
+                            <div className="mb-4">
+                                <label className="label mb-1.5">Ancho de impresora térmica</label>
+                                <div className="flex gap-2">
+                                    {[["80", "80 mm", "Estándar"], ["58", "58 mm", "Compacta"]].map(([val, size, desc]) => (
+                                        <button
+                                            key={val}
+                                            type="button"
+                                            onClick={() => setSettings(p => ({ ...p, printer_width: val }))}
+                                            className={`flex-1 py-2.5 px-3 rounded-xl border text-left transition-all ${
+                                                (settings.printer_width || "80") === val
+                                                    ? "border-brand-500 bg-brand-500/10 text-brand-500"
+                                                    : "border-border/30 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-500/50"
+                                            }`}
+                                        >
+                                            <div className="text-[12px] font-black">{size}</div>
+                                            <div className="text-[10px] font-semibold opacity-70">{desc}</div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             <div className="flex justify-end border-t border-border/10 pt-3">
                                 <Button onClick={saveSettings} disabled={loading} className="h-8 px-6 text-[10px]">
                                     {loading ? "Guardando..." : "Guardar Configuración"}

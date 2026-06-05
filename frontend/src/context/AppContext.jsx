@@ -107,6 +107,7 @@ export function AppProvider({ children }) {
   const activePaymentMethods = paymentMethods.filter(m => m.active);
 
   const storeName    = settings.store_name || "MI TIENDA POS";
+  const printerWidth = parseInt(settings.printer_width || "80");
   const companyInfo  = {
     name:     settings.store_name    || "",
     rif:      settings.store_rif     || "",
@@ -134,7 +135,7 @@ export function AppProvider({ children }) {
       // Notify
       notification, notify,
       // Settings
-      settings, loadSettings, storeName, companyInfo,
+      settings, loadSettings, storeName, companyInfo, printerWidth,
       // Currencies
       currencies, activeCurrencies, baseCurrency, loadCurrencies,
       // Journals
