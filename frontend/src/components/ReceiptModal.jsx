@@ -46,14 +46,7 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
     const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
     const dateStr = fmtDate(s.created_at);
 
-    const itemsRows = s.items.map(i => `
- <tr>
- <td>${i.name}</td>
- <td style="text-align:center">${i.quantity}</td>
- <td style="text-align:right">${fmtP(i.price)}</td>
- <td style="text-align:right">${fmtP(i.subtotal)}</td>
- </tr>
- `).join(""); const html = `<!DOCTYPE html>
+    const fmtQty = q => { const n = parseFloat(q); return n % 1 === 0 ? String(Math.round(n)) : n; }; const html = `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8" />
@@ -73,7 +66,7 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
             color: #000;
             background: white;
             width: ${printerWidth === 58 ? "44mm" : "72mm"};
-            margin: 0 auto;
+            margin: ${printerWidth === 58 ? "0" : "0 auto"};
             padding: ${printerWidth === 58 ? "2mm" : "3mm"};
         }
 
@@ -91,7 +84,7 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
 
         .meta { margin-bottom: ${printerWidth === 58 ? "5px" : "8px"}; font-size: ${printerWidth === 58 ? "8px" : "10.5px"}; }
         .meta-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
-        .meta-label { color: #555; font-weight: 500; }
+        .meta-label { color: #000; font-weight: 600; }
         .meta-value { font-weight: 700; text-align: right; }
 
         table { width: 100%; border-collapse: collapse; margin-bottom: ${printerWidth === 58 ? "5px" : "8px"}; }
@@ -103,8 +96,10 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
             text-align: left;
             border-bottom: 1.5px solid #000;
         }
-        th:nth-child(2) { text-align: center; }
-        th:nth-child(3), th:nth-child(4) { text-align: right; }
+        th:nth-child(1) { width: ${printerWidth === 58 ? "40%" : "45%"}; }
+        th:nth-child(2) { width: ${printerWidth === 58 ? "12%" : "10%"}; text-align: center; }
+        th:nth-child(3) { width: ${printerWidth === 58 ? "24%" : "22%"}; text-align: right; }
+        th:nth-child(4) { width: ${printerWidth === 58 ? "24%" : "23%"}; text-align: right; }
 
         td {
             padding: ${printerWidth === 58 ? "3px 2px" : "5px 4px"};
@@ -112,6 +107,8 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
             vertical-align: top;
             border-bottom: 0.5px dashed #eee;
         }
+        td:nth-child(2) { text-align: center; white-space: nowrap; }
+        td:nth-child(3), td:nth-child(4) { text-align: right; white-space: nowrap; }
         .item-name { font-weight: 600; line-height: 1.2; }
         .td-center { text-align: center; }
         .td-right { text-align: right; }
@@ -174,7 +171,7 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
             ${s.items.map(i => `
                 <tr>
                     <td><div class="item-name">${i.name}</div></td>
-                    <td class="td-center">${i.quantity}</td>
+                    <td class="td-center">${fmtQty(i.quantity)}</td>
                     <td class="td-right">${fmtP(i.price)}</td>
                     <td class="td-right"><b>${fmtP(i.subtotal)}</b></td>
                 </tr>
@@ -197,12 +194,17 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
 </body>
 </html>`;
 
-    const paperPx = printerWidth === 58 ? 220 : 304;
-    const win = window.open("", "_blank", `width=${paperPx},height=900,scrollbars=no,resizable=no`);
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); win.close(); }, 400);
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:300px;height:1200px;border:0;";
+    document.body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+    iframe.onload = () => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => document.body.removeChild(iframe), 2000);
+    };
 }
 
 export default function ReceiptModal({ open, onClose, sale }) {
@@ -303,7 +305,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     {s.items.map((item, idx) => (
                         <tr key={idx} className="border-b border-dashed border-border dark:border-border-dark">
                             <td className="px-1.5 py-1.5 text-content dark:text-content-dark">{item.name}</td>
-                            <td className="px-1.5 py-1.5 text-center text-content-muted dark:text-content-dark-muted">{item.quantity}</td>
+                            <td className="px-1.5 py-1.5 text-center text-content-muted dark:text-content-dark-muted">{parseFloat(item.quantity) % 1 === 0 ? Math.round(parseFloat(item.quantity)) : item.quantity}</td>
                             <td className="px-1.5 py-1.5 text-right text-content-muted dark:text-content-dark-muted">{fmtP(item.price)}</td>
                             <td className="px-1.5 py-1.5 text-right text-content dark:text-content-dark font-medium">{fmtP(item.subtotal)}</td>
                         </tr>
