@@ -96,19 +96,19 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
             text-align: left;
             border-bottom: 1.5px solid #000;
         }
-        th:nth-child(1) { width: ${printerWidth === 58 ? "40%" : "45%"}; }
-        th:nth-child(2) { width: ${printerWidth === 58 ? "12%" : "10%"}; text-align: center; }
-        th:nth-child(3) { width: ${printerWidth === 58 ? "24%" : "22%"}; text-align: right; }
-        th:nth-child(4) { width: ${printerWidth === 58 ? "24%" : "23%"}; text-align: right; }
+        th:nth-child(1) { width: ${printerWidth === 58 ? "36%" : "45%"}; }
+        th:nth-child(2) { width: ${printerWidth === 58 ? "9%"  : "10%"}; text-align: center; }
+        th:nth-child(3) { width: ${printerWidth === 58 ? "27%" : "22%"}; text-align: right; }
+        th:nth-child(4) { width: ${printerWidth === 58 ? "28%" : "23%"}; text-align: right; }
 
         td {
-            padding: ${printerWidth === 58 ? "3px 2px" : "5px 4px"};
+            padding: ${printerWidth === 58 ? "3px 1px" : "5px 4px"};
             font-size: ${printerWidth === 58 ? "8px" : "10px"};
             vertical-align: top;
             border-bottom: 0.5px dashed #eee;
         }
         td:nth-child(2) { text-align: center; white-space: nowrap; }
-        td:nth-child(3), td:nth-child(4) { text-align: right; white-space: nowrap; }
+        td:nth-child(3), td:nth-child(4) { text-align: right; white-space: nowrap; font-size: ${printerWidth === 58 ? "7px" : "10px"}; }
         .item-name { font-weight: 600; line-height: 1.2; }
         .td-center { text-align: center; }
         .td-right { text-align: right; }
