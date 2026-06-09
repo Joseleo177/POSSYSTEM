@@ -6,8 +6,8 @@ async function getDashboard({ company_id, isSuperuser }) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const month = new Date(today); month.setDate(month.getDate() - 30);
 
-  const tenantWhere  = (!isSuperuser && company_id) ? { company_id } : {};
-  const tenantClause = (!isSuperuser && company_id) ? `AND company_id = :company_id` : "";
+  const tenantWhere  = company_id ? { company_id } : {};
+  const tenantClause = company_id ? `AND company_id = :company_id` : "";
 
   const [kpiToday, kpiMonth] = await Promise.all([
     Sale.findOne({
@@ -37,9 +37,9 @@ async function getDashboard({ company_id, isSuperuser }) {
 
   const cashInHand = await sequelize.query(`
     SELECT (
-      (SELECT COALESCE(SUM(amount), 0) FROM payments ${!isSuperuser && company_id ? "WHERE company_id = :company_id" : ""})
+      (SELECT COALESCE(SUM(amount), 0) FROM payments ${!!company_id ? "WHERE company_id = :company_id" : ""})
       -
-      (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE status = 'activo' ${!isSuperuser && company_id ? "AND company_id = :company_id" : ""})
+      (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE status = 'activo' ${!!company_id ? "AND company_id = :company_id" : ""})
     ) as total
   `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 
@@ -66,7 +66,7 @@ async function getDashboard({ company_id, isSuperuser }) {
     FROM sales
     WHERE created_at >= NOW() - INTERVAL '30 days'
       AND status NOT IN ('anulado', 'eliminado')
-      ${!isSuperuser && company_id ? "AND company_id = :company_id" : ""}
+      ${!!company_id ? "AND company_id = :company_id" : ""}
     GROUP BY CAST(created_at AS DATE)
     ORDER BY day ASC
   `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
@@ -76,7 +76,7 @@ async function getDashboard({ company_id, isSuperuser }) {
            COALESCE(SUM(total - (SELECT COALESCE(SUM(amount), 0) FROM payments p WHERE p.sale_id = s.id)), 0) as balance
     FROM sales s
     WHERE s.status IN ('borrador', 'pendiente', 'parcial')
-    ${!isSuperuser && company_id ? "AND s.company_id = :company_id" : ""}
+    ${!!company_id ? "AND s.company_id = :company_id" : ""}
   `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 
   const lowStock = await sequelize.query(`
@@ -84,7 +84,7 @@ async function getDashboard({ company_id, isSuperuser }) {
     FROM products p
     LEFT JOIN product_stock ps ON ps.product_id = p.id
     WHERE p.min_stock > 0
-    ${!isSuperuser && company_id ? "AND p.company_id = :company_id" : ""}
+    ${!!company_id ? "AND p.company_id = :company_id" : ""}
     GROUP BY p.id, p.name, p.unit, p.min_stock
     HAVING COALESCE(SUM(ps.qty), 0) < p.min_stock
     ORDER BY total_stock ASC

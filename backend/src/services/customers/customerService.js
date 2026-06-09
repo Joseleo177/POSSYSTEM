@@ -2,9 +2,8 @@ const { Sequelize, Customer, Sale, SaleItem, Purchase, Payment, Currency } = req
 
 async function getAll({ search, type, limit = 100, offset = 0 }, req) {
   const company_id  = req.employee?.company_id ?? null;
-  const isSuperuser = !!req.is_superuser;
   const where = {};
-  if (!isSuperuser && company_id) where.company_id = company_id;
+  if (company_id) where.company_id = company_id;
   if (type && ["cliente", "proveedor"].includes(type)) where.type = type;
   if (search) {
     where[Sequelize.Op.or] = [

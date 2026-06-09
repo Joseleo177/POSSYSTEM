@@ -8,7 +8,7 @@ module.exports = async function getAllPayments(query, tenant = {}) {
     { amount: { [Op.gt]: 0 } },
   ];
 
-  if (!isSuperuser && company_id) {
+  if (company_id) {
     andClauses.push({ company_id });
   }
 

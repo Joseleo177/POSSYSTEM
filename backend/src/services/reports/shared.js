@@ -9,11 +9,10 @@ function sanitizeDate(val) {
 
 function buildTenantContext(req) {
   const company_id  = req.employee?.company_id ?? null;
-  const isSuperuser = !!req.is_superuser;
-  const scoped      = !isSuperuser && company_id;
+  const scoped      = !!company_id;
   return {
     company_id,
-    isSuperuser,
+    isSuperuser: !scoped,
     rep:  { cid: company_id },
     tc:   scoped ? `AND company_id = :cid`    : '',
     tcS:  scoped ? `AND s.company_id = :cid`  : '',

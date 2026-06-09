@@ -8,7 +8,7 @@ module.exports = async function getPendingPayments(query, tenant = {}) {
     { status: { [Op.in]: ["borrador", "pendiente", "parcial"] } },
   ];
 
-  if (!isSuperuser && company_id) {
+  if (company_id) {
     andClauses.push({ company_id });
   }
 

@@ -2,8 +2,7 @@ const { Product, ProductStock, Sequelize, sequelize } = require("../../models");
 
 function buildTcp(req) {
   const company_id = req.employee?.company_id ?? null;
-  const isSuperuser = !!req.is_superuser;
-  return (!isSuperuser && company_id) ? ` AND p.company_id = ${parseInt(company_id)}` : '';
+  return company_id ? ` AND p.company_id = ${parseInt(company_id)}` : '';
 }
 
 async function getStock(req) {

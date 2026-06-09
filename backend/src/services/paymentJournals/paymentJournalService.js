@@ -12,8 +12,7 @@ function flattenJournal(j) {
 
 function tenantFilter(req) {
   const company_id  = req.employee?.company_id ?? null;
-  const isSuperuser = !!req.is_superuser;
-  const scoped      = !isSuperuser && company_id;
+  const scoped      = !!company_id;
   return {
     tenantWhere: scoped ? { company_id } : {},
     tc:  scoped ? `AND p.company_id = ${parseInt(company_id)}`  : '',
@@ -77,8 +76,7 @@ async function getSummary(req) {
   const { date_from, date_to } = req.query;
   const { tenantWhere, tc, tce } = tenantFilter(req);
   const company_id  = req.employee?.company_id ?? null;
-  const isSuperuser = !!req.is_superuser;
-  const tci = (!isSuperuser && company_id) ? `AND i.company_id = ${parseInt(company_id)}` : '';
+  const tci = company_id ? `AND i.company_id = ${parseInt(company_id)}` : '';
 
   const buildDateClause = (alias) => {
     const col = `${alias}."created_at"`;
@@ -155,8 +153,7 @@ async function getMovements(req) {
 
   // Tenant filter para incomes (mismo patrón que tp/texp pero para tabla incomes)
   const company_id  = req.employee?.company_id ?? null;
-  const isSuperuser = !!req.is_superuser;
-  const scoped      = !isSuperuser && company_id;
+  const scoped      = !!company_id;
   const ti   = scoped ? ` AND payment_journal_id = :id AND company_id = ${parseInt(company_id)}` : ' AND payment_journal_id = :id';
   const tci  = scoped ? `AND i.company_id = ${parseInt(company_id)}` : '';
 

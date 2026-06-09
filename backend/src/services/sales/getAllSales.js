@@ -6,7 +6,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
 
   const andClauses = [];
 
-  if (!isSuperuser && company_id) {
+  if (company_id) {
     andClauses.push({ company_id });
   }
 
