@@ -54,9 +54,10 @@ async function handleImageDelete(imageValue) {
   }
 }
 
-async function getAll({ search, category_id, is_combo, is_service, warehouse_id, limit = 100, offset = 0 }) {
+async function getAll({ search, category_id, is_combo, is_service, warehouse_id, limit = 100, offset = 0, company_id }) {
   const where = {};
-  if (category_id)             where.category_id = category_id;
+  if (company_id)               where.company_id = company_id;
+  if (category_id)              where.category_id = category_id;
   if (is_combo   !== undefined) where.is_combo   = is_combo   === 'true';
   if (is_service !== undefined) where.is_service = is_service === 'true';
 
@@ -133,8 +134,9 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
   return { data, total: count, limit: parseInt(limit), offset: parseInt(offset) };
 }
 
-async function getOne(id) {
-  const product = await Product.findByPk(id, {
+async function getOne(id, company_id) {
+  const product = await Product.findOne({
+    where: { id, ...(company_id ? { company_id } : {}) },
     include: [
       { model: Category, attributes: ['name'], required: false },
       {
@@ -269,8 +271,8 @@ async function updateProduct({ id, body, file, company_id }) {
   }
 }
 
-async function deleteProduct(id) {
-  const product = await Product.findByPk(id);
+async function deleteProduct(id, company_id) {
+  const product = await Product.findOne({ where: { id, ...(company_id ? { company_id } : {}) } });
   if (!product) { const e = new Error("Producto no encontrado"); e.status = 404; throw e; }
 
   const stockQty = await ProductStock.sum('qty', { where: { product_id: id } });

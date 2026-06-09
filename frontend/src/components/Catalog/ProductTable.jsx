@@ -1,12 +1,18 @@
 import { fmtBase, resolveImageUrl } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 
-export default function ProductTable({ 
+export default function ProductTable({
     products, canManageProducts, openEditProduct, setDeleteProductDialog,
-    selectedProducts = [], onToggleSelect, onSelectAll, isSelectionMode = false
+    selectedProducts = [], onToggleSelect, onSelectAll, isSelectionMode = false,
+    priceCurrency = "base", localCurrency = null
 }) {
     const { baseCurrency } = useApp();
-    const fmtPrice = (n) => fmtBase(n, baseCurrency);
+    const fmtPrice = (n) => {
+        if (priceCurrency === "local" && localCurrency) {
+            return fmtBase(parseFloat(n) * parseFloat(localCurrency.exchange_rate), localCurrency);
+        }
+        return fmtBase(n, baseCurrency);
+    };
 
     const allSelected = products.length > 0 && products.every(p => selectedProducts.includes(p.id));
 

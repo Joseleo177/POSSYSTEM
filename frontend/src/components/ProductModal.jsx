@@ -15,8 +15,13 @@ const EMPTY = {
 };
 
 export default function ProductModal({ open, onClose, onSave, editData, categories, loading }) {
-    const { notify } = useApp();
+    const { notify, activeCurrencies } = useApp();
+    const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
+    const exchangeRate = parseFloat(localCurrency?.exchange_rate || 0);
+
     const [form, setForm] = useState(EMPTY);
+    const [bulkPrice, setBulkPrice] = useState("");
+    const [priceInBs, setPriceInBs] = useState("");
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
     const [removeImage, setRemoveImage] = useState(false);
@@ -54,6 +59,12 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             }
             setImageFile(null);
             setRemoveImage(false);
+            setBulkPrice("");
+            if (editData && exchangeRate > 0) {
+                setPriceInBs((parseFloat(editData.price) * exchangeRate).toFixed(2));
+            } else {
+                setPriceInBs("");
+            }
 
         }
     }, [open, editData]);
@@ -68,6 +79,32 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         );
         if (suggested !== null) next.price = suggested;
         setForm(next);
+    };
+
+    const handlePriceChange = (val) => {
+        set("price", val);
+        if (exchangeRate > 0 && val) {
+            setPriceInBs((parseFloat(val) * exchangeRate).toFixed(2));
+        } else {
+            setPriceInBs("");
+        }
+    };
+
+    const handlePriceInBsChange = (val) => {
+        setPriceInBs(val);
+        if (exchangeRate > 0 && val) {
+            set("price", (parseFloat(val) / exchangeRate).toFixed(4));
+        } else {
+            set("price", "");
+        }
+    };
+
+    const handleBulkPriceChange = (val) => {
+        setBulkPrice(val);
+        const size = parseFloat(form.package_size);
+        if (!val || !size || size <= 0) return;
+        const unitCost = (parseFloat(val) / size).toFixed(4);
+        handleCostOrMarginChange("cost_price", unitCost);
     };
 
     const handleImageChange = (e) => {
@@ -177,8 +214,20 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                         <span className="text-content-subtle font-bold">$</span>
                                     </div>
-                                    <input value={form.price} onChange={e => set("price", e.target.value)} type="number" step="0.01" min="0.01" className="input !pl-8" placeholder="0.00" />
+                                    <input value={form.price} onChange={e => handlePriceChange(e.target.value)} type="number" step="0.01" min="0.01" className="input !pl-8" placeholder="0.00" />
                                 </div>
+                                {localCurrency && (
+                                    <div className="relative mt-1">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-[11px] font-bold">{localCurrency.symbol || "Bs."}</span>
+                                        <input
+                                            value={priceInBs}
+                                            onChange={e => handlePriceInBsChange(e.target.value)}
+                                            type="number" step="0.01" min="0"
+                                            className="input !pl-9 text-[11px]"
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                )}
                             </div>
                             {editData?.id && !form.is_combo && !form.is_service && (
                                 <div>
@@ -229,21 +278,50 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
                             <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">Costos y Rentabilidad</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="label">Costo Unitario</label>
-                                        <div className="relative">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">$</span>
-                                            <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.01" min="0" className="input !pl-6" placeholder="0.00" />
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="label">Costo Unitario</label>
+                                            <div className="relative">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">$</span>
+                                                <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.01" min="0" className="input !pl-6" placeholder="0.00" />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="label">Margen (%)</label>
+                                            <div className="relative">
+                                                <input value={form.profit_margin} onChange={e => handleCostOrMarginChange("profit_margin", e.target.value)} type="number" step="0.1" className="input pr-6" placeholder="0" />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">%</span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div>
-                                        <label className="label">Margen (%)</label>
-                                        <div className="relative">
-                                            <input value={form.profit_margin} onChange={e => handleCostOrMarginChange("profit_margin", e.target.value)} type="number" step="0.1" className="input pr-6" placeholder="0" />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">%</span>
+
+                                    {/* Precio por bulto — helper, no se guarda */}
+                                    {form.package_unit && form.package_size ? (
+                                        <div>
+                                            <label className="label">
+                                                Precio por {form.package_unit}
+                                                <span className="ml-1 text-content-subtle opacity-60 normal-case font-normal">({form.package_size} uds)</span>
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                                <div className="relative flex-1">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">$</span>
+                                                    <input
+                                                        value={bulkPrice}
+                                                        onChange={e => handleBulkPriceChange(e.target.value)}
+                                                        type="number" step="0.01" min="0"
+                                                        className="input !pl-6"
+                                                        placeholder="0.00"
+                                                    />
+                                                </div>
+                                                {bulkPrice && parseFloat(form.package_size) > 0 && (
+                                                    <span className="text-[11px] text-brand-500 font-bold whitespace-nowrap">
+                                                        = $ {(parseFloat(bulkPrice) / parseFloat(form.package_size)).toFixed(4)} c/u
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
+                                    ) : null}
                                 </div>
                                 <div
                                     className={`flex flex-col justify-center p-3 px-4 rounded-lg border transition-all cursor-pointer ${suggestedPrice ? "bg-green-500/5 border-green-500/20 hover:bg-green-500/10" : "bg-surface-2 dark:bg-white/5 border-border/40 opacity-60"}`}

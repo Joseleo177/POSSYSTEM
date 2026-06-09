@@ -20,7 +20,7 @@ const TABS = [
 ];
 
 export default function CatalogPage() {
-    const { employee } = useApp();
+    const { employee, activeCurrencies } = useApp();
     const {
         products, search, setSearch, loadProducts, can,
         categories, notify, loading,
@@ -40,6 +40,8 @@ export default function CatalogPage() {
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [showWarehouse, setShowWarehouse] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
+    const [priceCurrency, setPriceCurrency] = useState("base");
+    const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
 
     const availableWarehouses = employee?.warehouses || [];
     const [warehouseId, setWarehouseId] = useState(() => availableWarehouses[0]?.id ?? null);
@@ -217,6 +219,30 @@ export default function CatalogPage() {
                                 </>
                             )}
                         </div>
+
+                        {/* Selector de moneda */}
+                        {localCurrency && (
+                            <div className="flex items-center rounded-xl border border-border/40 dark:border-white/10 overflow-hidden h-9">
+                                <button
+                                    onClick={() => setPriceCurrency("base")}
+                                    className={`h-full px-3 text-[10px] font-black uppercase tracking-widest transition-all ${
+                                        priceCurrency === "base"
+                                            ? "bg-brand-500 text-black"
+                                            : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
+                                    }`}>
+                                    $
+                                </button>
+                                <button
+                                    onClick={() => setPriceCurrency("local")}
+                                    className={`h-full px-3 text-[10px] font-black uppercase tracking-widest border-l border-border/40 dark:border-white/10 transition-all ${
+                                        priceCurrency === "local"
+                                            ? "bg-brand-500 text-black"
+                                            : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
+                                    }`}>
+                                    Bs
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -230,6 +256,8 @@ export default function CatalogPage() {
                                 onToggleSelect={toggleSelect}
                                 onSelectAll={selectAll}
                                 isSelectionMode={isSelectionMode}
+                                priceCurrency={priceCurrency}
+                                localCurrency={localCurrency}
                             />
                         </div>
                         <Pagination

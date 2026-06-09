@@ -28,3 +28,4 @@ Thumbs.db
 
 # ── Misc ──────────────────────────────────────
 *.local
+backups/posdb_20260608_124945.sql.gz

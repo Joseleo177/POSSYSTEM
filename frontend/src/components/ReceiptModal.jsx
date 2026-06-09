@@ -46,7 +46,14 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
     const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
     const dateStr = fmtDate(s.created_at);
 
-    const fmtQty = q => { const n = parseFloat(q); return n % 1 === 0 ? String(Math.round(n)) : n; }; const html = `<!DOCTYPE html>
+    const fmtQty  = q => { const n = parseFloat(q); return n % 1 === 0 ? String(Math.round(n)) : n; };
+    const fmtPRow = n => {
+        const text = fmtP(n);
+        if (printerWidth !== 58) return text;
+        const len = text.length;
+        const size = len >= 14 ? "5.5px" : len >= 12 ? "6px" : len >= 10 ? "6.5px" : "7.5px";
+        return `<span style="font-size:${size};white-space:nowrap">${text}</span>`;
+    }; const html = `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8" />
@@ -172,8 +179,8 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
                 <tr>
                     <td><div class="item-name">${i.name}</div></td>
                     <td class="td-center">${fmtQty(i.quantity)}</td>
-                    <td class="td-right">${fmtP(i.price)}</td>
-                    <td class="td-right"><b>${fmtP(i.subtotal)}</b></td>
+                    <td class="td-right">${fmtPRow(i.price)}</td>
+                    <td class="td-right"><b>${fmtPRow(i.subtotal)}</b></td>
                 </tr>
             `).join("")}
         </tbody>
