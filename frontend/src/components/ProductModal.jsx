@@ -22,6 +22,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const [form, setForm] = useState(EMPTY);
     const [bulkPrice, setBulkPrice] = useState("");
     const [priceInBs, setPriceInBs] = useState("");
+    const [priceCurrency, setPriceCurrency] = useState("base");
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
     const [removeImage, setRemoveImage] = useState(false);
@@ -60,6 +61,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             setImageFile(null);
             setRemoveImage(false);
             setBulkPrice("");
+            setPriceCurrency("base");
             if (editData && exchangeRate > 0) {
                 setPriceInBs((parseFloat(editData.price) * exchangeRate).toFixed(2));
             } else {
@@ -209,23 +211,30 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 <input value={form.barcode} onChange={e => set("barcode", e.target.value)} className="input" placeholder="Ej. 123456789012" />
                             </div>
                             <div>
-                                <label className="label">Precio de Venta</label>
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <span className="text-content-subtle font-bold">$</span>
+                                <label className="label flex items-center justify-between">
+                                    Precio de Venta
+                                    {localCurrency && (
+                                        <div className="flex text-[9px] font-black rounded overflow-hidden border border-border/30 dark:border-white/10">
+                                            <button type="button" onClick={() => setPriceCurrency("base")}
+                                                className={`px-2 py-0.5 transition-colors ${priceCurrency === "base" ? "bg-brand-500 text-black" : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content"}`}>
+                                                $
+                                            </button>
+                                            <button type="button" onClick={() => setPriceCurrency("local")}
+                                                className={`px-2 py-0.5 transition-colors ${priceCurrency === "local" ? "bg-brand-500 text-black" : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content"}`}>
+                                                {localCurrency.symbol || "Bs."}
+                                            </button>
+                                        </div>
+                                    )}
+                                </label>
+                                {priceCurrency === "base" || !localCurrency ? (
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle font-bold text-xs">$</span>
+                                        <input value={form.price} onChange={e => handlePriceChange(e.target.value)} type="number" step="0.0001" min="0.0001" className="input !pl-7" placeholder="0.0000" />
                                     </div>
-                                    <input value={form.price} onChange={e => handlePriceChange(e.target.value)} type="number" step="0.01" min="0.01" className="input !pl-8" placeholder="0.00" />
-                                </div>
-                                {localCurrency && (
-                                    <div className="relative mt-1">
+                                ) : (
+                                    <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-[11px] font-bold">{localCurrency.symbol || "Bs."}</span>
-                                        <input
-                                            value={priceInBs}
-                                            onChange={e => handlePriceInBsChange(e.target.value)}
-                                            type="number" step="0.01" min="0"
-                                            className="input !pl-9 text-[11px]"
-                                            placeholder="0.00"
-                                        />
+                                        <input value={priceInBs} onChange={e => handlePriceInBsChange(e.target.value)} type="number" step="0.0001" min="0" className="input !pl-9" placeholder="0.0000" />
                                     </div>
                                 )}
                             </div>
@@ -284,7 +293,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                             <label className="label">Costo Unitario</label>
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">$</span>
-                                                <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.01" min="0" className="input !pl-6" placeholder="0.00" />
+                                                <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.0001" min="0" className="input !pl-6" placeholder="0.0000" />
                                             </div>
                                         </div>
                                         <div>

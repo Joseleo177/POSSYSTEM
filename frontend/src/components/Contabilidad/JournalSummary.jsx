@@ -3,7 +3,6 @@ import { api } from "../../services/api";
 
 export default function JournalSummary({ dateFrom, dateTo, onData, onSelectJournal }) {
     const [data, setData] = useState([]);
-    const [expandedKey, setExpandedKey] = useState(null);
 
     useEffect(() => {
         const params = {};
@@ -56,12 +55,11 @@ export default function JournalSummary({ dateFrom, dateTo, onData, onSelectJourn
                 const sym     = group.currency_symbol || "Ref.";
                 const fmt     = n => `${sym}${Number(n).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                 const color   = group.color;
-                const isMulti = group.journals.length > 1;
-                const isOpen  = expandedKey === group.key;
-
                 const handleCardClick = () => {
-                    if (isMulti) {
-                        setExpandedKey(isOpen ? null : group.key);
+                    // Si tiene banco → abrir vista de banco (todos los diarios)
+                    // Si no tiene banco → abrir diario individual
+                    if (group.bank_id) {
+                        onSelectJournal?.({ bank_id: group.bank_id });
                     } else {
                         onSelectJournal?.(group.journals[0]);
                     }
@@ -96,7 +94,7 @@ export default function JournalSummary({ dateFrom, dateTo, onData, onSelectJourn
                                         <h4 className="text-[11px] font-black text-content dark:text-white uppercase tracking-widest truncate max-w-[140px]">
                                             {group.display_name}
                                         </h4>
-                                        {isMulti ? (
+                                        {group.journals.length > 1 ? (
                                             <div className="text-[9px] font-bold text-content-subtle uppercase tracking-widest opacity-60">
                                                 {group.journals.length} diarios
                                             </div>
@@ -113,14 +111,6 @@ export default function JournalSummary({ dateFrom, dateTo, onData, onSelectJourn
                                         <span className="text-[9px] font-black text-content-subtle bg-surface-2 dark:bg-white/5 px-2 py-0.5 rounded-lg border border-border/40 dark:border-white/5 uppercase tracking-tighter">
                                             {group.currency_code}
                                         </span>
-                                    )}
-                                    {isMulti && (
-                                        <svg
-                                            className={`w-3.5 h-3.5 text-content-subtle transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-                                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                        >
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                                        </svg>
                                     )}
                                 </div>
                             </div>
@@ -150,34 +140,6 @@ export default function JournalSummary({ dateFrom, dateTo, onData, onSelectJourn
                             </div>
                         </div>
 
-                        {/* ── Lista de diarios (solo si multi y expandido) ── */}
-                        {isMulti && isOpen && (
-                            <div className="border-t border-border/20 dark:border-white/5 px-3 pb-3 pt-2 space-y-1 bg-surface-1/50 dark:bg-white/[0.02]">
-                                <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle opacity-50 px-2 pb-1">
-                                    Selecciona un diario
-                                </div>
-                                {group.journals.map(j => {
-                                    const jFmt = n => `${sym}${Number(n).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                                    return (
-                                        <button
-                                            key={j.id}
-                                            onClick={() => { onSelectJournal?.(j); setExpandedKey(null); }}
-                                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-left hover:bg-brand-500/10 transition-colors group/j"
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-1.5 h-1.5 rounded-full" style={{ background: j.color || color }} />
-                                                <span className="text-[11px] font-bold text-content dark:text-white/70 group-hover/j:text-brand-500 transition-colors uppercase">
-                                                    {j.name}
-                                                </span>
-                                            </div>
-                                            <span className="text-[11px] font-black tabular-nums" style={{ color: j.color || color }}>
-                                                {jFmt(j.total_ingresos)}
-                                            </span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
                     </div>
                 );
             })}

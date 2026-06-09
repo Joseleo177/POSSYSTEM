@@ -40,6 +40,7 @@ exports.getAll = async (req, res, next) => {
       rate:            parseFloat(e.rate || 1),
       status:          e.status,
       notes:           e.notes,
+      date:            e.date ?? null,
       created_at:      e.created_at,
       category_name:   e.category?.name || '',
       category_id:     e.category_id,
@@ -80,7 +81,7 @@ exports.upsertCategory = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
-    const { description, amount, category_id, payment_journal_id, reference, notes, currency_id, rate } = req.body;
+    const { description, amount, category_id, payment_journal_id, reference, notes, currency_id, rate, date } = req.body;
     if (!description || !amount || !category_id)
       return res.status(400).json({ ok: false, message: 'Descripción, monto y categoría son obligatorios' });
 
@@ -95,6 +96,7 @@ exports.create = async (req, res, next) => {
       rate: rate || 1,
       employee_id: req.employee.id,
       status: 'activo',
+      date: date ? new Date(date) : null,
     });
 
     const full = await Income.findByPk(income.id, {

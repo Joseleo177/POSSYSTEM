@@ -23,7 +23,8 @@ export function useEgresos({ notify, journals }) {
     const [deleteConfirm, setDeleteConfirm] = useState(null);
 
     const [showCreate, setShowCreate] = useState(false);
-    const [form, setForm] = useState({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "" });
+    const today = () => new Date().toISOString().split('T')[0];
+    const [form, setForm] = useState({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "", date: today() });
     const [saving, setSaving] = useState(false);
 
     const selectedJournal = form.payment_journal_id ? journals?.find(j => j.id == form.payment_journal_id) : null;
@@ -97,10 +98,11 @@ export function useEgresos({ notify, journals }) {
                 notes: form.notes || null,
                 currency_id: selectedJournal?.currency_id || null,
                 rate: currentRate,
+                date: form.date || null,
             });
             notify("Egreso registrado correctamente");
             setShowCreate(false);
-            setForm({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "" });
+            setForm({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "", date: today() });
             loadExpenses();
         } catch (e) { notify(e.message, "err"); }
         finally { setSaving(false); }

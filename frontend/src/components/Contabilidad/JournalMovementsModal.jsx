@@ -10,13 +10,8 @@ const fmtDate = (d) => {
     return dt.toLocaleDateString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric" });
 };
 
-const fmtTime = (d) => {
-    if (!d) return "";
-    const dt = new Date(d);
-    return dt.toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit" });
-};
 
-export default function JournalMovementsModal({ journalId, onClose }) {
+export default function JournalMovementsModal({ journalId, bankId, onClose }) {
     const [movements, setMovements] = useState([]);
     const [journal, setJournal] = useState(null);
     const [total, setTotal] = useState(0);
@@ -29,13 +24,15 @@ export default function JournalMovementsModal({ journalId, onClose }) {
     const fmtLocal = (n) => `${sym}${Number(n).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     const load = useCallback(async () => {
-        if (!journalId) return;
+        if (!journalId && !bankId) return;
         setLoading(true);
         try {
             const params = { limit: LIMIT, offset: (page - 1) * LIMIT };
             if (dateFrom) params.date_from = dateFrom;
             if (dateTo)   params.date_to   = dateTo;
-            const r = await api.journals.getMovements(journalId, params);
+            const r = bankId
+                ? await api.journals.getBankMovements(bankId, params)
+                : await api.journals.getMovements(journalId, params);
             setMovements(r.data || []);
             setJournal(r.journal || null);
             setTotal(r.total || 0);
@@ -44,12 +41,12 @@ export default function JournalMovementsModal({ journalId, onClose }) {
         } finally {
             setLoading(false);
         }
-    }, [journalId, page, dateFrom, dateTo]);
+    }, [journalId, bankId, page, dateFrom, dateTo]);
 
     useEffect(() => { setPage(1); }, [dateFrom, dateTo]);
     useEffect(() => { load(); }, [load]);
 
-    if (!journalId) return null;
+    if (!journalId && !bankId) return null;
 
     const totalPages = Math.ceil(total / LIMIT);
 
@@ -121,7 +118,7 @@ export default function JournalMovementsModal({ journalId, onClose }) {
                         <table className="w-full text-left border-collapse min-w-[820px]">
                             <thead className="sticky top-0 z-10 bg-surface-2 dark:bg-surface-dark-2">
                                 <tr>
-                                    {["Fecha", "Hora", "Tipo", "Referencia", "Concepto", "Debe (Egreso)", "Haber (Ingreso)", "Saldo"].map((h) => (
+                                    {["Fecha", "Tipo", "Referencia", "Concepto", "Debe (Egreso)", "Haber (Ingreso)", "Saldo"].map((h) => (
                                         <th
                                             key={h}
                                             className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 border-b border-border/40 dark:border-white/5 ${
@@ -164,13 +161,6 @@ export default function JournalMovementsModal({ journalId, onClose }) {
                                                 <td className="px-4 py-2.5">
                                                     <span className={`text-[11px] font-bold text-content-subtle uppercase ${isVoided ? "line-through" : ""}`}>
                                                         {fmtDate(m.date)}
-                                                    </span>
-                                                </td>
-
-                                                {/* Hora */}
-                                                <td className="px-4 py-2.5">
-                                                    <span className="text-[10px] font-bold text-content-subtle opacity-60">
-                                                        {fmtTime(m.date)}
                                                     </span>
                                                 </td>
 

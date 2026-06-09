@@ -164,7 +164,8 @@ export const api = {
   journals: {
     getAll:       ()              => request("/payment-journals"),
     getSummary:   (params={})     => request("/payment-journals/summary?" + new URLSearchParams(params)),
-    getMovements: (id, params={}) => request(`/payment-journals/${id}/movements?` + new URLSearchParams(params)),
+    getMovements:     (id, params={})     => request(`/payment-journals/${id}/movements?` + new URLSearchParams(params)),
+    getBankMovements: (bankId, params={}) => request(`/payment-journals/bank/${bankId}/movements?` + new URLSearchParams(params)),
     create:       (body)          => request("/payment-journals",       { method: "POST",   body: JSON.stringify(body) }),
     update:       (id, body)      => request(`/payment-journals/${id}`, { method: "PUT",    body: JSON.stringify(body) }),
     remove:       (id)            => request(`/payment-journals/${id}`, { method: "DELETE" }),

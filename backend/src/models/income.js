@@ -23,6 +23,7 @@ module.exports = (sequelize, DataTypes) => {
     company_id:  { type: DataTypes.INTEGER, allowNull: true },
     notes:       { type: DataTypes.TEXT, allowNull: true },
     status:      { type: DataTypes.STRING(20), defaultValue: 'activo' },
+    date:        { type: DataTypes.DATE, allowNull: true },
   }, {
     sequelize,
     tableName: 'incomes',

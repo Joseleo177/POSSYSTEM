@@ -153,7 +153,7 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                                         <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{exp.journal_name || "—"}</span>
                                     </td>
                                     <td>
-                                        <span className="text-[11px] font-bold text-content-subtle uppercase">{fmtDateShort(exp.created_at)}</span>
+                                        <span className="text-[11px] font-bold text-content-subtle uppercase">{fmtDateShort(exp.date ?? exp.created_at)}</span>
                                     </td>
                                     <td className="text-right pr-6">
                                         <div className="flex flex-col items-end">
@@ -229,9 +229,15 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                             <CustomSelect value={form.payment_journal_id} onChange={v => setForm(p => ({ ...p, payment_journal_id: v }))} placeholder="Sin diario" options={[{ value: "", label: "Sin diario" }, ...(journals || []).map(j => ({ value: String(j.id), label: j.name }))]} />
                         </div>
                     </div>
-                    <div>
-                        <label className="label">Notas</label>
-                        <textarea className="input resize-none min-h-[72px]" placeholder="Observaciones adicionales..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="label">Fecha del Movimiento</label>
+                            <input type="date" className="input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
+                        </div>
+                        <div>
+                            <label className="label">Notas</label>
+                            <textarea className="input resize-none" rows={1} placeholder="Observaciones..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+                        </div>
                     </div>
                     <div className="flex gap-2.5 pt-2 border-t border-border/20 dark:border-white/5">
                         <Button variant="ghost" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button>

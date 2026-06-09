@@ -38,7 +38,8 @@ export default function EstadoCuentaTab() {
             {/* Modal de movimientos */}
             {selectedJournal && (
                 <JournalMovementsModal
-                    journalId={selectedJournal.id}
+                    journalId={selectedJournal.bank_id ? null : selectedJournal.id}
+                    bankId={selectedJournal.bank_id ?? null}
                     onClose={() => setSelectedJournal(null)}
                 />
             )}
