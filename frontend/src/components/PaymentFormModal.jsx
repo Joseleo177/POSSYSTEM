@@ -16,6 +16,7 @@ const getEmpty = () => ({
   change_journal_id: "",
   change_amount_override: "", // monto real a entregar (en moneda del diario de cambio)
   keep_change: false,
+  credit_change: false,
 });
 
 export default function PaymentFormModal({ sale, onClose, onSuccess }) {
@@ -82,10 +83,10 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
       if (!form.amount) return notify("El monto es requerido", "err");
       if (!isCash && !form.reference_number?.trim()) return notify("El número de referencia es requerido", "err");
     }
-    if (changeBase > 0 && !form.keep_change && !form.change_journal_id) return notify("Selecciona el diario del que saldrá el cambio", "err");
+    if (changeBase > 0 && !form.keep_change && !form.credit_change && !form.change_journal_id) return notify("Selecciona el diario del que saldrá el cambio", "err");
 
     const finalAmountBase = form.keep_change ? Math.min(receivedBase, pendingAfterCredit) : amountBase;
-    const payAmountToSend = (changeBase > 0 && !form.keep_change && form.change_journal_id)
+    const payAmountToSend = (changeBase > 0 && !form.keep_change && (form.change_journal_id || form.credit_change))
       ? receivedBase
       : finalAmountBase;
 
@@ -101,9 +102,10 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
         notes:              form.notes || null,
         payment_journal_id: creditCoversAll ? null : (form.payment_journal_id || null),
         received_amount:    receivedBase > 0 ? receivedBase : undefined,
-        change_given:       (changeBase > 0 && !form.keep_change) ? actualChangeBase : undefined,
-        change_journal_id:  (changeBase > 0 && !form.keep_change) ? form.change_journal_id : undefined,
+        change_given:       (changeBase > 0 && !form.keep_change && !form.credit_change) ? actualChangeBase : undefined,
+        change_journal_id:  (changeBase > 0 && !form.keep_change && !form.credit_change) ? form.change_journal_id : undefined,
         surplus_kept:       (changeBase > 0 && form.keep_change) ? changeBase : undefined,
+        change_to_credit:   (changeBase > 0 && form.credit_change) ? changeBase : undefined,
         credit_amount:      creditApplied > 0 ? creditApplied : undefined,
       });
       if (res.sale_status === "pagado") notify("¡Factura pagada completamente!");
@@ -119,7 +121,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     creditCoversAll ||
     (form.payment_journal_id && !isNaN(amountNum) && amountNum > 0 &&
       (isCash || form.reference_number?.trim()) &&
-      (changeBase <= 0 || form.keep_change || form.change_journal_id))
+      (changeBase <= 0 || form.keep_change || form.credit_change || form.change_journal_id))
   );
 
   // Para mostrar los montos de la factura
@@ -266,13 +268,13 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
               </div>
             </div>
 
-            {/* Toggle dar cambio / quedarse */}
+            {/* Toggle dar cambio / quedarse / crédito */}
             <div className="flex p-1 bg-white/[0.02] dark:bg-white/[0.04] rounded-xl border border-white/[0.06]">
               <button type="button"
-                onClick={() => setForm(p => ({ ...p, keep_change: false, change_journal_id: "", change_amount_override: "" }))}
+                onClick={() => setForm(p => ({ ...p, keep_change: false, credit_change: false, change_journal_id: "", change_amount_override: "" }))}
                 className={[
                   "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
-                  !form.keep_change
+                  !form.keep_change && !form.credit_change
                     ? "bg-warning text-black shadow-lg"
                     : "text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
                 ].join(" ")}
@@ -280,7 +282,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
                 Dar cambio
               </button>
               <button type="button"
-                onClick={() => setForm(p => ({ ...p, keep_change: true, change_journal_id: "", change_amount_override: "" }))}
+                onClick={() => setForm(p => ({ ...p, keep_change: true, credit_change: false, change_journal_id: "", change_amount_override: "" }))}
                 className={[
                   "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
                   form.keep_change
@@ -290,10 +292,30 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
               >
                 Quedarse
               </button>
+              {sale?.customer_id && (
+                <button type="button"
+                  onClick={() => setForm(p => ({ ...p, keep_change: false, credit_change: true, change_journal_id: "", change_amount_override: "" }))}
+                  className={[
+                    "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
+                    form.credit_change
+                      ? "bg-brand-500 text-black shadow-lg"
+                      : "text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+                  ].join(" ")}
+                >
+                  Crédito
+                </button>
+              )}
             </div>
 
+            {/* Nota de crédito al cliente */}
+            {form.credit_change && (
+              <p className="text-[10px] font-black text-brand-500">
+                ✓ {paySym}{changeDisplay.toFixed(2)} se añadirá al crédito del cliente.
+              </p>
+            )}
+
             {/* Selector de diario de cambio */}
-            {!form.keep_change && (
+            {!form.keep_change && !form.credit_change && (
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-warning/80 mb-1.5">DAR CAMBIO DESDE *</p>
                 <div className="flex flex-wrap gap-1.5">

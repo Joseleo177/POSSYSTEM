@@ -216,18 +216,20 @@ async function getMovements(req) {
     preBalance = parseFloat(prevBal?.balance || 0);
   }
 
-  // Window function calcula el saldo acumulado correcto en orden ASC; el query externo ordena DESC y pagina.
+  // Window function calcula el saldo acumulado en orden ASC; el query externo ordena DESC y pagina.
+  // created_at se usa como tiebreaker para evitar orden arbitrario cuando dos movimientos comparten fecha.
   const rows = await sequelize.query(`
     SELECT * FROM (
       SELECT *,
         SUM(CASE WHEN type = 'ingreso' THEN amount_local ELSE -amount_local END)
-          OVER (ORDER BY date ASC, id ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+          OVER (ORDER BY date ASC, created_at ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
           + :pre_balance AS balance
       FROM (
         SELECT
           p.id,
           'ingreso'                                               AS type,
           COALESCE(p.reference_date, p.created_at)              AS date,
+          p.created_at                                           AS created_at,
           COALESCE(s.invoice_number, CONCAT('PAY-', p.id))      AS reference,
           COALESCE(c.name, 'Pago de venta')                     AS concept,
           (p.amount * COALESCE(p.exchange_rate, 1))             AS amount_local,
@@ -247,6 +249,7 @@ async function getMovements(req) {
           i.id,
           'ingreso'                                               AS type,
           COALESCE(i.date, i.created_at)                        AS date,
+          i.created_at                                           AS created_at,
           COALESCE(i.reference, CONCAT('INC-', i.id))           AS reference,
           i.description                                          AS concept,
           (i.amount * COALESCE(i.rate, 1))                      AS amount_local,
@@ -264,6 +267,7 @@ async function getMovements(req) {
           e.id,
           'egreso'                                               AS type,
           COALESCE(e.date, e.created_at)                        AS date,
+          e.created_at                                           AS created_at,
           COALESCE(e.reference, CONCAT('EGR-', e.id))          AS reference,
           e.description                                          AS concept,
           (e.amount * COALESCE(e.rate, 1))                     AS amount_local,
@@ -276,7 +280,7 @@ async function getMovements(req) {
         WHERE e.payment_journal_id = :id AND e.status = 'activo' ${dateExp} ${te}
       ) all_movements
     ) with_balance
-    ORDER BY date DESC, id DESC
+    ORDER BY date DESC, created_at DESC
     LIMIT :limit OFFSET :offset
   `, {
     replacements: { id, pre_balance: preBalance, limit: parseInt(limit), offset: parseInt(offset) },
@@ -383,10 +387,11 @@ async function getBankMovements(req) {
     SELECT * FROM (
       SELECT *,
         SUM(CASE WHEN type = 'ingreso' THEN amount_local ELSE -amount_local END)
-          OVER (ORDER BY date ASC, id ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+          OVER (ORDER BY date ASC, created_at ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
           + ${preBalance} AS balance
       FROM (
         SELECT p.id, 'ingreso' AS type, COALESCE(p.reference_date, p.created_at) AS date,
+          p.created_at                                      AS created_at,
           COALESCE(s.invoice_number, CONCAT('PAY-', p.id)) AS reference,
           COALESCE(c.name, 'Pago de venta')                AS concept,
           (p.amount * COALESCE(p.exchange_rate, 1))        AS amount_local,
@@ -402,6 +407,7 @@ async function getBankMovements(req) {
         UNION ALL
 
         SELECT i.id, 'ingreso' AS type, COALESCE(i.date, i.created_at) AS date,
+          i.created_at                                 AS created_at,
           COALESCE(i.reference, CONCAT('INC-', i.id)) AS reference,
           i.description AS concept,
           (i.amount * COALESCE(i.rate, 1)) AS amount_local,
@@ -413,6 +419,7 @@ async function getBankMovements(req) {
         UNION ALL
 
         SELECT e.id, 'egreso' AS type, COALESCE(e.date, e.created_at) AS date,
+          e.created_at                                 AS created_at,
           COALESCE(e.reference, CONCAT('EGR-', e.id)) AS reference,
           e.description AS concept,
           (e.amount * COALESCE(e.rate, 1)) AS amount_local,
@@ -422,7 +429,7 @@ async function getBankMovements(req) {
         WHERE e.payment_journal_id IN (${jList}) AND e.status = 'activo' ${dateExp} ${te}
       ) all_movements
     ) with_balance
-    ORDER BY date DESC, id DESC
+    ORDER BY date DESC, created_at DESC
     LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}
   `, { type: Sequelize.QueryTypes.SELECT });
 

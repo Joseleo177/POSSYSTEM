@@ -194,12 +194,31 @@ export default function SaleDetailModal({ saleId, onClose }) {
                             </div>
 
                             {/* Pagos registrados */}
-                            {payments.length > 0 && (
+                            {(payments.length > 0 || parseFloat(sale.credit_applied || 0) > 0) && (
                                 <div className="px-5 pb-5 border-t border-border/10 dark:border-white/5">
                                     <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-2 mt-4">
-                                        Pagos registrados ({payments.length})
+                                        Pagos registrados ({payments.length + (parseFloat(sale.credit_applied || 0) > 0 ? 1 : 0)})
                                     </div>
                                     <div className="space-y-2">
+                                        {/* Crédito de cliente aplicado */}
+                                        {parseFloat(sale.credit_applied || 0) > 0 && (
+                                            <div className="bg-brand-500/5 rounded-xl px-3 py-2.5 border border-brand-500/20">
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <div className="text-[11px] font-bold text-brand-500 flex items-center gap-1.5">
+                                                            <span className="w-2 h-2 rounded-full inline-block shrink-0 bg-brand-500" />
+                                                            Crédito de cliente
+                                                        </div>
+                                                        <div className="text-[10px] text-content-subtle dark:text-white/30">
+                                                            Aplicado al saldo de la factura
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-[13px] font-black text-brand-500 tabular-nums">
+                                                        {fmt(parseFloat(sale.credit_applied))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                         {payments.map((p, idx) => {
                                             const payRate    = p.exchange_rate || 1;
                                             const paySym     = p.journal_sym || baseCurrency?.symbol || "Ref.";

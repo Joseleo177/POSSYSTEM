@@ -3,6 +3,7 @@ import { api } from "../services/api";
 import Page from "./ui/Page";
 import { Button } from "./ui/Button";
 import { resolveImageUrl } from "../helpers";
+import { useApp } from "../context/AppContext";
 
 const SECTIONS = [
     ["empresa", "Empresa"],
@@ -30,6 +31,7 @@ const FIELDS_FACTURA = [
 ];
 
 export default function SettingsTab({ notify }) {
+    const { loadCurrencies } = useApp();
     const [settings, setSettings] = useState({});
     const [currencies, setCurrencies] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -73,6 +75,7 @@ export default function SettingsTab({ notify }) {
             await api.currencies.updateRate(id, { exchange_rate: parseFloat(rate) });
             notify("Tipo de cambio actualizado correctamente");
             await load();
+            loadCurrencies();
         } catch (e) { notify(e.message, "err"); }
     };
 
@@ -84,6 +87,7 @@ export default function SettingsTab({ notify }) {
             notify(res.updated.length ? `Tasas actualizadas: ${names}` : "Las tasas ya están al día");
             setLastRefresh(new Date());
             setCurrencies(res.data);
+            loadCurrencies();
         } catch (e) { notify(e.message || "Error al consultar la API de tasas", "err"); }
         finally { setRefreshing(false); }
     };
@@ -94,6 +98,7 @@ export default function SettingsTab({ notify }) {
             notify("Moneda agregada correctamente");
             setNewCurrency({ code: "", name: "", symbol: "", exchange_rate: "" });
             await load();
+            loadCurrencies();
         } catch (e) { notify(e.message, "err"); }
     };
 
@@ -389,7 +394,7 @@ export default function SettingsTab({ notify }) {
                                                 <td className="px-4 py-2">
                                                     {!c.is_base && (
                                                         <button
-                                                            onClick={() => api.currencies.toggle(c.id).then(load).catch(e => notify(e.message, "err"))}
+                                                            onClick={() => api.currencies.toggle(c.id).then(() => { load(); loadCurrencies(); }).catch(e => notify(e.message, "err"))}
                                                             className={`h-6 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all ${c.active ? "bg-danger/10 text-danger border-danger/20 hover:bg-danger hover:text-white" : "bg-success/10 text-success border-success/20 hover:bg-success hover:text-black"}`}
                                                         >
                                                             {c.active ? "Suspender" : "Habilitar"}
@@ -551,10 +556,10 @@ function RateEditor({ currency, onSave }) {
 
     if (!editing) return (
         <span
-            onClick={() => setEditing(true)}
+            onClick={() => { setVal(currency.exchange_rate); setEditing(true); }}
             className="cursor-pointer text-info border-b border-dashed border-info/50 hover:text-blue-400 transition-colors"
         >
-            {parseFloat(currency.exchange_rate).toFixed(6)}
+            {parseFloat(currency.exchange_rate).toFixed(4)}
         </span>
     );
 

@@ -1,4 +1,4 @@
-const { Sequelize, Customer, Sale, SaleItem, Purchase, Payment, Currency } = require("../../models");
+const { Sequelize, sequelize, Customer, Sale, SaleItem, Purchase, Payment, Currency, Expense, ExpenseCategory, PaymentJournal } = require("../../models");
 
 async function getAll({ search, type, limit = 100, offset = 0 }, req) {
   const company_id  = req.employee?.company_id ?? null;
@@ -186,4 +186,65 @@ async function adjustCredit(id, amount) {
   return { data: customer };
 }
 
-module.exports = { getAll, getOne, getCustomerPurchases, createCustomer, updateCustomer, deleteCustomer, adjustCredit };
+async function creditRefund(id, { amount, journal_id, reference_date, notes, employee_id }) {
+  if (!amount || isNaN(amount) || parseFloat(amount) <= 0)
+    { const e = new Error("El monto debe ser mayor a cero"); e.status = 400; throw e; }
+  if (!journal_id)
+    { const e = new Error("Selecciona el diario de devolución"); e.status = 400; throw e; }
+  if (!reference_date)
+    { const e = new Error("La fecha de referencia es requerida"); e.status = 400; throw e; }
+
+  const refundAmt = parseFloat(parseFloat(amount).toFixed(6));
+
+  const t = await sequelize.transaction();
+  try {
+    const customer = await Customer.findByPk(id, { transaction: t, lock: true });
+    if (!customer) { const e = new Error("Cliente no encontrado"); e.status = 404; throw e; }
+
+    const available = parseFloat(customer.credit_balance || 0);
+    if (refundAmt > available + 0.001)
+      { const e = new Error(`Crédito insuficiente. Disponible: ${available.toFixed(2)}`); e.status = 400; throw e; }
+
+    const journal = await PaymentJournal.findByPk(journal_id, {
+      include: [{ model: Currency, attributes: ['id', 'exchange_rate'], required: false }],
+      transaction: t,
+    });
+    if (!journal) { const e = new Error("Diario no encontrado"); e.status = 404; throw e; }
+
+    const rate       = parseFloat(journal.Currency?.exchange_rate || 1);
+    const currencyId = journal.currency_id || null;
+
+    const [cat] = await ExpenseCategory.findOrCreate({
+      where:    { name: "Devolución de Crédito" },
+      defaults: { name: "Devolución de Crédito", active: true },
+      transaction: t,
+    });
+
+    await Expense.create({
+      description:        `Devolución de crédito — ${customer.name}`,
+      amount:             refundAmt,
+      rate,
+      category_id:        cat.id,
+      payment_journal_id: journal_id,
+      currency_id:        currencyId,
+      employee_id:        employee_id || null,
+      date:               reference_date ? new Date(reference_date) : null,
+      notes:              notes?.trim() || null,
+      status:             'activo',
+    }, { transaction: t });
+
+    await Customer.decrement(
+      { credit_balance: refundAmt },
+      { where: { id }, transaction: t }
+    );
+
+    await t.commit();
+    const updated = await Customer.findByPk(id);
+    return { data: updated };
+  } catch (err) {
+    await t.rollback();
+    throw err;
+  }
+}
+
+module.exports = { getAll, getOne, getCustomerPurchases, createCustomer, updateCustomer, deleteCustomer, adjustCredit, creditRefund };

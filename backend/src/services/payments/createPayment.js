@@ -19,6 +19,7 @@ module.exports = async function createPayment(body) {
       change_given,       // cambio a devolver (en moneda base)
       change_journal_id,  // diario del que sale el cambio
       surplus_kept,       // sobrante que se queda en caja (en moneda base)
+      change_to_credit,   // sobrante que va al crédito del cliente (en moneda base)
       // Crédito de cliente
       credit_amount,      // monto a descontar del credit_balance del cliente
     } = body;
@@ -85,20 +86,7 @@ module.exports = async function createPayment(body) {
       if (creditAmt > available + 0.001) { const e = new Error(`Crédito insuficiente. Disponible: ${available.toFixed(2)}`); e.status = 400; throw e; }
       creditApplied = parseFloat(Math.min(creditAmt, pendingBalance).toFixed(6));
       await Customer.decrement({ credit_balance: creditApplied }, { where: { id: customer.id }, transaction: t });
-      await Payment.create({
-        sale_id,
-        customer_id:        sale.customer_id,
-        amount:             creditApplied,
-        currency_id:        sale.currency_id || null,
-        exchange_rate:      sale.exchange_rate || 1,
-        payment_journal_id: null,
-        employee_id:        employee_id || null,
-        reference_date,
-        reference_number:   null,
-        notes:              `Crédito de cliente aplicado`,
-        change_given:       null,
-        change_journal_id:  null,
-      }, { transaction: t });
+      await Sale.increment({ credit_applied: creditApplied }, { where: { id: sale_id }, transaction: t });
     }
 
     // getSaleBalance ya descuenta change_given de pagos previos.
@@ -168,6 +156,13 @@ module.exports = async function createPayment(body) {
         },
         { transaction: t }
       );
+    }
+
+    // Si el sobrante va al crédito del cliente
+    const creditChangeAmt = parseFloat(change_to_credit || 0);
+    if (creditChangeAmt > 0) {
+      if (!sale.customer_id) throw new Error("La venta no tiene cliente para acreditar el sobrante");
+      await Customer.increment({ credit_balance: creditChangeAmt }, { where: { id: sale.customer_id }, transaction: t });
     }
 
     // Si el cajero se quedó con el sobrante: registrar como ingreso extra en el mismo diario

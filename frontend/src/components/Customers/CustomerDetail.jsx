@@ -4,19 +4,49 @@ import { exportToCSV } from "../../utils/exportUtils";
 import { fmtBase, fmtSale as fmtSaleHelper } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import SaleDetailModal from "./SaleDetailModal";
+import Modal from "../ui/Modal";
 import { api } from "../../services/api";
 
 const SECTION = "bg-surface-2 dark:bg-white/[0.04] rounded-2xl border border-border/10 dark:border-white/[0.06]";
 const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-subtle opacity-40";
 
 export default function CustomerDetail({ detail, detailSales, onClose, onPay, onRefresh }) {
-    const { baseCurrency, notify } = useApp();
+    const { baseCurrency, notify, activeJournals, activeCurrencies } = useApp();
     const [selectedSaleId, setSelectedSaleId] = useState(null);
     const [clearingCredit, setClearingCredit] = useState(false);
     const [confirmClear, setConfirmClear] = useState(false);
+    const [showRefund, setShowRefund] = useState(false);
+    const [refundForm, setRefundForm] = useState({ amount: "", journal_id: "", reference_date: new Date().toISOString().split("T")[0], notes: "" });
+    const [refunding, setRefunding] = useState(false);
 
     const fmtPrice = (n) => fmtBase(n, baseCurrency);
     const fmtSale  = (sale, amount) => fmtSaleHelper(sale, amount, baseCurrency);
+
+    // Moneda/tasa del diario seleccionado para la devolución
+    const refundJournal  = activeJournals.find(j => j.id === refundForm.journal_id);
+    const refundCurrency = refundJournal?.currency_id ? activeCurrencies.find(c => c.id === parseInt(refundJournal.currency_id)) : null;
+    const refundRate     = (!refundCurrency || refundCurrency.is_base) ? 1 : parseFloat(refundCurrency.exchange_rate || 1);
+    const refundSym      = refundCurrency?.symbol || baseCurrency?.symbol || "Ref.";
+
+    // amount en el form está en moneda LOCAL del diario; se envía al backend en base dividiendo por rate
+    const refundAmountBase = parseFloat(String(refundForm.amount).replace(",", ".") || 0) / refundRate;
+
+    const handleRefund = async () => {
+        setRefunding(true);
+        try {
+            await api.customers.creditRefund(detail.id, {
+                amount:         refundAmountBase,
+                journal_id:     refundForm.journal_id,
+                reference_date: refundForm.reference_date,
+                notes:          refundForm.notes || null,
+            });
+            notify("Devolución registrada correctamente");
+            setShowRefund(false);
+            setRefundForm({ amount: "", journal_id: "", reference_date: new Date().toISOString().split("T")[0], notes: "" });
+            onRefresh?.();
+        } catch (e) { notify(e.message, "err"); }
+        setRefunding(false);
+    };
 
     const handleClearCredit = async () => {
         setClearingCredit(true);
@@ -111,11 +141,11 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay, on
 
                         {/* Crédito disponible */}
                         {parseFloat(detail.credit_balance || 0) > 0.001 && (
-                            <div className="text-right">
+                            <div className="flex-1">
                                 <p className={`${LABEL} mb-0.5`}>Crédito Disponible</p>
                                 {confirmClear ? (
-                                    <div className="flex items-center gap-1.5 justify-end">
-                                        <span className="text-[10px] text-content-subtle dark:text-white/40">¿Anular?</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] text-content-subtle dark:text-white/40">¿Anular todo?</span>
                                         <button onClick={handleClearCredit} disabled={clearingCredit}
                                             className="h-6 px-2 rounded-lg bg-danger text-white text-[10px] font-black uppercase transition-all hover:brightness-110 disabled:opacity-50">
                                             {clearingCredit ? "…" : "Sí"}
@@ -126,8 +156,13 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay, on
                                         </button>
                                     </div>
                                 ) : (
-                                    <div className="flex items-center gap-2 justify-end">
+                                    <div className="flex items-center gap-2">
                                         <p className="text-[15px] font-black text-brand-500 tabular-nums">{fmtPrice(detail.credit_balance)}</p>
+                                        <button onClick={() => { setShowRefund(true); setConfirmClear(false); }}
+                                            title="Devolver crédito en efectivo"
+                                            className="h-6 px-2 rounded-lg border border-brand-500/30 text-brand-500 text-[10px] font-black uppercase tracking-wide hover:bg-brand-500/10 transition-all">
+                                            Devolver
+                                        </button>
                                         <button onClick={() => setConfirmClear(true)}
                                             title="Anular crédito"
                                             className="w-5 h-5 rounded-md flex items-center justify-center text-content-subtle/40 hover:text-danger hover:bg-danger/10 transition-all">
@@ -233,6 +268,106 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay, on
         {selectedSaleId && (
             <SaleDetailModal saleId={selectedSaleId} onClose={() => setSelectedSaleId(null)} />
         )}
+
+        {/* ── Modal devolución de crédito ── */}
+        <Modal
+            open={showRefund}
+            onClose={() => setShowRefund(false)}
+            title="Devolver crédito en efectivo"
+            width={440}
+        >
+            <div className="space-y-4">
+                {/* Crédito disponible */}
+                <div className="rounded-xl bg-brand-500/5 border border-brand-500/20 px-4 py-3 flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-500">Crédito disponible</span>
+                    <span className="text-[15px] font-black text-brand-500 tabular-nums">{fmtPrice(detail.credit_balance)}</span>
+                </div>
+
+                {/* Monto + fecha */}
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">
+                            Monto a devolver * {refundSym && <span className="text-brand-500 normal-case">({refundSym})</span>}
+                        </p>
+                        <input
+                            type="text" inputMode="decimal"
+                            value={refundForm.amount}
+                            placeholder={refundForm.journal_id ? (parseFloat(detail.credit_balance || 0) * refundRate).toFixed(2) : "0.00"}
+                            onChange={e => setRefundForm(p => ({ ...p, amount: e.target.value.replace(/[^\d.,]/g, "") }))}
+                            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+                        />
+                        {refundForm.journal_id && refundRate !== 1 && refundForm.amount && (
+                            <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1 tabular-nums">
+                                ≈ {baseCurrency?.symbol}{refundAmountBase.toFixed(2)}
+                            </p>
+                        )}
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Fecha *</p>
+                        <input
+                            type="date"
+                            value={refundForm.reference_date}
+                            onChange={e => setRefundForm(p => ({ ...p, reference_date: e.target.value }))}
+                            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
+                        />
+                    </div>
+                </div>
+
+                {/* Diario */}
+                <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Diario de salida *</p>
+                    <div className="flex flex-wrap gap-1.5">
+                        {activeJournals.map(j => {
+                            const jCur  = j.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
+                            const jRate = (!jCur || jCur.is_base) ? 1 : parseFloat(jCur.exchange_rate || 1);
+                            const autoAmt = (parseFloat(detail.credit_balance || 0) * jRate).toFixed(2);
+                            return (
+                                <button key={j.id} type="button"
+                                    onClick={() => setRefundForm(p => ({ ...p, journal_id: j.id, amount: autoAmt }))}
+                                    style={refundForm.journal_id === j.id && j.color ? { borderColor: j.color, backgroundColor: j.color, color: "#000" } : undefined}
+                                    className={[
+                                        "px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide border-2 transition-all",
+                                        refundForm.journal_id === j.id && !j.color
+                                            ? "border-brand-500 bg-brand-500 text-black"
+                                            : refundForm.journal_id !== j.id
+                                            ? "border-border/40 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-400 dark:hover:border-brand-400/50"
+                                            : ""
+                                    ].join(" ")}
+                                >
+                                    {j.name}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Notas */}
+                <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Notas</p>
+                    <input
+                        type="text"
+                        value={refundForm.notes}
+                        onChange={e => setRefundForm(p => ({ ...p, notes: e.target.value }))}
+                        placeholder="Observaciones..."
+                        className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+                    />
+                </div>
+
+                {/* Acciones */}
+                <div className="flex gap-2.5 pt-2 border-t border-border/20 dark:border-white/5">
+                    <button onClick={() => setShowRefund(false)}
+                        className="flex-1 h-10 rounded-xl border border-border/40 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all">
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={handleRefund}
+                        disabled={refunding || !refundForm.amount || !refundForm.journal_id || !refundForm.reference_date}
+                        className="flex-[2] h-10 rounded-xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-wide hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                        {refunding ? "Registrando…" : "Confirmar devolución"}
+                    </button>
+                </div>
+            </div>
+        </Modal>
         </>
     );
 }

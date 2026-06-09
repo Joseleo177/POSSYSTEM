@@ -12,7 +12,10 @@ async function getSaleBalance(saleId, transaction) {
     where: { sale_id: saleId, change_journal_id: { [Op.not]: null } },
     transaction,
   }) || 0);
-  return paid - changeGiven;
+  // Crédito de cliente aplicado directamente sobre la venta (no genera Payment record)
+  const saleRecord = await Sale.findByPk(saleId, { attributes: ['credit_applied'], transaction });
+  const creditApplied = parseFloat(saleRecord?.credit_applied || 0);
+  return paid - changeGiven + creditApplied;
 }
 
 module.exports = {

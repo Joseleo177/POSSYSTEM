@@ -26,6 +26,7 @@ module.exports = (sequelize, DataTypes) => {
     correlative_number: { type: DataTypes.INTEGER },
     invoice_number:     { type: DataTypes.STRING(50) },
     idempotency_key:    { type: DataTypes.STRING(64), allowNull: true, unique: true },
+    credit_applied:     { type: DataTypes.DECIMAL(14, 6), allowNull: false, defaultValue: 0 },
     created_at:         { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,
