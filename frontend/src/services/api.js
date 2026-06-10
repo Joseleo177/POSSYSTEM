@@ -160,6 +160,7 @@ export const api = {
     create:       (body)     => request("/currencies",               { method: "POST", body: JSON.stringify(body) }),
     updateRate:   (id, body) => request(`/currencies/${id}/rate`,   { method: "PUT",  body: JSON.stringify(body) }),
     toggle:       (id)       => request(`/currencies/${id}/toggle`, { method: "PUT" }),
+    remove:       (id)       => request(`/currencies/${id}`,        { method: "DELETE" }),
     refreshRates: ()         => request("/currencies/refresh",       { method: "POST" }),
   },
   journals: {

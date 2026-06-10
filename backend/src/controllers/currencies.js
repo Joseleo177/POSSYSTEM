@@ -150,4 +150,27 @@ const refreshRates = async (req, res) => {
   }
 };
 
-module.exports = { getAll, updateRate, toggle, create, refreshRates };
+// DELETE /api/currencies/:id
+const remove = async (req, res) => {
+  try {
+    const currency = await Currency.findOne({ where: { id: req.params.id, is_base: false } });
+    if (!currency) return res.status(404).json({ ok: false, message: "Moneda no encontrada o es moneda base" });
+
+    const { Payment, Sale } = require("../models");
+    const [paymentCount, saleCount] = await Promise.all([
+      Payment.count({ where: { currency_id: currency.id } }),
+      Sale.count({ where: { currency_id: currency.id } }),
+    ]);
+    if (paymentCount > 0 || saleCount > 0) {
+      return res.status(400).json({ ok: false, message: "No se puede eliminar: tiene movimientos asociados. Puedes suspenderla en su lugar." });
+    }
+
+    await currency.destroy();
+    res.json({ ok: true, message: "Moneda eliminada" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, message: "Error al eliminar moneda" });
+  }
+};
+
+module.exports = { getAll, updateRate, toggle, create, refreshRates, remove };

@@ -144,6 +144,7 @@ export function AppProvider({ children }) {
     footer:   settings.receipt_footer || "¡Gracias por su compra!",
     tax_name: settings.tax_name      || "",
     tax_rate: settings.tax_rate      || "",
+    show_header: (settings.receipt_show_header || "true") === "true",
   };
 
   return (

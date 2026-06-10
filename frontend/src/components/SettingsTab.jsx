@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
 import Page from "./ui/Page";
 import { Button } from "./ui/Button";
+import Modal from "./ui/Modal";
+import ConfirmModal from "./ui/ConfirmModal";
 import { resolveImageUrl } from "../helpers";
 import { useApp } from "../context/AppContext";
 
@@ -31,7 +33,7 @@ const FIELDS_FACTURA = [
 ];
 
 export default function SettingsTab({ notify }) {
-    const { loadCurrencies } = useApp();
+    const { loadCurrencies, loadSettings } = useApp();
     const [settings, setSettings] = useState({});
     const [currencies, setCurrencies] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -39,6 +41,8 @@ export default function SettingsTab({ notify }) {
     const [lastRefresh, setLastRefresh] = useState(null);
     const [section, setSection] = useState("empresa");
     const [newCurrency, setNewCurrency] = useState({ code: "", name: "", symbol: "", exchange_rate: "" });
+    const [showNewCurrency, setShowNewCurrency] = useState(false);
+    const [deleteCurrencyDialog, setDeleteCurrencyDialog] = useState(null);
 
     const load = async () => {
         try {
@@ -55,6 +59,7 @@ export default function SettingsTab({ notify }) {
         try {
             const { logo_url, logo_filename, ...rest } = settings;
             await api.settings.update(rest);
+            loadSettings();
             notify("Configuración guardada correctamente");
         } catch (e) { notify(e.message, "err"); }
         finally { setLoading(false); }
@@ -97,9 +102,23 @@ export default function SettingsTab({ notify }) {
             await api.currencies.create({ ...newCurrency, exchange_rate: parseFloat(newCurrency.exchange_rate) });
             notify("Moneda agregada correctamente");
             setNewCurrency({ code: "", name: "", symbol: "", exchange_rate: "" });
+            setShowNewCurrency(false);
             await load();
             loadCurrencies();
         } catch (e) { notify(e.message, "err"); }
+    };
+
+    const removeCurrency = async () => {
+        try {
+            await api.currencies.remove(deleteCurrencyDialog.id);
+            notify("Moneda eliminada");
+            setDeleteCurrencyDialog(null);
+            await load();
+            loadCurrencies();
+        } catch (e) {
+            notify(e.message, "err");
+            setDeleteCurrencyDialog(null);
+        }
     };
 
     // ── Backup ─────────────────────────────────────────────────
@@ -323,6 +342,32 @@ export default function SettingsTab({ notify }) {
                                 </div>
                             </div>
 
+                            {/* Encabezado de empresa en el ticket */}
+                            <div className="mb-4">
+                                <label className="label mb-1.5">Encabezado de empresa en el ticket</label>
+                                <button
+                                    type="button"
+                                    onClick={() => setSettings(p => ({ ...p, receipt_show_header: (p.receipt_show_header || "true") === "true" ? "false" : "true" }))}
+                                    className={`w-full py-2.5 px-3 rounded-xl border text-left transition-all flex items-center justify-between ${
+                                        (settings.receipt_show_header || "true") === "true"
+                                            ? "border-brand-500 bg-brand-500/10"
+                                            : "border-border/30 dark:border-white/10"
+                                    }`}
+                                >
+                                    <div>
+                                        <div className={`text-[12px] font-black ${(settings.receipt_show_header || "true") === "true" ? "text-brand-500" : "text-content-subtle dark:text-white/40"}`}>
+                                            {(settings.receipt_show_header || "true") === "true" ? "Imprimir encabezado" : "Sin encabezado"}
+                                        </div>
+                                        <div className="text-[10px] font-semibold opacity-70 text-content-subtle dark:text-white/40">
+                                            Logo, nombre, RIF, dirección y teléfonos al inicio del ticket
+                                        </div>
+                                    </div>
+                                    <div className={`w-9 h-5 rounded-full relative transition-all shrink-0 ${(settings.receipt_show_header || "true") === "true" ? "bg-brand-500" : "bg-surface-3 dark:bg-white/10"}`}>
+                                        <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${(settings.receipt_show_header || "true") === "true" ? "left-[18px]" : "left-0.5"}`} />
+                                    </div>
+                                </button>
+                            </div>
+
                             <div className="flex justify-end border-t border-border/10 pt-3">
                                 <Button onClick={saveSettings} disabled={loading} className="h-8 px-6 text-[10px]">
                                     {loading ? "Guardando..." : "Guardar Configuración"}
@@ -362,6 +407,12 @@ export default function SettingsTab({ notify }) {
                                     >
                                         {refreshing ? "Sincronizando..." : "Sincronizar Online"}
                                     </button>
+                                    <button
+                                        onClick={() => setShowNewCurrency(true)}
+                                        className="h-7 px-3 rounded-lg bg-warning/10 text-warning text-[10px] font-black uppercase tracking-widest border border-warning/20 hover:bg-warning hover:text-black transition-all"
+                                    >
+                                        + Nueva Divisa
+                                    </button>
                                 </div>
                             </div>
                             <div className="overflow-x-auto">
@@ -393,12 +444,21 @@ export default function SettingsTab({ notify }) {
                                                 </td>
                                                 <td className="px-4 py-2">
                                                     {!c.is_base && (
-                                                        <button
-                                                            onClick={() => api.currencies.toggle(c.id).then(() => { load(); loadCurrencies(); }).catch(e => notify(e.message, "err"))}
-                                                            className={`h-6 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all ${c.active ? "bg-danger/10 text-danger border-danger/20 hover:bg-danger hover:text-white" : "bg-success/10 text-success border-success/20 hover:bg-success hover:text-black"}`}
-                                                        >
-                                                            {c.active ? "Suspender" : "Habilitar"}
-                                                        </button>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <button
+                                                                onClick={() => api.currencies.toggle(c.id).then(() => { load(); loadCurrencies(); }).catch(e => notify(e.message, "err"))}
+                                                                className={`h-6 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all ${c.active ? "bg-danger/10 text-danger border-danger/20 hover:bg-danger hover:text-white" : "bg-success/10 text-success border-success/20 hover:bg-success hover:text-black"}`}
+                                                            >
+                                                                {c.active ? "Suspender" : "Habilitar"}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setDeleteCurrencyDialog(c)}
+                                                                title="Eliminar moneda"
+                                                                className="w-6 h-6 flex items-center justify-center rounded-lg text-content-subtle dark:text-white/30 hover:text-danger hover:bg-danger/10 border border-transparent hover:border-danger/20 transition-all"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </td>
                                             </tr>
@@ -408,39 +468,46 @@ export default function SettingsTab({ notify }) {
                             </div>
                         </div>
 
-                        {/* Nueva Moneda */}
-                        <div className="bg-white dark:bg-surface-dark-3 rounded-xl p-4 border border-border/40 dark:border-white/10 shadow-sm">
-                            <div className="flex items-center gap-2 mb-3">
-                                <div className="w-6 h-6 rounded-lg bg-warning/10 text-warning flex items-center justify-center">
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                                </div>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-content dark:text-white">Registrar Nueva Divisa</span>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+                        {/* Modal: Nueva Divisa */}
+                        <Modal open={showNewCurrency} onClose={() => setShowNewCurrency(false)} title="Registrar Nueva Divisa" width={420}>
+                            <div className="space-y-3">
                                 {[
-                                    ["Código ISO (EUR)", "code", "text"],
-                                    ["Nombre", "name", "text"],
-                                    ["Símbolo", "symbol", "text"],
-                                    ["Tasa vs USD", "exchange_rate", "number"],
-                                ].map(([label, key, type]) => (
+                                    ["Código ISO", "code", "text", "EUR"],
+                                    ["Nombre", "name", "text", "Euro"],
+                                    ["Símbolo", "symbol", "text", "€"],
+                                    ["Tasa vs USD", "exchange_rate", "number", "0.92"],
+                                ].map(([label, key, type, placeholder], i) => (
                                     <div key={key}>
                                         <label className="label">{label}</label>
                                         <input
+                                            autoFocus={i === 0}
                                             value={newCurrency[key]}
                                             onChange={e => setNewCurrency(p => ({ ...p, [key]: e.target.value }))}
+                                            onKeyDown={e => { if (e.key === "Enter") addCurrency(); }}
                                             type={type}
+                                            placeholder={placeholder}
                                             className="input h-9 w-full"
                                         />
                                     </div>
                                 ))}
                                 <button
                                     onClick={addCurrency}
-                                    className="h-9 px-5 bg-warning text-black font-black uppercase text-[10px] tracking-widest rounded-xl hover:shadow-lg hover:shadow-warning/20 transition-all active:scale-95"
+                                    className="w-full h-10 bg-warning text-black font-black uppercase text-[10px] tracking-widest rounded-xl hover:shadow-lg hover:shadow-warning/20 transition-all active:scale-95"
                                 >
-                                    Agregar
+                                    Agregar Divisa
                                 </button>
                             </div>
-                        </div>
+                        </Modal>
+
+                        {/* Confirmar eliminación */}
+                        <ConfirmModal
+                            isOpen={!!deleteCurrencyDialog}
+                            title={`¿Eliminar ${deleteCurrencyDialog?.name || "moneda"}?`}
+                            message="Esta acción no se puede deshacer. Si la moneda tiene pagos o ventas asociadas no podrá eliminarse — en ese caso usa Suspender."
+                            onConfirm={removeCurrency}
+                            onCancel={() => setDeleteCurrencyDialog(null)}
+                            type="danger"
+                        />
                     </div>
                 )}
                 {/* ── Respaldo ── */}

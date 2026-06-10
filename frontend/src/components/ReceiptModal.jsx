@@ -137,6 +137,7 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
     </style>
 </head>
 <body>
+    ${companyInfo?.show_header !== false ? `
     <div class="header">
         ${companyInfo?.logo_url ? `<img src="${resolveImageUrl(companyInfo.logo_url)}" class="logo" />` : ""}
         <div class="header-content">
@@ -150,6 +151,7 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
             </div>
         </div>
     </div>
+    ` : ""}
 
     <div class="doc-header">
         <div class="doc-title">TICKET DE CAJA</div>
@@ -240,20 +242,24 @@ export default function ReceiptModal({ open, onClose, sale }) {
         <Modal open={open} onClose={onClose} title={`FACTURA ${invoiceLabel}`} width={380}>
             {/* Encabezado empresa */}
             <div className="text-center mb-3 pb-3 border-b border-border/10 dark:border-white/5">
-                {companyInfo?.logo_url && (
-                    <img src={resolveImageUrl(companyInfo.logo_url)} alt="logo" className="mx-auto mb-2 max-h-16 w-auto object-contain" />
+                {companyInfo?.show_header !== false && (
+                    <>
+                        {companyInfo?.logo_url && (
+                            <img src={resolveImageUrl(companyInfo.logo_url)} alt="logo" className="mx-auto mb-2 max-h-16 w-auto object-contain" />
+                        )}
+                        <div className="text-sm font-black text-content dark:text-content-dark tracking-wide">{storeName}</div>
+                        {companyInfo?.rif && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">RIF: {companyInfo.rif}</div>}
+                        {companyInfo?.slogan && <div className="text-[11px] italic text-content-subtle mt-0.5">{companyInfo.slogan}</div>}
+                        {companyInfo?.address && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-1">{companyInfo.address}</div>}
+                        {(companyInfo?.city || companyInfo?.phone) && (
+                            <div className="text-[11px] text-content-muted dark:text-content-dark-muted">
+                                {[companyInfo.city, companyInfo.phone, companyInfo.phone2].filter(Boolean).join(" · ")}
+                            </div>
+                        )}
+                        {companyInfo?.email && <div className="text-[11px] text-content-subtle">{companyInfo.email}</div>}
+                    </>
                 )}
-                <div className="text-sm font-black text-content dark:text-content-dark tracking-wide">{storeName}</div>
-                {companyInfo?.rif && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">RIF: {companyInfo.rif}</div>}
-                {companyInfo?.slogan && <div className="text-[11px] italic text-content-subtle mt-0.5">{companyInfo.slogan}</div>}
-                {companyInfo?.address && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-1">{companyInfo.address}</div>}
-                {(companyInfo?.city || companyInfo?.phone) && (
-                    <div className="text-[11px] text-content-muted dark:text-content-dark-muted">
-                        {[companyInfo.city, companyInfo.phone, companyInfo.phone2].filter(Boolean).join(" · ")}
-                    </div>
-                )}
-                {companyInfo?.email && <div className="text-[11px] text-content-subtle">{companyInfo.email}</div>}
-                <div className="text-[11px] font-black text-content-subtle tracking-wide mt-2 uppercase">Comprobante de Venta</div>
+                <div className={`text-[11px] font-black text-content-subtle tracking-wide uppercase ${companyInfo?.show_header !== false ? "mt-2" : ""}`}>Comprobante de Venta</div>
             </div>
 
             {/* Metadata */}
