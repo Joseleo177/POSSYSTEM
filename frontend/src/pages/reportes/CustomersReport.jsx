@@ -3,7 +3,7 @@ import { api } from "../../services/api";
 import { buildCustomersExcel } from "../../helpers/excel";
 import {
  fmt$, fmtN, pct,
- useReport, defaultRange, usePagination, Pagination,
+ useReport, defaultRange, usePagination, Pagination, useExportFull,
  DateRangePicker, KpiCard, SectionHeader, Card, Loading, ExportButton,
 } from "./reportes.utils";
 
@@ -11,6 +11,7 @@ export default function CustomersReport() {
  const [range, setRange] = useState(defaultRange(30));
  const [inactiveDays, setInactiveDays] = useState(45);
  const { data, loading, error } = useReport(api.reports.customersAnalysis, { date_from: range.from, date_to: range.to, inactive_days: inactiveDays }, [range, inactiveDays]);
+ const exportFull = useExportFull(api.reports.customersAnalysis, { date_from: range.from, date_to: range.to, inactive_days: inactiveDays }, (d) => buildCustomersExcel(d, range));
  const [view, setView] = useState("top");
  const rr = data?.repeat_rate;
  const topPag = usePagination(data?.top_customers ?? []);
@@ -28,7 +29,7 @@ export default function CustomersReport() {
  <div className="h-full flex flex-col space-y-4 overflow-auto">
  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
- {data && <ExportButton onClick={() => buildCustomersExcel(data, range)} />}
+ {data && <ExportButton onClick={exportFull.run} loading={exportFull.exporting} />}
  </div>
 
  {loading && <div className="flex-1 flex items-center justify-center"><Loading /></div>}

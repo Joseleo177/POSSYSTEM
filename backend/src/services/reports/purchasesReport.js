@@ -1,11 +1,12 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause } = require("./shared");
 
-async function purchasesReport({ date_from, date_to, company_id, tc, tcP, rep }) {
+async function purchasesReport({ date_from, date_to, limit, company_id, tc, tcP, rep }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dR  = dateClause(df, dt);
   const dP  = dateClause(df, dt, 'p');
+  const lim = parseInt(limit) || 0;   // 0 = usar defaults de pantalla
 
   const [summary, bySupplier, byDay, topProducts] = await Promise.all([
     sequelize.query(
@@ -28,7 +29,7 @@ async function purchasesReport({ date_from, date_to, company_id, tc, tcP, rep })
        WHERE TRUE ${tcP} ${dP}
        GROUP BY c.name, p.supplier_name
        ORDER BY total_cost DESC
-       LIMIT 20`,
+       LIMIT ${lim || 20}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -51,7 +52,7 @@ async function purchasesReport({ date_from, date_to, company_id, tc, tcP, rep })
        WHERE TRUE ${tcP} ${dP}
        GROUP BY pi.product_id, pi.product_name
        ORDER BY total_cost DESC
-       LIMIT 15`,
+       LIMIT ${lim || 15}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
   ]);

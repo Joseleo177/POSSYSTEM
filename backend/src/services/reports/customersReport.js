@@ -1,13 +1,14 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause } = require("./shared");
 
-async function customersReport({ date_from, date_to, inactive_days = 45, company_id, tc, tcS, tcC, rep }) {
+async function customersReport({ date_from, date_to, inactive_days = 45, limit, company_id, tc, tcS, tcC, rep }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dS = dateClause(df, dt, 's');
   const dC = dateClause(df, dt, 'c');
   const dR = dateClause(df, dt);
   const inactiveDays = parseInt(inactive_days);
+  const lim = parseInt(limit) || 0;   // 0 = usar defaults de pantalla
 
   const [topCustomers, inactiveCustomers, newCustomers, ticketStats, repeatRate] = await Promise.all([
     sequelize.query(
@@ -21,7 +22,7 @@ async function customersReport({ date_from, date_to, inactive_days = 45, company
        WHERE c.type = 'cliente' ${tcS} ${dS}
        GROUP BY c.id, c.name, c.phone, c.rif
        ORDER BY total_spent DESC
-       LIMIT 20`,
+       LIMIT ${lim || 20}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -36,7 +37,7 @@ async function customersReport({ date_from, date_to, inactive_days = 45, company
        GROUP BY c.id, c.name, c.phone, c.rif
        HAVING MAX(s.created_at) < NOW() - (${inactiveDays} * INTERVAL '1 day')
        ORDER BY days_inactive DESC
-       LIMIT 30`,
+       LIMIT ${lim || 30}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -49,7 +50,7 @@ async function customersReport({ date_from, date_to, inactive_days = 45, company
        WHERE c.type = 'cliente' ${tcC} ${dC}
        GROUP BY c.id, c.name, c.phone
        ORDER BY first_purchase DESC
-       LIMIT 20`,
+       LIMIT ${lim || 20}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(

@@ -1,11 +1,12 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause } = require("./shared");
 
-async function auditReport({ date_from, date_to, company_id, tcS, rep }) {
+async function auditReport({ date_from, date_to, limit, company_id, tcS, rep }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dS = dateClause(df, dt, 's');
   const dR = dateClause(df, dt, 'r');
+  const lim = parseInt(limit) || 0;   // 0 = usar defaults de pantalla
 
   const [returnsSummary, returnsList, byEmployee, discounts] = await Promise.all([
     sequelize.query(
@@ -28,7 +29,7 @@ async function auditReport({ date_from, date_to, company_id, tcS, rep }) {
        LEFT JOIN customers c ON s.customer_id = c.id
        WHERE TRUE ${tcS} ${dR}
        ORDER BY r.created_at DESC
-       LIMIT 50`,
+       LIMIT ${lim || 50}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -57,7 +58,7 @@ async function auditReport({ date_from, date_to, company_id, tcS, rep }) {
        LEFT JOIN customers c ON s.customer_id = c.id
        WHERE s.discount_amount > 0 ${tcS} ${dS}
        ORDER BY discount_pct DESC
-       LIMIT 30`,
+       LIMIT ${lim || 30}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
   ]);

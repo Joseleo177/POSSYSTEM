@@ -3,13 +3,14 @@ import { api } from "../../services/api";
 import { buildMarginsExcel } from "../../helpers/excel";
 import {
  fmt$, fmtN,
- useReport, defaultRange, usePagination, Pagination,
+ useReport, defaultRange, usePagination, Pagination, useExportFull,
  DateRangePicker, KpiCard, SectionHeader, Card, Loading, ExportButton, BarChart,
 } from "./reportes.utils";
 
 export default function MarginsReport() {
  const [range, setRange] = useState(defaultRange(30));
  const { data, loading, error } = useReport(api.reports.margins, { date_from: range.from, date_to: range.to }, [range]);
+ const exportFull = useExportFull(api.reports.margins, { date_from: range.from, date_to: range.to }, (d) => buildMarginsExcel(d, range));
  const [view, setView] = useState("top");
  const s = data?.summary;
 
@@ -27,7 +28,7 @@ export default function MarginsReport() {
  <div className="h-full flex flex-col space-y-4 overflow-auto">
  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
- {data && <ExportButton onClick={() => buildMarginsExcel(data, range)} />}
+ {data && <ExportButton onClick={exportFull.run} loading={exportFull.exporting} />}
  </div>
 
  {loading && <div className="flex-1 flex items-center justify-center"><Loading /></div>}

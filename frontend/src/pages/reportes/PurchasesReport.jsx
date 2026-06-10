@@ -3,13 +3,14 @@ import { api } from "../../services/api";
 import { buildPurchasesExcel } from "../../helpers/excel";
 import {
  fmt$, fmtN,
- useReport, defaultRange, usePagination, Pagination,
+ useReport, defaultRange, usePagination, Pagination, useExportFull,
  DateRangePicker, KpiCard, SectionHeader, Card, Loading, ExportButton,
 } from "./reportes.utils";
 
 export default function PurchasesReport() {
  const [range, setRange] = useState(defaultRange(30));
  const { data, loading, error } = useReport(api.reports.purchases, { date_from: range.from, date_to: range.to }, [range]);
+ const exportFull = useExportFull(api.reports.purchases, { date_from: range.from, date_to: range.to }, (d) => buildPurchasesExcel(d, range));
  const s = data?.summary;
  const supplierPag = usePagination(data?.by_supplier ?? [], 20);
  const productPag = usePagination(data?.top_products ?? [], 20);
@@ -18,7 +19,7 @@ export default function PurchasesReport() {
  <div className="h-full flex flex-col space-y-4 overflow-auto">
  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
- {data && <ExportButton onClick={() => buildPurchasesExcel(data, range)} />}
+ {data && <ExportButton onClick={exportFull.run} loading={exportFull.exporting} />}
  </div>
 
  {loading && <div className="flex-1 flex items-center justify-center"><Loading /></div>}

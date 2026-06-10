@@ -36,6 +36,7 @@ export default function InventoryReport() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -83,6 +84,28 @@ export default function InventoryReport() {
   const handleFilterChange = (setter) => (val) => {
     setter(val);
     setPage(1);
+  };
+
+  // Exportar: pide TODO el dataset (todas las secciones, sin paginar) con los filtros activos
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const r = await api.reports.inventory({
+        days,
+        warehouse_id: warehouseId,
+        category_id: categoryId,
+        search: debouncedSearch,
+        view: "all",
+        limit: 100000,
+        offset: 0,
+      });
+      buildInventoryExcel(r.data);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const s = data?.summary;
@@ -189,7 +212,7 @@ export default function InventoryReport() {
         </div>
 
         <div className="h-10 border-l border-border/20 mx-1" />
-        {data && <ExportButton onClick={() => buildInventoryExcel(data)} />}
+        {data && <ExportButton onClick={handleExport} loading={exporting} />}
       </div>
 
       {loading && !data && <div className="flex-1 flex items-center justify-center"><Loading /></div>}

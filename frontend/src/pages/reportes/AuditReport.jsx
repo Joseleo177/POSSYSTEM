@@ -4,13 +4,14 @@ import { buildAuditExcel } from "../../helpers/excel";
 import { fmtDate } from "../../helpers";
 import {
  fmt$, fmtN,
- useReport, defaultRange, usePagination, Pagination,
+ useReport, defaultRange, usePagination, Pagination, useExportFull,
  DateRangePicker, KpiCard, SectionHeader, Card, Loading, ExportButton,
 } from "./reportes.utils";
 
 export default function AuditReport() {
  const [range, setRange] = useState(defaultRange(30));
  const { data, loading, error } = useReport(api.reports.audit, { date_from: range.from, date_to: range.to }, [range]);
+ const exportFull = useExportFull(api.reports.audit, { date_from: range.from, date_to: range.to }, (d) => buildAuditExcel(d, range));
  const [view, setView] = useState("employees");
  const rs = data?.returns_summary;
  const returnsPag = usePagination(data?.returns_list ?? []);
@@ -22,7 +23,7 @@ export default function AuditReport() {
  <div className="h-full flex flex-col space-y-4 overflow-auto">
  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
- {data && <ExportButton onClick={() => buildAuditExcel(data, range)} />}
+ {data && <ExportButton onClick={exportFull.run} loading={exportFull.exporting} />}
  </div>
 
  {loading && <div className="flex-1 flex items-center justify-center"><Loading /></div>}

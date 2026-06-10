@@ -1,10 +1,11 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause } = require("./shared");
 
-async function marginsReport({ date_from, date_to, company_id, tcS, rep }) {
+async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dS = dateClause(df, dt, 's');
+  const lim = parseInt(limit) || 0;   // 0 = usar defaults de pantalla
 
   const [byProduct, byCategory, summary, byDay] = await Promise.all([
     sequelize.query(
@@ -29,7 +30,7 @@ async function marginsReport({ date_from, date_to, company_id, tcS, rep }) {
          AND p.cost_price IS NOT NULL AND p.cost_price > 0
        GROUP BY si.product_id, si.name, c.name
        ORDER BY gross_margin DESC
-       LIMIT 30`,
+       LIMIT ${lim || 30}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(

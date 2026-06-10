@@ -36,6 +36,21 @@ export function defaultRange(days = 30) {
  return { from: d.toISOString().slice(0, 10), to: t };
 }
 
+// ── Export completo: pide el dataset sin límites antes de generar el Excel ──
+export function useExportFull(fetchFn, params, build) {
+ const [exporting, setExporting] = useState(false);
+ const run = async () => {
+ if (exporting) return;
+ setExporting(true);
+ try {
+ const r = await fetchFn({ ...params, limit: 100000 });
+ build(r.data);
+ } catch (e) { console.error(e); }
+ finally { setExporting(false); }
+ };
+ return { run, exporting };
+}
+
 // ── Componentes UI reutilizables ──────────────────────────────
 
 export function DateRangePicker({ from, to, onChange }) {
@@ -90,7 +105,16 @@ export function Loading() {
  );
 }
 
-export function ExportButton({ onClick }) {
+export function ExportButton({ onClick, loading = false }) {
+ if (loading) {
+ return (
+ <button disabled
+ className="flex items-center gap-2 px-4 py-2 text-[11px] font-black uppercase tracking-wide rounded-xl border border-green-500\30 text-green-500 bg-green-500\5 opacity-60 animate-pulse shadow-sm">
+ <div className="w-4 h-4 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin" />
+ Generando...
+ </button>
+ );
+ }
  return (
  <button onClick={onClick}
  className="flex items-center gap-2 px-4 py-2 text-[11px] font-black uppercase tracking-wide rounded-xl border border-green-500/30 text-green-500 bg-green-500/5 hover:bg-green-500 hover:text-white transition-all shadow-sm">

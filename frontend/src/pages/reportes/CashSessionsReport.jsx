@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import SaleDetailModal from "../../components/Customers/SaleDetailModal";
+import CustomSelect from "../../components/ui/CustomSelect";
 import { fmtDate } from "../../helpers";
 import {
  fmt$,
@@ -16,7 +17,34 @@ export default function CashSessionsReport() {
  const [summaryData, setSummaryData] = useState(null);
  const [loadingSummary, setLoadingSummary] = useState(false);
  const [detailSaleId, setDetailSaleId] = useState(null);
- const sessionsPag = usePagination(sessions, 20);
+
+ // Filtros
+ const [searchTerm, setSearchTerm] = useState("");
+ const [filterEmployee, setFilterEmployee] = useState("");
+ const [dateFrom, setDateFrom] = useState("");
+ const [dateTo, setDateTo] = useState("");
+
+ const employees = [...new Set(sessions.map(s => s.employee?.full_name).filter(Boolean))];
+
+ const filtered = sessions.filter(s => {
+ if (filterEmployee && s.employee?.full_name !== filterEmployee) return false;
+ if (dateFrom && new Date(s.closed_at) < new Date(dateFrom + "T00:00:00")) return false;
+ if (dateTo && new Date(s.closed_at) > new Date(dateTo + "T23:59:59")) return false;
+ if (searchTerm.trim()) {
+ const q = searchTerm.trim().toLowerCase();
+ const hay = `cierre #${s.id} ${s.employee?.full_name || ""} ${s.warehouse?.name || ""}`.toLowerCase();
+ if (!hay.includes(q)) return false;
+ }
+ return true;
+ });
+
+ const sessionsPag = usePagination(filtered, 20);
+
+ // Volver a página 1 al cambiar filtros
+ useEffect(() => { sessionsPag.setPage(1); }, [searchTerm, filterEmployee, dateFrom, dateTo]); // eslint-disable-line
+
+ const hasFilters = !!(searchTerm || filterEmployee || dateFrom || dateTo);
+ const clearFilters = () => { setSearchTerm(""); setFilterEmployee(""); setDateFrom(""); setDateTo(""); };
 
  const loadSessions = useCallback(async () => {
  setLoading(true);
