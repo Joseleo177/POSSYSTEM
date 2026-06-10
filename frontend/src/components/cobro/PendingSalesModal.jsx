@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../../services/api";
 
 const STATUS_TABS = [
@@ -54,6 +54,15 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
         if (!open) { setSearch(""); setStatusTab("all"); }
     }, [open]);
 
+    useEffect(() => {
+        if (!open) return;
+        const handler = (e) => {
+            if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+        };
+        window.addEventListener("keydown", handler, true);
+        return () => window.removeEventListener("keydown", handler, true);
+    }, [open, onClose]);
+
     if (!open) return null;
 
     const filtered = statusTab === "all" ? sales : sales.filter(s => s.status === statusTab);
@@ -67,7 +76,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
 
     return (
         <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={e => e.target === e.currentTarget && onClose()}>
-            <div className="w-full max-w-3xl bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out" style={{ maxHeight: "85vh" }}>
+            <div className="w-full max-w-3xl bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out" style={{ maxHeight: "85vh" }} onKeyDown={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 shrink-0">

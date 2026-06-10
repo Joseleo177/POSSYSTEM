@@ -2,6 +2,7 @@ import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import { Button } from "../ui/Button";
 import { printQuotationDoc } from "../../helpers";
+import { useEffect } from "react";
 
 export default function QuotationConfirmModal({ quotation, onNext }) {
     const { companyInfo, baseCurrency, activeCurrencies, notify } = useApp();
@@ -16,6 +17,14 @@ export default function QuotationConfirmModal({ quotation, onNext }) {
     const total    = parseFloat(quotation?.total || 0);
     const discount = parseFloat(quotation?.discount_amount || 0);
 
+    useEffect(() => {
+        const handler = (e) => {
+            if (e.key === "Escape" || e.key === "Enter") { e.stopPropagation(); onNext(); }
+        };
+        window.addEventListener("keydown", handler, true);
+        return () => window.removeEventListener("keydown", handler, true);
+    }, [onNext]);
+
     const handlePrint = async () => {
         try {
             const res = await api.quotations.getOne(quotation.id);
@@ -27,7 +36,7 @@ export default function QuotationConfirmModal({ quotation, onNext }) {
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out">
+            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out" onKeyDown={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3 bg-brand-500/5">

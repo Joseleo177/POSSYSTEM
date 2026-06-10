@@ -36,20 +36,20 @@ export default function CheckoutTypeModal({ open, onClose, onSelectFactura, onSe
         if (!open) return;
 
         const handler = (e) => {
-            if (e.key === "1") { e.preventDefault(); setSelected(0); }
-            if (e.key === "2") { e.preventDefault(); setSelected(1); }
-            if (e.key === "ArrowLeft" || e.key === "ArrowUp")   { e.preventDefault(); setSelected(0); }
-            if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); setSelected(1); }
+            if (e.key === "1") { e.preventDefault(); e.stopPropagation(); setSelected(0); }
+            if (e.key === "2") { e.preventDefault(); e.stopPropagation(); setSelected(1); }
+            if (e.key === "ArrowLeft" || e.key === "ArrowUp")   { e.preventDefault(); e.stopPropagation(); setSelected(0); }
+            if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setSelected(1); }
             if (e.key === "Enter") {
-                e.preventDefault();
+                e.preventDefault(); e.stopPropagation();
                 if (selected === 0) onSelectFactura();
                 else onSelectCotizacion();
             }
-            if (e.key === "Escape") { e.preventDefault(); onClose(); }
+            if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
         };
 
-        window.addEventListener("keydown", handler);
-        return () => window.removeEventListener("keydown", handler);
+        window.addEventListener("keydown", handler, true);
+        return () => window.removeEventListener("keydown", handler, true);
     }, [open, selected, onSelectFactura, onSelectCotizacion, onClose]);
 
     if (!open) return null;
@@ -57,7 +57,7 @@ export default function CheckoutTypeModal({ open, onClose, onSelectFactura, onSe
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center">
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out">
+            <div className="relative bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out" onKeyDown={e => e.stopPropagation()}>
 
                 <div className="text-center mb-5">
                     <div className="w-12 h-12 rounded-[16px] bg-brand-500/10 text-brand-500 flex items-center justify-center mx-auto mb-3">

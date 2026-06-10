@@ -103,7 +103,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const handlePriceInBsChange = (val) => {
         setPriceInBs(val);
         if (exchangeRate > 0 && val) {
-            set("price", (parseFloat(val) / exchangeRate).toFixed(4));
+            set("price", (parseFloat(val) / exchangeRate).toFixed(5));
         } else {
             set("price", "");
         }
@@ -141,25 +141,23 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
     const suggestedPrice = calcSalePriceHelper(form.cost_price, form.profit_margin);
 
-    useEffect(() => {
-        if (form.is_combo && form.combo_items) {
-            const sumPrice = form.combo_items.reduce((acc, item) => {
-                const qty = parseFloat(item.quantity) || 0;
-                const p = parseFloat(item.price) || 0;
-                return acc + (p * qty);
-            }, 0);
-            
-            if (sumPrice > 0 && Math.abs(sumPrice - parseFloat(form.price || 0)) > 0.0001) {
-                const newPrice = sumPrice.toFixed(4);
-                setForm(prev => ({ ...prev, price: newPrice }));
-                if (exchangeRate > 0) {
-                    setPriceInBs((parseFloat(newPrice) * exchangeRate).toFixed(2));
-                } else {
-                    setPriceInBs("");
-                }
+    const handleComboItemsChange = (items) => {
+        const sumPrice = items.reduce((acc, item) => {
+            const qty = parseFloat(item.quantity) || 0;
+            const p = parseFloat(item.price) || 0;
+            return acc + (p * qty);
+        }, 0);
+        const updates = { combo_items: items };
+        if (sumPrice > 0) {
+            updates.price = sumPrice.toFixed(5);
+            if (exchangeRate > 0) {
+                setPriceInBs((sumPrice * exchangeRate).toFixed(2));
+            } else {
+                setPriceInBs("");
             }
         }
-    }, [form.combo_items, form.is_combo, form.price, exchangeRate]);
+        setForm(prev => ({ ...prev, ...updates }));
+    };
 
     return (
         <Modal open={open} onClose={onClose} title={isEdit ? "Edición de Producto" : "Nuevo Producto"} width={720}>
@@ -257,12 +255,12 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 {priceCurrency === "base" || !localCurrency ? (
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle font-bold text-xs">$</span>
-                                        <input value={form.price} onChange={e => handlePriceChange(e.target.value)} type="number" step="0.0001" min="0.0001" className="input !pl-7" placeholder="0.0000" />
+                                        <input value={form.price} onChange={e => handlePriceChange(e.target.value.replace(/[^0-9.]/g, ""))} type="text" inputMode="decimal" className="input !pl-7" placeholder="0.00000" />
                                     </div>
                                 ) : (
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-[11px] font-bold">{localCurrency.symbol || "Bs."}</span>
-                                        <input value={priceInBs} onChange={e => handlePriceInBsChange(e.target.value)} type="number" step="0.0001" min="0" className="input !pl-9" placeholder="0.0000" />
+                                        <input value={priceInBs} onChange={e => handlePriceInBsChange(e.target.value)} type="number" step="0.01" min="0" className="input !pl-9" placeholder="0.00" />
                                     </div>
                                 )}
                             </div>
@@ -402,7 +400,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 ) : form.is_combo ? (
                     <ComboItemsEditor
                         comboItems={form.combo_items}
-                        onChange={items => set("combo_items", items)}
+                        onChange={handleComboItemsChange}
                         excludeId={editData?.id}
                     />
                 ) : null}

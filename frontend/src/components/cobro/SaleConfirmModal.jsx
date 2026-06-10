@@ -1,11 +1,20 @@
 import { Button } from "../ui/Button";
 import ReceiptModal from "../ReceiptModal";
 import PaymentFormModal from "../PaymentFormModal";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay }) {
     const [showReceiptModal, setShowReceiptModal] = useState(false);
     const [showPayModal, setShowPayModal] = useState(false);
+
+    useEffect(() => {
+        if (showReceiptModal || showPayModal) return; // los sub-modales manejan su propio Escape
+        const handler = (e) => {
+            if (e.key === "Escape") { e.stopPropagation(); onNext(); }
+        };
+        window.addEventListener("keydown", handler, true);
+        return () => window.removeEventListener("keydown", handler, true);
+    }, [onNext, showReceiptModal, showPayModal]);
 
     const receiptRate   = parseFloat(receipt?.exchange_rate || 1);
     const receiptIsBase = !receipt?.currency || receipt.currency.is_base;
@@ -25,7 +34,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out">
+            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out" onKeyDown={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className={`px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3 ${currentStatus === "pagado" ? "bg-success/5" : currentStatus === "borrador" ? "bg-surface-2/50" : "bg-danger/5"}`}>
