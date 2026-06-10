@@ -1,5 +1,6 @@
 const { StockTransfer, Warehouse, Employee, Product, ProductStock, Sequelize, sequelize } = require("../models");
 const { Op } = Sequelize;
+const { broadcast } = require("../services/sseService");
 
 // GET /api/stock-transfers
 const getAll = async (req, res) => {
@@ -100,6 +101,7 @@ const create = async (req, res) => {
     }, { transaction });
 
     await transaction.commit();
+    broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
     res.status(201).json({ ok: true, data: transfer });
   } catch (err) {
     if (transaction) await transaction.rollback();

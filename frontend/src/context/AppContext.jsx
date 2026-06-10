@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
+import { initSSE, closeSSE, onSSE } from "../services/sse";
 
 const AppContext = createContext(null);
 
@@ -97,6 +98,27 @@ export function AppProvider({ children }) {
     loadBanks();
     loadPaymentMethods();
     loadCategories();
+  }, [employee]);
+
+  // ── SSE: actualizaciones en tiempo real ─────────────────────
+  useEffect(() => {
+    if (!employee) return;
+    const token = localStorage.getItem('pos_token');
+    initSSE(token);
+    // El evento trae las monedas completas → setState directo, sin round-trip extra
+    const unsubSSE = onSSE('currencies:updated', (data) => {
+      if (data?.currencies?.length) setCurrencies(data.currencies);
+      else loadCurrencies();  // fallback si llega sin datos
+    });
+    // Fallback sin costo: refresca solo cuando el usuario vuelve al tab
+    const onVisible = () => { if (document.visibilityState === 'visible') loadCurrencies(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { unsubSSE(); document.removeEventListener('visibilitychange', onVisible); };
+  }, [employee, loadCurrencies, setCurrencies]);
+
+  // Cerrar SSE al hacer logout
+  useEffect(() => {
+    if (!employee) closeSSE();
   }, [employee]);
 
   // ── Derived ────────────────────────────────────────────────

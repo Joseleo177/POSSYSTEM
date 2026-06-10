@@ -94,6 +94,8 @@ app.use("/api/credit-notes",     require("./routes/creditNotes"));       // auth
 app.use("/api/incomes",          require("./routes/incomes"));            // auth dentro
 app.use("/api/backup",           require("./routes/backup"));             // auth+config dentro
 
+app.use("/api/events",           require("./routes/events"));             // SSE stream
+
 // ── Health check ──────────────────────────────────────────────
 app.get("/health", async (req, res) => {
   try {

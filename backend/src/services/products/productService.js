@@ -54,12 +54,44 @@ async function handleImageDelete(imageValue) {
   }
 }
 
-async function getAll({ search, category_id, is_combo, is_service, warehouse_id, limit = 100, offset = 0, company_id }) {
+async function getAll({ search, category_id, is_combo, is_service, warehouse_id, stock_filter, limit = 100, offset = 0, company_id }) {
   const where = {};
   if (company_id)               where.company_id = company_id;
   if (category_id)              where.category_id = category_id;
   if (is_combo   !== undefined) where.is_combo   = is_combo   === 'true';
   if (is_service !== undefined) where.is_service = is_service === 'true';
+
+  if (stock_filter === 'no' || stock_filter === 'with') {
+    // Los combos siempre pasan el filtro SQL porque su stock se calcula
+    // dinámicamente de ingredientes (DB siempre tiene stock=0). Se post-filtran
+    // después de calcular el stock real.
+    if (warehouse_id) {
+      const withStock = await ProductStock.findAll({
+        where: { warehouse_id: parseInt(warehouse_id), qty: { [Op.gt]: 0 } },
+        attributes: ['product_id'],
+      });
+      const withStockIds = withStock.map(r => r.product_id);
+      if (stock_filter === 'no') {
+        where[Op.or] = [
+          { is_combo: true },
+          withStockIds.length > 0
+            ? { is_combo: false, id: { [Op.notIn]: withStockIds } }
+            : { is_combo: false },
+        ];
+      } else {
+        where[Op.or] = [
+          { is_combo: true },
+          withStockIds.length > 0
+            ? { is_combo: false, id: { [Op.in]: withStockIds } }
+            : { is_combo: false, id: { [Op.in]: [-1] } },
+        ];
+      }
+    } else {
+      where[Op.or] = stock_filter === 'no'
+        ? [{ is_combo: true }, { is_combo: false, stock: { [Op.lte]: 0 } }]
+        : [{ is_combo: true }, { is_combo: false, stock: { [Op.gt]: 0 } }];
+    }
+  }
 
   const include = [
     { model: Category, attributes: ['name'], required: false },
@@ -131,7 +163,16 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
     return prod;
   });
 
-  return { data, total: count, limit: parseInt(limit), offset: parseInt(offset) };
+  // Post-filtrar combos por su stock calculado real
+  let finalData = data;
+  if (stock_filter === 'no') {
+    finalData = data.filter(p => !p.is_combo || (p.stock !== null && parseFloat(p.stock) <= 0));
+  } else if (stock_filter === 'with') {
+    finalData = data.filter(p => !p.is_combo || (p.stock !== null && parseFloat(p.stock) > 0));
+  }
+  const adjustedTotal = count - (data.length - finalData.length);
+
+  return { data: finalData, total: adjustedTotal, limit: parseInt(limit), offset: parseInt(offset) };
 }
 
 async function getOne(id, company_id) {

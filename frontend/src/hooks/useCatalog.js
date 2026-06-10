@@ -14,12 +14,14 @@ export function useCatalog() {
     // Filtros
     const [filterCategory, setFilterCategory] = useState("");
     const [filterType, setFilterType] = useState("");      // "" | "service" | "combo" | "normal"
+    const [filterStock, setFilterStock] = useState("");   // "" | "with" | "no"
 
-    const activeFilterCount = [filterCategory, filterType].filter(Boolean).length;
+    const activeFilterCount = [filterCategory, filterType, filterStock].filter(Boolean).length;
 
     const clearFilters = () => {
         setFilterCategory("");
         setFilterType("");
+        setFilterStock("");
     };
 
     const loadProducts = useCallback(async (p = 1, warehouseId = null) => {
@@ -34,6 +36,7 @@ export function useCatalog() {
             if (filterType === "service") q.is_service = true;
             else if (filterType === "combo") q.is_combo = true;
             else if (filterType === "normal") { q.is_service = false; q.is_combo = false; }
+            if (filterStock) q.stock_filter = filterStock;
 
             const r = await api.products.getAll(q);
             setProducts(r.data || []);
@@ -43,7 +46,7 @@ export function useCatalog() {
         } finally {
             setLoading(false);
         }
-    }, [notify, search, limit, filterCategory, filterType]);
+    }, [notify, search, limit, filterCategory, filterType, filterStock]);
 
     return {
         products, loading, search, setSearch, loadProducts,
@@ -51,6 +54,7 @@ export function useCatalog() {
         page, setPage, totalProducts, limit,
         filterCategory, setFilterCategory,
         filterType, setFilterType,
+        filterStock, setFilterStock,
         activeFilterCount, clearFilters,
     };
 }

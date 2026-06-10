@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { api } from "../../services/api";
+import { onSSE } from "../../services/sse";
 import { useDebounce } from "../useDebounce";
 
 const LIMIT = 30;
@@ -36,6 +37,20 @@ export function useCobroProducts(activeWarehouse, notify) {
         setProducts([]);
         if (activeWarehouse) loadProducts(debouncedSearch, debouncedCat, 0, true);
     }, [activeWarehouse, debouncedSearch, debouncedCat]); // eslint-disable-line
+
+    // Refrescar en tiempo real cuando el servidor notifica cambio de precios
+    useEffect(() => {
+        if (!activeWarehouse) return;
+        const refresh = () => loadProducts(debouncedSearch, debouncedCat, 0, true);
+        const unsubSSE  = onSSE('products:updated', refresh);
+        // Fallback: refrescar al volver al tab (por si SSE se reconecta tarde)
+        const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            unsubSSE();
+            document.removeEventListener('visibilitychange', onVisible);
+        };
+    }, [activeWarehouse, debouncedSearch, debouncedCat, loadProducts]);
 
     // Cargar más (llamado por el sentinel)
     const loadMore = useCallback(() => {

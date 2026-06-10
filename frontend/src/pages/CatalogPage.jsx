@@ -27,6 +27,7 @@ export default function CatalogPage() {
         page, totalProducts, limit,
         filterCategory, setFilterCategory,
         filterType, setFilterType,
+        filterStock, setFilterStock,
         activeFilterCount, clearFilters,
     } = useCatalog();
     const debouncedSearch = useDebounce(search, 400);
@@ -205,6 +206,25 @@ export default function CatalogPage() {
                                             <div className="grid grid-cols-2 gap-1">
                                                 {[{ value: "", label: "Todos" }, { value: "normal", label: "Normal" }, { value: "service", label: "Servicio" }, { value: "combo", label: "Combo" }].map(opt => (
                                                     <button key={opt.value} onClick={() => setFilterType(opt.value)} className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filterType === opt.value ? "bg-brand-500 text-black" : "bg-surface-3 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mb-1.5">Stock</div>
+                                            <div className="flex flex-col gap-1">
+                                                {[
+                                                    { value: "",     label: "Todos" },
+                                                    { value: "with", label: "Con stock" },
+                                                    { value: "no",   label: "Sin stock" },
+                                                ].map(opt => (
+                                                    <button key={opt.value} onClick={() => setFilterStock(opt.value)}
+                                                        className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-left ${
+                                                            filterStock === opt.value
+                                                                ? opt.value === "no" ? "bg-warning text-black" : "bg-brand-500 text-black"
+                                                                : "bg-surface-3 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
+                                                        }`}>
                                                         {opt.label}
                                                     </button>
                                                 ))}

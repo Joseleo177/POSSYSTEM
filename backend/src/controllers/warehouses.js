@@ -4,6 +4,7 @@ const {
   createTransfer, getTransfers,
   getActiveSession, openSession, addLine, closeSession, getSessions,
 } = require("../services/warehouses");
+const { broadcast } = require("../services/sseService");
 
 const wrap = (fn, status = 200) => async (req, res) => {
   try {
@@ -15,6 +16,9 @@ const wrap = (fn, status = 200) => async (req, res) => {
   }
 };
 
+const cid = (req) => req.employee?.company_id ?? 0;
+const stockBroadcast = (req) => broadcast(cid(req), 'products:updated', {});
+
 module.exports = {
   getAll:           wrap(() => getAll()),
   getByEmployee:    wrap(req => getByEmployee(req.params.employeeId)),
@@ -24,14 +28,14 @@ module.exports = {
   assignEmployees:  wrap(req => assignEmployees(req.params.id, req.body.employee_ids)),
   getStock:         wrap(req => getStock(req)),
   getProducts:      wrap(req => getProducts(req)),
-  addStock:         wrap(req => addStock(req)),
-  setStock:         wrap(req => setStock(req)),
-  removeStock:      wrap(req => removeStock(req)),
-  transfer:         wrap(req => createTransfer(req), 201),
+  addStock:         wrap(async req => { const r = await addStock(req);    stockBroadcast(req); return r; }),
+  setStock:         wrap(async req => { const r = await setStock(req);    stockBroadcast(req); return r; }),
+  removeStock:      wrap(async req => { const r = await removeStock(req); stockBroadcast(req); return r; }),
+  transfer:         wrap(async req => { const r = await createTransfer(req); stockBroadcast(req); return r; }, 201),
   getTransfers:     wrap(req => getTransfers(req)),
   getActiveSession: wrap(req => getActiveSession(req.params.id, req)),
   openSession:      wrap(req => openSession(req.params.id, req), 201),
-  addLine:          wrap(req => addLine(req.params.id, req.params.sessionId, req.body, req), 201),
-  closeSession:     wrap(req => closeSession(req.params.id, req.params.sessionId, req.body, req)),
+  addLine:          wrap(async req => { const r = await addLine(req.params.id, req.params.sessionId, req.body, req); stockBroadcast(req); return r; }, 201),
+  closeSession:     wrap(async req => { const r = await closeSession(req.params.id, req.params.sessionId, req.body, req); stockBroadcast(req); return r; }),
   getSessions:      wrap(req => getSessions(req.params.id, req.query, req)),
 };

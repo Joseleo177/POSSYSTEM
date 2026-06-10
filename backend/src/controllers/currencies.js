@@ -1,4 +1,5 @@
 const { Currency, Sequelize } = require("../models");
+const { broadcast } = require("../services/sseService");
 
 // GET /api/currencies
 const getAll = async (req, res) => {
@@ -22,6 +23,8 @@ const updateRate = async (req, res) => {
     if (!currency) return res.status(404).json({ ok: false, message: "Moneda no encontrada o es moneda base" });
 
     await currency.update({ exchange_rate });
+    const all = await Currency.findAll({ order: [['is_base', 'DESC'], ['code', 'ASC']] });
+    broadcast(req.company_id ?? 0, 'currencies:updated', { currencies: all.map(c => c.toJSON()) });
     res.json({ ok: true, data: currency });
   } catch (err) {
     res.status(500).json({ ok: false, message: "Error al actualizar tipo de cambio" });
@@ -139,6 +142,7 @@ const refreshRates = async (req, res) => {
     if (!updated.length) throw new Error(errors.map(e => e.error).join(" | ") || "No se actualizó ninguna tasa");
 
     const result = await Currency.findAll({ order: [['is_base', 'DESC'], ['code', 'ASC']] });
+    broadcast(req.company_id ?? 0, 'currencies:updated', { currencies: result.map(c => c.toJSON()) });
     res.json({ ok: true, updated, errors, data: result });
   } catch (err) {
     console.error("[refreshRates] FATAL:", err);

@@ -1,17 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Modal from "../ui/Modal";
 
-/**
- * QuantityModal - Estandarizado con el sistema
- * Permite editar cantidades con botones gigantes compatibles con táctiles.
- */
 export default function QuantityModal({ isOpen, onClose, item, onSave }) {
     const [val, setVal] = useState("");
+    const inputRef = useRef(null);
 
     useEffect(() => {
         if (isOpen && item) {
-            // Si el item viene del carrito tiene qty, si es nuevo del catálogo es vacío
             setVal(String(item.qty || "").replace(".", ","));
+            // Foco explícito después de que React termine el render + setVal
+            requestAnimationFrame(() => {
+                inputRef.current?.focus();
+                inputRef.current?.select();
+            });
         }
     }, [isOpen, item]);
 
@@ -76,7 +77,7 @@ export default function QuantityModal({ isOpen, onClose, item, onSave }) {
 
                         <div className="flex-1 relative group">
                             <input
-                                autoFocus
+                                ref={inputRef}
                                 type="text"
                                 inputMode="decimal"
                                 value={val}

@@ -1,4 +1,5 @@
 const salesService = require("../services/sales");
+const { broadcast } = require("../services/sseService");
 
 // PATCH /api/sales/:id
 const update = async (req, res) => {
@@ -49,6 +50,7 @@ const getStats = async (req, res) => {
 const create = async (req, res) => {
   try {
     const data = await salesService.createSale(req.body);
+    broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
     res.status(201).json({ ok: true, data });
   } catch (err) {
     const status = /insuficiente|no encontrado/i.test(err.message) ? 400 : 500;
@@ -60,6 +62,7 @@ const create = async (req, res) => {
 const cancel = async (req, res) => {
   try {
     await salesService.cancelSale(req.params.id);
+    broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
     res.json({ ok: true, message: "Venta anulada y stock restaurado" });
   } catch (err) {
     const status = /no encontrada/i.test(err.message) ? 404 : 500;

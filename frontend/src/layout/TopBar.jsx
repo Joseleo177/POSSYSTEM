@@ -2,6 +2,7 @@
 import React from "react";
 import { resolveImageUrl } from "../helpers";
 import { ROLE_COLORS, DEFAULT_ROLE_CLASS } from "../constants/roles";
+import { api } from "../services/api";
 
 function useDateTick() {
     const [now, setNow] = React.useState(new Date());
@@ -15,6 +16,14 @@ function useDateTick() {
 export default function TopBar({ settings, storeName, safeTab, visibleTabs, employee, dark, toggle, logout, onOpenLauncher, currencies = [] }) {
     const roleClass = ROLE_COLORS[employee?.role] || DEFAULT_ROLE_CLASS;
     const activeTab = visibleTabs.find((t) => t.key === safeTab);
+    const [refreshing, setRefreshing] = React.useState(false);
+
+    const handleRefreshRate = async () => {
+        if (refreshing) return;
+        setRefreshing(true);
+        try { await api.currencies.refreshRates(); } catch {}
+        setRefreshing(false);
+    };
 
     const now = useDateTick();
     const dateStr = now.toLocaleDateString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -72,7 +81,7 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
             </span>
 
             {/* Center: date + exchange rate */}
-            <div className="flex-1 flex justify-center items-center gap-0">
+            <div className="flex-1 flex justify-center items-center gap-1.5">
                 {(dateStr || rateStr) && (
                     <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-surface-2 dark:bg-white/5 border border-border/30 dark:border-white/10 select-none">
                         <svg className="w-3 h-3 text-content-subtle opacity-50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -89,6 +98,18 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
                             </>
                         )}
                     </div>
+                )}
+                {localCurrency && (
+                    <button
+                        onClick={handleRefreshRate}
+                        disabled={refreshing}
+                        title="Actualizar tasa BCV"
+                        className="w-6 h-6 flex items-center justify-center rounded-md text-content-subtle dark:text-white/30 hover:text-brand-500 dark:hover:text-brand-400 hover:bg-brand-500/10 transition-all disabled:opacity-40"
+                    >
+                        <svg className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
                 )}
             </div>
 
