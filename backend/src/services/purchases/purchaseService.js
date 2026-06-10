@@ -150,38 +150,6 @@ async function _applyStockAndPrices(purchase, items, transaction) {
       package_unit: package_unit || 'unidad'
     }, { transaction });
 
-    const isUnidad = !package_unit || package_unit.toLowerCase().trim() === 'unidad';
-    if (parseFloat(package_size) > 1 && !isUnidad) {
-      const pkgUnitName  = package_unit.charAt(0).toUpperCase() + package_unit.slice(1);
-      const comboName    = `${pkgUnitName} de ${product.name} (${package_size})`;
-      const comboSalePrice = parseFloat(package_price) * (1 + parseFloat(profit_margin || 0) / 100);
-
-      const [comboProduct, createdCombo] = await Product.findOrCreate({
-        where: { name: comboName, is_combo: true },
-        defaults: {
-          price: comboSalePrice,
-          stock: 0,
-          unit: 'unidad',
-          category_id: product.category_id,
-          image_filename: product.image_filename,
-          is_combo: true
-        },
-        transaction,
-        lock: true
-      });
-
-      if (createdCombo) {
-        await ProductComboItem.create({ combo_id: comboProduct.id, product_id: product.id, quantity: parseFloat(package_size) }, { transaction });
-      } else {
-        await comboProduct.update({ price: comboSalePrice }, { transaction });
-      }
-
-      await ProductStock.findOrCreate({
-        where: { warehouse_id: purchase.warehouse_id, product_id: comboProduct.id },
-        defaults: { qty: 0 },
-        transaction
-      });
-    }
 
     if (!product.is_service) {
       const totalStock = await ProductStock.sum('qty', { where: { product_id }, transaction });

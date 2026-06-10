@@ -50,7 +50,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         product_id: c.ingredient.id,
                         name: c.ingredient.name,
                         unit: c.ingredient.unit || "uds",
-                        quantity: c.quantity
+                        quantity: c.quantity,
+                        price: parseFloat(c.ingredient.price || 0)
                     })) : []
                 });
                 setImagePreview(resolveImageUrl(editData.image_url) || null);
@@ -76,10 +77,17 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const handleCostOrMarginChange = (key, val) => {
         const next = { ...form, [key]: val };
         const suggested = calcSalePriceHelper(
-            key === "cost_price" ? val : form.cost_price,
-            key === "profit_margin" ? val : form.profit_margin
+            key === "cost_price" ? val : next.cost_price,
+            key === "profit_margin" ? val : next.profit_margin
         );
-        if (suggested !== null) next.price = suggested;
+        if (suggested !== null) {
+            next.price = suggested;
+            if (exchangeRate > 0) {
+                setPriceInBs((parseFloat(suggested) * exchangeRate).toFixed(2));
+            } else {
+                setPriceInBs("");
+            }
+        }
         setForm(next);
     };
 
@@ -132,6 +140,26 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const isEdit = !!editData;
 
     const suggestedPrice = calcSalePriceHelper(form.cost_price, form.profit_margin);
+
+    useEffect(() => {
+        if (form.is_combo && form.combo_items) {
+            const sumPrice = form.combo_items.reduce((acc, item) => {
+                const qty = parseFloat(item.quantity) || 0;
+                const p = parseFloat(item.price) || 0;
+                return acc + (p * qty);
+            }, 0);
+            
+            if (sumPrice > 0 && Math.abs(sumPrice - parseFloat(form.price || 0)) > 0.0001) {
+                const newPrice = sumPrice.toFixed(4);
+                setForm(prev => ({ ...prev, price: newPrice }));
+                if (exchangeRate > 0) {
+                    setPriceInBs((parseFloat(newPrice) * exchangeRate).toFixed(2));
+                } else {
+                    setPriceInBs("");
+                }
+            }
+        }
+    }, [form.combo_items, form.is_combo, form.price, exchangeRate]);
 
     return (
         <Modal open={open} onClose={onClose} title={isEdit ? "Edición de Producto" : "Nuevo Producto"} width={720}>
@@ -334,7 +362,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 </div>
                                 <div
                                     className={`flex flex-col justify-center p-3 px-4 rounded-lg border transition-all cursor-pointer ${suggestedPrice ? "bg-green-500/5 border-green-500/20 hover:bg-green-500/10" : "bg-surface-2 dark:bg-white/5 border-border/40 opacity-60"}`}
-                                    onClick={() => { if (suggestedPrice) set("price", suggestedPrice); }}
+                                    onClick={() => { if (suggestedPrice) handlePriceChange(suggestedPrice); }}
                                 >
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="text-[10px] font-bold uppercase tracking-wide text-green-600 dark:text-green-400">PVP Sugerido</span>

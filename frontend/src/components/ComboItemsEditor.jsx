@@ -33,7 +33,7 @@ export default function ComboItemsEditor({ comboItems, onChange, excludeId }) {
 
     const add = (prod) => {
         if (comboItems.find(i => i.product_id === prod.id)) return;
-        onChange([...comboItems, { product_id: prod.id, name: prod.name, unit: prod.unit || "uds", quantity: 1 }]);
+        onChange([...comboItems, { product_id: prod.id, name: prod.name, unit: prod.unit || "uds", quantity: 1, price: parseFloat(prod.price || 0) }]);
         setSearch("");
         setShowDropdown(false);
     };
