@@ -1,6 +1,6 @@
 const { Sequelize, sequelize, Customer, Sale, SaleItem, Purchase, Payment, Currency, Expense, ExpenseCategory, PaymentJournal } = require("../../models");
 
-async function getAll({ search, type, limit = 100, offset = 0 }, req) {
+async function getAll({ search, type, debtors, limit = 100, offset = 0 }, req) {
   const company_id  = req.employee?.company_id ?? null;
   const where = {};
   if (company_id) where.company_id = company_id;
@@ -12,6 +12,15 @@ async function getAll({ search, type, limit = 100, offset = 0 }, req) {
       { email:    { [Sequelize.Op.iLike]: `%${search}%` } },
       { rif:      { [Sequelize.Op.iLike]: `%${search}%` } },
       { tax_name: { [Sequelize.Op.iLike]: `%${search}%` } },
+    ];
+  }
+  if (debtors === 'true') {
+    where[Sequelize.Op.and] = [
+      ...(where[Sequelize.Op.and] || []),
+      Sequelize.literal(`(
+        SELECT COALESCE(SUM(s.total - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.sale_id = s.id), 0)), 0)
+        FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial')
+      ) > 0.01`),
     ];
   }
 

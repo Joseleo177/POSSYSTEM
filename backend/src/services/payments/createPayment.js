@@ -165,26 +165,39 @@ module.exports = async function createPayment(body) {
       await Customer.increment({ credit_balance: creditChangeAmt }, { where: { id: sale.customer_id }, transaction: t });
     }
 
-    // Si el cajero se quedó con el sobrante: registrar como ingreso extra en el mismo diario
+    // Si el cajero se quedó con el sobrante: sumarlo al mismo cobro
+    // (físicamente entró todo junto a la caja — un solo pago, igual que "Dar cambio")
     const surplusAmt = parseFloat(surplus_kept || 0);
     if (surplusAmt > 0) {
-      await Payment.create(
-        {
-          sale_id,
-          customer_id: sale.customer_id,
-          amount: surplusAmt,
-          currency_id: currency_id || sale.currency_id || null,
-          exchange_rate: parseFloat(exchange_rate) || 1,
-          payment_journal_id: payment_journal_id || null,
-          employee_id: employee_id || null,
-          reference_date,
-          reference_number: reference_number?.trim() || null,
-          notes: `Sobrante — Factura ${sale.invoice_number || "#" + sale_id}`,
-          change_given: null,
-          change_journal_id: null,
-        },
-        { transaction: t }
-      );
+      const surplusRate = parseFloat(exchange_rate) || 1;
+      const surplusNote = `Incluye sobrante de ${(surplusAmt * surplusRate).toFixed(2)} (no aplicado a factura)`;
+      if (payment) {
+        await payment.update(
+          {
+            amount: parseFloat((payAmt + surplusAmt).toFixed(6)),
+            notes: [payment.notes, surplusNote].filter(Boolean).join(" · "),
+          },
+          { transaction: t }
+        );
+      } else {
+        await Payment.create(
+          {
+            sale_id,
+            customer_id: sale.customer_id,
+            amount: surplusAmt,
+            currency_id: currency_id || sale.currency_id || null,
+            exchange_rate: surplusRate,
+            payment_journal_id: payment_journal_id || null,
+            employee_id: employee_id || null,
+            reference_date,
+            reference_number: reference_number?.trim() || null,
+            notes: `Sobrante — Factura ${sale.invoice_number || "#" + sale_id}`,
+            change_given: null,
+            change_journal_id: null,
+          },
+          { transaction: t }
+        );
+      }
     }
 
     const newStatus = totalPaidNow >= saleTotal - 0.02 ? "pagado" : "parcial";

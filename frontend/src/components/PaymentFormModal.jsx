@@ -55,10 +55,13 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const receivedBase = !isNaN(receivedNum) ? receivedNum / payRate : 0;
   const amountBase   = !isNaN(amountNum) ? amountNum / payRate : 0;
 
-  const changeBase = receivedBase > amountBase && receivedBase > 0 && pendingAfterCredit > 0
-    ? parseFloat((receivedBase - amountBase).toFixed(4))
+  // Sobrante calculado en la moneda de pago (570 - 561.22 = 8.78 exacto),
+  // sin ida-y-vuelta por USD que acumula error de redondeo
+  const changeInPayCur = (!isNaN(receivedNum) && receivedNum > 0 && pendingAfterCredit > 0 && receivedNum > (isNaN(amountNum) ? 0 : amountNum))
+    ? parseFloat((receivedNum - (isNaN(amountNum) ? 0 : amountNum)).toFixed(2))
     : 0;
-  const changeDisplay = changeBase * payRate;
+  const changeBase = changeInPayCur > 0 ? changeInPayCur / payRate : 0;
+  const changeDisplay = changeInPayCur;
 
   // Moneda del diario de cambio (para mostrar equivalencia en Bs, etc.)
   const changeJournalObj  = form.change_journal_id ? activeJournals.find(j => j.id === form.change_journal_id) : null;

@@ -15,6 +15,7 @@ export function useCustomers(notify) {
   const [page, setPage]               = useState(1);
   const [search, setSearch]           = useState("");
   const [typeFilter, setTypeFilter]   = useState("");
+  const [debtorsFilter, setDebtorsFilter] = useState(false);
 
   const [detail, setDetail]           = useState(null);
   const [detailSales, setDetailSales] = useState([]);
@@ -22,19 +23,20 @@ export function useCustomers(notify) {
   const [saving, setSaving]           = useState(false);
 
   // Resetear página al cambiar filtros
-  useEffect(() => { setPage(1); }, [search, typeFilter]);
+  useEffect(() => { setPage(1); }, [search, typeFilter, debtorsFilter]);
 
   // ── Cargar lista ─────────────────────────────────────────────
   const load = useCallback(async () => {
     try {
       const params = { limit: LIMIT, offset: (page - 1) * LIMIT };
-      if (search)     params.search = search;
-      if (typeFilter) params.type   = typeFilter;
+      if (search)        params.search  = search;
+      if (typeFilter)    params.type    = typeFilter;
+      if (debtorsFilter) params.debtors = true;
       const r = await api.customers.getAll(params);
       setCustomers(r.data);
       setTotal(r.total || r.data.length);
     } catch (e) { notify(e.message, "err"); }
-  }, [search, typeFilter, page, notify]);
+  }, [search, typeFilter, debtorsFilter, page, notify]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -98,6 +100,7 @@ export function useCustomers(notify) {
     customers, total, page, setPage,
     search, setSearch,
     typeFilter, setTypeFilter,
+    debtorsFilter, setDebtorsFilter,
     load,
     // Detalle
     detail, detailSales,

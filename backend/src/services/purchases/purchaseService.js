@@ -115,7 +115,8 @@ async function _applyStockAndPrices(purchase, items, transaction) {
   for (const item of items) {
     const {
       product_id, total_units, unit_cost, profit_margin, sale_price,
-      package_size, package_unit, package_price, lot_number, expiration_date
+      package_size, package_unit, package_price, lot_number, expiration_date,
+      update_price
     } = item;
 
     if (!product_id) continue;
@@ -142,13 +143,18 @@ async function _applyStockAndPrices(purchase, items, transaction) {
       }
     }
 
-    await product.update({
+    // El costo siempre se actualiza (es lo que realmente se pagó);
+    // el precio de venta solo si la línea tiene update_price activo
+    const productChanges = {
       cost_price: unit_cost,
-      profit_margin,
-      price: sale_price,
       package_size,
-      package_unit: package_unit || 'unidad'
-    }, { transaction });
+      package_unit: package_unit || 'unidad',
+    };
+    if (update_price !== false) {
+      productChanges.price = sale_price;
+      productChanges.profit_margin = profit_margin;
+    }
+    await product.update(productChanges, { transaction });
 
 
     if (!product.is_service) {
@@ -195,7 +201,7 @@ async function createPurchase({ body, employee_id }) {
     for (const item of items) {
       const {
         product_id, package_unit, package_size, package_qty, package_price,
-        profit_margin, lot_number, expiration_date
+        profit_margin, lot_number, expiration_date, update_price
       } = item;
 
       if (!product_id || !package_size || !package_qty)
@@ -229,7 +235,8 @@ async function createPurchase({ body, employee_id }) {
         total_units,
         subtotal,
         lot_number: lot_number || null,
-        expiration_date: expiration_date || null
+        expiration_date: expiration_date || null,
+        update_price: update_price !== false && update_price !== 'false'
       }, { transaction });
 
       createdItems.push(purchaseItem);
@@ -356,7 +363,7 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
     let grandTotal = 0;
     if (items?.length) {
       for (const item of items) {
-        const { product_id, package_unit, package_size, package_qty, package_price, profit_margin, lot_number, expiration_date } = item;
+        const { product_id, package_unit, package_size, package_qty, package_price, profit_margin, lot_number, expiration_date, update_price } = item;
         if (!product_id || !package_size || !package_qty)
           throw new Error("Datos incompletos en línea de compra");
 
@@ -387,7 +394,8 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
           total_units,
           subtotal,
           lot_number: lot_number || null,
-          expiration_date: expiration_date || null
+          expiration_date: expiration_date || null,
+          update_price: update_price !== false && update_price !== 'false'
         }, { transaction });
       }
     }

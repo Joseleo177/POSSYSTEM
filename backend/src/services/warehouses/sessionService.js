@@ -61,6 +61,8 @@ async function addLine(warehouseId, sessionId, { product_id, qty, type, reason, 
   try {
     const product = await Product.findByPk(product_id, { transaction, lock: true });
     if (!product) { const e = new Error('Producto no encontrado'); e.status = 404; throw e; }
+    if (product.is_combo) { const e = new Error('Los combos no admiten ajuste manual: su stock se calcula de los ingredientes'); e.status = 400; throw e; }
+    if (product.is_service) { const e = new Error('Los servicios no manejan stock'); e.status = 400; throw e; }
 
     const [stockEntry] = await ProductStock.findOrCreate({
       where:    { warehouse_id: parseInt(warehouseId), product_id },

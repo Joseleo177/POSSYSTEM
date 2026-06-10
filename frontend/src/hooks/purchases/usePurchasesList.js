@@ -125,6 +125,7 @@ export function usePurchasesList({
             profit_margin: parseFloat(i.profit_margin) || 0,
             lot_number: i.lot_number || null,
             expiration_date: i.expiration_date || null,
+            update_price: i.update_price !== false,
         }));
 
     const savePurchase = useCallback(

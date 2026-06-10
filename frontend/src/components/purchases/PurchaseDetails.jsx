@@ -179,6 +179,7 @@ export default function PurchaseDetails({ state }) {
           profit_margin:   i.profit_margin,
           lot_number:      i.lot_number      || null,
           expiration_date: i.expiration_date || null,
+          update_price:    i.update_price !== false,
         })),
       });
       notify("Borrador actualizado", "success");

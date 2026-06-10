@@ -76,9 +76,53 @@ export default function CashSessionsReport() {
 
  return (
  <div className="h-full flex flex-col space-y-3 overflow-auto">
- <div className="flex justify-end shrink-0">
+ <div className="shrink-0 flex flex-wrap items-center gap-2">
+ {/* Buscador */}
+ <div className="relative flex-1 min-w-[200px] group">
+ <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle opacity-40 group-focus-within:opacity-100 group-focus-within:text-brand-500 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+ </svg>
+ <input
+ type="text"
+ placeholder="Buscar por # cierre, cajero o almacén..."
+ value={searchTerm}
+ onChange={e => setSearchTerm(e.target.value)}
+ className="w-full h-10 pl-10 pr-4 bg-surface-2 dark:bg-white/[0.03] border border-border/40 dark:border-white/5 rounded-xl text-[11px] font-bold tracking-wide focus:border-brand-500/50 focus:ring-4 focus:ring-brand-500/5 outline-none transition-all placeholder:text-content-subtle/50"
+ />
+ </div>
+
+ {/* Cajero */}
+ <CustomSelect
+ value={filterEmployee}
+ onChange={setFilterEmployee}
+ placeholder="TODOS LOS CAJEROS"
+ className="w-48"
+ options={[
+ { value: "", label: "TODOS LOS CAJEROS" },
+ ...employees.map(name => ({ value: name, label: name })),
+ ]}
+ />
+
+ {/* Rango de fechas */}
+ <div className="flex items-center gap-1.5">
+ <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+ className="h-10 px-3 bg-surface-2 dark:bg-white/[0.03] border border-border/40 dark:border-white/5 rounded-xl text-[11px] font-bold focus:border-brand-500/50 outline-none transition-all" />
+ <span className="text-[10px] font-black text-content-subtle opacity-40">→</span>
+ <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+ className="h-10 px-3 bg-surface-2 dark:bg-white/[0.03] border border-border/40 dark:border-white/5 rounded-xl text-[11px] font-bold focus:border-brand-500/50 outline-none transition-all" />
+ </div>
+
+ {/* Limpiar filtros */}
+ {hasFilters && (
+ <button onClick={clearFilters}
+ className="h-10 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-danger border border-danger/20 hover:bg-danger/10 transition-all">
+ Limpiar
+ </button>
+ )}
+
+ {/* Refrescar */}
  <button onClick={loadSessions}
- className="p-1.5 rounded-lg bg-surface-3 dark:bg-white/5 border border-border dark:border-white/5 hover:bg-brand-500/10 text-content-subtle hover:text-brand-500 transition-all">
+ className="h-10 w-10 flex items-center justify-center rounded-xl bg-surface-3 dark:bg-white/5 border border-border dark:border-white/5 hover:bg-brand-500/10 text-content-subtle hover:text-brand-500 transition-all">
  <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
  </svg>
@@ -125,7 +169,7 @@ export default function CashSessionsReport() {
  </tr>
  ))
  ) : (
- <tr><td colSpan="5" className="p-10 text-center text-[11px] text-content-subtle opacity-30 uppercase font-black tracking-wide">Sin sesiones</td></tr>
+ <tr><td colSpan="5" className="p-10 text-center text-[11px] text-content-subtle opacity-30 uppercase font-black tracking-wide">{hasFilters ? "Sin resultados con estos filtros" : "Sin sesiones"}</td></tr>
  )}
  </tbody>
  </table>

@@ -54,7 +54,8 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
         if (!selectedWarehouse) return;
         setLoadingList(true);
         api.warehouses.getProducts(selectedWarehouse.id, { limit: 200 })
-            .then(r => setAllProducts(r.data || []))
+            // Combos y servicios no admiten ajuste manual: su stock es derivado / inexistente
+            .then(r => setAllProducts((r.data || []).filter(p => !p.is_combo && !p.is_service)))
             .catch(() => {})
             .finally(() => setLoadingList(false));
     }, [selectedWarehouse?.id]);

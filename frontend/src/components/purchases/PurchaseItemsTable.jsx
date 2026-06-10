@@ -96,9 +96,54 @@ export default function PurchaseItemsTable({
                                 {item.unit_cost > 0 ? `Ref. ${fmt2(item.unit_cost)}` : "—"}
                             </td>
 
-                            {/* Precio Venta */}
-                            <td className="px-4 py-3 text-right text-xs font-black text-success tabular-nums">
-                                {item.sale_price > 0 ? `Ref. ${fmt2(item.sale_price)}` : "—"}
+                            {/* Precio Venta — editable + toggle para actualizar el PVP del producto al recibir */}
+                            <td className="px-4 py-3 text-right">
+                                {isEditing && item.unit_cost > 0 ? (
+                                    <div className="flex items-center justify-end gap-2">
+                                        <div className={`flex flex-col items-end gap-0.5 ${item.update_price === false ? "opacity-30" : ""}`}>
+                                            <input
+                                                type="number" min="0" step="0.01"
+                                                disabled={item.update_price === false}
+                                                value={invoiceRate > 1
+                                                    ? fmt2(parseFloat(item.sale_price || 0) * invoiceRate)
+                                                    : +parseFloat(item.sale_price || 0).toFixed(4)}
+                                                onChange={e => {
+                                                    const raw = parseFloat(e.target.value || 0);
+                                                    const newPrice = invoiceRate > 1 ? raw / invoiceRate : raw;
+                                                    const cost = parseFloat(item.unit_cost) || 0;
+                                                    if (cost > 0 && newPrice >= 0) {
+                                                        onUpdate?.(item.id ?? item.key, { profit_margin: ((newPrice / cost) - 1) * 100 });
+                                                    }
+                                                }}
+                                                className="w-20 p-0 text-right text-xs font-black tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-success dark:focus:border-success focus:outline-none text-success [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                            />
+                                            <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">
+                                                {invoiceRate > 1 && parseFloat(item.sale_price) > 0
+                                                    ? `≈ Ref. ${fmt2(item.sale_price)} · ${(parseFloat(item.profit_margin) || 0).toFixed(1)}% mg`
+                                                    : `${(parseFloat(item.profit_margin) || 0).toFixed(1)}% mg`}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => onUpdate?.(item.id ?? item.key, { update_price: item.update_price === false })}
+                                            title={item.update_price === false
+                                                ? "NO actualizará el precio de venta del producto al recibir"
+                                                : "Actualizará el precio de venta del producto al recibir"}
+                                            className={`w-8 h-4.5 rounded-full relative transition-all shrink-0 ${item.update_price === false ? "bg-surface-3 dark:bg-white/10" : "bg-success"}`}
+                                            style={{ height: "18px" }}
+                                        >
+                                            <span className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${item.update_price === false ? "left-0.5" : "left-[15px]"}`} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-end gap-0.5">
+                                        <span className="text-xs font-black text-success tabular-nums">
+                                            {item.sale_price > 0 ? `Ref. ${fmt2(item.sale_price)}` : "—"}
+                                        </span>
+                                        {item.update_price === false && (
+                                            <span className="text-[8px] font-black uppercase tracking-widest text-content-subtle/40">No actualiza PVP</span>
+                                        )}
+                                    </div>
+                                )}
                             </td>
 
                             {/* Total Uds. (solo no-borrador) */}
