@@ -4,7 +4,7 @@ import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
 
-export default function CategoriesTab({ notify, can }) {
+export default function CategoriesTab({ notify, can, triggerNew }) {
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [modal, setModal] = useState(false);       // false | "new" | {id, name, color}
@@ -21,7 +21,12 @@ export default function CategoriesTab({ notify, can }) {
 
     useEffect(() => { load(); }, [load]);
 
-    const openNew  = () => { setForm({ name: "", color: "#fabd2f" }); setModal("new"); };
+    const openNew  = useCallback(() => { setForm({ name: "", color: "#fabd2f" }); setModal("new"); }, []);
+    
+    useEffect(() => {
+        if (triggerNew > 0) openNew();
+    }, [triggerNew, openNew]);
+
     const openEdit = (cat) => { setForm({ name: cat.name, color: cat.color || "#fabd2f" }); setModal(cat); };
 
     const save = async () => {
@@ -56,11 +61,6 @@ export default function CategoriesTab({ notify, can }) {
                 <span className="text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
                     {categories.length} categoría{categories.length !== 1 ? "s" : ""}
                 </span>
-                {can("products") && (
-                    <Button onClick={openNew} className="h-8 px-3 text-[10px] shadow-none">
-                        + Nueva Categoría
-                    </Button>
-                )}
             </div>
 
             <div className="flex-1 overflow-auto">

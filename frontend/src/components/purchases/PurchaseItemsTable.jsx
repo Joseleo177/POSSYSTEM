@@ -9,8 +9,8 @@ export default function PurchaseItemsTable({
     invoiceRate = 1,
     invoiceSym = "Ref.",
 }) {
-    const isEditing   = orderStatus === "borrador" || orderStatus === "pendiente";
-    const showLots    = orderStatus !== "borrador";
+    const isEditing = orderStatus === "borrador" || orderStatus === "pendiente";
+    const showLots = orderStatus !== "borrador";
     const showActions = isEditing;
 
     return (
@@ -22,7 +22,7 @@ export default function PurchaseItemsTable({
                         {showLots && <th className="px-4 py-3">Lote / Vence</th>}
                         <th className="px-4 py-3 text-center">Cant.</th>
                         <th className="px-4 py-3 text-right w-36">
-                          Costo×Emp.{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70">({invoiceSym})</span> : ""}
+                            Costo×Emp.{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70">({invoiceSym})</span> : ""}
                         </th>
                         <th className="px-4 py-3 text-right">C.Unit</th>
                         <th className="px-4 py-3 text-right">P.Venta</th>
@@ -119,8 +119,8 @@ export default function PurchaseItemsTable({
                                             />
                                             <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">
                                                 {invoiceRate > 1 && parseFloat(item.sale_price) > 0
-                                                    ? `≈ Ref. ${fmt2(item.sale_price)} · ${(parseFloat(item.profit_margin) || 0).toFixed(1)}% mg`
-                                                    : `${(parseFloat(item.profit_margin) || 0).toFixed(1)}% mg`}
+                                                    ? `≈ Ref. ${fmt2(item.sale_price)} · ${(parseFloat(item.profit_margin) || 0).toFixed(1)}%`
+                                                    : `${(parseFloat(item.profit_margin) || 0).toFixed(1)}%`}
                                             </span>
                                         </div>
                                         <button

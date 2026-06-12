@@ -34,7 +34,7 @@ async function getStock(req) {
   const productsRaw = await sequelize.query(`
     SELECT
       p.id AS product_id, p.name AS product_name, p.price, p.unit, p.image_filename,
-      p.cost_price, p.is_combo, p.barcode,
+      p.cost_price, p.is_combo, p.is_service, p.barcode,
       c.name AS category_name,
       ps.qty
     FROM product_stock ps
@@ -92,6 +92,7 @@ async function getStock(req) {
     product_id:    p.product_id,
     product_name:  p.product_name,
     is_combo:      p.is_combo,
+    is_service:    p.is_service,
     barcode:       p.barcode,
     qty:           p.is_combo ? (ingredientStockMap[p.product_id] ?? 0) : parseFloat(p.qty) || 0,
     unit:          p.unit,
@@ -127,7 +128,11 @@ async function getProducts(req) {
     FROM products p
     LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = :wid
     ${countJoin}
-    WHERE (p.is_service = true OR p.is_combo = true OR ps.product_id IS NOT NULL) ${tcp}
+    WHERE (
+      ps.product_id IS NOT NULL 
+      OR 
+      ( (p.is_service = true OR p.is_combo = true) AND NOT EXISTS (SELECT 1 FROM product_stock WHERE product_id = p.id) )
+    ) ${tcp}
     ${whereExtra}
   `, { replacements, type: Sequelize.QueryTypes.SELECT });
 
@@ -148,7 +153,11 @@ async function getProducts(req) {
       FROM sale_items
       GROUP BY product_id
     ) si_agg ON si_agg.product_id = p.id
-    WHERE (p.is_service = true OR p.is_combo = true OR ps.product_id IS NOT NULL) ${tcp}
+    WHERE (
+      ps.product_id IS NOT NULL 
+      OR 
+      ( (p.is_service = true OR p.is_combo = true) AND NOT EXISTS (SELECT 1 FROM product_stock WHERE product_id = p.id) )
+    ) ${tcp}
     ${whereExtra}
     ORDER BY total_sold DESC, p.name ASC
     LIMIT :limit OFFSET :offset

@@ -1,5 +1,5 @@
 const path = require("path");
-const fs   = require("fs");
+const fs = require("fs");
 const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, Sequelize, ProductComboItem, sequelize } = require("../../models");
 const Op = Sequelize.Op;
 
@@ -19,7 +19,7 @@ function calculateComboStockAndCost(comboItems) {
   for (const item of comboItems) {
     if (!item.ingredient) return { stock: 0, cost: 0 };
     const ingCost = parseFloat(item.ingredient.cost_price) || 0;
-    const reqQty  = parseFloat(item.quantity) || 1;
+    const reqQty = parseFloat(item.quantity) || 1;
     totalCost += ingCost * reqQty;
     if (item.ingredient.is_service) continue; // services don't limit combo stock
     const stockModel = item.ingredient.stocks?.[0];
@@ -34,13 +34,13 @@ function calculateComboStockAndCost(comboItems) {
 async function handleImageUpload(file) {
   if (!file) return null;
   if (isSupabase()) {
-    const ext      = path.extname(file.originalname).toLowerCase();
+    const ext = path.extname(file.originalname).toLowerCase();
     const filename = `product_${Date.now()}${ext}`;
     return getSupabaseStorage().uploadImage(file.buffer, filename, file.mimetype);
   }
   const uploadsDir = path.join(__dirname, "../../../uploads");
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-  const ext      = path.extname(file.originalname).toLowerCase();
+  const ext = path.extname(file.originalname).toLowerCase();
   const filename = `product_${Date.now()}${ext}`;
   fs.writeFileSync(path.join(uploadsDir, filename), file.buffer);
   return filename;
@@ -56,40 +56,75 @@ async function handleImageDelete(imageValue) {
 
 async function getAll({ search, category_id, is_combo, is_service, warehouse_id, stock_filter, limit = 100, offset = 0, company_id }) {
   const where = {};
-  if (company_id)               where.company_id = company_id;
-  if (category_id)              where.category_id = category_id;
-  if (is_combo   !== undefined) where.is_combo   = is_combo   === 'true';
+  if (company_id) where.company_id = company_id;
+  if (category_id) where.category_id = category_id;
+  if (is_combo !== undefined) where.is_combo = is_combo === 'true';
   if (is_service !== undefined) where.is_service = is_service === 'true';
 
-  if (stock_filter === 'no' || stock_filter === 'with') {
-    // Los combos siempre pasan el filtro SQL porque su stock se calcula
-    // dinámicamente de ingredientes (DB siempre tiene stock=0). Se post-filtran
-    // después de calcular el stock real.
+  if (warehouse_id || stock_filter) {
+    let associatedIds = [];
+    let validPhysicalIds = [];
+
     if (warehouse_id) {
-      const withStock = await ProductStock.findAll({
-        where: { warehouse_id: parseInt(warehouse_id), qty: { [Op.gt]: 0 } },
-        attributes: ['product_id'],
+      const stocksInWarehouse = await ProductStock.findAll({
+        where: { warehouse_id: parseInt(warehouse_id) },
+        attributes: ['product_id', 'qty'],
       });
-      const withStockIds = withStock.map(r => r.product_id);
-      if (stock_filter === 'no') {
-        where[Op.or] = [
-          { is_combo: true },
-          withStockIds.length > 0
-            ? { is_combo: false, id: { [Op.notIn]: withStockIds } }
-            : { is_combo: false },
-        ];
+
+      associatedIds = stocksInWarehouse.map(s => s.product_id);
+
+      if (stock_filter === 'with') {
+        validPhysicalIds = stocksInWarehouse.filter(s => parseFloat(s.qty) > 0).map(s => s.product_id);
+      } else if (stock_filter === 'no') {
+        validPhysicalIds = stocksInWarehouse.filter(s => parseFloat(s.qty) <= 0).map(s => s.product_id);
       } else {
-        where[Op.or] = [
-          { is_combo: true },
-          withStockIds.length > 0
-            ? { is_combo: false, id: { [Op.in]: withStockIds } }
-            : { is_combo: false, id: { [Op.in]: [-1] } },
-        ];
+        validPhysicalIds = associatedIds;
       }
+    }
+
+    const orConditions = [];
+
+    if (warehouse_id) {
+      // 1. Physical products that match the stock filter for this warehouse
+      if (validPhysicalIds.length > 0) {
+        orConditions.push({ is_combo: false, is_service: false, id: { [Op.in]: validPhysicalIds } });
+      }
+
+      // 2. Combos explicitly associated with this warehouse (qty doesn't matter, evaluated post-query)
+      if (associatedIds.length > 0) {
+        orConditions.push({ is_combo: true, id: { [Op.in]: associatedIds } });
+      }
+
+      // 3. Services explicitly associated with this warehouse
+      if (stock_filter !== 'no' && associatedIds.length > 0) {
+        orConditions.push({ is_service: true, id: { [Op.in]: associatedIds } });
+      }
+
+      // 4. Global Combos/Services (those created before this feature, with no ProductStock records anywhere)
+      const productsWithAnyStock = await ProductStock.findAll({ attributes: ['product_id'], group: ['product_id'] });
+      const idsWithAnyStock = productsWithAnyStock.map(s => s.product_id);
+      const notInIds = idsWithAnyStock.length ? idsWithAnyStock : [-1];
+
+      orConditions.push({ is_combo: true, id: { [Op.notIn]: notInIds } });
+      if (stock_filter !== 'no') {
+        orConditions.push({ is_service: true, id: { [Op.notIn]: notInIds } });
+      }
+
+      if (orConditions.length === 0) orConditions.push({ id: -1 });
+
     } else {
-      where[Op.or] = stock_filter === 'no'
-        ? [{ is_combo: true }, { is_combo: false, stock: { [Op.lte]: 0 } }]
-        : [{ is_combo: true }, { is_combo: false, stock: { [Op.gt]: 0 } }];
+      if (stock_filter === 'with') {
+        orConditions.push({ is_combo: false, is_service: false, stock: { [Op.gt]: 0 } });
+        orConditions.push({ is_combo: true });
+        orConditions.push({ is_service: true });
+      } else if (stock_filter === 'no') {
+        orConditions.push({ is_combo: false, is_service: false, stock: { [Op.lte]: 0 } });
+        orConditions.push({ is_combo: true });
+      }
+    }
+
+    if (orConditions.length > 0) {
+      where[Op.or] = orConditions;
     }
   }
 
@@ -203,15 +238,15 @@ async function getOne(id, company_id) {
 
 async function createProduct({ body, file, company_id }) {
   const { name, price, category_id, unit, qty_step,
-          cost_price, profit_margin, package_size, package_unit, min_stock,
-          is_combo, combo_items, is_service, barcode } = body;
+    cost_price, profit_margin, package_size, package_unit, min_stock,
+    is_combo, combo_items, is_service, barcode, warehouse_id, bulk_price } = body;
 
   if (!name || price == null) {
     const e = new Error("name y price son requeridos"); e.status = 400; throw e;
   }
 
-  const imageValue  = await handleImageUpload(file);
-  const isComboBool = is_combo   === 'true' || is_combo   === true;
+  const imageValue = await handleImageUpload(file);
+  const isComboBool = is_combo === 'true' || is_combo === true;
   const isServiceBool = is_service === 'true' || is_service === true;
 
   const t = await sequelize.transaction();
@@ -227,12 +262,22 @@ async function createProduct({ body, file, company_id }) {
       profit_margin: profit_margin || null,
       package_size: package_size || null,
       package_unit: package_unit || null,
+      bulk_price: bulk_price || null,
       min_stock: parseFloat(min_stock) || 0,
       is_combo: isComboBool,
       is_service: isServiceBool,
       barcode: barcode || null,
       company_id,
     }, { transaction: t });
+
+    if (warehouse_id) {
+      await ProductStock.create({
+        product_id: product.id,
+        warehouse_id: parseInt(warehouse_id),
+        qty: 0,
+        company_id
+      }, { transaction: t });
+    }
 
     if (isComboBool && combo_items) {
       const parsedItems = typeof combo_items === 'string' ? JSON.parse(combo_items) : combo_items;
@@ -254,8 +299,8 @@ async function createProduct({ body, file, company_id }) {
 
 async function updateProduct({ id, body, file, company_id }) {
   const { name, price, category_id, unit, qty_step,
-          cost_price, profit_margin, package_size, package_unit, min_stock,
-          is_combo, combo_items, is_service, barcode } = body;
+    cost_price, profit_margin, package_size, package_unit, min_stock,
+    is_combo, combo_items, is_service, barcode, bulk_price } = body;
 
   const t = await sequelize.transaction();
   try {
@@ -271,8 +316,8 @@ async function updateProduct({ id, body, file, company_id }) {
       currentImageValue = null;
     }
 
-    const isComboBool   = is_combo   === 'true' || is_combo   === true  || (is_combo   === undefined ? product.is_combo   : false);
-    const isServiceBool = is_service === 'true' || is_service === true  || (is_service === undefined ? product.is_service : false);
+    const isComboBool = is_combo === 'true' || is_combo === true || (is_combo === undefined ? product.is_combo : false);
+    const isServiceBool = is_service === 'true' || is_service === true || (is_service === undefined ? product.is_service : false);
 
     await product.update({
       name, price,
@@ -285,6 +330,7 @@ async function updateProduct({ id, body, file, company_id }) {
       profit_margin: profit_margin || null,
       package_size: package_size || null,
       package_unit: package_unit || null,
+      bulk_price: bulk_price || null,
       min_stock: parseFloat(min_stock) || 0,
       is_combo: isComboBool,
       is_service: isServiceBool,

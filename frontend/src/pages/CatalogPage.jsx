@@ -42,6 +42,8 @@ export default function CatalogPage() {
     const [showWarehouse, setShowWarehouse] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
     const [priceCurrency, setPriceCurrency] = useState("base");
+    const [triggerNewCategory, setTriggerNewCategory] = useState(0);
+    const [triggerNewPromo, setTriggerNewPromo] = useState(0);
     const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
 
     const availableWarehouses = employee?.warehouses || [];
@@ -111,23 +113,38 @@ export default function CatalogPage() {
         </div>
     );
 
-    // ── Actions del header ────────────────────────────────────
     const actions = (
         <>
-            {selectedProducts.length > 0 && (
-                <Button onClick={() => setPrintingLabels(true)} variant="ghost" className="h-8 px-3 text-[10px] shadow-none bg-info/10 text-info border border-info/30 hover:bg-info hover:text-black">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                    Imprimir ({selectedProducts.length})
+            {activeTab === "products" && (
+                <>
+                    {selectedProducts.length > 0 && (
+                        <Button onClick={() => setPrintingLabels(true)} variant="ghost" className="h-8 px-3 text-[10px] shadow-none bg-info/10 text-info border border-info/30 hover:bg-info hover:text-black">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                            Imprimir ({selectedProducts.length})
+                        </Button>
+                    )}
+                    <Button onClick={() => { setIsSelectionMode(!isSelectionMode); if (isSelectionMode) setSelectedProducts([]); }} variant="ghost"
+                        className={`h-8 px-3 text-[10px] shadow-none border ${isSelectionMode ? "bg-brand-500 text-black border-brand-500" : "bg-surface-3 dark:bg-white/5 text-content-subtle border-white/5 hover:bg-white/10"}`}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        {isSelectionMode ? "Cancelar" : "Seleccionar"}
+                    </Button>
+                    {can("products") && (
+                        <Button onClick={() => { setProductEditData(null); setProductModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
+                            + Nuevo Producto
+                        </Button>
+                    )}
+                </>
+            )}
+
+            {activeTab === "categories" && can("products") && (
+                <Button onClick={() => setTriggerNewCategory(prev => prev + 1)} className="h-8 px-3 text-[10px] shadow-none">
+                    + Nueva Categoría
                 </Button>
             )}
-            <Button onClick={() => { setIsSelectionMode(!isSelectionMode); if (isSelectionMode) setSelectedProducts([]); }} variant="ghost"
-                className={`h-8 px-3 text-[10px] shadow-none border ${isSelectionMode ? "bg-brand-500 text-black border-brand-500" : "bg-surface-3 dark:bg-white/5 text-content-subtle border-white/5 hover:bg-white/10"}`}>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                {isSelectionMode ? "Cancelar" : "Seleccionar"}
-            </Button>
-            {activeTab === "products" && can("products") && (
-                <Button onClick={() => { setProductEditData(null); setProductModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
-                    + Nuevo Producto
+
+            {activeTab === "promotions" && can("products") && (
+                <Button onClick={() => setTriggerNewPromo(prev => prev + 1)} className="h-8 px-3 text-[10px] shadow-none">
+                    + Nueva Promoción
                 </Button>
             )}
         </>
@@ -293,12 +310,12 @@ export default function CatalogPage() {
 
             {/* Tab: Categorías */}
             {activeTab === "categories" && (
-                <CategoriesTab notify={notify} can={can} />
+                <CategoriesTab notify={notify} can={can} triggerNew={triggerNewCategory} />
             )}
 
             {/* Tab: Promociones */}
             {activeTab === "promotions" && (
-                <PromotionsTab notify={notify} can={can} />
+                <PromotionsTab notify={notify} can={can} triggerNew={triggerNewPromo} />
             )}
 
             <ProductModal
@@ -308,6 +325,8 @@ export default function CatalogPage() {
                 editData={productEditData}
                 categories={categories}
                 loading={loading}
+                warehouseId={warehouseId}
+                warehouseName={selectedWarehouseName}
             />
 
             <ConfirmModal

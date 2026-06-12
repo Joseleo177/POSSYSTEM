@@ -72,6 +72,9 @@ export default function StockView({
                                             {s.is_combo && (
                                                 <span className="ml-2 px-1.5 py-0.5 bg-indigo-500/10 text-indigo-400 text-[8px] font-black uppercase tracking-widest rounded">Combo</span>
                                             )}
+                                            {s.is_service && (
+                                                <span className="ml-2 px-1.5 py-0.5 bg-fuchsia-500/10 text-fuchsia-400 text-[8px] font-black uppercase tracking-widest rounded">Servicio</span>
+                                            )}
                                         </td>
                                         <td>
                                             <span className="text-[10px] font-bold text-content-subtle uppercase tracking-tighter opacity-70">{s.category_name || "General"}</span>

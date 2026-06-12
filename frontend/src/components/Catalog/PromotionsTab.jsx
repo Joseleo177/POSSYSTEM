@@ -21,7 +21,7 @@ const EMPTY_FORM = {
     starts_at: new Date().toISOString().slice(0, 10), ends_at: "", active: true, product_ids: [],
 };
 
-export default function PromotionsTab({ notify, can }) {
+export default function PromotionsTab({ notify, can, triggerNew }) {
     const [promos, setPromos] = useState([]);
     const [loading, setLoading] = useState(false);
     const [modal, setModal] = useState(false);
@@ -49,7 +49,12 @@ export default function PromotionsTab({ notify, can }) {
 
     useEffect(() => { load(); loadProducts(); }, [load, loadProducts]);
 
-    const openNew = () => { setForm(EMPTY_FORM); setProductSearch(""); setModal("new"); };
+    const openNew = useCallback(() => { setForm(EMPTY_FORM); setProductSearch(""); setModal("new"); }, []);
+    
+    useEffect(() => {
+        if (triggerNew > 0) openNew();
+    }, [triggerNew, openNew]);
+
     const openEdit = (p) => {
         setForm({
             name: p.name, type: p.type,
@@ -122,11 +127,6 @@ export default function PromotionsTab({ notify, can }) {
                 <span className="text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
                     {promos.length} promoción{promos.length !== 1 ? "es" : ""}
                 </span>
-                {can("products") && (
-                    <Button onClick={openNew} className="h-8 px-3 text-[10px] shadow-none">
-                        + Nueva Promoción
-                    </Button>
-                )}
             </div>
 
             <div className="flex-1 overflow-auto">

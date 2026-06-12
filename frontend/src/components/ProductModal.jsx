@@ -11,16 +11,15 @@ const PKG_UNITS = ["CAJA", "BULTO", "PAQUETE", "DOCENA", "MEDIA CAJA", "FARDO", 
 const EMPTY = {
     name: "", price: "", stock: "", category_id: "", unit: "UNIDAD", qty_step: "1",
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
-    is_combo: false, combo_items: [], is_service: false, barcode: ""
+    is_combo: false, combo_items: [], is_service: false, barcode: "", bulk_price: ""
 };
 
-export default function ProductModal({ open, onClose, onSave, editData, categories, loading }) {
+export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName }) {
     const { notify, activeCurrencies } = useApp();
     const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
     const exchangeRate = parseFloat(localCurrency?.exchange_rate || 0);
 
     const [form, setForm] = useState(EMPTY);
-    const [bulkPrice, setBulkPrice] = useState("");
     const [priceInBs, setPriceInBs] = useState("");
     const [priceCurrency, setPriceCurrency] = useState("base");
     const [imageFile, setImageFile] = useState(null);
@@ -40,6 +39,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     qty_step: editData.qty_step || "1",
                     package_unit: editData.package_unit || "",
                     package_size: editData.package_size != null && editData.package_size !== "" ? parseFloat(editData.package_size) : "",
+                    bulk_price: editData.bulk_price || "",
                     cost_price: editData.cost_price || "",
                     profit_margin: editData.profit_margin || "",
                     min_stock: editData.min_stock != null ? parseFloat(editData.min_stock) : 0,
@@ -61,7 +61,6 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             }
             setImageFile(null);
             setRemoveImage(false);
-            setBulkPrice("");
             setPriceCurrency("base");
             if (editData && exchangeRate > 0) {
                 setPriceInBs((parseFloat(editData.price) * exchangeRate).toFixed(2));
@@ -110,11 +109,24 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     };
 
     const handleBulkPriceChange = (val) => {
-        setBulkPrice(val);
         const size = parseFloat(form.package_size);
-        if (!val || !size || size <= 0) return;
-        const unitCost = (parseFloat(val) / size).toFixed(4);
-        handleCostOrMarginChange("cost_price", unitCost);
+        const updates = { bulk_price: val };
+
+        if (val && size > 0) {
+            const unitCost = (parseFloat(val) / size).toFixed(4);
+            updates.cost_price = unitCost;
+            
+            const suggested = calcSalePriceHelper(unitCost, form.profit_margin);
+            if (suggested !== null) {
+                updates.price = suggested;
+                if (exchangeRate > 0) {
+                    setPriceInBs((parseFloat(suggested) * exchangeRate).toFixed(2));
+                } else {
+                    setPriceInBs("");
+                }
+            }
+        }
+        setForm(prev => ({ ...prev, ...updates }));
     };
 
     const handleImageChange = (e) => {
@@ -134,7 +146,11 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const handleSave = () => {
         if (parseFloat(form.price) <= 0 || form.price === "") return notify("El precio de venta debe ser mayor a 0", "err");
         if (form.cost_price !== "" && parseFloat(form.cost_price) < 0) return notify("El costo unitario no puede ser negativo", "err");
-        onSave(form, imageFile, removeImage);
+        const submissionForm = { ...form };
+        if (!isEdit && warehouseId) {
+            submissionForm.warehouse_id = warehouseId;
+        }
+        onSave(submissionForm, imageFile, removeImage);
     };
 
     const isEdit = !!editData;
@@ -331,7 +347,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         </div>
                                     </div>
 
-                                    {/* Precio por bulto — helper, no se guarda */}
+                                    {/* Precio por bulto */}
                                     {form.package_unit && form.package_size ? (
                                         <div>
                                             <label className="label">
@@ -342,16 +358,16 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                                 <div className="relative flex-1">
                                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">$</span>
                                                     <input
-                                                        value={bulkPrice}
+                                                        value={form.bulk_price}
                                                         onChange={e => handleBulkPriceChange(e.target.value)}
                                                         type="number" step="0.01" min="0"
                                                         className="input !pl-6"
                                                         placeholder="0.00"
                                                     />
                                                 </div>
-                                                {bulkPrice && parseFloat(form.package_size) > 0 && (
+                                                {form.bulk_price && parseFloat(form.package_size) > 0 && (
                                                     <span className="text-[11px] text-brand-500 font-bold whitespace-nowrap">
-                                                        = $ {(parseFloat(bulkPrice) / parseFloat(form.package_size)).toFixed(4)} c/u
+                                                        = $ {(parseFloat(form.bulk_price) / parseFloat(form.package_size)).toFixed(4)} c/u
                                                     </span>
                                                 )}
                                             </div>
@@ -379,8 +395,19 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">Unidades de Embalaje</h3>
                                 <div className="flex gap-2">
                                     <div className="flex-1">
-                                        <input list="pkg-units-list" value={form.package_unit} onChange={e => set("package_unit", e.target.value)} placeholder="Ej. Caja, Bulto..." className="input" />
-                                        <datalist id="pkg-units-list">{PKG_UNITS.map(u => <option key={u} value={u} />)}</datalist>
+                                        <CustomSelect
+                                            value={form.package_unit}
+                                            onChange={val => set("package_unit", val)}
+                                            options={[
+                                                { value: "", label: "NINGUNO" },
+                                                ...Array.from(new Set([
+                                                    ...PKG_UNITS,
+                                                    ...(form.package_unit && !PKG_UNITS.includes(form.package_unit.toUpperCase()) ? [form.package_unit.toUpperCase()] : [])
+                                                ])).map(u => ({ value: u, label: u }))
+                                            ]}
+                                            placeholder="Unidad de Embalaje"
+                                            className="w-full"
+                                        />
                                     </div>
                                     <div className="w-24 relative">
                                         <input value={form.package_size} onChange={e => set("package_size", e.target.value)} type="number" placeholder="Cant." className="input text-center" />

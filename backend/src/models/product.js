@@ -19,6 +19,7 @@ module.exports = (sequelize, DataTypes) => {
     profit_margin: { type: DataTypes.DECIMAL(5, 2) },
     package_size: { type: DataTypes.DECIMAL(10, 3) },
     package_unit: { type: DataTypes.STRING(50) },
+    bulk_price: { type: DataTypes.DECIMAL(14, 5) },
     is_combo: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     is_service: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     min_stock: { type: DataTypes.DECIMAL(10, 3), allowNull: false, defaultValue: 0 },
