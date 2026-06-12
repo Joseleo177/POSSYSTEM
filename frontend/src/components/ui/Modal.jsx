@@ -72,7 +72,7 @@ export default function Modal({ open, onClose, title, children, width = 560 }) {
         ref={modalRef}
         onClick={e => e.stopPropagation()}
         onKeyDown={e => e.stopPropagation()}
-        style={{ maxWidth: width, overflow: "auto" }}
+        style={{ maxWidth: width }}
         className="bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl w-full relative animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out flex flex-col max-h-[90vh]"
       >
         {/* Header */}

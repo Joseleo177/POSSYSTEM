@@ -142,11 +142,11 @@ export function CartProvider({ children }) {
     return true;
   }, []);
 
-  const addToCart = useCallback((product, customQty = null) => {
-    if (!activeWarehouse) { notify("Selecciona un almacén antes de cobrar", "err"); return false; }
+  const addToCart = useCallback((product, customQty = null, silentError = false) => {
+    if (!activeWarehouse) { if (!silentError) notify("Selecciona un almacén antes de cobrar", "err"); return false; }
     // stock === null significa combo de solo-servicios (sin límite de stock)
     const hasUnlimitedStock = product.is_service || (product.is_combo && product.stock === null);
-    if (!hasUnlimitedStock && parseFloat(product.stock) <= 0) { notify("Sin stock disponible", "err"); return false; }
+    if (!hasUnlimitedStock && parseFloat(product.stock) <= 0) { if (!silentError) notify("Sin stock disponible", "err"); return false; }
 
     const step = parseFloat(product.qty_step) || 1;
     const initialQty = customQty !== null ? parseFloat(customQty) : step;
@@ -161,7 +161,7 @@ export function CartProvider({ children }) {
     }
 
     if (!validateCartStock(newCart)) {
-      notify("Stock insuficiente de este producto o sus ingredientes", "err");
+      if (!silentError) notify("Stock insuficiente de este producto o sus ingredientes", "err");
       return false;
     }
     setCart(newCart);
@@ -194,7 +194,7 @@ export function CartProvider({ children }) {
     setCart(newCart);
   }, [notify, validateCartStock, cart]);
 
-  const setQtyDirect = useCallback((id, raw) => {
+  const setQtyDirect = useCallback((id, raw, silentError = false) => {
     if (raw === "") {
       setCart(cart.map(i => i.id === id ? { ...i, qty: "" } : i));
       return true;
@@ -216,7 +216,7 @@ export function CartProvider({ children }) {
 
     if (!changeOccurred) return true;
     if (!validateCartStock(newCart)) {
-      notify("Stock límite alcanzado", "err");
+      if (!silentError) notify("Stock límite alcanzado", "err");
       return false;
     }
     setCart(newCart);

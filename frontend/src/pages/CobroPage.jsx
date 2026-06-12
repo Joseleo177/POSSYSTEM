@@ -254,9 +254,9 @@ export default function CobroPage() {
                 onSave={(id, q) => {
                     const isInCart = cart.find(i => i.id === id);
                     if (isInCart) {
-                        return setQtyDirect(id, q);
+                        return setQtyDirect(id, q, true);
                     } else {
-                        return addToCart(qtyModalItem, q);
+                        return addToCart(qtyModalItem, q, true);
                     }
                 }}
             />

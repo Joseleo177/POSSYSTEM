@@ -3,11 +3,13 @@ import Modal from "../ui/Modal";
 
 export default function QuantityModal({ isOpen, onClose, item, onSave }) {
     const [val, setVal] = useState("");
+    const [error, setError] = useState(null);
     const inputRef = useRef(null);
 
     useEffect(() => {
         if (isOpen && item) {
             setVal(String(item.qty || "").replace(".", ","));
+            setError(null);
             // Foco explícito después de que React termine el render + setVal
             requestAnimationFrame(() => {
                 inputRef.current?.focus();
@@ -29,7 +31,12 @@ export default function QuantityModal({ isOpen, onClose, item, onSave }) {
             if (isInteger) num = Math.floor(num);
             const ok = onSave(item.id, parseFloat(num.toFixed(3)));
             // Solo cerrar si el padre no rechazó (retorna false = stock insuficiente)
-            if (ok !== false) onClose();
+            if (ok !== false) {
+                setError(null);
+                onClose();
+            } else {
+                setError("Stock insuficiente o límite alcanzado");
+            }
         }
     };
 
@@ -38,6 +45,7 @@ export default function QuantityModal({ isOpen, onClose, item, onSave }) {
         let next = Math.max(0, current + amount);
         if (isInteger) next = Math.floor(next);
         setVal(String(parseFloat(next.toFixed(3))).replace(".", ","));
+        setError(null);
     };
 
     const handleInputChange = (raw) => {
@@ -53,11 +61,18 @@ export default function QuantityModal({ isOpen, onClose, item, onSave }) {
             }
         }
         setVal(v);
+        setError(null);
     };
 
     return (
         <Modal open={isOpen} onClose={onClose} title={`Cantidad: ${item.name}`} width={380}>
-            <div className="flex flex-col gap-4 py-1">
+            <div className="flex flex-col gap-4 py-1 relative">
+            {error && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-lg animate-in slide-in-from-top-1 fade-in duration-150">
+                    <svg className="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    <span className="text-red-600 dark:text-red-400 text-[11px] font-bold uppercase tracking-wider">{error}</span>
+                </div>
+            )}
                 
                 <div className="flex justify-center -mt-1">
                     <div className="px-3 py-1 rounded-md bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 text-[9px] font-black uppercase tracking-widest border border-border/40 dark:border-white/5">
