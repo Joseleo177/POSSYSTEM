@@ -4,6 +4,7 @@
   "description": "POS System — API REST con Node.js + Express + PostgreSQL",
   "main": "src/index.js",
   "scripts": {
+    "build": "npx sequelize-cli db:migrate",
     "start": "npx sequelize-cli db:migrate && node src/index.js",
     "dev": "npx sequelize-cli db:migrate && nodemon src/index.js"
   },
