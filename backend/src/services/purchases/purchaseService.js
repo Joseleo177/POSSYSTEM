@@ -149,6 +149,7 @@ async function _applyStockAndPrices(purchase, items, transaction) {
       cost_price: unit_cost,
       package_size,
       package_unit: package_unit || 'unidad',
+      bulk_price: package_price || null,
     };
     if (update_price !== false) {
       productChanges.price = sale_price;

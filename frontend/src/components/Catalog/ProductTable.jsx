@@ -1,4 +1,4 @@
-import { fmtBase, resolveImageUrl } from "../../helpers";
+import { fmtBase, resolveImageUrl, imgRetryOnError } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 
 export default function ProductTable({
@@ -54,7 +54,7 @@ export default function ProductTable({
                         <td>
                             <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-[11px] font-black border border-white/5 overflow-hidden">
                                 {p.image_url
-                                    ? <img src={resolveImageUrl(p.image_url)} className="w-full h-full object-cover" />
+                                    ? <img src={resolveImageUrl(p.image_url)} className="w-full h-full object-cover" onError={imgRetryOnError} />
                                     : p.name.charAt(0)}
                             </div>
                         </td>
