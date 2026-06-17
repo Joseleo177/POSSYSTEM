@@ -30,6 +30,11 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     useEffect(() => {
         if (open) {
             if (editData) {
+                let initialBulkPrice = editData.bulk_price || "";
+                if (!initialBulkPrice && editData.cost_price && editData.package_size) {
+                    initialBulkPrice = (parseFloat(editData.cost_price) * parseFloat(editData.package_size)).toFixed(2);
+                }
+
                 setForm({
                     name: editData.name,
                     price: editData.price,
@@ -37,9 +42,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     category_id: editData.category_id || "",
                     unit: editData.unit || "unidad",
                     qty_step: editData.qty_step || "1",
-                    package_unit: editData.package_unit || "",
+                    package_unit: editData.package_unit ? editData.package_unit.toUpperCase() : "",
                     package_size: editData.package_size != null && editData.package_size !== "" ? parseFloat(editData.package_size) : "",
-                    bulk_price: editData.bulk_price || "",
+                    bulk_price: initialBulkPrice,
                     cost_price: editData.cost_price || "",
                     profit_margin: editData.profit_margin || "",
                     min_stock: editData.min_stock != null ? parseFloat(editData.min_stock) : 0,
@@ -50,8 +55,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         product_id: c.ingredient.id,
                         name: c.ingredient.name,
                         unit: c.ingredient.unit || "uds",
-                        quantity: c.quantity,
-                        price: parseFloat(c.ingredient.price || 0)
+                        quantity: parseFloat(c.quantity),
+                        price: parseFloat(c.ingredient.price || 0),
+                        cost_price: parseFloat(c.ingredient.cost_price || 0)
                     })) : []
                 });
                 setImagePreview(resolveImageUrl(editData.image_url) || null);
@@ -75,6 +81,16 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
     const handleCostOrMarginChange = (key, val) => {
         const next = { ...form, [key]: val };
+        
+        if (key === "cost_price" && next.package_size) {
+            const size = parseFloat(next.package_size);
+            if (size > 0 && val !== "") {
+                next.bulk_price = (parseFloat(val) * size).toFixed(2);
+            } else if (val === "") {
+                next.bulk_price = "";
+            }
+        }
+
         const suggested = calcSalePriceHelper(
             key === "cost_price" ? val : next.cost_price,
             key === "profit_margin" ? val : next.profit_margin
@@ -129,6 +145,19 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         setForm(prev => ({ ...prev, ...updates }));
     };
 
+    const handlePackageSizeChange = (val) => {
+        const next = { ...form, package_size: val };
+        if (next.cost_price && val) {
+            const size = parseFloat(val);
+            if (size > 0) {
+                next.bulk_price = (parseFloat(next.cost_price) * size).toFixed(2);
+            }
+        } else if (!val) {
+            next.bulk_price = "";
+        }
+        setForm(next);
+    };
+
     const handleImageChange = (e) => {
         const f = e.target.files[0];
         if (!f) return;
@@ -158,21 +187,34 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const suggestedPrice = calcSalePriceHelper(form.cost_price, form.profit_margin);
 
     const handleComboItemsChange = (items) => {
-        const sumPrice = items.reduce((acc, item) => {
+        const sumCost = items.reduce((acc, item) => {
             const qty = parseFloat(item.quantity) || 0;
-            const p = parseFloat(item.price) || 0;
-            return acc + (p * qty);
+            const c = parseFloat(item.cost_price) || 0;
+            return acc + (c * qty);
         }, 0);
+        
         const updates = { combo_items: items };
-        if (sumPrice > 0) {
-            updates.price = sumPrice.toFixed(5);
-            if (exchangeRate > 0) {
-                setPriceInBs((sumPrice * exchangeRate).toFixed(2));
-            } else {
-                setPriceInBs("");
-            }
+        if (sumCost > 0 || items.length === 0) {
+            updates.cost_price = sumCost.toFixed(4);
         }
-        setForm(prev => ({ ...prev, ...updates }));
+        
+        setForm(prev => {
+            const next = { ...prev, ...updates };
+            if (next.profit_margin && next.cost_price !== "") {
+                 const suggested = calcSalePriceHelper(next.cost_price, next.profit_margin);
+                 if (suggested !== null) {
+                     next.price = suggested;
+                     setTimeout(() => {
+                         if (exchangeRate > 0) {
+                             setPriceInBs((parseFloat(suggested) * exchangeRate).toFixed(2));
+                         } else {
+                             setPriceInBs("");
+                         }
+                     }, 0);
+                 }
+            }
+            return next;
+        });
     };
 
     return (
@@ -322,9 +364,19 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     )}
                 </div>
 
-                {/* ── Si NO es combo y NO es servicio: Mostrar Costos. Si es Combo: Mostrar Componentes ── */}
-                {!form.is_combo && !form.is_service ? (
-                    <div className="space-y-3 animate-in fade-in duration-300">
+                {/* ── Componentes de Combo ── */}
+                {form.is_combo && (
+                    <ComboItemsEditor
+                        comboItems={form.combo_items}
+                        onChange={handleComboItemsChange}
+                        excludeId={editData?.id}
+                        warehouseId={warehouseId}
+                    />
+                )}
+
+                {/* ── Si NO es servicio: Mostrar Costos y Rentabilidad ── */}
+                {!form.is_service && (
+                    <div className="space-y-3 animate-in fade-in duration-300 mt-2">
                         {/* ── Rentabilidad ── */}
                         <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
                             <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">Costos y Rentabilidad</h3>
@@ -335,7 +387,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                             <label className="label">Costo Unitario</label>
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">$</span>
-                                                <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.0001" min="0" className="input !pl-6" placeholder="0.0000" />
+                                                <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.0001" min="0" className={`input !pl-6 ${form.is_combo ? "bg-surface-2 dark:bg-white/5" : ""}`} placeholder="0.0000" readOnly={form.is_combo} />
                                             </div>
                                         </div>
                                         <div>
@@ -390,7 +442,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         </div>
 
                         {/* ── Configuración Avanzada ── */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {!form.is_combo && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
                                 <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">Unidades de Embalaje</h3>
                                 <div className="flex gap-2">
@@ -410,8 +463,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         />
                                     </div>
                                     <div className="w-24 relative">
-                                        <input value={form.package_size} onChange={e => set("package_size", e.target.value)} type="number" placeholder="Cant." className="input text-center" />
-                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-content-subtle font-bold uppercase">uds</span>
+                                        <input value={form.package_size} onChange={e => handlePackageSizeChange(e.target.value)} type="number" placeholder="Cant." className="input text-center !pr-9" />
+                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-content-subtle font-bold uppercase">{form.unit || "uds"}</span>
                                     </div>
                                 </div>
                             </div>
@@ -423,14 +476,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 </div>
                             </div>
                         </div>
+                        )}
                     </div>
-                ) : form.is_combo ? (
-                    <ComboItemsEditor
-                        comboItems={form.combo_items}
-                        onChange={handleComboItemsChange}
-                        excludeId={editData?.id}
-                    />
-                ) : null}
+                )}
 
                 {/* ── Footer de Acción ── */}
                 <div className="flex gap-3 justify-end mt-3 pt-3 border-t border-border/40 dark:border-border-dark/40">

@@ -41,10 +41,10 @@ export default function PurchaseForm({ state }) {
                         <table className="table-pos min-w-[720px]">
                             <thead>
                                 <tr>
-                                    <th>Producto</th>
-                                    <th>Empaque</th>
+                                    <th className="text-left">Producto</th>
+                                    <th className="text-left">Empaque</th>
                                     <th className="text-center">Cant.</th>
-                                    <th className="text-right">Costo×Emp.</th>
+                                    <th className="text-center">Costo×Emp.</th>
                                     <th className="text-right">P.Venta</th>
                                     <th className="text-right">Subtotal</th>
                                     <th className="w-12"></th>
@@ -63,29 +63,31 @@ export default function PurchaseForm({ state }) {
                                             {item.package_unit} × {item.package_unit?.toLowerCase() === "unidad" ? "1" : item.package_size}
                                         </td>
                                         <td className="text-center">
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                step="1"
-                                                value={item.package_qty}
-                                                onChange={e => updateItem(item.key, { package_qty: e.target.value })}
-                                                className="w-16 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-content dark:text-white"
-                                            />
+                                            <div className="flex justify-center">
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    value={item.package_qty}
+                                                    onChange={e => updateItem(item.key, { package_qty: e.target.value })}
+                                                    className="w-14 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-content dark:text-white"
+                                                />
+                                            </div>
                                         </td>
-                                        <td className="text-right">
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                value={item.package_price}
-                                                onChange={e => updateItem(item.key, { package_price: e.target.value })}
-                                                className="w-24 text-right text-[10px] font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-content-subtle dark:text-white/50"
-                                            />
-                                            {item.unit_cost > 0 && (
-                                                <div className="text-[8px] tabular-nums text-content-subtle/50 dark:text-white/25 mt-0.5">
-                                                    unit: Ref. {fmt2(item.unit_cost)}
-                                                </div>
-                                            )}
+                                        <td className="text-center">
+                                            <div className="flex flex-col items-center gap-0.5">
+                                                <input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    value={item.package_price}
+                                                    onChange={e => updateItem(item.key, { package_price: e.target.value })}
+                                                    className="w-28 p-0 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-info"
+                                                />
+                                                {item.unit_cost > 0 && (
+                                                    <span className="text-[9px] tabular-nums text-content-subtle/40 dark:text-white/20">
+                                                        unit: Ref. {fmt2(item.unit_cost)}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="text-right text-[10px] font-bold tabular-nums text-success">
                                             {item.sale_price > 0 ? `Ref. ${fmt2(item.sale_price)}` : "—"}

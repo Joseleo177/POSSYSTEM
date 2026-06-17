@@ -164,10 +164,17 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
       attributes: ['id']
     });
     const catIds = categories.map(c => c.id);
-    where[Op.or] = [
+    const searchOr = [
       { name: { [Op.iLike]: `%${search}%` } },
       ...(catIds.length > 0 ? [{ category_id: { [Op.in]: catIds } }] : [])
     ];
+    if (where[Op.or]) {
+      // Ya existe filtro de almacén/stock — combinar ambos con AND
+      where[Op.and] = [{ [Op.or]: where[Op.or] }, { [Op.or]: searchOr }];
+      delete where[Op.or];
+    } else {
+      where[Op.or] = searchOr;
+    }
   }
 
   const { count, rows } = await Product.findAndCountAll({

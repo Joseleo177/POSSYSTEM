@@ -80,10 +80,14 @@ export default function StockView({
                                             <span className="text-[10px] font-bold text-content-subtle uppercase tracking-tighter opacity-70">{s.category_name || "General"}</span>
                                         </td>
                                         <td>
-                                            <span className={`text-[13px] font-black tabular-nums transition-colors ${parseFloat(s.qty) <= 0 ? "text-danger" : parseFloat(s.qty) <= 5 ? "text-warning" : "text-success"}`}>
-                                                {fmtQty(s.qty)}
-                                                <span className="text-[9px] ml-1 opacity-40 uppercase font-bold">{s.unit || "uds"}</span>
-                                            </span>
+                                            {s.is_service ? (
+                                                <span className="text-[13px] font-black text-content-subtle opacity-30">—</span>
+                                            ) : (
+                                                <span className={`text-[13px] font-black tabular-nums transition-colors ${parseFloat(s.qty) <= 0 ? "text-danger" : parseFloat(s.qty) <= 5 ? "text-warning" : "text-success"}`}>
+                                                    {fmtQty(s.qty)}
+                                                    <span className="text-[9px] ml-1 opacity-40 uppercase font-bold">{s.unit || "uds"}</span>
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="font-bold text-brand-500 text-xs tabular-nums tracking-tight">
                                             ${parseFloat(s.price || 0).toFixed(2)}

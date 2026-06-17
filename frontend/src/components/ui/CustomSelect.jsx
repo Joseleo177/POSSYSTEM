@@ -48,7 +48,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
       <div
         ref={triggerRef}
         onClick={() => setOpen(!open)}
-        className={`h-9 text-[11px] cursor-pointer flex items-center justify-between transition-all duration-200 border px-3 rounded-md
+        className={`h-10 text-[11px] cursor-pointer flex items-center justify-between transition-all duration-200 border px-3 rounded-md
           ${open
             ? "border-brand-500 bg-brand-500/5 ring-[3px] ring-brand-500/15"
             : "bg-white dark:bg-[#12141a] border-border/80 dark:border-white/5 hover:border-brand-500/40"}

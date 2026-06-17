@@ -59,8 +59,20 @@ export default function ProductTable({
                             </div>
                         </td>
                         <td>
-                            <div className="text-xs font-bold text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">
-                                {p.name}
+                            <div className="flex items-center gap-2">
+                                <div className="text-xs font-bold text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">
+                                    {p.name}
+                                </div>
+                                {p.is_combo && (
+                                    <span className="text-[9px] bg-brand-500/10 text-brand-500 border border-brand-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wide whitespace-nowrap">
+                                        Combo
+                                    </span>
+                                )}
+                                {p.is_service && (
+                                    <span className="text-[9px] bg-blue-500/10 text-blue-500 border border-blue-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wide whitespace-nowrap">
+                                        Servicio
+                                    </span>
+                                )}
                             </div>
                         </td>
                         <td>
@@ -69,16 +81,22 @@ export default function ProductTable({
                             </span>
                         </td>
                         <td className="text-center">
-                            <span className={`text-xs font-bold tabular-nums ${
-                                parseFloat(p.warehouse_stock ?? p.stock) <= 0
-                                    ? "text-danger"
-                                    : parseFloat(p.warehouse_stock ?? p.stock) <= 5
-                                    ? "text-warning"
-                                    : "text-success"
-                            }`}>
-                                {p.warehouse_stock ?? p.stock}
-                            </span>
-                            <span className="ml-1 text-[9px] font-bold text-content-subtle opacity-40 uppercase">{p.unit || "uds"}</span>
+                            {p.is_service ? (
+                                <span className="text-xs font-bold text-content-subtle opacity-30">—</span>
+                            ) : (
+                                <>
+                                    <span className={`text-xs font-bold tabular-nums ${
+                                        parseFloat(p.warehouse_stock ?? p.stock) <= 0
+                                            ? "text-danger"
+                                            : parseFloat(p.warehouse_stock ?? p.stock) <= 5
+                                            ? "text-warning"
+                                            : "text-success"
+                                    }`}>
+                                        {p.warehouse_stock ?? p.stock}
+                                    </span>
+                                    <span className="ml-1 text-[9px] font-bold text-content-subtle opacity-40 uppercase">{p.unit || "uds"}</span>
+                                </>
+                            )}
                         </td>
                         <td className="text-right">
                             <span className="text-xs font-bold text-brand-500 tabular-nums tracking-tighter">

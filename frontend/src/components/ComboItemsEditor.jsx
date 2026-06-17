@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../services/api";
 
-export default function ComboItemsEditor({ comboItems, onChange, excludeId }) {
+export default function ComboItemsEditor({ comboItems, onChange, excludeId, warehouseId }) {
     const [search, setSearch] = useState("");
     const [results, setResults] = useState([]);
     const [loadingSearch, setLoadingSearch] = useState(false);
@@ -15,13 +15,13 @@ export default function ComboItemsEditor({ comboItems, onChange, excludeId }) {
         timer.current = setTimeout(async () => {
             setLoadingSearch(true);
             try {
-                const r = await api.products.getAll({ search, is_combo: false, limit: 10 });
+                const r = await api.products.getAll({ search, is_combo: false, limit: 10, warehouse_id: warehouseId });
                 setResults(r.data.filter(p => p.id !== excludeId));
             } catch {}
             finally { setLoadingSearch(false); }
         }, 250);
         return () => clearTimeout(timer.current);
-    }, [search, excludeId]);
+    }, [search, excludeId, warehouseId]);
 
     useEffect(() => {
         const handle = (e) => {
@@ -33,7 +33,7 @@ export default function ComboItemsEditor({ comboItems, onChange, excludeId }) {
 
     const add = (prod) => {
         if (comboItems.find(i => i.product_id === prod.id)) return;
-        onChange([...comboItems, { product_id: prod.id, name: prod.name, unit: prod.unit || "uds", quantity: 1, price: parseFloat(prod.price || 0) }]);
+        onChange([...comboItems, { product_id: prod.id, name: prod.name, unit: prod.unit || "uds", quantity: 1, price: parseFloat(prod.price || 0), cost_price: parseFloat(prod.cost_price || 0) }]);
         setSearch("");
         setShowDropdown(false);
     };
@@ -42,6 +42,13 @@ export default function ComboItemsEditor({ comboItems, onChange, excludeId }) {
 
     const updateQty = (id, q) => {
         if (parseFloat(q) < 0) return;
+        const itemToUpdate = comboItems.find(i => i.product_id === id);
+        if (itemToUpdate) {
+            const u = itemToUpdate.unit ? itemToUpdate.unit.toUpperCase() : "";
+            if (u === "UNIDAD" || u === "UDS") {
+                if (q.includes(".") || q.includes(",")) return;
+            }
+        }
         onChange(comboItems.map(i => i.product_id === id ? { ...i, quantity: q } : i));
     };
 
@@ -107,7 +114,7 @@ export default function ComboItemsEditor({ comboItems, onChange, excludeId }) {
                                         value={item.quantity}
                                         onChange={e => updateQty(item.product_id, e.target.value)}
                                         type="number"
-                                        step={item.unit === "unidad" || item.unit === "uds" ? "1" : "0.001"}
+                                        step={item.unit && (item.unit.toUpperCase() === "UNIDAD" || item.unit.toUpperCase() === "UDS") ? "1" : "0.001"}
                                         className="input !h-7 text-center text-xs"
                                     />
                                 </div>

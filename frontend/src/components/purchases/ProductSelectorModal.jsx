@@ -65,7 +65,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
             });
             setForm({
                 package_unit:    editItem.package_unit  || "Unidad",
-                package_size:    String(editItem.package_size  ?? "1"),
+                package_size:    String(parseFloat(editItem.package_size ?? 1) || 1),
                 package_qty:     String(editItem.package_qty   ?? "1"),
                 package_price:   editItem.package_price != null ? String((parseFloat(editItem.package_price) * invoiceRate).toFixed(2)) : "",
                 profit_margin:   String(editItem.profit_margin ?? "30"),
@@ -109,7 +109,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         const pkgSize  = isUnidad ? 1 : (parseFloat(p.package_size) || 1);
         setForm({
             package_unit:  p.package_unit || "Unidad",
-            package_size:  isUnidad ? "1" : (p.package_size != null ? String(p.package_size) : "1"),
+            package_size:  isUnidad ? "1" : String(parseFloat(p.package_size) || 1),
             package_qty:   "1",
             package_price: p.cost_price ? String((p.cost_price * pkgSize * invoiceRate).toFixed(2)) : "",
             profit_margin: p.profit_margin != null ? String(p.profit_margin) : "30",

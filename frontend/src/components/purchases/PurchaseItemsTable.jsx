@@ -1,4 +1,40 @@
+import { useState, useEffect, useRef } from "react";
 import { fmt2 } from "../../utils/purchaseUtils";
+
+// Input numérico que preserva lo que el usuario escribe (permite ".", "" y borrar)
+// Solo sincroniza desde fuera cuando el valor externo cambia significativamente.
+function EditablePriceInput({ value, onChange, disabled, className, decimals = 5 }) {
+    const toDisplay = (v) => (parseFloat(v) > 0 ? String(+parseFloat(v).toFixed(decimals)) : "");
+    const [display, setDisplay] = useState(() => toDisplay(value));
+    const extRef = useRef(value);
+
+    useEffect(() => {
+        const ext = parseFloat(value) || 0;
+        const cur = parseFloat(extRef.current) || 0;
+        if (Math.abs(ext - cur) > 0.00001) {
+            extRef.current = value;
+            setDisplay(toDisplay(value));
+        }
+    }, [value]);
+
+    const handleChange = (e) => {
+        const raw = e.target.value;
+        setDisplay(raw);
+        extRef.current = raw;
+        onChange(raw);
+    };
+
+    return (
+        <input
+            type="text"
+            inputMode="decimal"
+            value={display}
+            disabled={disabled}
+            onChange={handleChange}
+            className={className}
+        />
+    );
+}
 
 export default function PurchaseItemsTable({
     items = [],
@@ -21,7 +57,7 @@ export default function PurchaseItemsTable({
                         <th className="px-4 py-3">Producto</th>
                         {showLots && <th className="px-4 py-3">Lote / Vence</th>}
                         <th className="px-4 py-3 text-center">Cant.</th>
-                        <th className="px-4 py-3 text-right w-36">
+                        <th className="px-4 py-3 text-center w-36">
                             Costo×Emp.{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70">({invoiceSym})</span> : ""}
                         </th>
                         <th className="px-4 py-3 text-right">C.Unit</th>
@@ -56,31 +92,28 @@ export default function PurchaseItemsTable({
                             {/* Cant. */}
                             <td className="px-4 py-3 text-center">
                                 {isEditing ? (
-                                    <input
-                                        type="number" min="1" step="1"
-                                        value={item.package_qty}
-                                        onChange={e => onUpdate?.(item.id ?? item.key, { package_qty: e.target.value })}
-                                        className="w-14 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-content dark:text-white [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                    <EditablePriceInput
+                                        value={parseFloat(item.package_qty) || 0}
+                                        onChange={raw => onUpdate?.(item.id ?? item.key, { package_qty: raw })}
+                                        className="w-14 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-content dark:text-white"
                                     />
                                 ) : (
-                                    <span className="text-xs font-bold tabular-nums">{item.package_qty}</span>
+                                    <span className="text-xs font-bold tabular-nums">{parseFloat(item.package_qty)}</span>
                                 )}
                             </td>
 
                             {/* Costo × Empaque */}
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-4 py-3 text-center">
                                 {isEditing ? (
-                                    <div className="flex flex-col items-end gap-0.5">
-                                        <input
-                                            type="number" min="0" step="0.01"
-                                            value={invoiceRate > 1
-                                                ? fmt2(parseFloat(item.package_price || 0) * invoiceRate)
-                                                : +parseFloat(item.package_price || 0).toFixed(4)}
-                                            onChange={e => {
-                                                const raw = parseFloat(e.target.value || 0);
-                                                onUpdate?.(item.id ?? item.key, { package_price: invoiceRate > 1 ? raw / invoiceRate : e.target.value });
+                                    <div className="flex flex-col items-center gap-0.5">
+                                        <EditablePriceInput
+                                            value={invoiceRate > 1 ? parseFloat(item.package_price || 0) * invoiceRate : parseFloat(item.package_price || 0)}
+                                            decimals={invoiceRate > 1 ? 2 : 5}
+                                            onChange={raw => {
+                                                const num = parseFloat(raw) || 0;
+                                                onUpdate?.(item.id ?? item.key, { package_price: invoiceRate > 1 ? num / invoiceRate : raw });
                                             }}
-                                            className="w-full p-0 text-right text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-info [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                            className="w-28 p-0 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-info"
                                         />
                                         {invoiceRate > 1 && parseFloat(item.package_price) > 0 && (
                                             <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">≈ Ref. {fmt2(item.package_price)}</span>
@@ -101,21 +134,19 @@ export default function PurchaseItemsTable({
                                 {isEditing && item.unit_cost > 0 ? (
                                     <div className="flex items-center justify-end gap-2">
                                         <div className={`flex flex-col items-end gap-0.5 ${item.update_price === false ? "opacity-30" : ""}`}>
-                                            <input
-                                                type="number" min="0" step="0.01"
+                                            <EditablePriceInput
                                                 disabled={item.update_price === false}
-                                                value={invoiceRate > 1
-                                                    ? fmt2(parseFloat(item.sale_price || 0) * invoiceRate)
-                                                    : +parseFloat(item.sale_price || 0).toFixed(4)}
-                                                onChange={e => {
-                                                    const raw = parseFloat(e.target.value || 0);
-                                                    const newPrice = invoiceRate > 1 ? raw / invoiceRate : raw;
+                                                value={invoiceRate > 1 ? parseFloat(item.sale_price || 0) * invoiceRate : parseFloat(item.sale_price || 0)}
+                                                decimals={invoiceRate > 1 ? 2 : 5}
+                                                onChange={raw => {
+                                                    const num = parseFloat(raw) || 0;
+                                                    const newPrice = invoiceRate > 1 ? num / invoiceRate : num;
                                                     const cost = parseFloat(item.unit_cost) || 0;
                                                     if (cost > 0 && newPrice >= 0) {
                                                         onUpdate?.(item.id ?? item.key, { profit_margin: ((newPrice / cost) - 1) * 100 });
                                                     }
                                                 }}
-                                                className="w-20 p-0 text-right text-xs font-black tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-success dark:focus:border-success focus:outline-none text-success [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                                className="w-20 p-0 text-right text-xs font-black tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-success dark:focus:border-success focus:outline-none text-success"
                                             />
                                             <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">
                                                 {invoiceRate > 1 && parseFloat(item.sale_price) > 0
@@ -128,7 +159,7 @@ export default function PurchaseItemsTable({
                                             title={item.update_price === false
                                                 ? "NO actualizará el precio de venta del producto al recibir"
                                                 : "Actualizará el precio de venta del producto al recibir"}
-                                            className={`w-8 h-4.5 rounded-full relative transition-all shrink-0 ${item.update_price === false ? "bg-surface-3 dark:bg-white/10" : "bg-success"}`}
+                                            className={`w-8 rounded-full relative transition-all shrink-0 ${item.update_price === false ? "bg-surface-3 dark:bg-white/10" : "bg-success"}`}
                                             style={{ height: "18px" }}
                                         >
                                             <span className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${item.update_price === false ? "left-0.5" : "left-[15px]"}`} />
