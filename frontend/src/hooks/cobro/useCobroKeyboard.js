@@ -9,11 +9,21 @@ export function useCobroKeyboard({
     searchInputRef,
     customers, selectedCustIdx, setSelectedCustIdx,
     setSelectedCustomer, setCustomers, setCustSearch,
-    openQtyModal, notify,
+    openQtyModal, setScanPending, qtyModalOpen, notify,
 }) {
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.key === "F1") { e.preventDefault(); setSelectedIndex(-1); searchInputRef.current?.focus(); return; }
+
+            // Redirigir escritura al buscador si no hay ningún input enfocado
+            const tag = e.target.tagName;
+            const isInInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target.isContentEditable;
+            if (!isInInput && !qtyModalOpen && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+                setSearch(prev => prev + e.key);
+                return;
+            }
 
             // Navegación en buscador de clientes
             if (e.target.id === "customer-search-input") {
@@ -31,6 +41,7 @@ export function useCobroKeyboard({
             if (e.key === "F4") { e.preventDefault(); holdCart(); }
             if (e.key === "F10") { e.preventDefault(); if (cart.length > 0) setShowConfirmCheckout(true); }
             if (e.key === "Escape") {
+                setScanPending?.(false);
                 setSearch("");
                 setSelectedIndex(-1);
                 setShowPayModal(false);
@@ -61,19 +72,26 @@ export function useCobroKeyboard({
                 // CheckoutTypeModal handles its own Enter key — skip when it's open
                 if (showConfirmCheckout) return;
 
-                // Caso especial: Lector de Barras (Buscador con 1 solo resultado)
-                if (e.target.id === "product-search-input" && selectedIndex < 0 && filteredProducts.length === 1) {
+                if (e.target.id === "product-search-input" && selectedIndex < 0) {
                     e.preventDefault();
-                    const p = filteredProducts[0];
-                    if (p) {
-                        const hasUnlimitedStock = p.is_service || (p.is_combo && p.stock === null);
-                        if (!hasUnlimitedStock && parseFloat(p.stock) <= 0) {
-                            return notify("Este producto no tiene existencias en el inventario", "error");
+                    if (filteredProducts.length === 1) {
+                        // Resultado inmediato: abrir modal directo
+                        const p = filteredProducts[0];
+                        if (p) {
+                            const hasUnlimitedStock = p.is_service || (p.is_combo && p.stock === null);
+                            if (!hasUnlimitedStock && parseFloat(p.stock) <= 0) {
+                                return notify("Este producto no tiene existencias en el inventario", "error");
+                            }
+                            setSearch("");
+                            openQtyModal(p);
+                            return;
                         }
-                        setSearch(""); // Limpiar búsqueda para el siguiente escaneo
-                        openQtyModal(p);
-                        return;
                     }
+                    // Productos aún no cargaron (debounce+API en curso) → marcar pending
+                    if (e.target.value.trim()) {
+                        setScanPending?.(true);
+                    }
+                    return;
                 }
 
                 if (selectedIndex >= 0) {
@@ -95,5 +113,5 @@ export function useCobroKeyboard({
     }, [cart, holdCart, receipt, selectedIndex, filteredProducts, showConfirmCheckout,
         checkout, customers, selectedCustIdx, setSelectedCustomer, setCustomers, setCustSearch,
         setSelectedCustIdx, setSelectedIndex, setSearch, setShowPayModal, setShowConfirmCheckout,
-        searchInputRef, openQtyModal, notify]);
+        searchInputRef, openQtyModal, setScanPending, qtyModalOpen, notify]);
 }

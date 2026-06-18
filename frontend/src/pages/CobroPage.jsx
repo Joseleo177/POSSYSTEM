@@ -53,6 +53,7 @@ export default function CobroPage() {
     const [qtyModalItem, setQtyModalItem]          = useState(null);
     const [showPendingSales, setShowPendingSales]  = useState(false);
     const searchInputRef                           = useRef(null);
+    const scanPendingRef                           = useRef(false);
 
     // ── Hooks de capa ──────────────────────────────────────────
     const products = useCobroProducts(activeWarehouse, notify);
@@ -60,6 +61,35 @@ export default function CobroPage() {
     const session  = useCobroSession(employee, activeWarehouse);
 
     const currSym = currentCurrency?.symbol || baseCurrency?.symbol || "Ref.";
+
+    // ── Foco automático en el buscador ─────────────────────────
+    // Al montar la página
+    useEffect(() => { requestAnimationFrame(() => searchInputRef.current?.focus()); }, []);
+    // Al cerrar el modal de cantidad
+    useEffect(() => {
+        if (!qtyModalItem) requestAnimationFrame(() => searchInputRef.current?.focus());
+    }, [qtyModalItem]);
+
+    // ── Auto-apertura: coincidencia exacta de barcode o Enter pendiente del scanner ──
+    useEffect(() => {
+        const fp = products.filteredProducts;
+        const term = products.search.trim();
+        if (!term || fp.length !== 1) {
+            if (fp.length > 1) scanPendingRef.current = false;
+            return;
+        }
+        const p = fp[0];
+        const isExact = p.barcode && p.barcode === term;
+        if (!isExact && !scanPendingRef.current) return;
+        scanPendingRef.current = false;
+        const hasUnlimitedStock = p.is_service || (p.is_combo && p.stock === null);
+        if (!hasUnlimitedStock && parseFloat(p.stock) <= 0) {
+            notify("Este producto no tiene existencias en el inventario", "error");
+        } else {
+            products.setSearch("");
+            setQtyModalItem(p);
+        }
+    }, [products.filteredProducts]); // eslint-disable-line
 
     useCobroKeyboard({
         cart, receipt, holdCart,
@@ -78,6 +108,8 @@ export default function CobroPage() {
         setCustomers: customer.setCustomers,
         setCustSearch: customer.setCustSearch,
         openQtyModal: setQtyModalItem,
+        setScanPending: (v) => { scanPendingRef.current = v; },
+        qtyModalOpen: !!qtyModalItem,
         notify,
     });
 
@@ -251,6 +283,11 @@ export default function CobroPage() {
                 isOpen={!!qtyModalItem}
                 onClose={() => setQtyModalItem(null)}
                 item={qtyModalItem}
+                convertToDisplay={convertToDisplay}
+                convertToSecondary={convertToSecondary}
+                currSym={currSym}
+                secondaryCurrency={secondaryCurrency}
+                fmt={fmt}
                 onSave={(id, q) => {
                     const isInCart = cart.find(i => i.id === id);
                     if (isInCart) {
