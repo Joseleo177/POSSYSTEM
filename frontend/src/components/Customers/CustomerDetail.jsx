@@ -196,7 +196,7 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay, on
                             <span className="w-1.5 h-1.5 rounded-full bg-danger" />
                             <p className="text-[10px] font-black uppercase tracking-widest text-danger opacity-70">Cuentas por Cobrar</p>
                         </div>
-                        <div className="divide-y divide-border/10 dark:divide-white/[0.05]">
+                        <div className="divide-y divide-border/10 dark:divide-white/[0.05] max-h-[340px] overflow-y-auto print:max-h-none print:overflow-visible">
                             {pendingSales.map(sale => (
                                 <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => setSelectedSaleId(sale.id)}>
                                     <div className="flex-1 min-w-0">
@@ -238,7 +238,7 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay, on
                             <p className={LABEL}>Sin pagos finalizados</p>
                         </div>
                     ) : (
-                        <div className="divide-y divide-border/10 dark:divide-white/[0.05]">
+                        <div className="divide-y divide-border/10 dark:divide-white/[0.05] max-h-[340px] overflow-y-auto print:max-h-none print:overflow-visible">
                             {paidSales.map(sale => (
                                 <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => setSelectedSaleId(sale.id)}>
                                     <div className="flex-1 min-w-0">
