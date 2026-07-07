@@ -24,7 +24,7 @@ export default function Page({ module = "Módulo", title, subheader, actions, ch
             {subheader}
 
             {/* Contenido */}
-            <div className="flex-1 overflow-auto flex flex-col px-4 py-2 bg-white/[0.02]">
+            <div className="flex-1 min-h-0 overflow-auto flex flex-col px-4 py-2 bg-white/[0.02]">
                 {children}
             </div>
 

@@ -14,6 +14,10 @@ const PAID_LIMIT = 50;
 const SECTION = "bg-surface-2 dark:bg-white/[0.04] rounded-2xl border border-border/10 dark:border-white/[0.06]";
 const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-subtle opacity-40";
 
+// Cuerpo scrolleable de cada lista: rellena el alto disponible de su sección y desplaza dentro.
+// En impresión se desactiva para que salgan todas las filas.
+const SCROLL_LIST = "flex-1 min-h-0 overflow-y-auto print:min-h-0 print:overflow-visible";
+
 export default function CustomerDetail({ detail, pending, paid, paidTotal, paidPage, onPaidPageChange, onClose, onPay, onRefresh }) {
     const { baseCurrency, notify, activeJournals, activeCurrencies } = useApp();
     const [selectedSaleId, setSelectedSaleId] = useState(null);
@@ -101,7 +105,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                 </div>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-auto px-4 py-4 flex flex-col gap-4">
+            <div className="flex-1 min-h-0 overflow-hidden print:overflow-visible print:block px-4 py-4 flex flex-col gap-4">
 
                 {/* Print header */}
                 <div className="hidden print-force-break mb-4 text-center text-black">
@@ -111,7 +115,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                 </div>
 
                 {/* ── Card resumen de cliente ── */}
-                <div className={`${SECTION} p-5`}>
+                <div className={`${SECTION} p-5 shrink-0`}>
                     <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
 
                         {/* Identidad */}
@@ -196,12 +200,12 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
 
                 {/* ── Cuentas por Cobrar ── */}
                 {pendingSales.length > 0 && (
-                    <div className={`${SECTION} overflow-hidden`}>
-                        <div className="px-5 py-3 border-b border-border/10 dark:border-white/[0.06] flex items-center gap-2">
+                    <div className={`${SECTION} overflow-hidden flex-1 min-h-0 flex flex-col print:flex-none print:min-h-0 print:overflow-visible`}>
+                        <div className="shrink-0 px-5 py-3 border-b border-border/10 dark:border-white/[0.06] flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-danger" />
                             <p className="text-[10px] font-black uppercase tracking-widest text-danger opacity-70">Cuentas por Cobrar</p>
                         </div>
-                        <div className="divide-y divide-border/10 dark:divide-white/[0.05]">
+                        <div className={`divide-y divide-border/10 dark:divide-white/[0.05] ${SCROLL_LIST}`}>
                             {pendingSales.map(sale => (
                                 <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => setSelectedSaleId(sale.id)}>
                                     <div className="flex-1 min-w-0">
@@ -234,8 +238,8 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                 )}
 
                 {/* ── Historial de Pagos ── */}
-                <div className={`${SECTION} overflow-hidden`}>
-                    <div className="px-5 py-3 border-b border-border/10 dark:border-white/[0.06] flex items-center justify-between">
+                <div className={`${SECTION} overflow-hidden flex-1 min-h-0 flex flex-col print:flex-none print:min-h-0 print:overflow-visible`}>
+                    <div className="shrink-0 px-5 py-3 border-b border-border/10 dark:border-white/[0.06] flex items-center justify-between">
                         <p className={LABEL}>Historial de Pagos</p>
                         {paidTotal > 0 && (
                             <p className="text-[10px] font-bold text-content-subtle dark:text-white/20 tabular-nums">{paidTotal} en total</p>
@@ -246,7 +250,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             <p className={LABEL}>Sin pagos finalizados</p>
                         </div>
                     ) : (
-                        <div className="divide-y divide-border/10 dark:divide-white/[0.05]">
+                        <div className={`divide-y divide-border/10 dark:divide-white/[0.05] ${SCROLL_LIST}`}>
                             {paidSales.map(sale => (
                                 <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => setSelectedSaleId(sale.id)}>
                                     <div className="flex-1 min-w-0">
@@ -268,7 +272,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             ))}
                         </div>
                     )}
-                    <div className="print-hidden">
+                    <div className="shrink-0 print-hidden">
                         <Pagination
                             page={paidPage}
                             totalPages={paidTotalPages}
