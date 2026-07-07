@@ -93,8 +93,9 @@ async function getCustomerPurchases(id, { limit = 50, offset = 0 }) {
   const customer = await Customer.findByPk(id, { attributes: ['id', 'name'] });
   if (!customer) { const e = new Error("Cliente no encontrado"); e.status = 404; throw e; }
 
-  const { count, rows } = await Sale.findAndCountAll({
-    where: { customer_id: id },
+  // Consulta base reutilizable (mismos atributos/includes para ambas secciones)
+  const querySales = (where, opts = {}) => Sale.findAll({
+    where: { customer_id: id, ...where },
     attributes: {
       include: [
         'id', 'total', 'status', 'currency_id', 'exchange_rate', 'created_at',
@@ -105,12 +106,11 @@ async function getCustomerPurchases(id, { limit = 50, offset = 0 }) {
       { model: SaleItem, attributes: ['name', 'price', 'quantity', 'subtotal'] },
       { model: Currency,  attributes: ['symbol', 'code'], required: false },
     ],
-    order:  [['created_at', 'DESC']],
-    limit:  parseInt(limit),
-    offset: parseInt(offset),
+    order: [['created_at', 'DESC']],
+    ...opts,
   });
 
-  const data = rows.map(s => {
+  const mapSale = s => {
     const sale = s.toJSON();
     sale.items           = sale.SaleItems ?? [];
     sale.currency_symbol = sale.Currency?.symbol ?? null;
@@ -120,9 +120,21 @@ async function getCustomerPurchases(id, { limit = 50, offset = 0 }) {
     delete sale.SaleItems;
     delete sale.Currency;
     return sale;
-  });
+  };
 
-  return { customer, data, total: count };
+  // Cuentas por cobrar: SIEMPRE completas (excluye anulado/devuelto).
+  const pendingRows = await querySales({ status: ['borrador', 'pendiente', 'parcial'] });
+
+  // Historial de pagos: paginado.
+  const paidTotal = await Sale.count({ where: { customer_id: id, status: 'pagado' } });
+  const paidRows  = await querySales({ status: 'pagado' }, { limit: parseInt(limit), offset: parseInt(offset) });
+
+  return {
+    customer,
+    pending:   pendingRows.map(mapSale),
+    paid:      paidRows.map(mapSale),
+    paidTotal,
+  };
 }
 
 function buildPayload({ type, name, phone, email, address, rif, tax_name, notes }) {

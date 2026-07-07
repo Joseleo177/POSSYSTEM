@@ -123,7 +123,7 @@ export const api = {
   customers: {
     getAll:       (params={}) => request("/customers?" + new URLSearchParams(params)),
     getOne:       (id)        => request(`/customers/${id}`),
-    getPurchases: (id)        => request(`/customers/${id}/purchases`),
+    getPurchases: (id, params = {}) => request(`/customers/${id}/purchases?` + new URLSearchParams(params)),
     create:       (body)      => request("/customers",       { method: "POST", body: JSON.stringify(body) }),
     update:       (id, body)   => request(`/customers/${id}`, { method: "PUT",  body: JSON.stringify(body) }),
     adjustCredit: (id, amount) => request(`/customers/${id}/credit`, { method: "PATCH", body: JSON.stringify({ amount }) }),

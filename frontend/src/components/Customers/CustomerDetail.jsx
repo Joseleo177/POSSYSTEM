@@ -5,12 +5,16 @@ import { fmtBase, fmtSale as fmtSaleHelper } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import SaleDetailModal from "./SaleDetailModal";
 import Modal from "../ui/Modal";
+import Pagination from "../ui/Pagination";
 import { api } from "../../services/api";
+
+// Debe coincidir con LIMIT del hook useCustomers (tamaño de página del historial)
+const PAID_LIMIT = 50;
 
 const SECTION = "bg-surface-2 dark:bg-white/[0.04] rounded-2xl border border-border/10 dark:border-white/[0.06]";
 const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-subtle opacity-40";
 
-export default function CustomerDetail({ detail, detailSales, onClose, onPay, onRefresh }) {
+export default function CustomerDetail({ detail, pending, paid, paidTotal, paidPage, onPaidPageChange, onClose, onPay, onRefresh }) {
     const { baseCurrency, notify, activeJournals, activeCurrencies } = useApp();
     const [selectedSaleId, setSelectedSaleId] = useState(null);
     const [clearingCredit, setClearingCredit] = useState(false);
@@ -59,12 +63,13 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay, on
         setClearingCredit(false);
     };
 
-    const safeSales    = detailSales || [];
-    const pendingSales = safeSales.filter(s => s.status === "borrador" || s.status === "pendiente" || s.status === "parcial");
-    const paidSales    = safeSales.filter(s => s.status === "pagado");
+    const pendingSales = pending || [];
+    const paidSales    = paid || [];
     const hasPending   = parseFloat(detail.total_debt || 0) > 0;
+    const paidTotalPages = Math.ceil((paidTotal || 0) / PAID_LIMIT);
 
     const handleExportStatement = () => {
+        const safeSales = [...pendingSales, ...paidSales];
         if (!safeSales.length) return;
         const headers = ["Factura", "Fecha", "Estado", "Cargo", "Abonado", "Saldo"];
         const rows = safeSales.map(s => [
@@ -196,7 +201,7 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay, on
                             <span className="w-1.5 h-1.5 rounded-full bg-danger" />
                             <p className="text-[10px] font-black uppercase tracking-widest text-danger opacity-70">Cuentas por Cobrar</p>
                         </div>
-                        <div className="divide-y divide-border/10 dark:divide-white/[0.05] max-h-[340px] overflow-y-auto print:max-h-none print:overflow-visible">
+                        <div className="divide-y divide-border/10 dark:divide-white/[0.05]">
                             {pendingSales.map(sale => (
                                 <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => setSelectedSaleId(sale.id)}>
                                     <div className="flex-1 min-w-0">
@@ -230,15 +235,18 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay, on
 
                 {/* ── Historial de Pagos ── */}
                 <div className={`${SECTION} overflow-hidden`}>
-                    <div className="px-5 py-3 border-b border-border/10 dark:border-white/[0.06]">
+                    <div className="px-5 py-3 border-b border-border/10 dark:border-white/[0.06] flex items-center justify-between">
                         <p className={LABEL}>Historial de Pagos</p>
+                        {paidTotal > 0 && (
+                            <p className="text-[10px] font-bold text-content-subtle dark:text-white/20 tabular-nums">{paidTotal} en total</p>
+                        )}
                     </div>
-                    {paidSales.length === 0 ? (
+                    {paidTotal === 0 ? (
                         <div className="flex flex-col items-center justify-center p-10 opacity-20">
                             <p className={LABEL}>Sin pagos finalizados</p>
                         </div>
                     ) : (
-                        <div className="divide-y divide-border/10 dark:divide-white/[0.05] max-h-[340px] overflow-y-auto print:max-h-none print:overflow-visible">
+                        <div className="divide-y divide-border/10 dark:divide-white/[0.05]">
                             {paidSales.map(sale => (
                                 <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => setSelectedSaleId(sale.id)}>
                                     <div className="flex-1 min-w-0">
@@ -260,6 +268,15 @@ export default function CustomerDetail({ detail, detailSales, onClose, onPay, on
                             ))}
                         </div>
                     )}
+                    <div className="print-hidden">
+                        <Pagination
+                            page={paidPage}
+                            totalPages={paidTotalPages}
+                            total={paidTotal}
+                            limit={PAID_LIMIT}
+                            onPageChange={onPaidPageChange}
+                        />
+                    </div>
                 </div>
 
             </div>

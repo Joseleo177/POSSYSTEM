@@ -18,7 +18,10 @@ export function useCustomers(notify) {
   const [debtorsFilter, setDebtorsFilter] = useState(false);
 
   const [detail, setDetail]           = useState(null);
-  const [detailSales, setDetailSales] = useState([]);
+  const [detailPending, setDetailPending]     = useState([]); // Cuentas por cobrar (completas)
+  const [detailPaid, setDetailPaid]           = useState([]); // Historial de pagos (página actual)
+  const [detailPaidTotal, setDetailPaidTotal] = useState(0);
+  const [detailPaidPage, setDetailPaidPage]   = useState(1);
 
   const [saving, setSaving]           = useState(false);
 
@@ -41,31 +44,46 @@ export function useCustomers(notify) {
   useEffect(() => { load(); }, [load]);
 
   // ── Detalle + historial de compras ───────────────────────────
+  // Carga cuentas por cobrar (completas) + una página del historial pagado.
+  const loadPurchases = useCallback(async (customerId, pg = 1) => {
+    const r = await api.customers.getPurchases(customerId, {
+      limit: LIMIT, offset: (pg - 1) * LIMIT,
+    });
+    setDetailPending(r.pending || []);
+    setDetailPaid(r.paid || []);
+    setDetailPaidTotal(r.paidTotal || 0);
+    setDetailPaidPage(pg);
+  }, []);
+
   const openDetail = useCallback(async (customer) => {
     setDetail(customer);
     try {
-      const r = await api.customers.getPurchases(customer.id);
-      setDetailSales(r.data);
+      await loadPurchases(customer.id, 1);
     } catch (e) { notify(e.message, "err"); }
-  }, [notify]);
+  }, [notify, loadPurchases]);
 
   const closeDetail = useCallback(() => {
     setDetail(null);
-    setDetailSales([]);
+    setDetailPending([]);
+    setDetailPaid([]);
+    setDetailPaidTotal(0);
+    setDetailPaidPage(1);
   }, []);
+
+  // Cambiar de página en el historial de pagos
+  const setDetailPage = useCallback((pg) => {
+    if (detail?.id) loadPurchases(detail.id, pg).catch(e => notify(e.message, "err"));
+  }, [detail, loadPurchases, notify]);
 
   const refreshDetail = useCallback(async (customerId) => {
     if (!customerId) return;
     try {
-      const [cR, pR] = await Promise.all([
-        api.customers.getOne(customerId),
-        api.customers.getPurchases(customerId),
-      ]);
+      const cR = await api.customers.getOne(customerId);
       setDetail(cR.data);
-      setDetailSales(pR.data);
+      await loadPurchases(customerId, 1);
       load();
     } catch (e) { notify(e.message, "err"); }
-  }, [notify, load]);
+  }, [notify, load, loadPurchases]);
 
   // ── CRUD ─────────────────────────────────────────────────────
   const save = useCallback(async (form, editId = null) => {
@@ -103,8 +121,8 @@ export function useCustomers(notify) {
     debtorsFilter, setDebtorsFilter,
     load,
     // Detalle
-    detail, detailSales,
-    openDetail, closeDetail, refreshDetail,
+    detail, detailPending, detailPaid, detailPaidTotal, detailPaidPage,
+    openDetail, closeDetail, refreshDetail, setDetailPage,
     // CRUD
     saving, save, remove,
     // Constante

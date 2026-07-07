@@ -18,7 +18,8 @@ export default function ClientesPage() {
         customers, search, setSearch,
         typeFilter, setTypeFilter,
         debtorsFilter, setDebtorsFilter,
-        detail, detailSales, openDetail, closeDetail, refreshDetail,
+        detail, detailPending, detailPaid, detailPaidTotal, detailPaidPage,
+        openDetail, closeDetail, refreshDetail, setDetailPage,
         remove, baseCurrency, customerModal, customerEditData,
         deleteConfirm, setDeleteConfirm, payModal, setPayModal,
         openNew, openEdit, onSave, closeModal,
@@ -151,7 +152,11 @@ export default function ClientesPage() {
             ) : (
                 <CustomerDetail
                     detail={detail}
-                    detailSales={detailSales}
+                    pending={detailPending}
+                    paid={detailPaid}
+                    paidTotal={detailPaidTotal}
+                    paidPage={detailPaidPage}
+                    onPaidPageChange={setDetailPage}
                     onClose={closeDetail}
                     onPay={setPayModal}
                     onRefresh={() => refreshDetail(detail?.id)}
