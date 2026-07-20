@@ -192,11 +192,7 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
         <div class="total-row"><span>SUBTOTAL</span><span>${fmtP(s.total + s.discount)}</span></div>
         ${s.discount > 0 ? `<div class="total-row discount"><span>DESCUENTO</span><span>-${fmtP(s.discount)}</span></div>` : ""}
         <div class="total-row big"><span>TOTAL</span><span>${fmtP(s.total)}</span></div>
-        ${effectiveRate > 1 ? `
-            <div class="total-row" style="margin-top:2px; font-weight:600; font-size:9px; opacity:0.7; justify-content: flex-end; gap: 4px;">
-                <span>EQUIV. REF.:</span><span>${fmt(s.total)}</span>
-            </div>
-        ` : ""}
+
     </div>
 
     <div class="footer">${companyInfo?.footer || "¡Gracias por su compra!<br>Vuelva pronto"}</div>
@@ -342,11 +338,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     <span className="text-content dark:text-content-dark font-black text-xs uppercase tracking-tighter">TOTAL</span>
                     <div className="text-right">
                         <div className="text-content dark:text-white font-black text-sm leading-none">{fmtP(s.total)}</div>
-                        {!isBase && (
-                            <div className="text-[10px] font-bold text-content-subtle dark:text-brand-500/60 mt-1">
-                                EQUIV. {fmt(s.total)}
-                            </div>
-                        )}
+
                     </div>
                 </div>
             </div>
