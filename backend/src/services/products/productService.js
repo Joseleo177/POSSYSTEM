@@ -252,6 +252,16 @@ async function createProduct({ body, file, company_id }) {
     const e = new Error("name y price son requeridos"); e.status = 400; throw e;
   }
 
+  if (barcode) {
+    const existing = await Product.findOne({ where: { barcode, company_id } });
+    if (existing) {
+      const e = new Error("El código de barras ya está registrado en otro producto");
+      e.status = 400;
+      e.isOperational = true;
+      throw e;
+    }
+  }
+
   const imageValue = await handleImageUpload(file);
   const isComboBool = is_combo === 'true' || is_combo === true;
   const isServiceBool = is_service === 'true' || is_service === true;
@@ -313,6 +323,16 @@ async function updateProduct({ id, body, file, company_id }) {
   try {
     const product = await Product.findByPk(id, { transaction: t });
     if (!product) { const e = new Error("Producto no encontrado"); e.status = 404; throw e; }
+
+    if (barcode && barcode !== product.barcode) {
+      const existing = await Product.findOne({ where: { barcode, company_id }, transaction: t });
+      if (existing) {
+        const e = new Error("El código de barras ya está registrado en otro producto");
+        e.status = 400;
+        e.isOperational = true;
+        throw e;
+      }
+    }
 
     let currentImageValue = product.image_filename;
     if (file) {

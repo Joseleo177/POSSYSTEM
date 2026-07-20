@@ -217,6 +217,54 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         });
     };
 
+    const handleIsServiceChange = (e) => {
+        const checked = e.target.checked;
+        setForm(prev => {
+            const next = { ...prev, is_service: checked };
+            if (checked) {
+                next.is_combo = false;
+                next.package_unit = "";
+                next.package_size = "";
+                next.bulk_price = "";
+            }
+            return next;
+        });
+    };
+
+    const handleIsComboChange = (e) => {
+        const checked = e.target.checked;
+        setForm(prev => {
+            const next = { ...prev, is_combo: checked };
+            if (checked) {
+                next.package_unit = "";
+                next.package_size = "";
+                next.bulk_price = "";
+                
+                const sumCost = prev.combo_items.reduce((acc, item) => {
+                    const qty = parseFloat(item.quantity) || 0;
+                    const c = parseFloat(item.cost_price) || 0;
+                    return acc + (c * qty);
+                }, 0);
+                next.cost_price = sumCost.toFixed(4);
+
+                if (next.profit_margin) {
+                    const suggested = calcSalePriceHelper(next.cost_price, next.profit_margin);
+                    if (suggested !== null) {
+                        next.price = suggested;
+                        setTimeout(() => {
+                            if (exchangeRate > 0) {
+                                setPriceInBs((parseFloat(suggested) * exchangeRate).toFixed(2));
+                            } else {
+                                setPriceInBs("");
+                            }
+                        }, 0);
+                    }
+                }
+            }
+            return next;
+        });
+    };
+
     return (
         <Modal open={open} onClose={onClose} title={isEdit ? "Edición de Producto" : "Nuevo Producto"} width={720}>
             <div className="flex flex-col gap-3">
@@ -344,7 +392,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5">No afecta inventario.</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" className="sr-only peer" checked={form.is_service} onChange={e => set("is_service", e.target.checked)} />
+                            <input type="checkbox" className="sr-only peer" checked={form.is_service} onChange={handleIsServiceChange} />
                             <div className="w-9 h-5 bg-border/50 peer-focus:outline-none dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
                         </label>
                     </div>
@@ -357,7 +405,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5">Compuesto por otros ítems.</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" className="sr-only peer" checked={form.is_combo} onChange={e => set("is_combo", e.target.checked)} disabled={isEdit && form.combo_items.length > 0} />
+                                <input type="checkbox" className="sr-only peer" checked={form.is_combo} onChange={handleIsComboChange} disabled={isEdit && form.combo_items.length > 0} />
                                 <div className="w-9 h-5 bg-border/50 peer-focus:outline-none dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
                             </label>
                         </div>
