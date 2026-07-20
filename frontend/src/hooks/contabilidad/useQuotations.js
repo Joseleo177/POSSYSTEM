@@ -16,6 +16,7 @@ export function useQuotations({ notify }) {
 
     const [selectedQuot, setSelectedQuot]   = useState(null);
     const [cancelConfirm, setCancelConfirm] = useState(null);
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
     const [convertModal, setConvertModal]   = useState(null);
 
     const hasFilters = !!(statusFilter || dateFrom || dateTo);
@@ -55,6 +56,16 @@ export function useQuotations({ notify }) {
         }
     }, [load, page, notify]);
 
+    const deleteQuotation = useCallback(async (id) => {
+        try {
+            await api.quotations.remove(id);
+            notify("Cotización eliminada");
+            load(page);
+        } catch (e) {
+            notify(e.message, "err");
+        }
+    }, [load, page, notify]);
+
     const convertQuotation = useCallback(async (id, serieId) => {
         try {
             const res = await api.quotations.convert(id, { serie_id: serieId });
@@ -82,8 +93,9 @@ export function useQuotations({ notify }) {
         hasFilters, clearFilters,
         selectedQuot, setSelectedQuot,
         cancelConfirm, setCancelConfirm,
+        deleteConfirm, setDeleteConfirm,
         convertModal, setConvertModal,
-        cancelQuotation, convertQuotation,
+        cancelQuotation, convertQuotation, deleteQuotation,
         load,
     };
 }

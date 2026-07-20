@@ -29,15 +29,15 @@ async function getDashboard({ company_id, isSuperuser }) {
   ]);
 
   const [incomeToday, incomeMonth, expenseToday, expenseMonth] = await Promise.all([
-    sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE created_at >= :today ${tenantClause}`,   { replacements: { today, company_id }, type: Sequelize.QueryTypes.SELECT }),
-    sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE created_at >= :month ${tenantClause}`,   { replacements: { month, company_id }, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(`SELECT COALESCE(SUM(p.amount), 0) as total FROM payments p LEFT JOIN sales s ON s.id = p.sale_id WHERE p.created_at >= :today AND (s.id IS NULL OR s.status != 'anulado') ${!!company_id ? "AND p.company_id = :company_id" : ""}`,   { replacements: { today, company_id }, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(`SELECT COALESCE(SUM(p.amount), 0) as total FROM payments p LEFT JOIN sales s ON s.id = p.sale_id WHERE p.created_at >= :month AND (s.id IS NULL OR s.status != 'anulado') ${!!company_id ? "AND p.company_id = :company_id" : ""}`,   { replacements: { month, company_id }, type: Sequelize.QueryTypes.SELECT }),
     sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE created_at >= :today AND status = 'activo' ${tenantClause}`, { replacements: { today, company_id }, type: Sequelize.QueryTypes.SELECT }),
     sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE created_at >= :month AND status = 'activo' ${tenantClause}`, { replacements: { month, company_id }, type: Sequelize.QueryTypes.SELECT }),
   ]);
 
   const cashInHand = await sequelize.query(`
     SELECT (
-      (SELECT COALESCE(SUM(amount), 0) FROM payments ${!!company_id ? "WHERE company_id = :company_id" : ""})
+      (SELECT COALESCE(SUM(p.amount), 0) FROM payments p LEFT JOIN sales s ON s.id = p.sale_id WHERE (s.id IS NULL OR s.status != 'anulado') AND (p.reference_number IS NULL OR p.reference_number NOT LIKE 'ANUL-%') ${!!company_id ? "AND p.company_id = :company_id" : ""})
       -
       (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE status = 'activo' ${!!company_id ? "AND company_id = :company_id" : ""})
     ) as total

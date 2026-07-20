@@ -318,6 +318,7 @@ export const api = {
     create:   (body)      => request("/quotations",             { method: "POST",  body: JSON.stringify(body) }),
     cancel:   (id)        => request(`/quotations/${id}/cancel`,{ method: "PATCH" }),
     convert:  (id, body)  => request(`/quotations/${id}/convert`,{ method: "POST", body: JSON.stringify(body) }),
+    remove:   (id)        => request(`/quotations/${id}`,       { method: "DELETE" }),
   },
 
   // ── Promociones ───────────────────────────────────────────────

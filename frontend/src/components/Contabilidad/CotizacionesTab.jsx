@@ -19,7 +19,7 @@ const STATUS_LABEL = {
     anulada:    "Anulada",
 };
 
-function QuotDetailModal({ quot, onClose, onPrint, onLoadToCart, onCancel, can, fmtPrice }) {
+function QuotDetailModal({ quot, onClose, onPrint, onLoadToCart, onCancel, onDelete, can, fmtPrice }) {
 
     if (!quot) return null;
     const items = quot.items || [];
@@ -107,6 +107,12 @@ function QuotDetailModal({ quot, onClose, onPrint, onLoadToCart, onCancel, can, 
                                     Anular
                                 </button>
                             )}
+                            {quot.status === "anulada" && can("admin") && (
+                                <button onClick={() => onDelete(quot)}
+                                    className="h-9 px-3 rounded-xl border border-danger text-danger text-[10px] font-black uppercase tracking-widest hover:bg-danger hover:text-white transition-all">
+                                    Eliminar
+                                </button>
+                            )}
                             <button onClick={() => onPrint(quot)}
                                 className="h-9 px-4 rounded-xl border border-border/30 dark:border-white/10 text-content-subtle text-[10px] font-black uppercase tracking-widest hover:text-brand-500 hover:border-brand-500/30 transition-all flex items-center gap-2">
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -155,6 +161,11 @@ export default function CotizacionesTab({ notify, can, fmtPrice }) {
     const handleCancel = (quot) => {
         q.setSelectedQuot(null);
         q.setCancelConfirm(quot);
+    };
+
+    const handleDelete = (quot) => {
+        q.setSelectedQuot(null);
+        q.setDeleteConfirm(quot);
     };
 
     const subheader = (
@@ -292,9 +303,31 @@ export default function CotizacionesTab({ notify, can, fmtPrice }) {
                                                 title="Imprimir cotización"
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                 </svg>
                                             </button>
+                                            {quot.status === "pendiente" && can("admin") && (
+                                                <button
+                                                    onClick={() => handleCancel(quot)}
+                                                    className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90"
+                                                    title="Anular cotización"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                            {quot.status === "anulada" && can("admin") && (
+                                                <button
+                                                    onClick={() => handleDelete(quot)}
+                                                    className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90"
+                                                    title="Eliminar cotización"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -316,12 +349,23 @@ export default function CotizacionesTab({ notify, can, fmtPrice }) {
                 confirmText="Sí, anular"
             />
 
+            <ConfirmModal
+                isOpen={!!q.deleteConfirm}
+                title="¿Eliminar cotización?"
+                message={`¿Deseas eliminar permanentemente la cotización #${q.deleteConfirm?.id}? Esta acción borrará el registro de la base de datos.`}
+                onConfirm={() => { q.deleteQuotation(q.deleteConfirm.id); q.setDeleteConfirm(null); }}
+                onCancel={() => q.setDeleteConfirm(null)}
+                type="danger"
+                confirmText="Sí, eliminar"
+            />
+
             <QuotDetailModal
                 quot={q.selectedQuot}
                 onClose={() => q.setSelectedQuot(null)}
                 onPrint={handlePrint}
                 onLoadToCart={handleLoadToCart}
                 onCancel={handleCancel}
+                onDelete={handleDelete}
                 can={can}
                 fmtPrice={fmtPrice}
             />

@@ -35,4 +35,11 @@ const convert = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-module.exports = { getAll, getOne, create, cancel, convert };
+const remove = async (req, res, next) => {
+  try {
+    const result = await svc.remove(req.params.id);
+    res.json({ ok: true, data: result });
+  } catch (e) { next(e); }
+};
+
+module.exports = { getAll, getOne, create, cancel, convert, remove };

@@ -241,4 +241,21 @@ async function convert(quotationId, body, employeeId) {
   }
 }
 
-module.exports = { getAll, getById, create, cancel, convert };
+async function remove(id) {
+  const q = await Quotation.findByPk(id, { include: [{ model: QuotationItem, as: 'items' }] });
+  if (!q) { const e = new Error("Cotización no encontrada"); e.status = 404; throw e; }
+  if (q.status !== 'anulada') { const e = new Error("Solo se pueden eliminar cotizaciones anuladas"); e.status = 400; throw e; }
+  
+  const t = await sequelize.transaction();
+  try {
+    await QuotationItem.destroy({ where: { quotation_id: id }, transaction: t });
+    await q.destroy({ transaction: t });
+    await t.commit();
+    return { message: "Cotización eliminada exitosamente" };
+  } catch (err) {
+    await t.rollback();
+    throw err;
+  }
+}
+
+module.exports = { getAll, getById, create, cancel, convert, remove };

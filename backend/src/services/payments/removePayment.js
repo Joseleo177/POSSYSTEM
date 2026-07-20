@@ -8,18 +8,20 @@ module.exports = async function removePayment(id) {
 
     const sale = await Sale.findByPk(payment.sale_id, { transaction: t, lock: true });
     if (!sale) throw new Error("Factura no encontrada");
-    if (sale.status === "anulado") throw new Error("La factura está anulada");
 
     await payment.destroy({ transaction: t });
 
     const remainingPaid = parseFloat(await Payment.sum("amount", { where: { sale_id: sale.id }, transaction: t }) || 0);
     const saleTotal = parseFloat(sale.total);
-    let newStatus;
-    if (remainingPaid <= 0) newStatus = sale.invoice_number ? "pendiente" : "borrador";
-    else if (remainingPaid >= saleTotal - 0.01) newStatus = "pagado";
-    else newStatus = "parcial";
+    let newStatus = sale.status;
 
-    await sale.update({ status: newStatus }, { transaction: t });
+    if (sale.status !== "anulado") {
+      if (remainingPaid <= 0) newStatus = sale.invoice_number ? "pendiente" : "borrador";
+      else if (remainingPaid >= saleTotal - 0.01) newStatus = "pagado";
+      else newStatus = "parcial";
+      
+      await sale.update({ status: newStatus }, { transaction: t });
+    }
     await t.commit();
 
     return { sale_status: newStatus };

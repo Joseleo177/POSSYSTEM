@@ -227,11 +227,11 @@ export function CartProvider({ children }) {
     setCart([]);
     setSelectedCustomer(null);
     setSelectedCurrency(null);
-    setSelectedSerieId(null);
+    setSelectedSerieId(mySeries.length > 0 ? mySeries[0].id : null);
     setDiscountEnabled(false);
     setDiscountPct("");
     setQuotationId(null);
-  }, []);
+  }, [mySeries]);
 
   // Pre-carga el carrito desde una cotización para editar antes de facturar
   const loadFromQuotation = useCallback(async (quot) => {

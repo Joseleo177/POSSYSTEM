@@ -9,5 +9,6 @@ router.get('/:id',        ctrl.getOne);
 router.post('/',          permit('sales', 'config'), ctrl.create);
 router.patch('/:id/cancel',  permit('admin', 'config'), ctrl.cancel);
 router.post('/:id/convert',  permit('sales', 'config'), ctrl.convert);
+router.delete('/:id',        permit('admin', 'config'), ctrl.remove);
 
 module.exports = router;
