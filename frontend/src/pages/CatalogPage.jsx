@@ -208,7 +208,7 @@ export default function CatalogPage() {
                                     <div className="absolute right-0 top-full mt-2 w-64 bg-surface-2 dark:bg-surface-dark-2 rounded-2xl border border-border/40 dark:border-white/10 shadow-2xl z-40 p-4 animate-in fade-in slide-in-from-top-2 duration-200 space-y-4">
                                         <div>
                                             <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mb-1.5">Categoría</div>
-                                            <div className="space-y-0.5">
+                                            <div className="space-y-0.5 max-h-48 overflow-y-auto pr-1">
                                                 <button onClick={() => setFilterCategory("")} className={`w-full text-left px-3 py-2 rounded-xl text-[11px] font-bold transition-all ${!filterCategory ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"}`}>Todas</button>
                                                 {categories.map(c => (
                                                     <button key={c.id} onClick={() => setFilterCategory(String(c.id))} className={`w-full text-left px-3 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2 ${filterCategory === String(c.id) ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"}`}>
