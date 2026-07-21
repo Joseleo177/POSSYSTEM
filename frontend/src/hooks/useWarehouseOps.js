@@ -201,7 +201,7 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
     deleteStockModal, setDeleteStockModal, handleDeleteStock, confirmDeleteStock,
     // Add Stock
     addStockModal, setAddStockModal, openAddStock,
-    addStockForm, setAddStockForm, addStockSearch, setAddStockSearch, addStockResults,
+    addStockForm, setAddStockForm,
     addStockProduct, selectAddStockProduct, clearAddStockProduct, doAddStock, savingStock,
     // Transfers
     transfers, loadTransfers,

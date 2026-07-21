@@ -35,7 +35,7 @@ export default function WarehousesTab({ notify }) {
         editStockModal, setEditStockModal, editStockValue, setEditStockValue, handleEditStock, submitEditStock,
         deleteStockModal, setDeleteStockModal, handleDeleteStock, confirmDeleteStock,
         addStockModal, setAddStockModal, openAddStock,
-        addStockForm, setAddStockForm, addStockSearch, setAddStockSearch, addStockResults,
+        addStockForm, setAddStockForm,
         addStockProduct, setAddStockProduct, selectAddStockProduct, doAddStock, savingStock,
         transfers, loadTransfers,
         transferProductSearch, setTransferProductSearch, transferProductResults, setTransferProductResults,
