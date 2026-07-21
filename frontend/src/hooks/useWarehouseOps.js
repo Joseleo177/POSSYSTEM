@@ -95,7 +95,9 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
     if (!debouncedAddStockSearch.trim()) { setAddStockResults([]); return; }
     async function searchItems() {
       try {
-        const r = await api.products.getAll({ search: debouncedAddStockSearch, is_service: false });
+        const params = { search: debouncedAddStockSearch, is_service: false };
+        if (selectedWarehouse) params.not_in_warehouse_id = selectedWarehouse.id;
+        const r = await api.products.getAll(params);
         setAddStockResults(r.data.slice(0, 8));
       } catch {}
     }

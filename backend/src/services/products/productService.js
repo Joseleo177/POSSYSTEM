@@ -54,12 +54,23 @@ async function handleImageDelete(imageValue) {
   }
 }
 
-async function getAll({ search, category_id, is_combo, is_service, warehouse_id, stock_filter, limit = 100, offset = 0, company_id }) {
+async function getAll({ search, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, limit = 100, offset = 0, company_id }) {
   const where = {};
   if (company_id) where.company_id = company_id;
   if (category_id) where.category_id = category_id;
   if (is_combo !== undefined) where.is_combo = is_combo === 'true';
   if (is_service !== undefined) where.is_service = is_service === 'true';
+
+  if (not_in_warehouse_id) {
+    const stocksInWarehouse = await ProductStock.findAll({
+      where: { warehouse_id: parseInt(not_in_warehouse_id) },
+      attributes: ['product_id'],
+    });
+    const associatedIds = stocksInWarehouse.map(s => s.product_id);
+    if (associatedIds.length > 0) {
+      where.id = { [Op.notIn]: associatedIds };
+    }
+  }
 
   if (warehouse_id || stock_filter) {
     let associatedIds = [];
