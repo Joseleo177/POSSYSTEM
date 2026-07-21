@@ -99,12 +99,12 @@ async function getSummary(req) {
       'id', 'name', 'type', 'bank_id', 'color', 'currency_id',
       [Sequelize.literal(`(
         SELECT COUNT(p.id) FROM payments p
-        JOIN sales s ON p.sale_id = s.id AND s.status NOT IN ('anulado', 'devuelto')
+        LEFT JOIN sales s ON p.sale_id = s.id
         WHERE p.payment_journal_id = "PaymentJournal".id ${pDate} ${tc}
       )`), 'tx_count'],
       [Sequelize.literal(`(
         (SELECT COALESCE(SUM(p."amount" * COALESCE(p."exchange_rate", 1)), 0)
-         FROM payments p JOIN sales s ON p.sale_id = s.id AND s.status NOT IN ('anulado', 'devuelto')
+         FROM payments p LEFT JOIN sales s ON p.sale_id = s.id
          WHERE p.payment_journal_id = "PaymentJournal".id ${pDate} ${tc})
         +
         (SELECT COALESCE(SUM(i."amount" * COALESCE(i."rate", 1)), 0) FROM incomes i
@@ -115,7 +115,7 @@ async function getSummary(req) {
       )`), 'total_ingresos'],
       [Sequelize.literal(`(
         (SELECT COALESCE(SUM(p."amount" * COALESCE(p."exchange_rate", 1)), 0)
-         FROM payments p JOIN sales s ON p.sale_id = s.id AND s.status NOT IN ('anulado', 'devuelto')
+         FROM payments p LEFT JOIN sales s ON p.sale_id = s.id
          WHERE p.payment_journal_id = "PaymentJournal".id AND ${todayP} ${tc})
         +
         (SELECT COALESCE(SUM(i."amount" * COALESCE(i."rate", 1)), 0) FROM incomes i

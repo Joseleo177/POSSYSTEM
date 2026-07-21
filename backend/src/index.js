@@ -47,6 +47,9 @@ const loginLimiter = rateLimit({
   message: { ok: false, message: "Demasiados intentos de inicio de sesión. Intenta en 15 minutos." },
 });
 
+// Sirve archivos estáticos (imágenes) antes del rate limiter para no agotar las peticiones
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+
 app.use(globalLimiter);
 
 // ── Body parsing + logging ────────────────────────────────────
@@ -56,7 +59,7 @@ app.use((req, _res, next) => {
   logger.info(`${req.method} ${req.path}`);
   next();
 });
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+// app.use("/uploads", express.static(path.join(__dirname, "../uploads"))); // Movido arriba
 
 // ── Audit log (mutations) ─────────────────────────────────────
 app.use(auditLog);

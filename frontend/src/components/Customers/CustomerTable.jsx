@@ -48,7 +48,9 @@ export default function CustomerTable({
                                         {parseFloat(c.total_debt || 0) > 0 ? (
                                             <div className="flex flex-col">
                                                 <span className="text-[11px] font-black text-danger tabular-nums">-{fmtPrice(c.total_debt)}</span>
-                                                <span className="text-[9px] font-bold uppercase text-danger/50">Por cobrar</span>
+                                                <span className="text-[9px] font-bold uppercase text-danger/50">
+                                                    {c.type === 'proveedor' ? 'Por pagar' : 'Por cobrar'}
+                                                </span>
                                             </div>
                                         ) : (
                                             <span className="badge badge-success shadow-none !bg-success/5 !text-success border-success/10 font-black uppercase tracking-widest">

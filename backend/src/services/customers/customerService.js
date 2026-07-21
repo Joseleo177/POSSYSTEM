@@ -28,14 +28,28 @@ async function getAll({ search, type, debtors, limit = 100, offset = 0 }, req) {
     where,
     attributes: {
       include: [
-        [Sequelize.fn("COUNT", Sequelize.col("Sales.id")), "total_purchases"],
         [Sequelize.literal(`(
-          SELECT COALESCE(SUM(s.total), 0) FROM sales s
-          WHERE s.customer_id = "Customer"."id" AND s.status = 'pagado'
+          CASE WHEN "Customer"."type" = 'proveedor' THEN (
+            SELECT COUNT(p.id) FROM purchases p WHERE p.supplier_id = "Customer"."id"
+          ) ELSE (
+            SELECT COUNT(s.id) FROM sales s WHERE s.customer_id = "Customer"."id"
+          ) END
+        )`), "total_purchases"],
+        [Sequelize.literal(`(
+          CASE WHEN "Customer"."type" = 'proveedor' THEN (
+            SELECT COALESCE(SUM(p.total), 0) FROM purchases p WHERE p.supplier_id = "Customer"."id" AND p.payment_status = 'pagado'
+          ) ELSE (
+            SELECT COALESCE(SUM(s.total), 0) FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status = 'pagado'
+          ) END
         )`), "total_spent"],
         [Sequelize.literal(`(
-          SELECT COALESCE(SUM(s.total - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.sale_id = s.id), 0)), 0)
-          FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial')
+          CASE WHEN "Customer"."type" = 'proveedor' THEN (
+            SELECT COALESCE(SUM(p.total - COALESCE((SELECT SUM(pp.amount) FROM purchase_payments pp WHERE pp.purchase_id = p.id), 0)), 0)
+            FROM purchases p WHERE p.supplier_id = "Customer"."id" AND p.payment_status IN ('pendiente','parcial')
+          ) ELSE (
+            SELECT COALESCE(SUM(s.total - COALESCE((SELECT SUM(py.amount) FROM payments py WHERE py.sale_id = s.id), 0)), 0)
+            FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial')
+          ) END
         )`), "total_debt"],
       ]
     },
@@ -63,15 +77,35 @@ async function getOne(id) {
     where: { id },
     attributes: {
       include: [
-        [Sequelize.fn("COUNT", Sequelize.col("Sales.id")), "total_purchases"],
         [Sequelize.literal(`(
-          SELECT COALESCE(SUM(s.total), 0) FROM sales s
-          WHERE s.customer_id = "Customer"."id" AND s.status = 'pagado'
+          CASE WHEN "Customer"."type" = 'proveedor' THEN (
+            SELECT COUNT(p.id) FROM purchases p WHERE p.supplier_id = "Customer"."id"
+          ) ELSE (
+            SELECT COUNT(s.id) FROM sales s WHERE s.customer_id = "Customer"."id"
+          ) END
+        )`), "total_purchases"],
+        [Sequelize.literal(`(
+          CASE WHEN "Customer"."type" = 'proveedor' THEN (
+            SELECT COALESCE(SUM(p.total), 0) FROM purchases p WHERE p.supplier_id = "Customer"."id" AND p.payment_status = 'pagado'
+          ) ELSE (
+            SELECT COALESCE(SUM(s.total), 0) FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status = 'pagado'
+          ) END
         )`), "total_spent"],
-        [Sequelize.fn("MAX", Sequelize.col("Sales.created_at")), "last_purchase_at"],
         [Sequelize.literal(`(
-          SELECT COALESCE(SUM(s.total - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.sale_id = s.id), 0)), 0)
-          FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial')
+          CASE WHEN "Customer"."type" = 'proveedor' THEN (
+            SELECT MAX(p.created_at) FROM purchases p WHERE p.supplier_id = "Customer"."id"
+          ) ELSE (
+            SELECT MAX(s.created_at) FROM sales s WHERE s.customer_id = "Customer"."id"
+          ) END
+        )`), "last_purchase_at"],
+        [Sequelize.literal(`(
+          CASE WHEN "Customer"."type" = 'proveedor' THEN (
+            SELECT COALESCE(SUM(p.total - COALESCE((SELECT SUM(pp.amount) FROM purchase_payments pp WHERE pp.purchase_id = p.id), 0)), 0)
+            FROM purchases p WHERE p.supplier_id = "Customer"."id" AND p.payment_status IN ('pendiente','parcial')
+          ) ELSE (
+            SELECT COALESCE(SUM(s.total - COALESCE((SELECT SUM(py.amount) FROM payments py WHERE py.sale_id = s.id), 0)), 0)
+            FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial')
+          ) END
         )`), "total_debt"],
       ]
     },
@@ -90,10 +124,43 @@ async function getOne(id) {
 }
 
 async function getCustomerPurchases(id, { limit = 50, offset = 0 }) {
-  const customer = await Customer.findByPk(id, { attributes: ['id', 'name'] });
+  const customer = await Customer.findByPk(id, { attributes: ['id', 'name', 'type'] });
   if (!customer) { const e = new Error("Cliente no encontrado"); e.status = 404; throw e; }
 
-  // Consulta base reutilizable (mismos atributos/includes para ambas secciones)
+  if (customer.type === 'proveedor') {
+    const queryPurchases = (where, opts = {}) => Purchase.findAll({
+      where: { supplier_id: id, ...where },
+      attributes: {
+        include: [
+          'id', 'total', 'payment_status', 'created_at',
+          [Sequelize.literal(`(SELECT COALESCE(SUM(amount),0) FROM purchase_payments WHERE purchase_id = "Purchase"."id")`), 'amount_paid'],
+        ]
+      },
+      order: [['created_at', 'DESC']],
+      ...opts,
+    });
+
+    const mapPurchase = p => {
+      const purchase = p.toJSON();
+      purchase.status = purchase.payment_status; // Map for the UI
+      purchase.amount_paid = parseFloat(purchase.amount_paid || 0);
+      purchase.balance = parseFloat((parseFloat(purchase.total) - purchase.amount_paid).toFixed(6));
+      return purchase;
+    };
+
+    const pendingRows = await queryPurchases({ payment_status: ['pendiente', 'parcial'] });
+    const paidTotal = await Purchase.count({ where: { supplier_id: id, payment_status: ['pagado'] } });
+    const paidRows  = await queryPurchases({ payment_status: ['pagado'] }, { limit: parseInt(limit), offset: parseInt(offset) });
+
+    return {
+      customer,
+      pending: pendingRows.map(mapPurchase),
+      paid: paidRows.map(mapPurchase),
+      paidTotal,
+    };
+  }
+
+  // Cuentas por cobrar para clientes
   const querySales = (where, opts = {}) => Sale.findAll({
     where: { customer_id: id, ...where },
     attributes: {
@@ -122,12 +189,9 @@ async function getCustomerPurchases(id, { limit = 50, offset = 0 }) {
     return sale;
   };
 
-  // Cuentas por cobrar: SIEMPRE completas (excluye anulado/devuelto).
   const pendingRows = await querySales({ status: ['borrador', 'pendiente', 'parcial'] });
-
-  // Historial de pagos: paginado.
-  const paidTotal = await Sale.count({ where: { customer_id: id, status: 'pagado' } });
-  const paidRows  = await querySales({ status: 'pagado' }, { limit: parseInt(limit), offset: parseInt(offset) });
+  const paidTotal = await Sale.count({ where: { customer_id: id, status: ['pagado'] } });
+  const paidRows  = await querySales({ status: ['pagado'] }, { limit: parseInt(limit), offset: parseInt(offset) });
 
   return {
     customer,

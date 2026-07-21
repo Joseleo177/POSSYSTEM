@@ -11,7 +11,7 @@ async function getDashboard({ company_id, isSuperuser }) {
 
   const [kpiToday, kpiMonth] = await Promise.all([
     Sale.findOne({
-      where: { ...tenantWhere, created_at: { [Op.gte]: today }, status: { [Op.ne]: "anulado" } },
+      where: { ...tenantWhere, created_at: { [Op.gte]: today }, status: { [Op.notIn]: ["anulado", "devuelto", "eliminado"] } },
       attributes: [
         [Sequelize.fn("COUNT", Sequelize.col("id")), "count"],
         [Sequelize.fn("COALESCE", Sequelize.fn("SUM", Sequelize.col("total")), 0), "revenue"],
@@ -19,7 +19,7 @@ async function getDashboard({ company_id, isSuperuser }) {
       raw: true,
     }),
     Sale.findOne({
-      where: { ...tenantWhere, created_at: { [Op.gte]: month }, status: { [Op.ne]: "anulado" } },
+      where: { ...tenantWhere, created_at: { [Op.gte]: month }, status: { [Op.notIn]: ["anulado", "devuelto", "eliminado"] } },
       attributes: [
         [Sequelize.fn("COUNT", Sequelize.col("id")), "count"],
         [Sequelize.fn("COALESCE", Sequelize.fn("SUM", Sequelize.col("total")), 0), "revenue"],
@@ -51,7 +51,7 @@ async function getDashboard({ company_id, isSuperuser }) {
     ],
     include: [{
       model: Sale, attributes: [],
-      where: { ...tenantWhere, created_at: { [Op.gte]: month }, status: { [Op.notIn]: ["anulado", "eliminado"] } },
+      where: { ...tenantWhere, created_at: { [Op.gte]: month }, status: { [Op.notIn]: ["anulado", "eliminado", "devuelto"] } },
       required: true,
     }],
     group: ["SaleItem.product_id", "SaleItem.name"],
@@ -65,7 +65,7 @@ async function getDashboard({ company_id, isSuperuser }) {
            COALESCE(SUM(total), 0)::float AS revenue
     FROM sales
     WHERE created_at >= NOW() - INTERVAL '30 days'
-      AND status NOT IN ('anulado', 'eliminado')
+      AND status NOT IN ('anulado', 'eliminado', 'devuelto')
       ${!!company_id ? "AND company_id = :company_id" : ""}
     GROUP BY CAST(created_at AS DATE)
     ORDER BY day ASC

@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../../services/api";
 import CustomSelect from "../ui/CustomSelect";
+import { useDebounce } from "../../hooks/useDebounce";
 
 const REASONS_OUT = [
     { value: "merma",       label: "Merma (Deterioro/Rotura)" },
@@ -31,9 +32,15 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
     const [allProducts, setAllProducts]         = useState([]);
     const [loadingList, setLoadingList]         = useState(false);
     const [search, setSearch]                   = useState("");
+    const debouncedSearch = useDebounce(search, 400);
+    const [page, setPage]                       = useState(0);
+    const [hasMore, setHasMore]                 = useState(true);
+    const [loadingMore, setLoadingMore]         = useState(false);
+    
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [form, setForm]                       = useState({ quantity: "", type: "out", reason: "merma", notes: "" });
     const [saving, setSaving]                   = useState(false);
+    const LIMIT = 50;
 
     // Sesión activa
     const [session, setSession]         = useState(null);   // null = sin sesión
@@ -49,16 +56,44 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
 
     const reasons = form.type === "out" ? REASONS_OUT : REASONS_IN;
 
-    // ── Cargar productos ──────────────────────────────────────────
-    const loadProducts = useCallback(() => {
+    const loadProducts = useCallback(async (pageNum = 0, append = false) => {
         if (!selectedWarehouse) return;
-        setLoadingList(true);
-        api.warehouses.getProducts(selectedWarehouse.id, { limit: 200 })
-            // Combos y servicios no admiten ajuste manual: su stock es derivado / inexistente
-            .then(r => setAllProducts((r.data || []).filter(p => !p.is_combo && !p.is_service)))
-            .catch(() => {})
-            .finally(() => setLoadingList(false));
-    }, [selectedWarehouse?.id]);
+        if (pageNum === 0) setLoadingList(true);
+        else setLoadingMore(true);
+        
+        try {
+            const r = await api.warehouses.getProducts(selectedWarehouse.id, { 
+                search: debouncedSearch, 
+                limit: LIMIT, 
+                offset: pageNum * LIMIT,
+                simple_only: true // excluye combos y servicios desde backend
+            });
+            const prods = r.data || [];
+            setAllProducts(prev => append ? [...prev, ...prods] : prods);
+            setHasMore(prods.length === LIMIT);
+            setPage(pageNum);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoadingList(false);
+            setLoadingMore(false);
+        }
+    }, [selectedWarehouse?.id, debouncedSearch]);
+
+    // Efecto para buscar y cargar inicial
+    useEffect(() => {
+        if (!selectedWarehouse) return;
+        loadProducts(0, false);
+    }, [selectedWarehouse?.id, debouncedSearch]);
+
+    const handleScroll = (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.target;
+        if (scrollHeight - scrollTop <= clientHeight + 50) {
+            if (hasMore && !loadingMore && !loadingList) {
+                loadProducts(page + 1, true);
+            }
+        }
+    };
 
     // ── Verificar sesión activa ───────────────────────────────────
     const loadActiveSession = useCallback(async () => {
@@ -79,16 +114,8 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
         setAllProducts([]);
         setSession(null);
         setTab("ajuste");
-        loadProducts();
         loadActiveSession();
     }, [selectedWarehouse?.id]);
-
-    const filtered = search.trim()
-        ? allProducts.filter(p =>
-            p.name.toLowerCase().includes(search.toLowerCase()) ||
-            (p.barcode && p.barcode.includes(search))
-          )
-        : allProducts;
 
     // ── Abrir sesión ──────────────────────────────────────────────
     const handleOpenSession = async () => {
@@ -285,19 +312,19 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                     )}
                                 </div>
                                 <p className="text-[9px] font-bold text-content-subtle/40 mt-1.5 uppercase tracking-widest">
-                                    {loadingList ? "Cargando..." : `${filtered.length} producto${filtered.length !== 1 ? "s" : ""}`}
+                                    {loadingList ? "Cargando..." : `${allProducts.length} producto${allProducts.length !== 1 ? "s" : ""}`}
                                 </p>
                             </div>
-                            <div className="flex-1 overflow-y-auto divide-y divide-border/10 dark:divide-white/[0.04]">
+                            <div className="flex-1 overflow-y-auto divide-y divide-border/10 dark:divide-white/[0.04]" onScroll={handleScroll}>
                                 {loadingList ? (
                                     <div className="flex items-center justify-center py-16">
                                         <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
                                     </div>
-                                ) : filtered.length === 0 ? (
+                                ) : allProducts.length === 0 ? (
                                     <div className="flex items-center justify-center py-16">
                                         <p className="text-[11px] font-bold text-content-subtle/40 uppercase tracking-wide">Sin productos</p>
                                     </div>
-                                ) : filtered.map(p => {
+                                ) : allProducts.map(p => {
                                     const isSelected = selectedProduct?.id === p.id;
                                     return (
                                         <button key={p.id} onClick={() => setSelectedProduct(p)}
@@ -314,6 +341,11 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                         </button>
                                     );
                                 })}
+                                {loadingMore && (
+                                    <div className="py-4 text-center">
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-content-subtle opacity-50">Cargando más...</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -397,7 +429,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                                     <p className="text-[9px] text-content-subtle/50 uppercase">{line.reason}</p>
                                                 </div>
                                                 <div className="text-right shrink-0">
-                                                    <p className={`text-[12px] font-black tabular-nums ${line.type === "in" ? "text-success" : "text-danger"}`}>
+                                                    <p className={`text-[11px] font-black tabular-nums ${line.type === "in" ? "text-success" : "text-danger"}`}>
                                                         {line.type === "in" ? "+" : ""}{fmt(line.qty_adjusted)}
                                                     </p>
                                                     <p className="text-[9px] text-content-subtle/40 tabular-nums">{fmt(line.qty_before)} → {fmt(line.qty_after)}</p>

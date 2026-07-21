@@ -2,10 +2,10 @@ const multer = require("multer");
 const path   = require("path");
 
 const fileFilter = (_req, file, cb) => {
-  const allowed = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+  const allowed = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".jfif"];
   const ext = path.extname(file.originalname).toLowerCase();
   if (allowed.includes(ext)) cb(null, true);
-  else cb(new Error("Solo se permiten imágenes (jpg, png, webp, gif)"), false);
+  else cb(new Error("Solo se permiten imágenes (jpg, png, webp, gif, jfif)"), false);
 };
 
 // Se evalúa en cada request, no al cargar el módulo

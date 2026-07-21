@@ -19,7 +19,7 @@ const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-su
 const SCROLL_LIST = "flex-1 min-h-0 overflow-y-auto print:min-h-0 print:overflow-visible";
 
 export default function CustomerDetail({ detail, pending, paid, paidTotal, paidPage, onPaidPageChange, onClose, onPay, onRefresh }) {
-    const { baseCurrency, notify, activeJournals, activeCurrencies } = useApp();
+    const { baseCurrency, notify, activeJournals, activeCurrencies, triggerAction } = useApp();
     const [selectedSaleId, setSelectedSaleId] = useState(null);
     const [clearingCredit, setClearingCredit] = useState(false);
     const [confirmClear, setConfirmClear] = useState(false);
@@ -203,11 +203,20 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                     <div className={`${SECTION} overflow-hidden flex-1 min-h-0 flex flex-col print:flex-none print:min-h-0 print:overflow-visible`}>
                         <div className="shrink-0 px-5 py-3 border-b border-border/10 dark:border-white/[0.06] flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-danger" />
-                            <p className="text-[10px] font-black uppercase tracking-widest text-danger opacity-70">Cuentas por Cobrar</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-danger opacity-70">
+                                {detail.type === 'proveedor' ? 'Cuentas por Pagar' : 'Cuentas por Cobrar'}
+                            </p>
                         </div>
                         <div className={`divide-y divide-border/10 dark:divide-white/[0.05] ${SCROLL_LIST}`}>
                             {pendingSales.map(sale => (
-                                <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => setSelectedSaleId(sale.id)}>
+                                <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => {
+                                    if (detail.type === "proveedor") {
+                                        onClose();
+                                        triggerAction("Compras", "compras:abrir:" + sale.id);
+                                    } else {
+                                        setSelectedSaleId(sale.id);
+                                    }
+                                }}>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <span className="text-[12px] font-bold text-content dark:text-white">#{sale.id}</span>
@@ -226,10 +235,18 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                         <p className="text-[13px] font-black text-danger tabular-nums">{fmtSale(sale, sale.balance)}</p>
                                     </div>
                                     <button
-                                        onClick={e => { e.stopPropagation(); onPay(sale); }}
+                                        onClick={e => {
+                                            e.stopPropagation();
+                                            if (detail.type === "proveedor") {
+                                                onClose();
+                                                triggerAction("Compras", "compras:abrir:" + sale.id);
+                                            } else {
+                                                onPay(sale);
+                                            }
+                                        }}
                                         className="h-8 px-3 rounded-xl border border-success/20 bg-success/5 text-success text-[10px] font-black uppercase tracking-widest hover:bg-success hover:text-black transition-all active:scale-95 shrink-0"
                                     >
-                                        Cobrar
+                                        {detail.type === "proveedor" ? "Pagar" : "Cobrar"}
                                     </button>
                                 </div>
                             ))}
@@ -252,12 +269,23 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                     ) : (
                         <div className={`divide-y divide-border/10 dark:divide-white/[0.05] ${SCROLL_LIST}`}>
                             {paidSales.map(sale => (
-                                <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => setSelectedSaleId(sale.id)}>
+                                <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => {
+                                    if (detail.type === "proveedor") {
+                                        onClose();
+                                        triggerAction("Compras", "compras:abrir:" + sale.id);
+                                    } else {
+                                        setSelectedSaleId(sale.id);
+                                    }
+                                }}>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <span className="text-[12px] font-bold text-content dark:text-white">#{sale.id}</span>
-                                            <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full border bg-success/10 text-success border-success/20">
-                                                Pagado
+                                            <span className={`text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
+                                                sale.status === 'anulado' ? 'bg-danger/10 text-danger border-danger/20' :
+                                                sale.status === 'devuelto' ? 'bg-warning/10 text-warning border-warning/20' :
+                                                'bg-success/10 text-success border-success/20'
+                                            }`}>
+                                                {sale.status === 'anulado' ? 'Anulado' : sale.status === 'devuelto' ? 'Devuelto' : 'Pagado'}
                                             </span>
                                         </div>
                                         <p className={`${LABEL} mt-0.5 normal-case`}>{new Date(sale.created_at).toLocaleDateString("es-VE")}</p>

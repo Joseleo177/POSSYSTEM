@@ -377,6 +377,9 @@ async function updateProduct({ id, body, file, company_id }) {
       await ProductComboItem.destroy({ where: { combo_id: product.id }, transaction: t });
     }
 
+    // Actualiza en cascada el precio de venta de los combos que contengan este producto
+    await updateComboPricesForProduct(product.id, t);
+
     await t.commit();
     return { data: { ...product.toJSON(), image_url: imageUrl(currentImageValue) } };
   } catch (err) {
@@ -418,6 +421,54 @@ async function deleteProduct(id, company_id) {
   await ProductStock.destroy({ where: { product_id: id } });
   await product.destroy();
   return { message: "Producto eliminado exitosamente" };
+}
+
+async function calculateComboCost(comboId, t) {
+  const items = await ProductComboItem.findAll({
+    where: { combo_id: comboId },
+    include: [{ model: Product, as: 'ingredient', attributes: ['cost_price', 'is_combo'] }],
+    transaction: t
+  });
+  let totalCost = 0;
+  for (const item of items) {
+    if (!item.ingredient) continue;
+    let c = 0;
+    if (item.ingredient.is_combo) {
+      c = await calculateComboCost(item.product_id, t);
+    } else {
+      c = parseFloat(item.ingredient.cost_price || 0);
+    }
+    totalCost += c * parseFloat(item.quantity);
+  }
+  return totalCost;
+}
+
+async function updateComboPricesForProduct(productId, t, visited = new Set()) {
+  if (visited.has(productId)) return; // Previene bucles infinitos
+  visited.add(productId);
+
+  const comboItems = await ProductComboItem.findAll({ where: { product_id: productId }, transaction: t });
+  const comboIds = [...new Set(comboItems.map(ci => ci.combo_id))];
+
+  for (const comboId of comboIds) {
+    const combo = await Product.findByPk(comboId, { transaction: t });
+    if (!combo) continue;
+
+    const totalCost = await calculateComboCost(comboId, t);
+
+    // Solo se actualiza automáticamente si tiene un margen de ganancia configurado
+    if (combo.profit_margin !== null && combo.profit_margin !== undefined) {
+      const margin = parseFloat(combo.profit_margin) || 0;
+      const newPrice = totalCost * (1 + margin / 100);
+      const roundedPrice = parseFloat(newPrice.toFixed(2));
+      
+      if (parseFloat(combo.price) !== roundedPrice) {
+         await combo.update({ price: roundedPrice }, { transaction: t });
+         // Recursividad: actualiza combos que contengan a este combo
+         await updateComboPricesForProduct(comboId, t, visited);
+      }
+    }
+  }
 }
 
 module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct };

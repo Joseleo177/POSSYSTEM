@@ -18,8 +18,15 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
 
     const { pendingAction, setPendingAction } = useApp();
     useEffect(() => {
-        if (pendingAction === "compras:nuevo") { state.openNew(); setPendingAction(null); }
-    }, [pendingAction]);
+        if (pendingAction === "compras:nuevo") {
+            state.openNew();
+            setPendingAction(null);
+        } else if (pendingAction && pendingAction.startsWith("compras:abrir:")) {
+            const id = parseInt(pendingAction.split(":")[2]);
+            if (!isNaN(id)) state.openDetail(id);
+            setPendingAction(null);
+        }
+    }, [pendingAction, state]);
 
     const hasFilters = !!(state.listStatus || state.listOrderStatus || state.listDateFrom || state.listDateTo);
     const filtersCount = (state.listStatus ? 1 : 0) + (state.listOrderStatus ? 1 : 0) + ((state.listDateFrom || state.listDateTo) ? 1 : 0);
