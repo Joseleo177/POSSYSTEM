@@ -135,9 +135,6 @@ export default function WarehousesTab({ notify }) {
                 selectedWarehouse={selectedWarehouse}
                 addStockProduct={addStockProduct}
                 clearAddStockProduct={() => setAddStockProduct(null)}
-                addStockSearch={addStockSearch}
-                setAddStockSearch={setAddStockSearch}
-                addStockResults={addStockResults}
                 selectAddStockProduct={selectAddStockProduct}
                 addStockForm={addStockForm}
                 setAddStockForm={setAddStockForm}

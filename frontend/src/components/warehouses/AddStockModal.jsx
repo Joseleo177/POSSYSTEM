@@ -1,40 +1,72 @@
-import { useRef, useState, useEffect, useLayoutEffect } from "react";
-import { createPortal } from "react-dom";
+import { useState, useEffect, useCallback } from "react";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
+import { useDebounce } from "../../hooks/useDebounce";
+import { api } from "../../services/api";
 
 export default function AddStockModal({
     open, onClose, selectedWarehouse,
     addStockProduct, clearAddStockProduct,
-    addStockSearch, setAddStockSearch, addStockResults, selectAddStockProduct,
+    selectAddStockProduct,
     addStockForm, setAddStockForm,
     doAddStock, savingStock,
 }) {
-    const inputRef = useRef(null);
-    const [rect, setRect] = useState(null);
+    const [search, setSearch] = useState("");
+    const debouncedSearch = useDebounce(search, 400);
+    const [results, setResults] = useState([]);
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [loadingList, setLoadingList] = useState(false);
+    const LIMIT = 30;
 
-    // Calcula la posición del dropdown a partir del input. Se recalcula
-    // en cualquier scroll/resize para mantenerlo anclado al campo.
-    useLayoutEffect(() => {
+    const loadProducts = useCallback(async (pageNum = 0, append = false) => {
         if (!open || addStockProduct) return;
-        const update = () => {
-            if (inputRef.current) {
-                setRect(inputRef.current.getBoundingClientRect());
+        if (pageNum === 0) setLoadingList(true);
+        else setLoadingMore(true);
+
+        try {
+            const params = {
+                search: debouncedSearch,
+                limit: LIMIT,
+                offset: pageNum * LIMIT,
+                is_service: false,
+            };
+            if (selectedWarehouse) params.not_in_warehouse_id = selectedWarehouse.id;
+            
+            const r = await api.products.getAll(params);
+            const prods = r.data || [];
+            setResults(prev => append ? [...prev, ...prods] : prods);
+            setHasMore(prods.length === LIMIT);
+            setPage(pageNum);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoadingList(false);
+            setLoadingMore(false);
+        }
+    }, [open, addStockProduct, debouncedSearch, selectedWarehouse]);
+
+    useEffect(() => {
+        if (open && !addStockProduct) loadProducts(0, false);
+    }, [open, addStockProduct, debouncedSearch, loadProducts]);
+
+    const handleScroll = (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.target;
+        if (scrollHeight - scrollTop <= clientHeight + 50) {
+            if (hasMore && !loadingMore && !loadingList) {
+                loadProducts(page + 1, true);
             }
-        };
-        update();
-        window.addEventListener("resize", update);
-        window.addEventListener("scroll", update, true);
-        return () => {
-            window.removeEventListener("resize", update);
-            window.removeEventListener("scroll", update, true);
-        };
-    }, [open, addStockProduct, addStockResults.length, addStockSearch]);
+        }
+    };
 
-    // Limpia el rect al cerrar para que no quede flotando un dropdown viejo.
-    useEffect(() => { if (!open) setRect(null); }, [open]);
-
-    const showDropdown = open && !addStockProduct && addStockResults.length > 0 && rect;
+    // Limpiar buscador al abrir/cerrar
+    useEffect(() => {
+        if (!open) {
+            setSearch("");
+            setResults([]);
+        }
+    }, [open]);
 
     return (
         <Modal open={open} onClose={onClose} title="Agregar Producto al Almacén" width={480}>
@@ -62,13 +94,49 @@ export default function AddStockModal({
                         </button>
                     </div>
                 ) : (
-                    <input
-                        ref={inputRef}
-                        value={addStockSearch}
-                        onChange={e => setAddStockSearch(e.target.value)}
-                        placeholder="Buscar producto..."
-                        className="input"
-                    />
+                    <div className="space-y-3">
+                        <input
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            placeholder="Buscar producto..."
+                            className="input"
+                        />
+                        
+                        <div 
+                            className="max-h-48 overflow-y-auto border border-border/40 dark:border-white/10 rounded-lg divide-y divide-border/10 dark:divide-white/[0.04]"
+                            onScroll={handleScroll}
+                        >
+                            {loadingList ? (
+                                <div className="py-6 text-center text-xs text-content-muted dark:text-content-dark-muted font-bold uppercase tracking-widest">
+                                    Buscando productos...
+                                </div>
+                            ) : results.length === 0 ? (
+                                <div className="py-6 text-center text-xs text-content-muted dark:text-content-dark-muted font-bold uppercase tracking-widest">
+                                    No hay resultados
+                                </div>
+                            ) : (
+                                results.map(p => (
+                                    <div
+                                        key={p.id}
+                                        onClick={() => selectAddStockProduct(p)}
+                                        className="px-3 py-2 cursor-pointer text-xs hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors flex items-center justify-between"
+                                    >
+                                        <div>
+                                            <div className="font-bold text-content dark:text-content-dark">{p.name}</div>
+                                            <div className="text-[11px] text-content-muted dark:text-content-dark-muted">
+                                                {p.category_name || "Sin categoría"}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                            {loadingMore && (
+                                <div className="py-3 text-center text-[10px] text-content-muted dark:text-content-dark-muted font-black uppercase tracking-widest opacity-50">
+                                    Cargando más...
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 )}
             </div>
 
@@ -99,33 +167,6 @@ export default function AddStockModal({
                 </Button>
             </div>
 
-            {/* Dropdown flotante (portal): no afecta el flujo del modal. */}
-            {showDropdown && createPortal(
-                <div
-                    style={{
-                        position: "fixed",
-                        top: rect.bottom + 4,
-                        left: rect.left,
-                        width: rect.width,
-                        zIndex: 1100,
-                    }}
-                    className="bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-lg max-h-60 overflow-y-auto shadow-2xl"
-                >
-                    {addStockResults.map(p => (
-                        <div
-                            key={p.id}
-                            onMouseDown={(e) => { e.preventDefault(); selectAddStockProduct(p); }}
-                            className="px-3 py-2 cursor-pointer border-b border-surface-3 dark:border-surface-dark-3 text-xs hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors"
-                        >
-                            <div className="font-bold text-content dark:text-content-dark">{p.name}</div>
-                            <div className="text-[11px] text-content-muted dark:text-content-dark-muted">
-                                {p.category_name || "Sin categoría"} · Stock: {p.stock} {p.unit}
-                            </div>
-                        </div>
-                    ))}
-                </div>,
-                document.body
-            )}
         </Modal>
     );
 }

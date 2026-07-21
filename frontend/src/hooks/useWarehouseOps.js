@@ -31,9 +31,6 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   // ── Agregar producto al almacén manualmente ────────────────
   const [addStockModal, setAddStockModal]   = useState(false);
   const [addStockForm, setAddStockForm]     = useState(EMPTY_ADD_STOCK);
-  const [addStockSearch, setAddStockSearch] = useState("");
-  const debouncedAddStockSearch             = useDebounce(addStockSearch, 250);
-  const [addStockResults, setAddStockResults] = useState([]);
   const [addStockProduct, setAddStockProduct] = useState(null);
   const [savingStock, setSavingStock]       = useState(false);
 
@@ -91,32 +88,17 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
     call.then(r => setTransferProductResults((r.data || []).slice(0, 10))).catch(() => {});
   }, [debouncedTransferProductSearch, transferForm.from_warehouse_id]);
 
-  useEffect(() => {
-    if (!debouncedAddStockSearch.trim()) { setAddStockResults([]); return; }
-    async function searchItems() {
-      try {
-        const params = { search: debouncedAddStockSearch, is_service: false };
-        if (selectedWarehouse) params.not_in_warehouse_id = selectedWarehouse.id;
-        const r = await api.products.getAll(params);
-        setAddStockResults(r.data.slice(0, 8));
-      } catch {}
-    }
-    searchItems();
-  }, [debouncedAddStockSearch]);
+
 
   // ── Agregar producto manualmente ───────────────────────────
   const openAddStock = () => {
     setAddStockProduct(null);
     setAddStockForm(EMPTY_ADD_STOCK);
-    setAddStockSearch("");
-    setAddStockResults([]);
     setAddStockModal(true);
   };
 
   const selectAddStockProduct = (p) => {
     setAddStockProduct(p);
-    setAddStockSearch("");
-    setAddStockResults([]);
     setAddStockForm(prev => ({ ...prev, product_id: p.id }));
   };
 

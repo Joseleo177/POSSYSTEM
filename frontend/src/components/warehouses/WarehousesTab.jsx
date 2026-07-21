@@ -161,9 +161,6 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                 selectedWarehouse={selectedWarehouse}
                 addStockProduct={addStockProduct}
                 clearAddStockProduct={clearAddStockProduct}
-                addStockSearch={addStockSearch}
-                setAddStockSearch={setAddStockSearch}
-                addStockResults={addStockResults}
                 selectAddStockProduct={selectAddStockProduct}
                 addStockForm={addStockForm}
                 setAddStockForm={setAddStockForm}
