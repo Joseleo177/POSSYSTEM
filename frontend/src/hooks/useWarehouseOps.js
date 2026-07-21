@@ -110,7 +110,6 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   const doAddStock = async () => {
     if (!selectedWarehouse) return notify("No hay almacén seleccionado", "err");
     if (!addStockProduct) return notify("Selecciona un producto", "err");
-    if (!addStockForm.qty && addStockForm.qty !== 0) return notify("Ingresa la cantidad", "err");
     setSavingStock(true);
     try {
       await api.warehouses.addStock(selectedWarehouse.id, {
