@@ -88,12 +88,13 @@ module.exports = async function createSale(body) {
       transaction,
     });
 
-    // Cálculo del total en $ (sale.total): suma los precios PRECISOS (sin round2 por línea)
-    // y redondea solo al final con toFixed(2). Esto alinea con la aritmética Bs:
-    //   round2(sum(precio × qty)) = round2(12.197) = 12.20
-    //   round2(totalBs / tasa)    = round2(9000/737.88) = 12.20  ← cuadra exacto
-    // Con round-per-line: sum(round2(precio) × qty) = 4.07×3 = 12.21 ≠ 12.20.
-    // Los sale_items siguen guardando precio/descuento con 5 decimales (columna DECIMAL(14,5)).
+    // Dos pistas de cálculo en paralelo:
+    // - $ (sale.total): round2 POR LÍNEA → sum(round2(price) × qty) → 3 × 4.07 = 12.21
+    //   (igual que el carrito en USD: el usuario ve 4.07 × 3 = 12.21 exacto).
+    // - Bs (sale_items.subtotal): precio PRECISO con 5 decimales, redondeo en el frontend
+    //   (CartContext.subtotalBs: round2(price × vesRate) × qty = 3 × 3000 = 9000).
+    // La diferencia de 0.01 entre ambas pistas (12.21 vs 9000/tasa=12.20) es inherente al
+    // redondeo dual y se gestiona en PaymentFormModal con la tolerancia de 0.02 USD.
     const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
 
     const calcLineDiscount = (productId, unitPrice, qty, promos) => {
@@ -116,14 +117,15 @@ module.exports = async function createSale(body) {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
       if (!product) throw new Error(`Producto ${item.product_id} no encontrado`);
 
-      const rawPrice = parseFloat(product.price);
-      // Ambas pistas ($ y Bs) usan el precio preciso; el $ se redondea al final (toFixed(2)),
-      // el Bs se redondea por línea en el frontend (CartContext.subtotalBs) y en SaleItem.discount.
-      const lineDiscountUsd = calcLineDiscount(product.id, rawPrice, item.quantity, activePromos);
-      const lineDiscountBs  = calcLineDiscount(product.id, rawPrice, item.quantity, activePromos);
+      const rawPrice     = parseFloat(product.price);
+      const roundedPrice = round2(rawPrice);
+      // lineDiscountUsd: usa roundedPrice (pista $, para sale.total)
+      // lineDiscountBs:  usa rawPrice    (pista Bs, para SaleItem.discount y subtotal generado)
+      const lineDiscountUsd = calcLineDiscount(product.id, roundedPrice, item.quantity, activePromos);
+      const lineDiscountBs  = calcLineDiscount(product.id, rawPrice,     item.quantity, activePromos);
 
       if (product.is_service) {
-        total += rawPrice * item.quantity - lineDiscountUsd;
+        total += roundedPrice * item.quantity - lineDiscountUsd;
         enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, lineDiscountBs });
       } else if (product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
@@ -150,7 +152,7 @@ module.exports = async function createSale(body) {
           ingredientsData.push({ ingredient, qtyNeeded, stockEntry });
         }
 
-        total += rawPrice * item.quantity - lineDiscountUsd;
+        total += roundedPrice * item.quantity - lineDiscountUsd;
         enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs });
       } else {
         const stockEntry = await ProductStock.findOne({
@@ -164,7 +166,7 @@ module.exports = async function createSale(body) {
           throw new Error(`Stock insuficiente para "${product.name}" en este almacén. Disponible: ${currentQty}`);
         }
 
-        total += rawPrice * item.quantity - lineDiscountUsd;
+        total += roundedPrice * item.quantity - lineDiscountUsd;
         enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs });
       }
     }

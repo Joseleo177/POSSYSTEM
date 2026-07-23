@@ -325,15 +325,18 @@ export function CartProvider({ children }) {
   const vesCurrency = activeCurrencies.find(c => !c.is_base) || null;
   const vesRate = vesCurrency?.exchange_rate ? parseFloat(vesCurrency.exchange_rate) : null;
 
-  // USD — precios precisos acumulados; el redondeo ocurre en totalUsd (como createSale.js)
-  const subtotalUsd = cart.reduce((s, i) => s + (parseFloat(i.price) || 0) * i.qty, 0);
+  // USD — redondeo POR LÍNEA (round2(price) × qty) → 3 × 4.07 = 12.21
+  // Bs — redondeo POR LÍNEA EN Bs (round2(price × vesRate) × qty) → 3 × 3000 = 9000 (bloque independiente abajo)
+  // La diferencia de 0.01 entre ambas pistas es inherente al redondeo dual y se gestiona en
+  // PaymentFormModal con la tolerancia de 0.02 USD al calcular el abono en Bs.
+  const subtotalUsd = cart.reduce((s, i) => s + round2(i.price) * i.qty, 0);
   const discountAmountUsd = discountEnabled && parseFloat(discountPct) > 0
     ? subtotalUsd * (parseFloat(discountPct) / 100) : 0;
 
   const promoLineDiscountUsd = useCallback((item) => {
     for (const promo of activePromos) {
       if (!promo.product_ids?.includes(item.id)) continue;
-      const p = parseFloat(item.price) || 0; // precio preciso, sin round2
+      const p = round2(item.price); // mismo round2 que la línea de subtotalUsd
       if (promo.type === 'percentage')
         return p * item.qty * (parseFloat(promo.discount_pct) / 100);
       if (promo.type === 'buy_x_get_y') {
@@ -345,7 +348,7 @@ export function CartProvider({ children }) {
   }, [activePromos]);
 
   const promoDiscountUsd = cart.reduce((s, i) => s + promoLineDiscountUsd(i), 0);
-  const totalUsd = round2(subtotalUsd - discountAmountUsd - promoDiscountUsd);
+  const totalUsd = subtotalUsd - discountAmountUsd - promoDiscountUsd;
 
   const promoLineDiscountBs = useCallback((item) => {
     if (!vesRate) return 0;
