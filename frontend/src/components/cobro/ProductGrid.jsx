@@ -139,9 +139,13 @@ export default function ProductGrid({
                                         );
                                     })()}
 
-                                    {/* Badge de stock bajo */}
-                                    {p.stock <= 5 && !p.is_service && (
-                                        <div className={`absolute top-1 lg:top-2 right-1 lg:right-2 text-white text-[6px] lg:text-[10px] font-black px-1 lg:px-1.5 py-0.5 rounded-full shadow-lg uppercase tracking-tighter ${p.stock <= 0 ? "bg-danger" : "bg-orange-500"}`}>
+                                    {/* Badge de stock: rojo = agotado, naranja = bajo, verde = disponible */}
+                                    {!p.is_service && p.stock !== null && (
+                                        <div className={`absolute top-1 lg:top-2 right-1 lg:right-2 text-[6px] lg:text-[10px] font-black px-1 lg:px-1.5 py-0.5 rounded-full shadow-lg uppercase tracking-tighter ${
+                                            parseFloat(p.stock) <= 0 ? "bg-danger text-white"
+                                            : parseFloat(p.stock) <= 5 ? "bg-orange-500 text-white"
+                                            : "bg-success text-black"
+                                        }`}>
                                             {fmtQtyUnit(p.stock, p.unit)}
                                         </div>
                                     )}
