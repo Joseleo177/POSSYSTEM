@@ -2,7 +2,8 @@ import { resolveImageUrl } from ".";
 
 const fmtDate = d => d ? new Date(d).toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
-export function printPurchaseOrderDoc(detail, items, companyInfo) {
+export function printPurchaseOrderDoc(detail, items, companyInfo, printerWidth = 80) {
+    const w58 = printerWidth === 58;
     const isBorrador = detail.status === "borrador";
     const title   = isBorrador ? "LISTA DE PEDIDO" : "ORDEN DE COMPRA";
     const subTitle = isBorrador ? "DOCUMENTO INTERNO · NO FISCAL" : "DOCUMENTO INTERNO · NO FISCAL";
@@ -29,47 +30,48 @@ export function printPurchaseOrderDoc(detail, items, companyInfo) {
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        @page { size: ${w58 ? "58mm" : "80mm"} auto; margin: 0; }
         body {
             font-family: 'Outfit', sans-serif;
-            font-size: 11px;
+            font-size: ${w58 ? "8px" : "11px"};
             line-height: 1.3;
             color: #000;
             background: white;
-            width: 302px;
+            width: ${w58 ? "216px" : "302px"};
             margin: 0 auto;
-            padding: 10px;
+            padding: ${w58 ? "6px" : "10px"};
         }
-        .header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 8px; }
-        .logo { max-height: 50px; max-width: 80px; object-fit: contain; }
-        .header-content { flex: 1; }
-        .store-name { font-size: 14px; font-weight: 800; text-transform: uppercase; line-height: 1; margin-bottom: 2px; }
-        .store-rif  { font-size: 10px; font-weight: 700; margin-bottom: 1px; }
-        .store-info { font-size: 9px; line-height: 1.2; font-weight: 500; }
-        .doc-header { text-align: center; margin: 8px 0; }
-        .doc-title  { font-size: 14px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
-        .doc-sub    { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; opacity: 0.6; }
-        .meta { margin-bottom: 8px; font-size: 10.5px; }
-        .meta-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+        .header { display: flex; align-items: flex-start; gap: ${w58 ? "4px" : "8px"}; margin-bottom: ${w58 ? "6px" : "10px"}; border-bottom: 2px solid #000; padding-bottom: ${w58 ? "5px" : "8px"}; }
+        .logo { max-height: ${w58 ? "35px" : "50px"}; max-width: ${w58 ? "55px" : "80px"}; object-fit: contain; }
+        .header-content { flex: 1; min-width: 0; }
+        .store-name { font-size: ${w58 ? "10px" : "14px"}; font-weight: 800; text-transform: uppercase; line-height: 1; margin-bottom: 2px; }
+        .store-rif  { font-size: ${w58 ? "7.5px" : "10px"}; font-weight: 700; margin-bottom: 1px; }
+        .store-info { font-size: ${w58 ? "7px" : "9px"}; line-height: 1.2; font-weight: 500; }
+        .doc-header { text-align: center; margin: ${w58 ? "5px" : "8px"} 0; }
+        .doc-title  { font-size: ${w58 ? "10px" : "14px"}; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+        .doc-sub    { font-size: ${w58 ? "7px" : "9px"}; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; opacity: 0.6; }
+        .meta { margin-bottom: ${w58 ? "5px" : "8px"}; font-size: ${w58 ? "8px" : "10.5px"}; }
+        .meta-row { display: flex; justify-content: space-between; margin-bottom: 2px; gap: 4px; }
         .meta-label { color: #555; font-weight: 500; }
         .meta-value { font-weight: 700; text-align: right; max-width: 60%; }
-        .notes { margin-bottom: 8px; font-size: 9.5px; background: #f5f5f5; padding: 5px 7px; border-radius: 4px; }
-        .notes-label { font-weight: 800; text-transform: uppercase; font-size: 8px; letter-spacing: 0.5px; margin-bottom: 1px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-        th { font-size: 9px; font-weight: 800; text-transform: uppercase; padding: 6px 3px; text-align: left; border-bottom: 1.5px solid #000; border-top: 1.5px solid #000; }
-        th:nth-child(1) { width: 18px; }
+        .notes { margin-bottom: ${w58 ? "5px" : "8px"}; font-size: ${w58 ? "7.5px" : "9.5px"}; background: #f5f5f5; padding: 5px 7px; border-radius: 4px; }
+        .notes-label { font-weight: 800; text-transform: uppercase; font-size: ${w58 ? "7px" : "8px"}; letter-spacing: 0.5px; margin-bottom: 1px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: ${w58 ? "5px" : "8px"}; }
+        th { font-size: ${w58 ? "7px" : "9px"}; font-weight: 800; text-transform: uppercase; padding: ${w58 ? "4px 2px" : "6px 3px"}; text-align: left; border-bottom: 1.5px solid #000; border-top: 1.5px solid #000; }
+        th:nth-child(1) { width: 16px; }
         th:nth-child(3) { text-align: center; }
-        th:nth-child(4) { text-align: center; width: 28px; }
-        td { padding: 5px 3px; font-size: 10px; vertical-align: middle; border-bottom: 0.5px dashed #ddd; }
+        th:nth-child(4) { text-align: center; width: 24px; }
+        td { padding: ${w58 ? "3px 2px" : "5px 3px"}; font-size: ${w58 ? "8px" : "10px"}; vertical-align: middle; border-bottom: 0.5px dashed #ddd; }
         .item-name { font-weight: 700; line-height: 1.2; }
-        .item-pkg  { font-size: 8.5px; color: #666; margin-top: 1px; }
-        .td-num    { color: #aaa; font-size: 9px; text-align: right; padding-right: 5px; }
+        .item-pkg  { font-size: ${w58 ? "7px" : "8.5px"}; color: #666; margin-top: 1px; }
+        .td-num    { color: #aaa; font-size: ${w58 ? "7px" : "9px"}; text-align: right; padding-right: 5px; }
         .td-center { text-align: center; }
-        .td-check  { text-align: center; font-size: 14px; color: #ccc; }
-        .summary   { border-top: 1.5px solid #000; padding-top: 6px; display: flex; justify-content: space-between; align-items: center; }
-        .summary-count { font-size: 10px; font-weight: 700; color: #555; }
-        .summary-total { font-size: 11px; font-weight: 800; }
-        .count-badge { display: inline-block; background: #000; color: #fff; font-size: 8px; font-weight: 800; padding: 1px 5px; border-radius: 3px; margin-left: 4px; vertical-align: middle; }
-        .footer { text-align: center; margin-top: 14px; font-size: 9px; color: #555; font-weight: 500; border-top: 1px dashed #ccc; padding-top: 8px; }
+        .td-check  { text-align: center; font-size: ${w58 ? "11px" : "14px"}; color: #ccc; }
+        .summary   { border-top: 1.5px solid #000; padding-top: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .summary-count { font-size: ${w58 ? "8px" : "10px"}; font-weight: 700; color: #555; }
+        .summary-total { font-size: ${w58 ? "9px" : "11px"}; font-weight: 800; }
+        .count-badge { display: inline-block; background: #000; color: #fff; font-size: ${w58 ? "7px" : "8px"}; font-weight: 800; padding: 1px 5px; border-radius: 3px; margin-left: 4px; vertical-align: middle; }
+        .footer { text-align: center; margin-top: 14px; font-size: ${w58 ? "7px" : "9px"}; color: #555; font-weight: 500; border-top: 1px dashed #ccc; padding-top: 8px; }
     </style>
 </head>
 <body>

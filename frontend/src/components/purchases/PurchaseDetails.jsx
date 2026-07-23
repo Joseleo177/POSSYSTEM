@@ -22,7 +22,7 @@ const ORDER_STATUS = {
 
 export default function PurchaseDetails({ state }) {
   const { detail, refreshDetail, confirmOrder, receivePurchase, loading, warehouses = [] } = state;
-  const { notify, baseCurrency, activeCurrencies, companyInfo } = useApp();
+  const { notify, baseCurrency, activeCurrencies, companyInfo, printerWidth } = useApp();
 
   // ── Payments ──
   const [payments, setPayments]         = useState([]);
@@ -448,7 +448,8 @@ export default function PurchaseDetails({ state }) {
                 onClick={() => printPurchaseOrderDoc(
                   detail,
                   isBorrador ? localItems : (detail.items || []),
-                  companyInfo
+                  companyInfo,
+                  printerWidth
                 )}
                 className="h-7 px-3 rounded-lg bg-surface-2 dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] text-[10px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 flex items-center gap-1.5 hover:bg-surface-3 dark:hover:bg-white/[0.07] transition-all active:scale-95"
                 title="Imprimir lista de productos"
