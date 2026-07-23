@@ -55,8 +55,8 @@ module.exports = async function getPendingPayments(query, tenant = {}) {
   const data = await Promise.all(
     sales.map(async (s) => {
       const item = s.toJSON();
-      const amount_paid = parseFloat(await Payment.sum("amount", { where: { sale_id: s.id } }) || 0);
-      const balance = parseFloat((parseFloat(item.total) - amount_paid).toFixed(6));
+      const rawBalance = parseFloat((parseFloat(item.total) - amount_paid).toFixed(6));
+      const balance = rawBalance <= 0.10 ? 0 : rawBalance;
 
       item.customer_name = item.Customer?.name ?? null;
       item.customer_rif = item.Customer?.rif ?? null;

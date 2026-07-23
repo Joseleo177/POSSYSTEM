@@ -54,7 +54,24 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const receivedNum = parseFloat(String(form.received_amount).replace(",", "."));
   const amountNum   = parseFloat(String(form.amount).replace(",", "."));
 
-  const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const historicalRate = parseFloat(sale?.exchange_rate) > 1 ? parseFloat(sale.exchange_rate) : defaultRate;
+
+  const roundBs2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const round2   = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const bsRate = (displayCur && !displayCur.is_base) ? defaultRate : 0;
+  const hasBsRate = bsRate > 1;
+  const totalPreciseBs = (sale?.items?.length && hasBsRate)
+    ? roundBs2(
+        sale.items.reduce((acc, i) =>
+          acc + roundBs2((parseFloat(i.price || 0) - parseFloat(i.discount || 0)) * bsRate) * parseFloat(i.quantity || 0)
+        , 0) - roundBs2(parseFloat(sale?.discount_amount || 0) * bsRate)
+      )
+    : roundBs2(parseFloat(sale?.total || 0) * historicalRate);
+  const pendingPreciseBs = Math.max(0, roundBs2(totalPreciseBs
+    - roundBs2(parseFloat(sale?.amount_paid    || 0) * historicalRate)
+    - roundBs2(parseFloat(sale?.total_returned || 0) * historicalRate)
+    - roundBs2(creditApplied * historicalRate)));
+
   const isNonBasePay = payCur && !payCur.is_base;
 
   const receivedBase = !isNaN(receivedNum)
@@ -65,9 +82,11 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     ? (isNonBasePay ? amountNum / payRate : round2(amountNum / payRate))
     : 0;
 
-  // Para cobros en USD (moneda base), si el $ resultante queda a ≤2 céntimos del saldo oficial, se ajusta al saldo exacto.
-  // Para cobros en Bs (moneda secundaria), NO alterar amountBase porque desvirtúa el monto registrado en Bs (ej. 12.21 × tasa = 9009.53).
-  if (!isNonBasePay && pendingAfterCredit > 0 && Math.abs(amountBase - pendingAfterCredit) < 0.02) {
+  // Ajuste anti-residuo en moneda base (USD):
+  // Si el cobro es en USD y se encuentra a ≤$0.10 del saldo oficial, se ajusta al saldo exacto.
+  // En Bs (moneda secundaria), se mantiene el monto exacto abonado (amountNum / payRate) para que
+  // la base de datos guarde exactamente los bolívares pagados (ej. Bs. 12364.30 y no Bs. 12396.41).
+  if (!isNonBasePay && pendingAfterCredit > 0 && Math.abs(amountBase - pendingAfterCredit) < 0.10) {
     amountBase = pendingAfterCredit;
   }
   amountBase = Math.min(amountBase, pendingAfterCredit + 0.0001);
@@ -143,23 +162,6 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
       (isCash || form.reference_number?.trim()) &&
       (changeBase <= 0 || form.keep_change || form.credit_change || form.change_journal_id))
   );
-
-  const historicalRate = parseFloat(sale?.exchange_rate) > 1 ? parseFloat(sale.exchange_rate) : defaultRate;
-
-  const roundBs2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
-  const bsRate = (displayCur && !displayCur.is_base) ? defaultRate : 0;
-  const hasBsRate = bsRate > 1;
-  const totalPreciseBs = (sale?.items?.length && hasBsRate)
-    ? roundBs2(
-        sale.items.reduce((acc, i) =>
-          acc + roundBs2((parseFloat(i.price || 0) - parseFloat(i.discount || 0)) * bsRate) * parseFloat(i.quantity || 0)
-        , 0) - roundBs2(parseFloat(sale?.discount_amount || 0) * bsRate)
-      )
-    : roundBs2(parseFloat(sale?.total || 0) * historicalRate);
-  const pendingPreciseBs = Math.max(0, roundBs2(totalPreciseBs
-    - roundBs2(parseFloat(sale?.amount_paid    || 0) * historicalRate)
-    - roundBs2(parseFloat(sale?.total_returned || 0) * historicalRate)
-    - roundBs2(creditApplied * historicalRate)));
 
   const fmt     = (usdAmt) => `${defaultSym}${(Number(usdAmt || 0) * historicalRate).toFixed(2)}`;
   const fmtBase = (usdAmt) => `${baseCurrency?.symbol || "Ref."}${Number(usdAmt || 0).toFixed(2)}`;

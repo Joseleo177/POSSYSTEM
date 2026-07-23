@@ -1,4 +1,4 @@
-const { Payment, Sale, Sequelize, sequelize, getSaleBalance } = require("./shared");
+const { Payment, Sale, SaleItem, Sequelize, sequelize, getSaleBalance } = require("./shared");
 const { Expense, ExpenseCategory, PaymentJournal, Currency, Serie, SerieRange, Customer } = require("../../models");
 
 module.exports = async function createPayment(body) {
@@ -91,11 +91,31 @@ module.exports = async function createPayment(body) {
     }
 
     // getSaleBalance ya descuenta change_given de pagos previos.
-    // El crédito neto de este pago = lo físicamente recibido menos el cambio entregado.
     const pendingAfterCredit = pendingBalance - creditApplied;
-    const netCredit    = hasJournalPayment
-      ? Math.min(parseFloat((payAmt - changeAmt).toFixed(6)), pendingAfterCredit)
-      : 0;
+
+    // Evaluación dinámica en la moneda del cobro (Bs):
+    // Calcular el total exacto en Bs (suma por línea idéntica al carrito)
+    const payRate = parseFloat(exchange_rate) || parseFloat(sale.exchange_rate) || 1;
+    const isBsPay = payRate > 1;
+    const saleItems = await SaleItem.findAll({ where: { sale_id }, transaction: t });
+    const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+    const saleTotalBs = isBsPay
+      ? round2(
+          saleItems.reduce((acc, i) =>
+            acc + round2((parseFloat(i.price || 0) - parseFloat(i.discount || 0)) * payRate) * parseFloat(i.quantity || 0)
+          , 0) - round2(parseFloat(sale.discount_amount || 0) * payRate)
+        )
+      : saleTotal;
+
+    const alreadyPaidBs = isBsPay ? round2(alreadyPaid * payRate) : alreadyPaid;
+    const pendingBalanceBs = Math.max(0, saleTotalBs - alreadyPaidBs);
+    const payAmtInCur = isBsPay ? round2(payAmt * payRate) : payAmt;
+    const isBsFullPay = isBsPay && (payAmtInCur >= pendingBalanceBs - 1.00);
+
+    const netCredit = (hasJournalPayment && isBsFullPay)
+      ? pendingAfterCredit
+      : (hasJournalPayment ? Math.min(parseFloat((payAmt - changeAmt).toFixed(6)), pendingAfterCredit) : 0);
+
     const totalPaidNow = parseFloat((alreadyPaid + creditApplied + netCredit).toFixed(6));
 
     if (netCredit < -0.001) {
@@ -201,16 +221,19 @@ module.exports = async function createPayment(body) {
       }
     }
 
-    const newStatus = totalPaidNow >= saleTotal - 0.02 ? "pagado" : "parcial";
+    // Tolerancia de $0.10 USD (10 céntimos): cubre desfasajes de redondeo por línea acumulados
+    // en ventas con múltiples productos al pagar en bolívares.
+    const isFullPayment = isBsFullPay || totalPaidNow >= saleTotal - 0.10;
+    const newStatus = isFullPayment ? "pagado" : "parcial";
     await sale.update({ status: newStatus }, { transaction: t });
     await t.commit();
 
     const rawBalance = parseFloat((saleTotal - totalPaidNow).toFixed(6));
-    const balance = rawBalance <= 0.02 ? 0 : rawBalance;
+    const balance = (rawBalance <= 0.10 || isFullPayment) ? 0 : rawBalance;
     return {
       payment,
       sale_status: newStatus,
-      amount_paid: totalPaidNow,
+      amount_paid: isFullPayment ? saleTotal : totalPaidNow,
       balance: balance < 0 ? 0 : balance,
       change_given: changeAmt > 0 ? changeAmt : 0,
       invoice_number: sale.invoice_number || null,
