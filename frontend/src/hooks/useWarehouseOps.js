@@ -160,21 +160,21 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   };
 
   // ── Transferencias ─────────────────────────────────────────
-  const doTransfer = async () => {
-    const { from_warehouse_id, to_warehouse_id, qty, note } = transferForm;
-    const product_id = transferProductSelected?.id;
-    if (!from_warehouse_id || !to_warehouse_id || !product_id || !qty)
-      return notify("Origen, destino, producto y cantidad son requeridos", "err");
+  const doTransfer = async (items) => {
+    const { from_warehouse_id, to_warehouse_id, note } = transferForm;
+    if (!from_warehouse_id || !to_warehouse_id)
+      return notify("Origen y destino son requeridos", "err");
+    if (!items || items.length === 0)
+      return notify("Agrega al menos un producto a la lista", "err");
     setLoadingTransfer(true);
     try {
       await api.warehouses.transfer({
         from_warehouse_id: parseInt(from_warehouse_id),
         to_warehouse_id: parseInt(to_warehouse_id),
-        product_id,
-        qty: parseFloat(qty),
         note: note || null,
+        items: items.map(i => ({ product_id: i.product_id, qty: parseFloat(i.qty) })),
       });
-      notify("Transferencia registrada ✓");
+      notify(`Transferencia registrada ✓ (${items.length} producto${items.length !== 1 ? "s" : ""})`);
       setTransferForm({ ...EMPTY_TRANSFER });
       setTransferProductSearch("");
       setTransferProductResults([]);
