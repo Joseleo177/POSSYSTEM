@@ -5,6 +5,7 @@ const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select
 export default function Modal({ open, onClose, title, children, width = 560 }) {
   const modalRef = useRef(null);
   const previousFocus = useRef(null);
+  const wasOpen = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -24,10 +25,17 @@ export default function Modal({ open, onClose, title, children, width = 560 }) {
 
   useEffect(() => {
     if (!open) {
-      // Devolver foco al elemento que lo tenía antes
-      if (previousFocus.current) previousFocus.current.focus();
+      // Devolver foco SOLO en la transición abierto→cerrado.
+      // (El efecto también se re-ejecuta cuando cambia la identidad de onClose en cada
+      // render del padre; sin esta guarda, robaba el foco de otros inputs de la página.)
+      if (wasOpen.current) {
+        wasOpen.current = false;
+        previousFocus.current?.focus();
+        previousFocus.current = null;
+      }
       return;
     }
+    wasOpen.current = true;
 
     const handleKey = (e) => {
       if (e.key === "Escape") {
