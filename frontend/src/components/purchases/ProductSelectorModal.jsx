@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../../services/api";
 import { calcPurchaseItem } from "../../helpers";
 import { PKG_UNITS } from "../../constants/pkg";
@@ -6,6 +6,16 @@ import CustomSelect from "../ui/CustomSelect";
 import ProductModal from "../ProductModal";
 
 const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Tamaño de página para el scroll infinito
+const PAGE_SIZE = 40;
+
+// Normaliza el empaque a la opción canónica de PKG_UNITS ignorando mayúsculas/minúsculas.
+// (El modal de producto guarda en MAYÚSCULAS y la orden en Capitalizado → así siempre coinciden.)
+const normalizePkgUnit = (u) => {
+    if (!u) return "Unidad";
+    return PKG_UNITS.find(x => x.toLowerCase() === u.toLowerCase()) || u;
+};
 
 const EMPTY_FORM = {
     package_unit: "Unidad",
@@ -42,8 +52,13 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     const [step, setStep]           = useState(1);
     const [search, setSearch]       = useState("");
     const [results, setResults]     = useState([]);
+    const [total, setTotal]         = useState(0);
     const [searching, setSearching] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [selected, setSelected]   = useState(null);
+    const offsetRef = useRef(0);
+    const reqRef    = useRef(0);
+    const listRef   = useRef(null);
     const [form, setForm]           = useState(EMPTY_FORM);
     const [stockFilter, setStockFilter]         = useState("todos");
     const [showStockFilter, setShowStockFilter] = useState(false);
@@ -64,7 +79,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                 cost_price: editItem.unit_cost ?? 0,
             });
             setForm({
-                package_unit:    editItem.package_unit  || "Unidad",
+                package_unit:    normalizePkgUnit(editItem.package_unit),
                 package_size:    String(parseFloat(editItem.package_size ?? 1) || 1),
                 package_qty:     String(editItem.package_qty   ?? "1"),
                 package_price:   editItem.package_price != null ? String((parseFloat(editItem.package_price) * invoiceRate).toFixed(2)) : "",
@@ -79,23 +94,45 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         setShowProductModal(false);
     }, [open]);
 
-    // Carga inicial + búsqueda debounceada
+    // Carga una página de productos. append=false reinicia; append=true suma (scroll infinito).
+    const loadProducts = useCallback(async (searchVal, append) => {
+        const off = append ? offsetRef.current : 0;
+        const myReq = append ? reqRef.current : ++reqRef.current; // una carga nueva invalida las anteriores
+        if (append) setLoadingMore(true); else setSearching(true);
+        try {
+            const params = { is_combo: false, is_service: false, limit: PAGE_SIZE, offset: off };
+            if (searchVal.trim()) params.search = searchVal.trim();
+            const r = await api.products.getAll(params);
+            if (myReq !== reqRef.current) return; // resultado obsoleto
+            const data = r.data || r || [];
+            setTotal(r.total ?? data.length);
+            offsetRef.current = off + data.length;
+            setResults(prev => append ? [...prev, ...data] : data);
+        } catch {
+            if (myReq === reqRef.current && !append) { setResults([]); setTotal(0); }
+        } finally {
+            if (myReq === reqRef.current) { if (append) setLoadingMore(false); else setSearching(false); }
+        }
+    }, []);
+
+    // Carga inicial + búsqueda debounceada (reinicia desde offset 0)
     useEffect(() => {
         if (!open) return;
         let active = true;
         const delay = search.trim() ? 350 : 0;
-        const t = setTimeout(async () => {
-            setSearching(true);
-            try {
-                const params = { is_combo: false, is_service: false, limit: 60 };
-                if (search.trim()) params.search = search.trim();
-                const r = await api.products.getAll(params);
-                if (active) setResults(r.data || r);
-            } catch { if (active) setResults([]); }
-            finally  { if (active) setSearching(false); }
-        }, delay);
+        const t = setTimeout(() => { if (active) loadProducts(search, false); }, delay);
         return () => { active = false; clearTimeout(t); };
-    }, [search, open]);
+    }, [search, open, loadProducts]);
+
+    // Scroll infinito: al acercarse al final, carga la siguiente página
+    const handleScroll = () => {
+        const el = listRef.current;
+        if (!el || loadingMore || searching) return;
+        if (results.length >= total) return;
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 140) {
+            loadProducts(search, true);
+        }
+    };
 
     const setF = (key, val) => setForm(prev => {
         const next = { ...prev, [key]: val };
@@ -108,7 +145,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         const isUnidad = !p.package_unit || p.package_unit.toLowerCase() === "unidad";
         const pkgSize  = isUnidad ? 1 : (parseFloat(p.package_size) || 1);
         setForm({
-            package_unit:  p.package_unit || "Unidad",
+            package_unit:  normalizePkgUnit(p.package_unit),
             package_size:  isUnidad ? "1" : String(parseFloat(p.package_size) || 1),
             package_qty:   "1",
             package_price: p.cost_price ? String((p.cost_price * pkgSize * invoiceRate).toFixed(2)) : "",
@@ -254,7 +291,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto px-4 pb-4">
+                        <div ref={listRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 pb-4">
                             {searching && results.length === 0 && (
                                 <div className="flex items-center justify-center py-12">
                                     <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
@@ -315,6 +352,18 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     );
                                 })}
                             </div>
+
+                            {/* Indicador de carga de más resultados (scroll infinito) */}
+                            {loadingMore && (
+                                <div className="flex items-center justify-center py-4">
+                                    <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                                </div>
+                            )}
+                            {!searching && !loadingMore && results.length > 0 && results.length >= total && (
+                                <p className="text-center text-[10px] font-bold text-content-subtle dark:text-white/20 uppercase tracking-widest py-3">
+                                    {total} producto{total !== 1 ? "s" : ""}
+                                </p>
+                            )}
                         </div>
                     </div>
                 )}
@@ -355,7 +404,10 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     <CustomSelect
                                         value={form.package_unit}
                                         onChange={val => setF("package_unit", val)}
-                                        options={PKG_UNITS.map(u => ({ value: u, label: u }))}
+                                        options={[
+                                            ...PKG_UNITS,
+                                            ...(form.package_unit && !PKG_UNITS.some(u => u.toLowerCase() === form.package_unit.toLowerCase()) ? [form.package_unit] : [])
+                                        ].map(u => ({ value: u, label: u }))}
                                         placeholder="Tipo..."
                                         className="w-full"
                                     />

@@ -177,6 +177,7 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
     const catIds = categories.map(c => c.id);
     const searchOr = [
       { name: { [Op.iLike]: `%${search}%` } },
+      { barcode: { [Op.iLike]: `%${search}%` } },
       ...(catIds.length > 0 ? [{ category_id: { [Op.in]: catIds } }] : [])
     ];
     if (where[Op.or]) {
