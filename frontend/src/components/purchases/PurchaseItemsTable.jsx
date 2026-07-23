@@ -5,7 +5,9 @@ import { isIntegerUnit } from "../../helpers/unitFormatter";
 
 // Input numérico que preserva lo que el usuario escribe (permite ".", "" y borrar)
 // Solo sincroniza desde fuera cuando el valor externo cambia significativamente.
-function EditablePriceInput({ value, onChange, disabled, className, decimals = 5 }) {
+// integer=true: descarta el separador decimal en el momento de tipear (no solo al confirmar),
+// para que nunca llegue a mostrarse en pantalla (p.ej. cantidades de productos por UNIDAD).
+function EditablePriceInput({ value, onChange, disabled, className, decimals = 5, integer = false }) {
     const toDisplay = (v) => (parseFloat(v) > 0 ? String(+parseFloat(v).toFixed(decimals)) : "");
     const [display, setDisplay] = useState(() => toDisplay(value));
     const extRef = useRef(value);
@@ -20,7 +22,7 @@ function EditablePriceInput({ value, onChange, disabled, className, decimals = 5
     }, [value]);
 
     const handleChange = (e) => {
-        const raw = e.target.value;
+        const raw = integer ? e.target.value.replace(/[.,]/g, "") : e.target.value;
         setDisplay(raw);
         extRef.current = raw;
         onChange(raw);
@@ -101,10 +103,8 @@ export default function PurchaseItemsTable({
                                     <EditablePriceInput
                                         value={parseFloat(item.package_qty) || 0}
                                         decimals={qtyIsInteger ? 0 : 3}
-                                        onChange={raw => {
-                                            const clean = qtyIsInteger ? String(raw).replace(/[.,].*$/, "") : raw;
-                                            onUpdate?.(item.id ?? item.key, { package_qty: clean });
-                                        }}
+                                        integer={qtyIsInteger}
+                                        onChange={raw => onUpdate?.(item.id ?? item.key, { package_qty: raw })}
                                         className="w-14 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-content dark:text-white"
                                     />
                                 ) : (
