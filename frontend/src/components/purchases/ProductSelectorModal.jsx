@@ -141,10 +141,22 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         return next;
     });
 
+    // Sanea texto libre a número: solo dígitos y un separador decimal (admite "," o ".", normaliza a ".").
+    // Usamos <input type="text"> en vez de type="number" porque en React los inputs numéricos
+    // controlados mueven el cursor al final en cada re-render, rompiendo la edición de decimales
+    // en medio del texto (p.ej. "10" + "." + "2" terminaba en "102.").
+    const sanitizeDecimal = (raw, allowDecimal) => {
+        let v = String(raw).replace(/[^\d.,]/g, "");
+        if (!allowDecimal) return v.replace(/[.,]/g, "");
+        v = v.replace(",", ".");
+        const firstDot = v.indexOf(".");
+        if (firstDot !== -1) v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, "");
+        return v;
+    };
+
     // Setter para campos de cantidad: si el producto se mide en unidades enteras, descarta la parte decimal.
     const setQtyField = (key, val) => {
-        if (isIntegerUnit(selected?.unit)) val = String(val).replace(/[.,].*$/, "");
-        setF(key, val);
+        setF(key, sanitizeDecimal(val, !isIntegerUnit(selected?.unit)));
     };
 
     const handleSelectProduct = (p) => {
@@ -424,7 +436,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Unids × Empaque</label>
                                     <input
-                                        type="number" min="1" step={isIntegerUnit(selected?.unit) ? "1" : "0.001"}
+                                        type="text" inputMode="decimal"
                                         value={form.package_size}
                                         onChange={e => setQtyField("package_size", e.target.value)}
                                         disabled={form.package_unit?.toLowerCase() === "unidad"}
@@ -434,7 +446,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Cant. Empaques</label>
                                     <input
-                                        type="number" min="1" step={isIntegerUnit(selected?.unit) ? "1" : "0.001"}
+                                        type="text" inputMode="decimal"
                                         value={form.package_qty}
                                         onChange={e => setQtyField("package_qty", e.target.value)}
                                         className="input h-9 text-center font-black tabular-nums"
@@ -449,9 +461,9 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                         Costo × Empaque{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70 normal-case font-bold">({invoiceSym})</span> : ""}
                                     </label>
                                     <input
-                                        type="number" min="0" step="0.01"
+                                        type="text" inputMode="decimal"
                                         value={form.package_price}
-                                        onChange={e => setF("package_price", e.target.value)}
+                                        onChange={e => setF("package_price", sanitizeDecimal(e.target.value, true))}
                                         placeholder="0.00"
                                         className="input h-9 font-black tabular-nums text-brand-500"
                                     />
@@ -462,9 +474,9 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Margen (%)</label>
                                     <input
-                                        type="number" min="0" step="0.1"
+                                        type="text" inputMode="decimal"
                                         value={form.profit_margin}
-                                        onChange={e => setF("profit_margin", e.target.value)}
+                                        onChange={e => setF("profit_margin", sanitizeDecimal(e.target.value, true))}
                                         className="input h-9 font-black tabular-nums"
                                     />
                                 </div>
