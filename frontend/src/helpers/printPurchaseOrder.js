@@ -10,7 +10,7 @@ export function printPurchaseOrderDoc(detail, items, companyInfo) {
 
     const itemsRows = items.map((i, idx) => {
         const empaque = i.package_unit?.toLowerCase() === "unidad"
-            ? "Unidad"
+            ? "UNIDAD"
             : `${i.package_unit || ""} × ${i.package_size || "1"}`;
         return `
         <tr>

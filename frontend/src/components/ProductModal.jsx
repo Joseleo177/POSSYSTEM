@@ -5,9 +5,9 @@ import { useApp } from "../context/AppContext";
 import CustomSelect from "./ui/CustomSelect";
 import { calcSalePrice as calcSalePriceHelper, resolveImageUrl } from "../helpers";
 import ComboItemsEditor from "./ComboItemsEditor";
+import { PKG_UNITS } from "../constants/pkg";
 
 const UNITS = ["UNIDAD", "KG", "LITRO", "METRO"];
-const PKG_UNITS = ["CAJA", "BULTO", "PAQUETE", "DOCENA", "MEDIA CAJA", "FARDO", "SACO"];
 const EMPTY = {
     name: "", price: "", stock: "", category_id: "", unit: "UNIDAD", qty_step: "1",
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",

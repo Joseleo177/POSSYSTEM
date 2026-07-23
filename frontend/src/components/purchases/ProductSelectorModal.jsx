@@ -13,12 +13,12 @@ const PAGE_SIZE = 40;
 // Normaliza el empaque a la opción canónica de PKG_UNITS ignorando mayúsculas/minúsculas.
 // (El modal de producto guarda en MAYÚSCULAS y la orden en Capitalizado → así siempre coinciden.)
 const normalizePkgUnit = (u) => {
-    if (!u) return "Unidad";
-    return PKG_UNITS.find(x => x.toLowerCase() === u.toLowerCase()) || u;
+    if (!u) return "UNIDAD";
+    return PKG_UNITS.find(x => x.toLowerCase() === u.toLowerCase()) || u.toUpperCase();
 };
 
 const EMPTY_FORM = {
-    package_unit: "Unidad",
+    package_unit: "UNIDAD",
     package_size: "1",
     package_qty: "1",
     package_price: "",
