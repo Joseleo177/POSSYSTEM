@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { fmt2 } from "../../utils/purchaseUtils";
+import { fmtQty } from "../../helpers";
+import { isIntegerUnit } from "../../helpers/unitFormatter";
 
 // Input numérico que preserva lo que el usuario escribe (permite ".", "" y borrar)
 // Solo sincroniza desde fuera cuando el valor externo cambia significativamente.
@@ -68,7 +70,11 @@ export default function PurchaseItemsTable({
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-border/10 dark:divide-white/[0.04]">
-                    {items.map((item) => (
+                    {items.map((item) => {
+                        // El unit puede venir plano (backend) o anidado en .product (ítem agregado en esta sesión, aún sin guardar)
+                        const itemUnit = item.unit ?? item.product?.unit;
+                        const qtyIsInteger = isIntegerUnit(itemUnit);
+                        return (
                         <tr key={item.id ?? item.key} className="hover:bg-surface-2/30 dark:hover:bg-white/[0.02] transition-colors group">
 
                             {/* Producto + empaque */}
@@ -77,7 +83,7 @@ export default function PurchaseItemsTable({
                                     {item.product_name}
                                 </div>
                                 <div className="text-[9px] font-medium text-content-subtle dark:text-white/30 uppercase mt-0.5">
-                                    {item.package_unit} × {item.package_size}
+                                    {item.package_unit} × {fmtQty(item.package_size)}
                                 </div>
                             </td>
 
@@ -94,11 +100,15 @@ export default function PurchaseItemsTable({
                                 {isEditing ? (
                                     <EditablePriceInput
                                         value={parseFloat(item.package_qty) || 0}
-                                        onChange={raw => onUpdate?.(item.id ?? item.key, { package_qty: raw })}
+                                        decimals={qtyIsInteger ? 0 : 3}
+                                        onChange={raw => {
+                                            const clean = qtyIsInteger ? String(raw).replace(/[.,].*$/, "") : raw;
+                                            onUpdate?.(item.id ?? item.key, { package_qty: clean });
+                                        }}
                                         className="w-14 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-content dark:text-white"
                                     />
                                 ) : (
-                                    <span className="text-xs font-bold tabular-nums">{parseFloat(item.package_qty)}</span>
+                                    <span className="text-xs font-bold tabular-nums">{fmtQty(item.package_qty)}</span>
                                 )}
                             </td>
 
@@ -180,7 +190,7 @@ export default function PurchaseItemsTable({
                             {/* Total Uds. (solo no-borrador) */}
                             {!isEditing && (
                                 <td className="px-4 py-3 text-right text-xs font-bold text-brand-500 tabular-nums">
-                                    {item.total_units} <span className="text-[10px] opacity-40">u</span>
+                                    {fmtQty(item.total_units)} <span className="text-[10px] opacity-40">u</span>
                                 </td>
                             )}
 
@@ -222,7 +232,8 @@ export default function PurchaseItemsTable({
                                 </td>
                             )}
                         </tr>
-                    ))}
+                        );
+                    })}
                 </tbody>
             </table>
         </div>
