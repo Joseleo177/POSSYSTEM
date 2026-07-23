@@ -127,10 +127,12 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
       (changeBase <= 0 || form.keep_change || form.credit_change || form.change_journal_id))
   );
 
-  // Para mostrar los montos de la factura
-  const infoRate = form.pay_currency_id ? payRate : defaultRate;
-  const infoSym  = form.pay_currency_id ? paySym : defaultSym;
-  const fmt = (usdAmt) => `${infoSym}${(Number(usdAmt || 0) * infoRate).toFixed(2)}`;
+  // Para mostrar los montos de la factura (Total/Ya pagado/Saldo pendiente):
+  // usar SIEMPRE la tasa congelada al crear la venta (sale.exchange_rate), no la tasa vigente hoy.
+  // La deuda en USD es fija; su equivalente en Bs no debe fluctuar solo por pagarla otro día
+  // con una tasa distinta (misma lógica ya aplicada en ReceiptModal para ventas pendientes/parciales).
+  const historicalRate = parseFloat(sale?.exchange_rate) > 1 ? parseFloat(sale.exchange_rate) : defaultRate;
+  const fmt = (usdAmt) => `${defaultSym}${(Number(usdAmt || 0) * historicalRate).toFixed(2)}`;
   const fmtBase = (usdAmt) => `${baseCurrency?.symbol || "Ref."}${Number(usdAmt || 0).toFixed(2)}`;
 
   return (

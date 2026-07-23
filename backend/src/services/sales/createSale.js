@@ -178,6 +178,10 @@ module.exports = async function createSale(body) {
     );
 
     for (const entry of enrichedItems) {
+      // `discount` se guarda POR UNIDAD: la BD calcula subtotal = (price - discount) * quantity
+      // (columna generada). entry.lineDiscount es el descuento TOTAL de la línea (p.ej. valor de
+      // las unidades gratis en una promo "compre X lleve Y"), hay que prorratearlo entre qty.
+      const unitDiscount = entry.qty > 0 ? parseFloat(((entry.lineDiscount || 0) / entry.qty).toFixed(2)) : 0;
       await SaleItem.create(
         {
           sale_id: sale.id,
@@ -185,7 +189,7 @@ module.exports = async function createSale(body) {
           name: entry.product.name,
           price: entry.product.price,
           quantity: entry.qty,
-          discount: entry.lineDiscount || 0,
+          discount: unitDiscount,
         },
         { transaction }
       );
