@@ -415,8 +415,8 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
           </div>
         )}
 
-        {/* Abono (readonly) */}
-        <Field label="ABONO A LA FACTURA">
+        {/* Monto / Abono (readonly) */}
+        <Field label={amountBase >= pendingAfterCredit - 0.001 ? "PAGO COMPLETO A FACTURA" : "ABONO PARCIAL A FACTURA"}>
           <div className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 flex items-center text-[13px] font-black text-content dark:text-white tabular-nums">
             {paySym}{(payCur && !payCur.is_base ? amountNum : amountBase * payRate).toFixed(2)}
           </div>
