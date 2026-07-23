@@ -438,7 +438,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Cont. × Embalaje</label>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">{selected?.unit || "Unidad"} × Embalaje</label>
                                     <input
                                         type="text" inputMode="decimal"
                                         value={form.package_size}
