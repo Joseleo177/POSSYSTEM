@@ -35,6 +35,7 @@ module.exports = async function createPayment(body) {
     if (!sale) throw new Error("Factura no encontrada");
     if (sale.status === "pagado") throw new Error("Esta factura ya fue pagada");
     if (sale.status === "anulado") throw new Error("Esta factura está anulada");
+    if (sale.status === "devuelto") throw new Error("Esta factura fue devuelta en su totalidad, no tiene saldo por cobrar");
 
     // Asignar correlativo al confirmar el primer pago de un borrador
     if (sale.status === 'borrador' && sale.serie_id) {

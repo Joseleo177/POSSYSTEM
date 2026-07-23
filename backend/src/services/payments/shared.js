@@ -1,4 +1,4 @@
-const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Sequelize, sequelize } = require("../../models");
+const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Return, Sequelize, sequelize } = require("../../models");
 const { Op } = Sequelize;
 
 async function getSaleBalance(saleId, transaction) {
@@ -26,6 +26,7 @@ module.exports = {
   Employee,
   Currency,
   PaymentJournal,
+  Return,
   Sequelize,
   sequelize,
   Op,

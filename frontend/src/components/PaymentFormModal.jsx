@@ -52,8 +52,17 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const receivedNum = parseFloat(String(form.received_amount).replace(",", "."));
   const amountNum   = parseFloat(String(form.amount).replace(",", "."));
 
-  const receivedBase = !isNaN(receivedNum) ? receivedNum / payRate : 0;
-  const amountBase   = !isNaN(amountNum) ? amountNum / payRate : 0;
+  // Bs se cobra en montos "cerrados" (sin centavos reales); $ SIEMPRE se redondea a 2 decimales
+  // al convertir. Sin este redondeo, dividir Bs/payRate deja residuos de punto flotante (ej.
+  // 16.7599999...) que la factura registra como "parcial" aunque el cliente pagó el total en Bs.
+  const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const receivedBase = !isNaN(receivedNum) ? round2(receivedNum / payRate) : 0;
+  let amountBase = !isNaN(amountNum) ? round2(amountNum / payRate) : 0;
+  // Si el redondeo dejó el monto a menos de medio centavo del saldo pendiente, es un pago
+  // completo: ajusta al saldo exacto para que la factura quede saldada, no "parcial" por céntimos.
+  if (pendingAfterCredit > 0 && Math.abs(amountBase - pendingAfterCredit) < 0.005) {
+    amountBase = pendingAfterCredit;
+  }
 
   // Sobrante calculado en la moneda de pago (570 - 561.22 = 8.78 exacto),
   // sin ida-y-vuelta por USD que acumula error de redondeo
@@ -133,23 +142,16 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   // con una tasa distinta (misma lógica ya aplicada en ReceiptModal para ventas pendientes/parciales).
   const historicalRate = parseFloat(sale?.exchange_rate) > 1 ? parseFloat(sale.exchange_rate) : defaultRate;
 
-  // Total preciso en Bs: suma línea a línea con redondeo a 2 dec, igual que CartContext.
-  // Evita el error de punto flotante donde sale.total (2 dec USD) × tasa ≠ suma de precios Bs.
+  // Bs se DERIVA directamente del monto oficial en $ (sale.total / pendingAfterCredit), NO se
+  // recalcula de forma independiente línea a línea: esta pantalla cobra dinero real contra una
+  // deuda en $ ya fija. Si el Bs mostrado no es exactamente reversible a esa deuda, el cliente
+  // paga "todo lo que ve en pantalla" y la factura igual queda con centavos sueltos ("parcial")
+  // en vez de saldada. (El Bs independiente/preciso sí aplica en catálogo y en el recibo impreso,
+  // donde no hay dinero que cuadrar contra un saldo — ver ReceiptModal.jsx.)
   const roundBs2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
   const hasBsRate = historicalRate > 1;
-  const totalPreciseBs = (hasBsRate && sale?.items?.length)
-    ? parseFloat((
-        sale.items.reduce(
-          (s, i) => s + roundBs2((parseFloat(i.price || 0) - parseFloat(i.discount || 0)) * historicalRate) * parseFloat(i.quantity || 1),
-          0
-        ) - roundBs2(parseFloat(sale.discount_amount || 0) * historicalRate)
-      ).toFixed(2))
-    : roundBs2(parseFloat(sale?.total_precise ?? sale?.total ?? 0) * historicalRate);
-
-  // Saldo pendiente preciso en Bs (descuenta pagos y devoluciones ya registrados)
-  const paidBs   = roundBs2(parseFloat(sale?.amount_paid   || 0) * historicalRate);
-  const retBs    = roundBs2(parseFloat(sale?.total_returned || 0) * historicalRate);
-  const pendingPreciseBs = Math.max(0, totalPreciseBs - paidBs - retBs);
+  const totalPreciseBs   = roundBs2(parseFloat(sale?.total || 0) * historicalRate);
+  const pendingPreciseBs = roundBs2(pendingAfterCredit * historicalRate);
 
   // fmt: conversión genérica USD → moneda de display (para montos que sí son USD: amount_paid, etc.)
   const fmt     = (usdAmt) => `${defaultSym}${(Number(usdAmt || 0) * historicalRate).toFixed(2)}`;
@@ -171,9 +173,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
         )}
         <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
           <Row label="Saldo pendiente"
-            value={hasBsRate
-              ? `${defaultSym}${Math.max(0, pendingPreciseBs - creditApplied * historicalRate).toFixed(2)}`
-              : fmt(pendingAfterCredit)}
+            value={hasBsRate ? `${defaultSym}${pendingPreciseBs.toFixed(2)}` : fmt(pendingAfterCredit)}
             valueClass="text-danger font-black" />
         </div>
       </div>
@@ -276,11 +276,10 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
             onChange={e => {
               const val = e.target.value.replace(/[^\d.,]/g, "");
               const num = parseFloat(val.replace(",", "."));
-              // maxInCur: usar el saldo preciso en Bs cuando el pago es en moneda no-base,
-              // evitando que el límite calculado desde USD sea menor al real en Bs.
-              const maxInCur = (payCur && !payCur.is_base && hasBsRate)
-                ? Math.max(0, pendingPreciseBs - creditApplied * historicalRate)
-                : pendingAfterCredit * payRate;
+              // El tope SIEMPRE se calcula con payRate (tasa vigente hoy del método de pago
+              // seleccionado), la misma que se usa al enviar el pago (amountBase = amount/payRate).
+              // pendingAfterCredit ya descuenta el crédito aplicado, no restarlo de nuevo aquí.
+              const maxInCur = pendingAfterCredit * payRate;
               const abono = !isNaN(num) && num > 0 ? Math.min(num, maxInCur).toFixed(2) : "";
               setForm(p => ({ ...p, received_amount: val, amount: abono }));
             }}
