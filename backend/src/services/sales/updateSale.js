@@ -54,6 +54,10 @@ module.exports = async function updateSale(saleId, body) {
     await SaleItem.destroy({ where: { sale_id: saleId }, transaction });
 
     // Create new items
+    // Igual criterio que createSale.js: $ acumula con el precio redondeado a 2 decimales
+    // (cant×precio mostrado = total mostrado); SaleItem.price guarda precisión completa
+    // (base para sale_items.subtotal, usado en la conversión a Bs).
+    const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
     let total = 0;
     for (const item of items) {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
@@ -96,7 +100,7 @@ module.exports = async function updateSale(saleId, body) {
         { transaction }
       );
 
-      total += unitPrice * qty;
+      total += round2(unitPrice) * qty;
     }
 
     const discAmt = parseFloat(discount_amount ?? sale.discount_amount) || 0;

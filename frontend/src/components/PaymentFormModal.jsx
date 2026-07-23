@@ -140,7 +140,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const totalPreciseBs = (hasBsRate && sale?.items?.length)
     ? parseFloat((
         sale.items.reduce(
-          (s, i) => s + roundBs2(parseFloat(i.price || 0) * historicalRate) * parseFloat(i.quantity || 1),
+          (s, i) => s + roundBs2((parseFloat(i.price || 0) - parseFloat(i.discount || 0)) * historicalRate) * parseFloat(i.quantity || 1),
           0
         ) - roundBs2(parseFloat(sale.discount_amount || 0) * historicalRate)
       ).toFixed(2))
