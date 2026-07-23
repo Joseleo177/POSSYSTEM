@@ -3,6 +3,7 @@ import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { useDebounce } from "../../hooks/useDebounce";
 import { api } from "../../services/api";
+import { isIntegerUnit } from "../../helpers/unitFormatter";
 
 export default function AddStockModal({
     open, onClose, selectedWarehouse,
@@ -141,13 +142,20 @@ export default function AddStockModal({
             </div>
 
             <div className="mb-4">
-                <div className="label mb-1">Cantidad inicial *</div>
+                <div className="label mb-1">
+                    Cantidad inicial *
+                    {addStockProduct?.unit && <span className="ml-1 opacity-40 font-bold">({addStockProduct.unit})</span>}
+                </div>
                 <input
                     type="number"
                     min="0"
-                    step="0.001"
+                    step={isIntegerUnit(addStockProduct?.unit) ? "1" : "0.001"}
                     value={addStockForm.qty}
-                    onChange={e => setAddStockForm(p => ({ ...p, qty: e.target.value }))}
+                    onChange={e => {
+                        let v = e.target.value;
+                        if (isIntegerUnit(addStockProduct?.unit)) v = String(v).replace(/[.,].*$/, "");
+                        setAddStockForm(p => ({ ...p, qty: v }));
+                    }}
                     placeholder="0"
                     className="input"
                 />

@@ -44,6 +44,17 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   const [transferForm, setTransferForm] = useState(EMPTY_TRANSFER);
   const [loadingTransfer, setLoadingTransfer] = useState(false);
   const [transferModal, setTransferModal]     = useState(false);
+  // Paginación por scroll infinito del buscador de productos a transferir
+  const TRANSFER_PAGE = 30;
+  const [transferProductTotal, setTransferProductTotal] = useState(0);
+  const [loadingTransferProducts, setLoadingTransferProducts] = useState(false);
+  const [loadingMoreTransferProducts, setLoadingMoreTransferProducts] = useState(false);
+  const transferOffsetRef = useRef(0);
+  const transferReqRef    = useRef(0);
+  const transferSearchRef = useRef("");
+  const transferFromRef   = useRef("");
+  useEffect(() => { transferSearchRef.current = debouncedTransferProductSearch; }, [debouncedTransferProductSearch]);
+  useEffect(() => { transferFromRef.current = transferForm.from_warehouse_id; }, [transferForm.from_warehouse_id]);
 
   // ── Loaders ────────────────────────────────────────────────
   // Identidad estable: lee el término de búsqueda desde el ref para que
@@ -79,15 +90,38 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
     if (selectedWarehouse) loadStock(selectedWarehouse.id, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedStockSearch]);
+  // Carga una página de productos a transferir. append=false reinicia; append=true suma (scroll infinito).
+  // Con almacén de origen → solo productos con stock ahí; sin origen → todos los productos simples.
+  const loadTransferProducts = useCallback(async (append = false) => {
+    const off   = append ? transferOffsetRef.current : 0;
+    const myReq = append ? transferReqRef.current : ++transferReqRef.current;
+    if (append) setLoadingMoreTransferProducts(true); else setLoadingTransferProducts(true);
+    try {
+      const fromId = transferFromRef.current;
+      const params = { search: (transferSearchRef.current || "").trim(), limit: TRANSFER_PAGE, offset: off };
+      const r = fromId
+        ? await api.warehouses.getProducts(fromId, { ...params, simple_only: true })
+        : await api.products.getAll({ ...params, is_combo: false, is_service: false });
+      if (myReq !== transferReqRef.current) return; // resultado obsoleto
+      const data = r.data || [];
+      setTransferProductTotal(r.total ?? data.length);
+      transferOffsetRef.current = off + data.length;
+      setTransferProductResults(prev => append ? [...prev, ...data] : data);
+    } catch {
+      if (myReq === transferReqRef.current && !append) { setTransferProductResults([]); setTransferProductTotal(0); }
+    } finally {
+      if (myReq === transferReqRef.current) { if (append) setLoadingMoreTransferProducts(false); else setLoadingTransferProducts(false); }
+    }
+  }, []);
+
+  const loadMoreTransferProducts = useCallback(() => { loadTransferProducts(true); }, [loadTransferProducts]);
+
+  // Recarga desde cero al abrir el modal, buscar, o cambiar el almacén de origen
   useEffect(() => {
-    if (!debouncedTransferProductSearch.trim()) { setTransferProductResults([]); return; }
-    // Filtra solo productos con stock en el almacén de origen seleccionado
-    const fromId = transferForm.from_warehouse_id;
-    const call = fromId
-      ? api.warehouses.getProducts(fromId, { search: debouncedTransferProductSearch })
-      : api.products.getAll({ search: debouncedTransferProductSearch, is_combo: false, is_service: false, limit: 10 });
-    call.then(r => setTransferProductResults((r.data || []).slice(0, 10))).catch(() => {});
-  }, [debouncedTransferProductSearch, transferForm.from_warehouse_id]);
+    if (!transferModal) return;
+    transferOffsetRef.current = 0;
+    loadTransferProducts(false);
+  }, [transferModal, debouncedTransferProductSearch, transferForm.from_warehouse_id, loadTransferProducts]);
 
 
 
@@ -211,6 +245,7 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
     transferProductResults, setTransferProductResults,
     transferProductSelected, setTransferProductSelected,
     transferForm, setTransferForm, transferModal, setTransferModal, loadingTransfer, doTransfer,
+    transferProductTotal, loadingTransferProducts, loadingMoreTransferProducts, loadMoreTransferProducts,
     EMPTY_TRANSFER
   };
 }

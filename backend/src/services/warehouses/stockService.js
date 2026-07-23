@@ -248,8 +248,9 @@ async function addStock(req) {
     const e = new Error("product_id y qty son requeridos"); e.status = 400; throw e;
   }
   const parsedQty = parseFloat(qty);
-  if (isNaN(parsedQty) || parsedQty === 0) {
-    const e = new Error("La cantidad no puede ser 0"); e.status = 400; throw e;
+  // Se permite 0: registra el producto en el almacén sin stock inicial (findOrCreate crea la entrada).
+  if (isNaN(parsedQty)) {
+    const e = new Error("Cantidad inválida"); e.status = 400; throw e;
   }
 
   const transaction = await sequelize.transaction();
@@ -277,6 +278,7 @@ async function addStock(req) {
     await product.update({ stock: totalStock }, { transaction });
 
     await transaction.commit();
+    if (parsedQty === 0) return { message: `${product.name} registrado en el almacén (sin stock inicial)` };
     const action = parsedQty > 0 ? `+${parsedQty}` : `${parsedQty}`;
     return { message: `${product.name}: ${action} unidades ajustadas` };
   } catch (err) {

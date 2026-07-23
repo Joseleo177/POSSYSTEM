@@ -57,6 +57,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
         transferProductResults, setTransferProductResults,
         transferProductSelected, setTransferProductSelected,
         transferForm, setTransferForm, transferModal, setTransferModal, loadingTransfer, doTransfer,
+        transferProductTotal, loadingTransferProducts, loadingMoreTransferProducts, loadMoreTransferProducts,
     } = useWarehouseOps(notify, selectedWarehouse, loadWarehouses);
 
     useEffect(() => {
@@ -182,6 +183,10 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                 setTransferForm={setTransferForm}
                 doTransfer={doTransfer}
                 loadingTransfer={loadingTransfer}
+                transferProductTotal={transferProductTotal}
+                loadingTransferProducts={loadingTransferProducts}
+                loadingMoreTransferProducts={loadingMoreTransferProducts}
+                loadMoreTransferProducts={loadMoreTransferProducts}
             />
 
             <AssignEmployeesModal

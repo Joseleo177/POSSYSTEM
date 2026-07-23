@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../../services/api";
 import CustomSelect from "../ui/CustomSelect";
 import { useDebounce } from "../../hooks/useDebounce";
+import { isIntegerUnit } from "../../helpers/unitFormatter";
 
 const REASONS_OUT = [
     { value: "merma",       label: "Merma (Deterioro/Rotura)" },
@@ -132,6 +133,9 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
     const handleSave = async () => {
         if (!selectedProduct) return notify("Selecciona un producto", "err");
         if (!form.quantity || parseFloat(form.quantity) <= 0) return notify("Ingresa una cantidad válida", "err");
+        // Unidades contables (UNIDAD) → sin decimales
+        const qtyToSend = isIntegerUnit(selectedProduct.unit) ? Math.floor(parseFloat(form.quantity)) : form.quantity;
+        if (isIntegerUnit(selectedProduct.unit) && qtyToSend <= 0) return notify("Ingresa una cantidad válida", "err");
 
         let activeSession = session;
 
@@ -149,7 +153,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
         try {
             const r = await api.warehouses.sessions.addLine(
                 selectedWarehouse.id, activeSession.id,
-                { product_id: selectedProduct.id, qty: form.quantity, type: form.type, reason: form.reason, notes: form.notes }
+                { product_id: selectedProduct.id, qty: qtyToSend, type: form.type, reason: form.reason, notes: form.notes }
             );
             const line = r.data;
 
@@ -387,10 +391,19 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
 
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="label">Cantidad</label>
-                                        <input type="number" min="0" step="0.01" placeholder="0.00"
+                                        <label className="label">
+                                            Cantidad
+                                            {selectedProduct?.unit && <span className="ml-1 opacity-40 font-bold">({selectedProduct.unit})</span>}
+                                        </label>
+                                        <input type="number" min="0"
+                                            step={isIntegerUnit(selectedProduct?.unit) ? "1" : "0.01"}
+                                            placeholder={isIntegerUnit(selectedProduct?.unit) ? "0" : "0.00"}
                                             value={form.quantity}
-                                            onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))}
+                                            onChange={e => {
+                                                let v = e.target.value;
+                                                if (isIntegerUnit(selectedProduct?.unit)) v = String(v).replace(/[.,].*$/, "");
+                                                setForm(p => ({ ...p, quantity: v }));
+                                            }}
                                             className={`input h-10 text-[13px] font-black tabular-nums ${form.type === "out" ? "text-danger" : "text-success"}`} />
                                     </div>
                                     <div>

@@ -1,6 +1,8 @@
+import { useState } from "react";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
 import CustomSelect from "../ui/CustomSelect";
+import { isIntegerUnit } from "../../helpers/unitFormatter";
 
 const EMPTY = { from_warehouse_id: "", to_warehouse_id: "", qty: "", note: "" };
 
@@ -9,8 +11,11 @@ export default function TransferModal({
     transferProductSearch, setTransferProductSearch,
     transferProductResults, setTransferProductResults,
     transferProductSelected, setTransferProductSelected,
-    transferForm, setTransferForm, doTransfer, loadingTransfer
+    transferForm, setTransferForm, doTransfer, loadingTransfer,
+    transferProductTotal = 0, loadingTransferProducts, loadingMoreTransferProducts, loadMoreTransferProducts,
 }) {
+    const [showDropdown, setShowDropdown] = useState(false);
+
     const handleClose = () => {
         setTransferForm(EMPTY);
         setTransferProductSearch("");
@@ -18,6 +23,18 @@ export default function TransferModal({
         setTransferProductSelected(null);
         onClose();
     };
+
+    // Scroll infinito del listado de productos
+    const handleProductScroll = (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.target;
+        if (scrollHeight - scrollTop <= clientHeight + 60) {
+            if (transferProductResults.length < transferProductTotal && !loadingMoreTransferProducts && !loadingTransferProducts) {
+                loadMoreTransferProducts?.();
+            }
+        }
+    };
+
+    const qtyIsInteger = isIntegerUnit(transferProductSelected?.unit);
 
     // Mapeo de almacenes para el CustomSelect
     const warehouseOptions = warehouses
@@ -79,24 +96,42 @@ export default function TransferModal({
                                 <input
                                     value={transferProductSearch}
                                     onChange={e => setTransferProductSearch(e.target.value)}
+                                    onFocus={() => setShowDropdown(true)}
+                                    onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
                                     placeholder="Nombre o código del producto..."
                                     className="input h-10 pl-9"
                                 />
                                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle opacity-40 group-focus-within:text-brand-500 group-focus-within:opacity-100 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
-                                {transferProductResults.length > 0 && (
-                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200 divide-y divide-border/10">
-                                        {transferProductResults.map(p => (
-                                            <button
-                                                key={p.id}
-                                                onClick={() => { setTransferProductSelected(p); setTransferProductSearch(""); setTransferProductResults([]); }}
-                                                className="w-full px-4 py-2.5 text-[11px] font-black uppercase tracking-tight text-left hover:bg-brand-500/[0.03] hover:text-brand-500 transition-all flex items-center justify-between"
-                                            >
-                                                <span>{p.name}</span>
-                                                <span className="text-[9px] opacity-40">Stock: {p.stock}</span>
-                                            </button>
-                                        ))}
+                                {showDropdown && (
+                                    <div
+                                        onScroll={handleProductScroll}
+                                        className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200 divide-y divide-border/10"
+                                    >
+                                        {loadingTransferProducts && transferProductResults.length === 0 ? (
+                                            <div className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-50">Buscando productos...</div>
+                                        ) : transferProductResults.length === 0 ? (
+                                            <div className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-50">Sin productos</div>
+                                        ) : (
+                                            transferProductResults.map(p => (
+                                                <button
+                                                    key={p.id}
+                                                    onMouseDown={e => e.preventDefault()}
+                                                    onClick={() => { setTransferProductSelected(p); setTransferProductSearch(""); setShowDropdown(false); }}
+                                                    className="w-full px-4 py-2.5 text-[11px] font-black uppercase tracking-tight text-left hover:bg-brand-500/[0.03] hover:text-brand-500 transition-all flex items-center justify-between"
+                                                >
+                                                    <span>{p.name}</span>
+                                                    <span className="text-[9px] opacity-40">Stock: {p.stock}</span>
+                                                </button>
+                                            ))
+                                        )}
+                                        {loadingMoreTransferProducts && (
+                                            <div className="py-3 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-40">Cargando más...</div>
+                                        )}
+                                        {!loadingTransferProducts && !loadingMoreTransferProducts && transferProductResults.length > 0 && transferProductResults.length >= transferProductTotal && (
+                                            <div className="py-2 text-center text-[9px] font-bold uppercase tracking-widest text-content-subtle opacity-30">{transferProductTotal} producto{transferProductTotal !== 1 ? "s" : ""}</div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -106,11 +141,15 @@ export default function TransferModal({
                         <label className="label mb-1.5 opacity-70">Cantidad <span className="text-danger">*</span></label>
                         <input
                             type="number"
-                            min="0.001"
-                            step="0.001"
+                            min={qtyIsInteger ? "1" : "0.001"}
+                            step={qtyIsInteger ? "1" : "0.001"}
                             value={transferForm.qty}
-                            onChange={e => setTransferForm(p => ({ ...p, qty: e.target.value }))}
-                            placeholder="0.00"
+                            onChange={e => {
+                                let v = e.target.value;
+                                if (qtyIsInteger) v = String(v).replace(/[.,].*$/, "");
+                                setTransferForm(p => ({ ...p, qty: v }));
+                            }}
+                            placeholder={qtyIsInteger ? "0" : "0.00"}
                             className="input h-10 font-black tabular-nums text-brand-500 placeholder:text-content-subtle/30"
                         />
                     </div>
