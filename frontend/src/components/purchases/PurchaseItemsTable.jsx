@@ -62,7 +62,7 @@ export default function PurchaseItemsTable({
                         {showLots && <th className="px-4 py-3">Lote / Vence</th>}
                         <th className="px-4 py-3 text-center">Cant.</th>
                         <th className="px-4 py-3 text-center w-36">
-                            Costo×Emp.{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70">({invoiceSym})</span> : ""}
+                            Costo×Emb.{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70">({invoiceSym})</span> : ""}
                         </th>
                         <th className="px-4 py-3 text-right">C.Unit</th>
                         <th className="px-4 py-3 text-center">P.Venta</th>

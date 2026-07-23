@@ -308,8 +308,8 @@ export default function PurchaseDetails({ state }) {
             {/* Cols 5-6 — Acciones */}
             {isBorrador ? (
               <div className="col-span-2 lg:col-span-2">
-                <p className={`${LABEL} mb-1.5`}>Acciones</p>
-                <div className="flex items-center gap-2">
+                <p className={`${LABEL} mb-1.5 text-center`}>Acciones</p>
+                <div className="flex items-center justify-center gap-2">
                   <button onClick={() => receivePurchase?.(detail.id)} disabled={loading}
                     className="h-7 px-3 rounded-lg bg-success/10 text-success border border-success/20 text-[10px] font-black uppercase tracking-wide hover:bg-success hover:text-black transition-all active:scale-95 disabled:opacity-50">
                     {loading ? "..." : "Recibir Mercancía ✓"}

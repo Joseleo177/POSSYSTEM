@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 
-export default function CustomSelect({ value, onChange, options, placeholder = "Seleccionar...", className = "", disabled = false }) {
+export default function CustomSelect({ value, onChange, options, placeholder = "Seleccionar...", className = "", disabled = false, height = "h-10" }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0, openUp: false });
   const triggerRef = useRef(null);
@@ -48,7 +48,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
       <div
         ref={triggerRef}
         onClick={() => setOpen(!open)}
-        className={`h-10 text-[11px] cursor-pointer flex items-center justify-between transition-all duration-200 border px-3 rounded-md
+        className={`${height} text-[11px] cursor-pointer flex items-center justify-between transition-all duration-200 border px-3 rounded-md
           ${open
             ? "border-brand-500 bg-brand-500/5 ring-[3px] ring-brand-500/15"
             : "bg-white dark:bg-[#12141a] border-border/80 dark:border-white/5 hover:border-brand-500/40"}

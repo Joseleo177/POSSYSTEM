@@ -42,9 +42,9 @@ export default function PurchaseForm({ state }) {
                             <thead>
                                 <tr>
                                     <th className="text-left">Producto</th>
-                                    <th className="text-left">Empaque</th>
+                                    <th className="text-left">Embalaje</th>
                                     <th className="text-center">Cant.</th>
-                                    <th className="text-center">Costo×Emp.</th>
+                                    <th className="text-center">Costo×Emb.</th>
                                     <th className="text-right">P.Venta</th>
                                     <th className="text-right">Subtotal</th>
                                     <th className="w-12"></th>

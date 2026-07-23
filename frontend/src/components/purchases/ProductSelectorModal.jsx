@@ -421,10 +421,10 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                         </div>
 
                         <div className="px-5 pt-4 pb-5 space-y-4">
-                            {/* Empaque */}
+                            {/* Embalaje (mismo término que en la ficha del producto: "Unidades de Embalaje") */}
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Empaque</label>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Embalaje</label>
                                     <CustomSelect
                                         value={form.package_unit}
                                         onChange={val => setF("package_unit", val)}
@@ -434,10 +434,11 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                         ].map(u => ({ value: u, label: u }))}
                                         placeholder="Tipo..."
                                         className="w-full"
+                                        height="h-9"
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Unids × Empaque</label>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Cont. × Embalaje</label>
                                     <input
                                         type="text" inputMode="decimal"
                                         value={form.package_size}
@@ -447,7 +448,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Cant. Empaques</label>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Cant. a Pedir</label>
                                     <input
                                         type="text" inputMode="decimal"
                                         value={form.package_qty}
@@ -461,7 +462,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
-                                        Costo × Empaque{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70 normal-case font-bold">({invoiceSym})</span> : ""}
+                                        Costo × Embalaje{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70 normal-case font-bold">({invoiceSym})</span> : ""}
                                     </label>
                                     <input
                                         type="text" inputMode="decimal"
