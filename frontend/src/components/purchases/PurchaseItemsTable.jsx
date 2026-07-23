@@ -61,7 +61,7 @@ export default function PurchaseItemsTable({
                             Costo×Emp.{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70">({invoiceSym})</span> : ""}
                         </th>
                         <th className="px-4 py-3 text-right">C.Unit</th>
-                        <th className="px-4 py-3 text-right">P.Venta</th>
+                        <th className="px-4 py-3 text-center">P.Venta</th>
                         {!isEditing && <th className="px-4 py-3 text-right">Total Uds.</th>}
                         <th className="px-4 py-3 text-right">Subtotal</th>
                         {showActions && <th className="px-4 py-3 w-20"></th>}
@@ -130,10 +130,10 @@ export default function PurchaseItemsTable({
                             </td>
 
                             {/* Precio Venta — editable + toggle para actualizar el PVP del producto al recibir */}
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-4 py-3 text-center">
                                 {isEditing && item.unit_cost > 0 ? (
-                                    <div className="flex items-center justify-end gap-2">
-                                        <div className={`flex flex-col items-end gap-0.5 ${item.update_price === false ? "opacity-30" : ""}`}>
+                                    <div className="flex items-center justify-center gap-2">
+                                        <div className={`flex flex-col items-center gap-0.5 ${item.update_price === false ? "opacity-30" : ""}`}>
                                             <EditablePriceInput
                                                 disabled={item.update_price === false}
                                                 value={invoiceRate > 1 ? parseFloat(item.sale_price || 0) * invoiceRate : parseFloat(item.sale_price || 0)}
@@ -146,7 +146,7 @@ export default function PurchaseItemsTable({
                                                         onUpdate?.(item.id ?? item.key, { profit_margin: ((newPrice / cost) - 1) * 100 });
                                                     }
                                                 }}
-                                                className="w-20 p-0 text-right text-xs font-black tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-success dark:focus:border-success focus:outline-none text-success"
+                                                className="w-20 p-0 text-center text-xs font-black tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-success dark:focus:border-success focus:outline-none text-success"
                                             />
                                             <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">
                                                 {invoiceRate > 1 && parseFloat(item.sale_price) > 0
@@ -166,7 +166,7 @@ export default function PurchaseItemsTable({
                                         </button>
                                     </div>
                                 ) : (
-                                    <div className="flex flex-col items-end gap-0.5">
+                                    <div className="flex flex-col items-center gap-0.5">
                                         <span className="text-xs font-black text-success tabular-nums">
                                             {item.sale_price > 0 ? `Ref. ${fmt2(item.sale_price)}` : "—"}
                                         </span>
