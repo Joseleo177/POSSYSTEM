@@ -225,7 +225,7 @@ export default function PurchaseDetails({ state }) {
     <div className="flex flex-col gap-3 pb-20 animate-in fade-in duration-300">
 
       {/* ── CABECERA ── */}
-      <div className={`${SECTION} p-5`}>
+      <div className={`${SECTION} p-5 relative`}>
         {isEditable ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-5 items-start">
 
@@ -384,12 +384,12 @@ export default function PurchaseDetails({ state }) {
         )}
 
         {isDirty && isEditable && (
-          <div className="mt-4 pt-3 border-t border-border/10 dark:border-white/5 flex items-center justify-between">
-            <span className="text-[9px] font-bold text-warning uppercase tracking-wide opacity-70">· Cambios sin guardar</span>
+          <div className="absolute -top-3 right-4 z-10 flex items-center gap-2 bg-surface-2 dark:bg-surface-dark-2 pl-2.5 pr-1 py-1 rounded-full border border-border/20 dark:border-white/10 shadow-lg animate-in fade-in slide-in-from-top-1 duration-200">
+            <span className="text-[9px] font-bold text-warning uppercase tracking-wide opacity-70 whitespace-nowrap">· Sin guardar</span>
             <button
               onClick={saveDraftChanges}
               disabled={savingChanges}
-              className="h-7 px-4 rounded-lg bg-brand-500 text-black text-[10px] font-black uppercase tracking-wide hover:brightness-105 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+              className="h-6 px-3 rounded-full bg-brand-500 text-black text-[10px] font-black uppercase tracking-wide hover:brightness-105 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
             >
               {savingChanges
                 ? <div className="w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />
