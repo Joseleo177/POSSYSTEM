@@ -6,6 +6,7 @@ import CustomSelect from "./ui/CustomSelect";
 import { calcSalePrice as calcSalePriceHelper, resolveImageUrl } from "../helpers";
 import ComboItemsEditor from "./ComboItemsEditor";
 import { PKG_UNITS } from "../constants/pkg";
+import { fmtQtyUnit } from "../helpers/unitFormatter";
 
 const UNITS = ["UNIDAD", "KG", "LITRO", "METRO"];
 const EMPTY = {
@@ -373,9 +374,11 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             {editData?.id && !form.is_combo && !form.is_service && (
                                 <div>
                                     <label className="label">Stock Actual</label>
-                                    <div className="bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border border-border/40 rounded-lg px-3 flex justify-between items-center cursor-not-allowed opacity-80 h-10">
-                                        <span className="text-sm font-bold">{form.stock ?? 0} <span className="text-[10px] uppercase opacity-60 ml-1">{form.unit}</span></span>
-                                        <span className="text-[10px] bg-black/10 dark:bg-white/10 px-2 py-0.5 rounded uppercase font-bold tracking-wide">Lectura</span>
+                                    <div className="bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border border-border/40 rounded-lg px-3 flex justify-between items-center gap-2 cursor-not-allowed opacity-80 h-10 min-w-0 overflow-hidden" title={`${fmtQtyUnit(form.stock ?? 0, form.unit)} (solo lectura)`}>
+                                        <span className="text-sm font-bold truncate min-w-0 tabular-nums">{fmtQtyUnit(form.stock ?? 0, form.unit)}</span>
+                                        <svg className="w-3.5 h-3.5 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                        </svg>
                                     </div>
                                 </div>
                             )}
