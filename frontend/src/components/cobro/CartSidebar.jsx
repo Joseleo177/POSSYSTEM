@@ -7,6 +7,7 @@ export default function CartSidebar({
     cart, addToCart, removeFromCart, changeQty, setQtyDirect,
     subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
     discountPct, setDiscountPct, totalDisplay, totalSecondary,
+    subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
     convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt,
     currentCurrency, setSelectedCurrency, activeCurrencies,
     selectedSerieId, selectSerie, mySeries,
@@ -291,8 +292,8 @@ export default function CartSidebar({
                                             <span>{fmtQtyUnit(i.qty, i.unit)}</span>
                                             <span className="opacity-40">@</span>
                                             <span>{fmt(convertToDisplay(i.price), currSym)}</span>
-                                            {promoLineDiscount && promoLineDiscount(i) > 0 && (
-                                                <span className="text-success">-{fmt(convertToDisplay(promoLineDiscount(i)), currSym)}</span>
+                                            {promoLineDiscountDisplay && promoLineDiscountDisplay(i) > 0 && (
+                                                <span className="text-success">-{fmt(promoLineDiscountDisplay(i), currSym)}</span>
                                             )}
                                         </div>
                                         {secondaryCurrency && (
@@ -343,18 +344,18 @@ export default function CartSidebar({
                         <div className="space-y-1 mb-2">
                             <div className="flex justify-between items-center opacity-60 dark:text-content-dark-muted">
                                 <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide">SUBTOTAL</span>
-                                <span className="text-[11px] lg:text-xs font-black tabular-nums">{fmt(convertToDisplay(subtotalBase), currSym)}</span>
+                                <span className="text-[11px] lg:text-xs font-black tabular-nums">{fmt(subtotalDisplay, currSym)}</span>
                             </div>
                             {promoDiscount > 0 && (
                                 <div className="flex justify-between items-center text-success">
                                     <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide">Promociones</span>
-                                    <span className="text-[11px] lg:text-xs font-black tabular-nums">-{fmt(convertToDisplay(promoDiscount), currSym)}</span>
+                                    <span className="text-[11px] lg:text-xs font-black tabular-nums">-{fmt(promoDiscountDisplay, currSym)}</span>
                                 </div>
                             )}
                             {discountEnabled && discountAmount > 0 && (
                                 <div className="flex justify-between items-center text-brand-500">
                                     <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide">DESC. ({discountPct}%)</span>
-                                    <span className="text-[11px] lg:text-xs font-black tabular-nums">-{fmt(convertToDisplay(discountAmount), currSym)}</span>
+                                    <span className="text-[11px] lg:text-xs font-black tabular-nums">-{fmt(discountAmountDisplay, currSym)}</span>
                                 </div>
                             )}
                         </div>

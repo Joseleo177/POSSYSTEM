@@ -316,16 +316,22 @@ export function CartProvider({ children }) {
   }, [notify]);
 
   // ── Totales ────────────────────────────────────────────────
-  // $ (USD): SIEMPRE con el precio de cada línea redondeado a 2 decimales, para que la aritmética
-  // mostrada en pantalla cuadre exacto (cant × precio mostrado = subtotal mostrado). El precio del
-  // producto guarda más decimales (5) solo para poder calibrar precios finos en Bs — ver más abajo.
+  // Dos pistas de cálculo SIEMPRE fijas a su moneda (no a "cuál está seleccionada como principal",
+  // que puede cambiar y antes hacía que el total en Bs diera un número distinto según el toggle):
+  // - USD: precio de cada línea redondeado a 2 decimales (cant×precio mostrado = subtotal mostrado).
+  // - Bs (VES): precio de cada línea convertido y redondeado a 2 decimales EN Bs antes de sumar
+  //   (evita el arrastre de punto flotante: 3×4.0704...×tasa daría 8999.99 en vez de 9000.00).
+  // vesCurrency se busca explícitamente (no "la secundaria", que se invierte según qué esté
+  // seleccionado como principal) para que el resultado en Bs no cambie al togglear la moneda.
   const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const vesCurrency = activeCurrencies.find(c => !c.is_base) || null;
+  const vesRate = vesCurrency?.exchange_rate ? parseFloat(vesCurrency.exchange_rate) : null;
 
-  const subtotalBase = cart.reduce((s, i) => s + round2(i.price) * i.qty, 0);
-  const discountAmount = discountEnabled && parseFloat(discountPct) > 0
-    ? subtotalBase * (parseFloat(discountPct) / 100) : 0;
+  const subtotalUsd = cart.reduce((s, i) => s + round2(i.price) * i.qty, 0);
+  const discountAmountUsd = discountEnabled && parseFloat(discountPct) > 0
+    ? subtotalUsd * (parseFloat(discountPct) / 100) : 0;
 
-  const promoLineDiscount = useCallback((item) => {
+  const promoLineDiscountUsd = useCallback((item) => {
     for (const promo of activePromos) {
       if (!promo.product_ids?.includes(item.id)) continue;
       const p = round2(item.price);
@@ -339,20 +345,14 @@ export function CartProvider({ children }) {
     return 0;
   }, [activePromos]);
 
-  const promoDiscount = cart.reduce((s, i) => s + promoLineDiscount(i), 0);
-  const totalBase = subtotalBase - discountAmount - promoDiscount;
-  const totalDisplay = convertToDisplay(totalBase);
+  const promoDiscountUsd = cart.reduce((s, i) => s + promoLineDiscountUsd(i), 0);
+  const totalUsd = subtotalUsd - discountAmountUsd - promoDiscountUsd;
 
-  // Bs: se calcula sumando LÍNEA POR LÍNEA redondeada a 2 decimales (igual que lo que el usuario
-  // ve en pantalla por producto). Esto evita el error de punto flotante donde
-  // 3 × 4.0704... × tasa = 8999.99 en lugar de 9000.00.
-  // La lógica: si cada línea muestra "Bs. 3000.00", el total debe ser 3 × 3000 = 9000, exacto.
-  const roundBs = n => Math.round((parseFloat(n) || 0) * 100) / 100;
-
-  const promoLineDiscountFull = useCallback((item) => {
+  const promoLineDiscountBs = useCallback((item) => {
+    if (!vesRate) return 0;
     for (const promo of activePromos) {
       if (!promo.product_ids?.includes(item.id)) continue;
-      const pBs = roundBs((parseFloat(item.price) || 0) * secondaryExchangeRate);
+      const pBs = round2((parseFloat(item.price) || 0) * vesRate);
       if (promo.type === 'percentage')
         return pBs * item.qty * (parseFloat(promo.discount_pct) / 100);
       if (promo.type === 'buy_x_get_y') {
@@ -361,18 +361,32 @@ export function CartProvider({ children }) {
       }
     }
     return 0;
-  }, [activePromos, secondaryExchangeRate]);
+  }, [activePromos, vesRate]);
 
-  // Subtotal Bs: suma de (precio en Bs redondeado a 2 dec) × qty por línea
-  const subtotalBaseFull = secondaryCurrency
-    ? cart.reduce((s, i) => s + roundBs((parseFloat(i.price) || 0) * secondaryExchangeRate) * i.qty, 0)
-    : cart.reduce((s, i) => s + (parseFloat(i.price) || 0) * i.qty, 0);
-  const discountAmountFull = discountEnabled && parseFloat(discountPct) > 0
-    ? subtotalBaseFull * (parseFloat(discountPct) / 100) : 0;
-  const promoDiscountFull = cart.reduce((s, i) => s + promoLineDiscountFull(i), 0);
-  const totalBaseFull = subtotalBaseFull - discountAmountFull - promoDiscountFull;
-  // totalSecondary ya está en Bs (calculado directamente arriba), no requiere conversión adicional
-  const totalSecondary = secondaryCurrency ? totalBaseFull : convertToSecondary(totalBaseFull);
+  const subtotalBs = vesRate
+    ? cart.reduce((s, i) => s + round2((parseFloat(i.price) || 0) * vesRate) * i.qty, 0)
+    : null;
+  const discountAmountBs = (vesRate && discountEnabled && parseFloat(discountPct) > 0)
+    ? subtotalBs * (parseFloat(discountPct) / 100) : 0;
+  const promoDiscountBs = vesRate ? cart.reduce((s, i) => s + promoLineDiscountBs(i), 0) : 0;
+  const totalBs = vesRate ? (subtotalBs - discountAmountBs - promoDiscountBs) : null;
+
+  // ── Mapeo a "principal"/"secundaria" según la moneda seleccionada en el toggle ──
+  // (subtotalUsd/discountAmountUsd/promoDiscountUsd/totalUsd se mantienen con estos nombres
+  // porque checkout()/saveQuotation() los envían tal cual al backend, siempre en USD).
+  const isVesPrimary = !!currentCurrency && !currentCurrency.is_base;
+  const subtotalBase    = subtotalUsd;
+  const discountAmount  = discountAmountUsd;
+  const promoLineDiscount = promoLineDiscountUsd;
+  const promoDiscount   = promoDiscountUsd;
+  const totalBase        = totalUsd;
+
+  const subtotalDisplay        = isVesPrimary ? (subtotalBs ?? 0) : subtotalUsd;
+  const promoDiscountDisplay   = isVesPrimary ? promoDiscountBs : promoDiscountUsd;
+  const discountAmountDisplay  = isVesPrimary ? discountAmountBs : discountAmountUsd;
+  const promoLineDiscountDisplay = isVesPrimary ? promoLineDiscountBs : promoLineDiscountUsd;
+  const totalDisplay    = isVesPrimary ? (totalBs ?? 0) : totalUsd;
+  const totalSecondary  = isVesPrimary ? totalUsd : (totalBs ?? convertToSecondary(totalUsd));
 
 
   // ── Guardar cotización ────────────────────────────────────
@@ -474,6 +488,7 @@ export function CartProvider({ children }) {
       // Totales
       subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
       discountPct, setDiscountPct, totalBase, totalDisplay, totalSecondary,
+      subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
       // Moneda
       selectedCurrency, setSelectedCurrency, currentCurrency, exchangeRate,
       secondaryCurrency,

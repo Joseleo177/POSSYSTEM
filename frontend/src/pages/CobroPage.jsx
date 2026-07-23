@@ -31,6 +31,7 @@ export default function CobroPage() {
         cart, addToCart, removeFromCart, changeQty, setQtyDirect,
         subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
         discountPct, setDiscountPct, totalDisplay, totalSecondary,
+        subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
         currentCurrency, setSelectedCurrency, secondaryCurrency,
         convertToDisplay, convertToSecondary,
         selectedSerieId, selectSerie, mySeries, loadMySeries,
@@ -159,6 +160,8 @@ export default function CobroPage() {
                 discountEnabled={discountEnabled} setDiscountEnabled={setDiscountEnabled}
                 discountPct={discountPct} setDiscountPct={setDiscountPct}
                 totalDisplay={totalDisplay} totalSecondary={totalSecondary}
+                subtotalDisplay={subtotalDisplay} promoDiscountDisplay={promoDiscountDisplay}
+                discountAmountDisplay={discountAmountDisplay} promoLineDiscountDisplay={promoLineDiscountDisplay}
                 convertToDisplay={convertToDisplay} convertToSecondary={convertToSecondary}
                 currSym={currSym} secondaryCurrency={secondaryCurrency} fmt={fmt}
                 currentCurrency={currentCurrency} setSelectedCurrency={setSelectedCurrency}
