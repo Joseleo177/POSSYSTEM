@@ -89,9 +89,14 @@ export function CartProvider({ children }) {
   }, []);
 
   // ── Conversión de moneda ───────────────────────────────────
+  // El precio del producto se guarda con 5 decimales (ej. costo × margen = 3.79171), pero toda
+  // venta redondea el monto a 2 decimales en USD ANTES de convertir a Bs (ver createSale.js).
+  // Si aquí convertimos con la precisión completa, el Bs mostrado en catálogo/carrito no coincide
+  // con el que terminará facturando la venta real. Por eso redondeamos a 2 decimales primero.
   const convertToDisplay = useCallback((baseAmount) => {
-    if (!currentCurrency || currentCurrency.is_base) return baseAmount;
-    return baseAmount * exchangeRate;
+    const rounded = Math.round((parseFloat(baseAmount) || 0) * 100) / 100;
+    if (!currentCurrency || currentCurrency.is_base) return rounded;
+    return rounded * exchangeRate;
   }, [currentCurrency, exchangeRate]);
 
   const convertToBase = useCallback((displayAmount) => {
@@ -111,8 +116,9 @@ export function CartProvider({ children }) {
 
   const convertToSecondary = useCallback((baseAmount) => {
     if (!secondaryCurrency) return null;
-    if (secondaryCurrency.is_base) return baseAmount;
-    return baseAmount * secondaryExchangeRate;
+    const rounded = Math.round((parseFloat(baseAmount) || 0) * 100) / 100;
+    if (secondaryCurrency.is_base) return rounded;
+    return rounded * secondaryExchangeRate;
   }, [secondaryCurrency, secondaryExchangeRate]);
 
   // ── Cart helpers ───────────────────────────────────────────
