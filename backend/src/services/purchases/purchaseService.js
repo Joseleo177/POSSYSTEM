@@ -86,7 +86,7 @@ async function getOne(id) {
     include: [
       { model: Employee,     attributes: ['full_name'], required: false },
       { model: Warehouse,    attributes: ['name'],      required: false },
-      { model: PurchaseItem, include: [{ model: Product, attributes: ['image_filename'], required: false }] }
+      { model: PurchaseItem, include: [{ model: Product, attributes: ['image_filename', 'unit', 'stock'], required: false }] }
     ]
   });
   if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
@@ -97,6 +97,8 @@ async function getOne(id) {
   data.items = (data.PurchaseItems ?? []).map(pi => {
     const item = { ...pi };
     item.image_filename = item.Product?.image_filename ?? null;
+    item.unit  = item.Product?.unit  ?? null;
+    item.stock = item.Product?.stock ?? null;
     delete item.Product;
     return item;
   });

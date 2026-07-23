@@ -71,17 +71,20 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     useEffect(() => {
         if (!open) return;
         if (editItem) {
+            // El unit/stock puede venir plano (backend) o anidado en .product (ítem agregado en esta sesión, aún sin guardar)
+            const editUnit  = editItem.unit  ?? editItem.product?.unit  ?? "";
+            const editStock = editItem.stock ?? editItem.product?.stock ?? null;
             setStep(2);
             setSelected({
                 id:         editItem.product_id,
                 name:       editItem.product_name,
-                stock:      editItem.stock ?? null,
-                unit:       editItem.unit  ?? "",
+                stock:      editStock,
+                unit:       editUnit,
                 cost_price: editItem.unit_cost ?? 0,
             });
             setForm({
                 package_unit:    normalizePkgUnit(editItem.package_unit),
-                package_size:    String(isIntegerUnit(editItem.unit) ? (Math.floor(parseFloat(editItem.package_size ?? 1)) || 1) : (parseFloat(editItem.package_size ?? 1) || 1)),
+                package_size:    String(isIntegerUnit(editUnit) ? (Math.floor(parseFloat(editItem.package_size ?? 1)) || 1) : (parseFloat(editItem.package_size ?? 1) || 1)),
                 package_qty:     String(editItem.package_qty   ?? "1"),
                 package_price:   editItem.package_price != null ? String((parseFloat(editItem.package_price) * invoiceRate).toFixed(2)) : "",
                 profit_margin:   String(editItem.profit_margin ?? "30"),
