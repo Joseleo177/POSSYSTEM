@@ -100,6 +100,8 @@ module.exports = async function updateSale(saleId, body) {
     }
 
     const discAmt = parseFloat(discount_amount ?? sale.discount_amount) || 0;
+    // 2 decimales: sale.total es el monto "oficial" de la factura en $.
+    // La precisión completa vive en sale_items (price/discount/subtotal).
     total = parseFloat((total - discAmt).toFixed(2));
     if (total < 0) total = 0;
 

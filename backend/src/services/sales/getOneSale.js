@@ -21,6 +21,12 @@ module.exports = async function getOneSale(id) {
     };
   }) ?? [];
 
+  // Suma precisa de líneas (precio completo sin truncar a 2 dec).
+  // El frontend la usa para convertir a Bs; sale.total queda en 2 dec (monto oficial en $).
+  item.total_precise = parseFloat(
+    item.items.reduce((s, si) => s + parseFloat(si.subtotal || 0), 0).toFixed(5)
+  );
+
   const { Payment, PaymentJournal, Currency: CurrencyModel, Return } = require("../../models");
   const { Op } = require("sequelize");
 

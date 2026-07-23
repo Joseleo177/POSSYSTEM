@@ -82,14 +82,22 @@ module.exports = async function createSale(body) {
       transaction,
     });
 
+    // Dos pistas de cálculo en paralelo:
+    // - $ (sale.total): SIEMPRE con el precio redondeado a 2 decimales, para que cant×precio
+    //   mostrado cuadre exacto con el total de la factura.
+    // - Bs (sale_items.subtotal, vía SaleItem.price/discount): con precisión completa (5
+    //   decimales), independiente del total en $, para poder calibrar precios finos en Bs.
+    //   El frontend usa el mismo criterio (ver CartContext.jsx: subtotalBase vs subtotalBaseFull).
+    const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+
     const calcLineDiscount = (productId, unitPrice, qty, promos) => {
       for (const promo of promos) {
         if (!promo.Products.some(p => p.id === productId)) continue;
         if (promo.type === 'percentage')
-          return parseFloat((unitPrice * qty * parseFloat(promo.discount_pct) / 100).toFixed(2));
+          return parseFloat((unitPrice * qty * parseFloat(promo.discount_pct) / 100).toFixed(5));
         if (promo.type === 'buy_x_get_y') {
           const freeUnits = Math.floor(qty / (promo.buy_qty + promo.get_qty)) * promo.get_qty;
-          return parseFloat((freeUnits * unitPrice).toFixed(2));
+          return parseFloat((freeUnits * unitPrice).toFixed(5));
         }
       }
       return 0;
@@ -102,10 +110,16 @@ module.exports = async function createSale(body) {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
       if (!product) throw new Error(`Producto ${item.product_id} no encontrado`);
 
+      const rawPrice     = parseFloat(product.price);
+      const roundedPrice = round2(rawPrice);
+      // lineDiscountUsd (precio redondeado) alimenta sale.total; lineDiscountBs (precio completo)
+      // alimenta SaleItem.discount → sale_items.subtotal generado.
+      const lineDiscountUsd = calcLineDiscount(product.id, roundedPrice, item.quantity, activePromos);
+      const lineDiscountBs  = calcLineDiscount(product.id, rawPrice, item.quantity, activePromos);
+
       if (product.is_service) {
-        const lineDiscount = calcLineDiscount(product.id, parseFloat(product.price), item.quantity, activePromos);
-        total += parseFloat(product.price) * item.quantity - lineDiscount;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, lineDiscount });
+        total += roundedPrice * item.quantity - lineDiscountUsd;
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, lineDiscountBs });
       } else if (product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
         if (!comboItems || comboItems.length === 0) {
@@ -131,9 +145,8 @@ module.exports = async function createSale(body) {
           ingredientsData.push({ ingredient, qtyNeeded, stockEntry });
         }
 
-        const lineDiscount = calcLineDiscount(product.id, parseFloat(product.price), item.quantity, activePromos);
-        total += parseFloat(product.price) * item.quantity - lineDiscount;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscount });
+        total += roundedPrice * item.quantity - lineDiscountUsd;
+        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs });
       } else {
         const stockEntry = await ProductStock.findOne({
           where: { warehouse_id, product_id: product.id },
@@ -146,12 +159,12 @@ module.exports = async function createSale(body) {
           throw new Error(`Stock insuficiente para "${product.name}" en este almacén. Disponible: ${currentQty}`);
         }
 
-        const lineDiscount = calcLineDiscount(product.id, parseFloat(product.price), item.quantity, activePromos);
-        total += parseFloat(product.price) * item.quantity - lineDiscount;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscount });
+        total += roundedPrice * item.quantity - lineDiscountUsd;
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs });
       }
     }
 
+    // 2 decimales: sale.total es el monto "oficial" de la factura en $.
     total = parseFloat((total - discAmt).toFixed(2));
     if (total < 0) total = 0;
 
@@ -179,9 +192,9 @@ module.exports = async function createSale(body) {
 
     for (const entry of enrichedItems) {
       // `discount` se guarda POR UNIDAD: la BD calcula subtotal = (price - discount) * quantity
-      // (columna generada). entry.lineDiscount es el descuento TOTAL de la línea (p.ej. valor de
+      // (columna generada). entry.lineDiscountBs es el descuento TOTAL de la línea (p.ej. valor de
       // las unidades gratis en una promo "compre X lleve Y"), hay que prorratearlo entre qty.
-      const unitDiscount = entry.qty > 0 ? parseFloat(((entry.lineDiscount || 0) / entry.qty).toFixed(2)) : 0;
+      const unitDiscount = entry.qty > 0 ? parseFloat(((entry.lineDiscountBs || 0) / entry.qty).toFixed(5)) : 0;
       await SaleItem.create(
         {
           sale_id: sale.id,

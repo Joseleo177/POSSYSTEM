@@ -10,6 +10,7 @@ function normalizeSale(sale) {
         id: sale.id,
         invoice_number: sale.invoice_number || null,
         total: parseFloat(sale.total || 0),
+        total_precise: parseFloat(sale.total_precise ?? sale.total ?? 0),
         paid: parseFloat(sale.paid || 0),
         change: parseFloat(sale.change || 0),
         discount: parseFloat(sale.discount_amount || sale.discount || 0),
@@ -189,9 +190,9 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
     </table>
 
     <div class="totals">
-        <div class="total-row"><span>SUBTOTAL</span><span>${fmtP(s.total + s.discount)}</span></div>
+        <div class="total-row"><span>SUBTOTAL</span><span>${fmtP(s.total_precise + s.discount)}</span></div>
         ${s.discount > 0 ? `<div class="total-row discount"><span>DESCUENTO</span><span>-${fmtP(s.discount)}</span></div>` : ""}
-        <div class="total-row big"><span>TOTAL</span><span>${fmtP(s.total)}</span></div>
+        <div class="total-row big"><span>TOTAL</span><span>${fmtP(s.total_precise)}</span></div>
 
     </div>
 
@@ -323,10 +324,10 @@ export default function ReceiptModal({ open, onClose, sale }) {
             </table>
 
             {/* Totales */}
-            <div className="border-t border-border/10 dark:border-white/5 pt-2 mb-3">
+        <div className="border-t border-border/10 dark:border-white/5 pt-2 mb-3">
                 <div className="flex justify-between items-center py-0.5 text-xs">
                     <span className="text-content-muted dark:text-content-dark-muted">Subtotal</span>
-                    <span className="text-content dark:text-content-dark font-medium">{fmtP(s.total + s.discount)}</span>
+                    <span className="text-content dark:text-content-dark font-medium">{fmtP(s.total_precise + s.discount)}</span>
                 </div>
                 {s.discount > 0 && (
                     <div className="flex justify-between items-center py-0.5 text-xs text-danger">
@@ -337,7 +338,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                 <div className="flex justify-between items-center py-1.5 border-t border-border/10 dark:border-white/5 mt-1 pt-1.5">
                     <span className="text-content dark:text-content-dark font-black text-xs uppercase tracking-tighter">TOTAL</span>
                     <div className="text-right">
-                        <div className="text-content dark:text-white font-black text-sm leading-none">{fmtP(s.total)}</div>
+                        <div className="text-content dark:text-white font-black text-sm leading-none">{fmtP(s.total_precise)}</div>
 
                     </div>
                 </div>

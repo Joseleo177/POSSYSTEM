@@ -10,10 +10,10 @@ module.exports = (sequelize, DataTypes) => {
     sale_id: { type: DataTypes.INTEGER, allowNull: false },
     product_id: { type: DataTypes.INTEGER },
     name: { type: DataTypes.STRING(200), allowNull: false },
-    price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+    price: { type: DataTypes.DECIMAL(14, 5), allowNull: false },
     quantity: { type: DataTypes.DECIMAL(10, 3), allowNull: false },
-    discount: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
-    subtotal: { type: DataTypes.DECIMAL(10, 2) }
+    discount: { type: DataTypes.DECIMAL(14, 5), allowNull: false, defaultValue: 0 },
+    subtotal: { type: DataTypes.DECIMAL(14, 5) }
   }, {
     sequelize,
     tableName: 'sale_items',

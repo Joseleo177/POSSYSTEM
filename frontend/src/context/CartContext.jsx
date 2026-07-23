@@ -89,14 +89,12 @@ export function CartProvider({ children }) {
   }, []);
 
   // ── Conversión de moneda ───────────────────────────────────
-  // El precio del producto se guarda con 5 decimales (ej. costo × margen = 3.79171), pero toda
-  // venta redondea el monto a 2 decimales en USD ANTES de convertir a Bs (ver createSale.js).
-  // Si aquí convertimos con la precisión completa, el Bs mostrado en catálogo/carrito no coincide
-  // con el que terminará facturando la venta real. Por eso redondeamos a 2 decimales primero.
+  // El precio del producto se guarda con precisión completa (5 decimales, ej. costo × margen =
+  // 3.79171). En Bs se conserva esa precisión completa (para poder calibrar precios finos en el
+  // catálogo); en $ se redondea a 2 decimales solo al mostrar (ver fmtMoney).
   const convertToDisplay = useCallback((baseAmount) => {
-    const rounded = Math.round((parseFloat(baseAmount) || 0) * 100) / 100;
-    if (!currentCurrency || currentCurrency.is_base) return rounded;
-    return rounded * exchangeRate;
+    if (!currentCurrency || currentCurrency.is_base) return baseAmount;
+    return baseAmount * exchangeRate;
   }, [currentCurrency, exchangeRate]);
 
   const convertToBase = useCallback((displayAmount) => {
@@ -116,9 +114,8 @@ export function CartProvider({ children }) {
 
   const convertToSecondary = useCallback((baseAmount) => {
     if (!secondaryCurrency) return null;
-    const rounded = Math.round((parseFloat(baseAmount) || 0) * 100) / 100;
-    if (secondaryCurrency.is_base) return rounded;
-    return rounded * secondaryExchangeRate;
+    if (secondaryCurrency.is_base) return baseAmount;
+    return baseAmount * secondaryExchangeRate;
   }, [secondaryCurrency, secondaryExchangeRate]);
 
   // ── Cart helpers ───────────────────────────────────────────
@@ -319,18 +316,24 @@ export function CartProvider({ children }) {
   }, [notify]);
 
   // ── Totales ────────────────────────────────────────────────
-  const subtotalBase = cart.reduce((s, i) => s + parseFloat(i.price) * i.qty, 0);
+  // $ (USD): SIEMPRE con el precio de cada línea redondeado a 2 decimales, para que la aritmética
+  // mostrada en pantalla cuadre exacto (cant × precio mostrado = subtotal mostrado). El precio del
+  // producto guarda más decimales (5) solo para poder calibrar precios finos en Bs — ver más abajo.
+  const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+
+  const subtotalBase = cart.reduce((s, i) => s + round2(i.price) * i.qty, 0);
   const discountAmount = discountEnabled && parseFloat(discountPct) > 0
     ? subtotalBase * (parseFloat(discountPct) / 100) : 0;
 
   const promoLineDiscount = useCallback((item) => {
     for (const promo of activePromos) {
       if (!promo.product_ids?.includes(item.id)) continue;
+      const p = round2(item.price);
       if (promo.type === 'percentage')
-        return item.price * item.qty * (parseFloat(promo.discount_pct) / 100);
+        return p * item.qty * (parseFloat(promo.discount_pct) / 100);
       if (promo.type === 'buy_x_get_y') {
         const free = Math.floor(item.qty / (promo.buy_qty + promo.get_qty)) * promo.get_qty;
-        return free * item.price;
+        return free * p;
       }
     }
     return 0;
@@ -339,7 +342,37 @@ export function CartProvider({ children }) {
   const promoDiscount = cart.reduce((s, i) => s + promoLineDiscount(i), 0);
   const totalBase = subtotalBase - discountAmount - promoDiscount;
   const totalDisplay = convertToDisplay(totalBase);
-  const totalSecondary = convertToSecondary(totalBase);
+
+  // Bs: se calcula sumando LÍNEA POR LÍNEA redondeada a 2 decimales (igual que lo que el usuario
+  // ve en pantalla por producto). Esto evita el error de punto flotante donde
+  // 3 × 4.0704... × tasa = 8999.99 en lugar de 9000.00.
+  // La lógica: si cada línea muestra "Bs. 3000.00", el total debe ser 3 × 3000 = 9000, exacto.
+  const roundBs = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+
+  const promoLineDiscountFull = useCallback((item) => {
+    for (const promo of activePromos) {
+      if (!promo.product_ids?.includes(item.id)) continue;
+      const pBs = roundBs((parseFloat(item.price) || 0) * secondaryExchangeRate);
+      if (promo.type === 'percentage')
+        return pBs * item.qty * (parseFloat(promo.discount_pct) / 100);
+      if (promo.type === 'buy_x_get_y') {
+        const free = Math.floor(item.qty / (promo.buy_qty + promo.get_qty)) * promo.get_qty;
+        return free * pBs;
+      }
+    }
+    return 0;
+  }, [activePromos, secondaryExchangeRate]);
+
+  // Subtotal Bs: suma de (precio en Bs redondeado a 2 dec) × qty por línea
+  const subtotalBaseFull = secondaryCurrency
+    ? cart.reduce((s, i) => s + roundBs((parseFloat(i.price) || 0) * secondaryExchangeRate) * i.qty, 0)
+    : cart.reduce((s, i) => s + (parseFloat(i.price) || 0) * i.qty, 0);
+  const discountAmountFull = discountEnabled && parseFloat(discountPct) > 0
+    ? subtotalBaseFull * (parseFloat(discountPct) / 100) : 0;
+  const promoDiscountFull = cart.reduce((s, i) => s + promoLineDiscountFull(i), 0);
+  const totalBaseFull = subtotalBaseFull - discountAmountFull - promoDiscountFull;
+  // totalSecondary ya está en Bs (calculado directamente arriba), no requiere conversión adicional
+  const totalSecondary = secondaryCurrency ? totalBaseFull : convertToSecondary(totalBaseFull);
 
 
   // ── Guardar cotización ────────────────────────────────────

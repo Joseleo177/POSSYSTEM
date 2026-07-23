@@ -7,7 +7,7 @@ module.exports = (sequelize, DataTypes) => {
   }
   Sale.init({
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    total: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+    total: { type: DataTypes.DECIMAL(14, 5), allowNull: false },
     paid: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
     change: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
     customer_id: { type: DataTypes.INTEGER },

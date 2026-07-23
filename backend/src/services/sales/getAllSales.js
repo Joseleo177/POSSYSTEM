@@ -45,6 +45,8 @@ module.exports = async function getAllSales(query, tenant = {}) {
         [Sequelize.literal('(SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = "Sale"."id")'), "amount_paid"],
         [Sequelize.literal('(SELECT COALESCE(SUM(total),0) FROM returns WHERE sale_id = "Sale"."id")'), "total_returned"],
         [Sequelize.literal('(SELECT exchange_rate FROM payments WHERE sale_id = "Sale"."id" ORDER BY created_at DESC LIMIT 1)'), "final_payment_rate"],
+        // Suma precisa de líneas (sin truncar a 2 dec). El frontend la usa para convertir a Bs.
+        [Sequelize.literal('(SELECT COALESCE(SUM(subtotal),0) FROM sale_items WHERE sale_id = "Sale"."id")'), "total_precise"],
       ],
     },
     include: [
@@ -69,6 +71,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
     item.serie_name = item.Serie?.name ?? null;
     item.items = item.SaleItems ?? [];
     item.amount_paid = parseFloat(item.amount_paid || 0);
+    item.total_precise = parseFloat(item.total_precise || item.total || 0);
     const totalRet = parseFloat(item.total_returned || 0);
     item.balance = parseFloat((parseFloat(item.total) - totalRet - item.amount_paid).toFixed(6));
     ["Customer", "Employee", "Currency", "Warehouse", "Serie", "SaleItems"].forEach((k) => delete item[k]);

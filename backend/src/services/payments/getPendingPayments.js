@@ -36,6 +36,12 @@ module.exports = async function getPendingPayments(query, tenant = {}) {
     limit: parseInt(limit, 10),
     offset: parseInt(offset, 10),
     order: [["created_at", "DESC"]],
+    attributes: {
+      include: [
+        // Suma precisa de líneas (sin truncar a 2 dec). El frontend la usa para convertir a Bs.
+        [Sequelize.literal('(SELECT COALESCE(SUM(subtotal),0) FROM sale_items WHERE sale_id = "Sale"."id")'), "total_precise"],
+      ],
+    },
     include: [
       { model: Customer, attributes: ["name", "rif"], required: false },
       { model: Employee, attributes: ["full_name"], required: false },
@@ -61,6 +67,7 @@ module.exports = async function getPendingPayments(query, tenant = {}) {
       item.journal_color = item.PaymentJournal?.color ?? null;
       item.items = item.SaleItems ?? [];
       item.amount_paid = amount_paid;
+      item.total_precise = parseFloat(item.total_precise || item.total || 0);
       item.balance = balance;
       ["Customer", "Employee", "Currency", "PaymentJournal", "SaleItems"].forEach((k) => delete item[k]);
       return item;
