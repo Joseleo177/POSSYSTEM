@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Modal from "../ui/Modal";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers";
+import { fmtQtyUnit } from "../../helpers/unitFormatter";
 
 export default function QuantityModal({ isOpen, onClose, item, onSave, convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt }) {
     const [val, setVal] = useState("");
@@ -115,10 +116,20 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
                     </div>
                 )}
 
-                <div className="flex justify-center">
+                <div className="flex justify-center items-center gap-2">
                     <div className="px-3 py-1 rounded-md bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 text-[9px] font-black uppercase tracking-widest border border-border/40 dark:border-white/5">
                         {unit}
                     </div>
+                    {/* Disponible: mismo semáforo que la grilla (no aplica a servicios/stock ilimitado) */}
+                    {!item.is_service && item.stock !== null && item.stock !== undefined && (
+                        <div className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border ${
+                            parseFloat(item.stock) <= 0 ? "bg-danger/10 text-danger border-danger/30"
+                            : parseFloat(item.stock) <= 5 ? "bg-orange-500/10 text-orange-500 border-orange-500/30"
+                            : "bg-success/10 text-success border-success/30"
+                        }`}>
+                            Dispo: {fmtQtyUnit(item.stock, item.unit)}
+                        </div>
+                    )}
                 </div>
 
                 {/* Main Input Control */}
