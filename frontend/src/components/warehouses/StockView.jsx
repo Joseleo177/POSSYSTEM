@@ -34,16 +34,17 @@ export default function StockView({
                         placeholder="Filtrar producto..."
                         className="input h-10 pl-9"
                     />
+                    {loadingStock && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {loadingStock ? (
-                <div className="py-20 text-center text-brand-500 animate-pulse text-[11px] font-black uppercase tracking-wide">
-                    Sincronizando existencias...
-                </div>
-            ) : (
-                <>
-                    <div className="card-premium overflow-auto flex-1 mx-4 mb-2">
+            {/* La tabla se mantiene siempre montada (no se desmonta al buscar → el foco no se pierde) */}
+            <>
+                    <div className={`card-premium overflow-auto flex-1 mx-4 mb-2 transition-opacity ${loadingStock ? "opacity-40 pointer-events-none" : ""}`}>
                         <table className="table-pos min-w-[680px]">
                             <thead>
                                 <tr>
@@ -54,6 +55,7 @@ export default function StockView({
                             </thead>
                             <tbody className="divide-y divide-border/40 dark:divide-white/5">
                                 {filteredStock.length === 0 ? (
+                                    loadingStock ? null : (
                                     <tr>
                                         <td colSpan={5} className="py-20 text-center">
                                             <div className="flex flex-col items-center gap-3">
@@ -65,6 +67,7 @@ export default function StockView({
                                             </div>
                                         </td>
                                     </tr>
+                                    )
                                 ) : filteredStock.map(s => (
                                     <tr key={s.product_id} className="group transition-colors">
                                         <td className="font-black text-xs text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">
@@ -123,8 +126,7 @@ export default function StockView({
                         limit={limit}
                         onPageChange={(p) => loadStock(selectedWarehouse.id, p)}
                     />
-                </>
-            )}
+            </>
         </div>
     );
 }

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../services/api";
 import { useDebounce } from "./useDebounce";
 import { fmtQty } from "../helpers";
+import { isIntegerUnit } from "../helpers/unitFormatter";
 
 const EMPTY_ADD_STOCK = { product_id: "", qty: "" };
 const EMPTY_TRANSFER = { from_warehouse_id: "", to_warehouse_id: "", product_id: "", qty: "", note: "" };
@@ -164,8 +165,10 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   const submitEditStock = async (e) => {
     if (e) e.preventDefault();
     if (!editStockModal || !selectedWarehouse) return;
-    const qty = parseFloat(editStockValue);
+    let qty = parseFloat(editStockValue);
     if (isNaN(qty) || qty < 0) return notify("Cantidad inválida", "err");
+    // Unidades contables (UNIDAD) → sin decimales
+    if (isIntegerUnit(editStockModal.unit)) qty = Math.floor(qty);
 
     try {
       await api.warehouses.setStock(selectedWarehouse.id, editStockModal.product_id, { qty });

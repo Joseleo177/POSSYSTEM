@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../../services/api";
 import { calcPurchaseItem } from "../../helpers";
+import { fmtQtyUnit, isIntegerUnit } from "../../helpers/unitFormatter";
 import { PKG_UNITS } from "../../constants/pkg";
 import CustomSelect from "../ui/CustomSelect";
 import ProductModal from "../ProductModal";
@@ -80,7 +81,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
             });
             setForm({
                 package_unit:    normalizePkgUnit(editItem.package_unit),
-                package_size:    String(parseFloat(editItem.package_size ?? 1) || 1),
+                package_size:    String(isIntegerUnit(editItem.unit) ? (Math.floor(parseFloat(editItem.package_size ?? 1)) || 1) : (parseFloat(editItem.package_size ?? 1) || 1)),
                 package_qty:     String(editItem.package_qty   ?? "1"),
                 package_price:   editItem.package_price != null ? String((parseFloat(editItem.package_price) * invoiceRate).toFixed(2)) : "",
                 profit_margin:   String(editItem.profit_margin ?? "30"),
@@ -140,13 +141,21 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         return next;
     });
 
+    // Setter para campos de cantidad: si el producto se mide en unidades enteras, descarta la parte decimal.
+    const setQtyField = (key, val) => {
+        if (isIntegerUnit(selected?.unit)) val = String(val).replace(/[.,].*$/, "");
+        setF(key, val);
+    };
+
     const handleSelectProduct = (p) => {
         setSelected(p);
         const isUnidad = !p.package_unit || p.package_unit.toLowerCase() === "unidad";
-        const pkgSize  = isUnidad ? 1 : (parseFloat(p.package_size) || 1);
+        const rawSize  = isUnidad ? 1 : (parseFloat(p.package_size) || 1);
+        // Productos por unidad → tamaño de empaque entero (no admite 12.502)
+        const pkgSize  = isIntegerUnit(p.unit) ? (Math.floor(rawSize) || 1) : rawSize;
         setForm({
             package_unit:  normalizePkgUnit(p.package_unit),
-            package_size:  isUnidad ? "1" : String(parseFloat(p.package_size) || 1),
+            package_size:  isUnidad ? "1" : String(pkgSize),
             package_qty:   "1",
             package_price: p.cost_price ? String((p.cost_price * pkgSize * invoiceRate).toFixed(2)) : "",
             profit_margin: p.profit_margin != null ? String(p.profit_margin) : "30",
@@ -415,9 +424,9 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Unids × Empaque</label>
                                     <input
-                                        type="number" min="1" step="1"
+                                        type="number" min="1" step={isIntegerUnit(selected?.unit) ? "1" : "0.001"}
                                         value={form.package_size}
-                                        onChange={e => setF("package_size", e.target.value)}
+                                        onChange={e => setQtyField("package_size", e.target.value)}
                                         disabled={form.package_unit?.toLowerCase() === "unidad"}
                                         className={`input h-9 text-center font-black tabular-nums ${form.package_unit?.toLowerCase() === "unidad" ? "opacity-30 cursor-not-allowed" : ""}`}
                                     />
@@ -425,9 +434,9 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Cant. Empaques</label>
                                     <input
-                                        type="number" min="1" step="1"
+                                        type="number" min="1" step={isIntegerUnit(selected?.unit) ? "1" : "0.001"}
                                         value={form.package_qty}
-                                        onChange={e => setF("package_qty", e.target.value)}
+                                        onChange={e => setQtyField("package_qty", e.target.value)}
                                         className="input h-9 text-center font-black tabular-nums"
                                     />
                                 </div>
@@ -467,7 +476,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     {[
                                         { label: "Costo Unit.", value: `Ref. ${fmt2(calc.unit_cost)}`, color: "text-info" },
                                         { label: "Precio Venta", value: `Ref. ${fmt2(calc.sale_price)}`, color: "text-success" },
-                                        { label: "Total Unids.", value: `${calc.total_units} ${selected.unit}`, color: "text-warning" },
+                                        { label: "Total Unids.", value: fmtQtyUnit(calc.total_units, selected.unit), color: "text-warning" },
                                     ].map(({ label, value, color }) => (
                                         <div key={label} className="bg-surface-2/50 dark:bg-white/[0.03] rounded-xl p-2.5 border border-border/20 dark:border-white/5 text-center">
                                             <div className="text-[9px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide mb-0.5">{label}</div>
