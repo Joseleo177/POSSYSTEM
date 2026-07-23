@@ -3,7 +3,7 @@ import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { useDebounce } from "../../hooks/useDebounce";
 import { api } from "../../services/api";
-import { isIntegerUnit } from "../../helpers/unitFormatter";
+import { isIntegerUnit, fmtQtyUnit } from "../../helpers/unitFormatter";
 
 export default function AddStockModal({
     open, onClose, selectedWarehouse,
@@ -82,7 +82,7 @@ export default function AddStockModal({
                         <div className="flex-1">
                             <div className="text-xs font-bold text-info">{addStockProduct.name}</div>
                             <div className="text-[11px] text-content-muted dark:text-content-dark-muted">
-                                {addStockProduct.category_name || "Sin categoría"} · Stock: {addStockProduct.stock}
+                                {addStockProduct.category_name || "Sin categoría"} · Stock: {fmtQtyUnit(addStockProduct.stock, addStockProduct.unit)}
                             </div>
                         </div>
                         <button

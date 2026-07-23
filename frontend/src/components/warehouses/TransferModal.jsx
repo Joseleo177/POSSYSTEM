@@ -159,7 +159,7 @@ export default function TransferModal({
                                                             className="w-full px-4 py-2.5 text-[11px] font-black uppercase tracking-tight text-left hover:bg-brand-500/[0.03] hover:text-brand-500 transition-all flex items-center justify-between gap-2"
                                                         >
                                                             <span className="truncate">{p.name} {added && <span className="text-brand-500 opacity-70">· en lista</span>}</span>
-                                                            <span className="text-[9px] opacity-40 shrink-0">Stock: {p.stock}</span>
+                                                            <span className="text-[9px] opacity-40 shrink-0">Stock: {fmtQtyUnit(p.stock, p.unit)}</span>
                                                         </button>
                                                     );
                                                 })
@@ -218,7 +218,7 @@ export default function TransferModal({
                                         <div className="flex-1 min-w-0">
                                             <p className="text-[11px] font-black uppercase tracking-tight truncate">{it.name}</p>
                                             <p className={`text-[9px] font-bold ${insufficient ? "text-danger" : "text-content-subtle opacity-50"}`}>
-                                                {insufficient ? `⚠ Excede el stock (disp. ${it.stock})` : `Disponible: ${it.stock}`}
+                                                {insufficient ? `⚠ Excede el stock (disp. ${fmtQtyUnit(it.stock, it.unit)})` : `Disponible: ${fmtQtyUnit(it.stock, it.unit)}`}
                                             </p>
                                         </div>
                                         <span className={`text-[12px] font-black tabular-nums shrink-0 ${insufficient ? "text-danger" : "text-brand-500"}`}>

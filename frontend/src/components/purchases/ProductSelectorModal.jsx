@@ -355,7 +355,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                                 </div>
                                             </div>
                                             <div className={`shrink-0 text-[11px] font-black px-2.5 py-1 rounded-lg border tabular-nums ${stockColor(p.stock)}`}>
-                                                {p.stock} {p.unit}
+                                                {fmtQtyUnit(p.stock, p.unit)}
                                             </div>
                                         </button>
                                     );
@@ -387,7 +387,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     <div className="text-[10px] font-black text-content-subtle dark:text-white/30 uppercase tracking-widest mb-0.5">Stock actual</div>
                                     {selected.stock != null ? (
                                         <div className={`text-sm font-black tabular-nums ${stockColor(selected.stock).split(" ")[0]}`}>
-                                            {selected.stock} {selected.unit}
+                                            {fmtQtyUnit(selected.stock, selected.unit)}
                                         </div>
                                     ) : (
                                         <div className="text-sm font-black text-content-subtle opacity-30">—</div>

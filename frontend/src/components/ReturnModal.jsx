@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import DatePicker from "./ui/DatePicker";
 import { api } from "../services/api";
 import { fmtNumber, printNotaCreditoDoc } from "../helpers";
+import { fmtQtyUnit } from "../helpers/unitFormatter";
 import ConfirmModal from "./ui/ConfirmModal";
 import PaymentFormModal from "./PaymentFormModal";
 import { useApp } from "../context/AppContext";
@@ -655,7 +656,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                                     className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-brand-500/10 transition-colors text-left border-b last:border-0 border-border/10 dark:border-white/5">
                                                     <div>
                                                         <div className="text-[12px] font-bold text-content dark:text-white">{p.name}</div>
-                                                        <div className="text-[10px] text-content-subtle dark:text-white/30">Stock: {p.stock ?? "—"}</div>
+                                                        <div className="text-[10px] text-content-subtle dark:text-white/30">Stock: {p.stock != null ? fmtQtyUnit(p.stock, p.unit) : "—"}</div>
                                                     </div>
                                                     <span className="text-[12px] font-black text-brand-500 tabular-nums">{fmtPrice(p.price)}</span>
                                                 </button>
