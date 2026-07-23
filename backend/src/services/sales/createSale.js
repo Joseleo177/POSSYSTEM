@@ -41,6 +41,12 @@ async function formatSale(saleId) {
   data.warehouse_name = data.Warehouse?.name ?? null;
   data.serie_name = data.Serie?.name ?? null;
   data.items = data.SaleItems ?? [];
+  // Suma precisa de líneas (precio completo sin truncar a 2 dec) — igual que getOneSale.js.
+  // Sin esto, "Registrar pago inmediato" (que usa esta respuesta) mostraba un Bs distinto al que
+  // se ve al reabrir la misma factura desde Contabilidad/Pendientes (que sí la calculan).
+  data.total_precise = parseFloat(
+    data.items.reduce((s, si) => s + parseFloat(si.subtotal || 0), 0).toFixed(5)
+  );
   ["Customer", "Employee", "Currency", "Warehouse", "Serie", "SaleItems"].forEach((k) => delete data[k]);
   return data;
 }
@@ -82,12 +88,12 @@ module.exports = async function createSale(body) {
       transaction,
     });
 
-    // Dos pistas de cálculo en paralelo:
-    // - $ (sale.total): SIEMPRE con el precio redondeado a 2 decimales, para que cant×precio
-    //   mostrado cuadre exacto con el total de la factura.
-    // - Bs (sale_items.subtotal, vía SaleItem.price/discount): con precisión completa (5
-    //   decimales), independiente del total en $, para poder calibrar precios finos en Bs.
-    //   El frontend usa el mismo criterio (ver CartContext.jsx: subtotalBase vs subtotalBaseFull).
+    // Cálculo del total en $ (sale.total): suma los precios PRECISOS (sin round2 por línea)
+    // y redondea solo al final con toFixed(2). Esto alinea con la aritmética Bs:
+    //   round2(sum(precio × qty)) = round2(12.197) = 12.20
+    //   round2(totalBs / tasa)    = round2(9000/737.88) = 12.20  ← cuadra exacto
+    // Con round-per-line: sum(round2(precio) × qty) = 4.07×3 = 12.21 ≠ 12.20.
+    // Los sale_items siguen guardando precio/descuento con 5 decimales (columna DECIMAL(14,5)).
     const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
 
     const calcLineDiscount = (productId, unitPrice, qty, promos) => {
@@ -110,15 +116,14 @@ module.exports = async function createSale(body) {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
       if (!product) throw new Error(`Producto ${item.product_id} no encontrado`);
 
-      const rawPrice     = parseFloat(product.price);
-      const roundedPrice = round2(rawPrice);
-      // lineDiscountUsd (precio redondeado) alimenta sale.total; lineDiscountBs (precio completo)
-      // alimenta SaleItem.discount → sale_items.subtotal generado.
-      const lineDiscountUsd = calcLineDiscount(product.id, roundedPrice, item.quantity, activePromos);
+      const rawPrice = parseFloat(product.price);
+      // Ambas pistas ($ y Bs) usan el precio preciso; el $ se redondea al final (toFixed(2)),
+      // el Bs se redondea por línea en el frontend (CartContext.subtotalBs) y en SaleItem.discount.
+      const lineDiscountUsd = calcLineDiscount(product.id, rawPrice, item.quantity, activePromos);
       const lineDiscountBs  = calcLineDiscount(product.id, rawPrice, item.quantity, activePromos);
 
       if (product.is_service) {
-        total += roundedPrice * item.quantity - lineDiscountUsd;
+        total += rawPrice * item.quantity - lineDiscountUsd;
         enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, lineDiscountBs });
       } else if (product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
@@ -145,7 +150,7 @@ module.exports = async function createSale(body) {
           ingredientsData.push({ ingredient, qtyNeeded, stockEntry });
         }
 
-        total += roundedPrice * item.quantity - lineDiscountUsd;
+        total += rawPrice * item.quantity - lineDiscountUsd;
         enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs });
       } else {
         const stockEntry = await ProductStock.findOne({
@@ -159,7 +164,7 @@ module.exports = async function createSale(body) {
           throw new Error(`Stock insuficiente para "${product.name}" en este almacén. Disponible: ${currentQty}`);
         }
 
-        total += roundedPrice * item.quantity - lineDiscountUsd;
+        total += rawPrice * item.quantity - lineDiscountUsd;
         enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs });
       }
     }

@@ -316,25 +316,24 @@ export function CartProvider({ children }) {
   }, [notify]);
 
   // ── Totales ────────────────────────────────────────────────
-  // Dos pistas de cálculo SIEMPRE fijas a su moneda (no a "cuál está seleccionada como principal",
-  // que puede cambiar y antes hacía que el total en Bs diera un número distinto según el toggle):
-  // - USD: precio de cada línea redondeado a 2 decimales (cant×precio mostrado = subtotal mostrado).
-  // - Bs (VES): precio de cada línea convertido y redondeado a 2 decimales EN Bs antes de sumar
-  //   (evita el arrastre de punto flotante: 3×4.0704...×tasa daría 8999.99 en vez de 9000.00).
-  // vesCurrency se busca explícitamente (no "la secundaria", que se invierte según qué esté
-  // seleccionado como principal) para que el resultado en Bs no cambie al togglear la moneda.
+  // USD: suma precios PRECISOS, redondea solo el total final (round-after-sum).
+  //   round2(sum(4.06569 × 3)) = round2(12.197) = 12.20
+  //   round2(totalBs / tasa)   = round2(9000 / 737.88) = 12.20  ← cuadran exacto
+  // Con round-per-line (antes): sum(round2(4.06569) × 3) = 4.07×3 = 12.21 ≠ 12.20.
+  // Bs (VES): precio por línea convertido y redondeado EN Bs antes de sumar, sin cambios.
   const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
   const vesCurrency = activeCurrencies.find(c => !c.is_base) || null;
   const vesRate = vesCurrency?.exchange_rate ? parseFloat(vesCurrency.exchange_rate) : null;
 
-  const subtotalUsd = cart.reduce((s, i) => s + round2(i.price) * i.qty, 0);
+  // USD — precios precisos acumulados; el redondeo ocurre en totalUsd (como createSale.js)
+  const subtotalUsd = cart.reduce((s, i) => s + (parseFloat(i.price) || 0) * i.qty, 0);
   const discountAmountUsd = discountEnabled && parseFloat(discountPct) > 0
     ? subtotalUsd * (parseFloat(discountPct) / 100) : 0;
 
   const promoLineDiscountUsd = useCallback((item) => {
     for (const promo of activePromos) {
       if (!promo.product_ids?.includes(item.id)) continue;
-      const p = round2(item.price);
+      const p = parseFloat(item.price) || 0; // precio preciso, sin round2
       if (promo.type === 'percentage')
         return p * item.qty * (parseFloat(promo.discount_pct) / 100);
       if (promo.type === 'buy_x_get_y') {
@@ -346,7 +345,7 @@ export function CartProvider({ children }) {
   }, [activePromos]);
 
   const promoDiscountUsd = cart.reduce((s, i) => s + promoLineDiscountUsd(i), 0);
-  const totalUsd = subtotalUsd - discountAmountUsd - promoDiscountUsd;
+  const totalUsd = round2(subtotalUsd - discountAmountUsd - promoDiscountUsd);
 
   const promoLineDiscountBs = useCallback((item) => {
     if (!vesRate) return 0;
