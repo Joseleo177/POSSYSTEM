@@ -55,15 +55,22 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const amountNum   = parseFloat(String(form.amount).replace(",", "."));
 
   const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
-  const receivedBase = !isNaN(receivedNum) ? round2(receivedNum / payRate) : 0;
-  let amountBase = !isNaN(amountNum) ? round2(amountNum / payRate) : 0;
-  // Pago completo: el total en Bs (9000) y en $ (12.21) son dos redondeos independientes, así que
-  // 9000 Bs ÷ tasa = 12.20 ≠ 12.21 (1 céntimo). Si el $ resultante queda a ≤2 céntimos del saldo
-  // oficial, ajústalo al saldo exacto para saldar la factura, no dejarla "parcial" por el residuo.
-  if (pendingAfterCredit > 0 && Math.abs(amountBase - pendingAfterCredit) < 0.02) {
+  const isNonBasePay = payCur && !payCur.is_base;
+
+  const receivedBase = !isNaN(receivedNum)
+    ? (isNonBasePay ? receivedNum / payRate : round2(receivedNum / payRate))
+    : 0;
+
+  let amountBase = !isNaN(amountNum)
+    ? (isNonBasePay ? amountNum / payRate : round2(amountNum / payRate))
+    : 0;
+
+  // Para cobros en USD (moneda base), si el $ resultante queda a ≤2 céntimos del saldo oficial, se ajusta al saldo exacto.
+  // Para cobros en Bs (moneda secundaria), NO alterar amountBase porque desvirtúa el monto registrado en Bs (ej. 12.21 × tasa = 9009.53).
+  if (!isNonBasePay && pendingAfterCredit > 0 && Math.abs(amountBase - pendingAfterCredit) < 0.02) {
     amountBase = pendingAfterCredit;
   }
-  amountBase = Math.min(amountBase, pendingAfterCredit);
+  amountBase = Math.min(amountBase, pendingAfterCredit + 0.0001);
 
   // Sobrante calculado en la moneda de pago (570 - 561.22 = 8.78 exacto),
   // sin ida-y-vuelta por USD que acumula error de redondeo

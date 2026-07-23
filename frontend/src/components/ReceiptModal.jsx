@@ -32,6 +32,56 @@ function normalizeSale(sale) {
 }
 
 // displayCurrency: la moneda no-base (VES). Todos los montos del recibo se convierten a ella.
+// Helper para calcular precios y subtotals del recibo alineado con el carrito POS
+function calcReceiptTotals(s, rate, sym) {
+    const isBs = rate > 1;
+    const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+
+    const items = s.items.map(i => {
+        const qty = parseFloat(i.quantity || 1);
+        if (isBs) {
+            const priceBs = round2((parseFloat(i.price) || 0) * rate);
+            const discountBs = round2((parseFloat(i.discount) || 0) * rate);
+            const subtotalBs = round2((priceBs - discountBs) * qty);
+            return {
+                ...i,
+                fmtPrice: fmt(priceBs, sym),
+                fmtSubtotal: fmt(subtotalBs, sym),
+                subtotalBs,
+            };
+        } else {
+            const p = parseFloat(i.price || 0);
+            const sub = i.subtotal ?? (p * qty);
+            return {
+                ...i,
+                fmtPrice: fmt(p, sym),
+                fmtSubtotal: fmt(sub, sym),
+                subtotalBs: sub,
+            };
+        }
+    });
+
+    let subtotalBs = 0;
+    let discountBs = isBs ? round2(s.discount * rate) : s.discount;
+    let totalBs = 0;
+
+    if (isBs) {
+        subtotalBs = items.reduce((acc, i) => acc + i.subtotalBs, 0);
+        totalBs = Math.max(0, subtotalBs - discountBs);
+    } else {
+        subtotalBs = s.total_precise + s.discount;
+        totalBs = s.total_precise;
+    }
+
+    return {
+        items,
+        fmtSubtotal: fmt(subtotalBs, sym),
+        fmtDiscount: fmt(discountBs, sym),
+        fmtTotal: fmt(totalBs, sym),
+    };
+}
+
+// displayCurrency: la moneda no-base (VES). Todos los montos del recibo se convierten a ella.
 // sale.total y item.price están siempre en USD base.
 function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
     const storeName = companyInfo?.name || "MI TIENDA POS";
@@ -43,18 +93,18 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
         : parseFloat(s.exchange_rate || 1);
     const rate = (effectiveRate > 1) ? effectiveRate : parseFloat(displayCurrency?.exchange_rate || 1);
     const sym = displayCurrency?.symbol || "Ref.";
-    const code = displayCurrency?.code || "VES";
-    const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
+    const totals = calcReceiptTotals(s, rate, sym);
     const dateStr = fmtDate(s.created_at);
 
     const fmtQty  = q => { const n = parseFloat(q); return n % 1 === 0 ? String(Math.round(n)) : n; };
-    const fmtPRow = n => {
-        const text = fmtP(n);
+    const fmtPRow = text => {
         if (printerWidth !== 58) return text;
-        const len = text.length;
+        const len = String(text).length;
         const size = len >= 14 ? "5.5px" : len >= 12 ? "6px" : len >= 10 ? "6.5px" : "7.5px";
         return `<span style="font-size:${size};white-space:nowrap">${text}</span>`;
-    }; const html = `<!DOCTYPE html>
+    };
+
+    const html = `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8" />
@@ -69,7 +119,6 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Outfit', sans-serif;
-            font-size: ${printerWidth === 58 ? "8px" : "11px"};
             line-height: 1.3;
             color: #000;
             background: white;
@@ -78,78 +127,47 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
             padding: ${printerWidth === 58 ? "2mm" : "3mm"};
         }
 
-        .header { display: flex; align-items: flex-start; gap: ${printerWidth === 58 ? "4px" : "8px"}; margin-bottom: ${printerWidth === 58 ? "6px" : "10px"}; border-bottom: 2px solid #000; padding-bottom: ${printerWidth === 58 ? "5px" : "8px"}; }
-        .logo { max-height: ${printerWidth === 58 ? "35px" : "50px"}; max-width: ${printerWidth === 58 ? "55px" : "80px"}; object-fit: contain; }
-        .header-content { flex: 1; text-align: left; min-width: 0; }
-        .store-name { font-size: ${printerWidth === 58 ? "10px" : "14px"}; font-weight: 800; text-transform: uppercase; line-height: 1; margin-bottom: 2px; }
-        .store-rif { font-size: ${printerWidth === 58 ? "7.5px" : "10px"}; font-weight: 700; color: #000; margin-bottom: 1px; }
-        .store-slogan { font-size: ${printerWidth === 58 ? "7px" : "9px"}; font-weight: 700; font-style: italic; color: #000; margin-bottom: 2px; }
-        .store-info { font-size: ${printerWidth === 58 ? "7px" : "9px"}; color: #000; line-height: 1.2; font-weight: 500; }
+        .header { text-align: center; margin-bottom: 2mm; border-bottom: 1px dashed #000; padding-bottom: 2mm; }
+        .logo { max-height: 12mm; margin-bottom: 1mm; }
+        .store-name { font-size: ${printerWidth === 58 ? "10px" : "13px"}; font-weight: 800; text-transform: uppercase; }
+        .store-slogan { font-size: ${printerWidth === 58 ? "6.5px" : "8.5px"}; font-style: italic; margin-top: 0.5mm; }
+        .store-rif { font-size: ${printerWidth === 58 ? "7.5px" : "9.5px"}; margin-top: 0.5mm; }
+        .store-info { font-size: ${printerWidth === 58 ? "7px" : "8.5px"}; color: #333; margin-top: 0.5mm; }
 
-        .doc-header { text-align: center; margin: ${printerWidth === 58 ? "5px" : "8px"} 0; }
-        .doc-title { font-size: ${printerWidth === 58 ? "10px" : "13px"}; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
-        .doc-warning { font-size: ${printerWidth === 58 ? "7px" : "9px"}; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }
+        .doc-header { text-align: center; margin-bottom: 2mm; }
+        .doc-title { font-size: ${printerWidth === 58 ? "8.5px" : "10.5px"}; font-weight: 800; text-transform: uppercase; }
+        .doc-warning { font-size: ${printerWidth === 58 ? "6.5px" : "8px"}; font-weight: 700; margin-top: 0.5mm; }
 
-        .meta { margin-bottom: ${printerWidth === 58 ? "5px" : "8px"}; font-size: ${printerWidth === 58 ? "8px" : "10.5px"}; }
-        .meta-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
-        .meta-label { color: #000; font-weight: 600; }
-        .meta-value { font-weight: 700; text-align: right; }
+        .meta { margin-bottom: 2mm; font-size: ${printerWidth === 58 ? "7.5px" : "9.5px"}; border-bottom: 1px dashed #000; padding-bottom: 2mm; }
+        .meta-row { display: flex; justify-content: space-between; }
+        .meta-label { font-weight: 400; }
+        .meta-value { font-weight: 700; }
 
-        table { width: 100%; border-collapse: collapse; margin-bottom: ${printerWidth === 58 ? "5px" : "8px"}; }
-        th {
-            font-size: ${printerWidth === 58 ? "7px" : "9px"};
-            font-weight: 800;
-            text-transform: uppercase;
-            padding: ${printerWidth === 58 ? "4px 2px" : "6px 4px"};
-            text-align: left;
-            border-bottom: 1.5px solid #000;
-        }
-        th:nth-child(1) { width: ${printerWidth === 58 ? "36%" : "45%"}; }
-        th:nth-child(2) { width: ${printerWidth === 58 ? "9%"  : "10%"}; text-align: center; }
-        th:nth-child(3) { width: ${printerWidth === 58 ? "27%" : "22%"}; text-align: right; }
-        th:nth-child(4) { width: ${printerWidth === 58 ? "28%" : "23%"}; text-align: right; }
-
-        td {
-            padding: ${printerWidth === 58 ? "3px 1px" : "5px 4px"};
-            font-size: ${printerWidth === 58 ? "8px" : "10px"};
-            vertical-align: top;
-            border-bottom: 0.5px dashed #eee;
-        }
-        td:nth-child(2) { text-align: center; white-space: nowrap; }
-        td:nth-child(3), td:nth-child(4) { text-align: right; white-space: nowrap; font-size: ${printerWidth === 58 ? "7px" : "10px"}; }
-        .item-name { font-weight: 600; line-height: 1.2; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 2mm; }
+        th { text-align: left; border-bottom: 1px solid #000; padding: 1mm 0; font-size: ${printerWidth === 58 ? "7.5px" : "9px"}; }
+        td { padding: 1mm 0; font-size: ${printerWidth === 58 ? "7.5px" : "9px"}; vertical-align: top; }
+        .item-name { max-width: ${printerWidth === 58 ? "20mm" : "32mm"}; word-break: break-word; font-weight: 600; }
         .td-center { text-align: center; }
         .td-right { text-align: right; }
 
-        .totals { border-top: 1.5px solid #000; padding-top: ${printerWidth === 58 ? "4px" : "6px"}; }
-        .total-row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: ${printerWidth === 58 ? "8px" : "11px"}; }
-        .total-row.big { font-weight: 800; font-size: ${printerWidth === 58 ? "11px" : "14px"}; margin-top: 4px; padding-top: 4px; border-top: 1px solid #eee; }
-        .total-row.discount { color: #000; font-style: italic; }
+        .totals { border-top: 1px dashed #000; padding-top: 2mm; margin-bottom: 2mm; }
+        .total-row { display: flex; justify-content: space-between; font-size: ${printerWidth === 58 ? "8px" : "10px"}; margin-bottom: 0.5mm; }
+        .total-row.big { font-size: ${printerWidth === 58 ? "10px" : "12px"}; font-weight: 800; border-top: 1px solid #000; padding-top: 1mm; margin-top: 1mm; }
+        .total-row.discount { color: #000; }
 
-        .footer {
-            text-align: center;
-            margin-top: ${printerWidth === 58 ? "8px" : "15px"};
-            font-size: ${printerWidth === 58 ? "7px" : "9px"};
-            color: #333;
-            font-weight: 500;
-            border-top: 1px dashed #ccc;
-            padding-top: ${printerWidth === 58 ? "5px" : "8px"};
-        }
+        .footer { text-align: center; font-size: ${printerWidth === 58 ? "7px" : "8.5px"}; border-top: 1px dashed #000; padding-top: 2mm; margin-top: 2mm; }
     </style>
 </head>
 <body>
     ${companyInfo?.show_header !== false ? `
     <div class="header">
         ${companyInfo?.logo_url ? `<img src="${resolveImageUrl(companyInfo.logo_url)}" class="logo" />` : ""}
-        <div class="header-content">
-            <div class="store-name">${storeName}</div>
-            ${companyInfo?.slogan ? `<div class="store-slogan">"${companyInfo.slogan}"</div>` : ""}
-            ${companyInfo?.rif ? `<div class="store-rif">RIF: ${companyInfo.rif}</div>` : ""}
-            <div class="store-info">
-                ${companyInfo?.address ? `<div>${companyInfo.address}</div>` : ""}
-                ${companyInfo?.city ? `<span>${companyInfo.city}</span>` : ""}
-                ${(companyInfo?.phone || companyInfo?.phone2) ? `<span> | ${[companyInfo.phone, companyInfo.phone2].filter(Boolean).join(" / ")}</span>` : ""}
-            </div>
+        <div class="store-name">${storeName}</div>
+        ${companyInfo?.slogan ? `<div class="store-slogan">"${companyInfo.slogan}"</div>` : ""}
+        ${companyInfo?.rif ? `<div class="store-rif">RIF: ${companyInfo.rif}</div>` : ""}
+        <div class="store-info">
+            ${[companyInfo.address, companyInfo.city].filter(Boolean).join(", ")}
+            ${(companyInfo?.phone || companyInfo?.phone2) ? `<br>${[companyInfo.phone, companyInfo.phone2].filter(Boolean).join(" / ")}` : ""}
         </div>
     </div>
     ` : ""}
@@ -160,11 +178,9 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
     </div>
 
     <div class="meta">
-        <div class="meta-row"><span class="meta-label">Recibo Nº:</span><span class="meta-value">${s.invoice_number || `#${s.id}`}</span></div>
-        <div class="meta-row"><span class="meta-label">Fecha Emisión:</span><span class="meta-value">${dateStr}</span></div>
+        <div class="meta-row"><span class="meta-label">Recibo:</span><span class="meta-value">${s.invoice_number || `#${s.id}`}</span></div>
+        <div class="meta-row"><span class="meta-label">Fecha:</span><span class="meta-value">${dateStr}</span></div>
         ${s.employee_name ? `<div class="meta-row"><span class="meta-label">Cajero:</span><span class="meta-value">${s.employee_name}</span></div>` : ""}
-        ${s.journal_name ? `<div class="meta-row"><span class="meta-label">Método/Pago:</span><span class="meta-value">${s.journal_name}</span></div>` : ""}
-        ${s.customer_rif ? `<div class="meta-row"><span class="meta-label">CI/RIF:</span><span class="meta-value">${s.customer_rif}</span></div>` : ""}
         ${s.customer_name ? `<div class="meta-row"><span class="meta-label">Cliente:</span><span class="meta-value">${s.customer_name}</span></div>` : ""}
     </div>
 
@@ -178,22 +194,21 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
             </tr>
         </thead>
         <tbody>
-            ${s.items.map(i => `
+            ${totals.items.map(i => `
                 <tr>
                     <td><div class="item-name">${i.name}</div></td>
                     <td class="td-center">${fmtQty(i.quantity)}</td>
-                    <td class="td-right">${fmtPRow(i.price)}</td>
-                    <td class="td-right"><b>${fmtPRow(i.subtotal)}</b></td>
+                    <td class="td-right">${fmtPRow(i.fmtPrice)}</td>
+                    <td class="td-right"><b>${fmtPRow(i.fmtSubtotal)}</b></td>
                 </tr>
             `).join("")}
         </tbody>
     </table>
 
     <div class="totals">
-        <div class="total-row"><span>SUBTOTAL</span><span>${fmtP(s.total_precise + s.discount)}</span></div>
-        ${s.discount > 0 ? `<div class="total-row discount"><span>DESCUENTO</span><span>-${fmtP(s.discount)}</span></div>` : ""}
-        <div class="total-row big"><span>TOTAL</span><span>${fmtP(s.total_precise)}</span></div>
-
+        <div class="total-row"><span>SUBTOTAL</span><span>${totals.fmtSubtotal}</span></div>
+        ${s.discount > 0 ? `<div class="total-row discount"><span>DESCUENTO</span><span>-${totals.fmtDiscount}</span></div>` : ""}
+        <div class="total-row big"><span>TOTAL</span><span>${totals.fmtTotal}</span></div>
     </div>
 
     <div class="footer">${companyInfo?.footer || "¡Gracias por su compra!<br>Vuelva pronto"}</div>
@@ -229,9 +244,8 @@ export default function ReceiptModal({ open, onClose, sale }) {
         : parseFloat(s.exchange_rate || 1);
     const rate = isBase ? 1 : parseFloat(effectiveRate > 1 ? effectiveRate : (displayCurrency.exchange_rate || 1));
     const sym = isBase ? (baseCurrency?.symbol || "Ref.") : (displayCurrency.symbol || "Ref.");
+    const totals = calcReceiptTotals(s, rate, sym);
 
-    // Todos los montos vienen en USD base → multiplicar por tasa de display
-    const fmtP = n => fmt(parseFloat(n || 0) * rate, sym);
     const dateStr = fmtDate(s.created_at);
     const invoiceLabel = s.invoice_number || `#${s.id}`;
 
@@ -275,28 +289,14 @@ export default function ReceiptModal({ open, onClose, sale }) {
                         <span className="text-content dark:text-content-dark font-medium">{s.employee_name}</span>
                     </div>
                 )}
-                {s.journal_name && (
-                    <div className="flex justify-between items-center py-1.5 text-sm">
-                        <span className="text-content-muted dark:text-content-dark-muted">Diario</span>
-                        <span className="text-content dark:text-content-dark font-medium inline-flex items-center gap-1.5">
-                            {s.journal_color && (
-                                <span
-                                    className="inline-block w-2 h-2 rounded-full"
-                                    style={{ background: s.journal_color }}
-                                />
-                            )}
-                            {s.journal_name}
-                        </span>
-                    </div>
-                )}
             </div>
 
             {/* Cliente */}
-            {s.customer_name && (
-                <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg px-3 py-2 mb-3 text-xs">
-                    <span className="text-content-muted dark:text-content-dark-muted text-[10px] font-black uppercase tracking-wider block mb-0.5">CLIENTE</span>
-                    <span className="text-content dark:text-content-dark font-bold leading-none">
-                        {s.customer_rif ? s.customer_rif + " - " : ""}{s.customer_name}
+            {(s.customer_name || s.customer_rif) && (
+                <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-3 mb-3">
+                    <span className="text-[10px] font-black uppercase text-content-subtle block mb-1">Cliente</span>
+                    <span className="text-xs font-bold text-content dark:text-white uppercase block">
+                        {[s.customer_rif, s.customer_name].filter(Boolean).join(" - ")}
                     </span>
                 </div>
             )}
@@ -312,39 +312,36 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     </tr>
                 </thead>
                 <tbody>
-                    {s.items.map((item, idx) => (
+                    {totals.items.map((item, idx) => (
                         <tr key={idx} className="border-b border-dashed border-border dark:border-border-dark">
                             <td className="px-1.5 py-1.5 text-content dark:text-content-dark">{item.name}</td>
                             <td className="px-1.5 py-1.5 text-center text-content-muted dark:text-content-dark-muted">{parseFloat(item.quantity) % 1 === 0 ? Math.round(parseFloat(item.quantity)) : item.quantity}</td>
-                            <td className="px-1.5 py-1.5 text-right text-content-muted dark:text-content-dark-muted">{fmtP(item.price)}</td>
-                            <td className="px-1.5 py-1.5 text-right text-content dark:text-content-dark font-medium">{fmtP(item.subtotal)}</td>
+                            <td className="px-1.5 py-1.5 text-right text-content-muted dark:text-content-dark-muted">{item.fmtPrice}</td>
+                            <td className="px-1.5 py-1.5 text-right text-content dark:text-content-dark font-medium">{item.fmtSubtotal}</td>
                         </tr>
                     ))}
                 </tbody>
             </table>
 
             {/* Totales */}
-        <div className="border-t border-border/10 dark:border-white/5 pt-2 mb-3">
+            <div className="border-t border-border/10 dark:border-white/5 pt-2 mb-3">
                 <div className="flex justify-between items-center py-0.5 text-xs">
                     <span className="text-content-muted dark:text-content-dark-muted">Subtotal</span>
-                    <span className="text-content dark:text-content-dark font-medium">{fmtP(s.total_precise + s.discount)}</span>
+                    <span className="text-content dark:text-content-dark font-medium">{totals.fmtSubtotal}</span>
                 </div>
                 {s.discount > 0 && (
                     <div className="flex justify-between items-center py-0.5 text-xs text-danger">
                         <span className="font-medium">Descuento</span>
-                        <span className="font-bold">-{fmtP(s.discount)}</span>
+                        <span className="font-bold">-{totals.fmtDiscount}</span>
                     </div>
                 )}
                 <div className="flex justify-between items-center py-1.5 border-t border-border/10 dark:border-white/5 mt-1 pt-1.5">
                     <span className="text-content dark:text-content-dark font-black text-xs uppercase tracking-tighter">TOTAL</span>
                     <div className="text-right">
-                        <div className="text-content dark:text-white font-black text-sm leading-none">{fmtP(s.total_precise)}</div>
-
+                        <div className="text-content dark:text-white font-black text-sm leading-none">{totals.fmtTotal}</div>
                     </div>
                 </div>
             </div>
-
-
 
             {/* Footer */}
             <div className="text-center text-xs text-content-muted dark:text-content-dark-muted mb-4">¡Gracias por su compra!</div>
