@@ -31,20 +31,35 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
 // ── Rate limiting ─────────────────────────────────────────────
+const isLanIp = (req) => {
+  const ip = req.ip || req.connection?.remoteAddress || "";
+  return (
+    ip.includes("127.0.0.1") ||
+    ip.includes("::1") ||
+    ip.includes("::ffff:127.0.0.1") ||
+    ip.includes("192.168.") ||
+    ip.includes("10.") ||
+    /^::ffff:(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(ip) ||
+    /^172\.(1[6-9]|2[0-9]|3[01])\./.test(ip)
+  );
+};
+
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,   // 15 min
-  max: 500,                     // 500 req / 15min por IP
+  max: parseInt(process.env.RATE_LIMIT_MAX || "20000", 10), // 20,000 req / 15min
   standardHeaders: true,
   legacyHeaders: false,
   message: { ok: false, message: "Demasiadas solicitudes. Intenta en 15 minutos." },
+  skip: isLanIp,
 });
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,   // 15 min
-  max: 10,                      // 10 intentos de login / 15min
+  max: 50,                      // 50 intentos / 15min
   standardHeaders: true,
   legacyHeaders: false,
   message: { ok: false, message: "Demasiados intentos de inicio de sesión. Intenta en 15 minutos." },
+  skip: isLanIp,
 });
 
 // Sirve archivos estáticos (imágenes) antes del rate limiter para no agotar las peticiones
