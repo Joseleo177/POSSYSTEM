@@ -6,20 +6,21 @@ import ConfirmModal from "../ui/ConfirmModal";
 import Pagination from "../ui/Pagination";
 import DateRangePicker from "../ui/DateRangePicker";
 
-export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayment, setReceiptSale }) {
+export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayment, setReceiptSale, journals = [] }) {
     const {
         data, total, page, setPage, loading, LIMIT,
         viewType, setViewType,
         searchTerm, setSearchTerm,
         payDateFrom, setPayDateFrom,
         payDateTo, setPayDateTo,
+        journalFilter, setJournalFilter,
         showFilterDrop, setShowFilterDrop,
         payDetail, setPayDetail,
         payModal, setPayModal,
         deleteDialog, setDeleteDialog,
         clearFilters, reload,
         confirmRemovePayment, handleExportCSV,
-        hasFilters, totalPages,
+        hasFilters, filterCount, totalPages,
     } = usePagos({ notify });
 
     const subheader = (
@@ -40,7 +41,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                 >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                     Filtros
-                    {hasFilters && <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">1</span>}
+                    {hasFilters && <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">{filterCount}</span>}
                 </button>
                 {showFilterDrop && (
                     <>
@@ -57,6 +58,19 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                     ))}
                                 </div>
                             </div>
+                            {journals.length > 0 && (
+                                <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Diario de pago</div>
+                                    <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto custom-scrollbar">
+                                        {journals.map(j => (
+                                            <button key={j.id} onClick={() => setJournalFilter(p => String(p) === String(j.id) ? "" : String(j.id))}
+                                                className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all truncate ${String(journalFilter) === String(j.id) ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                                {j.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                                 <DateRangePicker from={payDateFrom} to={payDateTo} setFrom={setPayDateFrom} setTo={setPayDateTo} />
                             <div className="px-4 py-2">
                                 <button onClick={clearFilters} className="w-full py-1.5 text-[10px] font-black uppercase tracking-wide text-danger hover:bg-danger/5 rounded-lg transition-colors">

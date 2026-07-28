@@ -1,4 +1,4 @@
-const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Sequelize, Op } = require("./shared");
+const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Sequelize, Op, getSaleBalance } = require("./shared");
 
 module.exports = async function getPendingPayments(query, tenant = {}) {
   const { limit = 100, offset = 0, date_from, date_to, search } = query;
@@ -11,6 +11,10 @@ module.exports = async function getPendingPayments(query, tenant = {}) {
   if (company_id) {
     andClauses.push({ company_id });
   }
+
+  // Filtro por diario de pago (caja / banco) asignado a la factura
+  const pj = parseInt(query.payment_journal_id, 10);
+  if (Number.isInteger(pj)) andClauses.push({ payment_journal_id: pj });
 
   const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;
   const safeFrom = sd(date_from);
@@ -55,6 +59,9 @@ module.exports = async function getPendingPayments(query, tenant = {}) {
   const data = await Promise.all(
     sales.map(async (s) => {
       const item = s.toJSON();
+      // El saldo se deriva de los pagos reales (pagos − vuelto + crédito aplicado),
+      // igual que createPayment/removePayment. Antes referenciaba una variable inexistente.
+      const amount_paid = parseFloat(await getSaleBalance(item.id)) || 0;
       const rawBalance = parseFloat((parseFloat(item.total) - amount_paid).toFixed(6));
       const balance = rawBalance <= 0.10 ? 0 : rawBalance;
 

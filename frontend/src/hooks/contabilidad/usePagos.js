@@ -13,6 +13,7 @@ export function usePagos({ notify }) {
     const [searchTerm, setSearchTerm] = useState("");
     const [payDateFrom, setPayDateFrom] = useState("");
     const [payDateTo, setPayDateTo] = useState("");
+    const [journalFilter, setJournalFilter] = useState("");
     const [showFilterDrop, setShowFilterDrop] = useState(false);
 
     const [payDetail, setPayDetail] = useState(null);
@@ -20,7 +21,7 @@ export function usePagos({ notify }) {
     const [deleteDialog, setDeleteDialog] = useState(null);
 
     // Query unificado — cualquier cambio recarga desde página 1
-    const [query, setQuery] = useState({ viewType: "historial", search: "", dateFrom: "", dateTo: "", page: 1, refresh: 0 });
+    const [query, setQuery] = useState({ viewType: "historial", search: "", dateFrom: "", dateTo: "", journalId: "", page: 1, refresh: 0 });
 
     useEffect(() => {
         const timer = setTimeout(() => setQuery(q => {
@@ -32,10 +33,10 @@ export function usePagos({ notify }) {
 
     useEffect(() => {
         setQuery(q => {
-            if (q.viewType === viewType && q.dateFrom === payDateFrom && q.dateTo === payDateTo) return q;
-            return { ...q, viewType, dateFrom: payDateFrom, dateTo: payDateTo, page: 1 };
+            if (q.viewType === viewType && q.dateFrom === payDateFrom && q.dateTo === payDateTo && q.journalId === journalFilter) return q;
+            return { ...q, viewType, dateFrom: payDateFrom, dateTo: payDateTo, journalId: journalFilter, page: 1 };
         });
-    }, [viewType, payDateFrom, payDateTo]); // eslint-disable-line
+    }, [viewType, payDateFrom, payDateTo, journalFilter]); // eslint-disable-line
 
     useEffect(() => {
         let cancelled = false;
@@ -46,6 +47,7 @@ export function usePagos({ notify }) {
                 if (query.search)   params.search    = query.search;
                 if (query.dateFrom) params.date_from = query.dateFrom;
                 if (query.dateTo)   params.date_to   = query.dateTo;
+                if (query.journalId) params.payment_journal_id = query.journalId;
                 const res = query.viewType === "pendientes"
                     ? await api.payments.getPending(params)
                     : await api.payments.getAll(params);
@@ -68,6 +70,7 @@ export function usePagos({ notify }) {
         setViewType("historial");
         setPayDateFrom("");
         setPayDateTo("");
+        setJournalFilter("");
         setShowFilterDrop(false);
     };
 
@@ -97,7 +100,8 @@ export function usePagos({ notify }) {
     };
 
     const totalPages = Math.ceil(total / LIMIT);
-    const hasFilters = !!(payDateFrom || payDateTo || viewType !== "historial");
+    const filterCount = (viewType !== "historial" ? 1 : 0) + (payDateFrom || payDateTo ? 1 : 0) + (journalFilter ? 1 : 0);
+    const hasFilters = filterCount > 0;
 
     return {
         data, total, page, setPage, loading, LIMIT,
@@ -105,12 +109,13 @@ export function usePagos({ notify }) {
         searchTerm, setSearchTerm,
         payDateFrom, setPayDateFrom,
         payDateTo, setPayDateTo,
+        journalFilter, setJournalFilter,
         showFilterDrop, setShowFilterDrop,
         payDetail, setPayDetail,
         payModal, setPayModal,
         deleteDialog, setDeleteDialog,
         clearFilters, reload,
         confirmRemovePayment, handleExportCSV,
-        hasFilters, totalPages,
+        hasFilters, filterCount, totalPages,
     };
 }

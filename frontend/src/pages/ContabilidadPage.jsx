@@ -152,6 +152,7 @@ export default function ContabilidadPage() {
  fmtPrice={fmtPrice}
  fmtPayment={fmtPayment}
  setReceiptSale={setReceiptSale}
+ journals={journals}
  />
  );
  case "Series":

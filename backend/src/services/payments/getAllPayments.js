@@ -12,6 +12,10 @@ module.exports = async function getAllPayments(query, tenant = {}) {
     andClauses.push({ company_id });
   }
 
+  // Filtro por diario de pago (caja / banco) del cobro
+  const pj = parseInt(query.payment_journal_id, 10);
+  if (Number.isInteger(pj)) andClauses.push({ payment_journal_id: pj });
+
   const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;
   const safeFrom = sd(date_from);
   const safeTo   = sd(date_to);
