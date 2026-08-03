@@ -49,7 +49,7 @@ export default function PurchasesReport() {
  </thead>
  <tbody className="divide-y divide-border/20 dark:divide-white/5">
  {supplierPag.total === 0
- ? <tr><td colSpan={2} className="px-4 py-10 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin compras en este período</td></tr>
+ ? <tr><td colSpan={2} className="px-4 py-10 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin compras en este período</td></tr>
  : supplierPag.paginated.map((sup, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{sup.supplier_name}</td>
@@ -76,7 +76,7 @@ export default function PurchasesReport() {
  </thead>
  <tbody className="divide-y divide-border/20 dark:divide-white/5">
  {productPag.total === 0
- ? <tr><td colSpan={2} className="px-4 py-10 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin productos comprados</td></tr>
+ ? <tr><td colSpan={2} className="px-4 py-10 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin productos comprados</td></tr>
  : productPag.paginated.map((p, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.product_name}</td>

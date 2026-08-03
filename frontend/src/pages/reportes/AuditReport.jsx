@@ -91,12 +91,12 @@ export default function AuditReport() {
  </tr>
  ))}
  {view === "returns" && (returnsPag.total === 0
- ? <tr><td colSpan={4} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin devoluciones en este período</td></tr>
+ ? <tr><td colSpan={4} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin devoluciones en este período</td></tr>
  : returnsPag.paginated.map((r, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2">
  <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{r.customer_name || "Venta Casual"}</div>
- <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase">#{r.id}</div>
+ <div className="text-[10px] font-bold text-content-subtle uppercase">#{r.id}</div>
  </td>
  <td className="px-4 py-2 text-[11px] font-black text-content-subtle uppercase">{r.reason || "Sin motivo"}</td>
  <td className="px-4 py-2 text-right tabular-nums text-danger font-black text-[11px]">{fmt$(r.total)}</td>
@@ -104,12 +104,12 @@ export default function AuditReport() {
  </tr>
  )))}
  {view === "discounts" && (discountsPag.total === 0
- ? <tr><td colSpan={5} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin descuentos aplicados en este período</td></tr>
+ ? <tr><td colSpan={5} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin descuentos aplicados en este período</td></tr>
  : discountsPag.paginated.map((d, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2">
  <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{d.customer_name || "Venta Casual"}</div>
- <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase">#{d.id}</div>
+ <div className="text-[10px] font-bold text-content-subtle uppercase">#{d.id}</div>
  </td>
  <td className="px-4 py-2 text-[11px] text-content-subtle uppercase font-black">{d.employee_name || "—"}</td>
  <td className="px-4 py-2 text-right tabular-nums text-danger font-black text-[11px]">{fmt$(d.discount_amount)}</td>

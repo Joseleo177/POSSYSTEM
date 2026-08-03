@@ -29,7 +29,7 @@ export default function ReceiptInfo({ state }) {
         <div className="card-premium mb-3 overflow-visible bg-surface-1 dark:bg-white/[0.01]">
             <div className="flex items-center gap-2 mb-3">
                 <span className="w-1.5 h-1.5 rounded-full bg-brand-500" />
-                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-content-subtle opacity-50">Cabecera del Recibo de Compra</div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-content-subtle">Cabecera del Recibo de Compra</div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
@@ -80,7 +80,7 @@ export default function ReceiptInfo({ state }) {
                                 <div className="absolute z-50 w-full mt-1 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-xl shadow-2xl p-1 max-h-[200px] overflow-y-auto animate-in fade-in slide-in-from-top-2">
                                     {supplierResults.length === 0 ? (
                                         <div className="p-3 text-center">
-                                            <div className="text-[10px] font-bold text-content-subtle uppercase mb-2 opacity-50">Sin resultados</div>
+                                            <div className="text-[10px] font-bold text-content-subtle uppercase mb-2">Sin resultados</div>
                                             <button onClick={() => openCreateSupplier(supplierSearch)} className="text-[10px] font-bold text-brand-500 uppercase hover:underline">+ Crear Nuevo</button>
                                         </div>
                                     ) : (

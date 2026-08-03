@@ -96,6 +96,9 @@ module.exports = async function updateSale(saleId, body) {
           price: unitPrice,
           quantity: qty,
           discount: 0,
+          // Igual que en createSale: se congela el costo del momento. Aquí no hay combos
+          // (se rechazan más arriba), así que basta con el costo del propio producto.
+          cost_price: product.cost_price != null ? parseFloat(product.cost_price) : null,
         },
         { transaction }
       );

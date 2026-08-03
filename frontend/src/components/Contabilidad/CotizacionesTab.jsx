@@ -259,7 +259,7 @@ export default function CotizacionesTab({ notify, can, fmtPrice }) {
                             {q.loading ? (
                                 <tr><td colSpan={7} className="py-20 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">Cargando cotizaciones...</td></tr>
                             ) : q.quotations.length === 0 ? (
-                                <tr><td colSpan={7} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic opacity-40">Sin cotizaciones registradas</td></tr>
+                                <tr><td colSpan={7} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic">Sin cotizaciones registradas</td></tr>
                             ) : q.quotations.map(quot => (
                                 <tr key={quot.id} className="group">
                                     <td>
@@ -275,7 +275,7 @@ export default function CotizacionesTab({ notify, can, fmtPrice }) {
                                             {quot.customer_name || "Consumidor Final"}
                                         </span>
                                         {quot.customer_rif && (
-                                            <span className="text-[9px] font-bold text-content-subtle opacity-40 uppercase">{quot.customer_rif}</span>
+                                            <span className="text-[9px] font-bold text-content-subtle uppercase">{quot.customer_rif}</span>
                                         )}
                                     </td>
                                     <td>

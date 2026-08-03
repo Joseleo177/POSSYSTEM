@@ -9,7 +9,7 @@ export default function StockView({
     if (!selectedWarehouse) {
         return (
             <div className="flex-1 flex items-center justify-center">
-                <div className="text-content-subtle text-xs font-black uppercase tracking-wide opacity-40">
+                <div className="text-content-subtle text-xs font-black uppercase tracking-wide">
                     Selecciona un almacén para gestionar inventario
                 </div>
             </div>
@@ -62,7 +62,7 @@ export default function StockView({
                                                 <div className="w-12 h-12 rounded-full bg-surface-3 dark:bg-white/5 flex items-center justify-center">
                                                     <svg className="w-6 h-6 text-content-subtle opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                                                 </div>
-                                                <div className="text-content-subtle text-[11px] font-bold uppercase tracking-widest opacity-40">No se encontraron productos</div>
+                                                <div className="text-content-subtle text-[11px] font-bold uppercase tracking-widest">No se encontraron productos</div>
                                                 <button onClick={openAddStock} className="text-brand-500 font-black text-[10px] uppercase tracking-widest underline underline-offset-4 hover:text-brand-400 transition-colors">Agregar Stock</button>
                                             </div>
                                         </td>
@@ -84,7 +84,7 @@ export default function StockView({
                                         </td>
                                         <td>
                                             {s.is_service ? (
-                                                <span className="text-[13px] font-black text-content-subtle opacity-30">—</span>
+                                                <span className="text-[13px] font-black text-content-subtle">—</span>
                                             ) : (
                                                 <span className={`text-[13px] font-black tabular-nums transition-colors ${parseFloat(s.qty) <= 0 ? "text-danger" : parseFloat(s.qty) <= 5 ? "text-warning" : "text-success"}`}>
                                                     {fmtQty(s.qty)}

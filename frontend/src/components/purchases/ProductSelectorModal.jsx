@@ -49,7 +49,10 @@ function matchesStockFilter(stock, filter) {
     return true;
 }
 
-export default function ProductSelectorModal({ open, onClose, onAdd, existingItems = [], editItem = null, invoiceRate = 1, invoiceSym = "Ref.", showLotFields = false }) {
+// warehouseId: almacén de la compra. Se le pasa a ProductModal para que el producto nuevo
+// nazca asociado a ese almacén (ProductStock en 0). Sin esto el producto se crea "huérfano"
+// y no aparece en el catálogo filtrado por almacén hasta que se reciba la compra.
+export default function ProductSelectorModal({ open, onClose, onAdd, existingItems = [], editItem = null, invoiceRate = 1, invoiceSym = "Ref.", showLotFields = false, warehouseId = null }) {
     const [step, setStep]           = useState(1);
     const [search, setSearch]       = useState("");
     const [results, setResults]     = useState([]);
@@ -183,7 +186,14 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
 
     const openProductModal = async () => {
         if (!categories.length) {
-            try { const r = await api.products.getCategories(); setCategories(r.data || []); } catch {}
+            try {
+                const r = await api.categories.getAll();
+                setCategories(r.data || []);
+            } catch (e) {
+                // Sin categorías el modal sigue siendo usable ("Sin categoría"), pero el fallo
+                // no puede quedar mudo: antes se tragaba incluso el TypeError del método inexistente.
+                console.error("[ProductSelectorModal] no se pudieron cargar las categorías:", e);
+            }
         }
         setShowProductModal(true);
     };
@@ -405,7 +415,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                             {fmtQtyUnit(selected.stock, selected.unit)}
                                         </div>
                                     ) : (
-                                        <div className="text-sm font-black text-content-subtle opacity-30">—</div>
+                                        <div className="text-sm font-black text-content-subtle">—</div>
                                     )}
                                 </div>
                                 {selected.cost_price > 0 && (
@@ -580,6 +590,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                     onSave={handleProductSaved}
                     categories={categories}
                     loading={savingNew}
+                    warehouseId={warehouseId}
                 />
             )}
         </div>

@@ -53,7 +53,7 @@ export default function PurchasesTable({ state }) {
                                             {p.warehouse_name}
                                         </span>
                                     ) : (
-                                        <span className="text-[10px] text-content-subtle uppercase italic opacity-40 px-1">N/A</span>
+                                        <span className="text-[10px] text-content-subtle uppercase italic px-1">N/A</span>
                                     )}
                                 </td>
 
@@ -62,7 +62,7 @@ export default function PurchasesTable({ state }) {
                                         {p.supplier_name || "PROVEEDOR FINAL"}
                                     </div>
                                     {p.supplier_rif && (
-                                        <div className="text-[9px] font-bold text-content-subtle opacity-40 uppercase tracking-widest mt-0.5">
+                                        <div className="text-[9px] font-bold text-content-subtle uppercase tracking-widest mt-0.5">
                                             {p.supplier_rif}
                                         </div>
                                     )}

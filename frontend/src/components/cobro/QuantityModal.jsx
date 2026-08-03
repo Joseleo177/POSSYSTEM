@@ -67,6 +67,20 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
         ? fmt(convertToSecondary(item.price), secondaryCurrency.symbol)
         : null;
 
+    // Importe de la línea según lo que hay escrito ahora mismo. Mismo redondeo por línea
+    // que CartContext (round2 del precio en la moneda mostrada × qty) para que coincida
+    // con lo que se verá en el carrito. Las promociones no entran aquí: se aplican después.
+    const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+    const qtyNum = (() => {
+        const n = parseFloat(val.replace(",", "."));
+        if (isNaN(n) || n < 0) return 0;
+        return isInteger ? Math.floor(n) : n;
+    })();
+    const lineTotal = convertToDisplay ? round2(convertToDisplay(item.price)) * qtyNum : null;
+    const lineTotalSecondary = secondaryCurrency && convertToSecondary
+        ? round2(convertToSecondary(item.price)) * qtyNum
+        : null;
+
     return (
         <Modal open={isOpen} onClose={onClose} title={`Cantidad: ${item.name}`} width={440}>
             <div className="flex flex-col gap-4 py-1 relative">
@@ -102,7 +116,7 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
                             <div className="text-xl font-black dark:text-white font-display leading-none mt-0.5 tabular-nums">
                                 {primaryPrice}
                                 {secondaryPrice && (
-                                    <span className="text-white/40"> - {secondaryPrice}</span>
+                                    <span className="text-base text-content-muted dark:text-white/60"> · {secondaryPrice}</span>
                                 )}
                             </div>
                         )}
@@ -171,6 +185,28 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
                         </button>
                     </div>
                 </div>
+
+                {/* Importe resultante: se recalcula al escribir o al usar +/-. */}
+                {primaryPrice && (
+                    <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-brand-500/5 border border-brand-500/20">
+                        <div className="flex flex-col">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/40">Subtotal</span>
+                            <span className="text-[10px] font-black uppercase text-brand-500 tabular-nums">
+                                {fmtQtyUnit(qtyNum, item.unit)} <span className="opacity-40">×</span> {primaryPrice}
+                            </span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                            <span className="text-lg font-black font-display text-content dark:text-white tabular-nums leading-tight">
+                                {fmt(lineTotal, currSym)}
+                            </span>
+                            {lineTotalSecondary !== null && (
+                                <span className="text-lg font-black font-display text-content dark:text-white tabular-nums leading-tight">
+                                    {fmt(lineTotalSecondary, secondaryCurrency.symbol)}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Action Buttons */}
                 <div className="flex flex-col gap-2 pt-2">

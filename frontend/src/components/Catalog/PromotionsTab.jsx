@@ -134,7 +134,7 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                     <div className="flex items-center justify-center py-20 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/20 animate-pulse">Cargando…</div>
                 ) : promos.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20">
-                        <div className="text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/20 opacity-40">Sin promociones registradas</div>
+                        <div className="text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/20">Sin promociones registradas</div>
                     </div>
                 ) : (
                     <div className="card-premium overflow-auto flex-1">

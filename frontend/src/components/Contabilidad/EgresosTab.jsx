@@ -131,7 +131,7 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                             {loading ? (
                                 <tr><td colSpan={8} className="py-20 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">Sincronizando egresos...</td></tr>
                             ) : expenses.length === 0 ? (
-                                <tr><td colSpan={8} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic opacity-40">Sin egresos registrados</td></tr>
+                                <tr><td colSpan={8} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic">Sin egresos registrados</td></tr>
                             ) : expenses.map(exp => (
                                 <tr key={exp.id} className="group">
                                     <td>
@@ -144,7 +144,7 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                                     </td>
                                     <td className="truncate max-w-[200px]">
                                         <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight truncate">{exp.description}</span>
-                                        {exp.notes && <div className="text-[9px] font-bold text-content-subtle opacity-50 mt-0.5 truncate">{exp.notes}</div>}
+                                        {exp.notes && <div className="text-[9px] font-bold text-content-subtle mt-0.5 truncate">{exp.notes}</div>}
                                     </td>
                                     <td>
                                         <span className="text-[10px] font-black text-content-subtle uppercase tracking-wide">{exp.category_name}</span>

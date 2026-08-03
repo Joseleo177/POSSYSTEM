@@ -167,8 +167,7 @@ export default function CobroPage() {
                 currentCurrency={currentCurrency} setSelectedCurrency={setSelectedCurrency}
                 activeCurrencies={activeCurrencies}
                 selectedSerieId={selectedSerieId} selectSerie={selectSerie} mySeries={mySeries}
-                activeWarehouse={activeWarehouse} employeeWarehouses={employeeWarehouses}
-                switchWarehouse={switchWarehouse}
+                activeWarehouse={activeWarehouse}
                 selectedCustomer={selectedCustomer} setSelectedCustomer={setSelectedCustomer}
                 custSearch={customer.custSearch} setCustSearch={customer.setCustSearch}
                 customers={customer.customers} setCustomers={customer.setCustomers}
@@ -216,8 +215,10 @@ export default function CobroPage() {
             {/* Modales */}
             <CustomerModal
                 open={customer.customerModal}
-                onClose={() => customer.setCustomerModal(false)}
+                onClose={() => { customer.setCustomerModal(false); customer.setCustomerEditData(null); }}
                 onSave={customer.saveCustomer}
+                editData={customer.customerEditData}
+                loading={customer.savingCustomer}
             />
             <PendingSalesModal
                 open={showPendingSales}

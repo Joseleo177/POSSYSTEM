@@ -156,7 +156,7 @@ export default function ProductGrid({
                                     <div className="mt-0.5">
                                         <div className="text-[9px] lg:text-sm font-black dark:text-white font-display leading-none">{fmt(convertToDisplay(p.price), currSym)}</div>
                                         {secondaryCurrency && (
-                                            <div className="text-[6px] lg:text-[10px] font-bold text-content-subtle dark:text-content-dark-muted opacity-60 tabular-nums">
+                                            <div className="text-[8px] lg:text-xs font-black text-content-muted dark:text-white/75 tabular-nums mt-0.5">
                                                 {fmt(convertToSecondary(p.price), secondaryCurrency.symbol)}
                                             </div>
                                         )}

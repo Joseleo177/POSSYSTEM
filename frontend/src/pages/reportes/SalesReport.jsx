@@ -40,7 +40,7 @@ export default function SalesReport() {
  <BarChart data={data.by_day} xKey="day" yKey="revenue" color="#FFB800" height={140} />
  </div>
  ) : (
- <div className="h-[140px] flex items-center justify-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-40">Sin Data</div>
+ <div className="h-[140px] flex items-center justify-center text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin Data</div>
  )}
  </Card>
 
@@ -48,14 +48,14 @@ export default function SalesReport() {
  <SectionHeader title="Canales de Pago" sub="Distribución" />
  <div className="space-y-3 pt-1">
  {data.by_method.length === 0 ? (
- <div className="py-10 text-center text-[11px] font-black uppercase text-content-subtle opacity-30 tracking-wide">Sin Registros</div>
+ <div className="py-10 text-center text-[11px] font-black uppercase text-content-subtle tracking-wide">Sin Registros</div>
  ) : (
  data.by_method.map(m => (
  <div key={m.method_name} className="group">
  <div className="flex justify-between items-end mb-1">
  <div className="flex flex-col">
  <span className="text-[11px] font-black uppercase tracking-wider text-content dark:text-white">{m.method_name}</span>
- <span className="text-[10px] font-bold text-content-subtle opacity-50">{m.count} trans.</span>
+ <span className="text-[10px] font-bold text-content-subtle">{m.count} trans.</span>
  </div>
  <div className="text-right">
  <div className="text-[11px] font-black text-content dark:text-white tabular-nums">{fmt$(m.total)}</div>
@@ -99,7 +99,7 @@ export default function SalesReport() {
  <div className="flex justify-between items-end mb-1">
  <div className="flex flex-col truncate">
  <span className="text-[11px] font-black uppercase tracking-wider truncate text-content dark:text-white">{e.employee_name || "Desconocido"}</span>
- <span className="text-[10px] font-bold text-content-subtle opacity-50">{e.count} ventas · {fmt$(e.avg_ticket)} prom.</span>
+ <span className="text-[10px] font-bold text-content-subtle">{e.count} ventas · {fmt$(e.avg_ticket)} prom.</span>
  </div>
  <span className="text-[11px] font-black text-green-500 tabular-nums">{fmt$(e.revenue)}</span>
  </div>

@@ -40,7 +40,7 @@ export default function CustomerTable({
                                     </div>
                                     {c.city && <div className="text-[10px] text-content-subtle font-bold opacity-60 uppercase">{c.city}</div>}
                                 </td>
-                                <td className="hidden lg:table-cell text-[11px] font-bold text-content-subtle opacity-50 tabular-nums">
+                                <td className="hidden lg:table-cell text-[11px] font-bold text-content-subtle tabular-nums">
                                     {c.rif || "S/N"}
                                 </td>
                                 <td>

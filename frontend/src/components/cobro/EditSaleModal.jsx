@@ -111,7 +111,7 @@ export default function EditSaleModal({ open, onClose, sale, notify, onSaved }) 
                     </thead>
                     <tbody className="divide-y divide-border/20">
                         {items.length === 0 && (
-                            <tr><td colSpan={4} className="py-8 text-center text-[11px] text-content-subtle italic opacity-50">Sin productos</td></tr>
+                            <tr><td colSpan={4} className="py-8 text-center text-[11px] text-content-subtle italic">Sin productos</td></tr>
                         )}
                         {items.map((item, idx) => (
                             <tr key={idx} className="hover:bg-brand-500/5 transition-colors">

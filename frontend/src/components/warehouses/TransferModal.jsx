@@ -109,7 +109,7 @@ export default function TransferModal({
 
                 {/* ── Agregar producto a la lista ── */}
                 {!originSelected ? (
-                    <div className="rounded-xl border border-dashed border-border/40 dark:border-white/10 py-5 text-center text-[11px] font-bold uppercase tracking-widest text-content-subtle opacity-50">
+                    <div className="rounded-xl border border-dashed border-border/40 dark:border-white/10 py-5 text-center text-[11px] font-bold uppercase tracking-widest text-content-subtle">
                         Selecciona el almacén origen para agregar productos
                     </div>
                 ) : (
@@ -145,9 +145,9 @@ export default function TransferModal({
                                             className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200 divide-y divide-border/10"
                                         >
                                             {loadingTransferProducts && transferProductResults.length === 0 ? (
-                                                <div className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-50">Buscando productos...</div>
+                                                <div className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle">Buscando productos...</div>
                                             ) : transferProductResults.length === 0 ? (
-                                                <div className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-50">Sin productos con stock</div>
+                                                <div className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle">Sin productos con stock</div>
                                             ) : (
                                                 transferProductResults.map(p => {
                                                     const added = items.some(x => x.product_id === p.id);
@@ -165,10 +165,10 @@ export default function TransferModal({
                                                 })
                                             )}
                                             {loadingMoreTransferProducts && (
-                                                <div className="py-3 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-40">Cargando más...</div>
+                                                <div className="py-3 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle">Cargando más...</div>
                                             )}
                                             {!loadingTransferProducts && !loadingMoreTransferProducts && transferProductResults.length > 0 && transferProductResults.length >= transferProductTotal && (
-                                                <div className="py-2 text-center text-[9px] font-bold uppercase tracking-widest text-content-subtle opacity-30">{transferProductTotal} producto{transferProductTotal !== 1 ? "s" : ""}</div>
+                                                <div className="py-2 text-center text-[9px] font-bold uppercase tracking-widest text-content-subtle">{transferProductTotal} producto{transferProductTotal !== 1 ? "s" : ""}</div>
                                             )}
                                         </div>
                                     )}
@@ -217,7 +217,7 @@ export default function TransferModal({
                                     <div key={it.product_id} className="px-4 py-2.5 flex items-center gap-3">
                                         <div className="flex-1 min-w-0">
                                             <p className="text-[11px] font-black uppercase tracking-tight truncate">{it.name}</p>
-                                            <p className={`text-[9px] font-bold ${insufficient ? "text-danger" : "text-content-subtle opacity-50"}`}>
+                                            <p className={`text-[9px] font-bold ${insufficient ? "text-danger" : "text-content-subtle"}`}>
                                                 {insufficient ? `⚠ Excede el stock (disp. ${fmtQtyUnit(it.stock, it.unit)})` : `Disponible: ${fmtQtyUnit(it.stock, it.unit)}`}
                                             </p>
                                         </div>

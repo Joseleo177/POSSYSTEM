@@ -116,7 +116,7 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
                       : <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide bg-brand-500/10 text-brand-500 border border-brand-500/20">FAC</span>
                     }
                   </div>
-                  <div className="text-[9px] font-black text-content-subtle opacity-40 uppercase tracking-widest mt-0.5">
+                  <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mt-0.5">
                     {serie.padding} dígitos · {(serie.SerieRanges || []).filter(r => r.active).length} rangos activos
                   </div>
                 </div>

@@ -11,8 +11,10 @@ import { useApp } from "../../context/AppContext";
 import { printPurchaseOrderDoc } from "../../helpers/printPurchaseOrder";
 
 const fmt2 = (num) => Number(num || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const SECTION = "bg-surface-2 dark:bg-white/[0.04] rounded-2xl border border-border/10 dark:border-white/[0.06]";
-const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-subtle opacity-40";
+// En claro el fondo de página ya es surface-2 (#f9fafb), así que un panel surface-2 era
+// invisible: mismo color, borde al 10%. Va en blanco con sombra, igual que el .card global.
+const SECTION = "bg-surface dark:bg-white/[0.04] rounded-2xl border border-border/60 dark:border-white/[0.06] shadow-card dark:shadow-none";
+const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-subtle";
 
 const ORDER_STATUS = {
   borrador:  { label: "Borrador",  color: "text-content-subtle dark:text-white/40", dot: "bg-content-subtle/40 dark:bg-white/20", bg: "bg-surface-2/60 dark:bg-white/[0.03]" },
@@ -343,7 +345,7 @@ export default function PurchaseDetails({ state }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-5 items-start">
             <div>
               <p className={`${LABEL} mb-1`}>Proveedor</p>
-              <p className={`text-[13px] font-bold leading-snug ${detail.supplier_name ? "text-content dark:text-white" : "italic text-content-subtle opacity-30"}`}>
+              <p className={`text-[13px] font-bold leading-snug ${detail.supplier_name ? "text-content dark:text-white" : "italic text-content-subtle"}`}>
                 {detail.supplier_name || "No registrado"}
               </p>
               {detail.supplier_rif && <p className="text-[10px] font-bold text-brand-500 tabular-nums mt-0.5">{detail.supplier_rif}</p>}
@@ -510,7 +512,7 @@ export default function PurchaseDetails({ state }) {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-surface-1 dark:bg-white/[0.02] border border-border/10 dark:border-white/[0.05] rounded-xl p-3.5">
+              <div className="bg-surface-2 dark:bg-white/[0.02] border border-border/60 dark:border-white/[0.05] rounded-xl p-3.5">
                 <p className={`${LABEL} mb-1.5`}>Total Pagado</p>
                 <p className="text-[15px] font-black text-content dark:text-white tabular-nums tracking-tight leading-none">Ref. {fmt2(amountPaid)}</p>
                 <p className="text-[9px] font-bold text-success uppercase tracking-widest mt-1.5">Conciliado</p>
@@ -526,7 +528,7 @@ export default function PurchaseDetails({ state }) {
           <div className={`${SECTION} overflow-hidden flex flex-col`}>
             <div className="px-5 py-3 border-b border-border/10 dark:border-white/[0.06] flex items-center justify-between shrink-0">
               <p className={LABEL}>Historial de Pagos</p>
-              <button onClick={loadPayments} disabled={loadingPay} className="p-1.5 hover:bg-white/5 rounded-lg transition-colors text-content-subtle hover:text-brand-500">
+              <button onClick={loadPayments} disabled={loadingPay} className="p-1.5 hover:bg-surface-2 dark:hover:bg-white/5 rounded-lg transition-colors text-content-subtle hover:text-brand-500">
                 <svg className={`w-3.5 h-3.5 ${loadingPay ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
@@ -551,7 +553,7 @@ export default function PurchaseDetails({ state }) {
                       <div
                         key={p.id}
                         onClick={() => setPayDetail(p)}
-                        className="px-5 py-3.5 flex items-center gap-3 group hover:bg-white/[0.03] cursor-pointer transition-colors"
+                        className="px-5 py-3.5 flex items-center gap-3 group hover:bg-surface-2 dark:hover:bg-white/[0.03] cursor-pointer transition-colors"
                       >
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.journal_color || "#22c55e" }} />
                         <div className="flex-1 min-w-0">
@@ -568,7 +570,7 @@ export default function PurchaseDetails({ state }) {
                           {!isBase ? (
                             <>
                               <p className="text-[12px] font-black text-success tabular-nums">+{sym}{(parseFloat(p.amount) * rate).toFixed(2)}</p>
-                              <p className="text-[10px] font-bold text-content-subtle opacity-40 tabular-nums">Ref. {parseFloat(p.amount).toFixed(2)}</p>
+                              <p className="text-[10px] font-bold text-content-subtle tabular-nums">Ref. {parseFloat(p.amount).toFixed(2)}</p>
                             </>
                           ) : (
                             <p className="text-[12px] font-black text-success tabular-nums">+Ref. {parseFloat(p.amount).toFixed(2)}</p>
@@ -607,6 +609,7 @@ export default function PurchaseDetails({ state }) {
           editItem={editingItem}
           invoiceRate={invoiceRate}
           invoiceSym={invoiceSym}
+          warehouseId={localWarehouseId || detail?.warehouse_id || null}
           showLotFields={orderStatus === "pendiente"}
         />
       )}
@@ -653,7 +656,7 @@ function PayDetailModal({ payment: pd, activeCurrencies, baseCurrency, onClose, 
 
   return (
     <Modal open onClose={onClose} title="DETALLE DE PAGO" width={380}>
-      <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] divide-y divide-border/10 dark:divide-white/[0.05]">
+      <div className="rounded-xl bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.06] divide-y divide-border/60 dark:divide-white/[0.05]">
         <DRow label="Diario">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: pd.journal_color || "#22c55e" }} />
@@ -693,7 +696,7 @@ function PayDetailModal({ payment: pd, activeCurrencies, baseCurrency, onClose, 
 function DRow({ label, children }) {
   return (
     <div className="flex items-start justify-between gap-4 px-4 py-2.5">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-content-subtle opacity-40 whitespace-nowrap shrink-0 mt-0.5">{label}</span>
+      <span className="text-[10px] font-bold uppercase tracking-widest text-content-subtle whitespace-nowrap shrink-0 mt-0.5">{label}</span>
       <span className="text-[12px] font-bold text-content dark:text-white text-right">{children}</span>
     </div>
   );

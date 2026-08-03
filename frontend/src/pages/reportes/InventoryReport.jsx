@@ -15,7 +15,7 @@ const TH = ({ children, right, center }) => (
 );
 
 const EMPTY = ({ msg = "Sin registros en este período" }) => (
-  <tr><td colSpan={10} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">{msg}</td></tr>
+  <tr><td colSpan={10} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">{msg}</td></tr>
 );
 
 const LIMIT = 50;
@@ -314,7 +314,7 @@ export default function InventoryReport() {
                           <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
                             <td className="px-4 py-3">
                               <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.name}</div>
-                              <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase">{p.category_name}</div>
+                              <div className="text-[10px] font-bold text-content-subtle uppercase">{p.category_name}</div>
                             </td>
                             <td className="px-4 py-3 text-right tabular-nums font-black text-danger text-[11px]">{fmtNumber(p.stock, 2)}</td>
                             <td className="px-4 py-3 text-right tabular-nums text-[11px] text-content-subtle">{fmtNumber(p.min_stock, 2)}</td>
@@ -342,7 +342,7 @@ export default function InventoryReport() {
                           <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black text-content-subtle opacity-40 w-5 text-right">{(page-1)*LIMIT + i + 1}</span>
+                                <span className="text-[10px] font-black text-content-subtle w-5 text-right">{(page-1)*LIMIT + i + 1}</span>
                                 <span className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.name}</span>
                               </div>
                             </td>

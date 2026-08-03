@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "../../services/api";
 
 const STATUS_TABS = [
@@ -9,15 +9,16 @@ const STATUS_TABS = [
 ];
 
 function StatusBadge({ status }) {
+    const neutral = "bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 border-border/40 dark:border-white/10";
     const map = {
-        borrador:  "bg-white/5 text-white/40 border-white/10",
+        borrador:  neutral,
         pendiente: "bg-danger/10 text-danger border-danger/20",
         parcial:   "bg-brand-500/10 text-brand-500 border-brand-500/20",
         pagado:    "bg-green-500/10 text-green-500 border-green-500/20",
     };
     const label = { borrador: "Borrador", pendiente: "Pendiente", parcial: "Parcial", pagado: "Pagado" };
     return (
-        <span className={`text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full border ${map[status] || "bg-white/5 text-white/40 border-white/10"}`}>
+        <span className={`text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full border ${map[status] || neutral}`}>
             {label[status] || status}
         </span>
     );
@@ -79,7 +80,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
             <div className="w-full max-w-3xl bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out" style={{ maxHeight: "85vh" }} onKeyDown={e => e.stopPropagation()}>
 
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 shrink-0">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border/20 dark:border-white/5 shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-xl bg-warning/10 flex items-center justify-center border border-warning/20">
                             <svg className="w-4.5 h-4.5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -87,34 +88,34 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                             </svg>
                         </div>
                         <div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-white/30">POS</div>
-                            <h2 className="text-sm font-black text-white">Facturas Pendientes</h2>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">POS</div>
+                            <h2 className="text-sm font-black text-content dark:text-white">Facturas Pendientes</h2>
                         </div>
                     </div>
-                    <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all">
+                    <button onClick={onClose} className="w-8 h-8 rounded-full bg-surface-2 dark:bg-white/5 hover:bg-surface-3 dark:hover:bg-white/10 flex items-center justify-center text-content-subtle dark:text-white/50 hover:text-content dark:hover:text-white transition-all">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
 
                 {/* Toolbar */}
-                <div className="px-5 py-3 border-b border-white/5 shrink-0 flex items-center gap-3">
+                <div className="px-5 py-3 border-b border-border/20 dark:border-white/5 shrink-0 flex items-center gap-3">
                     {/* Search */}
                     <div className="relative flex-1 max-w-xs">
-                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                         <input
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             placeholder="Buscar por nro. o cliente..."
-                            className="w-full h-9 bg-white/5 border border-white/8 rounded-xl pl-9 pr-3 text-[11px] text-white placeholder:text-white/25 focus:outline-none focus:border-brand-500/50 focus:bg-brand-500/5 transition-all"
+                            className="w-full h-9 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl pl-9 pr-3 text-[11px] text-content dark:text-white placeholder:text-content-subtle dark:placeholder:text-white/25 focus:outline-none focus:border-brand-500/50 focus:bg-brand-500/5 transition-all"
                         />
                     </div>
                     {/* Status tabs */}
                     <div className="flex items-center gap-1 ml-auto">
                         {STATUS_TABS.map(t => (
                             <button key={t.key} onClick={() => setStatusTab(t.key)}
-                                className={`h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${statusTab === t.key ? "bg-brand-500 text-black" : "bg-white/5 text-white/40 hover:text-white hover:bg-white/10"}`}>
+                                className={`h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${statusTab === t.key ? "bg-brand-500 text-black" : "bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/10"}`}>
                                 {t.label}
                             </button>
                         ))}
@@ -124,7 +125,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                 {/* Table */}
                 <div className="flex-1 overflow-auto">
                     {loading ? (
-                        <div className="flex items-center justify-center py-16 text-white/30">
+                        <div className="flex items-center justify-center py-16 text-content-subtle dark:text-white/30">
                             <svg className="w-5 h-5 animate-spin mr-2" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -132,7 +133,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                             <span className="text-[11px] font-bold">Cargando...</span>
                         </div>
                     ) : filtered.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 gap-3 text-white/20">
+                        <div className="flex flex-col items-center justify-center py-16 gap-3 text-content-subtle dark:text-white/20">
                             <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
@@ -141,7 +142,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                     ) : (
                         <table className="w-full text-left min-w-[720px]">
                             <thead>
-                                <tr className="border-b border-white/5 text-[9px] font-black uppercase tracking-widest text-white/25 sticky top-0 bg-[#0c0c0c]">
+                                <tr className="border-b border-border/20 dark:border-white/5 text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/25 sticky top-0 bg-white dark:bg-surface-dark-2">
                                     <th className="px-5 py-3">Factura</th>
                                     <th className="px-3 py-3">Cliente</th>
                                     <th className="px-3 py-3 text-right">Total</th>
@@ -154,31 +155,31 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                             </thead>
                             <tbody>
                                 {filtered.map(sale => (
-                                    <tr key={sale.id} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors group">
+                                    <tr key={sale.id} className="border-b border-border/20 dark:border-white/5 hover:bg-surface-2 dark:hover:bg-white/[0.03] transition-colors group">
                                         <td className="px-5 py-3">
-                                            <span className="text-[11px] font-black text-white tabular-nums">
+                                            <span className="text-[11px] font-black text-content dark:text-white tabular-nums">
                                                 {sale.invoice_number || `Borrador #${sale.id}`}
                                             </span>
                                             {sale.serie_name && (
-                                                <div className="text-[9px] text-white/25 font-bold">{sale.serie_name}</div>
+                                                <div className="text-[9px] text-content-subtle dark:text-white/25 font-bold">{sale.serie_name}</div>
                                             )}
                                         </td>
                                         <td className="px-3 py-3 max-w-[140px]">
-                                            <span className="text-[11px] text-white/70 font-bold truncate block">
-                                                {sale.customer_name || <span className="text-white/25 italic">Sin cliente</span>}
+                                            <span className="text-[11px] text-content-muted dark:text-white/70 font-bold truncate block">
+                                                {sale.customer_name || <span className="text-content-subtle dark:text-white/25 italic">Sin cliente</span>}
                                             </span>
-                                            {sale.customer_rif && <div className="text-[9px] text-white/25">{sale.customer_rif}</div>}
+                                            {sale.customer_rif && <div className="text-[9px] text-content-subtle dark:text-white/25">{sale.customer_rif}</div>}
                                         </td>
                                         <td className="px-3 py-3 text-right tabular-nums">
-                                            <span className="text-[11px] font-black text-white/80">{fmt(sale.total)}</span>
+                                            <span className="text-[11px] font-black text-content dark:text-white/80">{fmt(sale.total)}</span>
                                         </td>
                                         <td className="px-3 py-3 text-right tabular-nums">
-                                            <span className={`text-[11px] font-bold ${sale.amount_paid > 0 ? "text-green-400" : "text-white/25"}`}>
+                                            <span className={`text-[11px] font-bold ${sale.amount_paid > 0 ? "text-green-600 dark:text-green-400" : "text-content-subtle dark:text-white/25"}`}>
                                                 {fmt(sale.amount_paid)}
                                             </span>
                                         </td>
                                         <td className="px-3 py-3 text-right tabular-nums">
-                                            <span className={`text-[12px] font-black ${sale.balance > 0 ? "text-warning" : "text-green-400"}`}>
+                                            <span className={`text-[12px] font-black ${sale.balance > 0 ? "text-warning" : "text-green-600 dark:text-green-400"}`}>
                                                 {fmt(sale.balance)}
                                             </span>
                                         </td>
@@ -186,7 +187,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                             <StatusBadge status={sale.status} />
                                         </td>
                                         <td className="px-3 py-3">
-                                            <span className="text-[10px] text-white/30 font-bold tabular-nums">{fmtDate(sale.created_at)}</span>
+                                            <span className="text-[10px] text-content-subtle dark:text-white/30 font-bold tabular-nums">{fmtDate(sale.created_at)}</span>
                                         </td>
                                         <td className="px-3 py-3">
                                             <button
@@ -205,8 +206,8 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
 
                 {/* Footer count */}
                 {!loading && filtered.length > 0 && (
-                    <div className="px-5 py-2.5 border-t border-white/5 shrink-0 flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-white/20">
+                    <div className="px-5 py-2.5 border-t border-border/20 dark:border-white/5 shrink-0 flex items-center justify-between">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/20">
                             {filtered.length} factura{filtered.length !== 1 ? "s" : ""}
                         </span>
                         <span className="text-[9px] font-black uppercase tracking-widest text-warning">

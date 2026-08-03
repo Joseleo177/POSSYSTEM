@@ -13,6 +13,9 @@ module.exports = (sequelize, DataTypes) => {
     price: { type: DataTypes.DECIMAL(14, 5), allowNull: false },
     quantity: { type: DataTypes.DECIMAL(10, 3), allowNull: false },
     discount: { type: DataTypes.DECIMAL(14, 5), allowNull: false, defaultValue: 0 },
+    // Costo congelado al momento de la venta. Sin esto la utilidad histórica se
+    // recalcularía con el costo actual. Null en ventas previas a la migración.
+    cost_price: { type: DataTypes.DECIMAL(14, 5), allowNull: true },
     subtotal: { type: DataTypes.DECIMAL(14, 5) }
   }, {
     sequelize,

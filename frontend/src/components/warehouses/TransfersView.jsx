@@ -36,7 +36,7 @@ export default function TransfersView({ transfers }) {
                                             {t.from_warehouse_name}
                                         </span>
                                     ) : (
-                                        <span className="text-[10px] text-content-subtle uppercase italic opacity-50">Externo</span>
+                                        <span className="text-[10px] text-content-subtle uppercase italic">Externo</span>
                                     )}
                                 </td>
                                 <td>

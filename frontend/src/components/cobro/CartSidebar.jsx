@@ -11,7 +11,7 @@ export default function CartSidebar({
     convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt,
     currentCurrency, setSelectedCurrency, activeCurrencies,
     selectedSerieId, selectSerie, mySeries,
-    activeWarehouse, employeeWarehouses, switchWarehouse,
+    activeWarehouse,
     selectedCustomer, setSelectedCustomer,
     custSearch, setCustSearch, customers, setCustomers,
     selectedCustIdx, setSelectedCustIdx,
@@ -22,6 +22,19 @@ export default function CartSidebar({
     searchInputRef,
     activePromos = [], promoLineDiscount, promoDiscount = 0,
 }) {
+    // Mismo redondeo por línea que CartContext, para que las líneas sumen el total del footer.
+    const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+
+    // Si lo tecleado en el buscador es solo un documento (dígitos, con prefijo opcional
+    // tipo V- o J-), lo llevamos al campo cédula/RIF del alta en vez de al nombre.
+    const buildNewCustomer = (q) => {
+        const txt = (q || "").trim();
+        const doc = txt.match(/^([VEJGP])?-?(\d+)$/i);
+        return doc
+            ? { name: "", rif: `${(doc[1] || "V").toUpperCase()}-${doc[2]}`, _fromCobro: true }
+            : { name: txt, _fromCobro: true };
+    };
+
     const handleQtyModal = (item) => {
         // En móviles, disparamos el modal. En desktop, el input inline es suficiente pero el modal no estorba.
         if (window.innerWidth < 1024) {
@@ -111,9 +124,17 @@ export default function CartSidebar({
                     </div>
                 </div>
 
+                {/* Almacén activo: solo informativo, se elige al abrir caja (AperturaCajaModal).
+                    Línea de ancho completo para que el nombre no se corte. */}
+                <div className="hidden lg:flex items-center gap-1.5 -mt-1 min-w-0">
+                    <svg className="w-3 h-3 text-brand-500 opacity-60 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-content-subtle dark:text-white/30 shrink-0">Almacén</span>
+                    <span className="text-[10px] font-black uppercase tracking-wide text-brand-500 truncate">{activeWarehouse?.name || "Sin almacén"}</span>
+                </div>
+
                 {/* Mobile session indicators */}
                 <div className="lg:hidden flex items-center justify-between pb-1">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-content-muted dark:text-content-dark-muted opacity-60">Punto de Venta</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-500 truncate" title="Almacén de venta">{activeWarehouse?.name || "Sin almacén"}</span>
                     <div className="flex items-center gap-2">
                         <button onClick={() => setShowHeldModal(true)} className="relative w-7 h-7 rounded-full bg-surface-2 dark:bg-white/5 flex items-center justify-center">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m9-.828l-1.414-1.414M3.707 18.293V21h2.707l14.586-14.586a2 2 0 10-2.828-2.828L3.707 18.293z" /></svg>
@@ -123,23 +144,6 @@ export default function CartSidebar({
                             <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                             <span className="text-[9px] font-black uppercase text-green-500">Abierto</span>
                         </div>
-                    </div>
-                </div>
-
-                {/* Almacén - More compact on mobile */}
-                <div className="flex items-center gap-2 px-3 py-1.5 lg:px-4 lg:py-2 bg-brand-500/5 lg:bg-brand-500/10 rounded-xl lg:rounded-2xl border border-brand-500/10 lg:border-brand-500/20">
-                    <span className="text-xs text-brand-500 shrink-0 opacity-60">
-                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                    </span>
-                    <div className="flex-1 min-w-0">
-                        <div className="hidden lg:block text-[10px] font-black uppercase tracking-wide text-brand-500 opacity-60 mb-0.5">ALMACÉN DE VENTA</div>
-                        <CustomSelect
-                            value={activeWarehouse?.id || ""}
-                            onChange={val => { const wh = employeeWarehouses.find(w => w.id === parseInt(val)); if (wh) switchWarehouse(wh); }}
-                            options={employeeWarehouses.map(w => ({ value: String(w.id), label: w.name }))}
-                            placeholder="Almacén..."
-                            className="w-full !p-0 !bg-transparent !border-none !text-[11px] font-black"
-                        />
                     </div>
                 </div>
 
@@ -155,6 +159,9 @@ export default function CartSidebar({
                                     <div className="min-w-0">
                                     <div className="hidden lg:block text-[11px] font-black uppercase tracking-wide text-brand-500">Cliente</div>
                                     <div className="text-sm font-black text-content dark:text-white truncate lg:mt-0.5">{selectedCustomer.name}</div>
+                                    {selectedCustomer.rif && (
+                                        <div className="text-[11px] font-black tracking-wide text-brand-600 dark:text-brand-400 truncate">{selectedCustomer.rif}</div>
+                                    )}
                                 </div>
                             </div>
                             <button onClick={() => setSelectedCustomer(null)} className="w-7 h-7 lg:w-8 lg:h-8 rounded-full bg-brand-500/20 text-brand-500 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all shrink-0">
@@ -184,7 +191,7 @@ export default function CartSidebar({
                                             const c = customers[selectedCustIdx];
                                             setSelectedCustomer(c); setCustomers([]); setCustSearch(""); setSelectedCustIdx(-1);
                                         } else if (selectedCustIdx === customers.length || customers.length === 0) {
-                                            setCustomerEditData({ name: custSearch, _fromCobro: true }); setCustomerModal(true); setCustSearch(""); setSelectedCustIdx(-1);
+                                            setCustomerEditData(buildNewCustomer(custSearch)); setCustomerModal(true); setCustSearch(""); setSelectedCustIdx(-1);
                                         } else if (customers.length === 1) {
                                             const c = customers[0];
                                             setSelectedCustomer(c); setCustomers([]); setCustSearch(""); setSelectedCustIdx(-1);
@@ -216,7 +223,7 @@ export default function CartSidebar({
                                 </button>
                             ))}
                             <button
-                                onClick={() => { setCustomerEditData({ name: custSearch, _fromCobro: true }); setCustomerModal(true); setCustSearch(""); setSelectedCustIdx(-1); }}
+                                onClick={() => { setCustomerEditData(buildNewCustomer(custSearch)); setCustomerModal(true); setCustSearch(""); setSelectedCustIdx(-1); }}
                                 className={`w-full text-left px-4 py-3 cursor-pointer text-sm font-bold text-warning flex items-center gap-2 transition-colors ${customers.length > 0 ? "border-t border-border dark:border-border-dark" : ""} ${selectedCustIdx === customers.length ? "bg-warning/10" : "hover:bg-surface-3 dark:hover:bg-surface-dark-3"}`}
                             >
                                 <span className="text-lg bg-warning/10 text-warning w-6 h-6 flex items-center justify-center rounded-md">+</span>
@@ -228,7 +235,7 @@ export default function CartSidebar({
 
                 {/* Moneda + Serie */}
                 <div className="flex gap-2 lg:gap-3">
-                    <div className="flex-1 bg-surface-1 dark:bg-white/5 rounded-xl lg:rounded-2xl flex items-center px-3 lg:px-4 gap-2 border border-black/5 dark:border-white/5">
+                    <div className="flex-1 bg-surface-2 dark:bg-white/5 rounded-xl lg:rounded-2xl flex items-center px-3 lg:px-4 gap-2 border border-black/5 dark:border-white/5">
                         <span className="text-xs opacity-40">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         </span>
@@ -239,7 +246,7 @@ export default function CartSidebar({
                             className="!p-0 !bg-transparent !border-none !text-[11px] font-black flex-1"
                         />
                     </div>
-                    <div className="flex-1 bg-surface-1 dark:bg-white/5 rounded-xl lg:rounded-2xl flex items-center px-3 lg:px-4 gap-2 border border-black/5 dark:border-white/5">
+                    <div className="flex-1 bg-surface-2 dark:bg-white/5 rounded-xl lg:rounded-2xl flex items-center px-3 lg:px-4 gap-2 border border-black/5 dark:border-white/5">
                         <span className="text-xs opacity-40">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                         </span>
@@ -264,8 +271,21 @@ export default function CartSidebar({
                             <div className="text-[11px] font-black tracking-wide uppercase text-center dark:text-white">Inicia una venta</div>
                         </div>
                     ) : (
-                        cart.map(i => (
-                            <div key={i.id} className="bg-surface-1 dark:bg-white/5 p-3 rounded-[24px] flex items-center gap-3 group transition-all border border-black/5 dark:border-white/5">
+                        cart.map(i => {
+                            // Total de línea con el mismo redondeo por línea que usa el subtotal
+                            // (round2 del precio en la moneda mostrada × qty), para que la suma
+                            // de las líneas cuadre exacto con el total del footer.
+                            const lineDiscount = promoLineDiscountDisplay ? promoLineDiscountDisplay(i) : 0;
+                            const lineGross = round2(convertToDisplay(i.price)) * i.qty;
+                            const lineTotal = lineGross - lineDiscount;
+                            // La promo se aplica como proporción para no arrastrar el descuento
+                            // de una moneda a la otra a través de la tasa.
+                            const discountRatio = lineGross > 0 ? lineDiscount / lineGross : 0;
+                            const lineTotalSecondary = secondaryCurrency
+                                ? round2(convertToSecondary(i.price)) * i.qty * (1 - discountRatio)
+                                : null;
+                            return (
+                            <div key={i.id} className="bg-surface-2 dark:bg-white/5 p-3 rounded-[24px] flex items-center gap-3 group transition-all border border-black/5 dark:border-white/5">
                                 <div className="w-12 h-12 rounded-xl bg-surface-2 dark:bg-white/5 flex items-center justify-center shrink-0 overflow-hidden relative">
                                     {i.image_url ? <img src={resolveImageUrl(i.image_url)} className="w-full h-full object-cover" alt={i.name} onError={imgRetryOnError} /> :<div className="text-sm opacity-20 dark:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>}
                                     <button onClick={() => removeFromCart(i.id)} className="absolute inset-0 bg-danger/80 text-white opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
@@ -288,19 +308,24 @@ export default function CartSidebar({
                                         })()}
                                     </div>
                                     <div className="flex flex-col mt-0.5">
-                                        <div className="text-[9px] font-black text-brand-500 uppercase flex items-center gap-1">
+                                        <div className="text-[9px] font-black text-brand-500 uppercase flex items-center gap-1 flex-wrap">
                                             <span>{fmtQtyUnit(i.qty, i.unit)}</span>
-                                            <span className="opacity-40">@</span>
+                                            <span className="opacity-40">×</span>
                                             <span>{fmt(convertToDisplay(i.price), currSym)}</span>
-                                            {promoLineDiscountDisplay && promoLineDiscountDisplay(i) > 0 && (
-                                                <span className="text-success">-{fmt(promoLineDiscountDisplay(i), currSym)}</span>
+                                            {lineDiscount > 0 && (
+                                                <span className="text-success">-{fmt(lineDiscount, currSym)}</span>
                                             )}
                                         </div>
-                                        {secondaryCurrency && (
-                                            <div className="text-[8px] font-bold text-content-subtle dark:text-content-dark-muted opacity-40 -mt-0.5">
-                                                {fmt(convertToSecondary(i.price), secondaryCurrency.symbol)}
-                                            </div>
-                                        )}
+                                        {/* Los importes no se parten por dentro: si no caben juntos,
+                                            el segundo baja completo a la línea siguiente. */}
+                                        <div className="flex items-baseline flex-wrap gap-x-1.5 gap-y-0.5 mt-0.5">
+                                            <span className="text-[12px] font-black text-content dark:text-white leading-tight whitespace-nowrap tabular-nums">{fmt(lineTotal, currSym)}</span>
+                                            {secondaryCurrency && (
+                                                <span className="text-[12px] font-black text-content dark:text-white leading-tight whitespace-nowrap tabular-nums">
+                                                    {fmt(lineTotalSecondary, secondaryCurrency.symbol)}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="flex items-center bg-surface-2 dark:bg-black/20 p-1 rounded-xl border border-black/5 dark:border-white/5 shrink-0">
@@ -320,13 +345,14 @@ export default function CartSidebar({
                                     <button onClick={() => changeQty(i.id, 1)} className="hidden lg:block w-7 h-7 rounded-lg font-black dark:text-white hover:bg-white/10">+</button>
                                 </div>
                             </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
 
                 {/* Footer: descuento + totales + botones */}
                 <div className="pt-2 border-t border-border/10 space-y-1.5 pb-1">
-                    <div className="bg-surface-1 dark:bg-white/5 rounded-lg p-2 flex items-center justify-between gap-3 border border-black/5 dark:border-white/5">
+                    <div className="bg-surface-2 dark:bg-white/5 rounded-lg p-2 flex items-center justify-between gap-3 border border-black/5 dark:border-white/5">
                         <div className="flex items-center gap-3">
                             <button onClick={() => setDiscountEnabled(!discountEnabled)} className={`w-8 h-5 lg:w-10 lg:h-6 rounded-full transition-all relative ${discountEnabled ? "bg-brand-500" : "bg-surface-3 dark:bg-white/10"}`}>
                                 <div className={`absolute top-0.5 lg:top-1 left-0.5 lg:left-1 w-4 h-4 bg-white rounded-full transition-all ${discountEnabled ? "translate-x-3 lg:translate-x-4" : ""}`} />
@@ -340,7 +366,7 @@ export default function CartSidebar({
                             </div>
                         )}
                     </div>
-                    <div className="bg-surface-1 dark:bg-white/5 p-3 rounded-xl border border-black/5 dark:border-white/10">
+                    <div className="bg-surface-2 dark:bg-white/5 p-3 rounded-xl border border-black/5 dark:border-white/10">
                         <div className="space-y-1 mb-2">
                             <div className="flex justify-between items-center opacity-60 dark:text-content-dark-muted">
                                 <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide">SUBTOTAL</span>

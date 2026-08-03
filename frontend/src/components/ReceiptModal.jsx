@@ -146,9 +146,14 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
         table { width: 100%; border-collapse: collapse; margin-bottom: 2mm; }
         th { text-align: left; border-bottom: 1px solid #000; padding: 1mm 0; font-size: ${printerWidth === 58 ? "7.5px" : "9px"}; }
         td { padding: 1mm 0; font-size: ${printerWidth === 58 ? "7.5px" : "9px"}; vertical-align: top; }
-        .item-name { max-width: ${printerWidth === 58 ? "20mm" : "32mm"}; word-break: break-word; font-weight: 600; }
-        .td-center { text-align: center; }
-        .td-right { text-align: right; }
+        .item-name { max-width: ${printerWidth === 58 ? "20mm" : "32mm"}; word-break: break-word; font-weight: 600; text-transform: uppercase; }
+        /* Separación entre columnas: sin ella cantidad, P.U. y total se leen como un solo bloque. */
+        .td-center { text-align: center; padding-left: 1.5mm; padding-right: 1.5mm; }
+        .td-right { text-align: right; padding-left: 1.5mm; }
+        /* La cantidad va en gris y con "x" delante para que no se confunda con un monto. */
+        .qty { color: #444; font-weight: 400; white-space: nowrap; }
+        .unit-price { color: #444; font-weight: 400; white-space: nowrap; }
+        .line-total { font-weight: 800; white-space: nowrap; }
 
         .totals { border-top: 1px dashed #000; padding-top: 2mm; margin-bottom: 2mm; }
         .total-row { display: flex; justify-content: space-between; font-size: ${printerWidth === 58 ? "8px" : "10px"}; margin-bottom: 0.5mm; }
@@ -188,18 +193,18 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
         <thead>
             <tr>
                 <th>Producto</th>
-                <th>Cant</th>
-                <th>P.U.</th>
-                <th>Total</th>
+                <th class="td-center">Cant</th>
+                <th class="td-right">P.U.</th>
+                <th class="td-right">Total</th>
             </tr>
         </thead>
         <tbody>
             ${totals.items.map(i => `
                 <tr>
                     <td><div class="item-name">${i.name}</div></td>
-                    <td class="td-center">${fmtQty(i.quantity)}</td>
-                    <td class="td-right">${fmtPRow(i.fmtPrice)}</td>
-                    <td class="td-right"><b>${fmtPRow(i.fmtSubtotal)}</b></td>
+                    <td class="td-center qty">x ${fmtQty(i.quantity)}</td>
+                    <td class="td-right unit-price">${fmtPRow(i.fmtPrice)}</td>
+                    <td class="td-right line-total">${fmtPRow(i.fmtSubtotal)}</td>
                 </tr>
             `).join("")}
         </tbody>
@@ -314,10 +319,10 @@ export default function ReceiptModal({ open, onClose, sale }) {
                 <tbody>
                     {totals.items.map((item, idx) => (
                         <tr key={idx} className="border-b border-dashed border-border dark:border-border-dark">
-                            <td className="px-1.5 py-1.5 text-content dark:text-content-dark">{item.name}</td>
-                            <td className="px-1.5 py-1.5 text-center text-content-muted dark:text-content-dark-muted">{parseFloat(item.quantity) % 1 === 0 ? Math.round(parseFloat(item.quantity)) : item.quantity}</td>
-                            <td className="px-1.5 py-1.5 text-right text-content-muted dark:text-content-dark-muted">{item.fmtPrice}</td>
-                            <td className="px-1.5 py-1.5 text-right text-content dark:text-content-dark font-medium">{item.fmtSubtotal}</td>
+                            <td className="px-1.5 py-1.5 text-content dark:text-content-dark uppercase">{item.name}</td>
+                            <td className="px-1.5 py-1.5 text-center text-content-muted dark:text-content-dark-muted whitespace-nowrap">x {parseFloat(item.quantity) % 1 === 0 ? Math.round(parseFloat(item.quantity)) : item.quantity}</td>
+                            <td className="px-1.5 py-1.5 text-right text-content-muted dark:text-content-dark-muted whitespace-nowrap">{item.fmtPrice}</td>
+                            <td className="px-1.5 py-1.5 text-right text-content dark:text-content-dark font-black whitespace-nowrap">{item.fmtSubtotal}</td>
                         </tr>
                     ))}
                 </tbody>

@@ -215,7 +215,7 @@ export default function NotasCreditoTab({ notify, fmtPrice }) {
               {loading ? (
                 <tr><td colSpan={8} className="py-20 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">Cargando notas de crédito...</td></tr>
               ) : items.length === 0 ? (
-                <tr><td colSpan={8} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic opacity-40">Sin notas de crédito emitidas</td></tr>
+                <tr><td colSpan={8} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic">Sin notas de crédito emitidas</td></tr>
               ) : items.map(r => (
                 <tr key={r.id} className="group">
                   <td>

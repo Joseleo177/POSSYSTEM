@@ -107,7 +107,7 @@ export default function CashSessionsReport() {
  <div className="flex items-center gap-1.5">
  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
  className="h-10 px-3 bg-surface-2 dark:bg-white/[0.03] border border-border/40 dark:border-white/5 rounded-xl text-[11px] font-bold focus:border-brand-500/50 outline-none transition-all" />
- <span className="text-[10px] font-black text-content-subtle opacity-40">→</span>
+ <span className="text-[10px] font-black text-content-subtle">→</span>
  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
  className="h-10 px-3 bg-surface-2 dark:bg-white/[0.03] border border-border/40 dark:border-white/5 rounded-xl text-[11px] font-bold focus:border-brand-500/50 outline-none transition-all" />
  </div>
@@ -169,7 +169,7 @@ export default function CashSessionsReport() {
  </tr>
  ))
  ) : (
- <tr><td colSpan="5" className="p-10 text-center text-[11px] text-content-subtle opacity-30 uppercase font-black tracking-wide">{hasFilters ? "Sin resultados con estos filtros" : "Sin sesiones"}</td></tr>
+ <tr><td colSpan="5" className="p-10 text-center text-[11px] text-content-subtle uppercase font-black tracking-wide">{hasFilters ? "Sin resultados con estos filtros" : "Sin sesiones"}</td></tr>
  )}
  </tbody>
  </table>
@@ -209,7 +209,7 @@ export default function CashSessionsReport() {
  <div key={item.label} className="p-3 bg-surface-2 dark:bg-white/5 rounded-xl border border-border/20 dark:border-white/5 text-center">
  <div className="text-[10px] font-black text-content-muted uppercase tracking-wide mb-1">{item.label}</div>
  <div className={`text-sm font-black ${item.color}`}>{item.value}</div>
- {item.sub && <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase mt-0.5">{item.sub}</div>}
+ {item.sub && <div className="text-[10px] font-bold text-content-subtle uppercase mt-0.5">{item.sub}</div>}
  </div>
  ))}
  </div>
@@ -256,7 +256,7 @@ export default function CashSessionsReport() {
  </tr>
  ))
  ) : (
- <tr><td colSpan="5" className="p-5 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">No se registraron ventas en este turno</td></tr>
+ <tr><td colSpan="5" className="p-5 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">No se registraron ventas en este turno</td></tr>
  )}
  </tbody>
  </table>
@@ -287,11 +287,11 @@ export default function CashSessionsReport() {
  <td className="px-4 py-2.5 text-right tabular-nums">
  {(js.change_out || 0) > 0
   ? <span className="text-danger">−{(js.change_out).toFixed(2)}</span>
-  : <span className="text-content-subtle opacity-30">—</span>}
+  : <span className="text-content-subtle">—</span>}
  </td>
  <td className="px-4 py-2.5 text-right tabular-nums">{js.expected_amount.toFixed(2)}</td>
  <td className="px-4 py-2.5 text-right text-success tabular-nums">{js.closing_amount?.toFixed(2) || "0.00"}</td>
- <td className={`px-4 py-2.5 text-center tabular-nums ${(js.difference || 0) < 0 ? "text-danger" : (js.difference || 0) > 0 ? "text-success" : "text-content-subtle opacity-40"}`}>
+ <td className={`px-4 py-2.5 text-center tabular-nums ${(js.difference || 0) < 0 ? "text-danger" : (js.difference || 0) > 0 ? "text-success" : "text-content-subtle"}`}>
  {(js.difference || 0) === 0 ? "OK" : (js.difference || 0).toFixed(2)}
  </td>
  </tr>

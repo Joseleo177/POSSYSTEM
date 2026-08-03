@@ -15,7 +15,7 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                         </div>
                         <div>
                             <h2 className="text-sm font-black tracking-tight text-content dark:text-white uppercase">Ventas en Espera</h2>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-40">Recupera o elimina carritos pausados</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Recupera o elimina carritos pausados</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="w-8 h-8 rounded-full bg-surface-2 dark:bg-white/5 flex items-center justify-center hover:bg-danger hover:text-white transition-all">

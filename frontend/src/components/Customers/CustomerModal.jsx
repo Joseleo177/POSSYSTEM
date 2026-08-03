@@ -32,10 +32,16 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
           rif: match ? match[2] : fullRif,
         });
       } else {
+        // En alta también aceptamos un documento prellenado (ej. desde el buscador de
+        // cobro, cuando lo tecleado es solo numérico y se interpreta como cédula/RIF).
+        const preRif = editData?.rif || "";
+        const preMatch = preRif.match(/^([VEJGP])-(.*)$/);
         setForm({
           ...EMPTY,
           type: editData?._newType || "cliente",
           name: editData?._newName || editData?.name || "",
+          doc_prefix: preMatch ? preMatch[1] : "V",
+          rif: preMatch ? preMatch[2] : preRif,
         });
       }
       setTimeout(() => nameRef.current?.focus(), 80);

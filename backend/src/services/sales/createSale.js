@@ -202,6 +202,21 @@ module.exports = async function createSale(body) {
       // (columna generada). entry.lineDiscountBs es el descuento TOTAL de la línea (p.ej. valor de
       // las unidades gratis en una promo "compre X lleve Y"), hay que prorratearlo entre qty.
       const unitDiscount = entry.qty > 0 ? parseFloat(((entry.lineDiscountBs || 0) / entry.qty).toFixed(5)) : 0;
+
+      // Costo congelado: sin esto, el reporte de márgenes recalcula la utilidad de esta venta
+      // con el costo de reposición del día en que se consulte, no con el que tenía hoy.
+      // En un combo el producto no lleva costo propio: es la suma del costo de sus ingredientes.
+      let unitCost = null;
+      if (entry.isCombo) {
+        const comboCost = entry.ingredientsData.reduce(
+          (acc, ing) => acc + parseFloat(ing.ingredient.cost_price || 0) * ing.qtyNeeded,
+          0
+        );
+        unitCost = entry.qty > 0 ? parseFloat((comboCost / entry.qty).toFixed(5)) : null;
+      } else if (entry.product.cost_price != null) {
+        unitCost = parseFloat(entry.product.cost_price);
+      }
+
       await SaleItem.create(
         {
           sale_id: sale.id,
@@ -210,6 +225,7 @@ module.exports = async function createSale(body) {
           price: entry.product.price,
           quantity: entry.qty,
           discount: unitDiscount,
+          cost_price: unitCost,
         },
         { transaction }
       );

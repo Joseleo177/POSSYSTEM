@@ -98,7 +98,7 @@ export default function CustomersReport() {
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2">
  <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{c.name}</div>
- <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase">{c.phone || "Sin contacto"}</div>
+ <div className="text-[10px] font-bold text-content-subtle uppercase">{c.phone || "Sin contacto"}</div>
  </td>
  <td className="px-4 py-2 text-right tabular-nums text-[11px] font-black text-content-muted">{c.purchase_count}</td>
  <td className="px-4 py-2 text-right tabular-nums text-[11px] text-content-subtle">{fmt$(c.avg_ticket)}</td>
@@ -110,7 +110,7 @@ export default function CustomersReport() {
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2">
  <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{c.name}</div>
- <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase">{c.phone || "Sin contacto"}</div>
+ <div className="text-[10px] font-bold text-content-subtle uppercase">{c.phone || "Sin contacto"}</div>
  </td>
  <td className="px-4 py-2 text-right tabular-nums text-brand-500 font-black text-[11px]">{fmt$(c.lifetime_value)}</td>
  <td className="px-4 py-2 text-center">
@@ -121,7 +121,7 @@ export default function CustomersReport() {
  </tr>
  ))}
  {view === "new" && (data.new_customers.length === 0
- ? <tr><td colSpan={5} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin clientes nuevos en este período</td></tr>
+ ? <tr><td colSpan={5} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin clientes nuevos en este período</td></tr>
  : newPag.paginated.map((c, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{c.name}</td>
@@ -134,7 +134,7 @@ export default function CustomersReport() {
  {view === "ticket" && (() => {
  const totalRev = data.ticket_distribution.reduce((s, r) => s + r.revenue, 0);
  return data.ticket_distribution.length === 0
- ? <tr><td colSpan={4} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin datos de distribución</td></tr>
+ ? <tr><td colSpan={4} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin datos de distribución</td></tr>
  : data.ticket_distribution.map((t, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2 font-black text-[11px] uppercase tracking-wider text-brand-500">{t.range}</td>

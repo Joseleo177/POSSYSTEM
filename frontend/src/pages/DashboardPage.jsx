@@ -88,7 +88,7 @@ function KpiCard({ label, valueBase, valueLocal, baseSym, localSym, sub, subValu
                 <div className="text-[13px] font-black tabular-nums text-content-subtle dark:text-white/40 mb-1">{localSym}{fmt(valueLocal)}</div>
             )}
             {sub && (
-                <div className="flex items-center justify-between text-[9px] font-bold text-content-subtle uppercase tracking-widest border-t border-border/10 pt-2 mt-1 opacity-50">
+                <div className="flex items-center justify-between text-[9px] font-bold text-content-subtle uppercase tracking-widest border-t border-border/10 pt-2 mt-1">
                     <span>Volumen</span>
                     <span className="text-content dark:text-white tabular-nums">{subValue} {sub}</span>
                 </div>
@@ -206,7 +206,7 @@ export default function DashboardPage() {
                         <div className="flex items-center justify-between mb-6 relative">
                             <span className="text-[11px] font-black uppercase tracking-widest text-content dark:text-white">Tendencia de Facturación Global (30 Días)</span>
                             <div className="flex items-center gap-2">
-                                <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase tracking-widest leading-none">Total Mes: <span className="text-brand-500 ml-1">{baseSym} {fmt(kpi.month.revenue)}</span></div>
+                                <div className="text-[10px] font-bold text-content-subtle uppercase tracking-widest leading-none">Total Mes: <span className="text-brand-500 ml-1">{baseSym} {fmt(kpi.month.revenue)}</span></div>
                             </div>
                         </div>
                         <SalesChart data={sales_by_day} />
@@ -232,7 +232,7 @@ export default function DashboardPage() {
                                                     <span className="w-4 h-4 rounded-md bg-surface-2 dark:bg-white/5 flex items-center justify-center text-[8px] font-black text-warning">#{i + 1}</span>
                                                     <span className="font-black text-content dark:text-white uppercase truncate opacity-70 group-hover:opacity-100 transition-all">{p.name}</span>
                                                 </div>
-                                                <span className="font-black text-content-subtle tabular-nums">{fmt(p.total_qty, 0)} <span className="text-[8px] opacity-40">UDS</span></span>
+                                                <span className="font-black text-content-subtle tabular-nums">{fmt(p.total_qty, 0)} <span className="text-[8px]">UDS</span></span>
                                             </div>
                                             <div className="h-1.5 bg-surface-2 dark:bg-white/5 rounded-full overflow-hidden">
                                                 <div className="h-full bg-warning rounded-full shadow-[0_0_8px_rgba(250,189,47,0.3)] transition-all duration-1000" style={{ width: `${pct}%` }} />
@@ -263,11 +263,11 @@ export default function DashboardPage() {
                                     <div key={p.id} className="flex items-center justify-between bg-surface-2 dark:bg-[#1c1c1c] border border-border/10 rounded-xl px-4 py-3 hover:border-danger/40 transition-all group">
                                         <div className="min-w-0">
                                             <div className="text-[10px] font-black text-content dark:text-white uppercase truncate mb-0.5">{p.name}</div>
-                                            <div className="text-[8px] font-black text-content-subtle uppercase opacity-40">Min: {fmt(p.min_stock, 0)} {p.unit}</div>
+                                            <div className="text-[8px] font-black text-content-subtle uppercase">Min: {fmt(p.min_stock, 0)} {p.unit}</div>
                                         </div>
                                         <div className="text-right">
                                             <div className="text-danger font-black text-sm tabular-nums leading-none mb-0.5">{fmt(p.total_stock, 0)}</div>
-                                            <div className="text-[8px] font-black text-content-subtle uppercase opacity-40">{p.unit}</div>
+                                            <div className="text-[8px] font-black text-content-subtle uppercase">{p.unit}</div>
                                         </div>
                                     </div>
                                 ))}

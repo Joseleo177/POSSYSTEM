@@ -15,6 +15,21 @@ input[type=number] { -moz-appearance: textfield; }
 .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
 @layer base {
+  /* Grises de texto por tema.
+     En claro, #9ca3af (gray-400) sobre blanco daba 2.5:1 de contraste — por debajo del
+     mínimo AA de 4.5:1 — y por eso las etiquetas secundarias no se leían. Como muchos
+     componentes usan text-content-subtle / -muted sin variante dark:, el valor tiene que
+     cambiar con el tema en vez de ser fijo. */
+  :root {
+    --c-content-muted:  75 85 99;    /* #4b5563 — 7.5:1 sobre blanco */
+    --c-content-subtle: 107 114 128; /* #6b7280 — 4.8:1 sobre blanco */
+  }
+
+  .dark {
+    --c-content-muted:  203 213 225; /* #cbd5e1 — 11:1 sobre el fondo oscuro */
+    --c-content-subtle: 148 163 184; /* #94a3b8 — 7.3:1 sobre el fondo oscuro */
+  }
+
   html {
     font-size: 16px;
     font-family: 'Inter', system-ui, sans-serif;

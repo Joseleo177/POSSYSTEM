@@ -7,9 +7,15 @@ module.exports = {
       colors: {
         surface: {
           DEFAULT: "#ffffff",
+          // surface-1 / surface-dark-1 se usan en 13 archivos pero nunca estuvieron definidos:
+          // Tailwind no generaba esas clases y los paneles quedaban transparentes (invisibles
+          // en tema claro, donde el fondo de página ya es surface-2). Son el escalón "panel
+          // elevado sobre la página", igual que el .card de index.css.
+          1:       "#ffffff",
           2:       "#f9fafb",
           3:       "#f3f4f6",
           dark:    "#0b0e14",
+          "dark-1":"#0b0e14",
           "dark-2":"#11151f",
           "dark-3":"#1a1f2e",
         },
@@ -19,8 +25,11 @@ module.exports = {
         },
         content: {
           DEFAULT:  "#111827",
-          muted:    "#4b5563",
-          subtle:   "#9ca3af",
+          // Definidos como variables CSS en index.css: cambian de valor entre claro y
+          // oscuro, para que text-content-muted / -subtle sean legibles en ambos temas
+          // aunque el componente no declare una variante dark:.
+          muted:    "rgb(var(--c-content-muted) / <alpha-value>)",
+          subtle:   "rgb(var(--c-content-subtle) / <alpha-value>)",
           dark:     "#f3f4f6",
           "dark-muted": "#CBD5E1", // Slighter brighter blue-gray
         },

@@ -58,14 +58,14 @@ export default function ReceivablesReport() {
  </thead>
  <tbody className="divide-y divide-border/20 dark:divide-white/5">
  {custPag.total === 0
- ? <tr><td colSpan={4} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-30">Sin cuentas por cobrar pendientes</td></tr>
+ ? <tr><td colSpan={4} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin cuentas por cobrar pendientes</td></tr>
  : custPag.paginated.map((c, i) => {
  const daysDiff = Math.floor((Date.now() - new Date(c.oldest_invoice)) / 86400000);
  return (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2">
  <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{c.customer_name}</div>
- <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase">{c.phone || "—"}</div>
+ <div className="text-[10px] font-bold text-content-subtle uppercase">{c.phone || "—"}</div>
  </td>
  <td className="px-4 py-2 text-right tabular-nums text-[11px] font-black text-content-muted">{c.invoice_count}</td>
  <td className="px-4 py-2 text-right tabular-nums text-danger font-black text-[11px]">{fmt$(c.balance)}</td>

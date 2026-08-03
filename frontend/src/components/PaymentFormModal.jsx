@@ -91,6 +91,19 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   }
   amountBase = Math.min(amountBase, pendingAfterCredit + 0.0001);
 
+  // Proyección de cómo queda la factura si se registra este pago. Se calcula sobre la
+  // misma pista que el resumen de arriba: en Bs cuando hay tasa (pendingPreciseBs), en
+  // la moneda base cuando no la hay, para que los números cuadren con "Saldo pendiente".
+  const payAmountInBs = isNonBasePay
+    ? (isNaN(amountNum) ? 0 : amountNum)
+    : roundBs2(amountBase * historicalRate);
+  const paidBeforeBase = parseFloat(sale?.amount_paid || 0);
+  const paidTotalBase  = paidBeforeBase + amountBase;
+  const paidTotalBs    = roundBs2(roundBs2(paidBeforeBase * historicalRate) + payAmountInBs);
+  const remainingBase  = Math.max(0, pendingAfterCredit - amountBase);
+  const remainingBs    = Math.max(0, roundBs2(pendingPreciseBs - payAmountInBs));
+  const settlesInvoice = hasBsRate ? remainingBs < 0.01 : remainingBase < 0.001;
+
   // Sobrante calculado en la moneda de pago (570 - 561.22 = 8.78 exacto),
   // sin ida-y-vuelta por USD que acumula error de redondeo
   const changeInPayCur = (!isNaN(receivedNum) && receivedNum > 0 && pendingAfterCredit > 0 && receivedNum > (isNaN(amountNum) ? 0 : amountNum))
@@ -426,6 +439,29 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
             </p>
           )}
         </Field>
+
+        {/* Cómo queda la factura con este pago, para no tener que calcularlo de cabeza. */}
+        {amountBase > 0 && (
+          <div className={`rounded-xl border p-3.5 space-y-1.5 ${settlesInvoice
+            ? "border-success/30 bg-success/5"
+            : "border-warning/30 bg-warning/5"}`}>
+            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/40">
+              Después de este pago
+            </div>
+            <Row
+              label="Total pagado"
+              value={hasBsRate ? `${defaultSym}${paidTotalBs.toFixed(2)}` : fmt(paidTotalBase)}
+              valueClass="text-success font-black"
+            />
+            <div className="border-t border-border/20 dark:border-white/5 pt-1.5">
+              <Row
+                label={settlesInvoice ? "Factura saldada" : "Saldo restante"}
+                value={hasBsRate ? `${defaultSym}${remainingBs.toFixed(2)}` : fmt(remainingBase)}
+                valueClass={`font-black ${settlesInvoice ? "text-success" : "text-warning"}`}
+              />
+            </div>
+          </div>
+        )}
 
         <Field label="FECHA DE REFERENCIA *">
           <DatePicker

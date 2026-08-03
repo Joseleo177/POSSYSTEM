@@ -88,7 +88,7 @@ export default function ProductSearch({ state }) {
                                             className="px-4 py-2.5 cursor-pointer rounded-xl border border-transparent hover:border-brand-500/20 hover:bg-brand-500/5 transition-all group"
                                         >
                                             <div className="font-black text-brand-500 group-hover:text-brand-400 uppercase text-xs">{p.name}</div>
-                                            <div className="text-[10px] font-bold text-content-subtle opacity-50 mt-0.5 uppercase whitespace-nowrap overflow-hidden text-ellipsis tabular-nums">
+                                            <div className="text-[10px] font-bold text-content-subtle mt-0.5 uppercase whitespace-nowrap overflow-hidden text-ellipsis tabular-nums">
                                                 Stock: {p.stock} {p.unit}
                                                 {p.package_unit && ` · Pack: ${p.package_unit} x${p.package_size}`}
                                                 {p.cost_price && ` · Anterior: Ref. ${fmt2(p.cost_price)}`}
@@ -173,7 +173,7 @@ export default function ProductSearch({ state }) {
                                     onChange={e => setIF("profit_margin", e.target.value)}
                                     className="input h-9 pr-8 font-bold tabular-nums"
                                 />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-content-subtle opacity-40">%</span>
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-content-subtle">%</span>
                             </div>
                         </div>
 
@@ -270,7 +270,7 @@ export default function ProductSearch({ state }) {
             {items.length > 0 && (
                 <div className="card-premium !p-0 overflow-hidden shadow-2xl">
                     <div className="px-4 py-2.5 bg-surface-2 dark:bg-white/[0.01] border-b border-border/10 dark:border-white/5 flex items-center justify-between">
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-content-subtle opacity-50">Mercancía en Tránsito (Recibo)</div>
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-content-subtle">Mercancía en Tránsito (Recibo)</div>
                         <div className="badge badge-info shadow-none !px-2 font-bold uppercase tabular-nums">{items.length} Tipos de productos</div>
                     </div>
 
@@ -342,7 +342,7 @@ export default function ProductSearch({ state }) {
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             </div>
                             <div>
-                                <div className="text-[10px] font-black uppercase tracking-[0.3em] text-content-subtle opacity-40 leading-none mb-0.5">Total del Recibo</div>
+                                <div className="text-[10px] font-black uppercase tracking-[0.3em] text-content-subtle leading-none mb-0.5">Total del Recibo</div>
                                 <div className="text-2xl font-black text-brand-500 tabular-nums tracking-tighter leading-none">Ref. {fmt2(grandTotal)}</div>
                             </div>
                         </div>

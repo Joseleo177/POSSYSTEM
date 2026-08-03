@@ -106,7 +106,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                             {loading ? (
                                 <tr><td colSpan={6} className="py-20 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">Sincronizando movimientos...</td></tr>
                             ) : data.length === 0 ? (
-                                <tr><td colSpan={6} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic opacity-40">Sin movimientos en esta vista</td></tr>
+                                <tr><td colSpan={6} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic">Sin movimientos en esta vista</td></tr>
                             ) : data.map(item => {
                                 const isInvoice = viewType === "pendientes";
                                 return (
@@ -116,7 +116,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                                 {item.invoice_number || (isInvoice ? `Factura #${item.id}` : `Cobro #${item.id}`)}
                                             </span>
                                             {!isInvoice && item.reference_number && (
-                                                <div className="text-[9px] font-black text-content-subtle opacity-40 uppercase tracking-tighter mt-0.5">Ref: {item.reference_number}</div>
+                                                <div className="text-[9px] font-black text-content-subtle uppercase tracking-tighter mt-0.5">Ref: {item.reference_number}</div>
                                             )}
                                         </td>
                                         <td>
@@ -209,7 +209,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                     p.notes && ["Notas", p.notes],
                                 ].filter(Boolean).map(([label, value, extra]) => (
                                     <div key={label} className="flex justify-between py-2 border-b border-border/10 dark:border-white/5 last:border-0">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-50">{label}</span>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">{label}</span>
                                         <span className={`text-[11px] font-bold ${extra || "text-content dark:text-white"}`}>{value}</span>
                                     </div>
                                 ))}

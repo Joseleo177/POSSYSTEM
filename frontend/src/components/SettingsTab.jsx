@@ -271,7 +271,7 @@ export default function SettingsTab({ notify }) {
                                         {settings.logo_url ? (
                                             <img src={resolveImageUrl(settings.logo_url)} alt="logo" className="h-8 w-auto mb-2 object-contain" />
                                         ) : (
-                                            <div className="w-8 h-8 rounded-full border border-dashed border-border/40 mb-2 flex items-center justify-center text-[9px] text-content-subtle opacity-30">NO LOGO</div>
+                                            <div className="w-8 h-8 rounded-full border border-dashed border-border/40 mb-2 flex items-center justify-center text-[9px] text-content-subtle">NO LOGO</div>
                                         )}
                                         <div className="text-xs font-black text-content dark:text-white uppercase tracking-tight leading-none mb-0.5">{settings.store_name || "MI TIENDA E.C.A"}</div>
                                         <div className="text-[9px] font-bold text-content-subtle uppercase tracking-widest opacity-60">{settings.store_rif ? `RIF: ${settings.store_rif}` : "RIF: J-00000000-0"}</div>
@@ -398,7 +398,7 @@ export default function SettingsTab({ notify }) {
                                 <span className="text-[10px] font-black uppercase tracking-widest text-content dark:text-white">Tipos de Cambio</span>
                                 <div className="flex items-center gap-2">
                                     {lastRefresh && (
-                                        <span className="text-[9px] font-black text-content-subtle uppercase tracking-widest opacity-40">Última actualización: {lastRefresh.toLocaleTimeString()}</span>
+                                        <span className="text-[9px] font-black text-content-subtle uppercase tracking-widest">Última actualización: {lastRefresh.toLocaleTimeString()}</span>
                                     )}
                                     <button
                                         onClick={autoRefreshRates}
@@ -420,7 +420,7 @@ export default function SettingsTab({ notify }) {
                                     <thead>
                                         <tr className="bg-surface-2 dark:bg-white/[0.02]">
                                             {["Código", "Nombre", "Símbolo", "Tasa (1 USD =)", "Estado", ""].map(h => (
-                                                <th key={h} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-40">{h}</th>
+                                                <th key={h} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-content-subtle">{h}</th>
                                             ))}
                                         </tr>
                                     </thead>
@@ -432,7 +432,7 @@ export default function SettingsTab({ notify }) {
                                                 <td className="px-4 py-2 font-black text-content-subtle">{c.symbol}</td>
                                                 <td className="px-4 py-2">
                                                     {c.is_base ? (
-                                                        <span className="text-content-subtle opacity-40 font-black tracking-widest italic">1.000 (Base)</span>
+                                                        <span className="text-content-subtle font-black tracking-widest italic">1.000 (Base)</span>
                                                     ) : (
                                                         <RateEditor currency={c} onSave={updateRate} />
                                                     )}
@@ -570,7 +570,7 @@ export default function SettingsTab({ notify }) {
                                     <thead>
                                         <tr className="bg-surface-2 dark:bg-white/[0.02]">
                                             {["Archivo", "Fecha", "Tamaño", ""].map(h => (
-                                                <th key={h} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-40">{h}</th>
+                                                <th key={h} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-content-subtle">{h}</th>
                                             ))}
                                         </tr>
                                     </thead>

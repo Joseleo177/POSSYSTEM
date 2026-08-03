@@ -24,6 +24,7 @@ export function usePurchasesModals({
     selectProduct,         // referencia estable a la acción real del form
     clearProductSearch,
     clearSupplierSearch,
+    selectedWarehouseId,   // almacén destino de la compra en curso
     notify,
 }) {
     // ───────────────────────────────────────────────
@@ -77,18 +78,22 @@ export function usePurchasesModals({
     // GUARDAR PRODUCTO
     // ───────────────────────────────────────────────
     const saveProduct = async (form, imageFile) => {
-        const { name, price, stock, category_id, unit, qty_step } = form || {};
-        if (!name || !price) return notify?.("Nombre y precio son requeridos", "err");
+        if (!form?.name || !form?.price) return notify?.("Nombre y precio son requeridos", "err");
 
         setSavingProduct(true);
         try {
+            // Se envía el formulario completo. Antes se armaba un payload a mano con solo
+            // 6 campos y se descartaban en silencio costo, margen, código de barras, mínimo
+            // de stock y embalaje — todo lo que el usuario había llenado en el modal.
             const payload = {
-                name,
-                price: +price,
-                stock: +stock,
-                category_id: category_id || null,
-                unit: unit || "unidad",
-                qty_step: +qty_step || 1,
+                ...form,
+                price: +form.price,
+                qty_step: +form.qty_step || 1,
+                unit: form.unit || "unidad",
+                category_id: form.category_id || null,
+                // Sin almacén el producto no genera fila en product_stock y queda invisible
+                // en el catálogo filtrado por almacén hasta que se reciba la compra.
+                ...(selectedWarehouseId ? { warehouse_id: selectedWarehouseId } : {}),
             };
             const r = await api.products.create(payload, imageFile);
             notify?.("Producto creado exitosamente");

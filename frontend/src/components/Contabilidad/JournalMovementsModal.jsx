@@ -139,7 +139,7 @@ export default function JournalMovementsModal({ journalId, bankId, onClose }) {
                                     </tr>
                                 ) : movements.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="px-6 py-16 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic opacity-40">
+                                        <td colSpan={8} className="px-6 py-16 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic">
                                             Sin movimientos registrados
                                         </td>
                                     </tr>
@@ -185,7 +185,7 @@ export default function JournalMovementsModal({ journalId, bankId, onClose }) {
                                                         {m.reference}
                                                     </span>
                                                     {m.doc_ref && (
-                                                        <div className="text-[8px] font-bold text-content-subtle opacity-50 mt-0.5">
+                                                        <div className="text-[8px] font-bold text-content-subtle mt-0.5">
                                                             Ref: {m.doc_ref}
                                                         </div>
                                                     )}
@@ -197,7 +197,7 @@ export default function JournalMovementsModal({ journalId, bankId, onClose }) {
                                                         {m.concept}
                                                     </span>
                                                     {m.notes && (
-                                                        <div className="text-[8px] font-bold text-content-subtle opacity-40 mt-0.5 truncate">
+                                                        <div className="text-[8px] font-bold text-content-subtle mt-0.5 truncate">
                                                             {m.notes}
                                                         </div>
                                                     )}

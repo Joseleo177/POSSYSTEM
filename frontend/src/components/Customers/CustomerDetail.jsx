@@ -12,7 +12,7 @@ import { api } from "../../services/api";
 const PAID_LIMIT = 50;
 
 const SECTION = "bg-surface-2 dark:bg-white/[0.04] rounded-2xl border border-border/10 dark:border-white/[0.06]";
-const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-subtle opacity-40";
+const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-subtle";
 
 // Cuerpo scrolleable de cada lista: rellena el alto disponible de su sección y desplaza dentro.
 // En impresión se desactiva para que salgan todas las filas.

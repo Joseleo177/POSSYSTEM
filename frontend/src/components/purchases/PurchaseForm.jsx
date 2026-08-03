@@ -5,7 +5,7 @@ import ProductSelectorModal from "./ProductSelectorModal";
 const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function PurchaseForm({ state }) {
-    const { items, removeItem, updateItem, grandTotal, savePurchase, loading, editingDraftId } = state;
+    const { items, removeItem, updateItem, grandTotal, savePurchase, loading, editingDraftId, selectedWarehouseId } = state;
     const [modalOpen, setModalOpen] = useState(false);
 
     const handleAdd = (item) => {
@@ -156,6 +156,7 @@ export default function PurchaseForm({ state }) {
                 onClose={() => setModalOpen(false)}
                 onAdd={handleAdd}
                 existingItems={items}
+                warehouseId={selectedWarehouseId || null}
             />
         </div>
     );

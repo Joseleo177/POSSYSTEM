@@ -52,6 +52,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
         productEditData,
         categories,
         savingProduct,
+        selectedWarehouseId,
     } = state;
 
     const getPageTitle = () => {
@@ -202,6 +203,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                 editData={productEditData}
                 categories={categories}
                 loading={savingProduct}
+                warehouseId={selectedWarehouseId || null}
             />
 
             <ConfirmModal

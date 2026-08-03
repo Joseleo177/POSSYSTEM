@@ -61,7 +61,7 @@ export default function MarginsReport() {
  })()}
  </div>
  ) : (
- <div className="h-[140px] flex items-center justify-center text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-40">Sin Data</div>
+ <div className="h-[140px] flex items-center justify-center text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin Data</div>
  )}
  </Card>
 
@@ -99,7 +99,7 @@ export default function MarginsReport() {
  <Card className="!p-0 min-h-0 flex flex-col">
  <div className="p-3 border-b border-border dark:border-white/5">
  <SectionHeader title={view === "top" ? "Alta Rentabilidad" : view === "bottom" ? "Optimización" : "Rentabilidad Sectorizada"}
- sub="Basado en costo de reposición actual" />
+ sub="Basado en el costo al momento de cada venta" />
  </div>
 
  <div className="overflow-x-auto">
@@ -126,7 +126,7 @@ export default function MarginsReport() {
  <td className="px-4 py-2"><div className="w-6 h-6 rounded-lg bg-surface-3 dark:bg-white/5 flex items-center justify-center text-[10px] font-black text-brand-500">{(activePag.page - 1) * 25 + i + 1}</div></td>
  <td className="px-4 py-2">
  <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.product_name}</div>
- <div className="text-[10px] font-bold text-content-subtle opacity-50 uppercase">{p.category_name}</div>
+ <div className="text-[10px] font-bold text-content-subtle uppercase">{p.category_name}</div>
  </td>
  <td className="px-4 py-2 text-right tabular-nums text-[11px] text-content dark:text-white font-black">{fmt$(p.revenue)}</td>
  <td className="px-4 py-2 text-right tabular-nums text-danger text-[11px]">{fmt$(p.total_cost)}</td>

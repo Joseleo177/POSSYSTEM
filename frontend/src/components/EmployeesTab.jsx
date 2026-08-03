@@ -158,7 +158,7 @@ export default function EmployeesTab({ notify }) {
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="text-xs font-black text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">{e.full_name}</span>
-                                                <span className="text-[10px] font-bold text-content-subtle opacity-50 mt-0.5">@{e.username}</span>
+                                                <span className="text-[10px] font-bold text-content-subtle mt-0.5">@{e.username}</span>
                                             </div>
                                         </div>
                                     </td>
@@ -168,7 +168,7 @@ export default function EmployeesTab({ notify }) {
                                     <td>
                                         <div className="flex flex-col gap-0.5">
                                             <span className="text-[11px] font-bold text-content dark:text-content-dark">{e.email || "—"}</span>
-                                            {e.phone && <span className="text-[10px] font-bold text-content-subtle opacity-50 tabular-nums">{e.phone}</span>}
+                                            {e.phone && <span className="text-[10px] font-bold text-content-subtle tabular-nums">{e.phone}</span>}
                                         </div>
                                     </td>
                                     <td className="text-center">
@@ -204,7 +204,7 @@ export default function EmployeesTab({ notify }) {
                                 <div className="flex items-center justify-between mb-4">
                                     <div>
                                         <div className="text-sm font-black text-content dark:text-white uppercase tracking-tight">{role.label}</div>
-                                        <div className="text-[10px] font-bold text-content-subtle font-mono mt-0.5 opacity-50">{role.name}</div>
+                                        <div className="text-[10px] font-bold text-content-subtle font-mono mt-0.5">{role.name}</div>
                                     </div>
                                     {isAdmin ? (
                                         <span className="badge badge-success text-[11px]">Acceso total</span>

@@ -212,7 +212,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
         return (
             <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
                 <svg className="w-10 h-10 text-content-subtle opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                <p className="text-[11px] font-black uppercase tracking-wide text-content-subtle opacity-40">Selecciona un almacén</p>
+                <p className="text-[11px] font-black uppercase tracking-wide text-content-subtle">Selecciona un almacén</p>
             </div>
         );
     }
@@ -347,7 +347,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                 })}
                                 {loadingMore && (
                                     <div className="py-4 text-center">
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-content-subtle opacity-50">Cargando más...</p>
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-content-subtle">Cargando más...</p>
                                     </div>
                                 )}
                             </div>
@@ -430,7 +430,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                             {session?.lines?.length > 0 && (
                                 <div className="shrink-0 border-t border-border/10 dark:border-white/[0.06]">
                                     <div className="px-5 py-2.5 flex items-center justify-between">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-50">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle">
                                             Movimientos en esta sesión ({session.lines.length})
                                         </p>
                                     </div>

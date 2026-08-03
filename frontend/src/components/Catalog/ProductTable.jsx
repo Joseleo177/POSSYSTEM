@@ -82,7 +82,7 @@ export default function ProductTable({
                         </td>
                         <td className="text-center">
                             {p.is_service ? (
-                                <span className="text-xs font-bold text-content-subtle opacity-30">—</span>
+                                <span className="text-xs font-bold text-content-subtle">—</span>
                             ) : (
                                 <>
                                     <span className={`text-xs font-bold tabular-nums ${
@@ -94,7 +94,7 @@ export default function ProductTable({
                                     }`}>
                                         {p.warehouse_stock ?? p.stock}
                                     </span>
-                                    <span className="ml-1 text-[9px] font-bold text-content-subtle opacity-40 uppercase">{p.unit || "uds"}</span>
+                                    <span className="ml-1 text-[9px] font-bold text-content-subtle uppercase">{p.unit || "uds"}</span>
                                 </>
                             )}
                         </td>

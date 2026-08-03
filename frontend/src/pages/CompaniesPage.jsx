@@ -134,7 +134,7 @@ export default function CompaniesPage() {
                                 {filtered.map(c => (
                                     <tr key={c.id} className="group hover:bg-brand-500/[0.02] transition-colors">
                                         <td>
-                                            <span className="text-[10px] font-black font-mono text-content-subtle opacity-50 tabular-nums">#{String(c.id).padStart(3, '0')}</span>
+                                            <span className="text-[10px] font-black font-mono text-content-subtle tabular-nums">#{String(c.id).padStart(3, '0')}</span>
                                         </td>
                                         <td>
                                             <div className="flex items-center gap-3">
@@ -143,7 +143,7 @@ export default function CompaniesPage() {
                                                 </div>
                                                 <div className="flex flex-col">
                                                     <span className="text-xs font-black text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">{c.name}</span>
-                                                    <span className="text-[10px] font-bold text-content-subtle opacity-50 tabular-nums uppercase tracking-wider mt-0.5">RIF: {c.tax_id || "N/A"}</span>
+                                                    <span className="text-[10px] font-bold text-content-subtle tabular-nums uppercase tracking-wider mt-0.5">RIF: {c.tax_id || "N/A"}</span>
                                                 </div>
                                             </div>
                                         </td>
@@ -152,7 +152,7 @@ export default function CompaniesPage() {
                                                 <span className="badge badge-info shadow-none w-fit">
                                                     {c.plan_name || "Básico"}
                                                 </span>
-                                                <span className="text-[10px] font-bold text-content-subtle opacity-50 tabular-nums">
+                                                <span className="text-[10px] font-bold text-content-subtle tabular-nums">
                                                     Vence: {c.expires_at ? new Date(c.expires_at).toLocaleDateString() : "Ilimitado"}
                                                 </span>
                                             </div>

@@ -125,7 +125,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                             {loading ? (
                                 <tr><td colSpan={6} className="py-20 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">Sincronizando transacciones...</td></tr>
                             ) : sales.length === 0 ? (
-                                <tr><td colSpan={6} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic opacity-40">Sin transacciones registradas</td></tr>
+                                <tr><td colSpan={6} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic">Sin transacciones registradas</td></tr>
                             ) : sales.map(sale => (
                                 <React.Fragment key={sale.id}>
                                     <tr className="group">

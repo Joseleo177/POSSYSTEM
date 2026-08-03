@@ -152,6 +152,7 @@ export function usePurchases(notify, onProductsUpdated) {
     selectProduct: form.selectProduct,
     clearProductSearch: search.clearProductSearch,
     clearSupplierSearch: search.clearSupplierSearch,
+    selectedWarehouseId,
     notify,
   });
 

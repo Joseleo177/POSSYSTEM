@@ -100,7 +100,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
                       })()}
                     </td>
                     <td>
-                      <span className="text-[10px] font-black text-content-subtle opacity-40 uppercase tracking-widest">{j.bank_name || j.bank || "—"}</span>
+                      <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest">{j.bank_name || j.bank || "—"}</span>
                     </td>
                     <td className="text-center">
                       {j.currency_code ? (

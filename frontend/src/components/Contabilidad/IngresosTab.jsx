@@ -110,14 +110,14 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                             {loading ? (
                                 <tr><td colSpan={8} className="py-20 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">Sincronizando ingresos...</td></tr>
                             ) : incomes.length === 0 ? (
-                                <tr><td colSpan={8} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic opacity-40">Sin ingresos registrados</td></tr>
+                                <tr><td colSpan={8} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic">Sin ingresos registrados</td></tr>
                             ) : incomes.map(inc => (
                                 <tr key={inc.id} className="group">
                                     <td><span className="text-[11px] font-black text-brand-500 tracking-tight">{inc.reference || `#${inc.id}`}</span></td>
                                     <td><span className={`badge shadow-none ${STATUS_BADGE[inc.status] || 'badge-success'}`}>{inc.status}</span></td>
                                     <td className="truncate max-w-[200px]">
                                         <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight truncate">{inc.description}</span>
-                                        {inc.notes && <div className="text-[9px] font-bold text-content-subtle opacity-50 mt-0.5 truncate">{inc.notes}</div>}
+                                        {inc.notes && <div className="text-[9px] font-bold text-content-subtle mt-0.5 truncate">{inc.notes}</div>}
                                     </td>
                                     <td><span className="text-[10px] font-black text-content-subtle uppercase tracking-wide">{inc.category_name}</span></td>
                                     <td><span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{inc.journal_name || "—"}</span></td>

@@ -99,7 +99,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
 
             {options.length === 0 && (
               <div className="px-5 py-6 text-center">
-                <div className="text-[10px] font-bold text-content-subtle opacity-30 uppercase tracking-widest italic">No hay resultados</div>
+                <div className="text-[10px] font-bold text-content-subtle uppercase tracking-widest italic">No hay resultados</div>
               </div>
             )}
           </div>

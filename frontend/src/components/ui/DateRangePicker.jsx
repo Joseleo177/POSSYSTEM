@@ -268,7 +268,7 @@ export default function DateRangePicker({ from, to, setFrom, setTo, onRangeChang
         >
           {/* Sidebar Shortcuts - Ultra Tighter */}
           <div className="w-16 border-r border-border/10 dark:border-white/5 py-2 flex flex-col gap-1 px-1 shrink-0 bg-surface-2/30 dark:bg-white/[0.02]">
-            <div className="text-[7px] font-black text-content-subtle opacity-30 uppercase tracking-widest mb-1 px-1.5">Atajos</div>
+            <div className="text-[7px] font-black text-content-subtle uppercase tracking-widest mb-1 px-1.5">Atajos</div>
             {[
               { id: "today", label: "Hoy" },
               { id: "yesterday", label: "Ayer" },
@@ -321,7 +321,7 @@ export default function DateRangePicker({ from, to, setFrom, setTo, onRangeChang
               <>
                 <div className="grid grid-cols-7 gap-1 mb-1">
                   {["L", "M", "X", "J", "V", "S", "D"].map(d => (
-                    <div key={d} className="h-6 flex items-center justify-center text-[9px] font-black text-content-subtle opacity-30">{d}</div>
+                    <div key={d} className="h-6 flex items-center justify-center text-[9px] font-black text-content-subtle">{d}</div>
                   ))}
                 </div>
                 <div className="grid grid-cols-7 gap-0.5">
