@@ -193,6 +193,12 @@ export const api = {
       return request("/settings/logo", { method: "POST", body: fd });
     },
   },
+  // Enlace del catálogo público (requiere permiso "config")
+  catalogLink: {
+    get:    () => request("/catalog-link"),
+    create: () => request("/catalog-link", { method: "POST" }),
+    revoke: () => request("/catalog-link", { method: "DELETE" }),
+  },
   backup: {
     list:     ()           => request("/backup"),
     trigger:  ()           => request("/backup/trigger", { method: "POST" }),
@@ -334,4 +340,21 @@ export const api = {
   creditNotes: {
     getAll: (params = {}) => request("/credit-notes?" + new URLSearchParams(params)),
   },
+};
+
+// ── Catálogo público ──────────────────────────────────────────
+// Usa fetch plano a propósito: request() adjunta el token de sesión y, ante un 401,
+// intenta refrescarlo y puede recargar la página. Nada de eso tiene sentido para un
+// cliente que solo abrió un enlace, y no queremos tocarle el localStorage.
+async function publicRequest(path) {
+  const res = await fetch(`${BASE}${path}`);
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw buildApiError(res.status, json.message, json.code, json);
+  return json;
+}
+
+export const publicApi = {
+  getStore: (token) => publicRequest(`/public/catalog/${encodeURIComponent(token)}`),
+  getProducts: (token, params = {}) =>
+    publicRequest(`/public/catalog/${encodeURIComponent(token)}/products?` + new URLSearchParams(params)),
 };

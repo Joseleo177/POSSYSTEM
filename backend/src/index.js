@@ -83,6 +83,10 @@ app.use(auditLog);
 app.use("/api/auth/login", loginLimiter);   // strict limiter on login
 app.use("/api/auth",       require("./routes/auth"));
 
+// Catálogo público: se accede por token, sin sesión. Lleva su propio rate limit y
+// resuelve el company_id desde el token (ver services/publicCatalogService.js).
+app.use("/api/public/catalog", require("./routes/publicCatalog").publicRouter);
+
 // ── Protected routes ──────────────────────────────────────────
 const { auth, permit } = require("./middleware/auth");
 
@@ -111,6 +115,7 @@ app.use("/api/promotions",       require("./routes/promotions"));        // auth
 app.use("/api/credit-notes",     require("./routes/creditNotes"));       // auth dentro
 app.use("/api/incomes",          require("./routes/incomes"));            // auth dentro
 app.use("/api/backup",           require("./routes/backup"));             // auth+config dentro
+app.use("/api/catalog-link",     require("./routes/publicCatalog").adminRouter); // auth+config dentro
 
 app.use("/api/events",           require("./routes/events"));             // SSE stream
 
