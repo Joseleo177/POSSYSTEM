@@ -187,6 +187,7 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
         <div class="meta-row"><span class="meta-label">Fecha:</span><span class="meta-value">${dateStr}</span></div>
         ${s.employee_name ? `<div class="meta-row"><span class="meta-label">Cajero:</span><span class="meta-value">${s.employee_name}</span></div>` : ""}
         ${s.customer_name ? `<div class="meta-row"><span class="meta-label">Cliente:</span><span class="meta-value">${s.customer_name}</span></div>` : ""}
+        ${s.customer_rif ? `<div class="meta-row"><span class="meta-label">C.I./RIF:</span><span class="meta-value">${s.customer_rif}</span></div>` : ""}
     </div>
 
     <table>

@@ -151,19 +151,18 @@ export default function CartSidebar({
                 <div className="space-y-4 relative">
                     <div className="relative group">
                         {selectedCustomer ? (
-                            <div className="flex items-center justify-between px-4 bg-brand-500/10 border border-brand-500/20 rounded-xl">
+                            <div className="flex items-center justify-between px-4 py-2 bg-brand-500/10 border border-brand-500/20 rounded-xl">
                                 <div className="flex items-center gap-3 min-w-0">
                                     <span className="text-xl text-brand-500">
                                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                                     </span>
                                     <div className="min-w-0">
-                                    <div className="hidden lg:block text-[11px] font-black uppercase tracking-wide text-brand-500">Cliente</div>
-                                    <div className="text-sm font-black text-content dark:text-white truncate lg:mt-0.5">{selectedCustomer.name}</div>
-                                    {selectedCustomer.rif && (
-                                        <div className="text-[11px] font-black tracking-wide text-brand-600 dark:text-brand-400 truncate">{selectedCustomer.rif}</div>
-                                    )}
+                                        <div className="text-sm font-black text-content dark:text-white truncate">{selectedCustomer.name}</div>
+                                        {selectedCustomer.rif && (
+                                            <div className="text-[11px] font-black tracking-wide text-brand-600 dark:text-brand-400 truncate">{selectedCustomer.rif}</div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
                             <button onClick={() => setSelectedCustomer(null)} className="w-7 h-7 lg:w-8 lg:h-8 rounded-full bg-brand-500/20 text-brand-500 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all shrink-0">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
