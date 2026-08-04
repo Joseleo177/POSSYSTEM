@@ -53,9 +53,13 @@ export default function EmployeesTab({ notify }) {
         if (!editId && !form.password)
             return notify("La contraseña es requerida para nuevos empleados", "err");
         setLoading(true);
+        // El input lleva la clase `uppercase`, que es solo CSS: se ve en mayúsculas pero
+        // el valor viaja tal cual se tecleó. Se normaliza aquí para que también cubra
+        // pegado, autocompletado del navegador y la edición de un empleado existente.
+        const payload = { ...form, full_name: form.full_name.trim().toUpperCase() };
         try {
-            if (editId) { await api.employees.update(editId, form); notify("Empleado actualizado correctamente"); }
-            else        { await api.employees.create(form);          notify("Empleado creado correctamente"); }
+            if (editId) { await api.employees.update(editId, payload); notify("Empleado actualizado correctamente"); }
+            else        { await api.employees.create(payload);          notify("Empleado creado correctamente"); }
             closeModal(); await load();
         } catch (e) { notify(e.message, "err"); }
         finally { setLoading(false); }
