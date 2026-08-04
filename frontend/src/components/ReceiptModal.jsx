@@ -132,7 +132,7 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
         .store-name { font-size: ${printerWidth === 58 ? "10px" : "13px"}; font-weight: 800; text-transform: uppercase; }
         .store-slogan { font-size: ${printerWidth === 58 ? "6.5px" : "8.5px"}; font-style: italic; margin-top: 0.5mm; }
         .store-rif { font-size: ${printerWidth === 58 ? "7.5px" : "9.5px"}; margin-top: 0.5mm; }
-        .store-info { font-size: ${printerWidth === 58 ? "7px" : "8.5px"}; color: #333; margin-top: 0.5mm; }
+        .store-info { font-size: ${printerWidth === 58 ? "7px" : "8.5px"}; color: #000; margin-top: 0.5mm; }
 
         .doc-header { text-align: center; margin-bottom: 2mm; }
         .doc-title { font-size: ${printerWidth === 58 ? "8.5px" : "10.5px"}; font-weight: 800; text-transform: uppercase; }
@@ -150,10 +150,12 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
         /* Separación entre columnas: sin ella cantidad, P.U. y total se leen como un solo bloque. */
         .td-center { text-align: center; padding-left: 1.5mm; padding-right: 1.5mm; }
         .td-right { text-align: right; padding-left: 1.5mm; }
-        /* La cantidad va en gris y con "x" delante para que no se confunda con un monto. */
-        .qty { color: #444; font-weight: 400; white-space: nowrap; }
-        .unit-price { color: #444; font-weight: 400; white-space: nowrap; }
-        .line-total { font-weight: 800; white-space: nowrap; }
+        /* TODO el texto va en negro puro: la térmica es de 1 bit, no imprime grises. Un #444
+           lo simula con un patrón de puntos disperso y sale lavado, casi ilegible.
+           La jerarquía entre columnas se logra con el grosor y la "x" de la cantidad. */
+        .qty { color: #000; font-weight: 700; white-space: nowrap; }
+        .unit-price { color: #000; font-weight: 700; white-space: nowrap; }
+        .line-total { color: #000; font-weight: 800; white-space: nowrap; }
 
         .totals { border-top: 1px dashed #000; padding-top: 2mm; margin-bottom: 2mm; }
         .total-row { display: flex; justify-content: space-between; font-size: ${printerWidth === 58 ? "8px" : "10px"}; margin-bottom: 0.5mm; }

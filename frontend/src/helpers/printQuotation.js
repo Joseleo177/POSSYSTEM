@@ -54,21 +54,21 @@ export function printQuotationDoc(quot, companyInfo, baseCurrency, activeCurrenc
         .doc-warning { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }
         .meta { margin-bottom: 8px; font-size: 10.5px; }
         .meta-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
-        .meta-label { color: #555; font-weight: 500; }
+        .meta-label { color: #000; font-weight: 600; }
         .meta-value { font-weight: 700; text-align: right; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
         th { font-size: 9px; font-weight: 800; text-transform: uppercase; padding: 6px 4px; text-align: left; border-bottom: 1.5px solid #000; }
         th:nth-child(2) { text-align: center; }
         th:nth-child(3), th:nth-child(4) { text-align: right; }
-        td { padding: 5px 4px; font-size: 10px; vertical-align: top; border-bottom: 0.5px dashed #eee; }
+        td { padding: 5px 4px; font-size: 10px; vertical-align: top; border-bottom: 0.5px dashed #000; }
         .item-name { font-weight: 600; line-height: 1.2; }
         .td-center { text-align: center; }
         .td-right { text-align: right; }
         .totals { border-top: 1.5px solid #000; padding-top: 6px; }
         .total-row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 11px; }
-        .total-row.big { font-weight: 800; font-size: 14px; margin-top: 4px; padding-top: 4px; border-top: 1px solid #eee; }
+        .total-row.big { font-weight: 800; font-size: 14px; margin-top: 4px; padding-top: 4px; border-top: 1px solid #000; }
         .total-row.discount { font-style: italic; }
-        .footer { text-align: center; margin-top: 15px; font-size: 9px; color: #333; font-weight: 500; border-top: 1px dashed #ccc; padding-top: 8px; }
+        .footer { text-align: center; margin-top: 15px; font-size: 9px; color: #000; font-weight: 600; border-top: 1px dashed #000; padding-top: 8px; }
     </style>
 </head>
 <body>
