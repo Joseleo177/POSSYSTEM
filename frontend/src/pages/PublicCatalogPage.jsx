@@ -995,6 +995,7 @@ export default function PublicCatalogPage({ token }) {
 // tenga ficha o no, confirmar quién es o dejar sus datos. La ficha NO se crea aquí — se
 // crea con el primer pedido, para que entrar a mirar no genere clientes fantasma.
 function IdentityGate({ token, store, onIdentified }) {
+    const { dark, toggle } = useTheme();
     const [step, setStep] = useState("doc"); // doc | confirm | phone | register
     const [prefix, setPrefix] = useState("V");
     const [number, setNumber] = useState("");
