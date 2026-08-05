@@ -1,6 +1,6 @@
 import Modal from "./ui/Modal";
 import { useApp } from "../context/AppContext";
-import { fmtMoney, fmtDate, resolveImageUrl } from "../helpers";
+import { fmtMoney, fmtDate, resolveImageUrl, printInvoiceLetter } from "../helpers";
 
 const fmt = fmtMoney;
 
@@ -354,15 +354,26 @@ export default function ReceiptModal({ open, onClose, sale }) {
             {/* Footer */}
             <div className="text-center text-xs text-content-muted dark:text-content-dark-muted mb-4">¡Gracias por su compra!</div>
 
-            {/* Botones */}
+            {/* Botones. IMPRIMIR saca el ticket térmico (rollo); PDF genera la misma factura
+                en tamaño carta, que es la que se le envía al cliente por WhatsApp o correo:
+                el ticket guardado como PDF sale como una tira angosta ilegible. */}
             <div className="flex gap-2.5">
                 <button onClick={onClose} className="btn-md btn-secondary w-full">
                     CERRAR
                 </button>
                 <button
+                    onClick={() => printInvoiceLetter({ sale: s, totals, companyInfo })}
+                    className="btn-md btn-secondary w-full"
+                    title="Factura tamaño carta, para enviar al cliente por WhatsApp o correo"
+                    style={{ flex: 1.4 }}
+                >
+                    📄 PDF
+                </button>
+                <button
                     onClick={() => printReceipt(sale, companyInfo, displayCurrency, printerWidth)}
                     className="btn-md btn-primary w-full"
-                    style={{ flex: 2 }}
+                    title="Ticket para la impresora térmica"
+                    style={{ flex: 1.8 }}
                 >
                     🖨 IMPRIMIR
                 </button>
