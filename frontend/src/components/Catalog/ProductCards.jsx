@@ -47,17 +47,20 @@ export default function ProductCards({
                             </div>
                         )}
 
-                        <div className="aspect-square bg-surface-2 dark:bg-white/5 relative">
+                        {/* La imagen va en posición absoluta: aspect-square define un alto
+                            preferido, no un tope, así que una foto vertical en flujo normal
+                            estiraba la tarjeta y descuadraba toda la fila de la grilla. */}
+                        <div className="aspect-square bg-surface-2 dark:bg-white/5 relative overflow-hidden">
                             {p.image_url ? (
                                 <img
                                     src={resolveImageUrl(p.image_url)}
                                     alt={p.name}
                                     loading="lazy"
                                     onError={imgRetryOnError}
-                                    className="w-full h-full object-cover"
+                                    className="absolute inset-0 w-full h-full object-cover"
                                 />
                             ) : (
-                                <div className="w-full h-full flex items-center justify-center text-2xl font-black text-content-subtle opacity-30">
+                                <div className="absolute inset-0 flex items-center justify-center text-2xl font-black text-content-subtle opacity-30">
                                     {p.name.charAt(0)}
                                 </div>
                             )}
