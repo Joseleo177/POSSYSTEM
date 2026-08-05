@@ -363,7 +363,12 @@ export default function PublicCatalogPage({ token }) {
                             className="w-12 h-12 rounded-xl object-cover shrink-0 border border-border dark:border-white/10"
                         />
                     )}
-                    <div className="min-w-0 shrink-0">
+                    {/* Sin shrink-0: este bloque es el que debe ceder ancho cuando la fila se
+                        queda corta. Con `shrink-0` anulaba al `min-w-0`, el `truncate` del
+                        título no llegaba a activarse nunca y, como el logo, la tasa y los
+                        botones tampoco encogen, la fila desbordaba y la página entera se podía
+                        arrastrar de lado. */}
+                    <div className="min-w-0">
                         <h1 className="text-base font-black text-content dark:text-white uppercase tracking-tight truncate">
                             {store?.name || "Catálogo"}
                         </h1>
