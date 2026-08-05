@@ -53,7 +53,16 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     const currentStatus  = saleBalance?.status  ?? receipt?.status ?? "pendiente";
     // Venta creada pero sin desenlace: ni cobrada ni facturada a crédito.
     const isUnresolved   = ["borrador", "espera"].includes(currentStatus);
-    const statusLabel    = currentStatus === "pagado" ? "Completado" : currentStatus === "parcial" ? "Abono Parcial" : currentStatus === "borrador" ? "Borrador" : "Pendiente";
+    // La insignia describe el ESTADO de la factura, no la acción que se acaba de hacer.
+    // "Abono parcial" nombraba el movimiento; lo que importa aquí es que queda saldo.
+    const STATUS_LABELS = {
+        pagado:    "Pagada",
+        parcial:   "Saldo pendiente",
+        borrador:  "Sin cobrar",
+        espera:    "En espera",
+        pendiente: "Por cobrar",
+    };
+    const statusLabel = STATUS_LABELS[currentStatus] || "Por cobrar";
     const badgeClass     = currentStatus === "pagado"
         ? "bg-green-500/10 text-green-500 border-green-500/20"
         : currentStatus === "parcial"
@@ -100,9 +109,21 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                         </>
                     )}
                     <div className="flex justify-between items-center pt-1">
-                        <span className="text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40">Total a Pagar</span>
-                        <span className="text-xl font-black text-brand-500 tabular-nums">{fmt(receipt.total)}</span>
+                        <span className="text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40">
+                            {currentStatus === "parcial" ? "Total de la factura" : "Total a Pagar"}
+                        </span>
+                        <span className={`text-xl font-black tabular-nums ${currentStatus === "parcial" ? "text-content-muted" : "text-brand-500"}`}>
+                            {fmt(receipt.total)}
+                        </span>
                     </div>
+                    {/* Con un abono parcial, mostrar solo el total contradice la insignia:
+                        lo que el cajero necesita ver es cuánto falta por cobrar. */}
+                    {currentStatus === "parcial" && (
+                        <div className="flex justify-between items-center pt-1 border-t border-border/20 dark:border-white/5 mt-1">
+                            <span className="text-[11px] font-black uppercase tracking-wide text-warning">Falta por cobrar</span>
+                            <span className="text-xl font-black text-warning tabular-nums">{fmt(currentBalance)}</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Acciones */}
