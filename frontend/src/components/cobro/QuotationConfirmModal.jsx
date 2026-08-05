@@ -5,7 +5,7 @@ import { printQuotationDoc } from "../../helpers";
 import { useEffect } from "react";
 
 export default function QuotationConfirmModal({ quotation, onNext }) {
-    const { companyInfo, baseCurrency, activeCurrencies, notify } = useApp();
+    const { companyInfo, baseCurrency, activeCurrencies, notify, printerWidth } = useApp();
 
     const receiptRate   = parseFloat(quotation?.exchange_rate || 1);
     const receiptIsBase = receiptRate <= 1;
@@ -28,7 +28,7 @@ export default function QuotationConfirmModal({ quotation, onNext }) {
     const handlePrint = async () => {
         try {
             const res = await api.quotations.getOne(quotation.id);
-            printQuotationDoc(res.data, companyInfo, baseCurrency, activeCurrencies);
+            printQuotationDoc(res.data, companyInfo, baseCurrency, activeCurrencies, printerWidth);
         } catch (e) {
             notify?.(e.message, "err");
         }

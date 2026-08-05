@@ -139,14 +139,14 @@ function QuotDetailModal({ quot, onClose, onPrint, onLoadToCart, onCancel, onDel
 
 export default function CotizacionesTab({ notify, can, fmtPrice }) {
     const q = useQuotations({ notify });
-    const { companyInfo, baseCurrency, activeCurrencies, navigateTo } = useApp();
+    const { companyInfo, baseCurrency, activeCurrencies, navigateTo, printerWidth } = useApp();
     const { loadFromQuotation } = useCart();
     const [showFilterDrop, setShowFilterDrop] = useState(false);
 
     const handlePrint = async (quot) => {
         try {
             const res = await api.quotations.getOne(quot.id);
-            printQuotationDoc(res.data, companyInfo, baseCurrency, activeCurrencies);
+            printQuotationDoc(res.data, companyInfo, baseCurrency, activeCurrencies, printerWidth);
         } catch (e) {
             notify(e.message, "err");
         }

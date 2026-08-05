@@ -94,7 +94,7 @@ function NCDetailModal({ nc, onClose, onPrint, fmt }) {
 }
 
 export default function NotasCreditoTab({ notify, fmtPrice }) {
-  const { baseCurrency, activeCurrencies, companyInfo } = useApp();
+  const { baseCurrency, activeCurrencies, companyInfo, printerWidth } = useApp();
 
   const [items, setItems]       = useState([]);
   const [loading, setLoading]   = useState(false);
@@ -139,7 +139,8 @@ export default function NotasCreditoTab({ notify, fmtPrice }) {
       { ...sale, customer_name: sale.Customer?.name || null, customer_rif: sale.Customer?.rif || null },
       companyInfo,
       baseCurrency,
-      activeCurrencies
+      activeCurrencies,
+      printerWidth
     );
   };
 

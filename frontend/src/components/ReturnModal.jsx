@@ -20,7 +20,7 @@ const EMPTY_REFUND = () => ({
 });
 
 export default function ReturnModal({ open, onClose, sale, onReturnSuccess, notify }) {
-    const { companyInfo, baseCurrency, activeCurrencies, activeJournals } = useApp();
+    const { companyInfo, baseCurrency, activeCurrencies, activeJournals, printerWidth } = useApp();
     const [mode, setMode] = useState("devolucion"); // "devolucion" | "cambio"
     const [returnQtys, setReturnQtys] = useState({});
     const [reason, setReason] = useState("");
@@ -288,7 +288,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
 
                 <div className="px-5 py-4 flex gap-2">
                     <button
-                        onClick={() => printNotaCreditoDoc(returnResult, sale, companyInfo, baseCurrency, activeCurrencies)}
+                        onClick={() => printNotaCreditoDoc(returnResult, sale, companyInfo, baseCurrency, activeCurrencies, printerWidth)}
                         className="flex-1 h-9 rounded-xl border border-border/30 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle hover:text-content dark:hover:text-white transition-all flex items-center justify-center gap-2"
                     >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
