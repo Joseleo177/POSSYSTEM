@@ -66,12 +66,16 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     };
 
     const getPageActions = () => {
-        if (view === "list") return <Button onClick={state.openNew}>+ NUEVA ORDEN</Button>;
+        if (view === "list") return (
+            <Button onClick={state.openNew} className="h-8 px-2.5 sm:px-3 text-[10px]">
+                + <span className="hidden sm:inline">NUEVA ORDEN</span><span className="sm:hidden">NUEVA</span>
+            </Button>
+        );
         if (view === "detail" || view === "new") {
             return (
-                <Button variant="ghost" onClick={() => state.setView("list")} className="h-10 px-4">
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                    VOLVER AL LISTADO
+                <Button variant="ghost" onClick={() => state.setView("list")} className="h-8 px-2.5 sm:px-3 text-[10px]">
+                    <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                    <span className="hidden sm:inline">VOLVER AL LISTADO</span><span className="sm:hidden">VOLVER</span>
                 </Button>
             );
         }
@@ -122,7 +126,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                 {showFilterDrop && (
                                     <>
                                         <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
-                                        <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                                        <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
                                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado de Orden</div>
                                                 <div className="grid grid-cols-3 gap-1.5">

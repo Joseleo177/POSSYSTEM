@@ -34,12 +34,13 @@ export default function LoginScreen({ onLogin }) {
 
       <button
         onClick={toggle}
-        className="fixed top-6 right-6 p-2.5 rounded-xl bg-surface-1/90 border border-border text-content-subtle hover:text-content hover:bg-surface-2 transition-all z-50"
+        title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+        className="fixed top-6 right-6 p-2.5 rounded-xl bg-surface-1 dark:bg-surface-dark-2 border border-border dark:border-white/10 text-content-subtle dark:text-amber-400 hover:text-content dark:hover:text-amber-300 hover:bg-surface-2 dark:hover:bg-white/10 transition-all z-50 shadow-sm"
       >
         {dark ? (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+          <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
         ) : (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+          <svg className="w-5 h-5 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
         )}
       </button>
 

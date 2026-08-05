@@ -1,5 +1,5 @@
 export const Button = ({ children, variant = "primary", className = "", ...props }) => {
-    const baseStyles = "px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all active:scale-95 shrink-0 flex items-center justify-center gap-2 disabled:opacity-50";
+    const baseStyles = "px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all active:scale-95 shrink-0 flex items-center justify-center gap-2 disabled:opacity-50 whitespace-nowrap";
 
     const variants = {
         primary: "bg-brand-500 text-black hover:bg-brand-400 shadow-lg shadow-brand-500/20",

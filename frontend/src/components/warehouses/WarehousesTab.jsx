@@ -77,16 +77,20 @@ export default function WarehousesTab({ notify, currentEmployee }) {
 
     // ── Acciones dinámicas por sub-tab ────────────────────────
     const pageActions = subTab === "almacenes" ? (
-        <Button onClick={openNewWarehouse}>+ Nuevo Almacén</Button>
+        <Button onClick={openNewWarehouse} className="h-8 px-2.5 sm:px-3 text-[10px]">
+            + <span className="hidden sm:inline">Nuevo Almacén</span><span className="sm:hidden">Nuevo</span>
+        </Button>
     ) : subTab === "stock" && selectedWarehouse ? (
         <Button
             onClick={openAddStock}
-            className="bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none"
+            className="h-8 px-2.5 sm:px-3 text-[10px] bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none"
         >
-            + Registrar Stock
+            + <span className="hidden sm:inline">Registrar Stock</span><span className="sm:hidden">Stock</span>
         </Button>
     ) : subTab === "transferencias" ? (
-        <Button onClick={() => setTransferModal(true)}>+ Nueva Transferencia</Button>
+        <Button onClick={() => setTransferModal(true)} className="h-8 px-2.5 sm:px-3 text-[10px]">
+            + <span className="hidden sm:inline">Nueva Transferencia</span><span className="sm:hidden">Transferir</span>
+        </Button>
     ) : null;
 
     // ── Título dinámico ───────────────────────────────────────

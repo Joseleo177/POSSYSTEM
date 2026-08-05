@@ -28,9 +28,14 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
       const menuH = Math.min(256, options.length * 36 + 16);
       const spaceBelow = window.innerHeight - r.bottom;
       const openUp = spaceBelow < menuH + 16 && r.top > menuH + 16;
+      let left = r.left;
+      const menuWidth = r.width;
+      if (left + menuWidth > window.innerWidth - 12) {
+        left = Math.max(12, window.innerWidth - menuWidth - 12);
+      }
       setPos({
         top: openUp ? r.top - menuH - 6 : r.bottom + 6,
-        left: r.left,
+        left,
         width: r.width,
         openUp,
       });

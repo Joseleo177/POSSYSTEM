@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { publicApi } from "../services/api";
 import { resolveImageUrl, imgRetryOnError } from "../helpers";
 import { isIntegerUnit, fmtQtyUnit } from "../helpers/unitFormatter";
+import { useTheme } from "../hooks/useTheme";
 
 const PAGE_SIZE = 24;
 
@@ -19,16 +20,17 @@ const docMaxLen = (prefix) => (["J", "G"].includes(prefix) ? 9 : 8);
 // existe en el navegador del cliente y termina en un mensaje de WhatsApp. No se crea
 // ninguna venta ni se aparta inventario: eso lo hace el comercio a mano.
 export default function PublicCatalogPage({ token }) {
-    const [store, setStore]           = useState(null);
+    const { dark, toggle } = useTheme();
+    const [store, setStore] = useState(null);
     const [currencies, setCurrencies] = useState([]);
     const [categories, setCategories] = useState([]);
-    const [products, setProducts]     = useState([]);
-    const [total, setTotal]           = useState(0);
-    const [search, setSearch]         = useState("");
-    const [category, setCategory]     = useState("");
-    const [loading, setLoading]       = useState(true);
+    const [products, setProducts] = useState([]);
+    const [total, setTotal] = useState(0);
+    const [search, setSearch] = useState("");
+    const [category, setCategory] = useState("");
+    const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
-    const [error, setError]           = useState(null);
+    const [error, setError] = useState(null);
     const reqRef = useRef(0);
 
     // Carrito: se guarda por token para que cerrar la pestaña sin querer no borre lo
@@ -38,9 +40,9 @@ export default function PublicCatalogPage({ token }) {
         try { return JSON.parse(localStorage.getItem(`catalog_cart_${token}`)) || []; }
         catch { return []; }
     });
-    const [cartOpen, setCartOpen]         = useState(false);
-    const [showCats, setShowCats]         = useState(false);
-    const [delivery, setDelivery]         = useState("");
+    const [cartOpen, setCartOpen] = useState(false);
+    const [showCats, setShowCats] = useState(false);
+    const [delivery, setDelivery] = useState("");
 
     // Identidad del visitante. Se recuerda en el navegador para que no tenga que
     // escribir su cédula cada vez que abre el enlace.
@@ -55,10 +57,35 @@ export default function PublicCatalogPage({ token }) {
         try { localStorage.setItem(identityKey, JSON.stringify(next)); } catch { /* modo privado */ }
     };
 
+    const [profileOpen, setProfileOpen] = useState(false);
+    const [editingProfile, setEditingProfile] = useState(false);
+    const [editName, setEditName] = useState("");
+    const [editPhone, setEditPhone] = useState("");
+
+    const openProfileModal = () => {
+        if (!identity) return;
+        setEditName(identity.name || "");
+        setEditPhone(identity.phone || "");
+        setEditingProfile(false);
+        setProfileOpen(true);
+    };
+
+    const handleSaveProfile = () => {
+        if (!identity) return;
+        const updated = {
+            ...identity,
+            name: editName.trim(),
+            phone: editPhone.trim(),
+        };
+        saveIdentity(updated);
+        setEditingProfile(false);
+    };
+
     const forgetIdentity = () => {
         setIdentity(null);
         setCartOpen(false);
         setOrdersOpen(false);
+        setProfileOpen(false);
         try { localStorage.removeItem(identityKey); } catch { /* modo privado */ }
     };
 
@@ -71,10 +98,10 @@ export default function PublicCatalogPage({ token }) {
         try { return JSON.parse(localStorage.getItem(`catalog_placed_${token}`)) || []; }
         catch { return []; }
     });
-    const [ordersOpen, setOrdersOpen]       = useState(false);
-    const [myOrders, setMyOrders]           = useState(null);
+    const [ordersOpen, setOrdersOpen] = useState(false);
+    const [myOrders, setMyOrders] = useState(null);
     const [ordersLoading, setOrdersLoading] = useState(false);
-    const [ordersError, setOrdersError]     = useState(null);
+    const [ordersError, setOrdersError] = useState(null);
 
     const rememberPlaced = (id) => {
         setPlacedIds(prev => {
@@ -115,11 +142,11 @@ export default function PublicCatalogPage({ token }) {
     // Cuántos siguen en curso, para el distintivo de la cabecera.
     const openOrdersCount = (myOrders || []).filter(o => ["enviado", "confirmado"].includes(o.stage)).length;
 
-    const [sending, setSending]           = useState(false);
-    const [sendError, setSendError]       = useState(null);
+    const [sending, setSending] = useState(false);
+    const [sendError, setSendError] = useState(null);
     // Pedido ya registrado en el servidor. Mientras exista, el panel muestra la
     // confirmación en vez del carrito.
-    const [placedOrder, setPlacedOrder]   = useState(null);
+    const [placedOrder, setPlacedOrder] = useState(null);
     // Clave de idempotencia del envío en curso: sobrevive a los reintentos y solo se
     // renueva cuando el pedido entra. Sin ella, un doble toque o un reintento por señal
     // mala le deja al comercio el mismo pedido dos veces en la lista.
@@ -130,7 +157,7 @@ export default function PublicCatalogPage({ token }) {
     }, [cart, cartKey]);
 
     const baseCur = currencies.find(c => c.is_base) || null;
-    const altCur  = currencies.find(c => !c.is_base) || null;
+    const altCur = currencies.find(c => !c.is_base) || null;
 
     const fmt = (amount, cur) => {
         if (!cur) return "";
@@ -211,7 +238,7 @@ export default function PublicCatalogPage({ token }) {
     const waHref = (store?.whatsapp && placedOrder)
         ? `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(
             `Hola, acabo de enviar el pedido #${placedOrder.id} a nombre de ${identity?.name || ""}.`
-          )}`
+        )}`
         : null;
 
     const closeConfirmation = () => {
@@ -266,7 +293,7 @@ export default function PublicCatalogPage({ token }) {
         setLoadingMore(true);
         publicApi.getProducts(token, { search, category_id: category, limit: PAGE_SIZE, offset: products.length })
             .then(r => setProducts(p => [...p, ...(r.data.products || [])]))
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => setLoadingMore(false));
     }, [token, search, category, products.length, total, loadingMore]);
 
@@ -300,7 +327,7 @@ export default function PublicCatalogPage({ token }) {
                             className="w-12 h-12 rounded-xl object-cover shrink-0 border border-border dark:border-white/10"
                         />
                     )}
-                    <div className="min-w-0">
+                    <div className="min-w-0 shrink-0">
                         <h1 className="text-base font-black text-content dark:text-white uppercase tracking-tight truncate">
                             {store?.name || "Catálogo"}
                         </h1>
@@ -308,36 +335,64 @@ export default function PublicCatalogPage({ token }) {
                             <p className="text-[11px] font-bold text-content-muted italic truncate">{store.slogan}</p>
                         )}
                     </div>
-                    {/* Seguimiento de los pedidos propios. El distintivo cuenta los que
-                        siguen en curso, para que se note sin tener que abrir nada. */}
-                    {identity && (
-                        <button
-                            onClick={openMyOrders}
-                            className="ml-auto shrink-0 h-11 px-3.5 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 flex items-center gap-2 text-content-muted hover:text-brand-500 hover:border-brand-500/40 transition-colors"
-                        >
-                            <span className="relative">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-                            {/* Contador sobre el icono: en móvil el texto se oculta y el
-                                distintivo tiene que seguir viéndose. */}
-                            {openOrdersCount > 0 && (
-                                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-brand-500 text-black text-[9px] font-black flex items-center justify-center tabular-nums">
-                                    {openOrdersCount}
-                                </span>
-                            )}
-                            </span>
-                            <span className="hidden sm:inline text-[11px] font-black uppercase tracking-widest">
-                                Mis pedidos
-                            </span>
-                        </button>
-                    )}
+
+                    {/* Tasa de cambio al centro */}
                     {altCur && baseCur && (
-                        <div className={`text-right shrink-0 hidden sm:block ${identity ? "pl-4" : "ml-auto"}`}>
-                            <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle">Tasa</div>
-                            <div className="text-[11px] font-black text-brand-500 tabular-nums">
+                        <div className="text-center mx-auto shrink-0 hidden sm:block px-3.5 py-1.5 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 shadow-sm">
+                            <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle">Tasa de Cambio</div>
+                            <div className="text-xs font-black text-brand-500 tabular-nums">
                                 {altCur.symbol}{altCur.exchange_rate.toLocaleString("es-VE", { maximumFractionDigits: 2 })}
                             </div>
                         </div>
                     )}
+
+                    {/* Acciones del usuario a la derecha */}
+                    <div className="ml-auto flex items-center gap-2 shrink-0">
+                        {identity && (
+                            <>
+                                <button
+                                    onClick={openMyOrders}
+                                    className="shrink-0 h-11 px-3.5 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 flex items-center gap-2 text-content-muted hover:text-brand-500 hover:border-brand-500/40 transition-colors"
+                                >
+                                    <span className="relative">
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                        {openOrdersCount > 0 && (
+                                            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-brand-500 text-black text-[9px] font-black flex items-center justify-center tabular-nums">
+                                                {openOrdersCount}
+                                            </span>
+                                        )}
+                                    </span>
+                                    <span className="hidden sm:inline text-[11px] font-black uppercase tracking-widest">
+                                        Mis pedidos
+                                    </span>
+                                </button>
+
+                                <button
+                                    onClick={openProfileModal}
+                                    className="shrink-0 h-11 px-3 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 flex items-center gap-2 text-content-muted hover:text-brand-500 hover:border-brand-500/40 transition-colors"
+                                    title="Ver mi perfil"
+                                >
+                                    <div className="w-7 h-7 rounded-xl bg-brand-500/15 text-brand-500 flex items-center justify-center text-xs font-black uppercase">
+                                        {(identity.name || identity.document || "U").charAt(0)}
+                                    </div>
+                                    <span className="hidden md:inline text-[11px] font-black uppercase tracking-widest max-w-[100px] truncate">
+                                        {identity.name ? identity.name.split(" ")[0] : identity.document}
+                                    </span>
+                                </button>
+                            </>
+                        )}
+                        <button
+                            onClick={toggle}
+                            title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+                            className="w-11 h-11 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 flex items-center justify-center text-content-muted hover:text-content dark:hover:text-white transition-all shrink-0"
+                        >
+                            {dark ? (
+                                <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                            ) : (
+                                <svg className="w-5 h-5 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                            )}
+                        </button>
+                    </div>
                 </div>
 
                 {/* Buscador y filtro en una sola fila: la lista de categorías ocupaba un
@@ -360,11 +415,10 @@ export default function PublicCatalogPage({ token }) {
                         <div className="relative shrink-0">
                             <button
                                 onClick={() => setShowCats(v => !v)}
-                                className={`h-11 px-3.5 rounded-2xl border flex items-center gap-2 text-[11px] font-black uppercase tracking-widest transition-all ${
-                                    category
+                                className={`h-11 px-3.5 rounded-2xl border flex items-center gap-2 text-[11px] font-black uppercase tracking-widest transition-all ${category
                                         ? "bg-brand-500 text-black border-brand-500"
                                         : "bg-surface-2 dark:bg-white/5 border-border dark:border-white/10 text-content-muted hover:text-content dark:hover:text-white"
-                                }`}
+                                    }`}
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" /></svg>
                                 <span className="hidden sm:inline">
@@ -628,20 +682,10 @@ export default function PublicCatalogPage({ token }) {
                             )}
                         </div>
 
-                        <div className="px-4 py-3 border-t border-border dark:border-white/5 flex items-center justify-between">
-                            <button onClick={forgetIdentity} className="text-[10px] font-black uppercase tracking-wide text-danger hover:underline">
-                                No soy yo
+                        <div className="px-4 py-3 border-t border-border dark:border-white/5 text-center">
+                            <button onClick={() => setOrdersOpen(false)} className="text-[11px] font-black uppercase tracking-widest text-content-subtle hover:text-content dark:hover:text-white">
+                                Cerrar
                             </button>
-                            {store?.whatsapp && (
-                                <a
-                                    href={`https://wa.me/${store.whatsapp}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-[10px] font-black uppercase tracking-wide text-content-subtle hover:text-brand-500"
-                                >
-                                    Escribir a la tienda
-                                </a>
-                            )}
                         </div>
                     </div>
                 </div>
@@ -707,112 +751,241 @@ export default function PublicCatalogPage({ token }) {
                                 </div>
                             </div>
                         ) : (
-                        <>
-                        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-                            {cart.map(it => (
-                                <div key={it.id} className="flex items-center gap-2.5">
-                                    <div className="w-11 h-11 rounded-xl bg-surface-2 dark:bg-white/5 overflow-hidden shrink-0 relative">
-                                        {it.image_url ? (
-                                            <img src={resolveImageUrl(it.image_url)} alt={it.name} onError={imgRetryOnError}
-                                                className="absolute inset-0 w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="absolute inset-0 flex items-center justify-center text-base font-black text-brand-500/30">
-                                                {it.name.charAt(0)}
+                            <>
+                                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                                    {cart.map(it => (
+                                        <div key={it.id} className="flex items-center gap-2.5">
+                                            <div className="w-11 h-11 rounded-xl bg-surface-2 dark:bg-white/5 overflow-hidden shrink-0 relative">
+                                                {it.image_url ? (
+                                                    <img src={resolveImageUrl(it.image_url)} alt={it.name} onError={imgRetryOnError}
+                                                        className="absolute inset-0 w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="absolute inset-0 flex items-center justify-center text-base font-black text-brand-500/30">
+                                                        {it.name.charAt(0)}
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="text-[13px] font-black uppercase tracking-tight text-content dark:text-white leading-tight line-clamp-2">
-                                            {it.name}
-                                        </div>
-                                        <div className="text-[12px] font-bold text-content-muted tabular-nums mt-0.5">
-                                            {fmtQtyUnit(it.qty, it.unit)} · {fmt(parseFloat(it.price) * it.qty, baseCur)}
-                                        </div>
-                                    </div>
-                                    {/* Objetivos de toque de 40px: los de 28 se fallaban con el
+                                            <div className="min-w-0 flex-1">
+                                                <div className="text-[13px] font-black uppercase tracking-tight text-content dark:text-white leading-tight line-clamp-2">
+                                                    {it.name}
+                                                </div>
+                                                <div className="text-[12px] font-bold text-content-muted tabular-nums mt-0.5">
+                                                    {fmtQtyUnit(it.qty, it.unit)} · {fmt(parseFloat(it.price) * it.qty, baseCur)}
+                                                </div>
+                                            </div>
+                                            {/* Objetivos de toque de 40px: los de 28 se fallaban con el
                                         pulgar, y equivocarse aquí cambia lo que el cliente pide.
                                         − y + van unidos como un solo control para que los tres
                                         botones grandes sigan cabiendo en un teléfono estrecho. */}
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <div className="flex items-center rounded-xl border border-border dark:border-white/10 overflow-hidden">
-                                            <QtyBtn onClick={() => changeQty(it.id, -1)} label="Quitar uno">−</QtyBtn>
-                                            <QtyBtn onClick={() => changeQty(it.id, +1)} label="Agregar uno" divider>+</QtyBtn>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <div className="flex items-center rounded-xl border border-border dark:border-white/10 overflow-hidden">
+                                                    <QtyBtn onClick={() => changeQty(it.id, -1)} label="Quitar uno">−</QtyBtn>
+                                                    <QtyBtn onClick={() => changeQty(it.id, +1)} label="Agregar uno" divider>+</QtyBtn>
+                                                </div>
+                                                <button onClick={() => removeFromCart(it.id)} title="Eliminar" aria-label={`Eliminar ${it.name}`}
+                                                    className="w-10 h-10 rounded-xl flex items-center justify-center text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90 transition-all">
+                                                    <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            </div>
                                         </div>
-                                        <button onClick={() => removeFromCart(it.id)} title="Eliminar" aria-label={`Eliminar ${it.name}`}
-                                            className="w-10 h-10 rounded-xl flex items-center justify-center text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90 transition-all">
-                                            <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                                    ))}
 
-                            <div className="pt-2 space-y-2">
-                                {/* Los datos ya se dieron al entrar; aquí solo se recuerdan para
+                                    <div className="pt-2 space-y-2">
+                                        {/* Los datos ya se dieron al entrar; aquí solo se recuerdan para
                                     que el cliente vea a nombre de quién va el pedido. */}
-                                <div className="rounded-xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 px-3 py-2">
-                                    <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle">A nombre de</div>
-                                    <div className="text-[12px] font-black text-content dark:text-white uppercase truncate">{identity?.name}</div>
-                                    <div className="text-[10px] font-bold text-content-muted tabular-nums truncate">
-                                        {[identity?.document, identity?.phone].filter(Boolean).join(" · ")}
+                                        <div className="rounded-xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 px-3 py-2">
+                                            <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle">A nombre de</div>
+                                            <div className="text-[12px] font-black text-content dark:text-white uppercase truncate">{identity?.name}</div>
+                                            <div className="text-[10px] font-bold text-content-muted tabular-nums truncate">
+                                                {[identity?.document, identity?.phone].filter(Boolean).join(" · ")}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-content-subtle">Entrega o nota</label>
+                                            <input
+                                                value={delivery}
+                                                onChange={e => setDelivery(e.target.value)}
+                                                placeholder="Dirección, hora, retiro en tienda..."
+                                                className="w-full h-9 mt-1 px-3 rounded-xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-[12px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 placeholder:text-content-subtle"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
-                                <div>
-                                    <label className="text-[9px] font-black uppercase tracking-widest text-content-subtle">Entrega o nota</label>
-                                    <input
-                                        value={delivery}
-                                        onChange={e => setDelivery(e.target.value)}
-                                        placeholder="Dirección, hora, retiro en tienda..."
-                                        className="w-full h-9 mt-1 px-3 rounded-xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-[12px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 placeholder:text-content-subtle"
-                                    />
-                                </div>
-                            </div>
-                        </div>
 
-                        <div className="px-4 py-3 border-t border-border dark:border-white/5 space-y-2">
-                            <div className="flex items-baseline justify-between">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Total</span>
-                                <div className="text-right">
-                                    <div className="text-base font-black text-content dark:text-white tabular-nums">{fmt(cartTotal, baseCur)}</div>
-                                    {altCur && (
-                                        <div className="text-[11px] font-black text-content-muted tabular-nums">{fmt(cartTotal, altCur)}</div>
+                                <div className="px-4 py-3 border-t border-border dark:border-white/5 space-y-2">
+                                    <div className="flex items-baseline justify-between">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Total</span>
+                                        <div className="text-right">
+                                            <div className="text-base font-black text-content dark:text-white tabular-nums">{fmt(cartTotal, baseCur)}</div>
+                                            {altCur && (
+                                                <div className="text-[11px] font-black text-content-muted tabular-nums">{fmt(cartTotal, altCur)}</div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {sendError && (
+                                        <p className="text-[10px] font-bold text-danger leading-relaxed">{sendError}</p>
                                     )}
-                                </div>
-                            </div>
 
-                            {sendError && (
-                                <p className="text-[10px] font-bold text-danger leading-relaxed">{sendError}</p>
-                            )}
-
-                            {/* Vaciar al lado y no debajo, pero secundario: mismo alto para que
+                                    {/* Vaciar al lado y no debajo, pero secundario: mismo alto para que
                                 la fila se lea pareja, y sin relleno de color para que no compita
                                 con la acción principal ni se pulse por inercia. */}
-                            <div className="flex items-stretch gap-2">
-                                <button
-                                    onClick={clearCart}
-                                    disabled={sending}
-                                    title="Vaciar pedido"
-                                    className="shrink-0 h-12 px-3.5 rounded-2xl border border-danger/30 text-danger flex items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-widest hover:bg-danger/10 active:scale-95 transition-all disabled:opacity-40"
-                                >
-                                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                    <span className="hidden sm:inline">Vaciar</span>
-                                </button>
-                                <button
-                                    onClick={submitOrder}
-                                    disabled={!canSubmit || sending}
-                                    className="flex-1 h-12 rounded-2xl bg-brand-500 text-black text-[12px] font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-[0.99] transition-transform disabled:opacity-40"
-                                >
-                                    {sending ? "Enviando..." : "Realizar pedido"}
-                                </button>
-                            </div>
+                                    <div className="flex items-stretch gap-2">
+                                        <button
+                                            onClick={clearCart}
+                                            disabled={sending}
+                                            title="Vaciar pedido"
+                                            className="shrink-0 h-12 px-3.5 rounded-2xl border border-danger/30 text-danger flex items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-widest hover:bg-danger/10 active:scale-95 transition-all disabled:opacity-40"
+                                        >
+                                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            <span className="hidden sm:inline">Vaciar</span>
+                                        </button>
+                                        <button
+                                            onClick={submitOrder}
+                                            disabled={!canSubmit || sending}
+                                            className="flex-1 h-12 rounded-2xl bg-brand-500 text-black text-[12px] font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-[0.99] transition-transform disabled:opacity-40"
+                                        >
+                                            {sending ? "Enviando..." : "Realizar pedido"}
+                                        </button>
+                                    </div>
 
-                            <p className="text-center text-[10px] font-bold text-content-subtle">
-                                {canSubmit ? "Sujeto a confirmación de la tienda" : "Completa cédula, nombre y teléfono"}
-                            </p>
-                        </div>
-                        </>
+                                    <p className="text-center text-[10px] font-bold text-content-subtle">
+                                        {canSubmit ? "Sujeto a confirmación de la tienda" : "Completa cédula, nombre y teléfono"}
+                                    </p>
+                                </div>
+                            </>
                         )}
                     </div>
                 </div>
+            )}
+            {/* ── Modal de Perfil de Cliente ── */}
+            {profileOpen && identity && (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center p-0 sm:p-4">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setProfileOpen(false)} />
+                    <div className="relative w-full sm:max-w-md bg-surface dark:bg-surface-dark-2 rounded-t-3xl sm:rounded-3xl border-t sm:border border-border dark:border-white/10 overflow-hidden shadow-2xl z-10 flex flex-col animate-in fade-in slide-in-from-bottom-3 sm:zoom-in-95 duration-200">
+
+                        {/* Encabezado */}
+                        <div className="px-5 pt-5 pb-4 border-b border-border dark:border-white/5 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-11 h-11 rounded-2xl bg-brand-500/15 text-brand-500 flex items-center justify-center text-base font-black uppercase">
+                                    {(identity.name || identity.document || "U").charAt(0)}
+                                </div>
+                                <div>
+                                    <h2 className="text-sm font-black uppercase tracking-tight text-content dark:text-white">
+                                        {identity.name || "Mi Perfil"}
+                                    </h2>
+                                    <p className="text-[11px] font-bold text-content-muted">
+                                        {identity.document}
+                                    </p>
+                                </div>
+                            </div>
+                            <button onClick={() => setProfileOpen(false)} className="p-1.5 -mr-1 text-content-subtle hover:text-content dark:hover:text-white transition-colors">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+
+                        {/* Contenido / Edición */}
+                        <div className="p-5 space-y-4">
+                            {!editingProfile ? (
+                                <>
+                                    <div className="rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 p-4 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Nombre</span>
+                                            <span className="text-xs font-bold text-content dark:text-white">{identity.name || "Sin registrar"}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between border-t border-border/40 dark:border-white/5 pt-2">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Cédula / RIF</span>
+                                            <span className="text-xs font-bold text-content dark:text-white tabular-nums">{identity.document}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between border-t border-border/40 dark:border-white/5 pt-2">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Teléfono</span>
+                                            <span className="text-xs font-bold text-content dark:text-white tabular-nums">{identity.phone || "Sin registrar"}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2 pt-1">
+                                        <button
+                                            onClick={() => setEditingProfile(true)}
+                                            className="w-full h-11 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-content dark:text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-brand-500/10 hover:text-brand-500 hover:border-brand-500/40 transition-all"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                            Modificar mi información
+                                        </button>
+
+                                        <button
+                                            onClick={() => { setProfileOpen(false); openMyOrders(); }}
+                                            className="w-full h-11 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-content dark:text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-brand-500/10 hover:text-brand-500 hover:border-brand-500/40 transition-all"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                            Ver mis pedidos
+                                        </button>
+
+                                        <button
+                                            onClick={forgetIdentity}
+                                            className="w-full h-11 rounded-2xl bg-danger/10 text-danger border border-danger/20 text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-danger hover:text-white transition-all"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                                            Cerrar sesión
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Tu nombre completo</label>
+                                        <input
+                                            value={editName}
+                                            onChange={e => setEditName(e.target.value)}
+                                            placeholder="ej. Juan Pérez"
+                                            className="w-full h-11 px-3.5 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-xs font-bold text-content dark:text-white outline-none focus:border-brand-500 transition-colors"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Número de teléfono (WhatsApp)</label>
+                                        <input
+                                            value={editPhone}
+                                            onChange={e => setEditPhone(e.target.value.replace(/[^\d+]/g, ""))}
+                                            placeholder="ej. 04141234567"
+                                            className="w-full h-11 px-3.5 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-xs font-bold text-content dark:text-white outline-none focus:border-brand-500 transition-colors"
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-2 pt-2">
+                                        <button
+                                            onClick={() => setEditingProfile(false)}
+                                            className="flex-1 h-11 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-content-subtle text-[11px] font-black uppercase tracking-widest hover:text-content dark:hover:text-white transition-all"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            onClick={handleSaveProfile}
+                                            className="flex-1 h-11 rounded-2xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all"
+                                        >
+                                            Guardar cambios
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                    </div>
+                </div>
+            )}
+
+            {/* ── Botón flotante de WhatsApp de la Tienda ── */}
+            {store?.whatsapp && (
+                <a
+                    href={`https://wa.me/${store.whatsapp}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Escribir a la tienda por WhatsApp"
+                    className="fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full bg-[#25D366] text-white shadow-xl shadow-emerald-600/30 hover:scale-110 active:scale-95 transition-all flex items-center justify-center group"
+                >
+                    <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 00-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884a9.82 9.82 0 016.988 2.896 9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.886-9.885 9.886m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.464 3.488" />
+                    </svg>
+                </a>
             )}
         </div>
     );
@@ -822,18 +995,18 @@ export default function PublicCatalogPage({ token }) {
 // tenga ficha o no, confirmar quién es o dejar sus datos. La ficha NO se crea aquí — se
 // crea con el primer pedido, para que entrar a mirar no genere clientes fantasma.
 function IdentityGate({ token, store, onIdentified }) {
-    const [step, setStep]     = useState("doc"); // doc | confirm | phone | register
+    const [step, setStep] = useState("doc"); // doc | confirm | phone | register
     const [prefix, setPrefix] = useState("V");
     const [number, setNumber] = useState("");
-    const [match, setMatch]   = useState(null);  // ficha encontrada
-    const [name, setName]     = useState("");
-    const [phone, setPhone]   = useState("");
-    const [busy, setBusy]     = useState(false);
-    const [err, setErr]       = useState(null);
+    const [match, setMatch] = useState(null);  // ficha encontrada
+    const [name, setName] = useState("");
+    const [phone, setPhone] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState(null);
 
     // Nombre explícito: `document` a secas taparía el objeto global del DOM.
     const fullDocument = `${prefix}-${number}`;
-    const phoneOk  = phone.replace(/\D/g, "").length >= 7;
+    const phoneOk = phone.replace(/\D/g, "").length >= 7;
 
     const lookup = async () => {
         if (number.length < 6 || busy) return;
@@ -859,7 +1032,18 @@ function IdentityGate({ token, store, onIdentified }) {
     const restart = () => { setStep("doc"); setMatch(null); setName(""); setPhone(""); setErr(null); };
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10 bg-surface-2 dark:bg-surface-dark">
+        <div className="min-h-screen relative flex flex-col items-center justify-center px-5 py-10 bg-surface-2 dark:bg-surface-dark">
+            <button
+                onClick={toggle}
+                title={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+                className="fixed top-6 right-6 p-2.5 rounded-2xl bg-surface dark:bg-surface-dark-2 border border-border dark:border-white/10 text-content-muted hover:text-content dark:hover:text-white transition-all z-50 shadow-sm"
+            >
+                {dark ? (
+                    <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                ) : (
+                    <svg className="w-5 h-5 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                )}
+            </button>
             <div className="w-full max-w-sm space-y-5">
                 <div className="text-center space-y-3">
                     {store?.logo_url ? (
@@ -1038,12 +1222,12 @@ function GateButton({ onClick, disabled, children }) {
 // Colores del estado. "rechazado" no viene del servidor: lo deduce el navegador cuando un
 // pedido que envió ya no aparece en la lista (ver rejectedIds).
 const STAGE_STYLES = {
-    enviado:    "bg-warning/15 text-warning border-warning/30",
+    enviado: "bg-warning/15 text-warning border-warning/30",
     confirmado: "bg-info/15 text-info border-info/30",
-    facturado:  "bg-brand-500/15 text-brand-500 border-brand-500/30",
-    pagado:     "bg-success/15 text-success border-success/30",
-    anulado:    "bg-danger/15 text-danger border-danger/30",
-    rechazado:  "bg-danger/15 text-danger border-danger/30",
+    facturado: "bg-brand-500/15 text-brand-500 border-brand-500/30",
+    pagado: "bg-success/15 text-success border-success/30",
+    anulado: "bg-danger/15 text-danger border-danger/30",
+    rechazado: "bg-danger/15 text-danger border-danger/30",
 };
 
 // Cantidades: enteras para unidades contables, 3 decimales para peso y volumen. Aquí no
@@ -1149,9 +1333,8 @@ function QtyBtn({ onClick, label, children, divider }) {
         <button
             onClick={onClick}
             aria-label={label}
-            className={`w-10 h-10 bg-surface-2 dark:bg-white/5 text-content dark:text-white text-lg font-black flex items-center justify-center hover:bg-brand-500/10 hover:text-brand-500 active:scale-90 transition-all ${
-                divider ? "border-l border-border dark:border-white/10" : ""
-            }`}
+            className={`w-10 h-10 bg-surface-2 dark:bg-white/5 text-content dark:text-white text-lg font-black flex items-center justify-center hover:bg-brand-500/10 hover:text-brand-500 active:scale-90 transition-all ${divider ? "border-l border-border dark:border-white/10" : ""
+                }`}
         >
             {children}
         </button>
@@ -1162,11 +1345,10 @@ function CatOption({ active, onClick, children }) {
     return (
         <button
             onClick={onClick}
-            className={`w-full text-left px-3 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center justify-between gap-2 ${
-                active
+            className={`w-full text-left px-3 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center justify-between gap-2 ${active
                     ? "bg-brand-500 text-black"
                     : "text-content-muted hover:bg-surface-2 dark:hover:bg-white/5 hover:text-content dark:hover:text-white"
-            }`}
+                }`}
         >
             <span className="truncate">{children}</span>
             {active && (

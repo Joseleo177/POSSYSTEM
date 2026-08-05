@@ -125,8 +125,8 @@ export default function EmployeesTab({ notify }) {
             title="Gestión de Empleados"
             subheader={subheader}
             actions={activeTab === "employees" ? (
-                <Button onClick={openNew} className="h-8 px-4 text-[10px] font-black uppercase tracking-wide">
-                    + Nuevo Empleado
+                <Button onClick={openNew} className="h-8 px-2.5 sm:px-3 text-[10px] font-black uppercase tracking-wide">
+                    + <span className="hidden sm:inline">Nuevo Empleado</span><span className="sm:hidden">Nuevo</span>
                 </Button>
             ) : null}
         >

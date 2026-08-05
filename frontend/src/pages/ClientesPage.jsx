@@ -40,7 +40,9 @@ export default function ClientesPage() {
 
     // Acciones de la página
     const pageActions = !detail && (
-        <Button onClick={() => openNew("cliente")}>+ NUEVO CONTACTO</Button>
+        <Button onClick={() => openNew("cliente")} className="h-8 px-2.5 sm:px-3 text-[10px]">
+            + <span className="hidden sm:inline">NUEVO CONTACTO</span><span className="sm:hidden">NUEVO</span>
+        </Button>
     );
 
     return (
@@ -87,7 +89,7 @@ export default function ClientesPage() {
                             {showFilterDrop && (
                                 <>
                                     <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
-                                    <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                                    <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
                                         <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                             <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Tipo de Contacto</div>
                                             <div className="grid grid-cols-2 gap-1.5">

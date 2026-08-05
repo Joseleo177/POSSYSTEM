@@ -154,58 +154,58 @@ export default function CatalogPage() {
                 <>
                     {selectedProducts.length > 0 && (
                         <>
-                            <Button onClick={() => setPrintingLabels(true)} variant="ghost" className="h-8 px-3 text-[10px] shadow-none bg-info/10 text-info border border-info/30 hover:bg-info hover:text-black">
+                            <Button onClick={() => setPrintingLabels(true)} variant="ghost" className="h-8 px-2 sm:px-3 text-[10px] shadow-none bg-info/10 text-info border border-info/30 hover:bg-info hover:text-black">
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                                Imprimir ({selectedProducts.length})
+                                <span className="hidden sm:inline">Imprimir</span> ({selectedProducts.length})
                             </Button>
                             {can("products") && (
                                 <>
                                     <Button onClick={() => bulkVisibility(true)} variant="ghost"
-                                        className="h-8 px-3 text-[10px] shadow-none bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black"
+                                        className="h-8 px-2 sm:px-3 text-[10px] shadow-none bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black"
                                         title="Mostrar en el catálogo público">
                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                        Publicar ({selectedProducts.length})
+                                        <span className="hidden sm:inline">Publicar</span> ({selectedProducts.length})
                                     </Button>
                                     <Button onClick={() => bulkVisibility(false)} variant="ghost"
-                                        className="h-8 px-3 text-[10px] shadow-none border border-border dark:border-white/10 text-content-subtle hover:text-danger"
+                                        className="h-8 px-2 sm:px-3 text-[10px] shadow-none border border-border dark:border-white/10 text-content-subtle hover:text-danger"
                                         title="Quitar del catálogo público">
                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
-                                        Ocultar
+                                        <span className="hidden sm:inline">Ocultar</span>
                                     </Button>
                                 </>
                             )}
                         </>
                     )}
                     <Button onClick={() => { setIsSelectionMode(!isSelectionMode); if (isSelectionMode) setSelectedProducts([]); }} variant="ghost"
-                        className={`h-8 px-3 text-[10px] shadow-none border ${isSelectionMode ? "bg-brand-500 text-black border-brand-500" : "bg-surface-3 dark:bg-white/5 text-content-subtle border-white/5 hover:bg-white/10"}`}>
+                        className={`h-8 px-2 sm:px-3 text-[10px] shadow-none border ${isSelectionMode ? "bg-brand-500 text-black border-brand-500" : "bg-surface-3 dark:bg-white/5 text-content-subtle border-white/5 hover:bg-white/10"}`}>
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        {isSelectionMode ? "Cancelar" : "Seleccionar"}
+                        <span className="hidden sm:inline">{isSelectionMode ? "Cancelar" : "Seleccionar"}</span>
                     </Button>
                     {can("config") && (
                         <Button onClick={() => setPublicLinkModal(true)} variant="ghost"
-                            className="h-8 px-3 text-[10px] shadow-none border border-border dark:border-white/10 text-content-subtle hover:text-brand-500"
+                            className="h-8 px-2 sm:px-3 text-[10px] shadow-none border border-border dark:border-white/10 text-content-subtle hover:text-brand-500"
                             title="Enlace de solo lectura para clientes">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m8.156-1.328l1.5-1.5a4 4 0 00-5.656-5.656l-3 3a4 4 0 000 5.656" /></svg>
-                            Compartir
+                            <span className="hidden sm:inline">Compartir</span>
                         </Button>
                     )}
                     {can("products") && (
-                        <Button onClick={() => { setProductEditData(null); setProductModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
-                            + Nuevo Producto
+                        <Button onClick={() => { setProductEditData(null); setProductModal(true); }} className="h-8 px-2.5 sm:px-3 text-[10px] shadow-none">
+                            + <span className="hidden sm:inline">Nuevo Producto</span><span className="sm:hidden">Nuevo</span>
                         </Button>
                     )}
                 </>
             )}
 
             {activeTab === "categories" && can("products") && (
-                <Button onClick={() => setTriggerNewCategory(prev => prev + 1)} className="h-8 px-3 text-[10px] shadow-none">
-                    + Nueva Categoría
+                <Button onClick={() => setTriggerNewCategory(prev => prev + 1)} className="h-8 px-2.5 sm:px-3 text-[10px] shadow-none">
+                    + <span className="hidden sm:inline">Nueva Categoría</span><span className="sm:hidden">Nueva</span>
                 </Button>
             )}
 
             {activeTab === "promotions" && can("products") && (
-                <Button onClick={() => setTriggerNewPromo(prev => prev + 1)} className="h-8 px-3 text-[10px] shadow-none">
-                    + Nueva Promoción
+                <Button onClick={() => setTriggerNewPromo(prev => prev + 1)} className="h-8 px-2.5 sm:px-3 text-[10px] shadow-none">
+                    + <span className="hidden sm:inline">Nueva Promoción</span><span className="sm:hidden">Nueva</span>
                 </Button>
             )}
         </>
@@ -238,7 +238,7 @@ export default function CatalogPage() {
                             {showWarehouse && (
                                 <>
                                     <div className="fixed inset-0 z-30" onClick={() => setShowWarehouse(false)} />
-                                    <div className="absolute left-0 top-full mt-2 w-52 bg-surface-2 dark:bg-surface-dark-2 rounded-2xl border border-border/40 dark:border-white/10 shadow-2xl z-40 p-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="absolute right-0 top-full mt-2 w-52 max-w-[calc(100vw-2rem)] bg-surface-2 dark:bg-surface-dark-2 rounded-2xl border border-border/40 dark:border-white/10 shadow-2xl z-40 p-3 animate-in fade-in slide-in-from-top-2 duration-200">
                                         <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mb-2 px-1">Almacén</div>
                                         <div className="space-y-0.5">
                                             {availableWarehouses.map(w => (
@@ -266,7 +266,7 @@ export default function CatalogPage() {
                             {showFilters && (
                                 <>
                                     <div className="fixed inset-0 z-30" onClick={() => setShowFilters(false)} />
-                                    <div className="absolute right-0 top-full mt-2 w-64 bg-surface-2 dark:bg-surface-dark-2 rounded-2xl border border-border/40 dark:border-white/10 shadow-2xl z-40 p-4 animate-in fade-in slide-in-from-top-2 duration-200 space-y-4">
+                                    <div className="absolute left-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] bg-surface-2 dark:bg-surface-dark-2 rounded-2xl border border-border/40 dark:border-white/10 shadow-2xl z-40 p-4 animate-in fade-in slide-in-from-top-2 duration-200 space-y-4">
                                         <div>
                                             <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mb-1.5">Categoría</div>
                                             <div className="space-y-0.5 max-h-48 overflow-y-auto pr-1">
