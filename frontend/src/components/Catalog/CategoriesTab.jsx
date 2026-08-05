@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { api } from "../../services/api";
 import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
@@ -23,8 +23,16 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
 
     const openNew  = useCallback(() => { setForm({ name: "", color: "#fabd2f" }); setModal("new"); }, []);
     
+    // Solo abre el modal cuando el contador CAMBIA, no cuando ya viene alto.
+    // CatalogPage monta esta pestaña únicamente mientras está activa, así que al ir a
+    // Productos y volver, el componente se remonta con triggerNew ya en 1 y la condición
+    // `> 0` disparaba el modal sola.
+    const lastTrigger = useRef(triggerNew);
     useEffect(() => {
-        if (triggerNew > 0) openNew();
+        if (triggerNew !== lastTrigger.current) {
+            lastTrigger.current = triggerNew;
+            openNew();
+        }
     }, [triggerNew, openNew]);
 
     const openEdit = (cat) => { setForm({ name: cat.name, color: cat.color || "#fabd2f" }); setModal(cat); };

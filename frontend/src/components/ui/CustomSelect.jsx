@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 
-export default function CustomSelect({ value, onChange, options, placeholder = "Seleccionar...", className = "", disabled = false, height = "h-10" }) {
+// icon: nodo opcional que se dibuja DENTRO de la caja, antes de la etiqueta. Antes había
+// que superponerlo por fuera con position absolute y padding, y como `className` se aplica
+// al contenedor —no a la caja visible— el icono terminaba fuera del recuadro.
+export default function CustomSelect({ value, onChange, options, placeholder = "Seleccionar...", className = "", disabled = false, height = "h-10", icon = null }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0, openUp: false });
   const triggerRef = useRef(null);
@@ -54,11 +57,18 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
             : "bg-white dark:bg-[#12141a] border-border/80 dark:border-white/5 hover:border-brand-500/40"}
         `}
       >
-        <span className={selectedOption
-          ? "text-content dark:text-content-dark font-bold uppercase tracking-tight"
-          : "text-content-subtle/50 dark:text-content-dark-muted/30 font-medium"
-        }>
-          {selectedOption ? selectedOption.label : placeholder}
+        <span className="flex items-center gap-2 min-w-0 flex-1">
+          {icon && (
+            <span className="shrink-0 text-content-subtle opacity-60 flex items-center">{icon}</span>
+          )}
+          {/* truncate + min-w-0: con ancho fijo, una etiqueta larga debe recortarse en vez
+              de desbordar la caja o empujar la flecha. */}
+          <span className={`truncate ${selectedOption
+            ? "text-content dark:text-content-dark font-bold uppercase tracking-tight"
+            : "text-content-subtle/50 dark:text-content-dark-muted/30 font-medium"
+          }`}>
+            {selectedOption ? selectedOption.label : placeholder}
+          </span>
         </span>
 
         <div className={`transition-transform duration-300 ${open ? "rotate-180" : ""}`}>

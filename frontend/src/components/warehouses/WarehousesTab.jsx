@@ -46,6 +46,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
     const {
         loadStock, loadingStock,
         stockSearch, setStockSearch, filteredStock,
+        stockCategory, setStockCategory,
         stockPage, totalStockItems, stockLimit,
         editStockModal, setEditStockModal, editStockValue, setEditStockValue, handleEditStock, submitEditStock,
         deleteStockModal, setDeleteStockModal, handleDeleteStock, confirmDeleteStock,
@@ -129,6 +130,8 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                     page={stockPage}
                     totalItems={totalStockItems}
                     limit={stockLimit}
+                    stockCategory={stockCategory}
+                    setStockCategory={setStockCategory}
                 />
             )}
 

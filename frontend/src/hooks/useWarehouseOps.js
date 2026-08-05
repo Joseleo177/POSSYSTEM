@@ -20,6 +20,11 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   // identidad estable y no dispare efectos en cadena al teclear.
   const searchRef = useRef("");
   useEffect(() => { searchRef.current = debouncedStockSearch; }, [debouncedStockSearch]);
+  // Categoría por la que se filtra el inventario. Mismo patrón de ref que la búsqueda:
+  // así loadStock conserva identidad estable y no encadena efectos.
+  const [stockCategory, setStockCategory] = useState("");
+  const categoryRef = useRef("");
+  useEffect(() => { categoryRef.current = stockCategory; }, [stockCategory]);
   const [stockPage, setStockPage]       = useState(1);
   const [totalStockItems, setTotalStockItems] = useState(0);
   const stockLimit = 50;
@@ -69,6 +74,7 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
         offset: (p - 1) * stockLimit,
         search: (searchRef.current || "").trim(),
       };
+      if (categoryRef.current) q.category_id = categoryRef.current;
       const r = await api.warehouses.getStock(warehouseId, q);
       setStock(r.data || []);
       setTotalStockItems(r.total || 0);
@@ -89,7 +95,7 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   useEffect(() => {
     if (selectedWarehouse) loadStock(selectedWarehouse.id, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedStockSearch]);
+  }, [debouncedStockSearch, stockCategory]);
   // Carga una página de productos a transferir. append=false reinicia; append=true suma (scroll infinito).
   // Con almacén de origen → solo productos con stock ahí; sin origen → todos los productos simples.
   const loadTransferProducts = useCallback(async (append = false) => {
@@ -231,6 +237,7 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
     // Stock
     stock, loadStock, loadingStock,
     stockSearch, setStockSearch,
+    stockCategory, setStockCategory,
     filteredStock, stockPage, setStockPage, totalStockItems, stockLimit,
     // CRUD Stock Modals
     editStockModal, setEditStockModal, editStockValue, setEditStockValue, handleEditStock, submitEditStock,

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { api } from "../../services/api";
 import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
@@ -51,8 +51,14 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
 
     const openNew = useCallback(() => { setForm(EMPTY_FORM); setProductSearch(""); setModal("new"); }, []);
     
+    // Mismo caso que CategoriesTab: la pestaña se remonta al volver a ella, y con la
+    // condición `> 0` el modal se abría solo. Se compara contra el valor previo.
+    const lastTrigger = useRef(triggerNew);
     useEffect(() => {
-        if (triggerNew > 0) openNew();
+        if (triggerNew !== lastTrigger.current) {
+            lastTrigger.current = triggerNew;
+            openNew();
+        }
     }, [triggerNew, openNew]);
 
     const openEdit = (p) => {

@@ -7,7 +7,7 @@ function buildTcp(req) {
 
 async function getStock(req) {
   const warehouseId = parseInt(req.params.id);
-  const { search, limit = 50, offset = 0 } = req.query;
+  const { search, category_id, limit = 50, offset = 0 } = req.query;
   const tcp = buildTcp(req);
 
   const replacements = { wid: warehouseId, limit: parseInt(limit), offset: parseInt(offset) };
@@ -17,8 +17,16 @@ async function getStock(req) {
     replacements.search = `%${search.trim()}%`;
   }
 
+  // El filtro va en la consulta y no en el navegador: el listado está paginado, así que
+  // filtrar del lado del cliente solo afectaría a los 50 registros de la página actual.
+  if (category_id) {
+    searchFilter += " AND p.category_id = :category_id";
+    replacements.category_id = parseInt(category_id);
+  }
+
   const countReplacements = { wid: warehouseId };
   if (replacements.search) countReplacements.search = replacements.search;
+  if (replacements.category_id) countReplacements.category_id = replacements.category_id;
 
   const countRes = await sequelize.query(`
     SELECT count(*)::int as count

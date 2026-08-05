@@ -81,17 +81,15 @@ export default function ProductGrid({
                         className="input !pl-10 w-full"
                     />
                 </div>
-                <div className="relative shrink-0">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40 z-10">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" /></svg>
-                    </div>
-                    <CustomSelect
-                        value={selectedCat}
-                        onChange={setSelectedCat}
-                        options={[{ value: "all", label: "Todas las categorías" }, ...categories.map(c => ({ value: c.name, label: c.name }))]}
-                        className="!pl-9 min-w-[140px] !text-[11px] font-black uppercase tracking-wide h-10"
-                    />
-                </div>
+                {/* Ancho fijo: con min-w el recuadro se estiraba y encogía según el largo
+                    de la categoría elegida, y la barra "bailaba" en cada selección. */}
+                <CustomSelect
+                    value={selectedCat}
+                    onChange={setSelectedCat}
+                    options={[{ value: "all", label: "Todas las categorías" }, ...categories.map(c => ({ value: c.name, label: c.name }))]}
+                    className="w-[200px] shrink-0 !text-[11px] font-black uppercase tracking-wide"
+                    icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" /></svg>}
+                />
             </div>
 
 
