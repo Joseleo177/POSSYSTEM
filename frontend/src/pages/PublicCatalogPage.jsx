@@ -731,12 +731,12 @@ export default function PublicCatalogPage({ token }) {
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                         onClick={() => (placedOrder ? closeConfirmation() : setCartOpen(false))} />
                     <div className="relative w-full sm:max-w-md bg-surface dark:bg-surface-dark-2 rounded-t-3xl sm:rounded-3xl border-t sm:border border-border dark:border-white/10 max-h-[90vh] flex flex-col">
-                        <div className="px-4 pt-4 pb-3 flex items-center justify-between border-b border-border dark:border-white/5">
-                            <h2 className="text-[13px] font-black uppercase tracking-tight text-content dark:text-white">
+                        <div className="relative px-4 pt-4 pb-3 flex items-center justify-center border-b border-border dark:border-white/5">
+                            <h2 className="text-[13px] font-black uppercase tracking-tight text-content dark:text-white text-center">
                                 {placedOrder ? "Pedido enviado" : "Tu pedido"}
                             </h2>
                             <button onClick={() => (placedOrder ? closeConfirmation() : setCartOpen(false))}
-                                className="p-1.5 -mr-1.5 text-content-subtle hover:text-content dark:hover:text-white">
+                                className="absolute right-4 top-3.5 p-1.5 text-content-subtle hover:text-content dark:hover:text-white">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
