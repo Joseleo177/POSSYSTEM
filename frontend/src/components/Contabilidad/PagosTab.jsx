@@ -9,7 +9,7 @@ import DateRangePicker from "../ui/DateRangePicker";
 export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayment, setReceiptSale, journals = [] }) {
     const {
         data, total, page, setPage, loading, LIMIT,
-        viewType, setViewType,
+        viewType,
         searchTerm, setSearchTerm,
         payDateFrom, setPayDateFrom,
         payDateTo, setPayDateTo,
@@ -47,17 +47,9 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                     <>
                         <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
                         <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
-                            <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Vista</div>
-                                <div className="flex bg-surface-2 dark:bg-white/5 p-0.5 rounded-lg border border-border/20 dark:border-white/5">
-                                    {["historial", "pendientes"].map(v => (
-                                        <button key={v} onClick={() => setViewType(v)}
-                                            className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wide rounded-md transition-all ${viewType === v ? "bg-brand-500 text-black shadow" : "text-content-subtle hover:text-content dark:hover:text-white"}`}>
-                                            {v === "historial" ? "Historial" : "Por Cobrar"}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
+                            {/* El selector de vista Historial / Por Cobrar se retiró de aquí: las
+                                cuentas por cobrar tienen su propio módulo. La vista "pendientes"
+                                sigue implementada en usePagos y en la tabla por si se reactiva. */}
                             {journals.length > 0 && (
                                 <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                     <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Diario de pago</div>
@@ -71,7 +63,10 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                     </div>
                                 </div>
                             )}
-                                <DateRangePicker from={payDateFrom} to={payDateTo} setFrom={setPayDateFrom} setTo={setPayDateTo} />
+                            <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Rango de fechas</div>
+                                <DateRangePicker compact from={payDateFrom} to={payDateTo} setFrom={setPayDateFrom} setTo={setPayDateTo} />
+                            </div>
                             <div className="px-4 py-2">
                                 <button onClick={clearFilters} className="w-full py-1.5 text-[10px] font-black uppercase tracking-wide text-danger hover:bg-danger/5 rounded-lg transition-colors">
                                     Limpiar todo

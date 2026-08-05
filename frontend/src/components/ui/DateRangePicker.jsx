@@ -6,7 +6,9 @@ import { createPortal } from "react-dom";
  * Custom calendar interface with Dark/Light mode support and quick shortcuts.
  * Uses React Portal to float above UI containers and avoid clipping.
  */
-export default function DateRangePicker({ from, to, setFrom, setTo, onRangeChange, className = "" }) {
+// compact: versión de menor altura y tipografía, para usar dentro de menús de filtro
+// donde el control a tamaño completo desentona con el resto de los campos.
+export default function DateRangePicker({ from, to, setFrom, setTo, onRangeChange, className = "", compact = false }) {
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const [viewDate, setViewDate] = useState(new Date()); // The month being viewed
@@ -226,20 +228,20 @@ export default function DateRangePicker({ from, to, setFrom, setTo, onRangeChang
   return (
     <div className={`relative ${className}`} ref={containerRef}>
       {/* Trigger Button - Mimics .input for alignment & matches buttons */}
-      <div 
+      <div
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center w-full gap-2 px-3 h-10 rounded-md border border-border/80 dark:border-white/5 bg-white dark:bg-[#12141a] text-content dark:text-content-dark transition-all cursor-pointer group select-none shadow-sm hover:border-brand-500/40"
+        className={`flex items-center w-full rounded-md border border-border/80 dark:border-white/5 bg-white dark:bg-[#12141a] text-content dark:text-content-dark transition-all cursor-pointer group select-none shadow-sm hover:border-brand-500/40 ${compact ? "gap-1.5 px-2 h-8" : "gap-2 px-3 h-10"}`}
       >
-        <svg className="w-3.5 h-3.5 text-content-subtle opacity-50 group-hover:text-brand-500 group-hover:opacity-100 transition-all shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className={`text-content-subtle opacity-50 group-hover:text-brand-500 group-hover:opacity-100 transition-all shrink-0 ${compact ? "w-3 h-3" : "w-3.5 h-3.5"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
-        
-        <div className="flex items-center justify-center gap-2 flex-1">
-          <span className={`text-[11px] font-medium uppercase tracking-tight ${from ? "" : "opacity-30"}`}>
+
+        <div className={`flex items-center justify-center flex-1 ${compact ? "gap-1" : "gap-2"}`}>
+          <span className={`font-medium uppercase tracking-tight ${compact ? "text-[10px]" : "text-[11px]"} ${from ? "" : "opacity-30"}`}>
             {fmt(from)}
           </span>
-          <span className="text-content-subtle opacity-20 text-[10px] font-bold group-hover:opacity-40 transition-opacity">→</span>
-          <span className={`text-[11px] font-medium uppercase tracking-tight ${to ? "" : "opacity-30"}`}>
+          <span className={`text-content-subtle opacity-20 font-bold group-hover:opacity-40 transition-opacity ${compact ? "text-[9px]" : "text-[10px]"}`}>→</span>
+          <span className={`font-medium uppercase tracking-tight ${compact ? "text-[10px]" : "text-[11px]"} ${to ? "" : "opacity-30"}`}>
             {fmt(to)}
           </span>
         </div>
