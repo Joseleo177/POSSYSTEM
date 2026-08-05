@@ -420,6 +420,20 @@ export function CartProvider({ children }) {
   }, [cart, heldSaleId, activeWarehouse, selectedSerieId, selectedCustomer, employee,
     currentCurrency, exchangeRate, discountAmount, clearCart, loadHeldCarts, notify]);
 
+  // Acepta un pedido llegado del catálogo público. Hasta aquí no había tocado inventario:
+  // el servidor lo descuenta ahora, del almacén activo de esta caja, y el pedido pasa a
+  // ser una cuenta en espera normal que se recupera y se cobra como cualquier otra.
+  const acceptWebOrder = useCallback(async (saleId) => {
+    if (!activeWarehouse) return notify("Selecciona un almacén antes de aceptar el pedido", "err");
+    try {
+      await api.sales.acceptOrder(saleId, { warehouse_id: activeWarehouse.id });
+      await loadHeldCarts();
+      notify("Pedido aceptado. Está en cuentas en espera.");
+    } catch (e) {
+      notify(e.message || "No se pudo aceptar el pedido", "err");
+    }
+  }, [activeWarehouse, loadHeldCarts, notify]);
+
   // Recupera una cuenta al carrito para seguir agregándole productos o cobrarla.
   const takeHeldCart = useCallback(async (saleId) => {
     const held = heldCarts.find(h => h.id === saleId);
@@ -596,6 +610,8 @@ export function CartProvider({ children }) {
       loadFromQuotation, quotationId,
       // Hold Cart
       heldCarts, holdCart, takeHeldCart, removeHeldCart, loadHeldCarts, heldSaleId,
+      // Pedidos del catálogo público
+      acceptWebOrder,
     }}>
       {children}
     </CartContext.Provider>

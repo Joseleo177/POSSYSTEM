@@ -113,6 +113,9 @@ export const api = {
     create:  (body, imageFile)     => request("/products",      { method: "POST", body: buildProductForm(body, imageFile) }),
     update:  (id, body, imageFile, removeImage) => request(`/products/${id}`,{ method: "PUT",  body: buildProductForm(body, imageFile, removeImage) }),
     remove:  (id)                  => request(`/products/${id}`,{ method: "DELETE" }),
+    // Publica u oculta varios productos del catálogo público en una sola llamada
+    setCatalogVisibility: (ids, visible) =>
+      request("/products/catalog-visibility", { method: "PATCH", body: JSON.stringify({ ids, visible }) }),
   },
   categories: {
     getAll:  ()          => request("/categories"),
@@ -144,8 +147,12 @@ export const api = {
     cancel:      (id)        => request(`/sales/${id}`,  { method: "DELETE" }),
     // Entrega a crédito: asigna correlativo y deja la venta en 'pendiente' (por cobrar)
     confirmCredit: (id)      => request(`/sales/${id}/credit`, { method: "POST" }),
-    // Cuentas en espera (status 'espera'): visibles desde cualquier caja
-    getHeld:     ()          => request("/sales?status=espera&limit=100"),
+    // Cuentas en espera y pedidos del catálogo público: visibles desde cualquier caja.
+    // Los 'pedido' todavía no descontaron inventario; se listan juntos porque se
+    // atienden en el mismo sitio y se distinguen por su status.
+    getHeld:     ()          => request("/sales?status=espera&status=pedido&limit=100"),
+    // Acepta un pedido web: descuenta stock del almacén indicado y lo pasa a 'espera'
+    acceptOrder: (id, body)  => request(`/sales/${id}/accept-order`, { method: "POST", body: JSON.stringify(body) }),
     // Devoluciones
     createReturn:   (id, body) => request(`/sales/${id}/return`,   { method: "POST", body: JSON.stringify(body) }),
     createExchange: (id, body) => request(`/sales/${id}/exchange`, { method: "POST", body: JSON.stringify(body) }),
@@ -350,8 +357,8 @@ export const api = {
 // Usa fetch plano a propósito: request() adjunta el token de sesión y, ante un 401,
 // intenta refrescarlo y puede recargar la página. Nada de eso tiene sentido para un
 // cliente que solo abrió un enlace, y no queremos tocarle el localStorage.
-async function publicRequest(path) {
-  const res = await fetch(`${BASE}${path}`);
+async function publicRequest(path, options) {
+  const res = await fetch(`${BASE}${path}`, options);
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw buildApiError(res.status, json.message, json.code, json);
   return json;
@@ -361,4 +368,18 @@ export const publicApi = {
   getStore: (token) => publicRequest(`/public/catalog/${encodeURIComponent(token)}`),
   getProducts: (token, params = {}) =>
     publicRequest(`/public/catalog/${encodeURIComponent(token)}/products?` + new URLSearchParams(params)),
+  identify: (token, document) =>
+    publicRequest(`/public/catalog/${encodeURIComponent(token)}/identify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document }),
+    }),
+  myOrders: (token, document) =>
+    publicRequest(`/public/catalog/${encodeURIComponent(token)}/my-orders?` + new URLSearchParams({ document })),
+  createOrder: (token, body) =>
+    publicRequest(`/public/catalog/${encodeURIComponent(token)}/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 };

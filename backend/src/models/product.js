@@ -24,6 +24,7 @@ module.exports = (sequelize, DataTypes) => {
     is_service: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     min_stock: { type: DataTypes.DECIMAL(10, 3), allowNull: false, defaultValue: 0 },
     barcode: { type: DataTypes.STRING(50), allowNull: true },
+    visible_in_catalog: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

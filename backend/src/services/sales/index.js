@@ -5,8 +5,10 @@ const createSale = require("./createSale");
 const cancelSale = require("./cancelSale");
 const updateSale = require("./updateSale");
 const confirmCreditSale = require("./confirmCreditSale");
+const acceptWebOrder = require("./acceptWebOrder");
 
 module.exports = {
+  acceptWebOrder,
   getAllSales,
   getOneSale,
   getSalesStats,

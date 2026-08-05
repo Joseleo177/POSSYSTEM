@@ -4,7 +4,7 @@ import { useApp } from "../../context/AppContext";
 export default function ProductTable({
     products, canManageProducts, openEditProduct, setDeleteProductDialog,
     selectedProducts = [], onToggleSelect, onSelectAll, isSelectionMode = false,
-    priceCurrency = "base", localCurrency = null
+    priceCurrency = "base", localCurrency = null, onToggleVisible
 }) {
     const { baseCurrency } = useApp();
     const fmtPrice = (n) => {
@@ -35,6 +35,7 @@ export default function ProductTable({
                     <th className="text-left">Categoría</th>
                     <th className="text-center">Stock</th>
                     <th className="text-right">Precio</th>
+                    {canManageProducts && <th className="text-center w-[90px]">Público</th>}
                     <th className="text-right w-[140px] pr-6">Acciones</th>
                 </tr>
             </thead>
@@ -103,6 +104,23 @@ export default function ProductTable({
                                 {fmtPrice(p.price)}
                             </span>
                         </td>
+                        {/* Visibilidad en el catálogo público: interruptor directo en la
+                            fila. Repasar qué se publica y qué no es una pasada sobre la
+                            lista completa, no una visita al modal de cada producto. */}
+                        {canManageProducts && (
+                            <td className="text-center">
+                                <label className="relative inline-flex items-center cursor-pointer align-middle"
+                                    title={p.visible_in_catalog ? "Visible en el catálogo público" : "Oculto del catálogo público"}>
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only peer"
+                                        checked={!!p.visible_in_catalog}
+                                        onChange={() => onToggleVisible?.(p)}
+                                    />
+                                    <div className="w-9 h-5 bg-border/50 dark:bg-white/10 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500" />
+                                </label>
+                            </td>
+                        )}
                         <td className="text-right pr-6">
                             <div className="flex justify-end gap-1">
                                 {canManageProducts && (

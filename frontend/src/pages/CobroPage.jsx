@@ -38,7 +38,7 @@ export default function CobroPage() {
         selectedCustomer, setSelectedCustomer,
         employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
         checkout, saveQuotation, loading, receipt, setReceipt,
-        heldCarts, holdCart, takeHeldCart, removeHeldCart, loadHeldCarts,
+        heldCarts, holdCart, takeHeldCart, removeHeldCart, loadHeldCarts, acceptWebOrder,
         activePromos, loadActivePromos, promoLineDiscount, promoDiscount,
     } = useCart();
 
@@ -250,6 +250,9 @@ export default function CobroPage() {
                 carts={heldCarts}
                 onTake={id => { takeHeldCart(id); setShowHeldModal(false); }}
                 onRemove={removeHeldCart}
+                // Aceptar no cierra el modal: lo normal al abrirlo es despachar varios
+                // pedidos seguidos, y volver a abrirlo entre cada uno estorba.
+                onAcceptOrder={acceptWebOrder}
                 baseCurrency={baseCurrency}
             />
             <CheckoutTypeModal

@@ -54,12 +54,13 @@ async function handleImageDelete(imageValue) {
   }
 }
 
-async function getAll({ search, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, limit = 100, offset = 0, company_id }) {
+async function getAll({ search, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, limit = 100, offset = 0, company_id }) {
   const where = {};
   if (company_id) where.company_id = company_id;
   if (category_id) where.category_id = category_id;
   if (is_combo !== undefined) where.is_combo = is_combo === 'true';
   if (is_service !== undefined) where.is_service = is_service === 'true';
+  if (visible_in_catalog !== undefined) where.visible_in_catalog = visible_in_catalog === 'true' || visible_in_catalog === true;
 
   if (not_in_warehouse_id) {
     const stocksInWarehouse = await ProductStock.findAll({
@@ -258,7 +259,8 @@ async function getOne(id, company_id) {
 async function createProduct({ body, file, company_id }) {
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
-    is_combo, combo_items, is_service, barcode, warehouse_id, bulk_price } = body;
+    is_combo, combo_items, is_service, barcode, warehouse_id, bulk_price,
+    visible_in_catalog } = body;
 
   if (!name || price == null) {
     const e = new Error("name y price son requeridos"); e.status = 400; throw e;
@@ -296,6 +298,7 @@ async function createProduct({ body, file, company_id }) {
       is_combo: isComboBool,
       is_service: isServiceBool,
       barcode: barcode || null,
+      visible_in_catalog: visible_in_catalog === 'true' || visible_in_catalog === true,
       company_id,
     }, { transaction: t });
 
@@ -329,7 +332,8 @@ async function createProduct({ body, file, company_id }) {
 async function updateProduct({ id, body, file, company_id }) {
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
-    is_combo, combo_items, is_service, barcode, bulk_price } = body;
+    is_combo, combo_items, is_service, barcode, bulk_price,
+    visible_in_catalog } = body;
 
   const t = await sequelize.transaction();
   try {
@@ -374,6 +378,11 @@ async function updateProduct({ id, body, file, company_id }) {
       is_combo: isComboBool,
       is_service: isServiceBool,
       barcode: barcode || null,
+      // Sin el campo en el cuerpo se conserva lo que ya tenía: hay flujos que guardan el
+      // producto sin pasar por el modal completo y no deben despublicarlo por omisión.
+      visible_in_catalog: visible_in_catalog === undefined
+        ? product.visible_in_catalog
+        : (visible_in_catalog === 'true' || visible_in_catalog === true),
     }, { transaction: t });
 
     if (isComboBool && combo_items !== undefined) {
@@ -435,6 +444,26 @@ async function deleteProduct(id, company_id) {
   return { message: "Producto eliminado exitosamente" };
 }
 
+// Publica u oculta varios productos de una sola vez. Marcar decenas de productos uno por
+// uno desde el modal no es viable en un inventario real, y es justo lo que hace falta
+// después de la migración, que deja todo oculto.
+async function setCatalogVisibility({ ids, visible, company_id }) {
+  const list = (Array.isArray(ids) ? ids : [])
+    .map(n => parseInt(n, 10))
+    .filter(n => Number.isInteger(n));
+
+  if (list.length === 0) {
+    const e = new Error("No se recibieron productos"); e.status = 400; throw e;
+  }
+
+  const [updated] = await Product.update(
+    { visible_in_catalog: !!visible },
+    { where: { id: { [Op.in]: list }, ...(company_id ? { company_id } : {}) } }
+  );
+
+  return { data: { updated } };
+}
+
 async function calculateComboCost(comboId, t) {
   const items = await ProductComboItem.findAll({
     where: { combo_id: comboId },
@@ -483,4 +512,4 @@ async function updateComboPricesForProduct(productId, t, visited = new Set()) {
   }
 }
 
-module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct };
+module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility };

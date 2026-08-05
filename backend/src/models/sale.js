@@ -27,6 +27,10 @@ module.exports = (sequelize, DataTypes) => {
     invoice_number:     { type: DataTypes.STRING(50) },
     idempotency_key:    { type: DataTypes.STRING(64), allowNull: true, unique: true },
     credit_applied:     { type: DataTypes.DECIMAL(14, 6), allowNull: false, defaultValue: 0 },
+    // Solo se llenan en pedidos llegados del catálogo público (status 'pedido')
+    web_customer_name:  { type: DataTypes.STRING(120), allowNull: true },
+    web_customer_phone: { type: DataTypes.STRING(30),  allowNull: true },
+    web_note:           { type: DataTypes.TEXT,        allowNull: true },
     created_at:         { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

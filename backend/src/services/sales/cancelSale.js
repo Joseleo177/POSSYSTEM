@@ -11,7 +11,11 @@ module.exports = async function cancelSale(id) {
       transaction,
     });
 
-    for (const item of items) {
+    // Un pedido del catálogo que todavía no fue aceptado nunca descontó inventario:
+    // "devolverlo" aquí regalaría existencias que jamás salieron.
+    const stockWasTaken = sale.status !== 'pedido';
+
+    for (const item of stockWasTaken ? items : []) {
       if (!item.product_id) continue;
       const product = await Product.findByPk(item.product_id, { transaction });
 
@@ -59,7 +63,7 @@ module.exports = async function cancelSale(id) {
     // entregó nada. Dejarla como 'anulado' ensuciaría el historial de facturas con algo
     // que nunca existió, así que se borra de verdad (sale_items va en cascada).
     // El resto sí se anula en lugar de destruirse: ya son documentos con número emitido.
-    if (sale.status === 'espera') {
+    if (sale.status === 'espera' || sale.status === 'pedido') {
       await sale.destroy({ transaction });
     } else {
       await sale.update({ status: 'anulado' }, { transaction });

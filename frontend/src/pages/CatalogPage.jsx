@@ -24,12 +24,13 @@ const TABS = [
 export default function CatalogPage() {
     const { employee, activeCurrencies } = useApp();
     const {
-        products, search, setSearch, loadProducts, can,
+        products, setProducts, search, setSearch, loadProducts, can,
         categories, notify, loading,
         page, totalProducts, limit,
         filterCategory, setFilterCategory,
         filterType, setFilterType,
         filterStock, setFilterStock,
+        filterVisible, setFilterVisible,
         activeFilterCount, clearFilters,
     } = useCatalog();
     const debouncedSearch = useDebounce(search, 400);
@@ -87,6 +88,32 @@ export default function CatalogPage() {
         } catch (e) { notify(e.message, "err"); }
     };
 
+    // Publicar/ocultar en el catálogo público. Se pinta el cambio de inmediato y se
+    // revierte si el servidor falla: recargar la página entera por marcar una casilla
+    // pierde el scroll justo cuando se están repasando decenas de productos.
+    const applyVisibility = async (ids, visible) => {
+        const previous = products;
+        setProducts(prev => prev.map(p => (ids.includes(p.id) ? { ...p, visible_in_catalog: visible } : p)));
+        try {
+            await api.products.setCatalogVisibility(ids, visible);
+            if (ids.length > 1) {
+                notify(visible ? `${ids.length} productos publicados` : `${ids.length} productos ocultados`);
+            }
+            // Con el filtro de visibilidad activo el producto ya no pertenece a la lista
+            // que se está viendo, así que hay que traer la página de nuevo.
+            if (filterVisible) loadProducts(page, warehouseId);
+        } catch (e) {
+            setProducts(previous);
+            notify(e.message, "err");
+        }
+    };
+
+    const bulkVisibility = async (visible) => {
+        await applyVisibility(selectedProducts.map(p => p.id), visible);
+        setSelectedProducts([]);
+        setIsSelectionMode(false);
+    };
+
     const toggleSelect = (id) => {
         const product = products.find(p => p.id === id);
         if (!product) return;
@@ -126,10 +153,28 @@ export default function CatalogPage() {
             {activeTab === "products" && (
                 <>
                     {selectedProducts.length > 0 && (
-                        <Button onClick={() => setPrintingLabels(true)} variant="ghost" className="h-8 px-3 text-[10px] shadow-none bg-info/10 text-info border border-info/30 hover:bg-info hover:text-black">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                            Imprimir ({selectedProducts.length})
-                        </Button>
+                        <>
+                            <Button onClick={() => setPrintingLabels(true)} variant="ghost" className="h-8 px-3 text-[10px] shadow-none bg-info/10 text-info border border-info/30 hover:bg-info hover:text-black">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                Imprimir ({selectedProducts.length})
+                            </Button>
+                            {can("products") && (
+                                <>
+                                    <Button onClick={() => bulkVisibility(true)} variant="ghost"
+                                        className="h-8 px-3 text-[10px] shadow-none bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black"
+                                        title="Mostrar en el catálogo público">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                        Publicar ({selectedProducts.length})
+                                    </Button>
+                                    <Button onClick={() => bulkVisibility(false)} variant="ghost"
+                                        className="h-8 px-3 text-[10px] shadow-none border border-border dark:border-white/10 text-content-subtle hover:text-danger"
+                                        title="Quitar del catálogo público">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                                        Ocultar
+                                    </Button>
+                                </>
+                            )}
+                        </>
                     )}
                     <Button onClick={() => { setIsSelectionMode(!isSelectionMode); if (isSelectionMode) setSelectedProducts([]); }} variant="ghost"
                         className={`h-8 px-3 text-[10px] shadow-none border ${isSelectionMode ? "bg-brand-500 text-black border-brand-500" : "bg-surface-3 dark:bg-white/5 text-content-subtle border-white/5 hover:bg-white/10"}`}>
@@ -263,6 +308,25 @@ export default function CatalogPage() {
                                                 ))}
                                             </div>
                                         </div>
+                                        <div>
+                                            <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mb-1.5">Catálogo público</div>
+                                            <div className="grid grid-cols-3 gap-1">
+                                                {[
+                                                    { value: "",    label: "Todos" },
+                                                    { value: "yes", label: "Público" },
+                                                    { value: "no",  label: "Oculto" },
+                                                ].map(opt => (
+                                                    <button key={opt.value} onClick={() => setFilterVisible(opt.value)}
+                                                        className={`px-2 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                                            filterVisible === opt.value
+                                                                ? "bg-brand-500 text-black"
+                                                                : "bg-surface-3 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
+                                                        }`}>
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
                                         {activeFilterCount > 0 && (
                                             <button onClick={() => { clearFilters(); setShowFilters(false); }} className="w-full py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-danger hover:bg-danger/10 transition-all border border-danger/20">
                                                 Limpiar filtros
@@ -336,6 +400,7 @@ export default function CatalogPage() {
                                     isSelectionMode={isSelectionMode}
                                     priceCurrency={priceCurrency}
                                     localCurrency={localCurrency}
+                                    onToggleVisible={(p) => applyVisibility([p.id], !p.visible_in_catalog)}
                                 />
                             ) : (
                                 <ProductTable
@@ -349,6 +414,7 @@ export default function CatalogPage() {
                                     isSelectionMode={isSelectionMode}
                                     priceCurrency={priceCurrency}
                                     localCurrency={localCurrency}
+                                    onToggleVisible={(p) => applyVisibility([p.id], !p.visible_in_catalog)}
                                 />
                             )}
                         </div>

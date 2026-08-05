@@ -12,7 +12,8 @@ const UNITS = ["UNIDAD", "KG", "LITRO", "METRO"];
 const EMPTY = {
     name: "", price: "", stock: "", category_id: "", unit: "UNIDAD", qty_step: "1",
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
-    is_combo: false, combo_items: [], is_service: false, barcode: "", bulk_price: ""
+    is_combo: false, combo_items: [], is_service: false, barcode: "", bulk_price: "",
+    visible_in_catalog: false
 };
 
 export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName }) {
@@ -58,6 +59,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     is_combo: editData.is_combo || false,
                     is_service: editData.is_service || false,
                     barcode: editData.barcode || "",
+                    visible_in_catalog: editData.visible_in_catalog || false,
                     combo_items: editData.comboItems ? editData.comboItems.map(c => ({
                         product_id: c.ingredient.id,
                         name: c.ingredient.name,
@@ -421,6 +423,20 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             </label>
                         </div>
                     )}
+                </div>
+
+                {/* ── Catálogo público ── */}
+                <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 mt-1 ${form.visible_in_catalog ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
+                    <div>
+                        <div className="text-xs font-bold text-content dark:text-content-dark">Mostrar en catálogo público</div>
+                        <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5">
+                            Los clientes verán foto, categoría y precio. Nunca el stock ni el costo.
+                        </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" checked={form.visible_in_catalog} onChange={e => set("visible_in_catalog", e.target.checked)} />
+                        <div className="w-9 h-5 bg-border/50 peer-focus:outline-none dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
+                    </label>
                 </div>
 
                 {/* ── Componentes de Combo ── */}

@@ -1,4 +1,4 @@
-const { getAll, getOne, createProduct, updateProduct, deleteProduct } = require("../services/products");
+const { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility } = require("../services/products");
 const { broadcast } = require("../services/sseService");
 
 const wrap = (fn, status = 200) => async (req, res) => {
@@ -21,6 +21,15 @@ module.exports = {
   }, 201),
   update:  wrap(async req => {
     const result = await updateProduct({ id: req.params.id, body: req.body, file: req.file, company_id: req.employee?.company_id ?? null });
+    broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
+    return result;
+  }),
+  setCatalogVisibility: wrap(async req => {
+    const result = await setCatalogVisibility({
+      ids: req.body.ids,
+      visible: req.body.visible,
+      company_id: req.employee?.company_id ?? null,
+    });
     broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
     return result;
   }),

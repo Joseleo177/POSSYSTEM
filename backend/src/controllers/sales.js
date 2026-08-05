@@ -12,6 +12,23 @@ const update = async (req, res) => {
   }
 };
 
+// POST /api/sales/:id/accept-order
+// Acepta un pedido llegado del catálogo público: descuenta inventario y lo deja como
+// cuenta en espera. El almacén sale del que tenga activo quien lo acepta.
+const acceptOrder = async (req, res) => {
+  try {
+    const data = await salesService.acceptWebOrder(req.params.id, {
+      warehouse_id: req.body?.warehouse_id,
+      employee_id: req.employee?.id ?? null,
+    });
+    broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    const status = err.status || (/insuficiente|no encontrad/i.test(err.message) ? 400 : 500);
+    res.status(status).json({ ok: false, message: err.message });
+  }
+};
+
 // GET /api/sales/:id
 const getOne = async (req, res) => {
   try {
@@ -81,4 +98,4 @@ const confirmCredit = async (req, res) => {
   }
 };
 
-module.exports = { getOne, getAll, getStats, create, cancel, update, confirmCredit };
+module.exports = { getOne, getAll, getStats, create, cancel, update, confirmCredit, acceptOrder };
