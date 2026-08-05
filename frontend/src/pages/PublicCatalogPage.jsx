@@ -171,7 +171,7 @@ export default function PublicCatalogPage({ token }) {
     // la cédula para mirar precios no aportaría nada.
     // `store` null todavía = cabecera cargando; no se decide nada hasta tenerla.
     const gated = !!store && ordersEnabled && !identity;
-    const cartTotal = cart.reduce((sum, it) => sum + parseFloat(it.price) * it.qty, 0);
+    const cartTotal = cart.reduce((sum, it) => sum + parseFloat(it.price) * (parseFloat(it.qty) || 0), 0);
 
     // Paso de cantidad: las unidades contables van de uno en uno; peso y volumen admiten
     // medios, que es como se pide en mostrador ("medio kilo").
@@ -181,7 +181,8 @@ export default function PublicCatalogPage({ token }) {
         setCart(prev => {
             const found = prev.find(it => it.id === p.id);
             if (found) {
-                return prev.map(it => it.id === p.id ? { ...it, qty: round3(it.qty + stepFor(it.unit)) } : it);
+                const currentQty = typeof found.qty === "number" ? found.qty : (parseFloat(found.qty) || 0);
+                return prev.map(it => it.id === p.id ? { ...it, qty: round3(currentQty + stepFor(it.unit)) } : it);
             }
             return [...prev, { id: p.id, name: p.name, price: p.price, unit: p.unit, image_url: p.image_url, qty: stepFor(p.unit) }];
         });
@@ -190,8 +191,41 @@ export default function PublicCatalogPage({ token }) {
     const changeQty = (id, delta) => {
         setCart(prev => prev.flatMap(it => {
             if (it.id !== id) return [it];
-            const next = round3(it.qty + delta * stepFor(it.unit));
+            const currentQty = typeof it.qty === "number" ? it.qty : (parseFloat(it.qty) || 0);
+            const next = round3(currentQty + delta * stepFor(it.unit));
             return next > 0 ? [{ ...it, qty: next }] : [];
+        }));
+    };
+
+    const setQtyDirect = (id, raw) => {
+        if (raw === "") {
+            setCart(prev => prev.map(it => it.id === id ? { ...it, qty: "" } : it));
+            return;
+        }
+        let targetNq = parseFloat(raw);
+        if (isNaN(targetNq)) return;
+        setCart(prev => prev.map(it => {
+            if (it.id !== id) return it;
+            const isInt = isIntegerUnit(it.unit);
+            let nq = targetNq;
+            if (isInt) {
+                nq = Math.floor(nq);
+            } else {
+                nq = round3(nq);
+            }
+            return { ...it, qty: nq };
+        }));
+    };
+
+    const handleQtyBlur = (id, unit) => {
+        setCart(prev => prev.flatMap(it => {
+            if (it.id !== id) return [it];
+            const num = parseFloat(it.qty);
+            if (isNaN(num) || num <= 0) {
+                const minVal = isIntegerUnit(unit) ? 1 : stepFor(unit);
+                return [{ ...it, qty: minVal }];
+            }
+            return [it];
         }));
     };
 
@@ -770,20 +804,39 @@ export default function PublicCatalogPage({ token }) {
                                                     {it.name}
                                                 </div>
                                                 <div className="text-[12px] font-bold text-content-muted tabular-nums mt-0.5">
-                                                    {fmtQtyUnit(it.qty, it.unit)} · {fmt(parseFloat(it.price) * it.qty, baseCur)}
+                                                    {fmtQtyUnit(it.qty || 0, it.unit)} · {fmt(parseFloat(it.price) * (parseFloat(it.qty) || 0), baseCur)}
                                                 </div>
                                             </div>
-                                            {/* Objetivos de toque de 40px: los de 28 se fallaban con el
-                                        pulgar, y equivocarse aquí cambia lo que el cliente pide.
-                                        − y + van unidos como un solo control para que los tres
-                                        botones grandes sigan cabiendo en un teléfono estrecho. */}
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                <div className="flex items-center rounded-xl border border-border dark:border-white/10 overflow-hidden">
-                                                    <QtyBtn onClick={() => changeQty(it.id, -1)} label="Quitar uno">−</QtyBtn>
-                                                    <QtyBtn onClick={() => changeQty(it.id, +1)} label="Agregar uno" divider>+</QtyBtn>
+
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <div className="flex items-center rounded-xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 p-0.5">
+                                                    <button
+                                                        onClick={() => changeQty(it.id, -1)}
+                                                        aria-label="Quitar uno"
+                                                        className="w-7 h-7 rounded-lg text-content dark:text-white font-black hover:bg-black/5 dark:hover:bg-white/10 active:scale-90 transition-all flex items-center justify-center text-sm"
+                                                    >
+                                                        −
+                                                    </button>
+                                                    <input
+                                                        type="number"
+                                                        inputMode={isIntegerUnit(it.unit) ? "numeric" : "decimal"}
+                                                        step={isIntegerUnit(it.unit) ? "1" : "any"}
+                                                        min="0"
+                                                        value={it.qty}
+                                                        onChange={e => setQtyDirect(it.id, e.target.value)}
+                                                        onBlur={() => handleQtyBlur(it.id, it.unit)}
+                                                        className="w-11 bg-transparent text-center text-[12px] font-black border-none outline-none text-content dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none tabular-nums"
+                                                    />
+                                                    <button
+                                                        onClick={() => changeQty(it.id, +1)}
+                                                        aria-label="Agregar uno"
+                                                        className="w-7 h-7 rounded-lg text-content dark:text-white font-black hover:bg-black/5 dark:hover:bg-white/10 active:scale-90 transition-all flex items-center justify-center text-sm"
+                                                    >
+                                                        +
+                                                    </button>
                                                 </div>
                                                 <button onClick={() => removeFromCart(it.id)} title="Eliminar" aria-label={`Eliminar ${it.name}`}
-                                                    className="w-10 h-10 rounded-xl flex items-center justify-center text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90 transition-all">
+                                                    className="w-9 h-9 rounded-xl flex items-center justify-center text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90 transition-all">
                                                     <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                 </button>
                                             </div>
@@ -1319,19 +1372,6 @@ function OrderCard({ order, fmt, baseCur }) {
                 </div>
             )}
         </div>
-    );
-}
-
-function QtyBtn({ onClick, label, children, divider }) {
-    return (
-        <button
-            onClick={onClick}
-            aria-label={label}
-            className={`w-10 h-10 bg-surface-2 dark:bg-white/5 text-content dark:text-white text-lg font-black flex items-center justify-center hover:bg-brand-500/10 hover:text-brand-500 active:scale-90 transition-all ${divider ? "border-l border-border dark:border-white/10" : ""
-                }`}
-        >
-            {children}
-        </button>
     );
 }
 
