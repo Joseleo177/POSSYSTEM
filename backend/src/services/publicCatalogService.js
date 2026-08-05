@@ -237,7 +237,9 @@ async function getMyOrders(token, document) {
     const sales = await Sale.findAll({
       where: { customer_id: customer.id, status: { [Op.in]: Object.keys(ORDER_STAGES) } },
       attributes: ["id", "total", "status", "invoice_number", "created_at"],
-      include: [{ model: SaleItem, attributes: ["name", "quantity"], required: false }],
+      // Se incluye el precio de cada línea: el cliente que abre un pedido viejo quiere ver
+      // qué pagó por cada cosa, no solo qué se llevó.
+      include: [{ model: SaleItem, attributes: ["name", "quantity", "price", "subtotal"], required: false }],
       order: [["created_at", "DESC"]],
       limit: 15,
     });
@@ -254,7 +256,13 @@ async function getMyOrders(token, document) {
           stage: stage.stage,
           stage_label: stage.label,
           stage_detail: stage.detail,
-          items: (j.SaleItems || []).map((i) => ({ name: i.name, quantity: parseFloat(i.quantity) })),
+          items: (j.SaleItems || []).map((i) => ({
+            name: i.name,
+            quantity: parseFloat(i.quantity),
+            price: parseFloat(i.price),
+            // subtotal es columna generada en la BD; si faltara se recompone aquí.
+            subtotal: i.subtotal != null ? parseFloat(i.subtotal) : parseFloat(i.price) * parseFloat(i.quantity),
+          })),
         };
       }),
     };
