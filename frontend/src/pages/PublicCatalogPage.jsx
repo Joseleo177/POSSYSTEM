@@ -86,6 +86,7 @@ export default function PublicCatalogPage({ token }) {
         setCartOpen(false);
         setOrdersOpen(false);
         setProfileOpen(false);
+        setSelectedOrder(null);
         try { localStorage.removeItem(identityKey); } catch { /* modo privado */ }
     };
 
@@ -98,10 +99,11 @@ export default function PublicCatalogPage({ token }) {
         try { return JSON.parse(localStorage.getItem(`catalog_placed_${token}`)) || []; }
         catch { return []; }
     });
-    const [ordersOpen, setOrdersOpen] = useState(false);
-    const [myOrders, setMyOrders] = useState(null);
+    const [ordersOpen, setOrdersOpen]       = useState(false);
+    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [myOrders, setMyOrders]           = useState(null);
     const [ordersLoading, setOrdersLoading] = useState(false);
-    const [ordersError, setOrdersError] = useState(null);
+    const [ordersError, setOrdersError]     = useState(null);
 
     const rememberPlaced = (id) => {
         setPlacedIds(prev => {
@@ -696,7 +698,7 @@ export default function PublicCatalogPage({ token }) {
                             ) : (
                                 <>
                                     {(myOrders || []).map(o => (
-                                        <OrderCard key={o.id} order={o} fmt={fmt} baseCur={baseCur} />
+                                        <OrderCard key={o.id} order={o} fmt={fmt} baseCur={baseCur} onSelect={setSelectedOrder} />
                                     ))}
                                     {rejectedIds.map(id => (
                                         <OrderCard
@@ -710,6 +712,7 @@ export default function PublicCatalogPage({ token }) {
                                             }}
                                             fmt={fmt}
                                             baseCur={baseCur}
+                                            onSelect={setSelectedOrder}
                                         />
                                     ))}
                                 </>
@@ -731,10 +734,18 @@ export default function PublicCatalogPage({ token }) {
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                         onClick={() => (placedOrder ? closeConfirmation() : setCartOpen(false))} />
                     <div className="relative w-full sm:max-w-md bg-surface dark:bg-surface-dark-2 rounded-t-3xl sm:rounded-3xl border-t sm:border border-border dark:border-white/10 max-h-[90vh] flex flex-col">
-                        <div className="relative px-4 pt-4 pb-3 flex items-center justify-center border-b border-border dark:border-white/5">
+                        <div className="relative px-4 pt-4 pb-3 flex flex-col items-center justify-center border-b border-border dark:border-white/5">
                             <h2 className="text-[13px] font-black uppercase tracking-tight text-content dark:text-white text-center">
                                 {placedOrder ? "Pedido enviado" : "Tu pedido"}
                             </h2>
+                            {/* A nombre de quién va el pedido, como subtítulo. Antes ocupaba un
+                                bloque del tamaño de una fila de producto para repetirle al cliente
+                                algo que ya sabe: basta con que pueda comprobarlo de un vistazo. */}
+                            {identity && !placedOrder && (
+                                <p className="text-[10px] font-bold text-content-muted text-center truncate max-w-full px-8">
+                                    {identity.name} · {identity.document}
+                                </p>
+                            )}
                             <button onClick={() => (placedOrder ? closeConfirmation() : setCartOpen(false))}
                                 className="absolute right-4 top-3.5 p-1.5 text-content-subtle hover:text-content dark:hover:text-white">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -1021,8 +1032,19 @@ export default function PublicCatalogPage({ token }) {
                 </div>
             )}
 
+            {/* ── Modal de Detalle de Pedido ── */}
+            {selectedOrder && (
+                <OrderDetailModal
+                    order={selectedOrder}
+                    onClose={() => setSelectedOrder(null)}
+                    fmt={fmt}
+                    baseCur={baseCur}
+                    altCur={altCur}
+                />
+            )}
+
             {/* ── Botón flotante de WhatsApp de la Tienda ── */}
-            {!cartOpen && !ordersOpen && !profileOpen && store?.whatsapp && (
+            {!cartOpen && !ordersOpen && !profileOpen && !selectedOrder && store?.whatsapp && (
                 <a
                     href={`https://wa.me/${store.whatsapp}`}
                     target="_blank"
@@ -1285,96 +1307,154 @@ const STAGE_STYLES = {
 // llega la unidad del producto, así que se decide por el propio número.
 const fmtQty = (q) => (q % 1 === 0 ? String(q) : q.toFixed(3));
 
-function OrderCard({ order, fmt, baseCur }) {
-    const [open, setOpen] = useState(false);
+function OrderCard({ order, fmt, baseCur, onSelect }) {
     const style = STAGE_STYLES[order.stage] || STAGE_STYLES.enviado;
-    const summary = order.items.map(i => `${fmtQty(i.quantity)} × ${i.name}`).join(", ");
-    // Los pedidos deducidos como rechazados no tienen líneas que mostrar.
-    const expandable = order.items.length > 0;
+    const itemsCount = order.items?.length || 0;
+    const summary = order.items?.map(i => `${fmtQty(i.quantity)} × ${i.name}`).join(", ");
 
     return (
-        <div className="rounded-2xl border border-border dark:border-white/10 bg-surface-2 dark:bg-white/[0.03] overflow-hidden">
-            <button
-                onClick={() => expandable && setOpen(v => !v)}
-                disabled={!expandable}
-                className={`w-full text-left p-3 space-y-2 ${expandable ? "hover:bg-white/[0.02] transition-colors" : "cursor-default"}`}
-            >
-                <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-black uppercase tracking-widest text-content dark:text-white">
-                        Pedido #{order.id}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-wide shrink-0 ${style}`}>
-                        {order.stage_label}
-                    </span>
-                </div>
+        <div
+            onClick={() => onSelect(order)}
+            className="w-full text-left p-3.5 rounded-2xl border border-border dark:border-white/10 bg-surface-2 dark:bg-white/[0.03] hover:bg-brand-500/5 hover:border-brand-500/30 transition-all cursor-pointer space-y-2 group"
+        >
+            <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] font-black uppercase tracking-tight text-content dark:text-white group-hover:text-brand-500 transition-colors">
+                    Pedido #{order.id}
+                </span>
+                <span className={`px-2.5 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-wide shrink-0 ${style}`}>
+                    {order.stage_label}
+                </span>
+            </div>
 
-                <p className="text-[11px] font-bold text-content-muted leading-relaxed">{order.stage_detail}</p>
-
-                {/* Cerrado: resumen de una línea. Abierto: el detalle de abajo lo sustituye,
-                    para no repetir los mismos productos dos veces. */}
-                {summary && !open && (
-                    <p className="text-[10px] font-bold text-content-subtle line-clamp-2">{summary}</p>
-                )}
-
-                <div className="flex items-end justify-between gap-2 pt-0.5">
-                    <div className="text-[10px] font-bold text-content-subtle">
-                        {order.created_at && new Date(order.created_at).toLocaleDateString("es-VE", { day: "2-digit", month: "short" })}
-                        {order.invoice_number && ` · Factura ${order.invoice_number}`}
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                        {order.total != null && (
-                            <span className="text-[13px] font-black text-content dark:text-white tabular-nums">
-                                {fmt(order.total, baseCur)}
-                            </span>
-                        )}
-                        {expandable && (
-                            <svg className={`w-3.5 h-3.5 text-content-subtle transition-transform ${open ? "rotate-180" : ""}`}
-                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
-                            </svg>
-                        )}
-                    </div>
-                </div>
-
-                {expandable && !open && (
-                    <p className="text-[9px] font-black uppercase tracking-widest text-brand-500">
-                        Ver detalle
-                    </p>
-                )}
-            </button>
-
-            {open && (
-                <div className="px-3 pb-3 -mt-1">
-                    <div className="rounded-xl bg-surface dark:bg-black/20 border border-border dark:border-white/5 divide-y divide-border/50 dark:divide-white/5">
-                        {order.items.map((it, i) => {
-                            // Un backend anterior a este cambio no manda precios. Sin esta
-                            // guarda el cliente vería "Ref.NaN" en cada línea.
-                            const hasPrice = Number.isFinite(it.price);
-                            const line = Number.isFinite(it.subtotal)
-                                ? it.subtotal
-                                : (hasPrice ? it.price * it.quantity : null);
-                            return (
-                                <div key={i} className="flex items-start justify-between gap-3 px-3 py-2">
-                                    <div className="min-w-0">
-                                        <div className="text-[11px] font-black uppercase tracking-tight text-content dark:text-white leading-tight">
-                                            {it.name}
-                                        </div>
-                                        <div className="text-[10px] font-bold text-content-subtle tabular-nums">
-                                            {fmtQty(it.quantity)}
-                                            {hasPrice && ` × ${fmt(it.price, baseCur)}`}
-                                        </div>
-                                    </div>
-                                    {line != null && (
-                                        <div className="text-[11px] font-black text-content dark:text-white tabular-nums shrink-0">
-                                            {fmt(line, baseCur)}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
+            {summary && (
+                <p className="text-[11px] font-bold text-content-muted line-clamp-1">
+                    {summary}
+                </p>
             )}
+
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40 dark:border-white/5 text-[11px]">
+                <span className="font-bold text-content-subtle">
+                    {order.created_at ? new Date(order.created_at).toLocaleDateString("es-VE", { day: "2-digit", month: "short" }) : "Sin fecha"}
+                    {itemsCount > 0 ? ` · ${itemsCount} ${itemsCount === 1 ? 'item' : 'items'}` : ''}
+                </span>
+                <div className="flex items-center gap-1 font-black text-content dark:text-white tabular-nums">
+                    {order.total != null ? fmt(order.total, baseCur) : "-"}
+                    <svg className="w-3.5 h-3.5 text-content-subtle group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function OrderDetailModal({ order, onClose, fmt, baseCur, altCur }) {
+    if (!order) return null;
+    const style = STAGE_STYLES[order.stage] || STAGE_STYLES.enviado;
+    const formattedDate = order.created_at 
+        ? new Date(order.created_at).toLocaleDateString("es-VE", { day: "2-digit", month: "long", year: "numeric" })
+        : "Fecha desconocida";
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative w-full max-w-lg max-h-[90vh] bg-surface dark:bg-surface-dark-2 rounded-3xl border border-border dark:border-white/10 overflow-hidden shadow-2xl flex flex-col z-10 animate-in fade-in zoom-in-95 duration-200">
+                
+                {/* Header */}
+                <div className="px-5 pt-5 pb-4 border-b border-border dark:border-white/5 flex items-center justify-between gap-3 shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center shrink-0">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        </div>
+                        <div className="min-w-0">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle block">
+                                Detalle de Venta
+                            </span>
+                            <h2 className="text-base font-black uppercase tracking-tight text-content dark:text-white truncate">
+                                Orden #{order.id}
+                            </h2>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <span className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-wider ${style}`}>
+                            {order.stage_label}
+                        </span>
+                        <button onClick={onClose} className="p-1.5 -mr-1 text-content-subtle hover:text-content dark:hover:text-white transition-colors">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                </div>
+
+                {/* Body / Scrollable Content */}
+                <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                    {/* Meta info grid */}
+                    <div className="grid grid-cols-2 gap-2.5">
+                        <div className="bg-surface-2 dark:bg-white/5 border border-border dark:border-white/5 rounded-2xl p-3 space-y-1">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-content-subtle block">Fecha</span>
+                            <span className="text-xs font-bold text-content dark:text-white capitalize block">{formattedDate}</span>
+                        </div>
+                        <div className="bg-surface-2 dark:bg-white/5 border border-border dark:border-white/5 rounded-2xl p-3 space-y-1">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-content-subtle block">Factura</span>
+                            <span className="text-xs font-bold text-content dark:text-white block">{order.invoice_number ? `Factura ${order.invoice_number}` : "S/F"}</span>
+                        </div>
+                        <div className="bg-surface-2 dark:bg-white/5 border border-border dark:border-white/5 rounded-2xl p-3 space-y-1 col-span-2">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-content-subtle block">Estado</span>
+                            <span className="text-xs font-bold text-content dark:text-white leading-relaxed block">{order.stage_detail}</span>
+                        </div>
+                    </div>
+
+                    {/* Table of items */}
+                    {order.items && order.items.length > 0 && (
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-content-subtle px-1">
+                                <span>Productos ({order.items.length})</span>
+                            </div>
+                            <div className="rounded-2xl border border-border dark:border-white/10 bg-surface-2 dark:bg-white/[0.02] overflow-hidden divide-y divide-border/40 dark:divide-white/5">
+                                <div className="grid grid-cols-12 gap-2 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-content-subtle bg-surface/50 dark:bg-white/5">
+                                    <span className="col-span-6">Producto</span>
+                                    <span className="col-span-2 text-center">Cant.</span>
+                                    <span className="col-span-2 text-right">P. Unit</span>
+                                    <span className="col-span-2 text-right">Subtotal</span>
+                                </div>
+                                {order.items.map((it, idx) => {
+                                    const hasPrice = Number.isFinite(it.price);
+                                    const subtotal = Number.isFinite(it.subtotal) ? it.subtotal : (hasPrice ? it.price * it.quantity : null);
+                                    return (
+                                        <div key={idx} className="grid grid-cols-12 gap-2 px-3 py-2.5 items-center text-xs">
+                                            <span className="col-span-6 font-black uppercase tracking-tight text-content dark:text-white truncate">
+                                                {it.name}
+                                            </span>
+                                            <span className="col-span-2 font-bold text-center text-content dark:text-white tabular-nums">
+                                                {fmtQty(it.quantity)}
+                                            </span>
+                                            <span className="col-span-2 text-right text-content-subtle tabular-nums font-bold text-[11px]">
+                                                {hasPrice ? fmt(it.price, baseCur) : "-"}
+                                            </span>
+                                            <span className="col-span-2 text-right font-black text-content dark:text-white tabular-nums text-[11px]">
+                                                {subtotal != null ? fmt(subtotal, baseCur) : "-"}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer Total */}
+                <div className="px-5 py-4 border-t border-border dark:border-white/5 bg-surface-2 dark:bg-white/5 flex items-center justify-between shrink-0">
+                    <span className="text-[11px] font-black uppercase tracking-widest text-content-subtle">Total del Pedido</span>
+                    <div className="text-right">
+                        <div className="text-lg font-black text-brand-500 tabular-nums">
+                            {order.total != null ? fmt(order.total, baseCur) : "-"}
+                        </div>
+                        {altCur && order.total != null && (
+                            <div className="text-[11px] font-black text-content-muted tabular-nums">
+                                {fmt(order.total, altCur)}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+            </div>
         </div>
     );
 }

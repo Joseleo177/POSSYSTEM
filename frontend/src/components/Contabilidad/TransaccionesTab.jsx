@@ -11,6 +11,8 @@ import DateRangePicker from "../ui/DateRangePicker";
 import Pagination from "../ui/Pagination";
 import { api } from "../../services/api";
 
+// Rojo solo para lo que exige cobrar. Una cuenta en espera y un pedido del catálogo no
+// son deudas: todavía no se han facturado, así que no deben leerse como una alerta.
 const STATUS_BADGE = {
     pagado:   "badge-success",
     parcial:  "badge-warning",
@@ -18,6 +20,8 @@ const STATUS_BADGE = {
     devuelto: "badge-warning",
     pendiente:"badge-danger",
     borrador: "badge-neutral",
+    espera:   "badge-info",
+    pedido:   "badge-violet",
 };
 
 export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, setReceiptSale }) {
@@ -133,7 +137,10 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                             <span className="text-[11px] font-black text-brand-500 tracking-tight">{sale.invoice_number || `#${sale.id}`}</span>
                                         </td>
                                         <td>
-                                            <span className={`badge shadow-none ${STATUS_BADGE[sale.status] || 'badge-danger'}`}>
+                                            {/* Neutro como respaldo, no rojo: un estado sin mapear
+                                                no es un problema, y pintarlo de alerta fue justo lo
+                                                que hizo pasar 'espera' por deuda pendiente. */}
+                                            <span className={`badge shadow-none ${STATUS_BADGE[sale.status] || 'badge-neutral'}`}>
                                                 {sale.status}
                                             </span>
                                         </td>
