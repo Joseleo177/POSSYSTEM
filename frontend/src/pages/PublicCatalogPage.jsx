@@ -790,18 +790,9 @@ export default function PublicCatalogPage({ token }) {
                                         </div>
                                     ))}
 
-                                    <div className="pt-2 space-y-2">
-                                        {/* Los datos ya se dieron al entrar; aquí solo se recuerdan para
-                                    que el cliente vea a nombre de quién va el pedido. */}
-                                        <div className="rounded-xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 px-3 py-2">
-                                            <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle">A nombre de</div>
-                                            <div className="text-[12px] font-black text-content dark:text-white uppercase truncate">{identity?.name}</div>
-                                            <div className="text-[10px] font-bold text-content-muted tabular-nums truncate">
-                                                {[identity?.document, identity?.phone].filter(Boolean).join(" · ")}
-                                            </div>
-                                        </div>
+                                    <div className="pt-2">
                                         <div>
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-content-subtle">Entrega o nota</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-content-subtle">Entrega o nota (opcional)</label>
                                             <input
                                                 value={delivery}
                                                 onChange={e => setDelivery(e.target.value)}
