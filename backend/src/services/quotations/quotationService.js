@@ -107,11 +107,12 @@ async function convert(quotationId, body, employeeId) {
 
   const t = await sequelize.transaction();
   try {
-    const quotation = await Quotation.findByPk(quotationId, {
-      include: [{ model: QuotationItem, as: 'items' }],
-      transaction: t, lock: true,
-    });
+    // Mismo motivo que en updateSale: Postgres rechaza FOR UPDATE sobre el lado nullable
+    // de un outer join, y el include hasMany genera un LEFT JOIN. Se bloquea la cabecera
+    // y las líneas se leen aparte, dentro de la misma transacción.
+    const quotation = await Quotation.findByPk(quotationId, { transaction: t, lock: true });
     if (!quotation) { const e = new Error("Cotización no encontrada"); e.status = 404; throw e; }
+    const quotationItems = await QuotationItem.findAll({ where: { quotation_id: quotationId }, transaction: t });
     if (quotation.status !== 'pendiente') {
       const e = new Error("Solo se pueden convertir cotizaciones pendientes"); e.status = 400; throw e;
     }
@@ -147,7 +148,7 @@ async function convert(quotationId, body, employeeId) {
     const warehouseId = quotation.warehouse_id;
     const enrichedItems = [];
 
-    for (const qi of quotation.items) {
+    for (const qi of quotationItems) {
       if (!qi.product_id) {
         enrichedItems.push({ product_id: null, name: qi.product_name, price: parseFloat(qi.price), qty: parseFloat(qi.quantity), isService: true });
         continue;

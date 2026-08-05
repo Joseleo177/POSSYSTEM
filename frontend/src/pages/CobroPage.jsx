@@ -38,7 +38,7 @@ export default function CobroPage() {
         selectedCustomer, setSelectedCustomer,
         employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
         checkout, saveQuotation, loading, receipt, setReceipt,
-        heldCarts, holdCart, takeHeldCart, removeHeldCart,
+        heldCarts, holdCart, takeHeldCart, removeHeldCart, loadHeldCarts,
         activePromos, loadActivePromos, promoLineDiscount, promoDiscount,
     } = useCart();
 
@@ -55,6 +55,9 @@ export default function CobroPage() {
     const [showPendingSales, setShowPendingSales]  = useState(false);
     const searchInputRef                           = useRef(null);
     const scanPendingRef                           = useRef(false);
+
+    // Al abrir el listado se recarga: otra caja pudo abrir o cobrar una cuenta mientras tanto.
+    useEffect(() => { if (showHeldModal) loadHeldCarts(); }, [showHeldModal, loadHeldCarts]);
 
     // ── Hooks de capa ──────────────────────────────────────────
     const products = useCobroProducts(activeWarehouse, notify);

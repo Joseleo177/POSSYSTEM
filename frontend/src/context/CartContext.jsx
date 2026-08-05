@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef } from "react";
+import { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
 import { api } from "../services/api";
 import { useApp } from "./AppContext";
 
@@ -16,6 +16,13 @@ export function CartProvider({ children }) {
   // y se renueva sólo cuando la venta se concreta con éxito.
   const pendingKeyRef = useRef(null);
   const [heldCarts, setHeldCarts] = useState([]);
+  // Id de la cuenta en espera que se está editando. Si está puesto, finalizar actualiza
+  // esa venta en vez de crear una nueva (evita duplicarla y descontar stock dos veces).
+  const [heldSaleId, setHeldSaleId] = useState(null);
+  // Espejo en ref: loadHeldCarts se ejecuta desde efectos y respuestas asíncronas, donde
+  // el valor del estado puede estar desfasado. La ref siempre tiene el actual.
+  const heldSaleIdRef = useRef(null);
+  const setHeldSale = useCallback((id) => { heldSaleIdRef.current = id; setHeldSaleId(id); }, []);
   const [quotationId, setQuotationId] = useState(null);
 
   // ── Moneda seleccionada ────────────────────────────────────
@@ -274,47 +281,6 @@ export function CartProvider({ children }) {
     }
   }, [activeWarehouse, notify]);
 
-  // ── Hold Cart ─────────────────────────────────────────────
-  const holdCart = useCallback(() => {
-    if (cart.length === 0) return notify("No hay productos para poner en espera", "info");
-
-    const newHeld = {
-      id: Date.now(),
-      created_at: new Date(),
-      items: [...cart],
-      customer: selectedCustomer,
-      currency: selectedCurrency,
-      serie_id: selectedSerieId,
-      discount: { enabled: discountEnabled, pct: discountPct }
-    };
-
-    setHeldCarts(prev => [newHeld, ...prev]);
-    clearCart();
-    notify("Venta puesta en espera");
-  }, [cart, selectedCustomer, selectedCurrency, selectedSerieId, discountEnabled, discountPct, clearCart, notify]);
-
-  const takeHeldCart = useCallback((heldId) => {
-    const held = heldCarts.find(h => h.id === heldId);
-    if (!held) return;
-
-    // Si hay algo en el carrito actual, preguntamos si guardarlo? 
-    // Por ahora solo lo reemplazamos (el usuario debería pausar el actual antes)
-    setCart(held.items);
-    setSelectedCustomer(held.customer);
-    setSelectedCurrency(held.currency);
-    setSelectedSerieId(held.serie_id);
-    setDiscountEnabled(held.discount.enabled);
-    setDiscountPct(held.discount.pct);
-
-    setHeldCarts(prev => prev.filter(h => h.id !== heldId));
-    notify("Venta recuperada");
-  }, [heldCarts, notify]);
-
-  const removeHeldCart = useCallback((heldId) => {
-    setHeldCarts(prev => prev.filter(h => h.id !== heldId));
-    notify("Venta en espera eliminada");
-  }, [notify]);
-
   // ── Totales ────────────────────────────────────────────────
   // USD: suma precios PRECISOS, redondea solo el total final (round-after-sum).
   //   round2(sum(4.06569 × 3)) = round2(12.197) = 12.20
@@ -391,6 +357,117 @@ export function CartProvider({ children }) {
   const totalSecondary  = isVesPrimary ? totalUsd : (totalBs ?? convertToSecondary(totalUsd));
 
 
+  // ── Cuentas en espera ─────────────────────────────────────
+  // Antes vivían en estado local: solo existían en la máquina que las creó y se perdían
+  // al recargar. Ahora son ventas reales con status 'espera', así que cualquier caja de
+  // la empresa las ve y las puede cobrar. No aparecen en Facturas Pendientes porque ese
+  // listado filtra borrador/pendiente/parcial.
+  const loadHeldCarts = useCallback(async () => {
+    if (!employee) return;
+    try {
+      const res = await api.sales.getHeld();
+      // La cuenta que esta caja tiene abierta en el carrito no se lista: sigue en 'espera'
+      // en el servidor, pero aquí ya está "en uso".
+      setHeldCarts((res.data || []).filter(s => s.id !== heldSaleIdRef.current));
+    } catch {
+      // Silencioso: es una carga de fondo, no debe interrumpir el cobro en curso.
+    }
+  }, [employee]);
+
+  // CartProvider envuelve toda la app, así que sin esta guarda la petición saldría
+  // también en la pantalla de login: un 401 dispararía el refresh de token y la recarga.
+  useEffect(() => { if (employee) loadHeldCarts(); }, [employee, loadHeldCarts]);
+
+  // Sin parámetros a propósito: se invoca como onClick={holdCart} y con el atajo F4, así
+  // que cualquier argumento sería el evento del clic, no un callback.
+  const holdCart = useCallback(async () => {
+    if (cart.length === 0) return notify("No hay productos para poner en espera", "info");
+    if (!activeWarehouse) return notify("Selecciona un almacén antes de continuar", "err");
+    if (!selectedSerieId) return notify("La serie es requerida", "err");
+
+    setLoading(true);
+    try {
+      // Si la cuenta ya existía (se recuperó para agregar productos), se actualiza en vez
+      // de crear otra: así no se duplica ni se descuenta el stock dos veces.
+      if (heldSaleId) {
+        await api.sales.update(heldSaleId, {
+          items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty) })),
+          discount_amount: discountAmount,
+        });
+      } else {
+        await api.sales.create({
+          items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty) })),
+          paid: 0,
+          customer_id: selectedCustomer?.id || null,
+          employee_id: employee?.id || null,
+          currency_id: currentCurrency?.id || null,
+          exchange_rate: exchangeRate,
+          serie_id: selectedSerieId,
+          warehouse_id: activeWarehouse.id,
+          discount_amount: discountAmount,
+          hold: true,
+        });
+      }
+      setHeldSale(null);
+      clearCart();
+      await loadHeldCarts();
+      notify("Cuenta puesta en espera");
+    } catch (e) {
+      notify(e.message || "No se pudo poner la cuenta en espera", "err");
+    } finally {
+      setLoading(false);
+    }
+  }, [cart, heldSaleId, activeWarehouse, selectedSerieId, selectedCustomer, employee,
+    currentCurrency, exchangeRate, discountAmount, clearCart, loadHeldCarts, notify]);
+
+  // Recupera una cuenta al carrito para seguir agregándole productos o cobrarla.
+  const takeHeldCart = useCallback(async (saleId) => {
+    const held = heldCarts.find(h => h.id === saleId);
+    if (!held) return;
+    if (!activeWarehouse) return notify("Selecciona un almacén antes de continuar", "err");
+
+    try {
+      // Las líneas guardadas solo traen product_id/precio/cantidad; hay que rehidratarlas
+      // con los datos del producto (unidad, imagen, stock) que el carrito necesita.
+      const wid = held.warehouse_id || activeWarehouse.id;
+      const res = await api.warehouses.getProducts(wid, { limit: 500 });
+      const productMap = Object.fromEntries((res.data || []).map(p => [p.id, p]));
+
+      const newCart = (held.items || []).reduce((acc, item) => {
+        const prod = productMap[item.product_id];
+        if (!prod) return acc;
+        return [...acc, { ...prod, price: parseFloat(item.price), qty: parseFloat(item.quantity) || 1 }];
+      }, []);
+
+      setCart(newCart);
+      setHeldSale(held.id);
+      if (held.customer_id) {
+        setSelectedCustomer({ id: held.customer_id, name: held.customer_name, rif: held.customer_rif });
+      }
+      if (held.serie_id) setSelectedSerieId(held.serie_id);
+
+      // Sale del listado: ya está en el carrito de esta caja, y dejarla visible invitaría
+      // a que otra la recupere en paralelo. En el servidor sigue en 'espera', así que si
+      // se abandona sin cobrarla ni volver a pausarla, reaparece en la próxima carga.
+      setHeldCarts(prev => prev.filter(h => h.id !== held.id));
+      notify("Cuenta recuperada");
+    } catch (e) {
+      notify(e.message || "No se pudo recuperar la cuenta", "err");
+    }
+  }, [heldCarts, activeWarehouse, notify]);
+
+  // Eliminar devuelve el inventario: cancelSale restaura el stock de cada línea.
+  const removeHeldCart = useCallback(async (saleId) => {
+    try {
+      await api.sales.cancel(saleId);
+      if (heldSaleId === saleId) { setHeldSale(null); clearCart(); }
+      await loadHeldCarts();
+      notify("Cuenta en espera eliminada");
+    } catch (e) {
+      notify(e.message || "No se pudo eliminar la cuenta", "err");
+    }
+  }, [heldSaleId, clearCart, loadHeldCarts, notify]);
+
   // ── Guardar cotización ────────────────────────────────────
   const saveQuotation = useCallback(async (onSuccess) => {
     if (!cart.length) return notify("El carrito está vacío", "err");
@@ -444,19 +521,28 @@ export function CartProvider({ children }) {
         (crypto?.randomUUID?.() ?? `k-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     }
     try {
-      const res = await api.sales.create({
-        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty) })),
-        paid: 0,
-        customer_id: selectedCustomer?.id || null,
-        employee_id: employee?.id || null,
-        currency_id: currentCurrency?.id || null,
-        exchange_rate: exchangeRate,
-        serie_id: selectedSerieId,
-        warehouse_id: activeWarehouse.id,
-        discount_amount: discountAmount,
-        idempotency_key: pendingKeyRef.current,
-        quotation_id: quotationId || null,
-      });
+      // Si se está cobrando una cuenta en espera, la venta YA existe: se actualizan sus
+      // líneas (por si se agregaron rondas) y se pasa a 'borrador' para que el cobro le
+      // asigne el correlativo. Crear una nueva duplicaría la venta y el descuento de stock.
+      const res = heldSaleId
+        ? await api.sales.update(heldSaleId, {
+            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty) })),
+            discount_amount: discountAmount,
+            status: "borrador",
+          })
+        : await api.sales.create({
+            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty) })),
+            paid: 0,
+            customer_id: selectedCustomer?.id || null,
+            employee_id: employee?.id || null,
+            currency_id: currentCurrency?.id || null,
+            exchange_rate: exchangeRate,
+            serie_id: selectedSerieId,
+            warehouse_id: activeWarehouse.id,
+            discount_amount: discountAmount,
+            idempotency_key: pendingKeyRef.current,
+            quotation_id: quotationId || null,
+          });
 
       const serie = mySeries.find(s => s.id === selectedSerieId);
       setReceipt({
@@ -471,6 +557,7 @@ export function CartProvider({ children }) {
       // Venta concretada: invalidamos la clave para que el próximo
       // cobro use una nueva (en errores la dejamos viva para reintentos).
       pendingKeyRef.current = null;
+      if (heldSaleId) { setHeldSale(null); loadHeldCarts(); }
       clearCart();
       onSuccess?.();
     } catch (e) {
@@ -480,7 +567,7 @@ export function CartProvider({ children }) {
       submittingRef.current = false;
     }
   }, [cart, activeWarehouse, selectedCustomer, selectedSerieId,
-    employee, currentCurrency, exchangeRate,
+    employee, currentCurrency, exchangeRate, heldSaleId, loadHeldCarts,
     mySeries, notify, clearCart]);
 
   return (
@@ -508,7 +595,7 @@ export function CartProvider({ children }) {
       // Quotation pre-load
       loadFromQuotation, quotationId,
       // Hold Cart
-      heldCarts, holdCart, takeHeldCart, removeHeldCart,
+      heldCarts, holdCart, takeHeldCart, removeHeldCart, loadHeldCarts, heldSaleId,
     }}>
       {children}
     </CartContext.Provider>

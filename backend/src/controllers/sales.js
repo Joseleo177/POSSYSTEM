@@ -70,4 +70,15 @@ const cancel = async (req, res) => {
   }
 };
 
-module.exports = { getOne, getAll, getStats, create, cancel, update };
+// POST /api/sales/:id/credit — entrega a crédito: asigna correlativo y deja por cobrar
+const confirmCredit = async (req, res) => {
+  try {
+    const result = await salesService.confirmCreditSale(req.params.id);
+    broadcast(req.employee?.company_id ?? 0, 'sales:updated', {});
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ ok: false, message: err.message });
+  }
+};
+
+module.exports = { getOne, getAll, getStats, create, cancel, update, confirmCredit };

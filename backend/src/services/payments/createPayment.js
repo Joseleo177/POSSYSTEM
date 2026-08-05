@@ -1,5 +1,6 @@
-const { Payment, Sale, SaleItem, Sequelize, sequelize, getSaleBalance } = require("./shared");
-const { Expense, ExpenseCategory, PaymentJournal, Currency, Serie, SerieRange, Customer } = require("../../models");
+const { Payment, Sale, SaleItem, sequelize, getSaleBalance } = require("./shared");
+const { Expense, ExpenseCategory, PaymentJournal, Currency, Customer } = require("../../models");
+const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
 
 module.exports = async function createPayment(body) {
   const t = await sequelize.transaction();
@@ -37,32 +38,11 @@ module.exports = async function createPayment(body) {
     if (sale.status === "anulado") throw new Error("Esta factura está anulada");
     if (sale.status === "devuelto") throw new Error("Esta factura fue devuelta en su totalidad, no tiene saldo por cobrar");
 
-    // Asignar correlativo al confirmar el primer pago de un borrador
-    if (sale.status === 'borrador' && sale.serie_id) {
-      const serie = await Serie.findByPk(sale.serie_id, { transaction: t });
-      if (serie && serie.active) {
-        const activeRange = await SerieRange.findOne({
-          where: {
-            serie_id: sale.serie_id,
-            active: true,
-            current_number: { [Sequelize.Op.lte]: Sequelize.col('end_number') },
-          },
-          order: [['start_number', 'ASC']],
-          lock: true,
-          transaction: t,
-        });
-        if (!activeRange) throw new Error(`Serie "${serie.name}" agotada. Añade un nuevo rango en Contabilidad.`);
-
-        const correlativeNumber = activeRange.current_number;
-        const invoiceNumber = `${serie.prefix}-${String(correlativeNumber).padStart(serie.padding, '0')}`;
-        const nextNumber = correlativeNumber + 1;
-        await activeRange.update(
-          nextNumber > activeRange.end_number ? { current_number: nextNumber, active: false } : { current_number: nextNumber },
-          { transaction: t }
-        );
-        await sale.update({ invoice_number: invoiceNumber, correlative_number: correlativeNumber, serie_range_id: activeRange.id }, { transaction: t });
-        sale.invoice_number = invoiceNumber;
-      }
+    // Asignar correlativo al primer pago de una venta que aún no lo tiene: borrador
+    // (contado) o cuenta en espera. Una venta ya entregada a crédito llega con status
+    // 'pendiente' y su número puesto, así que assignInvoiceNumber la deja intacta.
+    if (['borrador', 'espera'].includes(sale.status)) {
+      await assignInvoiceNumber(sale, t);
     }
 
     const payAmt   = parseFloat(amount || 0);

@@ -52,7 +52,7 @@ async function formatSale(saleId) {
 }
 
 module.exports = async function createSale(body) {
-  const { items, paid, customer_id, employee_id, currency_id, exchange_rate, payment_method, serie_id, discount_amount, warehouse_id, idempotency_key, quotation_id } =
+  const { items, paid, customer_id, employee_id, currency_id, exchange_rate, payment_method, serie_id, discount_amount, warehouse_id, idempotency_key, quotation_id, hold } =
     body;
 
   // Idempotencia: si ya existe una venta con esta clave, devolverla sin
@@ -191,7 +191,10 @@ module.exports = async function createSale(body) {
         payment_method: method,
         warehouse_id,
         serie_id: serie.id,
-        status: 'borrador',
+        // 'espera' = cuenta abierta (mesa/pedido sin cobrar todavía). Se distingue de
+        // 'borrador' para que NO aparezca en Facturas Pendientes: se gestiona desde
+        // "Cuentas en espera" y es visible para cualquier caja de la empresa.
+        status: hold ? 'espera' : 'borrador',
         idempotency_key: idempotency_key || null,
       },
       { transaction }

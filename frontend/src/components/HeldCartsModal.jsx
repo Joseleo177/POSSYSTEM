@@ -32,8 +32,10 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                         </div>
                     ) : (
                         carts.map(c => {
-                            const total = c.items.reduce((acc, i) => acc + (parseFloat(i.price) * i.qty), 0);
-                            const sym = c.currency?.symbol || baseCurrency?.symbol || "Ref.";
+                            // Las cuentas vienen del servidor (ventas con status 'espera'),
+                            // así que el total ya viene calculado y no hay que rearmarlo.
+                            const total = parseFloat(c.total || 0);
+                            const sym = c.currency_symbol || baseCurrency?.symbol || "Ref.";
 
                             return (
                                 <div key={c.id} className="bg-surface-1 dark:bg-white/[0.03] px-4 py-3 rounded-2xl border border-black/5 dark:border-white/5 flex items-center gap-4 group hover:border-brand-500/30 transition-all">
@@ -44,9 +46,14 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                     </div>
 
                                     <div className="flex-1 min-w-0">
-                                        <div className="text-[9px] font-black text-brand-500 uppercase tracking-widest opacity-60">
-                                            {c.customer?.name || "Cliente General"}
+                                        <div className="text-[9px] font-black text-brand-500 uppercase tracking-widest">
+                                            {c.customer_name || "Cliente General"}
                                         </div>
+                                        {c.employee_name && (
+                                            <div className="text-[9px] font-bold text-content-subtle uppercase truncate">
+                                                Abrió: {c.employee_name}
+                                            </div>
+                                        )}
                                         <div className="text-base font-black tracking-tight text-content dark:text-white truncate tabular-nums">
                                             {fmtMoney(total, sym)}
                                         </div>
@@ -75,8 +82,10 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                 </div>
 
                 {carts.length > 0 && (
-                    <div className="px-5 py-3 bg-surface-1 dark:bg-white/[0.01] border-t border-white/5 text-center">
-                        <p className="text-[9px] font-black uppercase tracking-widest opacity-30 italic">Las cuentas en espera se borran al recargar la página</p>
+                    <div className="px-5 py-3 bg-surface-2 dark:bg-white/[0.01] border-t border-border/20 dark:border-white/5 text-center">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-content-subtle">
+                            Guardadas en el servidor · visibles desde cualquier caja
+                        </p>
                     </div>
                 )}
             </div>

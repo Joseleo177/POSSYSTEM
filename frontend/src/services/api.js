@@ -142,6 +142,10 @@ export const api = {
     create:      (body)      => request("/sales",        { method: "POST",   body: JSON.stringify(body) }),
     update:      (id, body)  => request(`/sales/${id}`,  { method: "PATCH",  body: JSON.stringify(body) }),
     cancel:      (id)        => request(`/sales/${id}`,  { method: "DELETE" }),
+    // Entrega a crédito: asigna correlativo y deja la venta en 'pendiente' (por cobrar)
+    confirmCredit: (id)      => request(`/sales/${id}/credit`, { method: "POST" }),
+    // Cuentas en espera (status 'espera'): visibles desde cualquier caja
+    getHeld:     ()          => request("/sales?status=espera&limit=100"),
     // Devoluciones
     createReturn:   (id, body) => request(`/sales/${id}/return`,   { method: "POST", body: JSON.stringify(body) }),
     createExchange: (id, body) => request(`/sales/${id}/exchange`, { method: "POST", body: JSON.stringify(body) }),

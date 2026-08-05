@@ -14,24 +14,27 @@ module.exports = async function updateSale(saleId, body) {
 
   const transaction = await sequelize.transaction();
   try {
-    const sale = await Sale.findByPk(saleId, {
-      include: [{ model: SaleItem }],
-      transaction,
-      lock: true,
-    });
+    // El bloqueo va sin include: Postgres rechaza `SELECT ... FOR UPDATE` cuando la
+    // consulta trae un LEFT JOIN ("FOR UPDATE cannot be applied to the nullable side of
+    // an outer join"), y un include hasMany sin `required: true` genera exactamente eso.
+    // Las líneas se leen aparte, dentro de la misma transacción.
+    const sale = await Sale.findByPk(saleId, { transaction, lock: true });
 
     if (!sale) throw Object.assign(new Error("Venta no encontrada"), { status: 404 });
-    if (sale.status !== "borrador") {
+    // 'espera' entra aquí junto a 'borrador': es el caso de agregar rondas a una cuenta
+    // abierta. Ambos comparten lo esencial — todavía no tienen correlativo asignado.
+    if (!["borrador", "espera"].includes(sale.status)) {
       throw Object.assign(
-        new Error("Solo se pueden editar ventas en borrador. Una vez asignado el correlativo el documento es inmutable."),
+        new Error("Solo se pueden editar ventas en borrador o cuentas en espera. Una vez asignado el correlativo el documento es inmutable."),
         { status: 400 }
       );
     }
 
     const warehouseId = sale.warehouse_id;
+    const previousItems = await SaleItem.findAll({ where: { sale_id: saleId }, transaction });
 
     // Restore stock for all existing items
-    for (const item of sale.SaleItems) {
+    for (const item of previousItems) {
       const product = await Product.findByPk(item.product_id, { transaction });
       if (!product || product.is_service) continue;
 
@@ -112,7 +115,14 @@ module.exports = async function updateSale(saleId, body) {
     total = parseFloat((total - discAmt).toFixed(2));
     if (total < 0) total = 0;
 
-    await sale.update({ total, discount_amount: discAmt }, { transaction });
+    // Al cobrar una cuenta en espera se la pasa a 'borrador' para que el pago le asigne
+    // el correlativo. Solo se admite esa transición: cualquier otro cambio de estado
+    // debe pasar por su propio flujo (cobro, crédito o anulación).
+    const statusPatch = (sale.status === "espera" && body.status === "borrador")
+      ? { status: "borrador" }
+      : {};
+
+    await sale.update({ total, discount_amount: discAmt, ...statusPatch }, { transaction });
 
     await transaction.commit();
 

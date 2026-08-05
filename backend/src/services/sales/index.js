@@ -4,6 +4,7 @@ const getSalesStats = require("./getSalesStats");
 const createSale = require("./createSale");
 const cancelSale = require("./cancelSale");
 const updateSale = require("./updateSale");
+const confirmCreditSale = require("./confirmCreditSale");
 
 module.exports = {
   getAllSales,
@@ -12,4 +13,5 @@ module.exports = {
   createSale,
   cancelSale,
   updateSale,
+  confirmCreditSale,
 };

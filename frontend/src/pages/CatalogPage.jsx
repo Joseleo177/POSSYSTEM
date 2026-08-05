@@ -8,6 +8,7 @@ import { Button } from "../components/ui/Button";
 import Pagination from "../components/ui/Pagination";
 import ConfirmModal from "../components/ui/ConfirmModal";
 import ProductTable from "../components/Catalog/ProductTable";
+import ProductCards from "../components/Catalog/ProductCards";
 import CategoriesTab from "../components/Catalog/CategoriesTab";
 import PromotionsTab from "../components/Catalog/PromotionsTab";
 import ProductModal from "../components/ProductModal";
@@ -36,6 +37,9 @@ export default function CatalogPage() {
     const [activeTab, setActiveTab] = useState("products");
     const [productModal, setProductModal] = useState(false);
     const [publicLinkModal, setPublicLinkModal] = useState(false);
+    // Vista lista/cuadrícula. Se recuerda entre sesiones: es una preferencia de trabajo,
+    // no un filtro, y reiniciarla en cada carga resulta molesto.
+    const [viewMode, setViewMode] = useState(() => localStorage.getItem("catalog_view") || "list");
     const [productEditData, setProductEditData] = useState(null);
     const [deleteProductDialog, setDeleteProductDialog] = useState(null);
     const [selectedProducts, setSelectedProducts] = useState([]);
@@ -54,6 +58,8 @@ export default function CatalogPage() {
     useEffect(() => {
         if (warehouseId) loadProducts(1, warehouseId);
     }, [debouncedSearch, warehouseId, loadProducts, filterCategory, filterType]);
+
+    useEffect(() => { localStorage.setItem("catalog_view", viewMode); }, [viewMode]);
 
     const selectedWarehouseName = availableWarehouses.find(w => w.id === warehouseId)?.name;
     const totalPages = Math.ceil(totalProducts / limit);
@@ -290,22 +296,61 @@ export default function CatalogPage() {
                                 </button>
                             </div>
                         )}
+
+                        {/* Selector de vista: lista o cuadrícula. Va al extremo derecho
+                            (ml-auto) para no competir con los filtros de la izquierda. */}
+                        <div className="ml-auto flex items-center rounded-xl border border-border/40 dark:border-white/10 overflow-hidden h-9 shrink-0">
+                            <button
+                                onClick={() => setViewMode("list")}
+                                title="Vista de lista"
+                                className={`h-full px-2.5 flex items-center justify-center transition-all ${
+                                    viewMode === "list"
+                                        ? "bg-brand-500 text-black"
+                                        : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
+                                }`}>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                            </button>
+                            <button
+                                onClick={() => setViewMode("grid")}
+                                title="Vista de cuadrícula"
+                                className={`h-full px-2.5 flex items-center justify-center border-l border-border/40 dark:border-white/10 transition-all ${
+                                    viewMode === "grid"
+                                        ? "bg-brand-500 text-black"
+                                        : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
+                                }`}>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                            </button>
+                        </div>
                     </div>
 
                     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                         <div className="card-premium overflow-auto flex-1">
-                            <ProductTable
-                                products={products}
-                                canManageProducts={can("products")}
-                                openEditProduct={(p) => { setProductEditData(p); setProductModal(true); }}
-                                setDeleteProductDialog={setDeleteProductDialog}
-                                selectedProducts={selectedProducts.map(p => p.id)}
-                                onToggleSelect={toggleSelect}
-                                onSelectAll={selectAll}
-                                isSelectionMode={isSelectionMode}
-                                priceCurrency={priceCurrency}
-                                localCurrency={localCurrency}
-                            />
+                            {viewMode === "grid" ? (
+                                <ProductCards
+                                    products={products}
+                                    canManageProducts={can("products")}
+                                    openEditProduct={(p) => { setProductEditData(p); setProductModal(true); }}
+                                    setDeleteProductDialog={setDeleteProductDialog}
+                                    selectedProducts={selectedProducts.map(p => p.id)}
+                                    onToggleSelect={toggleSelect}
+                                    isSelectionMode={isSelectionMode}
+                                    priceCurrency={priceCurrency}
+                                    localCurrency={localCurrency}
+                                />
+                            ) : (
+                                <ProductTable
+                                    products={products}
+                                    canManageProducts={can("products")}
+                                    openEditProduct={(p) => { setProductEditData(p); setProductModal(true); }}
+                                    setDeleteProductDialog={setDeleteProductDialog}
+                                    selectedProducts={selectedProducts.map(p => p.id)}
+                                    onToggleSelect={toggleSelect}
+                                    onSelectAll={selectAll}
+                                    isSelectionMode={isSelectionMode}
+                                    priceCurrency={priceCurrency}
+                                    localCurrency={localCurrency}
+                                />
+                            )}
                         </div>
                         <Pagination
                             page={page}

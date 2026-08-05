@@ -2,10 +2,38 @@ import { Button } from "../ui/Button";
 import ReceiptModal from "../ReceiptModal";
 import PaymentFormModal from "../PaymentFormModal";
 import { useState, useEffect } from "react";
+import { api } from "../../services/api";
+import { useApp } from "../../context/AppContext";
 
 export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay }) {
+    const { notify } = useApp();
     const [showReceiptModal, setShowReceiptModal] = useState(false);
     const [showPayModal, setShowPayModal] = useState(false);
+    const [creditLoading, setCreditLoading] = useState(false);
+
+    // Entrega a crédito: el backend asigna el correlativo fiscal y deja la venta en
+    // 'pendiente'. Sin esto la venta fiada se quedaba en borrador y no aparecía ni en el
+    // reporte de ventas pendientes ni en el cierre de caja.
+    const confirmCredit = async () => {
+        if (!receipt?.customer_id && !receipt?.customer_name) {
+            return notify("Una venta a crédito requiere un cliente identificado", "err");
+        }
+        setCreditLoading(true);
+        try {
+            const res = await api.sales.confirmCredit(receipt.id);
+            notify(`Factura ${res.data.invoice_number || ""} entregada a crédito`.trim());
+            // Se reutiliza onPay: es el canal que ya refresca el saldo y el estado en CobroPage.
+            onPay({
+                sale_status: "pendiente",
+                invoice_number: res.data.invoice_number,
+                amount_paid: saleBalance?.amount_paid ?? 0,
+                balance: currentBalance,
+            });
+        } catch (e) {
+            notify(e.message, "err");
+        }
+        setCreditLoading(false);
+    };
 
     useEffect(() => {
         if (showReceiptModal || showPayModal) return; // los sub-modales manejan su propio Escape
@@ -23,6 +51,8 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
 
     const currentBalance = saleBalance?.balance ?? parseFloat(receipt?.total || 0);
     const currentStatus  = saleBalance?.status  ?? receipt?.status ?? "pendiente";
+    // Venta creada pero sin desenlace: ni cobrada ni facturada a crédito.
+    const isUnresolved   = ["borrador", "espera"].includes(currentStatus);
     const statusLabel    = currentStatus === "pagado" ? "Completado" : currentStatus === "parcial" ? "Abono Parcial" : currentStatus === "borrador" ? "Borrador" : "Pendiente";
     const badgeClass     = currentStatus === "pagado"
         ? "bg-green-500/10 text-green-500 border-green-500/20"
@@ -78,24 +108,48 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                 {/* Acciones */}
                 <div className="px-5 py-4 flex flex-col gap-2">
                     {currentStatus !== "pagado" && (
-                        <Button
-                            onClick={() => setShowPayModal(true)}
-                            className="w-full h-9 bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none"
-                        >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
-                            Registrar Pago Inmediato
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button
+                                onClick={() => setShowPayModal(true)}
+                                className="flex-1 h-9 bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                                Pago Inmediato
+                            </Button>
+                            {/* Solo tiene sentido antes de facturar: una venta ya confirmada
+                                (pendiente/parcial) no debe volver a consumir correlativo. */}
+                            {["borrador", "espera"].includes(currentStatus) && (
+                                <Button
+                                    onClick={confirmCredit}
+                                    disabled={creditLoading}
+                                    className="flex-1 h-9 bg-warning/10 text-warning border border-warning/30 hover:bg-warning hover:text-black shadow-none disabled:opacity-50"
+                                    title="Entregar a crédito: emite la factura y queda por cobrar"
+                                >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    {creditLoading ? "..." : "A Crédito"}
+                                </Button>
+                            )}
+                        </div>
                     )}
                     <div className="flex gap-2">
                         <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="flex-1 h-9 border border-border/30 dark:border-white/10">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                             Ver Ticket
                         </Button>
-                        <Button onClick={onNext} className="flex-1 h-9 shadow-none">
+                        {/* Si la venta sigue sin resolver, el botón dice a dónde va: sin esto
+                            el cajero salía sin saber que quedaba un borrador sin factura. */}
+                        <Button onClick={onNext} className="flex-1 h-9 shadow-none" title={isUnresolved ? "La venta queda sin cobrar, en Facturas Pendientes" : undefined}>
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            Siguiente
+                            {isUnresolved ? "Dejar Pendiente" : "Siguiente"}
                         </Button>
                     </div>
+
+                    {isUnresolved && (
+                        <p className="text-[10px] font-bold text-content-subtle dark:text-white/40 text-center leading-relaxed pt-0.5">
+                            Sin cobrar ni entregar a crédito, queda como borrador
+                            <span className="text-warning"> sin número de factura</span> en Facturas Pendientes.
+                        </p>
+                    )}
                 </div>
             </div>
 

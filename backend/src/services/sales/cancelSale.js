@@ -52,12 +52,18 @@ module.exports = async function cancelSale(id) {
       }
     }
 
-    // 5. Marcar como anulado (en lugar de destruir)
-    await sale.update({ status: 'anulado' }, { transaction });
-
-    // 6. Eliminar todos los pagos de la factura anulada
     const { Payment } = require("../../models");
     await Payment.destroy({ where: { sale_id: id }, transaction });
+
+    // Una cuenta en espera nunca llegó a ser un documento: no consumió correlativo ni se
+    // entregó nada. Dejarla como 'anulado' ensuciaría el historial de facturas con algo
+    // que nunca existió, así que se borra de verdad (sale_items va en cascada).
+    // El resto sí se anula en lugar de destruirse: ya son documentos con número emitido.
+    if (sale.status === 'espera') {
+      await sale.destroy({ transaction });
+    } else {
+      await sale.update({ status: 'anulado' }, { transaction });
+    }
 
     await transaction.commit();
   } catch (err) {
