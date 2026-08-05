@@ -1,4 +1,4 @@
-const { Sale, SaleItem, Product, ProductComboItem, ProductStock, sequelize } = require("./shared");
+const { Sale, SaleItem, Product, ProductComboItem, ProductStock, Serie, sequelize } = require("./shared");
 const getOneSale = require("./getOneSale");
 
 // Convierte un pedido del catálogo público (status 'pedido', sin efecto en inventario) en
@@ -6,9 +6,15 @@ const getOneSale = require("./getOneSale");
 // persona del comercio acepta el pedido y la mercancía queda comprometida. A partir de
 // este punto la venta es indistinguible de una abierta en caja — se recupera, se le
 // agregan líneas y se cobra con el flujo de siempre.
-module.exports = async function acceptWebOrder(saleId, { warehouse_id, employee_id }) {
+module.exports = async function acceptWebOrder(saleId, { warehouse_id, serie_id, employee_id }) {
   if (!warehouse_id) {
     throw Object.assign(new Error("Selecciona un almacén antes de aceptar el pedido"), { status: 400 });
+  }
+  // El pedido llega sin serie: quien lo hizo no es del comercio y no puede elegir de qué
+  // talonario sale la factura. Sin asignarla aquí, la venta se cobraba y terminaba en
+  // 'pagado' SIN correlativo, porque assignInvoiceNumber se salta las ventas sin serie.
+  if (!serie_id) {
+    throw Object.assign(new Error("Selecciona una serie antes de aceptar el pedido"), { status: 400 });
   }
 
   const transaction = await sequelize.transaction();
@@ -19,6 +25,11 @@ module.exports = async function acceptWebOrder(saleId, { warehouse_id, employee_
     // los intentos simultáneos y esta comprobación descarta el segundo.
     if (sale.status !== "pedido") {
       throw Object.assign(new Error("Este pedido ya fue aceptado o cancelado"), { status: 400 });
+    }
+
+    const serie = await Serie.findByPk(serie_id, { transaction });
+    if (!serie || !serie.active) {
+      throw Object.assign(new Error("Serie no encontrada o inactiva"), { status: 400 });
     }
 
     const items = await SaleItem.findAll({ where: { sale_id: sale.id }, transaction });
@@ -68,7 +79,12 @@ module.exports = async function acceptWebOrder(saleId, { warehouse_id, employee_
     }
 
     // Queda registrado quién lo aceptó: hasta ahora el pedido no tenía responsable.
-    await sale.update({ status: "espera", warehouse_id, employee_id: employee_id || null }, { transaction });
+    // La serie se fija ahora, no al cobrar: es lo que permite que el pago le asigne su
+    // correlativo fiscal como a cualquier otra venta.
+    await sale.update(
+      { status: "espera", warehouse_id, serie_id: serie.id, employee_id: employee_id || null },
+      { transaction }
+    );
 
     await transaction.commit();
     return await getOneSale(saleId);

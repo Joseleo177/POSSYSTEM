@@ -19,6 +19,7 @@ const acceptOrder = async (req, res) => {
   try {
     const data = await salesService.acceptWebOrder(req.params.id, {
       warehouse_id: req.body?.warehouse_id,
+      serie_id: req.body?.serie_id,
       employee_id: req.employee?.id ?? null,
     });
     broadcast(req.employee?.company_id ?? 0, 'products:updated', {});

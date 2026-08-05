@@ -39,6 +39,7 @@ export default function PublicCatalogPage({ token }) {
         catch { return []; }
     });
     const [cartOpen, setCartOpen]         = useState(false);
+    const [showCats, setShowCats]         = useState(false);
     const [delivery, setDelivery]         = useState("");
 
     // Identidad del visitante. Se recuerda en el navegador para que no tenga que
@@ -312,15 +313,21 @@ export default function PublicCatalogPage({ token }) {
                     {identity && (
                         <button
                             onClick={openMyOrders}
-                            className="ml-auto shrink-0 h-9 px-3 rounded-xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-content-muted hover:text-brand-500 transition-colors"
+                            className="ml-auto shrink-0 h-11 px-3.5 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 flex items-center gap-2 text-content-muted hover:text-brand-500 hover:border-brand-500/40 transition-colors"
                         >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-                            <span className="hidden xs:inline sm:inline">Mis pedidos</span>
+                            <span className="relative">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                            {/* Contador sobre el icono: en móvil el texto se oculta y el
+                                distintivo tiene que seguir viéndose. */}
                             {openOrdersCount > 0 && (
-                                <span className="w-4 h-4 rounded-full bg-brand-500 text-black text-[9px] flex items-center justify-center tabular-nums">
+                                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-brand-500 text-black text-[9px] font-black flex items-center justify-center tabular-nums">
                                     {openOrdersCount}
                                 </span>
                             )}
+                            </span>
+                            <span className="hidden sm:inline text-[11px] font-black uppercase tracking-widest">
+                                Mis pedidos
+                            </span>
                         </button>
                     )}
                     {altCur && baseCur && (
@@ -333,9 +340,11 @@ export default function PublicCatalogPage({ token }) {
                     )}
                 </div>
 
-                {/* Buscador + categorías */}
-                <div className="max-w-5xl mx-auto px-4 pb-3 space-y-2">
-                    <div className="relative">
+                {/* Buscador y filtro en una sola fila: la lista de categorías ocupaba un
+                    renglón completo aunque no se usara, y en móvil eso es alto de pantalla
+                    que se le quita a los productos. */}
+                <div className="max-w-5xl mx-auto px-4 pb-3 flex items-center gap-2">
+                    <div className="relative flex-1 min-w-0">
                         <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
@@ -343,17 +352,45 @@ export default function PublicCatalogPage({ token }) {
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             placeholder="Buscar producto..."
-                            className="w-full h-10 pl-10 pr-3 rounded-xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle"
+                            className="w-full h-11 pl-10 pr-3 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle"
                         />
                     </div>
+
                     {categories.length > 0 && (
-                        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
-                            <CatChip active={!category} onClick={() => setCategory("")}>Todo</CatChip>
-                            {categories.map(c => (
-                                <CatChip key={c.id} active={String(category) === String(c.id)} onClick={() => setCategory(String(c.id))}>
-                                    {c.name}
-                                </CatChip>
-                            ))}
+                        <div className="relative shrink-0">
+                            <button
+                                onClick={() => setShowCats(v => !v)}
+                                className={`h-11 px-3.5 rounded-2xl border flex items-center gap-2 text-[11px] font-black uppercase tracking-widest transition-all ${
+                                    category
+                                        ? "bg-brand-500 text-black border-brand-500"
+                                        : "bg-surface-2 dark:bg-white/5 border-border dark:border-white/10 text-content-muted hover:text-content dark:hover:text-white"
+                                }`}
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" /></svg>
+                                <span className="hidden sm:inline">
+                                    {category ? (categories.find(c => String(c.id) === String(category))?.name || "Filtro") : "Filtrar"}
+                                </span>
+                            </button>
+
+                            {showCats && (
+                                <>
+                                    <div className="fixed inset-0 z-30" onClick={() => setShowCats(false)} />
+                                    <div className="absolute right-0 top-full mt-2 w-56 max-h-72 overflow-y-auto bg-surface dark:bg-surface-dark-2 rounded-2xl border border-border dark:border-white/10 shadow-2xl z-40 p-2 space-y-0.5">
+                                        <CatOption active={!category} onClick={() => { setCategory(""); setShowCats(false); }}>
+                                            Todas las categorías
+                                        </CatOption>
+                                        {categories.map(c => (
+                                            <CatOption
+                                                key={c.id}
+                                                active={String(category) === String(c.id)}
+                                                onClick={() => { setCategory(String(c.id)); setShowCats(false); }}
+                                            >
+                                                {c.name}
+                                            </CatOption>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
                         </div>
                     )}
                 </div>
@@ -440,14 +477,21 @@ export default function PublicCatalogPage({ token }) {
                                         {ordersEnabled && p.available && parseFloat(p.price) > 0 && (
                                             <button
                                                 onClick={() => addToCart(p)}
-                                                className="mt-2 h-8 rounded-lg bg-brand-500 text-black text-[10px] font-black uppercase tracking-widest hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-1"
+                                                className="mt-2 h-9 rounded-xl bg-brand-500 text-black text-[10px] font-black uppercase tracking-widest hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-1.5"
                                             >
                                                 {cart.find(it => it.id === p.id) ? (
                                                     <>
-                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                                        {fmtQtyUnit(cart.find(it => it.id === p.id).qty, p.unit)}
+                                                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                        <span className="truncate">{fmtQtyUnit(cart.find(it => it.id === p.id).qty, p.unit)}</span>
                                                     </>
-                                                ) : "Agregar"}
+                                                ) : (
+                                                    // "Agregar" a secas no decía a dónde. El icono de carrito
+                                                    // más "Al carrito" lo deja explícito sin alargar la tarjeta.
+                                                    <>
+                                                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                                        Al carrito
+                                                    </>
+                                                )}
                                             </button>
                                         )}
                                     </div>
@@ -481,23 +525,40 @@ export default function PublicCatalogPage({ token }) {
                     Precios sujetos a cambio sin previo aviso.
                 </p>
                 {/* Hueco para que la barra flotante no tape el pie de página */}
-                {ordersEnabled && cart.length > 0 && <div className="h-16" />}
+                {ordersEnabled && cart.length > 0 && <div className="h-24" />}
             </footer>
 
             {/* ── Barra del pedido ── */}
             {ordersEnabled && cart.length > 0 && !cartOpen && (
-                <div className="fixed bottom-0 inset-x-0 z-30 p-3 bg-gradient-to-t from-black/20 to-transparent">
+                <div className="fixed bottom-0 inset-x-0 z-30 px-3 pb-3 pt-6 bg-gradient-to-t from-black/30 via-black/10 to-transparent pointer-events-none">
                     <button
                         onClick={() => setCartOpen(true)}
-                        className="max-w-5xl mx-auto w-full h-12 rounded-2xl bg-brand-500 text-black shadow-2xl flex items-center justify-between px-4 active:scale-[0.99] transition-transform"
+                        className="pointer-events-auto max-w-5xl mx-auto w-full h-14 rounded-2xl bg-brand-500 text-black shadow-2xl shadow-black/30 flex items-center gap-3 pl-3 pr-4 active:scale-[0.99] transition-transform"
                     >
-                        <span className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest">
-                            <span className="w-6 h-6 rounded-full bg-black/15 flex items-center justify-center tabular-nums">
+                        {/* Carrito con su contador: el número suelto no decía de qué era */}
+                        <span className="relative w-10 h-10 rounded-xl bg-black/10 flex items-center justify-center shrink-0">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-black text-brand-500 text-[10px] font-black flex items-center justify-center tabular-nums">
                                 {cart.length}
                             </span>
-                            Ver pedido
                         </span>
-                        <span className="text-sm font-black tabular-nums">{fmt(cartTotal, baseCur)}</span>
+
+                        <span className="text-left leading-tight min-w-0">
+                            <span className="block text-[12px] font-black uppercase tracking-widest">Ver mi pedido</span>
+                            <span className="block text-[10px] font-bold opacity-70">
+                                {cart.length === 1 ? "1 producto" : `${cart.length} productos`}
+                            </span>
+                        </span>
+
+                        <span className="ml-auto flex items-center gap-1.5 shrink-0">
+                            <span className="text-right leading-tight">
+                                <span className="block text-[15px] font-black tabular-nums">{fmt(cartTotal, baseCur)}</span>
+                                {altCur && (
+                                    <span className="block text-[10px] font-bold tabular-nums opacity-70">{fmt(cartTotal, altCur)}</span>
+                                )}
+                            </span>
+                            <svg className="w-4 h-4 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
+                        </span>
                     </button>
                 </div>
             )}
@@ -1018,17 +1079,20 @@ function QtyBtn({ onClick, label, children }) {
     );
 }
 
-function CatChip({ active, onClick, children }) {
+function CatOption({ active, onClick, children }) {
     return (
         <button
             onClick={onClick}
-            className={`h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide whitespace-nowrap transition-all shrink-0 ${
+            className={`w-full text-left px-3 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center justify-between gap-2 ${
                 active
                     ? "bg-brand-500 text-black"
-                    : "bg-surface-2 dark:bg-white/5 text-content-muted hover:text-content dark:hover:text-white"
+                    : "text-content-muted hover:bg-surface-2 dark:hover:bg-white/5 hover:text-content dark:hover:text-white"
             }`}
         >
-            {children}
+            <span className="truncate">{children}</span>
+            {active && (
+                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+            )}
         </button>
     );
 }

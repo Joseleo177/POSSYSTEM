@@ -425,14 +425,20 @@ export function CartProvider({ children }) {
   // ser una cuenta en espera normal que se recupera y se cobra como cualquier otra.
   const acceptWebOrder = useCallback(async (saleId) => {
     if (!activeWarehouse) return notify("Selecciona un almacén antes de aceptar el pedido", "err");
+    // El pedido nace sin serie porque lo creó el cliente desde el catálogo. Se le asigna
+    // la de esta caja al aceptarlo; sin ella la venta llegaría a cobrarse sin correlativo.
+    if (!selectedSerieId) return notify("La serie es requerida", "err");
     try {
-      await api.sales.acceptOrder(saleId, { warehouse_id: activeWarehouse.id });
+      await api.sales.acceptOrder(saleId, {
+        warehouse_id: activeWarehouse.id,
+        serie_id: selectedSerieId,
+      });
       await loadHeldCarts();
       notify("Pedido aceptado. Está en cuentas en espera.");
     } catch (e) {
       notify(e.message || "No se pudo aceptar el pedido", "err");
     }
-  }, [activeWarehouse, loadHeldCarts, notify]);
+  }, [activeWarehouse, selectedSerieId, loadHeldCarts, notify]);
 
   // Recupera una cuenta al carrito para seguir agregándole productos o cobrarla.
   const takeHeldCart = useCallback(async (saleId) => {

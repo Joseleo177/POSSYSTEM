@@ -11,7 +11,19 @@ const { Serie, SerieRange, Sequelize } = require("../../models");
 // Debe llamarse SIEMPRE dentro de una transacción: bloquea el rango para que dos cajas
 // no tomen el mismo número.
 module.exports = async function assignInvoiceNumber(sale, transaction) {
-  if (sale.invoice_number || !sale.serie_id) return sale.invoice_number || null;
+  if (sale.invoice_number) return sale.invoice_number;
+
+  // Antes esto devolvía null en silencio y la venta seguía su curso hasta 'pagado' sin
+  // número de factura — un documento fiscal sin correlativo, y sin ningún aviso de que
+  // algo había fallado. Toda venta creada desde el POS lleva serie obligatoria, así que
+  // llegar aquí sin ella significa que algo la creó saltándose esa regla: es un error, no
+  // un caso válido, y tiene que verse.
+  if (!sale.serie_id) {
+    throw Object.assign(
+      new Error(`La venta #${sale.id} no tiene serie asignada y no puede facturarse. Asígnale una serie antes de cobrarla.`),
+      { status: 400 }
+    );
+  }
 
   const serie = await Serie.findByPk(sale.serie_id, { transaction });
   if (!serie || !serie.active) return null;
