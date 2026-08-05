@@ -1016,10 +1016,12 @@ function IdentityGate({ token, store, onIdentified }) {
             const r = await publicApi.identify(token, fullDocument);
             if (r.data.found) {
                 setMatch(r.data);
-                // Una ficha vieja puede no tener teléfono, y el pedido lo necesita para
-                // que la tienda confirme y mande la factura.
-                setPhone(r.data.phone || "");
-                setStep("confirm");
+                if (r.data.phone) {
+                    onIdentified({ document: fullDocument, name: r.data.name, phone: r.data.phone });
+                } else {
+                    setPhone("");
+                    setStep("phone");
+                }
             } else {
                 setStep("register");
             }
