@@ -149,7 +149,7 @@ export default function PublicCatalogPage({ token }) {
                     </div>
                 ) : (
                     <>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
                             {products.map(p => (
                                 <article
                                     key={p.id}
@@ -167,8 +167,13 @@ export default function PublicCatalogPage({ token }) {
                                                 className="absolute inset-0 w-full h-full object-cover"
                                             />
                                         ) : (
-                                            <div className="absolute inset-0 flex items-center justify-center text-content-subtle opacity-30">
-                                                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                            // Sin foto se muestra la inicial sobre un degradado suave: repetir
+                                            // el mismo icono gris en decenas de tarjetas hace ver el catálogo
+                                            // roto, mientras que la inicial distingue una tarjeta de otra.
+                                            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-brand-500/5 to-brand-500/[0.12]">
+                                                <span className="text-3xl font-black text-brand-500/30 select-none">
+                                                    {p.name.charAt(0)}
+                                                </span>
                                             </div>
                                         )}
                                         {!p.available && (
@@ -187,12 +192,22 @@ export default function PublicCatalogPage({ token }) {
                                             {p.name}
                                         </h2>
                                         <div className="mt-auto pt-1.5">
-                                            <div className="text-sm font-black text-content dark:text-white font-display tabular-nums">
-                                                {fmt(p.price, baseCur)}
-                                            </div>
-                                            {altCur && (
-                                                <div className="text-[11px] font-black text-content-muted tabular-nums">
-                                                    {fmt(p.price, altCur)}
+                                            {/* Un producto sin precio cargado mostraba "Ref.0,00", que en una
+                                                vitrina se lee como que es gratis. Mejor invitar a preguntar. */}
+                                            {parseFloat(p.price) > 0 ? (
+                                                <>
+                                                    <div className="text-sm font-black text-content dark:text-white font-display tabular-nums">
+                                                        {fmt(p.price, baseCur)}
+                                                    </div>
+                                                    {altCur && (
+                                                        <div className="text-[11px] font-black text-content-muted tabular-nums">
+                                                            {fmt(p.price, altCur)}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <div className="text-[11px] font-black uppercase tracking-wide text-content-muted">
+                                                    Consultar precio
                                                 </div>
                                             )}
                                         </div>

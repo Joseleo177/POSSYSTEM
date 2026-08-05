@@ -83,7 +83,13 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0 
       // min_stock quedan fuera a propósito: son datos internos del negocio.
       attributes: ["id", "name", "price", "stock", "unit", "image_filename", "is_service", "is_combo"],
       include: [{ model: Category, attributes: ["name"], required: false }],
-      order: [["name", "ASC"]],
+      // Disponibles primero. Es una vitrina: un cliente que abre el enlace debe ver lo que
+      // puede comprar, no dos pantallas de agotados antes de llegar a algo. Como el
+      // listado es paginado, el orden tiene que resolverse aquí y no en el navegador.
+      order: [
+        [Sequelize.literal('(CASE WHEN "Product"."is_service" OR "Product"."is_combo" OR "Product"."stock" > 0 THEN 0 ELSE 1 END)'), "ASC"],
+        ["name", "ASC"],
+      ],
       limit: Math.min(parseInt(limit, 10) || 40, 60),
       offset: parseInt(offset, 10) || 0,
     });
