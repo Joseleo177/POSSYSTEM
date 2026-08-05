@@ -710,8 +710,8 @@ export default function PublicCatalogPage({ token }) {
                         <>
                         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
                             {cart.map(it => (
-                                <div key={it.id} className="flex items-center gap-3">
-                                    <div className="w-11 h-11 rounded-xl bg-surface-2 dark:bg-white/5 overflow-hidden shrink-0 relative">
+                                <div key={it.id} className="flex items-center gap-2.5">
+                                    <div className="w-10 h-10 rounded-xl bg-surface-2 dark:bg-white/5 overflow-hidden shrink-0 relative">
                                         {it.image_url ? (
                                             <img src={resolveImageUrl(it.image_url)} alt={it.name} onError={imgRetryOnError}
                                                 className="absolute inset-0 w-full h-full object-cover" />
@@ -729,12 +729,18 @@ export default function PublicCatalogPage({ token }) {
                                             {fmtQtyUnit(it.qty, it.unit)} · {fmt(parseFloat(it.price) * it.qty, baseCur)}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        <QtyBtn onClick={() => changeQty(it.id, -1)} label="Quitar uno">−</QtyBtn>
-                                        <QtyBtn onClick={() => changeQty(it.id, +1)} label="Agregar uno">+</QtyBtn>
-                                        <button onClick={() => removeFromCart(it.id)} title="Eliminar"
-                                            className="w-7 h-7 rounded-lg flex items-center justify-center text-content-subtle hover:text-danger transition-colors">
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    {/* Objetivos de toque de 40px: los de 28 se fallaban con el
+                                        pulgar, y equivocarse aquí cambia lo que el cliente pide.
+                                        − y + van unidos como un solo control para que los tres
+                                        botones grandes sigan cabiendo en un teléfono estrecho. */}
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <div className="flex items-center rounded-xl border border-border dark:border-white/10 overflow-hidden">
+                                            <QtyBtn onClick={() => changeQty(it.id, -1)} label="Quitar uno">−</QtyBtn>
+                                            <QtyBtn onClick={() => changeQty(it.id, +1)} label="Agregar uno" divider>+</QtyBtn>
+                                        </div>
+                                        <button onClick={() => removeFromCart(it.id)} title="Eliminar" aria-label={`Eliminar ${it.name}`}
+                                            className="w-10 h-10 rounded-xl flex items-center justify-center text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90 transition-all">
+                                            <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                         </button>
                                     </div>
                                 </div>
@@ -1067,12 +1073,14 @@ function OrderCard({ order, fmt, baseCur }) {
     );
 }
 
-function QtyBtn({ onClick, label, children }) {
+function QtyBtn({ onClick, label, children, divider }) {
     return (
         <button
             onClick={onClick}
             aria-label={label}
-            className="w-7 h-7 rounded-lg bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-content dark:text-white text-sm font-black flex items-center justify-center active:scale-90 transition-transform"
+            className={`w-10 h-10 bg-surface-2 dark:bg-white/5 text-content dark:text-white text-lg font-black flex items-center justify-center hover:bg-brand-500/10 hover:text-brand-500 active:scale-90 transition-all ${
+                divider ? "border-l border-border dark:border-white/10" : ""
+            }`}
         >
             {children}
         </button>
