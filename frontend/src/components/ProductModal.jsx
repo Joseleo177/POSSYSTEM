@@ -39,7 +39,13 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 setForm({
                     name: editData.name,
                     price: editData.price,
-                    stock: editData.stock,
+                    // Cuando el catálogo está filtrado por almacén, la tabla muestra
+                    // warehouse_stock (existencias en ESE almacén) mientras que `stock` es el
+                    // total de todos. Con un solo almacén coinciden; con varios, el modal
+                    // mostraba una cifra que no correspondía a la fila abierta.
+                    stock: (warehouseId && editData.warehouse_stock != null)
+                        ? editData.warehouse_stock
+                        : editData.stock,
                     category_id: editData.category_id || "",
                     unit: editData.unit || "unidad",
                     qty_step: editData.qty_step || "1",
@@ -76,7 +82,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             }
 
         }
-    }, [open, editData]);
+    }, [open, editData, warehouseId]);
 
     const set = (key, val) => setForm(p => ({ ...p, [key]: val }));
 
@@ -373,7 +379,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             </div>
                             {editData?.id && !form.is_combo && !form.is_service && (
                                 <div>
-                                    <label className="label">Stock Actual</label>
+                                    <label className="label">
+                                        {warehouseId && warehouseName ? `Stock en ${warehouseName}` : "Stock Actual"}
+                                    </label>
                                     <div className="bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border border-border/40 rounded-lg px-3 flex justify-between items-center gap-2 cursor-not-allowed opacity-80 h-10 min-w-0 overflow-hidden" title={`${fmtQtyUnit(form.stock ?? 0, form.unit)} (solo lectura)`}>
                                         <span className="text-sm font-bold truncate min-w-0 tabular-nums">{fmtQtyUnit(form.stock ?? 0, form.unit)}</span>
                                         <svg className="w-3.5 h-3.5 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
