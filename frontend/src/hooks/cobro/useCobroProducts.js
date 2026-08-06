@@ -1,9 +1,18 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { api } from "../../services/api";
 import { onSSE } from "../../services/sse";
 import { useDebounce } from "../useDebounce";
 
 const LIMIT = 30;
+
+// Cada cuánto se vuelve a pedir el stock por si el aviso en vivo no llegó.
+//
+// El SSE del backend guarda los clientes conectados en memoria del proceso, así que solo
+// funciona con un servidor persistente (el contenedor Docker). En un despliegue serverless
+// —Vercel— cada petición cae en una instancia distinta: quien emite el evento no ve a quien
+// está escuchando y el aviso se pierde siempre. Sin este refresco, un cajero puede pasar
+// horas viendo existencias de hace rato.
+const REFRESH_MS = 25_000;
 
 export function useCobroProducts(activeWarehouse, notify) {
     const [products, setProducts]       = useState([]);
@@ -16,12 +25,14 @@ export function useCobroProducts(activeWarehouse, notify) {
     const debouncedSearch = useDebounce(search, 300);
     const debouncedCat    = useDebounce(selectedCat, 150);
 
-    // Carga una página de productos
-    const loadProducts = useCallback(async (q = "", cat = "all", off = 0, replace = true) => {
+    // Carga una página de productos. `pageSize` solo lo usa el refresco periódico, para
+    // volver a traer TODO lo que el cajero ya tenía cargado en vez de devolverlo a la
+    // primera página cada vez que se refresca.
+    const loadProducts = useCallback(async (q = "", cat = "all", off = 0, replace = true, pageSize = LIMIT) => {
         if (!activeWarehouse) return;
         if (!replace) setLoadingMore(true);
         try {
-            const params = { search: q, limit: LIMIT, offset: off };
+            const params = { search: q, limit: pageSize, offset: off };
             if (cat && cat !== "all") params.category = cat;
             const r = await api.warehouses.getProducts(activeWarehouse.id, params);
             setTotal(r.total ?? 0);
@@ -38,16 +49,30 @@ export function useCobroProducts(activeWarehouse, notify) {
         if (activeWarehouse) loadProducts(debouncedSearch, debouncedCat, 0, true);
     }, [activeWarehouse, debouncedSearch, debouncedCat]); // eslint-disable-line
 
+    // Espejo del offset: el intervalo de refresco se crea una sola vez y necesita saber
+    // cuánto hay cargado sin reiniciarse cada vez que el cajero hace scroll.
+    const offsetRef = useRef(0);
+    useEffect(() => { offsetRef.current = offset; }, [offset]);
+
     // Refrescar en tiempo real cuando el servidor notifica cambio de precios
     useEffect(() => {
         if (!activeWarehouse) return;
-        const refresh = () => loadProducts(debouncedSearch, debouncedCat, 0, true);
+        // Se piden de nuevo todas las páginas que el cajero ya tenía a la vista: recargar
+        // solo la primera lo devolvería al principio de la lista cada refresco.
+        const refresh = () => loadProducts(debouncedSearch, debouncedCat, 0, true, Math.max(LIMIT, offsetRef.current));
         const unsubSSE  = onSSE('products:updated', refresh);
         // Fallback: refrescar al volver al tab (por si SSE se reconecta tarde)
         const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
         document.addEventListener('visibilitychange', onVisible);
+        // Red de seguridad para cuando el aviso en vivo no llega (ver REFRESH_MS). Solo con
+        // la pestaña a la vista: una caja minimizada no necesita datos frescos y cada
+        // consulta cuesta en un backend serverless.
+        const timer = setInterval(() => {
+            if (document.visibilityState === 'visible') refresh();
+        }, REFRESH_MS);
         return () => {
             unsubSSE();
+            clearInterval(timer);
             document.removeEventListener('visibilitychange', onVisible);
         };
     }, [activeWarehouse, debouncedSearch, debouncedCat, loadProducts]);

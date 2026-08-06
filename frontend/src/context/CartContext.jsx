@@ -376,7 +376,23 @@ export function CartProvider({ children }) {
 
   // CartProvider envuelve toda la app, así que sin esta guarda la petición saldría
   // también en la pantalla de login: un 401 dispararía el refresh de token y la recarga.
-  useEffect(() => { if (employee) loadHeldCarts(); }, [employee, loadHeldCarts]);
+  //
+  // Se repite cada tanto por lo mismo que la grilla de productos (ver REFRESH_MS en
+  // useCobroProducts): con el backend en serverless los avisos en vivo no llegan, y aquí
+  // además hay que ver las cuentas que abren las otras cajas y cuáles quedaron bloqueadas.
+  useEffect(() => {
+    if (!employee) return;
+    loadHeldCarts();
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') loadHeldCarts();
+    }, 25_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') loadHeldCarts(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [employee, loadHeldCarts]);
 
   // Sin parámetros a propósito: se invoca como onClick={holdCart} y con el atajo F4, así
   // que cualquier argumento sería el evento del clic, no un callback.
