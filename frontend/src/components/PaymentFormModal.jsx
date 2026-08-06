@@ -133,7 +133,9 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     if (!creditCoversAll) {
       if (!form.payment_journal_id) return notify("Selecciona el método de pago", "err");
       if (!form.amount) return notify("El monto es requerido", "err");
-      if (!isCash && !form.reference_number?.trim()) return notify("El número de referencia es requerido", "err");
+      // La referencia es opcional: hay cobros sin número a mano (el cliente no lo tiene
+      // todavía, el punto no lo imprime) y exigirla obligaba al cajero a inventarse algo
+      // para poder cerrar la venta, que es peor que dejar el campo vacío.
     }
     if (changeBase > 0 && !form.keep_change && !form.credit_change && !form.change_journal_id) return notify("Selecciona el diario del que saldrá el cambio", "err");
 
@@ -172,7 +174,6 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const canSubmit = !loading && form.reference_date && (
     creditCoversAll ||
     (form.payment_journal_id && !isNaN(amountNum) && amountNum > 0 &&
-      (isCash || form.reference_number?.trim()) &&
       (changeBase <= 0 || form.keep_change || form.credit_change || form.change_journal_id))
   );
 
@@ -473,7 +474,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
 
         {/* N° Referencia (oculto si es efectivo) */}
         {!isCash && (
-          <Field label="N° REFERENCIA *">
+          <Field label="N° REFERENCIA">
             <input
               type="text"
               value={form.reference_number}

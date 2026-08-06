@@ -44,7 +44,8 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
     if (!form.payment_journal_id) return notify("Selecciona el diario de pago", "err");
     if (!form.received_amount)    return notify("El monto es requerido", "err");
     if (!form.reference_date)     return notify("La fecha de referencia es requerida", "err");
-    if (!isCash && !form.reference_number?.trim()) return notify("El número de referencia es requerido", "err");
+    // La referencia queda opcional, igual que al cobrar una venta: no siempre se tiene el
+    // número a mano al registrar el pago.
 
     setLoading(true);
     try {
@@ -67,7 +68,7 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
 
   const canSubmit = !loading && form.payment_journal_id &&
     !isNaN(receivedNum) && receivedNum > 0 &&
-    form.reference_date && (isCash || form.reference_number?.trim());
+    form.reference_date;
 
   // Display helpers
   const infoRate = form.pay_currency_id ? payRate : 1;
@@ -171,7 +172,7 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
 
         {/* N° Referencia (oculto si es efectivo) */}
         {!isCash && (
-          <Field label="N° REFERENCIA *">
+          <Field label="N° REFERENCIA">
             <input
               type="text"
               value={form.reference_number}
