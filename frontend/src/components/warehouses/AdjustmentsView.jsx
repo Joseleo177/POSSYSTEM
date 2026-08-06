@@ -4,6 +4,7 @@ import CustomSelect from "../ui/CustomSelect";
 import { useDebounce } from "../../hooks/useDebounce";
 import { isIntegerUnit } from "../../helpers/unitFormatter";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers/image";
+import { useApp } from "../../context/AppContext";
 
 const REASONS_OUT = [
     { value: "merma",       label: "Merma (Deterioro/Rotura)" },
@@ -31,9 +32,15 @@ const fmt = n => Number(n || 0).toLocaleString("es-VE", { minimumFractionDigits:
 const fmtDate = d => d ? new Date(d).toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
 
 export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWarehouse, onSessionChange }) {
+    // Las categorías ya viven en el contexto y se cargan una vez al entrar: no hace falta
+    // pedirlas otra vez desde esta pantalla.
+    const { categories } = useApp();
     const [allProducts, setAllProducts]         = useState([]);
     const [loadingList, setLoadingList]         = useState(false);
     const [search, setSearch]                   = useState("");
+    // El filtro lo resuelve el backend (getProducts ya acepta category_id): filtrar en el
+    // cliente solo escondería productos de la página cargada y dejaría fuera el resto.
+    const [categoryId, setCategoryId]           = useState("");
     // Lista o cuadrícula con foto. Se recuerda entre sesiones, igual que en el Catálogo:
     // quien ajusta inventario con el producto en la mano se guía por la imagen, y quien
     // trabaja con nombres prefiere la lista compacta. Clave propia para no pisar la del
@@ -70,9 +77,10 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
         else setLoadingMore(true);
         
         try {
-            const r = await api.warehouses.getProducts(selectedWarehouse.id, { 
-                search: debouncedSearch, 
-                limit: LIMIT, 
+            const r = await api.warehouses.getProducts(selectedWarehouse.id, {
+                search: debouncedSearch,
+                ...(categoryId ? { category_id: categoryId } : {}),
+                limit: LIMIT,
                 offset: pageNum * LIMIT,
                 simple_only: true // excluye combos y servicios desde backend
             });
@@ -86,13 +94,14 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
             setLoadingList(false);
             setLoadingMore(false);
         }
-    }, [selectedWarehouse?.id, debouncedSearch]);
+    }, [selectedWarehouse?.id, debouncedSearch, categoryId]);
 
     // Efecto para buscar y cargar inicial
     useEffect(() => {
         if (!selectedWarehouse) return;
         loadProducts(0, false);
-    }, [selectedWarehouse?.id, debouncedSearch]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedWarehouse?.id, debouncedSearch, categoryId]);
 
     const handleScroll = (e) => {
         const { scrollTop, scrollHeight, clientHeight } = e.target;
@@ -303,24 +312,43 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                         </div>
                     )}
 
-                    <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 overflow-hidden">
+                    {/* El panel de ajuste es un formulario corto y fijo; la lista de productos
+                        es la que se recorre. Repartir mitad y mitad desperdiciaba espacio a la
+                        derecha y apretaba la cuadrícula de fotos a la izquierda. */}
+                    <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] overflow-hidden">
 
                         {/* Columna izquierda: productos */}
                         <div className="flex flex-col min-h-0 border-r border-border/10 dark:border-white/[0.06]">
                             <div className="shrink-0 px-4 py-3 border-b border-border/10 dark:border-white/[0.06]">
-                                <div className="relative">
-                                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
-                                    <input type="text" placeholder="Buscar producto..."
-                                        value={search} onChange={e => setSearch(e.target.value)}
-                                        className="input h-9 pl-9 text-sm" />
-                                    {search && (
-                                        <button onClick={() => setSearch("")}
-                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-content-subtle hover:text-content">
-                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12"/></svg>
-                                        </button>
-                                    )}
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1 min-w-0">
+                                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                        </svg>
+                                        <input type="text" placeholder="Buscar producto..."
+                                            value={search} onChange={e => setSearch(e.target.value)}
+                                            className="input h-9 pl-9 text-sm" />
+                                        {search && (
+                                            <button onClick={() => setSearch("")}
+                                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-content-subtle hover:text-content">
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12"/></svg>
+                                            </button>
+                                        )}
+                                    </div>
+                                    {/* Ancho fijo: si compartiera el espacio con el buscador, un
+                                        nombre de categoría largo dejaría el campo de texto inservible. */}
+                                    <div className="w-40 shrink-0">
+                                        <CustomSelect
+                                            value={categoryId}
+                                            onChange={setCategoryId}
+                                            height="h-9"
+                                            placeholder="Categoría"
+                                            options={[
+                                                { value: "", label: "Todas las categorías" },
+                                                ...(categories || []).map(c => ({ value: String(c.id), label: c.name })),
+                                            ]}
+                                        />
+                                    </div>
                                 </div>
                                 <div className="flex items-center justify-between gap-2 mt-1.5">
                                     <p className="text-[9px] font-bold text-content-subtle/40 uppercase tracking-widest">
@@ -365,7 +393,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                         <p className="text-[11px] font-bold text-content-subtle/40 uppercase tracking-wide">Sin productos</p>
                                     </div>
                                 ) : viewMode === "grid" ? (
-                                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
                                         {allProducts.map(p => {
                                             const isSelected = selectedProduct?.id === p.id;
                                             return (
