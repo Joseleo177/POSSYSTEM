@@ -114,7 +114,7 @@ async function getStock(req) {
 }
 
 async function getProducts(req) {
-  const { search, category, simple_only, limit = 30, offset = 0 } = req.query;
+  const { search, category, category_id, simple_only, limit = 30, offset = 0 } = req.query;
   const warehouseId = parseInt(req.params.id);
   const tcp = buildTcp(req);
 
@@ -127,6 +127,13 @@ async function getProducts(req) {
   if (category && category !== 'all') {
     filters.push(`c.name = :category`);
     replacements.category = category;
+  }
+  // Filtro por id, que es el que usa la vista de ajustes. Convive con el de nombre porque el
+  // POS ya filtraba así; por id es lo correcto, ya que dos categorías pueden llamarse igual
+  // en empresas distintas y un renombrado no debe romper el filtro.
+  if (category_id && !isNaN(parseInt(category_id))) {
+    filters.push(`p.category_id = :category_id`);
+    replacements.category_id = parseInt(category_id);
   }
   if (simple_only === 'true') {
     filters.push(`p.is_combo = false AND p.is_service = false`);
