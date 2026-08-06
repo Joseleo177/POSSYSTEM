@@ -368,28 +368,28 @@ export default function CartSidebar({
                     <div className="bg-surface-2 dark:bg-white/5 p-3 rounded-xl border border-black/5 dark:border-white/10">
                         <div className="space-y-1 mb-2">
                             <div className="flex justify-between items-center opacity-60 dark:text-content-dark-muted">
-                                <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide">SUBTOTAL</span>
-                                <span className="text-[11px] lg:text-xs font-black tabular-nums">{fmt(subtotalDisplay, currSym)}</span>
+                                <span className="text-[10px] lg:text-xs font-black uppercase tracking-wide">SUBTOTAL</span>
+                                <span className="text-[11px] lg:text-sm font-black tabular-nums">{fmt(subtotalDisplay, currSym)}</span>
                             </div>
                             {promoDiscount > 0 && (
                                 <div className="flex justify-between items-center text-success">
-                                    <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide">Promociones</span>
-                                    <span className="text-[11px] lg:text-xs font-black tabular-nums">-{fmt(promoDiscountDisplay, currSym)}</span>
+                                    <span className="text-[10px] lg:text-xs font-black uppercase tracking-wide">Promociones</span>
+                                    <span className="text-[11px] lg:text-sm font-black tabular-nums">-{fmt(promoDiscountDisplay, currSym)}</span>
                                 </div>
                             )}
                             {discountEnabled && discountAmount > 0 && (
                                 <div className="flex justify-between items-center text-brand-500">
-                                    <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide">DESC. ({discountPct}%)</span>
-                                    <span className="text-[11px] lg:text-xs font-black tabular-nums">-{fmt(discountAmountDisplay, currSym)}</span>
+                                    <span className="text-[10px] lg:text-xs font-black uppercase tracking-wide">DESC. ({discountPct}%)</span>
+                                    <span className="text-[11px] lg:text-sm font-black tabular-nums">-{fmt(discountAmountDisplay, currSym)}</span>
                                 </div>
                             )}
                         </div>
                         <div className="flex justify-between items-end">
-                            <span className="text-[10px] lg:text-[11px] font-black text-brand-500 uppercase tracking-wide">TOTAL</span>
-                            <div className="flex flex-col items-end">
-                                <div className="text-xl font-black tracking-tighter tabular-nums font-display dark:text-white leading-none">{fmt(totalDisplay, currSym)}</div>
+                            <span className="text-[10px] lg:text-xs font-black text-brand-500 uppercase tracking-wide shrink-0">TOTAL</span>
+                            <div className="flex flex-col items-end min-w-0">
+                                <div className="text-2xl lg:text-3xl font-black tracking-tighter tabular-nums font-display dark:text-white leading-none whitespace-nowrap">{fmt(totalDisplay, currSym)}</div>
                                 {secondaryCurrency && (
-                                    <div className="text-[10px] lg:text-xs font-bold text-content-subtle dark:text-brand-500/60 tabular-nums mt-0.5">
+                                    <div className="text-[10px] lg:text-sm font-bold text-content-subtle dark:text-brand-500/60 tabular-nums mt-1 whitespace-nowrap">
                                         ≈ {fmt(totalSecondary, secondaryCurrency.symbol)}
                                     </div>
                                 )}
