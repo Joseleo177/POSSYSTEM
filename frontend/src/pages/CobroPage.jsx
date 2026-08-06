@@ -25,7 +25,7 @@ import QuantityModal          from "../components/cobro/QuantityModal";
 const fmt = fmtMoney;
 
 export default function CobroPage() {
-    const { notify, employee, baseCurrency, activeCurrencies, categories } = useApp();
+    const { notify, employee, baseCurrency, activeCurrencies, categories, can } = useApp();
 
     const {
         cart, addToCart, removeFromCart, changeQty, setQtyDirect,
@@ -38,7 +38,7 @@ export default function CobroPage() {
         selectedCustomer, setSelectedCustomer,
         employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
         checkout, saveQuotation, loading, receipt, setReceipt,
-        heldCarts, holdCart, takeHeldCart, removeHeldCart, loadHeldCarts, acceptWebOrder,
+        heldCarts, holdCart, takeHeldCart, removeHeldCart, releaseHeldCart, loadHeldCarts, acceptWebOrder,
         activePromos, loadActivePromos, promoLineDiscount, promoDiscount,
     } = useCart();
 
@@ -254,6 +254,10 @@ export default function CobroPage() {
                 // pedidos seguidos, y volver a abrirlo entre cada uno estorba.
                 onAcceptOrder={acceptWebOrder}
                 baseCurrency={baseCurrency}
+                // Solo un administrador puede destrabar la cuenta de otra caja sin esperar a
+                // que venza el bloqueo.
+                canForceRelease={can("admin")}
+                onForceRelease={releaseHeldCart}
             />
             <CheckoutTypeModal
                 open={showConfirmCheckout}

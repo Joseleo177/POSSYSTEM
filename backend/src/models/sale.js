@@ -27,6 +27,11 @@ module.exports = (sequelize, DataTypes) => {
     invoice_number:     { type: DataTypes.STRING(50) },
     idempotency_key:    { type: DataTypes.STRING(64), allowNull: true, unique: true },
     credit_applied:     { type: DataTypes.DECIMAL(14, 6), allowNull: false, defaultValue: 0 },
+    // Caja que tiene la cuenta abierta en su carrito. Mientras esté puesto, las demás la ven
+    // bloqueada en lugar de poder tomarla o eliminarla. held_at permite soltarla sola si el
+    // cajero abandona sin cerrarla (ver HOLD_TIMEOUT_MIN en holdLock.js).
+    held_by_employee_id: { type: DataTypes.INTEGER, allowNull: true },
+    held_at:             { type: DataTypes.DATE,    allowNull: true },
     // Solo se llenan en pedidos llegados del catálogo público (status 'pedido')
     web_customer_name:  { type: DataTypes.STRING(120), allowNull: true },
     web_customer_phone: { type: DataTypes.STRING(30),  allowNull: true },

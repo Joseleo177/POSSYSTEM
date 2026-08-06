@@ -5,10 +5,16 @@ const { broadcast } = require("../services/sseService");
 const update = async (req, res) => {
   try {
     const data = await salesService.updateSale(req.params.id, req.body);
+    // Editar una cuenta en espera devuelve y vuelve a apartar inventario, igual que crearla
+    // o anularla. Sin este aviso las otras cajas seguían mostrando el stock viejo hasta que
+    // el cajero refrescaba a mano: era el único endpoint que movía existencias en silencio.
+    broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
     res.json({ ok: true, data });
   } catch (err) {
     const status = err.status || (/insuficiente|no encontrad/i.test(err.message) ? 400 : 500);
-    res.status(status).json({ ok: false, message: err.message });
+    // `code` viaja hasta la caja: con él distingue "otra caja tocó esta cuenta" de un error
+    // corriente y puede rehacer el carrito como venta nueva en vez de dejarlo atascado.
+    res.status(status).json({ ok: false, message: err.message, code: err.code });
   }
 };
 
@@ -46,10 +52,40 @@ const getAll = async (req, res) => {
     const company_id = req.employee?.company_id ?? null;
     const isSuperuser = !!req.is_superuser;
     const result = await salesService.getAllSales(req.query, { company_id, isSuperuser });
-    res.json({ ok: true, data: result.data, total: result.total });
+    // Solo el listado de cuentas en espera necesita saber quién tiene cada una; en el
+    // historial de facturas el dato no aplica y sería una consulta de más por página.
+    const wantsHeld = [].concat(req.query.status || []).some(s => s === "espera" || s === "pedido");
+    const data = wantsHeld
+      ? await salesService.annotateHolders(result.data, req.employee?.id ?? null)
+      : result.data;
+    res.json({ ok: true, data, total: result.total });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener ventas" });
+  }
+};
+
+// POST /api/sales/:id/claim — la caja toma la cuenta para atenderla
+const claim = async (req, res) => {
+  try {
+    await salesService.claimSale(req.params.id, req.employee?.id ?? null);
+    // Las demás cajas deben ver el candado al instante, no en su próxima recarga.
+    broadcast(req.employee?.company_id ?? 0, 'sales:updated', {});
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(err.status || 500).json({ ok: false, message: err.message, code: err.code });
+  }
+};
+
+// DELETE /api/sales/:id/claim — la suelta. Un administrador puede soltar la de cualquiera.
+const release = async (req, res) => {
+  try {
+    const force = !!req.employee?.permissions?.all;
+    const data = await salesService.releaseSale(req.params.id, req.employee?.id ?? null, { force });
+    broadcast(req.employee?.company_id ?? 0, 'sales:updated', {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(err.status || 500).json({ ok: false, message: err.message, code: err.code });
   }
 };
 
@@ -99,4 +135,4 @@ const confirmCredit = async (req, res) => {
   }
 };
 
-module.exports = { getOne, getAll, getStats, create, cancel, update, confirmCredit, acceptOrder };
+module.exports = { getOne, getAll, getStats, create, cancel, update, confirmCredit, acceptOrder, claim, release };

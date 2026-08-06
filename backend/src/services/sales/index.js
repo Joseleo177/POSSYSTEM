@@ -6,6 +6,7 @@ const cancelSale = require("./cancelSale");
 const updateSale = require("./updateSale");
 const confirmCreditSale = require("./confirmCreditSale");
 const acceptWebOrder = require("./acceptWebOrder");
+const { claimSale, releaseSale, annotateHolders } = require("./holdLock");
 
 module.exports = {
   acceptWebOrder,
@@ -16,4 +17,7 @@ module.exports = {
   cancelSale,
   updateSale,
   confirmCreditSale,
+  claimSale,
+  releaseSale,
+  annotateHolders,
 };

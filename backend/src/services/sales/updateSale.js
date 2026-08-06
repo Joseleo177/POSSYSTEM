@@ -8,7 +8,13 @@ const {
 } = require("./shared");
 const getOneSale = require("./getOneSale");
 
-const bad = (msg, status = 400) => Object.assign(new Error(msg), { status });
+const bad = (msg, status = 400, code = null) => Object.assign(new Error(msg), { status, code });
+
+// Códigos que la caja necesita distinguir sin leer el texto del mensaje: significan "esta
+// cuenta ya no se puede seguir editando porque otra caja la tocó". Con ellos el POS puede
+// rehacer el carrito como venta nueva en vez de dejar al cajero atascado.
+const GONE = "SALE_GONE";               // la eliminaron (una cuenta en espera se borra de verdad)
+const NOT_EDITABLE = "SALE_NOT_EDITABLE"; // ya la cobraron: dejó de estar en borrador/espera
 
 // Deja el stock total del producto igual a la suma de sus existencias por almacén. Se llama
 // después de cada movimiento porque products.stock es un acumulado, no la fuente de verdad.
@@ -30,11 +36,11 @@ module.exports = async function updateSale(saleId, body) {
     // Las líneas se leen aparte, dentro de la misma transacción.
     const sale = await Sale.findByPk(saleId, { transaction, lock: true });
 
-    if (!sale) throw bad("Venta no encontrada", 404);
+    if (!sale) throw bad("Esta cuenta ya no existe: otra caja la eliminó.", 404, GONE);
     // 'espera' entra aquí junto a 'borrador': es el caso de agregar rondas a una cuenta
     // abierta. Ambos comparten lo esencial — todavía no tienen correlativo asignado.
     if (!["borrador", "espera"].includes(sale.status)) {
-      throw bad("Solo se pueden editar ventas en borrador o cuentas en espera. Una vez asignado el correlativo el documento es inmutable.");
+      throw bad("Esta cuenta ya fue cobrada desde otra caja y no se puede seguir editando.", 400, NOT_EDITABLE);
     }
 
     const warehouseId = sale.warehouse_id;
@@ -179,7 +185,13 @@ module.exports = async function updateSale(saleId, body) {
       ? { status: "borrador" }
       : {};
 
-    await sale.update({ total, discount_amount: discAmt, ...statusPatch }, { transaction });
+    // Se suelta el bloqueo: los dos flujos que llegan aquí —pausar la cuenta y cobrarla—
+    // terminan vaciando el carrito de la caja, así que a partir de este punto ya no la está
+    // atendiendo nadie y otra caja debe poder tomarla.
+    await sale.update(
+      { total, discount_amount: discAmt, held_by_employee_id: null, held_at: null, ...statusPatch },
+      { transaction }
+    );
 
     await transaction.commit();
 

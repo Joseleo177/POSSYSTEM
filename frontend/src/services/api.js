@@ -153,6 +153,9 @@ export const api = {
     getHeld:     ()          => request("/sales?status=espera&status=pedido&limit=100"),
     // Acepta un pedido web: descuenta stock del almacén indicado y lo pasa a 'espera'
     acceptOrder: (id, body)  => request(`/sales/${id}/accept-order`, { method: "POST", body: JSON.stringify(body) }),
+    // Toma / suelta una cuenta en espera para que las demás cajas la vean bloqueada.
+    claim:       (id)        => request(`/sales/${id}/claim`, { method: "POST" }),
+    release:     (id)        => request(`/sales/${id}/claim`, { method: "DELETE" }),
     // Devoluciones
     createReturn:   (id, body) => request(`/sales/${id}/return`,   { method: "POST", body: JSON.stringify(body) }),
     createExchange: (id, body) => request(`/sales/${id}/exchange`, { method: "POST", body: JSON.stringify(body) }),

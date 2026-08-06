@@ -387,31 +387,44 @@ export function CartProvider({ children }) {
 
     setLoading(true);
     try {
+      const createHold = () => api.sales.create({
+        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty) })),
+        paid: 0,
+        customer_id: selectedCustomer?.id || null,
+        employee_id: employee?.id || null,
+        currency_id: currentCurrency?.id || null,
+        exchange_rate: exchangeRate,
+        serie_id: selectedSerieId,
+        warehouse_id: activeWarehouse.id,
+        discount_amount: discountAmount,
+        hold: true,
+      });
+
       // Si la cuenta ya existía (se recuperó para agregar productos), se actualiza en vez
       // de crear otra: así no se duplica ni se descuenta el stock dos veces.
+      let recreated = false;
       if (heldSaleId) {
-        await api.sales.update(heldSaleId, {
-          items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty) })),
-          discount_amount: discountAmount,
-        });
+        try {
+          await api.sales.update(heldSaleId, {
+            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty) })),
+            discount_amount: discountAmount,
+          });
+        } catch (e) {
+          // Otra caja la eliminó o la cobró mientras se atendía: se guarda como cuenta
+          // nueva para no perder lo que el cajero llevaba armado.
+          if (!isStaleSale(e)) throw e;
+          await createHold();
+          recreated = true;
+        }
       } else {
-        await api.sales.create({
-          items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty) })),
-          paid: 0,
-          customer_id: selectedCustomer?.id || null,
-          employee_id: employee?.id || null,
-          currency_id: currentCurrency?.id || null,
-          exchange_rate: exchangeRate,
-          serie_id: selectedSerieId,
-          warehouse_id: activeWarehouse.id,
-          discount_amount: discountAmount,
-          hold: true,
-        });
+        await createHold();
       }
       setHeldSale(null);
       clearCart();
       await loadHeldCarts();
-      notify("Cuenta puesta en espera");
+      notify(recreated
+        ? "Otra caja eliminó esa cuenta. Se guardó como una cuenta en espera nueva."
+        : "Cuenta puesta en espera");
     } catch (e) {
       notify(e.message || "No se pudo poner la cuenta en espera", "err");
     } finally {
@@ -419,6 +432,16 @@ export function CartProvider({ children }) {
     }
   }, [cart, heldSaleId, activeWarehouse, selectedSerieId, selectedCustomer, employee,
     currentCurrency, exchangeRate, discountAmount, clearCart, loadHeldCarts, notify]);
+
+  // Dos cajas pueden acabar sobre la misma cuenta en espera: una la recupera y otra la
+  // elimina o la cobra antes de que la primera termine. Ahí el PATCH devuelve SALE_GONE
+  // (una cuenta en espera se borra de verdad, ver cancelSale) o SALE_NOT_EDITABLE (ya la
+  // cobraron), y el cajero se quedaba con el carrito lleno, el cliente delante y ninguna
+  // salida: reintentar daba siempre el mismo error.
+  //
+  // Rehacerla como venta nueva es seguro: quien la eliminó devolvió el inventario al
+  // anularla, así que la venta nueva lo descuenta otra vez sin duplicar nada.
+  const isStaleSale = (e) => e?.code === "SALE_GONE" || e?.code === "SALE_NOT_EDITABLE";
 
   // Acepta un pedido llegado del catálogo público. Hasta aquí no había tocado inventario:
   // el servidor lo descuenta ahora, del almacén activo de esta caja, y el pedido pasa a
@@ -447,16 +470,49 @@ export function CartProvider({ children }) {
     if (!activeWarehouse) return notify("Selecciona un almacén antes de continuar", "err");
 
     try {
+      // Se reserva en el servidor ANTES de cargar nada: si otra caja se adelantó, el 409
+      // llega aquí y el cajero se entera antes de ponerse a trabajar sobre una cuenta que
+      // no va a poder cobrar. Antes esto se resolvía ocultándola solo en esta pantalla, y
+      // las dos cajas creían tenerla.
+      await api.sales.claim(saleId);
+
       // Las líneas guardadas solo traen product_id/precio/cantidad; hay que rehidratarlas
       // con los datos del producto (unidad, imagen, stock) que el carrito necesita.
       const wid = held.warehouse_id || activeWarehouse.id;
       const res = await api.warehouses.getProducts(wid, { limit: 500 });
       const productMap = Object.fromEntries((res.data || []).map(p => [p.id, p]));
 
+      // El stock que devuelve el almacén ya tiene descontado lo que ESTA cuenta apartó al
+      // pausarla, así que usarlo tal cual deja al cajero sin poder subir la cantidad: con 9
+      // empanadas físicas y 2 en la cuenta, el almacén reporta 7 y el carrito trataba ese 7
+      // como el techo, cuando el techo real son las 9.
+      //
+      // Se le devuelve lo apartado por la propia línea. Es lo mismo que hace updateSale en
+      // el servidor: restaura lo que la venta tenía y recién entonces descuenta lo nuevo.
+      const withOwnStock = (prod, qty) => {
+        if (prod.is_service) return prod;
+
+        if (prod.is_combo) {
+          // En un combo el límite lo ponen los ingredientes, no el combo en sí: a cada uno
+          // se le devuelve lo que esta cuenta consumía de él.
+          return {
+            ...prod,
+            stock: prod.stock === null ? null : parseFloat(prod.stock || 0) + qty,
+            combo_items: (prod.combo_items || []).map(ing => ing.ingredient_is_service ? ing : {
+              ...ing,
+              ingredient_stock: parseFloat(ing.ingredient_stock || 0) + qty * parseFloat(ing.quantity || 1),
+            }),
+          };
+        }
+
+        return { ...prod, stock: parseFloat(prod.stock || 0) + qty };
+      };
+
       const newCart = (held.items || []).reduce((acc, item) => {
         const prod = productMap[item.product_id];
         if (!prod) return acc;
-        return [...acc, { ...prod, price: parseFloat(item.price), qty: parseFloat(item.quantity) || 1 }];
+        const qty = parseFloat(item.quantity) || 1;
+        return [...acc, { ...withOwnStock(prod, qty), price: parseFloat(item.price), qty }];
       }, []);
 
       setCart(newCart);
@@ -475,6 +531,19 @@ export function CartProvider({ children }) {
       notify(e.message || "No se pudo recuperar la cuenta", "err");
     }
   }, [heldCarts, activeWarehouse, notify]);
+
+  // Suelta el bloqueo de una cuenta que quedó tomada por una caja que ya no la está
+  // atendiendo (se cerró el navegador, se fue el cajero). El bloqueo caduca solo, pero con
+  // un cliente esperando no hay por qué aguardar el plazo: un administrador la destraba aquí.
+  const releaseHeldCart = useCallback(async (saleId) => {
+    try {
+      await api.sales.release(saleId);
+      await loadHeldCarts();
+      notify("Cuenta liberada");
+    } catch (e) {
+      notify(e.message || "No se pudo liberar la cuenta", "err");
+    }
+  }, [loadHeldCarts, notify]);
 
   // Eliminar devuelve el inventario: cancelSale restaura el stock de cada línea.
   const removeHeldCart = useCallback(async (saleId) => {
@@ -544,25 +613,39 @@ export function CartProvider({ children }) {
       // Si se está cobrando una cuenta en espera, la venta YA existe: se actualizan sus
       // líneas (por si se agregaron rondas) y se pasa a 'borrador' para que el cobro le
       // asigne el correlativo. Crear una nueva duplicaría la venta y el descuento de stock.
-      const res = heldSaleId
-        ? await api.sales.update(heldSaleId, {
+      const createPayload = () => ({
+        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty) })),
+        paid: 0,
+        customer_id: selectedCustomer?.id || null,
+        employee_id: employee?.id || null,
+        currency_id: currentCurrency?.id || null,
+        exchange_rate: exchangeRate,
+        serie_id: selectedSerieId,
+        warehouse_id: activeWarehouse.id,
+        discount_amount: discountAmount,
+        idempotency_key: pendingKeyRef.current,
+        quotation_id: quotationId || null,
+      });
+
+      let res;
+      if (heldSaleId) {
+        try {
+          res = await api.sales.update(heldSaleId, {
             items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty) })),
             discount_amount: discountAmount,
             status: "borrador",
-          })
-        : await api.sales.create({
-            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty) })),
-            paid: 0,
-            customer_id: selectedCustomer?.id || null,
-            employee_id: employee?.id || null,
-            currency_id: currentCurrency?.id || null,
-            exchange_rate: exchangeRate,
-            serie_id: selectedSerieId,
-            warehouse_id: activeWarehouse.id,
-            discount_amount: discountAmount,
-            idempotency_key: pendingKeyRef.current,
-            quotation_id: quotationId || null,
           });
+        } catch (e) {
+          // Otra caja eliminó o cobró esta cuenta mientras se atendía. En vez de dejar al
+          // cajero atascado con el carrito armado, se cobra como venta nueva.
+          if (!isStaleSale(e)) throw e;
+          setHeldSale(null);
+          notify(`${e.message} Se cobró como una venta nueva.`);
+          res = await api.sales.create(createPayload());
+        }
+      } else {
+        res = await api.sales.create(createPayload());
+      }
 
       const serie = mySeries.find(s => s.id === selectedSerieId);
       setReceipt({
@@ -615,7 +698,7 @@ export function CartProvider({ children }) {
       // Quotation pre-load
       loadFromQuotation, quotationId,
       // Hold Cart
-      heldCarts, holdCart, takeHeldCart, removeHeldCart, loadHeldCarts, heldSaleId,
+      heldCarts, holdCart, takeHeldCart, removeHeldCart, releaseHeldCart, loadHeldCarts, heldSaleId,
       // Pedidos del catálogo público
       acceptWebOrder,
     }}>

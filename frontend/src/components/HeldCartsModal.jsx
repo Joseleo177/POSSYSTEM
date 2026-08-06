@@ -1,6 +1,6 @@
 import { fmtMoney } from "../helpers";
 
-export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove, onAcceptOrder, baseCurrency }) {
+export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove, onAcceptOrder, baseCurrency, canForceRelease, onForceRelease }) {
     if (!open) return null;
 
     return (
@@ -40,12 +40,19 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                             // llevar al carrito sin aceptarlo primero, porque el cobro daría por
                             // hecho que la mercancía ya salió.
                             const isWebOrder = c.status === "pedido";
+                            // Otra caja la tiene abierta en su carrito. Se muestra igual —para
+                            // que nadie la busque creyendo que se perdió— pero sin acciones:
+                            // tomarla o eliminarla ahora es lo que dejaba al otro cajero con un
+                            // carrito armado sobre una venta que ya no podía cobrar.
+                            const heldByOther = c.held_by && !c.held_by.is_mine;
 
                             return (
                                 <div key={c.id} className={`px-4 py-3 rounded-2xl border flex items-center gap-4 group transition-all ${
-                                    isWebOrder
-                                        ? "bg-info/[0.06] border-info/25 hover:border-info/50"
-                                        : "bg-surface-1 dark:bg-white/[0.03] border-black/5 dark:border-white/5 hover:border-brand-500/30"
+                                    heldByOther
+                                        ? "bg-surface-2 dark:bg-white/[0.02] border-black/5 dark:border-white/5 opacity-60"
+                                        : isWebOrder
+                                            ? "bg-info/[0.06] border-info/25 hover:border-info/50"
+                                            : "bg-surface-1 dark:bg-white/[0.03] border-black/5 dark:border-white/5 hover:border-brand-500/30"
                                 }`}>
                                     <div className="w-10 h-10 rounded-xl bg-surface-2 dark:bg-black/20 flex flex-col items-center justify-center text-center shrink-0">
                                         <span className="text-[9px] font-black leading-none opacity-40">{new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
@@ -89,8 +96,27 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                         </div>
                                     </div>
 
-                                    {/* Los pedidos web muestran sus acciones siempre: llegan solos y
-                                        hay que verlos, no descubrirlos pasando el cursor. */}
+                                    {/* En uso por otra caja: en vez de botones se dice quién la tiene.
+                                        Un administrador puede soltarla si esa caja quedó colgada. */}
+                                    {heldByOther ? (
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-content-subtle flex items-center gap-1.5 whitespace-nowrap">
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                                {c.held_by.name}
+                                            </span>
+                                            {canForceRelease && (
+                                                <button
+                                                    onClick={() => onForceRelease(c.id)}
+                                                    className="px-2.5 h-8 rounded-lg bg-warning/10 text-warning hover:bg-warning hover:text-white font-black text-[9px] uppercase tracking-widest transition-all"
+                                                    title="Liberar la cuenta para que otra caja pueda atenderla"
+                                                >
+                                                    Liberar
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                    /* Los pedidos web muestran sus acciones siempre: llegan solos y
+                                        hay que verlos, no descubrirlos pasando el cursor. */
                                     <div className={`flex items-center gap-1.5 transition-all ${isWebOrder ? "" : "opacity-0 group-hover:opacity-100"}`}>
                                         <button
                                             onClick={() => onRemove(c.id)}
@@ -118,6 +144,7 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                             </button>
                                         )}
                                     </div>
+                                    )}
                                 </div>
                             );
                         })
