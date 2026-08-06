@@ -45,11 +45,37 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         setCreditLoading(false);
     };
 
+    const receiptRate   = parseFloat(receipt?.exchange_rate || 1);
+    const receiptIsBase = !receipt?.currency || receipt.currency.is_base;
+    const receiptSym    = receiptIsBase ? (baseCurrency?.symbol || "Ref.") : (receipt?.currency?.symbol || "Ref.");
+    const fmt = (n) => `${receiptSym}${Number(n * (receiptIsBase ? 1 : receiptRate)).toFixed(2)}`;
+
+    // Equivalente en la otra moneda. El cajero cobra en bolívares pero la factura se lleva en
+    // la moneda base (o al revés), y tener que hacer la cuenta aparte con el cliente delante
+    // es donde se cuelan los errores. Los montos llegan siempre en base, así que convertir es
+    // multiplicar por la tasa cuando el recibo ya está en base, o no hacer nada cuando no.
+    const altCurrency = receiptIsBase
+        ? activeCurrencies?.find(c => !c.is_base)
+        : baseCurrency;
+    const altRate = receiptIsBase ? parseFloat(altCurrency?.exchange_rate || 0) : 1;
+    // Sin segunda moneda configurada no hay nada que mostrar, y con tasa 1 la línea sería una
+    // repetición del monto de arriba.
+    const showAlt = !!altCurrency && altRate > 0 && !(receiptIsBase && altRate === 1);
+    const fmtAlt  = (n) => `${altCurrency?.symbol || ""}${Number(n * altRate).toFixed(2)}`;
+
+    const currentBalance = saleBalance?.balance ?? parseFloat(receipt?.total || 0);
+    const currentStatus  = saleBalance?.status  ?? receipt?.status ?? "pendiente";
+    // Venta creada pero sin desenlace: ni cobrada ni facturada a crédito.
+    const isUnresolved   = ["borrador", "espera"].includes(currentStatus);
+
     // Qué botones se ven depende del estado de la venta: una ya pagada no ofrece cobrar ni
     // fiar, y el crédito solo aplica antes de facturar. La numeración se calcula sobre los
     // visibles para que el 1 sea siempre el primer botón en pantalla y no salte.
-    const canSettle    = currentStatus !== "pagado";
-    const canGiveCredit = canSettle && ["borrador", "espera"].includes(currentStatus);
+    //
+    // Va después de currentStatus a propósito: al declararlo antes, el render reventaba con
+    // "Cannot access before initialization" — const no se iza como var.
+    const canSettle     = currentStatus !== "pagado";
+    const canGiveCredit = canSettle && isUnresolved;
     const actionKeys = [
         canSettle && "pay",
         canGiveCredit && "credit",
@@ -93,29 +119,6 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         return () => window.removeEventListener("keydown", handler, true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [onNext, showReceiptModal, showPayModal, actionKeys.join(","), creditLoading]);
-
-    const receiptRate   = parseFloat(receipt?.exchange_rate || 1);
-    const receiptIsBase = !receipt?.currency || receipt.currency.is_base;
-    const receiptSym    = receiptIsBase ? (baseCurrency?.symbol || "Ref.") : (receipt?.currency?.symbol || "Ref.");
-    const fmt = (n) => `${receiptSym}${Number(n * (receiptIsBase ? 1 : receiptRate)).toFixed(2)}`;
-
-    // Equivalente en la otra moneda. El cajero cobra en bolívares pero la factura se lleva en
-    // la moneda base (o al revés), y tener que hacer la cuenta aparte con el cliente delante
-    // es donde se cuelan los errores. Los montos llegan siempre en base, así que convertir es
-    // multiplicar por la tasa cuando el recibo ya está en base, o no hacer nada cuando no.
-    const altCurrency = receiptIsBase
-        ? activeCurrencies?.find(c => !c.is_base)
-        : baseCurrency;
-    const altRate = receiptIsBase ? parseFloat(altCurrency?.exchange_rate || 0) : 1;
-    // Sin segunda moneda configurada no hay nada que mostrar, y con tasa 1 la línea sería una
-    // repetición del monto de arriba.
-    const showAlt = !!altCurrency && altRate > 0 && !(receiptIsBase && altRate === 1);
-    const fmtAlt  = (n) => `${altCurrency?.symbol || ""}${Number(n * altRate).toFixed(2)}`;
-
-    const currentBalance = saleBalance?.balance ?? parseFloat(receipt?.total || 0);
-    const currentStatus  = saleBalance?.status  ?? receipt?.status ?? "pendiente";
-    // Venta creada pero sin desenlace: ni cobrada ni facturada a crédito.
-    const isUnresolved   = ["borrador", "espera"].includes(currentStatus);
     // La insignia describe el ESTADO de la factura, no la acción que se acaba de hacer.
     // "Abono parcial" nombraba el movimiento; lo que importa aquí es que queda saldo.
     const STATUS_LABELS = {

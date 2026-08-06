@@ -10,10 +10,19 @@ export function useCobroKeyboard({
     customers, selectedCustIdx, setSelectedCustIdx,
     setSelectedCustomer, setCustomers, setCustSearch,
     openQtyModal, setScanPending, qtyModalOpen, notify,
+    setShowHeldModal, setShowPendingSales,
 }) {
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.key === "F1") { e.preventDefault(); setSelectedIndex(-1); searchInputRef.current?.focus(); return; }
+
+            // F3 y F5 van antes del desvío al buscador para que funcionen aunque el cajero
+            // esté escribiendo: son las dos listas que se consultan a media venta.
+            //
+            // F5 normalmente recarga la página; aquí se intercepta, así que mientras el POS
+            // está abierto deja de recargar. Es deliberado, pero conviene saberlo.
+            if (e.key === "F3") { e.preventDefault(); setShowHeldModal?.(true); return; }
+            if (e.key === "F5") { e.preventDefault(); setShowPendingSales?.(true); return; }
 
             // Redirigir escritura al buscador si no hay ningún input enfocado
             const tag = e.target.tagName;

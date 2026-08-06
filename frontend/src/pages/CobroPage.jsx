@@ -115,6 +115,7 @@ export default function CobroPage() {
         setScanPending: (v) => { scanPendingRef.current = v; },
         qtyModalOpen: !!qtyModalItem,
         notify,
+        setShowHeldModal, setShowPendingSales,
     });
 
     // ── Sin almacén asignado ───────────────────────────────────

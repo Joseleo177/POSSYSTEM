@@ -1,9 +1,11 @@
 const SHORTCUTS = [
-    { k: "F1",  l: "Buscar"  },
-    { k: "F2",  l: "Cliente" },
-    { k: "F4",  l: "Pausar"  },
-    { k: "F10", l: "Cobrar"  },
-    { k: "Esc", l: "Limpiar" },
+    { k: "F1",  l: "Buscar"     },
+    { k: "F2",  l: "Cliente"    },
+    { k: "F3",  l: "En espera"  },
+    { k: "F4",  l: "Pausar"     },
+    { k: "F5",  l: "Pendientes" },
+    { k: "F10", l: "Cobrar"     },
+    { k: "Esc", l: "Limpiar"    },
 ];
 
 export default function KeyboardLegend() {
