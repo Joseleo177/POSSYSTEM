@@ -155,9 +155,9 @@ export default function ProductGrid({
                                     <div className="text-[7px] lg:text-[11px] font-black text-brand-500 uppercase tracking-tighter lg:tracking-wide truncate">{p.category_name || "Sin Categoría"}</div>
                                     <div className="text-[8px] lg:text-xs font-black line-clamp-2 dark:text-white uppercase tracking-tight lg:tracking-wide leading-none h-4 lg:h-8">{p.name}</div>
                                     <div className="mt-0.5">
-                                        <div className="text-[9px] lg:text-sm font-black dark:text-white font-display leading-none">{fmt(convertToDisplay(p.price), currSym)}</div>
+                                        <div className="text-[9px] lg:text-lg font-black dark:text-white font-display tabular-nums leading-none">{fmt(convertToDisplay(p.price), currSym)}</div>
                                         {secondaryCurrency && (
-                                            <div className="text-[8px] lg:text-xs font-black text-content-muted dark:text-white/75 tabular-nums mt-0.5">
+                                            <div className="text-[8px] lg:text-sm font-black text-content-muted dark:text-white/75 tabular-nums mt-1">
                                                 {fmt(convertToSecondary(p.price), secondaryCurrency.symbol)}
                                             </div>
                                         )}
