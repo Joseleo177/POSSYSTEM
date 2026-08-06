@@ -164,7 +164,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                         <>
                             <div className="flex justify-between items-center">
                                 <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 uppercase tracking-wide">Subtotal</span>
-                                <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 tabular-nums">
+                                <span className="text-[11px] font-bold text-content-muted tabular-nums">
                                     {fmt(parseFloat(receipt.total) + parseFloat(receipt.discount_amount || 0))}
                                 </span>
                             </div>
@@ -182,8 +182,11 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             <div className={`text-xl font-black tabular-nums leading-tight ${currentStatus === "parcial" ? "text-content-muted" : "text-brand-500"}`}>
                                 {fmt(receipt.total)}
                             </div>
+                            {/* Sin dark:text-white/40: ese override daba ~3.2:1 sobre el fondo
+                                oscuro. text-content-muted ya cambia con el tema (7.5:1 en claro,
+                                11:1 en oscuro) y es un monto que el cajero tiene que leer. */}
                             {showAlt && (
-                                <div className="text-sm font-bold tabular-nums text-content-subtle dark:text-white/40 mt-0.5">
+                                <div className="text-sm font-bold tabular-nums text-content-muted mt-0.5">
                                     {fmtAlt(receipt.total)}
                                 </div>
                             )}
@@ -197,7 +200,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             <div className="text-right">
                                 <div className="text-xl font-black text-warning tabular-nums leading-tight">{fmt(currentBalance)}</div>
                                 {showAlt && (
-                                    <div className="text-sm font-bold tabular-nums text-warning/70 mt-0.5">
+                                    <div className="text-sm font-bold tabular-nums text-warning mt-0.5">
                                         {fmtAlt(currentBalance)}
                                     </div>
                                 )}
