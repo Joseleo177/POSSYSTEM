@@ -255,6 +255,12 @@ export default function CobroPage() {
                 // pedidos seguidos, y volver a abrirlo entre cada uno estorba.
                 onAcceptOrder={acceptWebOrder}
                 baseCurrency={baseCurrency}
+                // El total llega del servidor en moneda base: se convierte aquí igual que
+                // en el carrito, en vez de rotularlo con el símbolo guardado en la venta.
+                convertToDisplay={convertToDisplay}
+                convertToSecondary={convertToSecondary}
+                currSym={currSym}
+                secondaryCurrency={secondaryCurrency}
                 // Solo un administrador puede destrabar la cuenta de otra caja sin esperar a
                 // que venza el bloqueo.
                 canForceRelease={can("admin")}

@@ -1,6 +1,6 @@
 import { fmtMoney } from "../helpers";
 
-export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove, onAcceptOrder, baseCurrency, canForceRelease, onForceRelease }) {
+export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove, onAcceptOrder, baseCurrency, canForceRelease, onForceRelease, convertToDisplay, convertToSecondary, currSym, secondaryCurrency }) {
     if (!open) return null;
 
     return (
@@ -35,7 +35,14 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                             // Las cuentas vienen del servidor (ventas con status 'espera'),
                             // así que el total ya viene calculado y no hay que rearmarlo.
                             const total = parseFloat(c.total || 0);
-                            const sym = c.currency_symbol || baseCurrency?.symbol || "Ref.";
+                            // El total viene en moneda base. Antes se rotulaba con
+                            // c.currency_symbol —el símbolo con el que se abrió la cuenta— sin
+                            // convertir el monto, así que una cuenta abierta en Bs. mostraba la
+                            // cifra en Ref. con el símbolo "Bs.". Se convierte igual que en el
+                            // carrito, para que el modal hable siempre en la moneda seleccionada.
+                            const sym = currSym || baseCurrency?.symbol || "Ref.";
+                            const totalDisplay = convertToDisplay ? convertToDisplay(total) : total;
+                            const totalSecondary = convertToSecondary ? convertToSecondary(total) : null;
                             // Un pedido del catálogo todavía no descontó inventario: no se puede
                             // llevar al carrito sin aceptarlo primero, porque el cobro daría por
                             // hecho que la mercancía ya salió.
@@ -91,9 +98,14 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                                 Abrió: {c.employee_name}
                                             </div>
                                         )}
-                                        <div className="text-base font-black tracking-tight text-content dark:text-white truncate tabular-nums">
-                                            {fmtMoney(total, sym)}
+                                        <div className="text-base font-black tracking-tight text-content dark:text-white truncate tabular-nums leading-tight">
+                                            {fmtMoney(totalDisplay, sym)}
                                         </div>
+                                        {secondaryCurrency && totalSecondary !== null && (
+                                            <div className="text-[10px] font-bold text-content-subtle dark:text-white/50 truncate tabular-nums">
+                                                ≈ {fmtMoney(totalSecondary, secondaryCurrency.symbol)}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* En uso por otra caja: en vez de botones se dice quién la tiene.
