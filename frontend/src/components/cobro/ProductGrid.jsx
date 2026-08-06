@@ -112,7 +112,10 @@ export default function ProductGrid({
                                 className={`group bg-white dark:bg-white/5 rounded-2xl lg:rounded-[32px] overflow-hidden border transition-all cursor-pointer active:scale-95
                                     ${idx === selectedIndex ? "border-brand-500 ring-2 lg:ring-4 ring-brand-500/10 shadow-2xl -translate-y-0.5 lg:-translate-y-1 scale-[1.02]" : "border-black/5 dark:border-white/5 hover:border-brand-500/50"}`}
                             >
-                                <div className="aspect-[4/3] lg:aspect-square relative overflow-hidden bg-surface-2 dark:bg-black/20">
+                                {/* 4/3 en todos los tamaños. Con aspect-square en pantalla grande la
+                                    foto se comía la altura de la tarjeta y en una rejilla de 6
+                                    columnas obligaba a desplazarse para ver la segunda fila. */}
+                                <div className="aspect-[4/3] relative overflow-hidden bg-surface-2 dark:bg-black/20">
                                     {p.image_url ? (
                                         <img src={resolveImageUrl(p.image_url)} alt={p.name} onError={imgRetryOnError} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                                     ) : (
