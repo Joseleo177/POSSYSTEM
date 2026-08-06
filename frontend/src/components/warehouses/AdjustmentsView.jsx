@@ -393,7 +393,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                         <p className="text-[11px] font-bold text-content-subtle/40 uppercase tracking-wide">Sin productos</p>
                                     </div>
                                 ) : viewMode === "grid" ? (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
                                         {allProducts.map(p => {
                                             const isSelected = selectedProduct?.id === p.id;
                                             return (
@@ -419,13 +419,14 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                                                 {p.name.charAt(0)}
                                                             </div>
                                                         )}
-                                                        <span className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-white/90 dark:bg-black/70 backdrop-blur text-[9px] font-black tabular-nums ${stockColor(p.stock)}`}>
-                                                            {fmt(p.stock)} <span className="opacity-60">{p.unit}</span>
+                                                        {/* Solo la cifra: en una tarjeta de este tamaño la unidad no
+                                                            entra sin partirse, y ya se ve en el panel de ajuste. */}
+                                                        <span className={`absolute top-1 right-1 px-1 py-0.5 rounded bg-white/90 dark:bg-black/70 backdrop-blur text-[8px] font-black tabular-nums leading-none ${stockColor(p.stock)}`}>
+                                                            {fmt(p.stock)}
                                                         </span>
                                                     </div>
-                                                    <div className="px-2 py-1.5">
-                                                        <p className={`text-[10px] font-black uppercase tracking-tight leading-tight line-clamp-2 ${isSelected ? "text-brand-500" : "text-content dark:text-white"}`}>{p.name}</p>
-                                                        {p.category_name && <p className="text-[8px] text-content-subtle/50 uppercase tracking-wide mt-0.5 truncate">{p.category_name}</p>}
+                                                    <div className="px-1.5 py-1">
+                                                        <p className={`text-[9px] font-black uppercase tracking-tight leading-tight line-clamp-2 ${isSelected ? "text-brand-500" : "text-content dark:text-white"}`}>{p.name}</p>
                                                     </div>
                                                 </button>
                                             );
