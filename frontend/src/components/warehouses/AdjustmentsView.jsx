@@ -28,6 +28,15 @@ function stockColor(qty) {
     return "text-success";
 }
 
+// Versión en franja para las tarjetas: mismo semáforo pero en fondo sólido, que a tamaño
+// pequeño se lee de un golpe mientras que un número de color sobre la foto se pierde.
+function stockBand(qty) {
+    const n = parseFloat(qty) || 0;
+    if (n <= 0)  return "bg-danger text-white";
+    if (n <= 10) return "bg-warning text-black";
+    return "bg-success text-white";
+}
+
 const fmt = n => Number(n || 0).toLocaleString("es-VE", { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 const fmtDate = d => d ? new Date(d).toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
 
@@ -393,7 +402,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                         <p className="text-[11px] font-bold text-content-subtle/40 uppercase tracking-wide">Sin productos</p>
                                     </div>
                                 ) : viewMode === "grid" ? (
-                                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-1.5">
                                         {allProducts.map(p => {
                                             const isSelected = selectedProduct?.id === p.id;
                                             return (
@@ -403,30 +412,33 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                                             ? "border-brand-500 ring-2 ring-brand-500/30"
                                                             : "border-border/40 dark:border-white/10 hover:border-brand-500/40"
                                                     ].join(" ")}>
-                                                    {/* aspect-square con la imagen en absolute: en flujo normal una
-                                                        foto vertical estira la tarjeta y descuadra la fila. */}
-                                                    <div className="aspect-square bg-surface-2 dark:bg-white/5 relative overflow-hidden">
+                                                    {/* 4/3 en vez de cuadrado: baja el alto de la foto sin recortar
+                                                        de más, que es lo que hacía la tarjeta tan alta. La imagen va
+                                                        en absolute porque en flujo normal una foto vertical estira
+                                                        la tarjeta y descuadra toda la fila. */}
+                                                    <div className="aspect-[4/3] bg-surface-2 dark:bg-white/5 relative overflow-hidden">
                                                         {p.image_url ? (
                                                             <img
                                                                 src={resolveImageUrl(p.image_url)}
                                                                 alt={p.name}
                                                                 loading="lazy"
                                                                 onError={imgRetryOnError}
-                                                                className="absolute inset-0 w-full h-full object-cover"
+                                                                className="absolute inset-0 w-full h-full object-contain p-1"
                                                             />
                                                         ) : (
-                                                            <div className="absolute inset-0 flex items-center justify-center text-2xl font-black text-content-subtle opacity-30">
+                                                            <div className="absolute inset-0 flex items-center justify-center text-xl font-black text-content-subtle opacity-30">
                                                                 {p.name.charAt(0)}
                                                             </div>
                                                         )}
-                                                        {/* Solo la cifra: en una tarjeta de este tamaño la unidad no
-                                                            entra sin partirse, y ya se ve en el panel de ajuste. */}
-                                                        <span className={`absolute top-1 right-1 px-1 py-0.5 rounded bg-white/90 dark:bg-black/70 backdrop-blur text-[8px] font-black tabular-nums leading-none ${stockColor(p.stock)}`}>
-                                                            {fmt(p.stock)}
-                                                        </span>
+                                                    </div>
+                                                    {/* Franja de cantidad a todo el ancho: es el dato que se busca al
+                                                        ajustar inventario, y en banda sólida se distingue de lejos. */}
+                                                    <div className={`px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide tabular-nums ${stockBand(p.stock)}`}>
+                                                        {fmt(p.stock)} <span className="opacity-75">{p.unit}</span>
                                                     </div>
                                                     <div className="px-1.5 py-1">
-                                                        <p className={`text-[9px] font-black uppercase tracking-tight leading-tight line-clamp-2 ${isSelected ? "text-brand-500" : "text-content dark:text-white"}`}>{p.name}</p>
+                                                        {p.category_name && <p className="text-[8px] font-black text-content-subtle/60 uppercase tracking-wide truncate leading-none mb-0.5">{p.category_name}</p>}
+                                                        <p className={`text-[11px] font-black uppercase tracking-tight leading-tight line-clamp-2 ${isSelected ? "text-brand-500" : "text-content dark:text-white"}`}>{p.name}</p>
                                                     </div>
                                                 </button>
                                             );
