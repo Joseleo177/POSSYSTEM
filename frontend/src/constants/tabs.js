@@ -1,6 +1,9 @@
 // src/constants/tabs.js
 export const ALL_TABS = [
-    { key: "Dashboard",     label: "Dashboard",     mobileLabel: "Inicio",     perm: null,         color: "from-teal-500 to-teal-700" },
+    // El Dashboard va bajo el permiso de Reportes: muestra facturación, cobranza, saldo en
+    // cajas y cuentas por cobrar, que es la misma información gerencial de ese módulo. Un
+    // cajero no debe verla, y antes la veía porque el tab no pedía permiso alguno.
+    { key: "Dashboard",     label: "Dashboard",     mobileLabel: "Inicio",     perm: "reports",    color: "from-teal-500 to-teal-700" },
     { key: "Cobro",         label: "Venta (POS)",   mobileLabel: "Venta",      perm: "sales",      color: "from-emerald-500 to-emerald-700" },
     { key: "Catálogo",      label: "Catálogo",      mobileLabel: "Catálogo",   perm: "products",   color: "from-violet-500 to-violet-700" },
     { key: "Clientes",      label: "Clientes",      mobileLabel: "Clientes",   perm: "customers",  color: "from-sky-500 to-sky-700" },

@@ -13,7 +13,10 @@ export function useTabs(employee, can, setReceipt) {
     });
 
     const activeTabVisible = visibleTabs.some((t) => t.key === tab);
-    const safeTab = activeTabVisible ? tab : visibleTabs[0]?.key ?? "Dashboard";
+    // Sin ningún módulo visible el resultado es null, no "Dashboard": ahora que el tablero
+    // pide permiso de reportes, caer en él por descarte metería al usuario en una página
+    // que el backend le va a rechazar con 403.
+    const safeTab = activeTabVisible ? tab : visibleTabs[0]?.key ?? null;
 
     useEffect(() => {
         if (!activeTabVisible && visibleTabs.length) {

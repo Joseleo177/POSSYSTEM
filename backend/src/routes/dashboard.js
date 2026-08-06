@@ -2,6 +2,9 @@ const router = require("express").Router();
 const ctrl   = require("../controllers/dashboard");
 const { auth, permit } = require("../middleware/auth");
 
-router.get("/", auth, permit("sales", "reports", "inventory", "config"), ctrl.getDashboard);
+// Solo "reports": los KPIs que devuelve (facturación, cobranza, saldo en cajas, cuentas por
+// cobrar) son información gerencial. Antes bastaba con "sales" y eso dejaba entrar al cajero,
+// que veía las cifras del negocio aunque el tab estuviera oculto.
+router.get("/", auth, permit("reports"), ctrl.getDashboard);
 
 module.exports = router;
