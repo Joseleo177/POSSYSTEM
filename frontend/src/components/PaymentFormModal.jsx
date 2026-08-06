@@ -3,6 +3,7 @@ import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 import Modal from "./ui/Modal";
 import DatePicker from "./ui/DatePicker";
+import CustomSelect from "./ui/CustomSelect";
 
 const getEmpty = () => ({
   amount: "",
@@ -242,43 +243,35 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
         {/* Campos de pago — ocultos si el crédito cubre todo */}
         {!creditCoversAll && (<>
 
+        {/* Un desplegable en vez de una botonera: con siete u ocho diarios los chips se
+            desbordaban en cuatro filas y en móvil empujaban el resto del formulario fuera
+            de la vista. El desplegable ocupa una línea sin importar cuántos haya. */}
         <Field label="MÉTODO DE PAGO *">
-          <div className="flex flex-wrap gap-1.5">
-            {activeJournals.map(j => {
-              const active = form.payment_journal_id === j.id;
-              return (
-                <button key={j.id} type="button"
-                  onClick={() => {
-                    const newCurId = j.currency_id || baseCurrency?.id;
-                    const newCur = activeCurrencies.find(c => c.id === parseInt(newCurId));
-                    const isNonBase = newCur && !newCur.is_base;
-                    // En Bs → saldo calculado línea por línea (Bs.9000). En $ → saldo oficial (12.21).
-                    const newAmt = isNonBase ? pendingPreciseBs.toFixed(2) : pendingAfterCredit.toFixed(2);
-                    setForm(p => ({
-                      ...p,
-                      payment_journal_id: j.id,
-                      pay_currency_id: newCurId || p.pay_currency_id,
-                      amount: newAmt,
-                      received_amount: newAmt,
-                      change_journal_id: "",
-                      change_amount_override: "",
-                    }));
-                  }}
-                  style={active && j.color ? { borderColor: j.color, backgroundColor: j.color, color: "#000" } : undefined}
-                  className={[
-                    "px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide border-2 transition-all",
-                    active && !j.color
-                      ? "border-brand-500 bg-brand-500 text-black"
-                      : !active
-                      ? "border-border/40 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-400 dark:hover:border-brand-400/50"
-                      : ""
-                  ].join(" ")}
-                >
-                  {j.name}
-                </button>
-              );
-            })}
-          </div>
+          <CustomSelect
+            value={form.payment_journal_id === "" ? "" : String(form.payment_journal_id)}
+            placeholder="Seleccionar método..."
+            options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
+            onChange={(v) => {
+              // El id vuelve a número: el resto del formulario compara con j.id sin convertir.
+              const id = parseInt(v, 10);
+              const j = activeJournals.find(x => x.id === id);
+              if (!j) return;
+              const newCurId = j.currency_id || baseCurrency?.id;
+              const newCur = activeCurrencies.find(c => c.id === parseInt(newCurId));
+              const isNonBase = newCur && !newCur.is_base;
+              // En Bs → saldo calculado línea por línea (Bs.9000). En $ → saldo oficial (12.21).
+              const newAmt = isNonBase ? pendingPreciseBs.toFixed(2) : pendingAfterCredit.toFixed(2);
+              setForm(p => ({
+                ...p,
+                payment_journal_id: id,
+                pay_currency_id: newCurId || p.pay_currency_id,
+                amount: newAmt,
+                received_amount: newAmt,
+                change_journal_id: "",
+                change_amount_override: "",
+              }));
+            }}
+          />
           {payCur && !payCur.is_base && (
             <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1.5">
               {payCur.symbol} {payCur.code} · tasa {parseFloat(payCur.exchange_rate).toFixed(4)}
@@ -373,26 +366,22 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
             {!form.keep_change && !form.credit_change && (
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-warning/80 mb-1.5">DAR CAMBIO DESDE *</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {activeJournals.map(j => (
-                    <button key={j.id} type="button"
-                      onClick={() => {
-                        const cjCur = j.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
-                        const cjRate = (!cjCur || cjCur.is_base) ? 1 : parseFloat(cjCur.exchange_rate || 1);
-                        const exact  = parseFloat((changeBase * cjRate).toFixed(2));
-                        setForm(p => ({ ...p, change_journal_id: j.id, change_amount_override: String(exact) }));
-                      }}
-                      className={[
-                        "px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide border-2 transition-all",
-                        form.change_journal_id === j.id
-                          ? "border-warning bg-warning text-black"
-                          : "border-border/40 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-warning/50"
-                      ].join(" ")}
-                    >
-                      {j.name}
-                    </button>
-                  ))}
-                </div>
+                {/* Mismo desplegable que el método de pago: son la misma lista de diarios y
+                    tenerlos con dos formas distintas en un solo formulario confunde. */}
+                <CustomSelect
+                  value={form.change_journal_id === "" ? "" : String(form.change_journal_id)}
+                  placeholder="Seleccionar diario..."
+                  options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
+                  onChange={(v) => {
+                    const id = parseInt(v, 10);
+                    const j = activeJournals.find(x => x.id === id);
+                    if (!j) return;
+                    const cjCur = j.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
+                    const cjRate = (!cjCur || cjCur.is_base) ? 1 : parseFloat(cjCur.exchange_rate || 1);
+                    const exact  = parseFloat((changeBase * cjRate).toFixed(2));
+                    setForm(p => ({ ...p, change_journal_id: id, change_amount_override: String(exact) }));
+                  }}
+                />
                 {!form.change_journal_id && (
                   <p className="text-[10px] font-black text-danger mt-1.5">Selecciona de dónde saldrá el cambio</p>
                 )}

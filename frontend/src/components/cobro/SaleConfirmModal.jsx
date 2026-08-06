@@ -5,6 +5,16 @@ import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
 
+// Número de atajo dentro del botón. Se dibuja como tecla para que se lea como "pulsa el 1"
+// y no como parte del texto de la acción.
+function KeyHint({ n }) {
+    return (
+        <span className="mr-1.5 min-w-[14px] h-[14px] px-1 rounded border border-current/30 text-[9px] font-black leading-[13px] text-center opacity-60 shrink-0">
+            {n}
+        </span>
+    );
+}
+
 export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay }) {
     const { notify, activeCurrencies } = useApp();
     const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -35,14 +45,54 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         setCreditLoading(false);
     };
 
+    // Qué botones se ven depende del estado de la venta: una ya pagada no ofrece cobrar ni
+    // fiar, y el crédito solo aplica antes de facturar. La numeración se calcula sobre los
+    // visibles para que el 1 sea siempre el primer botón en pantalla y no salte.
+    const canSettle    = currentStatus !== "pagado";
+    const canGiveCredit = canSettle && ["borrador", "espera"].includes(currentStatus);
+    const actionKeys = [
+        canSettle && "pay",
+        canGiveCredit && "credit",
+        "ticket",
+        "next",
+    ].filter(Boolean);
+    const numOf = (key) => actionKeys.indexOf(key) + 1;
+
+    const runAction = (key) => {
+        if (key === "pay")    return setShowPayModal(true);
+        if (key === "credit") return creditLoading ? undefined : confirmCredit();
+        if (key === "ticket") return setShowReceiptModal(true);
+        if (key === "next")   return onNext();
+    };
+
     useEffect(() => {
         if (showReceiptModal || showPayModal) return; // los sub-modales manejan su propio Escape
         const handler = (e) => {
-            if (e.key === "Escape") { e.stopPropagation(); onNext(); }
+            // Nunca robar teclas a un campo de texto: si alguien escribe una nota, el "2" es
+            // parte de lo que teclea, no un atajo.
+            const tag = e.target?.tagName;
+            if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable) return;
+
+            if (e.key === "Escape" || e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+                onNext();
+                return;
+            }
+            // Los dígitos disparan la acción de esa posición. Se descartan las combinaciones
+            // con modificadores para no pisar atajos del navegador.
+            if (e.ctrlKey || e.altKey || e.metaKey) return;
+            const n = parseInt(e.key, 10);
+            if (Number.isInteger(n) && n >= 1 && n <= actionKeys.length) {
+                e.preventDefault();
+                e.stopPropagation();
+                runAction(actionKeys[n - 1]);
+            }
         };
         window.addEventListener("keydown", handler, true);
         return () => window.removeEventListener("keydown", handler, true);
-    }, [onNext, showReceiptModal, showPayModal]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [onNext, showReceiptModal, showPayModal, actionKeys.join(","), creditLoading]);
 
     const receiptRate   = parseFloat(receipt?.exchange_rate || 1);
     const receiptIsBase = !receipt?.currency || receipt.currency.is_base;
@@ -153,7 +203,8 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     )}
                 </div>
 
-                {/* Acciones */}
+                {/* Acciones. Cada una lleva su número: en caja se opera con el teclado y sin
+                    la etiqueta visible el atajo no existe para quien no lo memorizó. */}
                 <div className="px-5 py-4 flex flex-col gap-2">
                     {currentStatus !== "pagado" && (
                         <div className="flex gap-2">
@@ -161,6 +212,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                                 onClick={() => setShowPayModal(true)}
                                 className="flex-1 h-9 bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none"
                             >
+                                <KeyHint n={numOf("pay")} />
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
                                 Pago Inmediato
                             </Button>
@@ -173,6 +225,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                                     className="flex-1 h-9 bg-warning/10 text-warning border border-warning/30 hover:bg-warning hover:text-black shadow-none disabled:opacity-50"
                                     title="Entregar a crédito: emite la factura y queda por cobrar"
                                 >
+                                    <KeyHint n={numOf("credit")} />
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                     {creditLoading ? "..." : "A Crédito"}
                                 </Button>
@@ -181,12 +234,14 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     )}
                     <div className="flex gap-2">
                         <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="flex-1 h-9 border border-border/30 dark:border-white/10">
+                            <KeyHint n={numOf("ticket")} />
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                             Ver Ticket
                         </Button>
                         {/* Si la venta sigue sin resolver, el botón dice a dónde va: sin esto
                             el cajero salía sin saber que quedaba un borrador sin factura. */}
                         <Button onClick={onNext} className="flex-1 h-9 shadow-none" title={isUnresolved ? "La venta queda sin cobrar, en Facturas Pendientes" : undefined}>
+                            <KeyHint n={numOf("next")} />
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             {isUnresolved ? "Dejar Pendiente" : "Siguiente"}
                         </Button>
@@ -198,6 +253,14 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             <span className="text-warning"> sin número de factura</span> en Facturas Pendientes.
                         </p>
                     )}
+
+                    {/* Los atajos se anuncian: el cajero no tiene por qué adivinar que Enter
+                        y Esc hacen lo mismo que el botón resaltado. */}
+                    <div className="flex items-center justify-center gap-3 pt-1 text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
+                        <span>1 – {actionKeys.length} elegir</span>
+                        <span className="opacity-40">·</span>
+                        <span>Enter / Esc {isUnresolved ? "dejar pendiente" : "siguiente"}</span>
+                    </div>
                 </div>
             </div>
 
