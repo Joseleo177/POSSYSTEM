@@ -183,7 +183,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                                 {fmt(receipt.total)}
                             </div>
                             {showAlt && (
-                                <div className="text-[11px] font-bold tabular-nums text-content-subtle dark:text-white/40">
+                                <div className="text-sm font-bold tabular-nums text-content-subtle dark:text-white/40 mt-0.5">
                                     {fmtAlt(receipt.total)}
                                 </div>
                             )}
@@ -197,7 +197,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             <div className="text-right">
                                 <div className="text-xl font-black text-warning tabular-nums leading-tight">{fmt(currentBalance)}</div>
                                 {showAlt && (
-                                    <div className="text-[11px] font-bold tabular-nums text-warning/70">
+                                    <div className="text-sm font-bold tabular-nums text-warning/70 mt-0.5">
                                         {fmtAlt(currentBalance)}
                                     </div>
                                 )}
