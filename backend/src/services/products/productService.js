@@ -512,4 +512,6 @@ async function updateComboPricesForProduct(productId, t, visited = new Set()) {
   }
 }
 
-module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility };
+// calculateComboStockAndCost se exporta para que el catálogo público calcule la
+// disponibilidad de un combo con la misma regla que el POS, en vez de duplicarla.
+module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, calculateComboStockAndCost };

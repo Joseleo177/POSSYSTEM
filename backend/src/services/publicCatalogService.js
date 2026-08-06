@@ -1,5 +1,6 @@
-const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, Sequelize, sequelize } = require("../models");
+const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, Sequelize, sequelize } = require("../models");
 const { tenantStorage } = require("../utils/tenantStorage");
+const { calculateComboStockAndCost } = require("./products/productService");
 
 const Op = Sequelize.Op;
 
@@ -135,6 +136,40 @@ async function getStore(token) {
   });
 }
 
+// Cuántas unidades de cada combo se pueden armar hoy, indexado por id de combo. Usa la
+// misma regla que el POS (el mínimo entre lo que da cada ingrediente) reutilizando
+// calculateComboStockAndCost, para que la vitrina y la caja no puedan discrepar.
+//
+// Trabaja sobre el stock global del producto, no por almacén: un pedido del catálogo nace
+// sin almacén asignado — lo elige quien lo acepta — así que aquí la pregunta es si el
+// negocio puede armarlo, no si puede armarlo una sucursal concreta.
+async function comboAvailability(comboIds) {
+  if (!comboIds.length) return {};
+
+  const links = await ProductComboItem.findAll({
+    where: { combo_id: { [Op.in]: comboIds } },
+    attributes: ["combo_id", "product_id", "quantity"],
+  });
+  if (!links.length) return Object.fromEntries(comboIds.map((id) => [id, 0]));
+
+  const ingredients = await Product.findAll({
+    where: { id: { [Op.in]: [...new Set(links.map((l) => l.product_id))] } },
+    attributes: ["id", "stock", "is_service", "cost_price"],
+  });
+  const byId = Object.fromEntries(ingredients.map((i) => [i.id, i.toJSON()]));
+
+  const grouped = {};
+  for (const l of links) {
+    (grouped[l.combo_id] ||= []).push({ quantity: l.quantity, ingredient: byId[l.product_id] });
+  }
+
+  // Un combo sin ingredientes configurados queda en 0: createSale lo rechaza igual, así que
+  // publicarlo como disponible solo genera un pedido que nadie puede cumplir.
+  return Object.fromEntries(
+    comboIds.map((id) => [id, grouped[id] ? calculateComboStockAndCost(grouped[id]).stock : 0])
+  );
+}
+
 async function getProducts(token, { search, category_id, limit = 40, offset = 0 }) {
   const company_id = await resolveCompanyId(token);
   if (!company_id) return null;
@@ -157,6 +192,11 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0 
       // Disponibles primero. Es una vitrina: un cliente que abre el enlace debe ver lo que
       // puede comprar, no dos pantallas de agotados antes de llegar a algo. Como el
       // listado es paginado, el orden tiene que resolverse aquí y no en el navegador.
+      //
+      // Salvedad conocida: un combo cuenta como disponible para ordenar aunque no queden
+      // ingredientes, porque su stock real se calcula después de paginar (ver
+      // comboAvailability). Se muestra correctamente como agotado y no se puede pedir, pero
+      // no baja al final de la lista. Corregirlo exige mover ese cálculo a una subconsulta.
       order: [
         [Sequelize.literal('(CASE WHEN "Product"."is_service" OR "Product"."is_combo" OR "Product"."stock" > 0 THEN 0 ELSE 1 END)'), "ASC"],
         ["name", "ASC"],
@@ -165,12 +205,24 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0 
       offset: parseInt(offset, 10) || 0,
     });
 
+    // Un combo no tiene inventario propio: lo que se puede vender sale de sus ingredientes.
+    // Antes se publicaban como disponibles siempre, y el cliente podía pedir combos que no
+    // se podían armar — el comercio solo se enteraba al aceptar el pedido, cuando el
+    // descuento de stock fallaba. Se resuelve para los combos de esta página con dos
+    // consultas, no una por producto.
+    const comboStock = await comboAvailability(rows.filter((r) => r.is_combo).map((r) => r.id));
+
     return {
       total: count,
       products: rows.map((p) => {
         const j = p.toJSON();
-        // Servicios y combos no llevan inventario propio, siempre se ofrecen.
-        const available = j.is_service || j.is_combo || parseFloat(j.stock || 0) > 0;
+        // Los servicios no llevan inventario. Los combos dependen de sus ingredientes, y
+        // stock null significa que todos son servicios, o sea sin límite.
+        const available = j.is_service
+          ? true
+          : j.is_combo
+            ? (comboStock[j.id] === null || comboStock[j.id] > 0)
+            : parseFloat(j.stock || 0) > 0;
         return {
           id: j.id,
           name: j.name,
