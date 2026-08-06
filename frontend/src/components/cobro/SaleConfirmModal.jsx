@@ -6,7 +6,7 @@ import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
 
 export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay }) {
-    const { notify } = useApp();
+    const { notify, activeCurrencies } = useApp();
     const [showReceiptModal, setShowReceiptModal] = useState(false);
     const [showPayModal, setShowPayModal] = useState(false);
     const [creditLoading, setCreditLoading] = useState(false);
@@ -48,6 +48,19 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     const receiptIsBase = !receipt?.currency || receipt.currency.is_base;
     const receiptSym    = receiptIsBase ? (baseCurrency?.symbol || "Ref.") : (receipt?.currency?.symbol || "Ref.");
     const fmt = (n) => `${receiptSym}${Number(n * (receiptIsBase ? 1 : receiptRate)).toFixed(2)}`;
+
+    // Equivalente en la otra moneda. El cajero cobra en bolívares pero la factura se lleva en
+    // la moneda base (o al revés), y tener que hacer la cuenta aparte con el cliente delante
+    // es donde se cuelan los errores. Los montos llegan siempre en base, así que convertir es
+    // multiplicar por la tasa cuando el recibo ya está en base, o no hacer nada cuando no.
+    const altCurrency = receiptIsBase
+        ? activeCurrencies?.find(c => !c.is_base)
+        : baseCurrency;
+    const altRate = receiptIsBase ? parseFloat(altCurrency?.exchange_rate || 0) : 1;
+    // Sin segunda moneda configurada no hay nada que mostrar, y con tasa 1 la línea sería una
+    // repetición del monto de arriba.
+    const showAlt = !!altCurrency && altRate > 0 && !(receiptIsBase && altRate === 1);
+    const fmtAlt  = (n) => `${altCurrency?.symbol || ""}${Number(n * altRate).toFixed(2)}`;
 
     const currentBalance = saleBalance?.balance ?? parseFloat(receipt?.total || 0);
     const currentStatus  = saleBalance?.status  ?? receipt?.status ?? "pendiente";
@@ -112,16 +125,30 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                         <span className="text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40">
                             {currentStatus === "parcial" ? "Total de la factura" : "Total a Pagar"}
                         </span>
-                        <span className={`text-xl font-black tabular-nums ${currentStatus === "parcial" ? "text-content-muted" : "text-brand-500"}`}>
-                            {fmt(receipt.total)}
-                        </span>
+                        <div className="text-right">
+                            <div className={`text-xl font-black tabular-nums leading-tight ${currentStatus === "parcial" ? "text-content-muted" : "text-brand-500"}`}>
+                                {fmt(receipt.total)}
+                            </div>
+                            {showAlt && (
+                                <div className="text-[11px] font-bold tabular-nums text-content-subtle dark:text-white/40">
+                                    {fmtAlt(receipt.total)}
+                                </div>
+                            )}
+                        </div>
                     </div>
                     {/* Con un abono parcial, mostrar solo el total contradice la insignia:
                         lo que el cajero necesita ver es cuánto falta por cobrar. */}
                     {currentStatus === "parcial" && (
                         <div className="flex justify-between items-center pt-1 border-t border-border/20 dark:border-white/5 mt-1">
                             <span className="text-[11px] font-black uppercase tracking-wide text-warning">Falta por cobrar</span>
-                            <span className="text-xl font-black text-warning tabular-nums">{fmt(currentBalance)}</span>
+                            <div className="text-right">
+                                <div className="text-xl font-black text-warning tabular-nums leading-tight">{fmt(currentBalance)}</div>
+                                {showAlt && (
+                                    <div className="text-[11px] font-bold tabular-nums text-warning/70">
+                                        {fmtAlt(currentBalance)}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>
