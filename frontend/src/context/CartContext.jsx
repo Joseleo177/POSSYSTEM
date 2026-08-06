@@ -374,6 +374,28 @@ export function CartProvider({ children }) {
     }
   }, [employee]);
 
+  // El carrito vive solo en memoria: al recargar la página se pierde, pero el bloqueo que
+  // esta caja puso al recuperar una cuenta sigue en el servidor. Sin esto, un F5 dejaba la
+  // cuenta trabada a nombre de un carrito que ya no existe, y nadie podía atenderla hasta
+  // que venciera el plazo.
+  //
+  // Corre una sola vez al entrar, y ahí la premisa es segura: si acabo de cargar la página
+  // no tengo ninguna cuenta abierta, así que cualquier bloqueo mío es un resto.
+  const releasedOwnLocksRef = useRef(false);
+
+  const releaseOwnStaleLocks = useCallback(async () => {
+    if (releasedOwnLocksRef.current) return;
+    releasedOwnLocksRef.current = true;
+    try {
+      const res = await api.sales.getHeld();
+      const mine = (res.data || []).filter(s => s.held_by?.is_mine);
+      if (!mine.length) return;
+      await Promise.allSettled(mine.map(s => api.sales.release(s.id)));
+    } catch {
+      // Silencioso: si falla, el bloqueo caduca solo y un admin puede soltarlo.
+    }
+  }, []);
+
   // CartProvider envuelve toda la app, así que sin esta guarda la petición saldría
   // también en la pantalla de login: un 401 dispararía el refresh de token y la recarga.
   //
@@ -382,7 +404,9 @@ export function CartProvider({ children }) {
   // además hay que ver las cuentas que abren las otras cajas y cuáles quedaron bloqueadas.
   useEffect(() => {
     if (!employee) return;
-    loadHeldCarts();
+    // El orden importa: primero se sueltan los restos de la sesión anterior, y recién
+    // entonces se pide la lista, para que no aparezcan bloqueadas por uno mismo.
+    releaseOwnStaleLocks().finally(loadHeldCarts);
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') loadHeldCarts();
     }, 25_000);
@@ -392,7 +416,28 @@ export function CartProvider({ children }) {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [employee, loadHeldCarts]);
+  }, [employee, loadHeldCarts, releaseOwnStaleLocks]);
+
+  // Suelta la cuenta al cerrar o recargar la pestaña, para que otra caja pueda tomarla en
+  // el acto en vez de esperar a que este cajero vuelva a entrar. `keepalive` permite que la
+  // petición sobreviva a la descarga de la página; si aun así no llega, la limpieza de
+  // arriba lo resuelve en el próximo arranque.
+  useEffect(() => {
+    const onUnload = () => {
+      const id = heldSaleIdRef.current;
+      if (!id) return;
+      try {
+        const token = localStorage.getItem("pos_token");
+        fetch(`${import.meta.env.VITE_API_URL || ""}/api/sales/${id}/claim`, {
+          method: "DELETE",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          keepalive: true,
+        });
+      } catch { /* la página se está cerrando: no hay a quién avisar */ }
+    };
+    window.addEventListener("pagehide", onUnload);
+    return () => window.removeEventListener("pagehide", onUnload);
+  }, []);
 
   // Sin parámetros a propósito: se invoca como onClick={holdCart} y con el atajo F4, así
   // que cualquier argumento sería el evento del clic, no un callback.
