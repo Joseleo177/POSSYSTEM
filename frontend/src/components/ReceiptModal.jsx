@@ -367,7 +367,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     title="Factura tamaño carta, para enviar al cliente por WhatsApp o correo"
                     style={{ flex: 1.4 }}
                 >
-                    📄 PDF
+                    PDF
                 </button>
                 <button
                     onClick={() => printReceipt(sale, companyInfo, displayCurrency, printerWidth)}
@@ -375,7 +375,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     title="Ticket para la impresora térmica"
                     style={{ flex: 1.8 }}
                 >
-                    🖨 IMPRIMIR
+                    IMPRIMIR
                 </button>
             </div>
         </Modal>

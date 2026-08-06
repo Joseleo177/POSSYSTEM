@@ -297,6 +297,7 @@ export const api = {
     customersAnalysis:  (params = {}) => request("/reports/customers-analysis?" + new URLSearchParams(params)),
     audit:              (params = {}) => request("/reports/audit?"              + new URLSearchParams(params)),
     expiry:             (params = {}) => request("/reports/expiry?"             + new URLSearchParams(params)),
+    paymentJournals:    (params = {}) => request("/reports/payment-journals?"   + new URLSearchParams(params)),
   },
 
   cashSessions: {

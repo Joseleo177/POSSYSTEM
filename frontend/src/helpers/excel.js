@@ -389,3 +389,57 @@ export function buildPurchasesExcel(data, range) {
     },
   ]), `Compras_${range.from}_${range.to}`);
 }
+
+// Cobros por día y diario. A diferencia del resto de exportadores, las columnas no son fijas:
+// dependen de qué diarios tuvieron movimiento en el rango, así que las filas se aplanan aquí
+// usando una clave por diario.
+export function buildPaymentJournalsExcel(data, range) {
+  const journals = data.journals || [];
+
+  // Cada diario aporta su monto en su propia moneda; el equivalente en base solo se agrega
+  // cuando el diario no está ya en base, para no repetir la misma cifra dos veces.
+  const dayHeaders = [{ key: "fecha", label: "Fecha" }];
+  for (const j of journals) {
+    dayHeaders.push({ key: `j${j.id}`, label: `${j.name} (${j.currency_symbol})` });
+    if (!j.is_base) dayHeaders.push({ key: `j${j.id}_base`, label: `${j.name} (Ref.)` });
+  }
+  dayHeaders.push({ key: "total_base", label: "Total (Ref.)" });
+
+  const flatten = (row) => {
+    const out = { fecha: row.date, total_base: row.total_base };
+    for (const j of journals) {
+      const c = row.cells?.[j.id];
+      out[`j${j.id}`] = c ? c.amount_journal : 0;
+      if (!j.is_base) out[`j${j.id}_base`] = c ? c.amount_base : 0;
+    }
+    return out;
+  };
+
+  const dayRows = (data.days || []).map(flatten);
+  // El total va como una fila más de la misma hoja: en Excel es lo que se espera al pie de
+  // un cuadre, y así se puede comprobar la suma sin saltar de pestaña.
+  if (data.totals) dayRows.push({ ...flatten({ ...data.totals, date: "TOTAL" }) });
+
+  download(buildWb([
+    { name: "Por Día", rows: dayRows, headers: dayHeaders },
+    {
+      name: "Por Diario",
+      rows: journals.map(j => ({
+        name: j.name,
+        bank_name: j.bank_name || "",
+        currency_symbol: j.currency_symbol,
+        tx_count: data.totals?.cells?.[j.id]?.tx_count || 0,
+        amount_journal: data.totals?.cells?.[j.id]?.amount_journal || 0,
+        amount_base: data.totals?.cells?.[j.id]?.amount_base || 0,
+      })),
+      headers: [
+        { key: "name",            label: "Diario" },
+        { key: "bank_name",       label: "Banco" },
+        { key: "currency_symbol", label: "Moneda" },
+        { key: "tx_count",        label: "Cobros" },
+        { key: "amount_journal",  label: "Total (moneda del diario)" },
+        { key: "amount_base",     label: "Total (Ref.)" },
+      ],
+    },
+  ]), `DiariosPago_${range.from}_${range.to}`);
+}

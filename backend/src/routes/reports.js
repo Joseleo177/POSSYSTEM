@@ -11,5 +11,8 @@ router.get("/margins",            auth, permit("reports", "config"), ctrl.getMar
 router.get("/customers-analysis", auth, permit("reports", "config"), ctrl.getCustomersAnalysis);
 router.get("/audit",              auth, permit("config"), ctrl.getAuditReport);
 router.get("/expiry",             auth, permit("reports", "config", "inventory"), ctrl.getExpiryReport);
+// Lleva también "accounting": es información de caja, y quien gestiona contabilidad la
+// necesita aunque no tenga acceso al resto de reportes.
+router.get("/payment-journals",   auth, permit("reports", "config", "accounting"), ctrl.getPaymentJournalsReport);
 
 module.exports = router;

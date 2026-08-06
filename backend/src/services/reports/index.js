@@ -8,4 +8,5 @@ module.exports = {
   customersReport:   require("./customersReport"),
   auditReport:       require("./auditReport"),
   expiryReport:      require("./expiryReport"),
+  paymentJournalsReport: require("./paymentJournalsReport"),
 };
