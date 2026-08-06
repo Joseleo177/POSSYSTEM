@@ -3,6 +3,7 @@ import { api } from "../../services/api";
 import CustomSelect from "../ui/CustomSelect";
 import { useDebounce } from "../../hooks/useDebounce";
 import { isIntegerUnit } from "../../helpers/unitFormatter";
+import { resolveImageUrl, imgRetryOnError } from "../../helpers/image";
 
 const REASONS_OUT = [
     { value: "merma",       label: "Merma (Deterioro/Rotura)" },
@@ -33,6 +34,12 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
     const [allProducts, setAllProducts]         = useState([]);
     const [loadingList, setLoadingList]         = useState(false);
     const [search, setSearch]                   = useState("");
+    // Lista o cuadrícula con foto. Se recuerda entre sesiones, igual que en el Catálogo:
+    // quien ajusta inventario con el producto en la mano se guía por la imagen, y quien
+    // trabaja con nombres prefiere la lista compacta. Clave propia para no pisar la del
+    // Catálogo, que es otra pantalla y otra preferencia.
+    const [viewMode, setViewMode]               = useState(() => localStorage.getItem("adjustments_view") || "list");
+    useEffect(() => { localStorage.setItem("adjustments_view", viewMode); }, [viewMode]);
     const debouncedSearch = useDebounce(search, 400);
     const [page, setPage]                       = useState(0);
     const [hasMore, setHasMore]                 = useState(true);
@@ -315,11 +322,40 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                         </button>
                                     )}
                                 </div>
-                                <p className="text-[9px] font-bold text-content-subtle/40 mt-1.5 uppercase tracking-widest">
-                                    {loadingList ? "Cargando..." : `${allProducts.length} producto${allProducts.length !== 1 ? "s" : ""}`}
-                                </p>
+                                <div className="flex items-center justify-between gap-2 mt-1.5">
+                                    <p className="text-[9px] font-bold text-content-subtle/40 uppercase tracking-widest">
+                                        {loadingList ? "Cargando..." : `${allProducts.length} producto${allProducts.length !== 1 ? "s" : ""}`}
+                                    </p>
+                                    {/* Mismo selector de vista que el Catálogo, para que la
+                                        interfaz se comporte igual en las dos pantallas. */}
+                                    <div className="flex items-center rounded-lg border border-border/40 dark:border-white/10 overflow-hidden h-7 shrink-0">
+                                        <button
+                                            onClick={() => setViewMode("list")}
+                                            title="Vista de lista"
+                                            className={`h-full px-2 flex items-center justify-center transition-all ${
+                                                viewMode === "list"
+                                                    ? "bg-brand-500 text-black"
+                                                    : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
+                                            }`}>
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                                        </button>
+                                        <button
+                                            onClick={() => setViewMode("grid")}
+                                            title="Vista con imagen"
+                                            className={`h-full px-2 flex items-center justify-center border-l border-border/40 dark:border-white/10 transition-all ${
+                                                viewMode === "grid"
+                                                    ? "bg-brand-500 text-black"
+                                                    : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
+                                            }`}>
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="flex-1 overflow-y-auto divide-y divide-border/10 dark:divide-white/[0.04]" onScroll={handleScroll}>
+                            <div
+                                className={`flex-1 overflow-y-auto ${viewMode === "grid" ? "p-3" : "divide-y divide-border/10 dark:divide-white/[0.04]"}`}
+                                onScroll={handleScroll}
+                            >
                                 {loadingList ? (
                                     <div className="flex items-center justify-center py-16">
                                         <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
@@ -328,13 +364,69 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                     <div className="flex items-center justify-center py-16">
                                         <p className="text-[11px] font-bold text-content-subtle/40 uppercase tracking-wide">Sin productos</p>
                                     </div>
+                                ) : viewMode === "grid" ? (
+                                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                                        {allProducts.map(p => {
+                                            const isSelected = selectedProduct?.id === p.id;
+                                            return (
+                                                <button key={p.id} onClick={() => setSelectedProduct(p)}
+                                                    className={["rounded-xl border overflow-hidden text-left transition-all",
+                                                        isSelected
+                                                            ? "border-brand-500 ring-2 ring-brand-500/30"
+                                                            : "border-border/40 dark:border-white/10 hover:border-brand-500/40"
+                                                    ].join(" ")}>
+                                                    {/* aspect-square con la imagen en absolute: en flujo normal una
+                                                        foto vertical estira la tarjeta y descuadra la fila. */}
+                                                    <div className="aspect-square bg-surface-2 dark:bg-white/5 relative overflow-hidden">
+                                                        {p.image_url ? (
+                                                            <img
+                                                                src={resolveImageUrl(p.image_url)}
+                                                                alt={p.name}
+                                                                loading="lazy"
+                                                                onError={imgRetryOnError}
+                                                                className="absolute inset-0 w-full h-full object-cover"
+                                                            />
+                                                        ) : (
+                                                            <div className="absolute inset-0 flex items-center justify-center text-2xl font-black text-content-subtle opacity-30">
+                                                                {p.name.charAt(0)}
+                                                            </div>
+                                                        )}
+                                                        <span className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-white/90 dark:bg-black/70 backdrop-blur text-[9px] font-black tabular-nums ${stockColor(p.stock)}`}>
+                                                            {fmt(p.stock)} <span className="opacity-60">{p.unit}</span>
+                                                        </span>
+                                                    </div>
+                                                    <div className="px-2 py-1.5">
+                                                        <p className={`text-[10px] font-black uppercase tracking-tight leading-tight line-clamp-2 ${isSelected ? "text-brand-500" : "text-content dark:text-white"}`}>{p.name}</p>
+                                                        {p.category_name && <p className="text-[8px] text-content-subtle/50 uppercase tracking-wide mt-0.5 truncate">{p.category_name}</p>}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 ) : allProducts.map(p => {
                                     const isSelected = selectedProduct?.id === p.id;
                                     return (
                                         <button key={p.id} onClick={() => setSelectedProduct(p)}
-                                            className={["w-full px-4 py-3 flex items-center justify-between text-left transition-all border-l-2",
+                                            className={["w-full px-4 py-3 flex items-center gap-3 text-left transition-all border-l-2",
                                                 isSelected ? "bg-brand-500/10 border-brand-500" : "hover:bg-white/[0.03] border-transparent"
                                             ].join(" ")}>
+                                            {/* Miniatura también en la lista: reconocer el envase es más rápido
+                                                que leer el nombre cuando se tiene el producto en la mano. */}
+                                            <div className="w-9 h-9 rounded-lg bg-surface-2 dark:bg-white/5 overflow-hidden shrink-0 relative">
+                                                {p.image_url ? (
+                                                    <img
+                                                        src={resolveImageUrl(p.image_url)}
+                                                        alt=""
+                                                        loading="lazy"
+                                                        onError={imgRetryOnError}
+                                                        className="absolute inset-0 w-full h-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="absolute inset-0 flex items-center justify-center text-[13px] font-black text-content-subtle opacity-30">
+                                                        {p.name.charAt(0)}
+                                                    </div>
+                                                )}
+                                            </div>
                                             <div className="min-w-0 flex-1">
                                                 <p className={`text-[11px] font-black uppercase tracking-tight truncate ${isSelected ? "text-brand-500" : "text-content dark:text-white"}`}>{p.name}</p>
                                                 {p.category_name && <p className="text-[9px] text-content-subtle/50 uppercase tracking-wide mt-0.5">{p.category_name}</p>}
