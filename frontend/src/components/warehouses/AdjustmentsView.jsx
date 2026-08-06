@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../../services/api";
 import CustomSelect from "../ui/CustomSelect";
 import { useDebounce } from "../../hooks/useDebounce";
@@ -79,6 +79,20 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
     const [expandedSession, setExpandedSession] = useState(null);
 
     const reasons = form.type === "out" ? REASONS_OUT : REASONS_IN;
+
+    // Productos ya tocados en la sesión abierta, con cuántos movimientos lleva cada uno.
+    // En un conteo físico largo la lista se recorre varias veces y es fácil ajustar dos veces
+    // el mismo producto o saltarse uno; marcarlos evita tener que recordarlo.
+    //
+    // Se calcula desde session.lines, que ya viene con la sesión activa: no hace falta pedir
+    // nada extra ni guardar estado aparte, y al cerrar la sesión la marca desaparece sola.
+    const adjustedCount = useMemo(() => {
+        const m = new Map();
+        for (const l of session?.lines || []) {
+            m.set(l.product_id, (m.get(l.product_id) || 0) + 1);
+        }
+        return m;
+    }, [session]);
 
     const loadProducts = useCallback(async (pageNum = 0, append = false) => {
         if (!selectedWarehouse) return;
@@ -360,8 +374,13 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                     </div>
                                 </div>
                                 <div className="flex items-center justify-between gap-2 mt-1.5">
-                                    <p className="text-[9px] font-bold text-content-subtle/40 uppercase tracking-widest">
+                                    <p className="text-[9px] font-bold text-content-subtle/40 uppercase tracking-widest truncate">
                                         {loadingList ? "Cargando..." : `${allProducts.length} producto${allProducts.length !== 1 ? "s" : ""}`}
+                                        {/* Avance de la sesión: cuenta productos distintos, no movimientos,
+                                            que es lo que interesa al recorrer el inventario. */}
+                                        {adjustedCount.size > 0 && (
+                                            <span className="text-success ml-1.5">· {adjustedCount.size} ajustado{adjustedCount.size !== 1 ? "s" : ""}</span>
+                                        )}
                                     </p>
                                     {/* Mismo selector de vista que el Catálogo, para que la
                                         interfaz se comporte igual en las dos pantallas. */}
@@ -405,11 +424,14 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                     <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-1.5">
                                         {allProducts.map(p => {
                                             const isSelected = selectedProduct?.id === p.id;
+                                            const moves = adjustedCount.get(p.id) || 0;
                                             return (
                                                 <button key={p.id} onClick={() => setSelectedProduct(p)}
-                                                    className={["rounded-xl border overflow-hidden text-left transition-all",
+                                                    className={["rounded-xl border overflow-hidden text-left transition-all relative",
                                                         isSelected
                                                             ? "border-brand-500 ring-2 ring-brand-500/30"
+                                                            : moves > 0
+                                                            ? "border-success/50"
                                                             : "border-border/40 dark:border-white/10 hover:border-brand-500/40"
                                                     ].join(" ")}>
                                                     {/* 4/3 en vez de cuadrado: baja el alto de la foto sin recortar
@@ -430,6 +452,17 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                                                 {p.name.charAt(0)}
                                                             </div>
                                                         )}
+                                                        {/* Ya ajustado en esta sesión. El contador solo aparece si se
+                                                            tocó más de una vez, que es la señal de un posible duplicado. */}
+                                                        {moves > 0 && (
+                                                            <span
+                                                                className="absolute top-1 left-1 h-4 min-w-[16px] px-1 rounded-full bg-success text-white flex items-center justify-center gap-0.5 shadow"
+                                                                title={`Ajustado en esta sesión (${moves} ${moves === 1 ? "movimiento" : "movimientos"})`}
+                                                            >
+                                                                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
+                                                                {moves > 1 && <span className="text-[8px] font-black leading-none">{moves}</span>}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     {/* Franja de cantidad a todo el ancho: es el dato que se busca al
                                                         ajustar inventario, y en banda sólida se distingue de lejos. */}
@@ -446,10 +479,13 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                     </div>
                                 ) : allProducts.map(p => {
                                     const isSelected = selectedProduct?.id === p.id;
+                                    const moves = adjustedCount.get(p.id) || 0;
                                     return (
                                         <button key={p.id} onClick={() => setSelectedProduct(p)}
                                             className={["w-full px-4 py-3 flex items-center gap-3 text-left transition-all border-l-2",
-                                                isSelected ? "bg-brand-500/10 border-brand-500" : "hover:bg-white/[0.03] border-transparent"
+                                                isSelected ? "bg-brand-500/10 border-brand-500"
+                                                    : moves > 0 ? "bg-success/[0.04] border-success/60 hover:bg-success/[0.07]"
+                                                    : "hover:bg-white/[0.03] border-transparent"
                                             ].join(" ")}>
                                             {/* Miniatura también en la lista: reconocer el envase es más rápido
                                                 que leer el nombre cuando se tiene el producto en la mano. */}
@@ -469,7 +505,18 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                                 )}
                                             </div>
                                             <div className="min-w-0 flex-1">
-                                                <p className={`text-[11px] font-black uppercase tracking-tight truncate ${isSelected ? "text-brand-500" : "text-content dark:text-white"}`}>{p.name}</p>
+                                                <div className="flex items-center gap-1.5">
+                                                    {moves > 0 && (
+                                                        <span
+                                                            className="shrink-0 h-3.5 min-w-[14px] px-0.5 rounded-full bg-success text-white flex items-center justify-center gap-0.5"
+                                                            title={`Ajustado en esta sesión (${moves} ${moves === 1 ? "movimiento" : "movimientos"})`}
+                                                        >
+                                                            <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
+                                                            {moves > 1 && <span className="text-[7px] font-black leading-none">{moves}</span>}
+                                                        </span>
+                                                    )}
+                                                    <p className={`text-[11px] font-black uppercase tracking-tight truncate ${isSelected ? "text-brand-500" : "text-content dark:text-white"}`}>{p.name}</p>
+                                                </div>
                                                 {p.category_name && <p className="text-[9px] text-content-subtle/50 uppercase tracking-wide mt-0.5">{p.category_name}</p>}
                                             </div>
                                             <span className={`shrink-0 text-[11px] font-black tabular-nums ml-3 ${stockColor(p.stock)}`}>
