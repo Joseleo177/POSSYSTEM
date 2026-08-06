@@ -11,7 +11,11 @@ import { api } from "../../services/api";
 // Debe coincidir con LIMIT del hook useCustomers (tamaño de página del historial)
 const PAID_LIMIT = 50;
 
-const SECTION = "bg-surface-2 dark:bg-white/[0.04] rounded-2xl border border-border/10 dark:border-white/[0.06]";
+// En claro el panel va blanco sobre el gris de la página, como el .card de index.css: con
+// bg-surface-2 quedaba del mismo color exacto que el fondo del body y las secciones se veían
+// flotando sin recuadro. El borde al 10% tampoco alcanzaba para separarlas. En oscuro se
+// mantiene tal cual estaba, que ahí el velo blanco sí contrasta contra el fondo.
+const SECTION = "bg-white dark:bg-white/[0.04] rounded-2xl border border-border/60 dark:border-white/[0.06] shadow-card dark:shadow-none";
 const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-subtle";
 
 // Cuerpo scrolleable de cada lista: rellena el alto disponible de su sección y desplaza dentro.
@@ -209,7 +213,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                         </div>
                         <div className={`divide-y divide-border/10 dark:divide-white/[0.05] ${SCROLL_LIST}`}>
                             {pendingSales.map(sale => (
-                                <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => {
+                                <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-surface-2 dark:hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => {
                                     if (detail.type === "proveedor") {
                                         onClose();
                                         triggerAction("Compras", "compras:abrir:" + sale.id);
@@ -262,14 +266,16 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             <p className="text-[10px] font-bold text-content-subtle dark:text-white/20 tabular-nums">{paidTotal} en total</p>
                         )}
                     </div>
+                    {/* opacity-20 se calibró contra el fondo oscuro; sobre el panel blanco dejaba
+                        el texto casi invisible, así que el tema claro necesita bastante más. */}
                     {paidTotal === 0 ? (
-                        <div className="flex flex-col items-center justify-center p-10 opacity-20">
+                        <div className="flex flex-col items-center justify-center p-10 opacity-60 dark:opacity-20">
                             <p className={LABEL}>Sin pagos finalizados</p>
                         </div>
                     ) : (
                         <div className={`divide-y divide-border/10 dark:divide-white/[0.05] ${SCROLL_LIST}`}>
                             {paidSales.map(sale => (
-                                <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => {
+                                <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-surface-2 dark:hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => {
                                     if (detail.type === "proveedor") {
                                         onClose();
                                         triggerAction("Compras", "compras:abrir:" + sale.id);
@@ -343,7 +349,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             value={refundForm.amount}
                             placeholder={refundForm.journal_id ? (parseFloat(detail.credit_balance || 0) * refundRate).toFixed(2) : "0.00"}
                             onChange={e => setRefundForm(p => ({ ...p, amount: e.target.value.replace(/[^\d.,]/g, "") }))}
-                            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+                            className="w-full h-10 bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
                         />
                         {refundForm.journal_id && refundRate !== 1 && refundForm.amount && (
                             <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1 tabular-nums">
@@ -357,7 +363,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             type="date"
                             value={refundForm.reference_date}
                             onChange={e => setRefundForm(p => ({ ...p, reference_date: e.target.value }))}
-                            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
+                            className="w-full h-10 bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
                         />
                     </div>
                 </div>
@@ -398,7 +404,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                         value={refundForm.notes}
                         onChange={e => setRefundForm(p => ({ ...p, notes: e.target.value }))}
                         placeholder="Observaciones..."
-                        className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+                        className="w-full h-10 bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
                     />
                 </div>
 

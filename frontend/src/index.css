@@ -23,6 +23,22 @@ input[type=number] { -moz-appearance: textfield; }
   :root {
     --c-content-muted:  75 85 99;    /* #4b5563 — 7.5:1 sobre blanco */
     --c-content-subtle: 107 114 128; /* #6b7280 — 4.8:1 sobre blanco */
+
+    /* Color de marca por defecto: el teal histórico del sistema, con los valores exactos
+       que antes estaban escritos en tailwind.config.js. Cuando la empresa configura su
+       propio color, helpers/brandColor.js escribe estas mismas variables en el <html> y
+       gana por especificidad; al restaurar el color por defecto las borra y vuelve a
+       mandar esta declaración, sin quedar en un teal aproximado. */
+    --c-brand-50:  240 253 250;
+    --c-brand-100: 204 251 241;
+    --c-brand-200: 153 246 228;
+    --c-brand-300: 94 234 212;
+    --c-brand-400: 45 212 191;
+    --c-brand-500: 20 184 166;
+    --c-brand-600: 13 148 136;
+    --c-brand-700: 15 118 110;
+    --c-brand-800: 17 94 89;
+    --c-brand-900: 19 78 74;
   }
 
   .dark {

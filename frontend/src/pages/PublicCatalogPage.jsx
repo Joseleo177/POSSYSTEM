@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { publicApi } from "../services/api";
 import { resolveImageUrl, imgRetryOnError } from "../helpers";
 import { isIntegerUnit, fmtQtyUnit } from "../helpers/unitFormatter";
+import { applyBrandColor } from "../helpers/brandColor";
 import { useTheme } from "../hooks/useTheme";
 
 const PAGE_SIZE = 24;
@@ -290,6 +291,9 @@ export default function PublicCatalogPage({ token }) {
             .then(r => {
                 if (!alive) return;
                 setStore(r.data.store);
+                // El catálogo hereda el color de la empresa: para el cliente final esta
+                // página es la tienda, no un módulo del POS.
+                if (r.data.store?.brand_color) applyBrandColor(r.data.store.brand_color);
                 setCurrencies(r.data.currencies || []);
                 setCategories(r.data.categories || []);
             })

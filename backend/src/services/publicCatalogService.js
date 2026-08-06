@@ -60,6 +60,7 @@ const PUBLIC_SETTING_KEYS = [
   "store_name", "store_slogan", "store_address", "store_city",
   "store_phone", "store_phone2", "logo_filename",
   "catalog_whatsapp", "catalog_orders_enabled",
+  "brand_color",
 ];
 
 // wa.me solo acepta el número en dígitos, con código de país y sin signos. El comercio
@@ -117,6 +118,11 @@ async function getStore(token) {
         // que no lleva a ninguna parte.
         whatsapp: ordersEnabled ? whatsapp : null,
         orders_enabled: ordersEnabled,
+        // Se valida el formato aquí: es un valor que va directo a las variables CSS de la
+        // página pública, y no debe poder inyectarse nada más que un color.
+        brand_color: /^#?[0-9a-fA-F]{6}$/.test(String(s.brand_color || "").trim())
+          ? s.brand_color.trim()
+          : null,
       },
       currencies: currencies.map((c) => ({
         code: c.code,

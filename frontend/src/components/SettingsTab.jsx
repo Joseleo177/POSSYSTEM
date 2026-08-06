@@ -5,6 +5,7 @@ import { Button } from "./ui/Button";
 import Modal from "./ui/Modal";
 import ConfirmModal from "./ui/ConfirmModal";
 import { resolveImageUrl } from "../helpers";
+import { applyBrandColor, clearBrandColor, DEFAULT_BRAND } from "../helpers/brandColor";
 import { useApp } from "../context/AppContext";
 
 const SECTIONS = [
@@ -63,6 +64,13 @@ export default function SettingsTab({ notify }) {
             notify("Configuración guardada correctamente");
         } catch (e) { notify(e.message, "err"); }
         finally { setLoading(false); }
+    };
+
+    // El color se pinta en el sistema mientras se elige: la vista previa real es la interfaz
+    // entera, no un cuadrito. Si se sale sin guardar, al recargar vuelve el color guardado.
+    const previewBrand = (hex) => {
+        setSettings(p => ({ ...p, brand_color: hex }));
+        if (hex) applyBrandColor(hex); else clearBrandColor();
     };
 
     const uploadLogo = async (e) => {
@@ -261,6 +269,58 @@ export default function SettingsTab({ notify }) {
                                     <input type="file" accept="image/*" onChange={uploadLogo} className="hidden" />
                                 </label>
                                 <p className="text-[9px] font-bold text-center text-content-subtle dark:text-white/20 uppercase tracking-widest">PNG, JPG o WebP · Max 2MB</p>
+                            </div>
+
+                            {/* Color de marca */}
+                            <div className="bg-white dark:bg-surface-dark-3 rounded-xl p-4 border border-border/40 dark:border-white/10 shadow-sm">
+                                <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest mb-3 block opacity-60">Color de la marca</span>
+
+                                <div className="flex items-center gap-2.5 mb-3">
+                                    <label className="relative shrink-0 cursor-pointer" title="Elegir color">
+                                        <span
+                                            className="block w-11 h-11 rounded-xl border border-border/40 dark:border-white/10 shadow-inner"
+                                            style={{ backgroundColor: settings.brand_color || DEFAULT_BRAND }}
+                                        />
+                                        <input
+                                            type="color"
+                                            value={settings.brand_color || DEFAULT_BRAND}
+                                            onChange={e => previewBrand(e.target.value)}
+                                            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                                        />
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={settings.brand_color || ""}
+                                        placeholder={DEFAULT_BRAND}
+                                        onChange={e => {
+                                            const v = e.target.value.trim();
+                                            // Se escribe siempre para no bloquear el tecleo, pero solo se pinta
+                                            // cuando el hex ya está completo.
+                                            setSettings(p => ({ ...p, brand_color: v }));
+                                            if (/^#?[0-9a-fA-F]{6}$/.test(v)) applyBrandColor(v);
+                                        }}
+                                        className="input h-9 flex-1 font-mono uppercase"
+                                    />
+                                </div>
+
+                                <div className="flex items-center gap-2 mb-3">
+                                    <button type="button" className="btn-md btn-primary flex-1 text-[10px] h-8 pointer-events-none">BOTÓN</button>
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-500">Texto</span>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => previewBrand("")}
+                                    className="text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-brand-500 transition-colors"
+                                >
+                                    Restaurar color por defecto
+                                </button>
+
+                                <p className="text-[9px] font-bold text-content-subtle dark:text-white/20 mt-2 leading-relaxed">
+                                    Se aplica a todo el sistema y al catálogo público. Los tonos claros y oscuros
+                                    se derivan solos; si el color es muy claro se oscurece para que el texto blanco
+                                    de los botones siga leyéndose.
+                                </p>
                             </div>
 
                             {/* Preview */}

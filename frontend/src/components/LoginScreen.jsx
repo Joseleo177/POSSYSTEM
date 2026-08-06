@@ -48,7 +48,7 @@ export default function LoginScreen({ onLogin }) {
         
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 shadow-[0_0_40px_rgba(20,184,166,0.3)] mb-5 rotate-3 hover:rotate-0 transition-transform duration-500">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 shadow-[0_0_40px] shadow-brand-500/30 mb-5 rotate-3 hover:rotate-0 transition-transform duration-500">
             <svg className="w-8 h-8 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>

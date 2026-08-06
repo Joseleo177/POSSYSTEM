@@ -1,8 +1,14 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
 import { initSSE, closeSSE, onSSE } from "../services/sse";
+import { applyBrandColor, clearBrandColor, rememberBrandColor, applyRememberedBrandColor } from "../helpers/brandColor";
 
 const AppContext = createContext(null);
+
+// El color de marca llega con los ajustes, es decir tras una ida al servidor. Pintarlo desde
+// localStorage antes del primer render evita que la interfaz aparezca en teal y cambie de
+// color a medio segundo de haber entrado.
+applyRememberedBrandColor();
 
 export function AppProvider({ children }) {
   // ── Auth ───────────────────────────────────────────────────
@@ -51,7 +57,16 @@ export function AppProvider({ children }) {
   const [settings, setSettings] = useState({});
 
   const loadSettings = useCallback(async () => {
-    try { const r = await api.settings.getAll(); setSettings(r.data); } catch {}
+    try {
+      const r = await api.settings.getAll();
+      setSettings(r.data);
+      // Se aplica aquí y no en la pantalla de Configuración porque el color es de la
+      // empresa, no del usuario: todo empleado que entra debe ver la interfaz en su color,
+      // aunque no tenga permiso para cambiarlo.
+      const brand = r.data?.brand_color;
+      if (brand) applyBrandColor(brand); else clearBrandColor();
+      rememberBrandColor(brand || null);
+    } catch {}
   }, []);
 
   // ── Currencies ─────────────────────────────────────────────
