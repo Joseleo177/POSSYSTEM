@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 import Modal from "./ui/Modal";
+import { saleTotalAtRate } from "../helpers";
 import DatePicker from "./ui/DatePicker";
 import CustomSelect from "./ui/CustomSelect";
 
@@ -61,12 +62,10 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const round2   = n => Math.round((parseFloat(n) || 0) * 100) / 100;
   const bsRate = (displayCur && !displayCur.is_base) ? defaultRate : 0;
   const hasBsRate = bsRate > 1;
+  // Misma regla —y mismo helper— que usa SaleConfirmModal para pintar el total de la
+  // venta: si cada modal la reimplementa, vuelven a divergir en un céntimo.
   const totalPreciseBs = (sale?.items?.length && hasBsRate)
-    ? roundBs2(
-        sale.items.reduce((acc, i) =>
-          acc + roundBs2((parseFloat(i.price || 0) - parseFloat(i.discount || 0)) * bsRate) * parseFloat(i.quantity || 0)
-        , 0) - roundBs2(parseFloat(sale?.discount_amount || 0) * bsRate)
-      )
+    ? saleTotalAtRate(sale, bsRate)
     : roundBs2(parseFloat(sale?.total || 0) * historicalRate);
   const pendingPreciseBs = Math.max(0, roundBs2(totalPreciseBs
     - roundBs2(parseFloat(sale?.amount_paid    || 0) * historicalRate)
@@ -140,7 +139,15 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     }
     if (changeBase > 0 && !form.keep_change && !form.credit_change && !form.change_journal_id) return notify("Selecciona el diario del que saldrá el cambio", "err");
 
-    const finalAmountBase = form.keep_change ? Math.min(receivedBase, pendingAfterCredit) : amountBase;
+    // Con "Quedarse", el abono aplicado es el que se cobró en la moneda del pago, no el saldo
+    // oficial en base: ese saldo vale más bolívares que el precio cobrado (Bs.54383.84 contra
+    // los Bs.54381.93 de la factura), así que recortar contra él inflaba el cobro y la caja
+    // registraba Bs.54401.91 habiendo recibido Bs.54400. Aplicando el abono tal cual,
+    // abono + sobrante suman exactamente lo recibido. En moneda base sí se recorta: ahí no hay
+    // dos redondeos y el sobrante es lo que pasa del saldo.
+    const finalAmountBase = form.keep_change
+      ? (isNonBasePay ? amountBase : Math.min(receivedBase, pendingAfterCredit))
+      : amountBase;
     const payAmountToSend = (changeBase > 0 && !form.keep_change && (form.change_journal_id || form.credit_change))
       ? receivedBase
       : finalAmountBase;

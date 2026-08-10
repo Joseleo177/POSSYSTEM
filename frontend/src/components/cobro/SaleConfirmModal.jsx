@@ -3,6 +3,7 @@ import ReceiptModal from "../ReceiptModal";
 import PaymentFormModal from "../PaymentFormModal";
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
+import { saleTotalAtRate } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 
 // Número de atajo dentro del botón. Se dibuja como tecla para que se lea como "pulsa el 1"
@@ -36,7 +37,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
             onPay({
                 sale_status: "pendiente",
                 invoice_number: res.data.invoice_number,
-                amount_paid: saleBalance?.amount_paid ?? 0,
+                amount_paid: paidBase,
                 balance: currentBalance,
             });
         } catch (e) {
@@ -45,10 +46,12 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         setCreditLoading(false);
     };
 
+    const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+
     const receiptRate   = parseFloat(receipt?.exchange_rate || 1);
     const receiptIsBase = !receipt?.currency || receipt.currency.is_base;
     const receiptSym    = receiptIsBase ? (baseCurrency?.symbol || "Ref.") : (receipt?.currency?.symbol || "Ref.");
-    const fmt = (n) => `${receiptSym}${Number(n * (receiptIsBase ? 1 : receiptRate)).toFixed(2)}`;
+    const mainRate      = receiptIsBase ? 1 : receiptRate;
 
     // Equivalente en la otra moneda. El cajero cobra en bolívares pero la factura se lleva en
     // la moneda base (o al revés), y tener que hacer la cuenta aparte con el cliente delante
@@ -61,9 +64,30 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // Sin segunda moneda configurada no hay nada que mostrar, y con tasa 1 la línea sería una
     // repetición del monto de arriba.
     const showAlt = !!altCurrency && altRate > 0 && !(receiptIsBase && altRate === 1);
-    const fmtAlt  = (n) => `${altCurrency?.symbol || ""}${Number(n * altRate).toFixed(2)}`;
 
-    const currentBalance = saleBalance?.balance ?? parseFloat(receipt?.total || 0);
+    // Montos sueltos (descuento): son conversiones directas del monto en base.
+    const fmt = (n) => `${receiptSym}${round2(Number(n || 0) * mainRate).toFixed(2)}`;
+
+    // El TOTAL no se convierte así: sigue la regla del carrito (round2 del precio de cada
+    // línea ya convertido × cantidad). Multiplicarlo desde la moneda base mostraba aquí un
+    // total distinto al que pedía después "Registrar pago" sobre la misma factura.
+    const totalMain = saleTotalAtRate(receipt, mainRate);
+    const totalAlt  = saleTotalAtRate(receipt, altRate);
+    const fmtTotal    = (t, sym) => `${sym}${t.toFixed(2)}`;
+    const fmtSubtotal = (t, rate, sym) => `${sym}${round2(t + round2(parseFloat(receipt?.discount_amount || 0) * rate)).toFixed(2)}`;
+
+    // Lo ya cobrado y lo devuelto se descuentan del total en la misma pista de moneda, igual
+    // que en PaymentFormModal: así "Falta por cobrar" es exactamente el "Saldo pendiente"
+    // que el cajero verá al abrir el cobro.
+    const paidBase     = saleBalance?.amount_paid ?? parseFloat(receipt?.amount_paid || 0);
+    const returnedBase = parseFloat(receipt?.total_returned || 0);
+    const pendingAt = (total, rate) => Math.max(0, round2(
+        total - round2(paidBase * rate) - round2(returnedBase * rate)
+    ));
+
+    // saleBalance solo existe tras cobrar en esta pantalla; al retomar una factura pendiente
+    // el saldo viene en el propio recibo, y recién si no hay ninguno se asume el total.
+    const currentBalance = saleBalance?.balance ?? parseFloat(receipt?.balance ?? receipt?.total ?? 0);
     const currentStatus  = saleBalance?.status  ?? receipt?.status ?? "pendiente";
     // Venta creada pero sin desenlace: ni cobrada ni facturada a crédito.
     const isUnresolved   = ["borrador", "espera"].includes(currentStatus);
@@ -165,7 +189,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             <div className="flex justify-between items-center">
                                 <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 uppercase tracking-wide">Subtotal</span>
                                 <span className="text-[11px] font-bold text-content-muted tabular-nums">
-                                    {fmt(parseFloat(receipt.total) + parseFloat(receipt.discount_amount || 0))}
+                                    {fmtSubtotal(totalMain, mainRate, receiptSym)}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center">
@@ -180,14 +204,14 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                         </span>
                         <div className="text-right">
                             <div className={`text-xl font-black tabular-nums leading-tight ${currentStatus === "parcial" ? "text-content-muted" : "text-brand-500"}`}>
-                                {fmt(receipt.total)}
+                                {fmtTotal(totalMain, receiptSym)}
                             </div>
                             {/* Sin dark:text-white/40: ese override daba ~3.2:1 sobre el fondo
                                 oscuro. text-content-muted ya cambia con el tema (7.5:1 en claro,
                                 11:1 en oscuro) y es un monto que el cajero tiene que leer. */}
                             {showAlt && (
                                 <div className="text-sm font-bold tabular-nums text-content-muted mt-0.5">
-                                    {fmtAlt(receipt.total)}
+                                    {fmtTotal(totalAlt, altCurrency?.symbol || "")}
                                 </div>
                             )}
                         </div>
@@ -198,10 +222,12 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                         <div className="flex justify-between items-center pt-1 border-t border-border/20 dark:border-white/5 mt-1">
                             <span className="text-[11px] font-black uppercase tracking-wide text-warning">Falta por cobrar</span>
                             <div className="text-right">
-                                <div className="text-xl font-black text-warning tabular-nums leading-tight">{fmt(currentBalance)}</div>
+                                <div className="text-xl font-black text-warning tabular-nums leading-tight">
+                                    {fmtTotal(pendingAt(totalMain, mainRate), receiptSym)}
+                                </div>
                                 {showAlt && (
                                     <div className="text-sm font-bold tabular-nums text-warning mt-0.5">
-                                        {fmtAlt(currentBalance)}
+                                        {fmtTotal(pendingAt(totalAlt, altRate), altCurrency?.symbol || "")}
                                     </div>
                                 )}
                             </div>
@@ -274,7 +300,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
 
             {showPayModal && (
                 <PaymentFormModal
-                    sale={{ ...receipt, balance: currentBalance, amount_paid: saleBalance?.amount_paid ?? 0 }}
+                    sale={{ ...receipt, balance: currentBalance, amount_paid: paidBase }}
                     onClose={() => setShowPayModal(false)}
                     onSuccess={(res) => { onPay(res); setShowPayModal(false); }}
                 />

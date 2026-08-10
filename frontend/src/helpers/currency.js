@@ -57,6 +57,37 @@ export const convertToDisplay = (amountBase, currency) => {
 };
 
 /**
+ * Total de una venta convertido a una tasa, con la MISMA regla que el carrito:
+ * el precio neto de cada línea se redondea a 2 decimales YA CONVERTIDO y recién
+ * entonces se multiplica por la cantidad; el descuento de la factura se resta también
+ * convertido y redondeado.
+ *
+ * No sirve multiplicar el total en moneda base por la tasa: ese total se armó
+ * redondeando cada línea en $ (round2(precio) × qty), así que la conversión arrastra
+ * ese residuo y da un número distinto al que se cobra — Bs.54383.84 en el modal de
+ * venta contra los Bs.54381.93 del modal de pago, sobre la misma factura.
+ *
+ * Sin tasa (moneda base) o sin líneas no hay conversión por línea que aplicar: se
+ * devuelve el total oficial de la factura, que es la fuente de verdad en divisas.
+ *
+ * @param {object} sale - Venta con { total, discount_amount, items[{ price, discount, quantity }] }
+ * @param {number} rate - Tasa a la que convertir
+ */
+export const saleTotalAtRate = (sale, rate) => {
+  const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const r = parseFloat(rate) || 1;
+  const items = sale?.items || [];
+  if (!(r > 1) || !items.length) return round2(parseFloat(sale?.total || 0) * r);
+
+  const lines = items.reduce((acc, i) => {
+    const net = parseFloat(i.price || 0) - parseFloat(i.discount || 0);
+    const qty = parseFloat(i.quantity ?? i.qty ?? 0);
+    return acc + round2(net * r) * qty;
+  }, 0);
+  return round2(lines - round2(parseFloat(sale?.discount_amount || 0) * r));
+};
+
+/**
  * Formatea una tasa de cambio con precisión configurable.
  * @param {number} rate
  * @param {number} decimals
