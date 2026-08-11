@@ -6,6 +6,8 @@ import DateRangePicker from "../ui/DateRangePicker";
 import Modal from "../ui/Modal";
 import CustomSelect from "../ui/CustomSelect";
 import Pagination from "../ui/Pagination";
+import RateField from "../ui/RateField";
+import { useApp } from "../../context/AppContext";
 
 const STATUS_BADGE = {
     activo:  "badge-success",
@@ -23,11 +25,14 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
         voidConfirm, setVoidConfirm,
         showCreate, setShowCreate,
         form, setForm, saving,
-        currentSymbol,
+        currentSymbol, currentRate, configuredRate, baseEquivalent, selectedJournal,
         toggleFilter, toggleCat, clearFilters,
         handleVoid, handleCreate, handleExportCSV,
         hasFilters, totalPages,
     } = useIngresos({ notify, journals });
+
+    const { baseCurrency } = useApp();
+    const baseSym = baseCurrency?.symbol || "Ref.";
 
     const subheader = (
         <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2">
@@ -165,6 +170,11 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                                     className={`input ${currentSymbol ? "pl-8" : ""}`}
                                     value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
                             </div>
+                            {currentRate !== 1 && (
+                                <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 tabular-nums mt-1">
+                                    ≈ {baseSym}{baseEquivalent.toFixed(2)}
+                                </p>
+                            )}
                         </div>
                         <div>
                             <label className="label">Referencia</label>
@@ -178,9 +188,24 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                         </div>
                         <div>
                             <label className="label">Diario</label>
-                            <CustomSelect value={form.payment_journal_id} onChange={v => setForm(p => ({ ...p, payment_journal_id: v }))} placeholder="Sin diario" options={[{ value: "", label: "Sin diario" }, ...(journals || []).map(j => ({ value: String(j.id), label: j.name }))]} />
+                            {/* Al cambiar de diario se limpia la tasa tecleada: pertenecía a la
+                                moneda anterior y aplicarla a otra convertiría mal el monto. */}
+                            <CustomSelect value={form.payment_journal_id} onChange={v => setForm(p => ({ ...p, payment_journal_id: v, rate: "" }))} placeholder="Sin diario" options={[{ value: "", label: "Sin diario" }, ...(journals || []).map(j => ({ value: String(j.id), label: j.name }))]} />
                         </div>
                     </div>
+
+                    {/* Tasa del cobro. Solo aparece con diarios en moneda distinta a la base. */}
+                    {configuredRate !== 1 && (
+                        <div>
+                            <label className="label">Tasa del Cobro</label>
+                            <RateField
+                                value={form.rate}
+                                onChange={v => setForm(p => ({ ...p, rate: v }))}
+                                configuredRate={configuredRate}
+                                currency={{ code: selectedJournal?.currency_code }}
+                            />
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="label">Fecha del Movimiento</label>

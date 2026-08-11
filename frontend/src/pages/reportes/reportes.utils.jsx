@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fmtNumber, fmtInt, todayISO } from "../../helpers";
+import { fmtNumber, fmtInt, todayISO, toLocalISO } from "../../helpers";
 import GlobalDateRangePicker from "../../components/ui/DateRangePicker";
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -33,7 +33,7 @@ export function useReport(fetchFn, params, deps = []) {
 export function defaultRange(days = 30) {
  const t = todayISO();
  const d = new Date(); d.setDate(d.getDate() - days);
- return { from: d.toISOString().slice(0, 10), to: t };
+ return { from: toLocalISO(d), to: t };
 }
 
 // ── Export completo: pide el dataset sin límites antes de generar el Excel ──

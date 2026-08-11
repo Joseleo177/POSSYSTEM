@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, dateClause } = require("./shared");
+const { sanitizeDate, dateClause, localDate } = require("./shared");
 
 async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep }) {
   const df = sanitizeDate(date_from);
@@ -71,7 +71,7 @@ async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep }
     ),
     sequelize.query(
       `SELECT
-         DATE(s.created_at) AS day,
+         ${localDate('s.created_at')} AS day,
          COALESCE(SUM(si.subtotal), 0)::float AS revenue,
          COALESCE(SUM(si.quantity * COALESCE(si.cost_price, p.cost_price, 0)), 0)::float AS cost,
          COALESCE(SUM(si.subtotal) - SUM(si.quantity * COALESCE(si.cost_price, p.cost_price, 0)), 0)::float AS profit,
@@ -83,7 +83,7 @@ async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep }
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
        WHERE s.status = 'pagado' ${tcS} ${dS}
-       GROUP BY DATE(s.created_at)
+       GROUP BY ${localDate('s.created_at')}
        ORDER BY day ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),

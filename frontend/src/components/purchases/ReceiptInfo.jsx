@@ -1,6 +1,10 @@
 import CustomSelect from "../ui/CustomSelect";
+import { isRateEdited } from "../ui/RateField";
+import { useApp } from "../../context/AppContext";
 
 export default function ReceiptInfo({ state }) {
+    const { baseCurrency, activeCurrencies } = useApp();
+    const nonBaseCurrencies = (activeCurrencies || []).filter(c => !c.is_base);
     const {
         warehouses,
         selectedWarehouseId,
@@ -18,6 +22,12 @@ export default function ReceiptInfo({ state }) {
         notes,
         setNotes,
 
+        invoiceCurrency,
+        invoiceCurRate,
+        invoiceRateInput,
+        setInvoiceRateInput,
+        selectInvoiceCurrency,
+
         supplierRef,
         showSupplierDropdown,
         setShowSupplierDropdown,
@@ -34,7 +44,7 @@ export default function ReceiptInfo({ state }) {
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
                 {/* Bodega/Almacén */}
-                <div className="md:col-span-4">
+                <div className="md:col-span-3">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Almacén Destino</label>
                     <CustomSelect
                         value={String(selectedWarehouseId || "")}
@@ -46,7 +56,7 @@ export default function ReceiptInfo({ state }) {
                 </div>
 
                 {/* Proveedor */}
-                <div className="md:col-span-4">
+                <div className="md:col-span-3">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Proveedor</label>
 
                     {selectedSupplier ? (
@@ -101,7 +111,7 @@ export default function ReceiptInfo({ state }) {
                 </div>
 
                 {/* Notas */}
-                <div className="md:col-span-4">
+                <div className="md:col-span-3">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Notas / Referencia</label>
                     <input
                         value={notes}
@@ -110,6 +120,46 @@ export default function ReceiptInfo({ state }) {
                         className="input h-9 tabular-nums"
                     />
                 </div>
+
+                {/* Moneda y tasa de la factura del proveedor. Va en la cabecera, junto a la
+                    referencia, porque es un dato de la compra —a cuánto se compró ese día— y
+                    no una preferencia de visualización de la tabla. */}
+                {nonBaseCurrencies.length > 0 && (
+                    <div className="md:col-span-3">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Moneda / Tasa</label>
+                        <div className="flex items-center gap-1.5">
+                            <div className="flex items-center h-9 rounded-lg overflow-hidden border border-border/40 dark:border-white/10 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => selectInvoiceCurrency(null)}
+                                    className={`h-full px-2 text-[10px] font-black uppercase tracking-wide transition-all ${!invoiceCurrency ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
+                                    title="Cargar costos en moneda base"
+                                >
+                                    {baseCurrency?.symbol || "Ref."}
+                                </button>
+                                {nonBaseCurrencies.map(c => (
+                                    <button
+                                        key={c.id}
+                                        type="button"
+                                        onClick={() => selectInvoiceCurrency(c)}
+                                        className={`h-full px-2 text-[10px] font-black uppercase tracking-wide border-l border-border/40 dark:border-white/10 transition-all ${invoiceCurrency?.id === c.id ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
+                                        title={`Cargar costos en ${c.name}`}
+                                    >
+                                        {c.code}
+                                    </button>
+                                ))}
+                            </div>
+                            <input
+                                value={invoiceRateInput}
+                                onChange={e => setInvoiceRateInput(e.target.value.replace(/[^\d.,]/g, ""))}
+                                disabled={!invoiceCurrency}
+                                placeholder={invoiceCurRate.toFixed(4)}
+                                title={invoiceCurrency ? `Tasa de configuración: ${invoiceCurRate.toFixed(4)}` : "Elige la moneda de la factura"}
+                                className={`input h-9 tabular-nums text-center px-1 disabled:opacity-30 ${isRateEdited(invoiceRateInput, invoiceCurRate) ? "!border-warning/60 text-warning" : ""}`}
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

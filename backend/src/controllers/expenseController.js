@@ -1,6 +1,7 @@
 const { Expense, ExpenseCategory, PaymentJournal, Employee, Currency, PurchasePayment } = require('../models');
 const { Op } = require('sequelize');
 const { recalcPurchaseStatus } = require('../services/purchasePayments/purchasePaymentService');
+const { toLocalDate } = require('../utils/localDate');
 
 // ── Listar egresos (paginado + filtros) ──────────────────────
 exports.getAll = async (req, res, next) => {
@@ -17,8 +18,8 @@ exports.getAll = async (req, res, next) => {
 
     if (date_from || date_to) {
       where.created_at = {};
-      if (date_from) where.created_at[Op.gte] = new Date(date_from);
-      if (date_to)   where.created_at[Op.lte] = new Date(new Date(date_to).setHours(23, 59, 59, 999));
+      if (date_from) where.created_at[Op.gte] = toLocalDate(date_from);
+      if (date_to)   where.created_at[Op.lte] = new Date(toLocalDate(date_to).setHours(23, 59, 59, 999));
     }
 
     const { count, rows } = await Expense.findAndCountAll({
@@ -104,7 +105,7 @@ exports.create = async (req, res, next) => {
       rate: rate || 1,
       employee_id: req.employee.id,
       status: 'activo',
-      date: date ? new Date(date) : null,
+      date: toLocalDate(date),
     });
 
     // Reload con asociaciones

@@ -3,6 +3,7 @@ import { api } from "../../services/api";
 import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
+import { todayISO } from "../../helpers";
 
 const TYPE_LABELS = { percentage: "Porcentaje", buy_x_get_y: "Compra X lleva Y" };
 
@@ -18,7 +19,7 @@ function isExpired(ends_at) {
 
 const EMPTY_FORM = {
     name: "", type: "percentage", discount_pct: "", buy_qty: "", get_qty: "",
-    starts_at: new Date().toISOString().slice(0, 10), ends_at: "", active: true, product_ids: [],
+    starts_at: todayISO(), ends_at: "", active: true, product_ids: [],
 };
 
 export default function PromotionsTab({ notify, can, triggerNew }) {

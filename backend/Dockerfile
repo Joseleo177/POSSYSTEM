@@ -1,5 +1,9 @@
 FROM node:20-alpine
 
+# Alpine no trae la base de zonas horarias: sin tzdata, TZ=America/Caracas se
+# ignora sin avisar y new Date() vuelve a UTC, que es justo el bug que esto arregla.
+RUN apk add --no-cache tzdata
+
 WORKDIR /app
 
 # Instalar dependencias primero (aprovecha cache de capas Docker)

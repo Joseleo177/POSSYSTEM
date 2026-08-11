@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
+import { toLocalISO } from "../../helpers";
 
 /**
  * Premium Single DatePicker Component
@@ -112,14 +113,14 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa"
   const yearTitle = viewDate.getFullYear();
 
   const handleDateClick = (date) => {
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = toLocalISO(date);
     onChange?.(dateStr);
     setIsOpen(false);
     setMode("days");
   };
 
   const isSelected = (date) => {
-    const d = date.toISOString().split("T")[0];
+    const d = toLocalISO(date);
     return value && d === value;
   };
 
@@ -144,18 +145,18 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa"
   // Shortcuts logic
   const setShortcut = (type) => {
     const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
+    const todayStr = toLocalISO(now);
     
     if (type === "today") {
       onChange?.(todayStr);
     } else if (type === "yesterday") {
       const yesterday = new Date();
       yesterday.setDate(now.getDate() - 1);
-      onChange?.(yesterday.toISOString().split("T")[0]);
+      onChange?.(toLocalISO(yesterday));
     } else if (type === "tomorrow") {
       const tomorrow = new Date();
       tomorrow.setDate(now.getDate() + 1);
-      onChange?.(tomorrow.toISOString().split("T")[0]);
+      onChange?.(toLocalISO(tomorrow));
     } else if (type === "none") {
       onChange?.("");
     }

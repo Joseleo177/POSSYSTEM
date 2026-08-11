@@ -188,18 +188,29 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                 const rate = parseFloat(p.exchange_rate) || 1;
                 const sym = p.currency_symbol || baseCurrency?.symbol || "Ref.";
                 const fmtP = n => `${sym}${(Number(n || 0) * (isBase ? 1 : rate)).toFixed(2)}`;
+                // El monto grande va en la moneda del diario, pero amount se almacena en base:
+                // sin la tasa y el equivalente no había forma de conciliar este cobro con los
+                // reportes, que suman en base. Se omiten si el cobro ya fue en moneda base.
+                const baseSym = baseCurrency?.symbol || "Ref.";
                 return (
                     <Modal open={!!payDetail} onClose={() => setPayDetail(null)} title="Detalle del Cobro" width={400}>
                         <div className="space-y-4">
                             <div className="p-4 rounded-xl bg-surface-2 dark:bg-white/5 border border-border/20">
                                 <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-1">Monto Cobrado</div>
                                 <div className="text-3xl font-black tabular-nums">{fmtP(p.amount)}</div>
+                                {!isBase && (
+                                    <div className="text-[11px] font-bold text-content-subtle dark:text-white/40 tabular-nums mt-1">
+                                        ≈ {baseSym}{Number(p.amount || 0).toFixed(2)}
+                                    </div>
+                                )}
                             </div>
                             <div className="space-y-1">
                                 {[
                                     ["Documento", p.invoice_number || `#${p.sale_id}`, "text-brand-500 font-black"],
                                     p.customer_name && ["Cliente", p.customer_name, "uppercase"],
                                     p.journal_name  && ["Caja / Banco", p.journal_name, "uppercase"],
+                                    !isBase && ["Tasa", `${rate.toFixed(4)} ${sym}/${baseSym}`, "tabular-nums"],
+                                    !isBase && ["Equivalente", `${baseSym}${Number(p.amount || 0).toFixed(2)}`, "tabular-nums"],
                                     p.reference_number && ["Referencia", p.reference_number],
                                     p.notes && ["Notas", p.notes],
                                 ].filter(Boolean).map(([label, value, extra]) => (

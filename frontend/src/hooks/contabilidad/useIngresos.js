@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect } from "react";
 import { api } from "../../services/api";
 import { exportToCSV } from "../../utils/exportUtils";
-import { fmtDateShort } from "../../helpers";
+import { fmtDateShort, todayISO } from "../../helpers";
+import { resolveRate } from "../../components/ui/RateField";
 
 const LIMIT = 50;
 
@@ -22,13 +23,19 @@ export function useIngresos({ notify, journals }) {
     const [voidConfirm, setVoidConfirm] = useState(null);
 
     const [showCreate, setShowCreate] = useState(false);
-    const today = () => new Date().toISOString().split('T')[0];
-    const [form, setForm] = useState({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "", date: today() });
+    const today = () => todayISO();
+    const [form, setForm] = useState({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "", date: today(), rate: "" });
     const [saving, setSaving] = useState(false);
 
     const selectedJournal = form.payment_journal_id ? journals?.find(j => j.id == form.payment_journal_id) : null;
-    const currentRate   = selectedJournal?.exchange_rate || 1;
+    // La tasa del día a la que realmente se cobra no siempre es la cargada en configuración.
+    // form.rate vale solo para este ingreso; vacío = se usa la del diario.
+    const configuredRate = parseFloat(selectedJournal?.exchange_rate) || 1;
+    const currentRate   = resolveRate(form.rate, configuredRate);
     const currentSymbol = selectedJournal?.currency_symbol || "Ref.";
+    // El monto se teclea en la moneda del diario y se guarda en base: este es el equivalente
+    // que quedará almacenado, visible antes de guardar para no registrar a ciegas.
+    const baseEquivalent = (parseFloat(form.amount) || 0) / (currentRate || 1);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
@@ -96,7 +103,7 @@ export function useIngresos({ notify, journals }) {
             });
             notify("Ingreso registrado correctamente");
             setShowCreate(false);
-            setForm({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "", date: today() });
+            setForm({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "", date: today(), rate: "" });
             loadIncomes();
         } catch (e) { notify(e.message, "err"); }
         finally { setSaving(false); }
@@ -126,7 +133,7 @@ export function useIngresos({ notify, journals }) {
         voidConfirm, setVoidConfirm,
         showCreate, setShowCreate,
         form, setForm, saving,
-        selectedJournal, currentRate, currentSymbol,
+        selectedJournal, currentRate, currentSymbol, configuredRate, baseEquivalent,
         toggleFilter, toggleCat, clearFilters,
         handleVoid, handleCreate, handleExportCSV,
         hasFilters, totalPages,

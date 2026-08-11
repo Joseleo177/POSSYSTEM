@@ -88,7 +88,10 @@ module.exports = async function getOneSale(id) {
   item.amount_paid = parseFloat(await Payment.sum('amount', { where: { sale_id: id } }) || 0) + creditApplied;
   item.total_returned = parseFloat(await Return.sum('total', { where: { sale_id: id } }) || 0);
   item.balance = parseFloat((parseFloat(item.total) - item.total_returned - item.amount_paid).toFixed(6));
-  if (item.balance < 0 || item.balance <= 0.10) item.balance = 0;
+  // Una factura cerrada no tiene saldo: el estado manda sobre la resta. Cobrando divisas a
+  // tasa de efectivo entran menos dólares que el saldo oficial (el dólar físico vale más
+  // bolívares), y esos centavos no son deuda del cliente — ya pagó todo lo que debía en Bs.
+  if (item.status === 'pagado' || item.balance < 0 || item.balance <= 0.10) item.balance = 0;
 
   return item;
 };

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import DatePicker from "./ui/DatePicker";
 import { api } from "../services/api";
-import { fmtNumber, printNotaCreditoDoc } from "../helpers";
+import { fmtNumber, printNotaCreditoDoc, todayISO } from "../helpers";
 import { fmtQtyUnit } from "../helpers/unitFormatter";
 import ConfirmModal from "./ui/ConfirmModal";
 import PaymentFormModal from "./PaymentFormModal";
@@ -14,7 +14,7 @@ const EMPTY_REFUND = () => ({
     journal_id: '',
     currency_id: '',
     amount: '',
-    date: new Date().toISOString().split("T")[0],
+    date: todayISO(),
     reference: '',
     notes: '',
 });

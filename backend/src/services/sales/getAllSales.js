@@ -74,6 +74,9 @@ module.exports = async function getAllSales(query, tenant = {}) {
     item.total_precise = parseFloat(item.total_precise || item.total || 0);
     const totalRet = parseFloat(item.total_returned || 0);
     item.balance = parseFloat((parseFloat(item.total) - totalRet - item.amount_paid).toFixed(6));
+    // Igual que en getOneSale: una venta 'pagado' no arrastra saldo. Con divisas recibidas a
+    // tasa de efectivo la resta deja centavos que el cliente no debe.
+    if (item.status === 'pagado' || item.balance < 0) item.balance = 0;
     ["Customer", "Employee", "Currency", "Warehouse", "Serie", "SaleItems"].forEach((k) => delete item[k]);
     return item;
   });

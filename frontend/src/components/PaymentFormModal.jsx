@@ -2,13 +2,20 @@ import { useState, useEffect } from "react";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 import Modal from "./ui/Modal";
-import { saleTotalAtRate } from "../helpers";
+import { saleTotalAtRate, todayISO } from "../helpers";
 import DatePicker from "./ui/DatePicker";
 import CustomSelect from "./ui/CustomSelect";
+import RateField, { resolveRate, isRateEdited } from "./ui/RateField";
 
 const getEmpty = () => ({
   amount: "",
-  reference_date: new Date().toISOString().split("T")[0],
+  // Vacío = se usa la tasa de configuración de la moneda del diario. Lo que se escriba aquí
+  // vale solo para este cobro y viaja al backend en Payment.exchange_rate.
+  exchange_rate: "",
+  // Tasa a la que se recibe el dólar físico, siempre algo por encima de la oficial. Solo
+  // aplica cobrando en divisas; vacía = se cobra el saldo oficial, como siempre.
+  cash_rate: "",
+  reference_date: todayISO(),
   reference_number: "",
   notes: "",
   payment_journal_id: "",
@@ -40,7 +47,9 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const defaultSym = displayCur?.symbol || baseCurrency?.symbol || "Ref.";
 
   const payCur = activeCurrencies.find(c => c.id === parseInt(form.pay_currency_id));
-  const payRate = (!payCur || payCur.is_base) ? 1 : parseFloat(payCur.exchange_rate || 1);
+  const payCurRate = (!payCur || payCur.is_base) ? 1 : parseFloat(payCur.exchange_rate || 1);
+  // La tasa del cobro puede escribirse a mano; en moneda base no hay nada que convertir.
+  const payRate = (!payCur || payCur.is_base) ? 1 : resolveRate(form.exchange_rate, payCurRate);
   const paySym = payCur?.symbol || baseCurrency?.symbol || "Ref.";
 
   const selectedJournal = activeJournals.find(j => j.id === form.payment_journal_id);
@@ -60,19 +69,40 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
 
   const roundBs2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
   const round2   = n => Math.round((parseFloat(n) || 0) * 100) / 100;
-  const bsRate = (displayCur && !displayCur.is_base) ? defaultRate : 0;
+  // El resumen se muestra a la tasa con la que se va a cobrar: si el cajero la escribe a mano,
+  // el saldo en Bs tiene que moverse con ella o el monto prellenado deja de cuadrar con el
+  // "Saldo pendiente" de arriba. Cobrando en moneda base manda la de configuración.
+  const bsRate = (payCur && !payCur.is_base)
+    ? payRate
+    : ((displayCur && !displayCur.is_base) ? defaultRate : 0);
   const hasBsRate = bsRate > 1;
+
   // Misma regla —y mismo helper— que usa SaleConfirmModal para pintar el total de la
   // venta: si cada modal la reimplementa, vuelven a divergir en un céntimo.
-  const totalPreciseBs = (sale?.items?.length && hasBsRate)
-    ? saleTotalAtRate(sale, bsRate)
+  const totalBsAt = (rate) => (sale?.items?.length && rate > 1)
+    ? saleTotalAtRate(sale, rate)
     : roundBs2(parseFloat(sale?.total || 0) * historicalRate);
-  const pendingPreciseBs = Math.max(0, roundBs2(totalPreciseBs
+  const pendingBsAt = (rate) => Math.max(0, roundBs2(totalBsAt(rate)
     - roundBs2(parseFloat(sale?.amount_paid    || 0) * historicalRate)
     - roundBs2(parseFloat(sale?.total_returned || 0) * historicalRate)
     - roundBs2(creditApplied * historicalRate)));
 
+  const totalPreciseBs   = totalBsAt(bsRate);
+  const pendingPreciseBs = pendingBsAt(bsRate);
+
   const isNonBasePay = payCur && !payCur.is_base;
+
+  // Dólar en efectivo: se recibe por encima de la tasa oficial, así que la deuda en bolívares
+  // se divide por ESA tasa y el cliente entrega menos divisas. Solo se activa si el cajero
+  // escribe una tasa distinta de la configurada; mientras no la toque, cobrar en divisas se
+  // comporta como siempre (se pide el saldo oficial en moneda base).
+  const cashRate     = isNonBasePay ? 0 : resolveRate(form.cash_rate, defaultRate);
+  const usesCashRate = !isNonBasePay && hasBsRate && isRateEdited(form.cash_rate, defaultRate);
+  // Divisas a cobrar = deuda en bolívares ÷ tasa del efectivo. Se redondea hacia arriba al
+  // centavo: cobrar de menos dejaría la factura corta.
+  const pendingInCash = usesCashRate ? Math.ceil((pendingPreciseBs / cashRate) * 100) / 100 : 0;
+  // Tope del cobro en la moneda del pago.
+  const maxInPayCur = isNonBasePay ? pendingPreciseBs : (usesCashRate ? pendingInCash : pendingAfterCredit);
 
   const receivedBase = !isNaN(receivedNum)
     ? (isNonBasePay ? receivedNum / payRate : round2(receivedNum / payRate))
@@ -86,17 +116,22 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   // Si el cobro es en USD y se encuentra a ≤$0.10 del saldo oficial, se ajusta al saldo exacto.
   // En Bs (moneda secundaria), se mantiene el monto exacto abonado (amountNum / payRate) para que
   // la base de datos guarde exactamente los bolívares pagados (ej. Bs. 12364.30 y no Bs. 12396.41).
-  if (!isNonBasePay && pendingAfterCredit > 0 && Math.abs(amountBase - pendingAfterCredit) < 0.10) {
+  //
+  // Con tasa de efectivo NO se aplica: ahí el monto correcto está por debajo del saldo oficial
+  // a propósito, y empujarlo al saldo haría que la caja registre dólares que no recibió.
+  if (!isNonBasePay && !usesCashRate && pendingAfterCredit > 0 && Math.abs(amountBase - pendingAfterCredit) < 0.10) {
     amountBase = pendingAfterCredit;
   }
-  amountBase = Math.min(amountBase, pendingAfterCredit + 0.0001);
+  amountBase = Math.min(amountBase, (usesCashRate ? pendingInCash : pendingAfterCredit) + 0.0001);
 
   // Proyección de cómo queda la factura si se registra este pago. Se calcula sobre la
   // misma pista que el resumen de arriba: en Bs cuando hay tasa (pendingPreciseBs), en
   // la moneda base cuando no la hay, para que los números cuadren con "Saldo pendiente".
+  // Con tasa de efectivo, los bolívares que cubre el pago salen de ESA tasa: son más que los
+  // que darían las divisas a la tasa oficial, y es lo que hace que la factura quede saldada.
   const payAmountInBs = isNonBasePay
     ? (isNaN(amountNum) ? 0 : amountNum)
-    : roundBs2(amountBase * historicalRate);
+    : roundBs2(amountBase * (usesCashRate ? cashRate : historicalRate));
   const paidBeforeBase = parseFloat(sale?.amount_paid || 0);
   const paidTotalBase  = paidBeforeBase + amountBase;
   const paidTotalBs    = roundBs2(roundBs2(paidBeforeBase * historicalRate) + payAmountInBs);
@@ -163,6 +198,10 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
         reference_number:   form.reference_number || null,
         notes:              form.notes || null,
         payment_journal_id: creditCoversAll ? null : (form.payment_journal_id || null),
+        // Solo cuando se cobró en divisas a tasa de efectivo: el backend las necesita para
+        // saber que esos dólares cubren la deuda en bolívares y saldar la factura.
+        cash_rate:          usesCashRate ? cashRate : undefined,
+        debt_rate:          usesCashRate ? bsRate   : undefined,
         received_amount:    receivedBase > 0 ? receivedBase : undefined,
         change_given:       (changeBase > 0 && !form.keep_change && !form.credit_change) ? actualChangeBase : undefined,
         change_journal_id:  (changeBase > 0 && !form.keep_change && !form.credit_change) ? form.change_journal_id : undefined,
@@ -266,12 +305,18 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
               const newCurId = j.currency_id || baseCurrency?.id;
               const newCur = activeCurrencies.find(c => c.id === parseInt(newCurId));
               const isNonBase = newCur && !newCur.is_base;
+              // Cambiar de método cambia de moneda: la tasa escrita a mano para la anterior
+              // no aplica acá, así que vuelve a la de configuración de la nueva.
+              const newRate = isNonBase ? parseFloat(newCur.exchange_rate || 1) : 1;
               // En Bs → saldo calculado línea por línea (Bs.9000). En $ → saldo oficial (12.21).
-              const newAmt = isNonBase ? pendingPreciseBs.toFixed(2) : pendingAfterCredit.toFixed(2);
+              const newAmt = isNonBase ? pendingBsAt(newRate).toFixed(2) : pendingAfterCredit.toFixed(2);
               setForm(p => ({
                 ...p,
                 payment_journal_id: id,
                 pay_currency_id: newCurId || p.pay_currency_id,
+                exchange_rate: "",
+                // La tasa del efectivo pertenece al cobro en divisas: cambiar de método la borra.
+                cash_rate: "",
                 amount: newAmt,
                 received_amount: newAmt,
                 change_journal_id: "",
@@ -279,12 +324,64 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
               }));
             }}
           />
-          {payCur && !payCur.is_base && (
-            <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1.5">
-              {payCur.symbol} {payCur.code} · tasa {parseFloat(payCur.exchange_rate).toFixed(4)}
-            </p>
-          )}
         </Field>
+
+        {/* Cobro en divisas: el dólar físico se recibe por encima de la tasa oficial, así que
+            la deuda en bolívares se divide por la tasa que ponga el cajero. Vacío = se cobra el
+            saldo oficial en divisas, sin conversión de por medio. */}
+        {!isNonBasePay && payCur && hasBsRate && (
+          <Field label="TASA DEL EFECTIVO (OPCIONAL)">
+            <RateField
+              value={form.cash_rate}
+              configuredRate={defaultRate}
+              currency={displayCur}
+              onChange={(v) => {
+                const nextRate = resolveRate(v, defaultRate);
+                const nextAmt = isRateEdited(v, defaultRate)
+                  ? (Math.ceil((pendingPreciseBs / nextRate) * 100) / 100).toFixed(2)
+                  : pendingAfterCredit.toFixed(2);
+                setForm(p => ({
+                  ...p,
+                  cash_rate: v,
+                  received_amount: p.received_amount === p.amount ? nextAmt : p.received_amount,
+                  amount: nextAmt,
+                }));
+              }}
+            />
+            {usesCashRate && (
+              <p className="text-[10px] font-bold text-success mt-1.5 tabular-nums">
+                {defaultSym}{pendingPreciseBs.toFixed(2)} ÷ {cashRate.toFixed(4)} = {baseCurrency?.symbol}{pendingInCash.toFixed(2)} {baseCurrency?.code}
+                <span className="block text-content-subtle dark:text-white/30 font-bold">
+                  Saldo oficial {baseCurrency?.symbol}{pendingAfterCredit.toFixed(2)} · la factura queda saldada igual
+                </span>
+              </p>
+            )}
+          </Field>
+        )}
+
+        {/* La tasa se edita antes de contar el dinero: al cambiarla se rehace el saldo en Bs
+            y, con él, el monto propuesto. */}
+        {isNonBasePay && (
+          <Field label={`TASA DE CAMBIO (${payCur.code})`}>
+            <RateField
+              value={form.exchange_rate}
+              configuredRate={payCurRate}
+              currency={payCur}
+              onChange={(v) => {
+                const nextRate = resolveRate(v, payCurRate);
+                const nextPending = pendingBsAt(nextRate).toFixed(2);
+                setForm(p => ({
+                  ...p,
+                  exchange_rate: v,
+                  // El recibido solo se recalcula si todavía era el propuesto: si el cajero ya
+                  // tecleó lo que le entregó el cliente, esa cifra no se toca.
+                  received_amount: p.received_amount === p.amount ? nextPending : p.received_amount,
+                  amount: nextPending,
+                }));
+              }}
+            />
+          </Field>
+        )}
 
         <Field label="MONTO RECIBIDO DEL CLIENTE *">
           <input
@@ -295,9 +392,9 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
               const val = e.target.value.replace(/[^\d.,]/g, "");
               const num = parseFloat(val.replace(",", "."));
               // Tope en la moneda de pago: en Bs → saldo línea por línea (9000); en $ → saldo
-              // oficial (12.21). Coincide con lo mostrado en "Saldo pendiente" y con el auto-relleno.
-              const maxInCur = (payCur && !payCur.is_base) ? pendingPreciseBs : pendingAfterCredit;
-              const abono = !isNaN(num) && num > 0 ? Math.min(num, maxInCur).toFixed(2) : "";
+              // oficial (12.21), o el equivalente a tasa de efectivo cuando se usa.
+              // Coincide con lo mostrado en "Saldo pendiente" y con el auto-relleno.
+              const abono = !isNaN(num) && num > 0 ? Math.min(num, maxInPayCur).toFixed(2) : "";
               setForm(p => ({ ...p, received_amount: val, amount: abono }));
             }}
             placeholder={`${paySym}0.00`}

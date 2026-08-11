@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "../ui/Button";
 import { exportToCSV } from "../../utils/exportUtils";
-import { fmtBase, fmtSale as fmtSaleHelper } from "../../helpers";
+import { fmtBase, fmtSale as fmtSaleHelper, todayISO } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import SaleDetailModal from "./SaleDetailModal";
 import Modal from "../ui/Modal";
@@ -28,7 +28,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
     const [clearingCredit, setClearingCredit] = useState(false);
     const [confirmClear, setConfirmClear] = useState(false);
     const [showRefund, setShowRefund] = useState(false);
-    const [refundForm, setRefundForm] = useState({ amount: "", journal_id: "", reference_date: new Date().toISOString().split("T")[0], notes: "" });
+    const [refundForm, setRefundForm] = useState({ amount: "", journal_id: "", reference_date: todayISO(), notes: "" });
     const [refunding, setRefunding] = useState(false);
 
     const fmtPrice = (n) => fmtBase(n, baseCurrency);
@@ -54,7 +54,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
             });
             notify("Devolución registrada correctamente");
             setShowRefund(false);
-            setRefundForm({ amount: "", journal_id: "", reference_date: new Date().toISOString().split("T")[0], notes: "" });
+            setRefundForm({ amount: "", journal_id: "", reference_date: todayISO(), notes: "" });
             onRefresh?.();
         } catch (e) { notify(e.message, "err"); }
         setRefunding(false);

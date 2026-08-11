@@ -5,6 +5,7 @@ import ProductSelectorModal from "./ProductSelectorModal";
 import ConfirmModal from "../ui/ConfirmModal";
 import Modal from "../ui/Modal";
 import CustomSelect from "../ui/CustomSelect";
+import { resolveRate, isRateEdited } from "../ui/RateField";
 import { api } from "../../services/api";
 import { fmtDateShort } from "../../helpers";
 import { useApp } from "../../context/AppContext";
@@ -43,6 +44,7 @@ export default function PurchaseDetails({ state }) {
   const [addModalOpen, setAddModalOpen]         = useState(false);
   const [editingItem, setEditingItem]           = useState(null);
   const [invoiceCurrency, setInvoiceCurrency]   = useState(null);
+  const [invoiceRateInput, setInvoiceRateInput] = useState("");
 
   // Supplier search
   const [supQuery, setSupQuery] = useState("");
@@ -57,6 +59,11 @@ export default function PurchaseDetails({ state }) {
     );
     setLocalWarehouseId(detail.warehouse_id ? String(detail.warehouse_id) : "");
     setLocalNotes(detail.notes || "");
+    // Moneda y tasa con que se compró: se recuperan de la orden, no de la configuración
+    // vigente. Es el dato que dice a cuánto se cerró esa compra ese día.
+    const savedRate = parseFloat(detail.exchange_rate);
+    setInvoiceCurrency((activeCurrencies || []).find(c => c.id === detail.currency_id) || null);
+    setInvoiceRateInput(detail.currency_id && savedRate > 0 ? String(savedRate) : "");
     setIsDirty(false);
     setSupQuery("");
     setSupHits([]);
@@ -172,6 +179,8 @@ export default function PurchaseDetails({ state }) {
         supplier_id:   localSupplier?.id   || null,
         supplier_name: localSupplier?.name || null,
         notes:         localNotes || null,
+        currency_id:   invoiceCurrency?.id || null,
+        exchange_rate: invoiceCurrency ? invoiceRate : 1,
         items: localItems.map(i => ({
           product_id:      i.product_id,
           package_unit:    i.package_unit,
@@ -219,9 +228,23 @@ export default function PurchaseDetails({ state }) {
   };
 
   const grandTotal    = localItems.reduce((s, i) => s + (parseFloat(i.subtotal) || 0), 0);
-  const invoiceRate   = invoiceCurrency ? parseFloat(invoiceCurrency.exchange_rate) || 1 : 1;
+  // Tasa con la que se cargan los costos de la factura del proveedor. Arranca en la de
+  // configuración y se puede escribir: la factura viene con la tasa del día en que el
+  // proveedor la emitió, no con la que tenga cargada el sistema hoy.
+  const invoiceCurRate = invoiceCurrency ? (parseFloat(invoiceCurrency.exchange_rate) || 1) : 1;
+  const invoiceRate    = invoiceCurrency ? resolveRate(invoiceRateInput, invoiceCurRate) : 1;
+  const inInvoiceCur   = invoiceRate > 1;
   const invoiceSym    = invoiceCurrency ? (invoiceCurrency.symbol || invoiceCurrency.code) : (baseCurrency?.symbol || "Ref.");
   const nonBaseCurrencies = (activeCurrencies || []).filter(c => !c.is_base);
+
+  // Tasa que corresponde a una moneda al seleccionarla en la cabecera. Si es la moneda con
+  // que se guardó la orden vuelve SU tasa, no la de configuración de hoy: alternar de moneda
+  // y regresar repreciaba la compra entera (y al guardar pisaba el dato histórico de a cuánto
+  // se compró). Para cualquier otra moneda no hay tasa histórica y se cae en la configurada.
+  const rateInputFor = (cur) => {
+    const savedRate = parseFloat(detail?.exchange_rate);
+    return cur && cur.id === detail?.currency_id && savedRate > 0 ? String(savedRate) : "";
+  };
 
   return (
     <div className="flex flex-col gap-3 pb-20 animate-in fade-in duration-300">
@@ -229,7 +252,7 @@ export default function PurchaseDetails({ state }) {
       {/* ── CABECERA ── */}
       <div className={`${SECTION} p-5 relative`}>
         {isEditable ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-5 items-start">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-x-6 gap-y-5 items-start">
 
             {/* Almacén */}
             <div>
@@ -298,6 +321,45 @@ export default function PurchaseDetails({ state }) {
               />
             </div>
 
+            {/* Moneda y tasa de la compra. Es un dato de la orden —a cuánto se compró— y por
+                eso vive en la cabecera junto a la referencia y se guarda con el borrador. */}
+            {nonBaseCurrencies.length > 0 && (
+              <div>
+                <p className={`${LABEL} mb-1.5`}>Moneda / Tasa</p>
+                {(
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center h-9 rounded-lg overflow-hidden border border-border/40 dark:border-white/10 shrink-0">
+                      <button
+                        onClick={() => { setInvoiceCurrency(null); setInvoiceRateInput(""); setIsDirty(true); }}
+                        className={`h-full px-2 text-[10px] font-black uppercase tracking-wide transition-all ${!invoiceCurrency ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
+                        title="Costos en moneda base"
+                      >
+                        {baseCurrency?.symbol || "Ref."}
+                      </button>
+                      {nonBaseCurrencies.map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => { setInvoiceCurrency(c); setInvoiceRateInput(rateInputFor(c)); setIsDirty(true); }}
+                          className={`h-full px-2 text-[10px] font-black uppercase tracking-wide border-l border-border/40 dark:border-white/10 transition-all ${invoiceCurrency?.id === c.id ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
+                          title={`Costos en ${c.name}`}
+                        >
+                          {c.code}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      value={invoiceRateInput}
+                      onChange={e => { setInvoiceRateInput(e.target.value.replace(/[^\d.,]/g, "")); setIsDirty(true); }}
+                      disabled={!invoiceCurrency}
+                      placeholder={invoiceCurRate.toFixed(4)}
+                      title={invoiceCurrency ? `Tasa de configuración: ${invoiceCurRate.toFixed(4)}` : "Elige la moneda de la factura"}
+                      className={`input h-9 text-xs tabular-nums text-center px-1 disabled:opacity-30 ${isRateEdited(invoiceRateInput, invoiceCurRate) ? "!border-warning/60 text-warning" : ""}`}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Estado */}
             <div>
               <p className={`${LABEL} mb-1.5`}>Estado de orden</p>
@@ -342,7 +404,7 @@ export default function PurchaseDetails({ state }) {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-5 items-start">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-x-6 gap-y-5 items-start">
             <div>
               <p className={`${LABEL} mb-1`}>Proveedor</p>
               <p className={`text-[13px] font-bold leading-snug ${detail.supplier_name ? "text-content dark:text-white" : "italic text-content-subtle"}`}>
@@ -361,6 +423,16 @@ export default function PurchaseDetails({ state }) {
             <div>
               <p className={`${LABEL} mb-1`}>Fecha</p>
               <p className="text-[13px] font-bold text-content dark:text-white tabular-nums">{detail.created_at ? new Date(detail.created_at).toLocaleString("es-VE") : "—"}</p>
+            </div>
+            {/* Con la orden ya confirmada la tasa es historia: se muestra, no se toca. Es el
+                dato que responde "a cuánto compré este lote". */}
+            <div>
+              <p className={`${LABEL} mb-1`}>Moneda / Tasa</p>
+              <p className="text-[13px] font-bold text-content dark:text-white tabular-nums">
+                {invoiceCurrency
+                  ? `${invoiceCurrency.code} · ${invoiceRate.toFixed(4)}`
+                  : <span className="italic text-content-subtle">{baseCurrency?.symbol || "Ref."} · sin conversión</span>}
+              </p>
             </div>
             <div>
               <p className={`${LABEL} mb-1.5`}>Estado de orden</p>
@@ -415,27 +487,6 @@ export default function PurchaseDetails({ state }) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {isEditable && nonBaseCurrencies.length > 0 && (
-              <div className="flex items-center rounded-lg overflow-hidden border border-border/20 dark:border-white/[0.08]">
-                <button
-                  onClick={() => setInvoiceCurrency(null)}
-                  className={`h-7 px-2.5 text-[10px] font-black uppercase tracking-wide transition-all ${!invoiceCurrency ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
-                  title="Precios en moneda base"
-                >
-                  {baseCurrency?.symbol || "Ref."}
-                </button>
-                {nonBaseCurrencies.map(c => (
-                  <button
-                    key={c.id}
-                    onClick={() => setInvoiceCurrency(c)}
-                    className={`h-7 px-2.5 text-[10px] font-black uppercase tracking-wide transition-all border-l border-border/20 dark:border-white/[0.08] ${invoiceCurrency?.id === c.id ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
-                    title={`Ingresar precios en ${c.name}`}
-                  >
-                    {c.code}
-                  </button>
-                ))}
-              </div>
-            )}
             {isEditable && (
               <button
                 onClick={() => setAddModalOpen(true)}
@@ -505,7 +556,18 @@ export default function PurchaseDetails({ state }) {
             <div className="mb-5">
               <div className="flex justify-between items-center mb-2">
                 <span className={LABEL}>{paidPct.toFixed(1)}% saldado</span>
-                <span className="text-[11px] font-black text-content dark:text-white tabular-nums">Ref. {fmt2(total)}</span>
+                <div className="text-right">
+                  {/* Con moneda de compra, manda lo que decía la factura del proveedor: el
+                      total en esa moneda arriba y la base como referencia. */}
+                  {inInvoiceCur ? (
+                    <>
+                      <span className="text-[13px] font-black text-content dark:text-white tabular-nums block leading-none">{invoiceSym} {fmt2(total * invoiceRate)}</span>
+                      <span className="text-[10px] font-bold text-content-subtle/60 dark:text-white/25 tabular-nums">≈ Ref. {fmt2(total)}</span>
+                    </>
+                  ) : (
+                    <span className="text-[11px] font-black text-content dark:text-white tabular-nums">Ref. {fmt2(total)}</span>
+                  )}
+                </div>
               </div>
               <div className="h-1.5 rounded-full bg-border/20 dark:bg-white/5 overflow-hidden">
                 <div className="h-full rounded-full bg-brand-500 transition-all duration-700" style={{ width: `${paidPct}%` }} />
@@ -515,11 +577,17 @@ export default function PurchaseDetails({ state }) {
               <div className="bg-surface-2 dark:bg-white/[0.02] border border-border/60 dark:border-white/[0.05] rounded-xl p-3.5">
                 <p className={`${LABEL} mb-1.5`}>Total Pagado</p>
                 <p className="text-[15px] font-black text-content dark:text-white tabular-nums tracking-tight leading-none">Ref. {fmt2(amountPaid)}</p>
+                {inInvoiceCur && (
+                  <p className="text-[10px] font-bold text-content-subtle/60 dark:text-white/25 tabular-nums mt-1">{invoiceSym} {fmt2(amountPaid * invoiceRate)}</p>
+                )}
                 <p className="text-[9px] font-bold text-success uppercase tracking-widest mt-1.5">Conciliado</p>
               </div>
               <div className="bg-brand-500/[0.06] border border-brand-500/[0.12] rounded-xl p-3.5">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-brand-500 opacity-60 mb-1.5">Saldo Pendiente</p>
                 <p className="text-[15px] font-black text-brand-500 tabular-nums tracking-tight leading-none">Ref. {fmt2(balance)}</p>
+                {inInvoiceCur && (
+                  <p className="text-[10px] font-bold text-brand-500/50 tabular-nums mt-1">{invoiceSym} {fmt2(balance * invoiceRate)}</p>
+                )}
                 <p className="text-[9px] font-bold text-brand-500/50 uppercase tracking-widest mt-1.5">Cuentas x Pagar</p>
               </div>
             </div>

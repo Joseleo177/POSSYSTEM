@@ -26,8 +26,16 @@ export function usePurchasesList({
     selectedWarehouseId,
     selectedSupplier,
     notes,
+    invoiceCurrencyId,
+    invoiceRate,
     resetForm,
 }) {
+    // Moneda y tasa con que se cargó la factura: viajan juntas porque una tasa sin moneda no
+    // significa nada. Sin moneda elegida se manda null/1 y la orden queda en moneda base.
+    const invoicePayload = () => ({
+        currency_id:   invoiceCurrencyId ? parseInt(invoiceCurrencyId) : null,
+        exchange_rate: invoiceCurrencyId ? (parseFloat(invoiceRate) || 1) : 1,
+    });
     const openDetail = useCallback(
         async id => {
             try {
@@ -142,6 +150,7 @@ export function usePurchasesList({
                     warehouse_id: selectedWarehouseId ? parseInt(selectedWarehouseId) : undefined,
                     status: "borrador",
                     items: _buildItemsPayload(items),
+                    ...invoicePayload(),
                 });
                 notify("Borrador guardado ✓");
                 resetForm?.();
@@ -160,7 +169,7 @@ export function usePurchasesList({
                 setLoading(false);
             }
         },
-        [items, selectedWarehouseId, selectedSupplier, notes, notify, loadPurchases, resetForm, setLoading, setView, setDetail]
+        [items, selectedWarehouseId, selectedSupplier, notes, invoiceCurrencyId, invoiceRate, notify, loadPurchases, resetForm, setLoading, setView, setDetail]
     );
 
     const updateDraft = useCallback(
@@ -176,6 +185,7 @@ export function usePurchasesList({
                     notes: notes || undefined,
                     warehouse_id: selectedWarehouseId ? parseInt(selectedWarehouseId) : undefined,
                     items: _buildItemsPayload(items),
+                    ...invoicePayload(),
                 });
                 notify("Borrador actualizado ✓");
                 resetForm?.();
@@ -189,7 +199,7 @@ export function usePurchasesList({
                 setLoading(false);
             }
         },
-        [items, selectedWarehouseId, selectedSupplier, notes, notify, loadPurchases, resetForm, setLoading, setView, setDetail]
+        [items, selectedWarehouseId, selectedSupplier, notes, invoiceCurrencyId, invoiceRate, notify, loadPurchases, resetForm, setLoading, setView, setDetail]
     );
 
     return {

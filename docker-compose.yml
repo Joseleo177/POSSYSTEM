@@ -7,6 +7,8 @@ services:
       POSTGRES_DB:       ${POSTGRES_DB:-posdb}
       POSTGRES_USER:     ${POSTGRES_USER:-posuser}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pospassword}
+      TZ:                ${TZ:-America/Caracas}
+      PGTZ:              ${TZ:-America/Caracas}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -26,6 +28,11 @@ services:
     environment:
       NODE_ENV:    ${NODE_ENV:-development}
       PORT:        4000
+      # ── Zona horaria ───────────────────────────────────────────
+      # TZ afecta a new Date() en Node; DB_TIMEZONE al SET TIME ZONE
+      # que Sequelize emite por conexión. Ambos deben coincidir.
+      TZ:          ${TZ:-America/Caracas}
+      DB_TIMEZONE: ${TZ:-America/Caracas}
       # ── Modo LOCAL (PostgreSQL en Docker) ──────────────────────
       DB_HOST:     db
       DB_PORT:     5432

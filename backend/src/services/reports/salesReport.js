@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, dateClause } = require("./shared");
+const { sanitizeDate, dateClause, localDate, TZ } = require("./shared");
 
 async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tcS, tcS2, rep }) {
   const df = sanitizeDate(date_from);
@@ -41,11 +41,11 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
-      `SELECT DATE(created_at) AS day, COUNT(*)::int AS count,
+      `SELECT ${localDate('created_at')} AS day, COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS revenue
        FROM sales
        WHERE status = 'pagado' ${tc} ${dR}
-       GROUP BY DATE(created_at)
+       GROUP BY ${localDate('created_at')}
        ORDER BY day ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
@@ -62,12 +62,12 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
-      `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Caracas')::int AS hour,
+      `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE '${TZ}')::int AS hour,
               COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS revenue
        FROM sales
        WHERE status = 'pagado' ${tc} ${dR}
-       GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Caracas')
+       GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE '${TZ}')
        ORDER BY hour ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),

@@ -12,6 +12,10 @@ module.exports = (sequelize, DataTypes) => {
     supplier_name: { type: DataTypes.STRING(200) },
     notes: { type: DataTypes.TEXT },
     total: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+    // Moneda y tasa con que se cargó la factura del proveedor. El total y los costos siguen
+    // guardándose en moneda base: esto es el registro de a qué tasa se compró ese día.
+    currency_id:   { type: DataTypes.INTEGER },
+    exchange_rate: { type: DataTypes.DECIMAL(12, 6), allowNull: false, defaultValue: 1.0 },
     employee_id:     { type: DataTypes.INTEGER },
     warehouse_id:    { type: DataTypes.INTEGER },
     status:          { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'borrador' },

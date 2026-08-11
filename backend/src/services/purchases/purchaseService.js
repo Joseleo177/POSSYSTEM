@@ -167,8 +167,19 @@ async function _applyStockAndPrices(purchase, items, transaction) {
   }
 }
 
+// Tasa de compra saneada. Una tasa inválida o ≤ 0 no puede llegar a la base: se guardaría un
+// registro que después divide mal los costos al mostrarlos. Sin moneda no hay conversión, y
+// entonces la tasa es 1 por definición.
+function normalizeInvoiceRate(currency_id, exchange_rate) {
+  const curId = currency_id ? parseInt(currency_id) : null;
+  const rate  = parseFloat(exchange_rate);
+  if (!curId || isNaN(rate) || rate <= 0) return { currency_id: null, exchange_rate: 1 };
+  return { currency_id: curId, exchange_rate: rate };
+}
+
 async function createPurchase({ body, employee_id }) {
-  const { supplier_id, supplier_name, notes, items, warehouse_id, status: requestedStatus = 'borrador' } = body;
+  const { supplier_id, supplier_name, notes, items, warehouse_id, currency_id, exchange_rate, status: requestedStatus = 'borrador' } = body;
+  const invoiceCur = normalizeInvoiceRate(currency_id, exchange_rate);
 
   if (!items?.length)  { const e = new Error("Debe incluir al menos un producto"); e.status = 400; throw e; }
 
@@ -195,7 +206,9 @@ async function createPurchase({ body, employee_id }) {
       total: 0,
       status: initialStatus,
       employee_id: employee_id || null,
-      warehouse_id: warehouse_id || null
+      warehouse_id: warehouse_id || null,
+      currency_id: invoiceCur.currency_id,
+      exchange_rate: invoiceCur.exchange_rate
     }, { transaction });
 
     let grandTotal = 0;
@@ -345,7 +358,7 @@ async function deletePurchase(id) {
   }
 }
 
-async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes, items }) {
+async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes, items, currency_id, exchange_rate }) {
   const purchase = await Purchase.findByPk(id);
   if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
   if (!['borrador', 'pendiente'].includes(purchase.status)) {
@@ -409,6 +422,13 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
       notes: notes || null,
       total: grandTotal,
     };
+    // Solo se pisa si el cliente mandó el dato: un PUT que no toca la moneda no debe borrar
+    // la tasa con que se cargó la orden.
+    if (currency_id !== undefined || exchange_rate !== undefined) {
+      const invoiceCur = normalizeInvoiceRate(currency_id, exchange_rate);
+      updateData.currency_id   = invoiceCur.currency_id;
+      updateData.exchange_rate = invoiceCur.exchange_rate;
+    }
     if (warehouse_id) updateData.warehouse_id = parseInt(warehouse_id);
     else updateData.warehouse_id = null;
 

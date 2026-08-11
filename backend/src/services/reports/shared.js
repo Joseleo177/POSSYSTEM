@@ -22,12 +22,25 @@ function buildTenantContext(req) {
   };
 }
 
+// Zona horaria de operación. Los created_at son TIMESTAMPTZ (instantes en UTC);
+// el día al que pertenece cada registro depende de la zona en que se lo mire.
+// Comparar contra un literal 'YYYY-MM-DD' sin convertir corta los días en UTC,
+// y en UTC-4 eso empuja todo lo registrado desde las 8 PM al día siguiente.
+const TZ = process.env.DB_TIMEZONE || 'America/Caracas';
+
+// Fecha local de un TIMESTAMPTZ. Usar en filtros y en GROUP BY por día para que
+// ambos definan "día" igual; de lo contrario el total del rango no cuadra con
+// la suma de sus días.
+function localDate(col) {
+  return `(${col} AT TIME ZONE '${TZ}')::date`;
+}
+
 function dateClause(date_from, date_to, alias = '') {
-  const col = alias ? `${alias}.created_at` : 'created_at';
+  const col = localDate(alias ? `${alias}.created_at` : 'created_at');
   const parts = [];
-  if (date_from) parts.push(`AND ${col} >= '${date_from}'`);
-  if (date_to)   parts.push(`AND ${col} <  ('${date_to}'::date + INTERVAL '1 day')`);
+  if (date_from) parts.push(`AND ${col} >= '${date_from}'::date`);
+  if (date_to)   parts.push(`AND ${col} <= '${date_to}'::date`);
   return parts.join(' ');
 }
 
-module.exports = { sanitizeDate, buildTenantContext, dateClause };
+module.exports = { sanitizeDate, buildTenantContext, dateClause, localDate, TZ };

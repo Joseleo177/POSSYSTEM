@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../../services/api";
 import DateRangePicker from "../ui/DateRangePicker";
+import { useApp } from "../../context/AppContext";
 
 const LIMIT = 100;
 
@@ -20,8 +21,14 @@ export default function JournalMovementsModal({ journalId, bankId, onClose }) {
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
 
+    const { baseCurrency } = useApp();
     const sym = journal?.currency_symbol || "Ref.";
+    const baseSym = baseCurrency?.symbol || "Ref.";
     const fmtLocal = (n) => `${sym}${Number(n).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // Los montos se guardan en base y se muestran en la moneda del diario. Sin el equivalente
+    // no había forma de conciliar este estado de cuenta con los reportes, que suman en base.
+    const fmtBaseEq = (n) => `≈ ${baseSym}${Number(n || 0).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const hasRate = (m) => Math.abs((parseFloat(m?.rate) || 1) - 1) > 1e-6;
 
     const load = useCallback(async () => {
         if (!journalId && !bankId) return;
@@ -206,18 +213,32 @@ export default function JournalMovementsModal({ journalId, bankId, onClose }) {
                                                 {/* Debe (Egreso) */}
                                                 <td className="px-4 py-2.5 text-right">
                                                     {!isIngreso && (
-                                                        <span className={`text-[11px] font-black tabular-nums ${isVoided ? "text-content-subtle line-through" : "text-danger"}`}>
-                                                            -{fmtLocal(m.amount_local)}
-                                                        </span>
+                                                        <>
+                                                            <span className={`text-[11px] font-black tabular-nums ${isVoided ? "text-content-subtle line-through" : "text-danger"}`}>
+                                                                -{fmtLocal(m.amount_local)}
+                                                            </span>
+                                                            {hasRate(m) && (
+                                                                <div className="text-[9px] font-bold text-content-subtle dark:text-white/25 tabular-nums mt-0.5">
+                                                                    {fmtBaseEq(m.amount_base)} · {Number(m.rate).toFixed(4)}
+                                                                </div>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </td>
 
                                                 {/* Haber (Ingreso) */}
                                                 <td className="px-4 py-2.5 text-right">
                                                     {isIngreso && (
-                                                        <span className="text-[11px] font-black tabular-nums text-success">
-                                                            +{fmtLocal(m.amount_local)}
-                                                        </span>
+                                                        <>
+                                                            <span className="text-[11px] font-black tabular-nums text-success">
+                                                                +{fmtLocal(m.amount_local)}
+                                                            </span>
+                                                            {hasRate(m) && (
+                                                                <div className="text-[9px] font-bold text-content-subtle dark:text-white/25 tabular-nums mt-0.5">
+                                                                    {fmtBaseEq(m.amount_base)} · {Number(m.rate).toFixed(4)}
+                                                                </div>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </td>
 

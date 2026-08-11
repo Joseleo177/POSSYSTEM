@@ -1,12 +1,27 @@
 import { useState } from "react";
 import ReceiptInfo from "./ReceiptInfo";
 import ProductSelectorModal from "./ProductSelectorModal";
+import EditablePriceInput from "../ui/EditablePriceInput";
+import { useApp } from "../../context/AppContext";
 
 const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function PurchaseForm({ state }) {
     const { items, removeItem, updateItem, grandTotal, savePurchase, loading, editingDraftId, selectedWarehouseId } = state;
+    const { baseCurrency } = useApp();
     const [modalOpen, setModalOpen] = useState(false);
+
+    // Moneda y tasa con las que se CARGA la factura del proveedor. Viven en el hook porque se
+    // guardan con la orden (columnas currency_id/exchange_rate) y se eligen en la cabecera,
+    // junto a la referencia. La orden se sigue almacenando en moneda base: esto convierte la
+    // captura para no obligar al comprador a dividir cada costo a mano.
+    const { invoiceCurrency, invoiceRate } = state;
+    const invoiceSym   = invoiceCurrency ? (invoiceCurrency.symbol || invoiceCurrency.code) : (baseCurrency?.symbol || "Ref.");
+    const inInvoiceCur = invoiceRate > 1;
+    // Los montos de los ítems viven en base; para pintarlos en la moneda de la factura se
+    // multiplican, y lo que se teclea se divide antes de guardarlo.
+    const toInvoice = (base) => (parseFloat(base) || 0) * invoiceRate;
+    const fmtInvoice = (base) => `${invoiceSym} ${fmt2(toInvoice(base))}`;
 
     const handleAdd = (item) => {
         state.addItemFromModal(item);
@@ -44,7 +59,9 @@ export default function PurchaseForm({ state }) {
                                     <th className="text-left">Producto</th>
                                     <th className="text-left">Embalaje</th>
                                     <th className="text-center">Cant.</th>
-                                    <th className="text-center">Costo×Emb.</th>
+                                    <th className="text-center">
+                                        Costo×Emb.{inInvoiceCur && <span className="ml-1 text-brand-500/70">({invoiceSym})</span>}
+                                    </th>
                                     <th className="text-right">P.Venta</th>
                                     <th className="text-right">Subtotal</th>
                                     <th className="w-12"></th>
@@ -75,13 +92,21 @@ export default function PurchaseForm({ state }) {
                                         </td>
                                         <td className="text-center">
                                             <div className="flex flex-col items-center gap-0.5">
-                                                <input
-                                                    type="text"
-                                                    inputMode="decimal"
-                                                    value={item.package_price}
-                                                    onChange={e => updateItem(item.key, { package_price: e.target.value })}
+                                                {/* Lo tecleado está en la moneda de la factura; al guardar se
+                                                    divide por la tasa, porque la orden vive en moneda base. */}
+                                                <EditablePriceInput
+                                                    value={inInvoiceCur ? toInvoice(item.package_price) : (parseFloat(item.package_price) || 0)}
+                                                    decimals={inInvoiceCur ? 2 : 5}
+                                                    onChange={raw => updateItem(item.key, {
+                                                        package_price: inInvoiceCur ? (parseFloat(raw) || 0) / invoiceRate : raw,
+                                                    })}
                                                     className="w-28 p-0 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-info"
                                                 />
+                                                {inInvoiceCur && parseFloat(item.package_price) > 0 && (
+                                                    <span className="text-[9px] tabular-nums text-content-subtle/40 dark:text-white/20">
+                                                        ≈ Ref. {fmt2(item.package_price)}
+                                                    </span>
+                                                )}
                                                 {item.unit_cost > 0 && (
                                                     <span className="text-[9px] tabular-nums text-content-subtle/40 dark:text-white/20">
                                                         unit: Ref. {fmt2(item.unit_cost)}
@@ -90,10 +115,19 @@ export default function PurchaseForm({ state }) {
                                             </div>
                                         </td>
                                         <td className="text-right text-[10px] font-bold tabular-nums text-success">
-                                            {item.sale_price > 0 ? `Ref. ${fmt2(item.sale_price)}` : "—"}
+                                            {item.sale_price > 0
+                                                ? (inInvoiceCur ? fmtInvoice(item.sale_price) : `Ref. ${fmt2(item.sale_price)}`)
+                                                : "—"}
                                         </td>
                                         <td className="text-right text-xs font-black tabular-nums text-warning">
-                                            {item.subtotal > 0 ? `Ref. ${fmt2(item.subtotal)}` : "—"}
+                                            {item.subtotal > 0 ? (
+                                                inInvoiceCur ? (
+                                                    <>
+                                                        <div>{fmtInvoice(item.subtotal)}</div>
+                                                        <div className="text-[9px] font-bold text-content-subtle/40 dark:text-white/20">≈ Ref. {fmt2(item.subtotal)}</div>
+                                                    </>
+                                                ) : `Ref. ${fmt2(item.subtotal)}`
+                                            ) : "—"}
                                         </td>
                                         <td className="text-center">
                                             <button
@@ -126,7 +160,14 @@ export default function PurchaseForm({ state }) {
                     <div className="px-5 py-4 border-t border-border/20 dark:border-white/5 bg-surface-2/30 dark:bg-white/[0.02] flex items-center justify-between gap-4">
                         <div>
                             <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-0.5">Total Estimado</div>
-                            <div className="text-xl font-black text-brand-500 tabular-nums">Ref. {fmt2(grandTotal)}</div>
+                            {inInvoiceCur ? (
+                                <>
+                                    <div className="text-xl font-black text-brand-500 tabular-nums">{fmtInvoice(grandTotal)}</div>
+                                    <div className="text-[10px] font-bold text-content-subtle/50 dark:text-white/20 tabular-nums mt-0.5">≈ Ref. {fmt2(grandTotal)}</div>
+                                </>
+                            ) : (
+                                <div className="text-xl font-black text-brand-500 tabular-nums">Ref. {fmt2(grandTotal)}</div>
+                            )}
                         </div>
                         <button
                             onClick={savePurchase}
@@ -157,6 +198,8 @@ export default function PurchaseForm({ state }) {
                 onAdd={handleAdd}
                 existingItems={items}
                 warehouseId={selectedWarehouseId || null}
+                invoiceRate={invoiceRate}
+                invoiceSym={invoiceSym}
             />
         </div>
     );

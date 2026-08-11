@@ -1,44 +1,7 @@
-import { useState, useEffect, useRef } from "react";
 import { fmt2 } from "../../utils/purchaseUtils";
 import { fmtQty } from "../../helpers";
 import { isIntegerUnit } from "../../helpers/unitFormatter";
-
-// Input numérico que preserva lo que el usuario escribe (permite ".", "" y borrar)
-// Solo sincroniza desde fuera cuando el valor externo cambia significativamente.
-// integer=true: descarta el separador decimal en el momento de tipear (no solo al confirmar),
-// para que nunca llegue a mostrarse en pantalla (p.ej. cantidades de productos por UNIDAD).
-function EditablePriceInput({ value, onChange, disabled, className, decimals = 5, integer = false }) {
-    const toDisplay = (v) => (parseFloat(v) > 0 ? String(+parseFloat(v).toFixed(decimals)) : "");
-    const [display, setDisplay] = useState(() => toDisplay(value));
-    const extRef = useRef(value);
-
-    useEffect(() => {
-        const ext = parseFloat(value) || 0;
-        const cur = parseFloat(extRef.current) || 0;
-        if (Math.abs(ext - cur) > 0.00001) {
-            extRef.current = value;
-            setDisplay(toDisplay(value));
-        }
-    }, [value]);
-
-    const handleChange = (e) => {
-        const raw = integer ? e.target.value.replace(/[.,]/g, "") : e.target.value;
-        setDisplay(raw);
-        extRef.current = raw;
-        onChange(raw);
-    };
-
-    return (
-        <input
-            type="text"
-            inputMode="decimal"
-            value={display}
-            disabled={disabled}
-            onChange={handleChange}
-            className={className}
-        />
-    );
-}
+import EditablePriceInput from "../ui/EditablePriceInput";
 
 export default function PurchaseItemsTable({
     items = [],
@@ -129,6 +92,14 @@ export default function PurchaseItemsTable({
                                             <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">≈ Ref. {fmt2(item.package_price)}</span>
                                         )}
                                     </div>
+                                ) : invoiceRate > 1 ? (
+                                    // Orden ya confirmada: el costo se muestra en la moneda con que se
+                                    // compró. Es el dato que se va a buscar aquí —a cómo salió en la
+                                    // factura del proveedor— y la columna ya se rotula en esa moneda.
+                                    <div className="flex flex-col items-center gap-0.5">
+                                        <span className="text-xs font-black text-info tabular-nums">{invoiceSym} {fmt2(parseFloat(item.package_price) * invoiceRate)}</span>
+                                        <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">≈ Ref. {fmt2(item.package_price)}</span>
+                                    </div>
                                 ) : (
                                     <span className="text-xs font-black text-info tabular-nums">Ref. {fmt2(item.package_price)}</span>
                                 )}
@@ -196,7 +167,7 @@ export default function PurchaseItemsTable({
 
                             {/* Subtotal */}
                             <td className="px-4 py-3 text-right">
-                                {invoiceRate > 1 && isEditing ? (
+                                {invoiceRate > 1 ? (
                                     <div className="flex flex-col items-end gap-0.5">
                                         <span className="text-sm font-black text-warning tabular-nums">{invoiceSym} {fmt2(parseFloat(item.subtotal) * invoiceRate)}</span>
                                         <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">≈ Ref. {fmt2(item.subtotal)}</span>

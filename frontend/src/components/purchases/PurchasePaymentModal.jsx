@@ -4,10 +4,14 @@ import { api } from "../../services/api";
 import Modal from "../ui/Modal";
 import CustomSelect from "../ui/CustomSelect";
 import DatePicker from "../ui/DatePicker";
+import RateField, { resolveRate } from "../ui/RateField";
+import { todayISO } from "../../helpers";
 
 const getEmpty = () => ({
   received_amount: "",
-  reference_date: new Date().toISOString().split("T")[0],
+  // Vacío = tasa de configuración de la moneda del diario. Lo tecleado vale solo para este pago.
+  exchange_rate: "",
+  reference_date: todayISO(),
   reference_number: "",
   notes: "",
   payment_journal_id: "",
@@ -26,9 +30,12 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
   const [form, setForm] = useState(getEmpty);
   const [loading, setLoading] = useState(false);
 
-  const payCur  = activeCurrencies.find(c => c.id === parseInt(form.pay_currency_id));
-  const payRate = (!payCur || payCur.is_base) ? 1 : parseFloat(payCur.exchange_rate || 1);
-  const paySym  = payCur?.symbol || baseCurrency?.symbol || "Ref.";
+  const payCur     = activeCurrencies.find(c => c.id === parseInt(form.pay_currency_id));
+  const payCurRate = (!payCur || payCur.is_base) ? 1 : parseFloat(payCur.exchange_rate || 1);
+  // La tasa del pago al proveedor se puede escribir a mano: es la del día en que se transfiere,
+  // que rara vez coincide con la que quedó cargada en configuración.
+  const payRate    = (!payCur || payCur.is_base) ? 1 : resolveRate(form.exchange_rate, payCurRate);
+  const paySym     = payCur?.symbol || baseCurrency?.symbol || "Ref.";
 
   const selectedJournal = activeJournals.find(j => j.id === form.payment_journal_id);
   const isCash = selectedJournal?.type === "efectivo";
@@ -95,46 +102,56 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
 
       <div className="space-y-4">
 
-        {/* Diario de pago */}
+        {/* Diario de pago. Desplegable y no botones: con varios diarios cargados la fila se
+            desbordaba y empujaba el resto del formulario fuera de la vista. */}
         <Field label="DIARIO DE PAGO *">
-          <div className="flex flex-wrap gap-1.5">
-            {activeJournals.map(j => {
-              const active = form.payment_journal_id === j.id;
-              return (
-                <button key={j.id} type="button"
-                  onClick={() => {
-                    const newCurId = j.currency_id || baseCurrency?.id;
-                    const newCur   = activeCurrencies.find(c => c.id === parseInt(newCurId));
-                    const newRate  = (!newCur || newCur.is_base) ? 1 : parseFloat(newCur.exchange_rate || 1);
-                    const newAmt   = (balanceUsd * newRate).toFixed(2);
-                    setForm(p => ({
-                      ...p,
-                      payment_journal_id: j.id,
-                      pay_currency_id:    newCurId || p.pay_currency_id,
-                      received_amount:    newAmt,
-                    }));
-                  }}
-                  style={active && j.color ? { borderColor: j.color, backgroundColor: j.color, color: "#000" } : undefined}
-                  className={[
-                    "px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide border-2 transition-all",
-                    active && !j.color
-                      ? "border-brand-500 bg-brand-500 text-black"
-                      : !active
-                      ? "border-border/40 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-400 dark:hover:border-brand-400/50"
-                      : ""
-                  ].join(" ")}
-                >
-                  {j.name}
-                </button>
-              );
-            })}
-          </div>
-          {payCur && !payCur.is_base && (
-            <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1.5">
-              {payCur.symbol} {payCur.code} · tasa {parseFloat(payCur.exchange_rate).toFixed(4)}
-            </p>
-          )}
+          <CustomSelect
+            value={form.payment_journal_id === "" ? "" : String(form.payment_journal_id)}
+            placeholder="Seleccionar diario..."
+            options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
+            onChange={(v) => {
+              // El id vuelve a número: el resto del formulario compara con j.id sin convertir.
+              const id = parseInt(v, 10);
+              const j = activeJournals.find(x => x.id === id);
+              if (!j) return;
+              const newCurId = j.currency_id || baseCurrency?.id;
+              const newCur   = activeCurrencies.find(c => c.id === parseInt(newCurId));
+              const newRate  = (!newCur || newCur.is_base) ? 1 : parseFloat(newCur.exchange_rate || 1);
+              const newAmt   = (balanceUsd * newRate).toFixed(2);
+              setForm(p => ({
+                ...p,
+                payment_journal_id: id,
+                pay_currency_id:    newCurId || p.pay_currency_id,
+                // Otra moneda, otra tasa: la escrita para la anterior no aplica.
+                exchange_rate:      "",
+                received_amount:    newAmt,
+              }));
+            }}
+          />
         </Field>
+
+        {/* Tasa del pago. Al cambiarla se rehace el monto propuesto, que sale del saldo en base. */}
+        {payCur && !payCur.is_base && (
+          <Field label={`TASA DE CAMBIO (${payCur.code})`}>
+            <RateField
+              value={form.exchange_rate}
+              configuredRate={payCurRate}
+              currency={payCur}
+              onChange={(v) => {
+                const nextRate = resolveRate(v, payCurRate);
+                const prevProposed = (balanceUsd * payRate).toFixed(2);
+                setForm(p => ({
+                  ...p,
+                  exchange_rate: v,
+                  // Igual que al elegir diario: solo se repropone si no lo editaron a mano.
+                  received_amount: p.received_amount === prevProposed
+                    ? (balanceUsd * nextRate).toFixed(2)
+                    : p.received_amount,
+                }));
+              }}
+            />
+          </Field>
+        )}
 
         {/* Monto a pagar */}
         <Field label="MONTO A PAGAR *">

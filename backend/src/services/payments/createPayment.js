@@ -21,6 +21,9 @@ module.exports = async function createPayment(body) {
       change_journal_id,  // diario del que sale el cambio
       surplus_kept,       // sobrante que se queda en caja (en moneda base)
       change_to_credit,   // sobrante que va al crédito del cliente (en moneda base)
+      // Divisas en efectivo valoradas por encima de la tasa oficial
+      cash_rate,          // tasa a la que se recibió el efectivo (ej. 760)
+      debt_rate,          // tasa con la que está expresada la deuda en bolívares (ej. 757.5406)
       // Crédito de cliente
       credit_amount,      // monto a descontar del credit_balance del cliente
     } = body;
@@ -79,20 +82,35 @@ module.exports = async function createPayment(body) {
     const isBsPay = payRate > 1;
     const saleItems = await SaleItem.findAll({ where: { sale_id }, transaction: t });
     const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
-    const saleTotalBs = isBsPay
-      ? round2(
-          saleItems.reduce((acc, i) =>
-            acc + round2((parseFloat(i.price || 0) - parseFloat(i.discount || 0)) * payRate) * parseFloat(i.quantity || 0)
-          , 0) - round2(parseFloat(sale.discount_amount || 0) * payRate)
-        )
-      : saleTotal;
+    const totalBsAt = (rate) => round2(
+      saleItems.reduce((acc, i) =>
+        acc + round2((parseFloat(i.price || 0) - parseFloat(i.discount || 0)) * rate) * parseFloat(i.quantity || 0)
+      , 0) - round2(parseFloat(sale.discount_amount || 0) * rate)
+    );
+    const saleTotalBs = isBsPay ? totalBsAt(payRate) : saleTotal;
 
     const alreadyPaidBs = isBsPay ? round2(alreadyPaid * payRate) : alreadyPaid;
     const pendingBalanceBs = Math.max(0, saleTotalBs - alreadyPaidBs);
     const payAmtInCur = isBsPay ? round2(payAmt * payRate) : payAmt;
     const isBsFullPay = isBsPay && (payAmtInCur >= pendingBalanceBs - 1.00);
 
-    const netCredit = (hasJournalPayment && isBsFullPay)
+    // Divisas en efectivo recibidas por encima de la tasa oficial: el dólar físico se valora
+    // más alto, así que el cliente entrega MENOS divisas por los mismos bolívares. La deuda en
+    // bolívares queda cubierta aunque el monto en moneda base se quede corto frente al saldo
+    // oficial, y la factura tiene que darse por saldada — si no, quedaría un residuo de
+    // centavos imposible de cobrar. La diferencia se registra aparte, más abajo.
+    const cashRate = parseFloat(cash_rate) || 0;
+    const debtRate = parseFloat(debt_rate) || 0;
+    let cashSettles = false;
+    if (hasJournalPayment && !isBsPay && cashRate > 1 && debtRate > 1) {
+      const pendingBs = round2(totalBsAt(debtRate)
+        - round2(alreadyPaid * debtRate)
+        - round2(creditApplied * debtRate));
+      // Misma tolerancia de Bs.1.00 que el cobro en bolívares: cubre el redondeo por línea.
+      cashSettles = round2(payAmt * cashRate) >= pendingBs - 1.00;
+    }
+
+    const netCredit = (hasJournalPayment && (isBsFullPay || cashSettles))
       ? pendingAfterCredit
       : (hasJournalPayment ? Math.min(parseFloat((payAmt - changeAmt).toFixed(6)), pendingAfterCredit) : 0);
 
@@ -203,7 +221,7 @@ module.exports = async function createPayment(body) {
 
     // Tolerancia de $0.10 USD (10 céntimos): cubre desfasajes de redondeo por línea acumulados
     // en ventas con múltiples productos al pagar en bolívares.
-    const isFullPayment = isBsFullPay || totalPaidNow >= saleTotal - 0.10;
+    const isFullPayment = isBsFullPay || cashSettles || totalPaidNow >= saleTotal - 0.10;
     const newStatus = isFullPayment ? "pagado" : "parcial";
     await sale.update({ status: newStatus }, { transaction: t });
     await t.commit();

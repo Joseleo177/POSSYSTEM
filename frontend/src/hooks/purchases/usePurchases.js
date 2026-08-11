@@ -1,4 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useApp } from "../../context/AppContext";
+import { resolveRate } from "../../components/ui/RateField";
 
 // Sub-hooks
 import { usePurchasesData } from "./usePurchasesData";
@@ -86,6 +88,29 @@ export function usePurchases(notify, onProductsUpdated) {
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState([]);
   const [itemForm, setItemForm] = useState(EMPTY_ITEM);
+
+  // Moneda y tasa de la factura del proveedor. Quedan guardadas con la orden: los costos se
+  // convierten a base para almacenarlos, así que sin este par no había forma de saber después
+  // a qué tasa se compró — y al reabrir el borrador los bolívares salían con la tasa de hoy.
+  const { activeCurrencies } = useApp();
+  const [invoiceCurrencyId, setInvoiceCurrencyId] = useState("");
+  const [invoiceRateInput, setInvoiceRateInput]   = useState("");
+  const invoiceCurrency = (activeCurrencies || []).find(c => String(c.id) === String(invoiceCurrencyId)) || null;
+  const invoiceCurRate  = invoiceCurrency ? (parseFloat(invoiceCurrency.exchange_rate) || 1) : 1;
+  const invoiceRate     = invoiceCurrency ? resolveRate(invoiceRateInput, invoiceCurRate) : 1;
+
+  // Moneda y tasa con que se abrió el borrador. Alternar de moneda no puede descartarlas: al
+  // volver a la moneda de la orden se restaura SU tasa, no la de configuración de hoy. Sin
+  // esto un ida y vuelta repreciaba la compra entera y al guardar pisaba a cuánto se compró.
+  const savedInvoice = useRef({ currencyId: "", rate: "" });
+
+  const selectInvoiceCurrency = useCallback((cur) => {
+    const id = cur ? String(cur.id) : "";
+    setInvoiceCurrencyId(id);
+    // Solo la moneda de la orden tiene tasa histórica; para cualquier otra, la de configuración.
+    const saved = savedInvoice.current;
+    setInvoiceRateInput(id && saved.currencyId === id ? saved.rate : "");
+  }, []);
 
   // ───────────────────────────────────────────────
   // SUB-HOOKS
@@ -182,6 +207,8 @@ export function usePurchases(notify, onProductsUpdated) {
     selectedWarehouseId,
     selectedSupplier,
     notes,
+    invoiceCurrencyId,
+    invoiceRate,
     resetForm: form.resetForm,
   });
 
@@ -206,6 +233,10 @@ export function usePurchases(notify, onProductsUpdated) {
 
   const openNew = () => {
     form.resetForm();
+    setInvoiceCurrencyId("");
+    setInvoiceRateInput("");
+    // Orden nueva: no arrastra la tasa histórica del borrador anterior.
+    savedInvoice.current = { currencyId: "", rate: "" };
     setEditingDraftId(null);
     setView("new");
   };
@@ -220,6 +251,15 @@ export function usePurchases(notify, onProductsUpdated) {
           : null
       );
       setNotes(detail.notes || "");
+      // La tasa vuelve tal como se guardó, no como esté hoy en configuración: es el dato que
+      // dice a cuánto se compró. Por eso se carga en el input y no se deja vacío.
+      const savedRate = parseFloat(detail.exchange_rate);
+      const savedCurId  = detail.currency_id ? String(detail.currency_id) : "";
+      const savedRateIn = detail.currency_id && savedRate > 0 ? String(savedRate) : "";
+      setInvoiceCurrencyId(savedCurId);
+      setInvoiceRateInput(savedRateIn);
+      // Se recuerda para poder restaurarla si el comprador alterna de moneda y vuelve.
+      savedInvoice.current = { currencyId: savedCurId, rate: savedRateIn };
       setEditingDraftId(detail.id);
       setView("new");
     },
@@ -275,6 +315,15 @@ export function usePurchases(notify, onProductsUpdated) {
     ...modals,
     ...form,
     ...calc,
+
+    // moneda/tasa de la factura del proveedor
+    invoiceCurrencyId,
+    invoiceCurrency,
+    invoiceCurRate,
+    invoiceRate,
+    invoiceRateInput,
+    setInvoiceRateInput,
+    selectInvoiceCurrency,
 
     // wrappers — sobrescriben las versiones "crudas" de form/modals
     selectProduct,

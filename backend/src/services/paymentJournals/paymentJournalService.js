@@ -1,10 +1,15 @@
 const { PaymentJournal, Currency, Bank, Sale, Sequelize, sequelize } = require("../../models");
+const { localDate, TZ } = require("../reports/shared");
 
 function flattenJournal(j) {
   const jj = j.toJSON ? j.toJSON() : j;
   jj.currency_code    = jj.Currency?.code     ?? null;
   jj.currency_symbol  = jj.Currency?.symbol   ?? null;
   jj.currency_is_base = jj.Currency?.is_base  ?? null;
+  // Sin la tasa, quien registra un egreso o ingreso en un diario en bolívares no podía
+  // convertir el monto a base: se guardaba el importe en Bs. como si fueran Ref. y con
+  // rate 1. getSummary ya la exponía; getAll debe hacerlo igual.
+  jj.exchange_rate    = jj.Currency?.exchange_rate ?? 1;
   jj.bank_name        = jj.Bank?.name         ?? null;
   delete jj.Currency; delete jj.Bank;
   return jj;
@@ -27,8 +32,8 @@ async function getAll(req) {
   const journals = await PaymentJournal.findAll({
     where: tenantWhere,
     include: [
-      { model: Currency, attributes: ['code', 'symbol', 'is_base'], required: false },
-      { model: Bank,     attributes: ['name'],                      required: false }
+      { model: Currency, attributes: ['code', 'symbol', 'is_base', 'exchange_rate'], required: false },
+      { model: Bank,     attributes: ['name'],                                        required: false }
     ],
     order: [['sort_order', 'ASC'], ['id', 'ASC']]
   });
@@ -78,21 +83,28 @@ async function getSummary(req) {
   const company_id  = req.employee?.company_id ?? null;
   const tci = company_id ? `AND i.company_id = ${parseInt(company_id)}` : '';
 
+  // El filtro de rango y el "hoy" de abajo deben cortar el día igual. Antes el rango
+  // comparaba contra literales sin convertir (día UTC) mientras el "hoy" ya usaba hora
+  // local, así que un cobro de las 9 PM aparecía en una cifra y no en la otra.
+  const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;
+  const safeFrom = sd(date_from);
+  const safeTo   = sd(date_to);
+
   const buildDateClause = (alias) => {
-    const col = `${alias}."created_at"`;
+    const col = localDate(`${alias}."created_at"`);
     let clause = '';
-    if (date_from) clause += ` AND ${col} >= '${date_from}'`;
-    if (date_to)   clause += ` AND ${col} < ('${date_to}'::date + INTERVAL '1 day')`;
+    if (safeFrom) clause += ` AND ${col} >= '${safeFrom}'::date`;
+    if (safeTo)   clause += ` AND ${col} <= '${safeTo}'::date`;
     return clause;
   };
   const pDate = buildDateClause('p');
   const eDate = buildDateClause('e');
   const iDate = buildDateClause('i');
 
-  // Timezone-aware "today" for Venezuela (UTC-4)
-  const todayP = `(p.created_at AT TIME ZONE 'America/Caracas')::date = (NOW() AT TIME ZONE 'America/Caracas')::date`;
-  const todayE = `(e.created_at AT TIME ZONE 'America/Caracas')::date = (NOW() AT TIME ZONE 'America/Caracas')::date`;
-  const todayI = `(i.created_at AT TIME ZONE 'America/Caracas')::date = (NOW() AT TIME ZONE 'America/Caracas')::date`;
+  const todayLocal = `(NOW() AT TIME ZONE '${TZ}')::date`;
+  const todayP = `${localDate('p.created_at')} = ${todayLocal}`;
+  const todayE = `${localDate('e.created_at')} = ${todayLocal}`;
+  const todayI = `${localDate('i.created_at')} = ${todayLocal}`;
 
   const journals = await PaymentJournal.findAll({
     attributes: [
@@ -169,18 +181,25 @@ async function getMovements(req) {
   const safeFrom = sd(date_from);
   const safeTo   = sd(date_to);
 
+  // reference_date es DATE (fecha local ya elegida por el cajero); date y created_at son
+  // TIMESTAMPTZ y hay que llevarlos a fecha local antes de comparar. Sin esto el día de
+  // corte de un pago con referencia y el de uno sin ella no eran el mismo.
+  const payDay = `COALESCE(p.reference_date, ${localDate('p.created_at')})`;
+  const expDay = localDate('COALESCE(e.date, e.created_at)');
+  const incDay = localDate('COALESCE(i.date, i.created_at)');
+
   let datePay = '';
   let dateExp = '';
   let dateInc = '';
   if (safeFrom) {
-    datePay += ` AND COALESCE(p.reference_date, p.created_at) >= '${safeFrom}'`;
-    dateExp += ` AND COALESCE(e.date, e.created_at) >= '${safeFrom}'`;
-    dateInc += ` AND COALESCE(i.date, i.created_at) >= '${safeFrom}'`;
+    datePay += ` AND ${payDay} >= '${safeFrom}'::date`;
+    dateExp += ` AND ${expDay} >= '${safeFrom}'::date`;
+    dateInc += ` AND ${incDay} >= '${safeFrom}'::date`;
   }
   if (safeTo) {
-    datePay += ` AND COALESCE(p.reference_date, p.created_at) < ('${safeTo}'::date + INTERVAL '1 day')`;
-    dateExp += ` AND COALESCE(e.date, e.created_at) < ('${safeTo}'::date + INTERVAL '1 day')`;
-    dateInc += ` AND COALESCE(i.date, i.created_at) < ('${safeTo}'::date + INTERVAL '1 day')`;
+    datePay += ` AND ${payDay} <= '${safeTo}'::date`;
+    dateExp += ` AND ${expDay} <= '${safeTo}'::date`;
+    dateInc += ` AND ${incDay} <= '${safeTo}'::date`;
   }
 
   // Saldo real del diario — incluye payments (ventas) + incomes (manuales) - expenses
@@ -208,9 +227,9 @@ async function getMovements(req) {
   if (safeFrom) {
     const [prevBal] = await sequelize.query(`
       SELECT (
-        COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE COALESCE(reference_date, created_at) < :date_from ${tp}), 0)
-        + COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM incomes  WHERE status = 'activo' AND COALESCE(date, created_at) < :date_from ${ti}), 0)
-        - COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM expenses WHERE status = 'activo' AND COALESCE(date, created_at) < :date_from ${texp}), 0)
+        COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE COALESCE(reference_date, ${localDate('created_at')}) < :date_from ${tp}), 0)
+        + COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM incomes  WHERE status = 'activo' AND ${localDate('COALESCE(date, created_at)')} < :date_from ${ti}), 0)
+        - COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM expenses WHERE status = 'activo' AND ${localDate('COALESCE(date, created_at)')} < :date_from ${texp}), 0)
       ) as balance
     `, { replacements: { id, date_from: safeFrom }, type: Sequelize.QueryTypes.SELECT });
     preBalance = parseFloat(prevBal?.balance || 0);
@@ -342,16 +361,20 @@ async function getBankMovements(req) {
   const safeFrom = sd(date_from);
   const safeTo   = sd(date_to);
 
+  const payDay = `COALESCE(p.reference_date, ${localDate('p.created_at')})`;
+  const expDay = localDate('COALESCE(e.date, e.created_at)');
+  const incDay = localDate('COALESCE(i.date, i.created_at)');
+
   let datePay = '', dateExp = '', dateInc = '';
   if (safeFrom) {
-    datePay += ` AND COALESCE(p.reference_date, p.created_at) >= '${safeFrom}'`;
-    dateExp += ` AND COALESCE(e.date, e.created_at) >= '${safeFrom}'`;
-    dateInc += ` AND COALESCE(i.date, i.created_at) >= '${safeFrom}'`;
+    datePay += ` AND ${payDay} >= '${safeFrom}'::date`;
+    dateExp += ` AND ${expDay} >= '${safeFrom}'::date`;
+    dateInc += ` AND ${incDay} >= '${safeFrom}'::date`;
   }
   if (safeTo) {
-    datePay += ` AND COALESCE(p.reference_date, p.created_at) < ('${safeTo}'::date + INTERVAL '1 day')`;
-    dateExp += ` AND COALESCE(e.date, e.created_at) < ('${safeTo}'::date + INTERVAL '1 day')`;
-    dateInc += ` AND COALESCE(i.date, i.created_at) < ('${safeTo}'::date + INTERVAL '1 day')`;
+    datePay += ` AND ${payDay} <= '${safeTo}'::date`;
+    dateExp += ` AND ${expDay} <= '${safeTo}'::date`;
+    dateInc += ` AND ${incDay} <= '${safeTo}'::date`;
   }
 
   const [currBal] = await sequelize.query(`
@@ -375,9 +398,9 @@ async function getBankMovements(req) {
   if (safeFrom) {
     const [prevBal] = await sequelize.query(`
       SELECT (
-        COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE COALESCE(reference_date, created_at) < '${safeFrom}' ${tp}), 0)
-        + COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM incomes  WHERE status = 'activo' AND COALESCE(date, created_at) < '${safeFrom}' ${tp}), 0)
-        - COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM expenses WHERE status = 'activo' AND COALESCE(date, created_at) < '${safeFrom}' ${tp}), 0)
+        COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE COALESCE(reference_date, ${localDate('created_at')}) < '${safeFrom}'::date ${tp}), 0)
+        + COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM incomes  WHERE status = 'activo' AND ${localDate('COALESCE(date, created_at)')} < '${safeFrom}'::date ${tp}), 0)
+        - COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM expenses WHERE status = 'activo' AND ${localDate('COALESCE(date, created_at)')} < '${safeFrom}'::date ${tp}), 0)
       ) as balance
     `, { type: Sequelize.QueryTypes.SELECT });
     preBalance = parseFloat(prevBal?.balance || 0);

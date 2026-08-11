@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate } = require("./shared");
+const { sanitizeDate, TZ } = require("./shared");
 
 // Cobros por día y por diario de pago.
 //
@@ -23,8 +23,8 @@ async function paymentJournalsReport({ date_from, date_to, company_id }) {
   const scoped = !!company_id;
 
   // Las fechas se agrupan en hora de Caracas: en UTC, un cobro de las 8 de la noche cae al
-  // día siguiente y el cuadre diario no coincidiría con el turno de caja.
-  const TZ = "America/Caracas";
+  // día siguiente y el cuadre diario no coincidiría con el turno de caja. TZ sale de shared.js
+  // para que todos los reportes definan "día" igual.
   const parts = [];
   if (from) parts.push(`AND (p.created_at AT TIME ZONE '${TZ}')::date >= :dfrom`);
   if (to)   parts.push(`AND (p.created_at AT TIME ZONE '${TZ}')::date <= :dto`);

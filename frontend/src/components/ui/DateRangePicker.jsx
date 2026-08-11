@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
+import { toLocalISO } from "../../helpers";
 
 /**
  * Premium DateRangePicker Component
@@ -113,7 +114,7 @@ export default function DateRangePicker({ from, to, setFrom, setTo, onRangeChang
   const yearTitle = viewDate.getFullYear();
 
   const handleDateClick = (date) => {
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = toLocalISO(date);
     if (!from || (from && to)) {
       if (onRangeChange) {
         onRangeChange(dateStr, "");
@@ -142,12 +143,12 @@ export default function DateRangePicker({ from, to, setFrom, setTo, onRangeChang
   };
 
   const isInRange = (date) => {
-    const d = date.toISOString().split("T")[0];
+    const d = toLocalISO(date);
     return from && d > from && to && d < to;
   };
 
   const isSelected = (date) => {
-    const d = date.toISOString().split("T")[0];
+    const d = toLocalISO(date);
     return d === from || d === to;
   };
 
@@ -183,7 +184,7 @@ export default function DateRangePicker({ from, to, setFrom, setTo, onRangeChang
   // Shortcuts
   const setShortcut = (type) => {
     const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
+    const todayStr = toLocalISO(now);
     let finalFrom = "";
     let finalTo = "";
     
@@ -193,17 +194,17 @@ export default function DateRangePicker({ from, to, setFrom, setTo, onRangeChang
     } else if (type === "yesterday") {
       const yesterday = new Date();
       yesterday.setDate(now.getDate() - 1);
-      const yStr = yesterday.toISOString().split("T")[0];
+      const yStr = toLocalISO(yesterday);
       finalFrom = yStr;
       finalTo = yStr;
     } else if (type === "7days") {
       const past = new Date();
       past.setDate(now.getDate() - 7);
-      finalFrom = past.toISOString().split("T")[0];
+      finalFrom = toLocalISO(past);
       finalTo = todayStr;
     } else if (type === "month") {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      finalFrom = startOfMonth.toISOString().split("T")[0];
+      finalFrom = toLocalISO(startOfMonth);
       finalTo = todayStr;
     }
 

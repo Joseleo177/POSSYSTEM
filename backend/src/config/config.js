@@ -7,8 +7,14 @@ const pool = {
   idle: 10000,
 };
 
+// Zona horaria de operación. Sequelize emite SET TIME ZONE en cada conexión,
+// de modo que DATE(created_at), los literales de fecha y NOW() se resuelven
+// en hora local y no en UTC. Venezuela es UTC-4 fijo (sin horario de verano).
+const timezone = process.env.DB_TIMEZONE || 'America/Caracas';
+
 module.exports = {
   development: {
+    timezone,
     username: process.env.DB_USER || 'posuser',
     password: process.env.DB_PASSWORD || 'pospassword',
     database: process.env.DB_NAME || 'posdb',
@@ -24,6 +30,7 @@ module.exports = {
     }),
   },
   test: {
+    timezone,
     username: process.env.DB_USER || 'posuser',
     password: process.env.DB_PASSWORD || 'pospassword',
     database: process.env.DB_NAME || 'posdb',
@@ -34,6 +41,7 @@ module.exports = {
     pool,
   },
   production: {
+    timezone,
     username: process.env.DB_USER || 'posuser',
     password: process.env.DB_PASSWORD || 'pospassword',
     database: process.env.DB_NAME || 'posdb',

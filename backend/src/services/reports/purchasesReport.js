@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, dateClause } = require("./shared");
+const { sanitizeDate, dateClause, localDate } = require("./shared");
 
 async function purchasesReport({ date_from, date_to, limit, company_id, tc, tcP, rep }) {
   const df = sanitizeDate(date_from);
@@ -33,11 +33,11 @@ async function purchasesReport({ date_from, date_to, limit, company_id, tc, tcP,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
-      `SELECT DATE(created_at) AS day, COUNT(*)::int AS count,
+      `SELECT ${localDate('created_at')} AS day, COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS cost
        FROM purchases
        WHERE TRUE ${tc} ${dR}
-       GROUP BY DATE(created_at)
+       GROUP BY ${localDate('created_at')}
        ORDER BY day ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
