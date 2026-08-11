@@ -537,7 +537,7 @@ export default function PurchaseDetails({ state }) {
               {invoiceRate > 1 ? (
                 <>
                   <div className="text-lg font-black text-brand-500 tabular-nums">{invoiceSym} {fmt2(grandTotal * invoiceRate)}</div>
-                  <div className="text-[10px] text-content-subtle/50 dark:text-white/20 tabular-nums mt-0.5">≈ Ref. {fmt2(grandTotal)}</div>
+                  <div className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums mt-0.5">≈ Ref. {fmt2(grandTotal)}</div>
                 </>
               ) : (
                 <div className="text-lg font-black text-brand-500 tabular-nums">Ref. {fmt2(grandTotal)}</div>
@@ -562,7 +562,7 @@ export default function PurchaseDetails({ state }) {
                   {inInvoiceCur ? (
                     <>
                       <span className="text-[13px] font-black text-content dark:text-white tabular-nums block leading-none">{invoiceSym} {fmt2(total * invoiceRate)}</span>
-                      <span className="text-[10px] font-bold text-content-subtle/60 dark:text-white/25 tabular-nums">≈ Ref. {fmt2(total)}</span>
+                      <span className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(total)}</span>
                     </>
                   ) : (
                     <span className="text-[11px] font-black text-content dark:text-white tabular-nums">Ref. {fmt2(total)}</span>
@@ -578,7 +578,7 @@ export default function PurchaseDetails({ state }) {
                 <p className={`${LABEL} mb-1.5`}>Total Pagado</p>
                 <p className="text-[15px] font-black text-content dark:text-white tabular-nums tracking-tight leading-none">Ref. {fmt2(amountPaid)}</p>
                 {inInvoiceCur && (
-                  <p className="text-[10px] font-bold text-content-subtle/60 dark:text-white/25 tabular-nums mt-1">{invoiceSym} {fmt2(amountPaid * invoiceRate)}</p>
+                  <p className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums mt-1">{invoiceSym} {fmt2(amountPaid * invoiceRate)}</p>
                 )}
                 <p className="text-[9px] font-bold text-success uppercase tracking-widest mt-1.5">Conciliado</p>
               </div>

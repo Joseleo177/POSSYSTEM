@@ -103,12 +103,12 @@ export default function PurchaseForm({ state }) {
                                                     className="w-28 p-0 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-info"
                                                 />
                                                 {inInvoiceCur && parseFloat(item.package_price) > 0 && (
-                                                    <span className="text-[9px] tabular-nums text-content-subtle/40 dark:text-white/20">
+                                                    <span className="text-[11px] font-bold tabular-nums text-content-subtle dark:text-white/45">
                                                         ≈ Ref. {fmt2(item.package_price)}
                                                     </span>
                                                 )}
                                                 {item.unit_cost > 0 && (
-                                                    <span className="text-[9px] tabular-nums text-content-subtle/40 dark:text-white/20">
+                                                    <span className="text-[11px] font-bold tabular-nums text-content-subtle dark:text-white/45">
                                                         unit: Ref. {fmt2(item.unit_cost)}
                                                     </span>
                                                 )}
@@ -124,7 +124,7 @@ export default function PurchaseForm({ state }) {
                                                 inInvoiceCur ? (
                                                     <>
                                                         <div>{fmtInvoice(item.subtotal)}</div>
-                                                        <div className="text-[9px] font-bold text-content-subtle/40 dark:text-white/20">≈ Ref. {fmt2(item.subtotal)}</div>
+                                                        <div className="text-[11px] font-bold text-content-subtle dark:text-white/45">≈ Ref. {fmt2(item.subtotal)}</div>
                                                     </>
                                                 ) : `Ref. ${fmt2(item.subtotal)}`
                                             ) : "—"}
@@ -163,7 +163,7 @@ export default function PurchaseForm({ state }) {
                             {inInvoiceCur ? (
                                 <>
                                     <div className="text-xl font-black text-brand-500 tabular-nums">{fmtInvoice(grandTotal)}</div>
-                                    <div className="text-[10px] font-bold text-content-subtle/50 dark:text-white/20 tabular-nums mt-0.5">≈ Ref. {fmt2(grandTotal)}</div>
+                                    <div className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums mt-0.5">≈ Ref. {fmt2(grandTotal)}</div>
                                 </>
                             ) : (
                                 <div className="text-xl font-black text-brand-500 tabular-nums">Ref. {fmt2(grandTotal)}</div>

@@ -89,7 +89,7 @@ export default function PurchaseItemsTable({
                                             className="w-28 p-0 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-info"
                                         />
                                         {invoiceRate > 1 && parseFloat(item.package_price) > 0 && (
-                                            <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">≈ Ref. {fmt2(item.package_price)}</span>
+                                            <span className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(item.package_price)}</span>
                                         )}
                                     </div>
                                 ) : invoiceRate > 1 ? (
@@ -98,7 +98,7 @@ export default function PurchaseItemsTable({
                                     // factura del proveedor— y la columna ya se rotula en esa moneda.
                                     <div className="flex flex-col items-center gap-0.5">
                                         <span className="text-xs font-black text-info tabular-nums">{invoiceSym} {fmt2(parseFloat(item.package_price) * invoiceRate)}</span>
-                                        <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">≈ Ref. {fmt2(item.package_price)}</span>
+                                        <span className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(item.package_price)}</span>
                                     </div>
                                 ) : (
                                     <span className="text-xs font-black text-info tabular-nums">Ref. {fmt2(item.package_price)}</span>
@@ -129,7 +129,7 @@ export default function PurchaseItemsTable({
                                                 }}
                                                 className="w-20 p-0 text-center text-xs font-black tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-success dark:focus:border-success focus:outline-none text-success"
                                             />
-                                            <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">
+                                            <span className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums">
                                                 {invoiceRate > 1 && parseFloat(item.sale_price) > 0
                                                     ? `≈ Ref. ${fmt2(item.sale_price)} · ${(parseFloat(item.profit_margin) || 0).toFixed(1)}%`
                                                     : `${(parseFloat(item.profit_margin) || 0).toFixed(1)}%`}
@@ -170,7 +170,7 @@ export default function PurchaseItemsTable({
                                 {invoiceRate > 1 ? (
                                     <div className="flex flex-col items-end gap-0.5">
                                         <span className="text-sm font-black text-warning tabular-nums">{invoiceSym} {fmt2(parseFloat(item.subtotal) * invoiceRate)}</span>
-                                        <span className="text-[9px] text-content-subtle/40 dark:text-white/20 tabular-nums">≈ Ref. {fmt2(item.subtotal)}</span>
+                                        <span className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(item.subtotal)}</span>
                                     </div>
                                 ) : (
                                     <span className="text-sm font-black text-warning tabular-nums">Ref. {fmt2(item.subtotal)}</span>

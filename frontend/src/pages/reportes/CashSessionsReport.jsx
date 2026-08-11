@@ -301,6 +301,48 @@ export default function CashSessionsReport() {
  </div>
  </div>
 
+ {/* Cobros por diario — el turno completo, no solo las cajas que se arquean.
+     La conciliación de arriba solo lista los diarios con efectivo declarado, así que
+     transferencias, punto de venta o pago móvil no aparecían por ningún lado y no
+     había forma de saber cuánto entró por cada método. Los totales van por diario y
+     con su símbolo: sumarlos entre monedas distintas no significaría nada. */}
+ {summaryData.payments_by_journal?.length > 0 && (() => {
+   const conciliados = new Set((summaryData.journal_summary || []).map(j => j.journal_id));
+   return (
+ <div className="space-y-2">
+ <SectionHeader title="Cobros por Diario" sub="Todo lo cobrado en el turno, incluidos los métodos sin arqueo" />
+ <div className="rounded-xl border border-border dark:border-white/5 overflow-hidden">
+ <table className="w-full text-left">
+ <thead className="bg-surface-2 dark:bg-white/5">
+ <tr>
+ {["Diario", "Cobros", "Total"].map((h, i) => (
+ <th key={h} className={`px-4 py-2.5 text-[10px] font-black uppercase tracking-wide text-content-muted ${i > 0 ? "text-right" : ""}`}>{h}</th>
+ ))}
+ </tr>
+ </thead>
+ <tbody className="divide-y divide-border/10 dark:divide-white/5">
+ {summaryData.payments_by_journal.map((pj, idx) => (
+ <tr key={idx} className="text-[11px] font-black text-content dark:text-white">
+ <td className="px-4 py-2.5">
+ <div className="flex items-center gap-2.5">
+ <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: pj.journal_color }} />
+ {pj.journal_name}
+ {!conciliados.has(pj.id) && (
+ <span className="text-[9px] font-black uppercase tracking-wide text-content-subtle border border-border dark:border-white/10 rounded-md px-1.5 py-0.5">Sin arqueo</span>
+ )}
+ </div>
+ </td>
+ <td className="px-4 py-2.5 text-right text-content-subtle tabular-nums">{pj.payment_count}</td>
+ <td className="px-4 py-2.5 text-right text-success tabular-nums">{pj.currency_symbol || ""}{Number(pj.total || 0).toFixed(2)}</td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </div>
+ </div>
+   );
+ })()}
+
  </div>
  ) : null}
  </div>

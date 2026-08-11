@@ -66,6 +66,11 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
           {icon && (
             <span className="shrink-0 text-content-subtle opacity-60 flex items-center">{icon}</span>
           )}
+          {/* opt.color: punto del color de la entidad (categorías, diarios). Sin esto, pasar
+              una lista con color a un select obligaba a renunciar a esa señal visual. */}
+          {selectedOption?.color && (
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: selectedOption.color }} />
+          )}
           {/* truncate + min-w-0: con ancho fijo, una etiqueta larga debe recortarse en vez
               de desbordar la caja o empujar la flecha. */}
           <span className={`truncate ${selectedOption
@@ -102,7 +107,12 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
                       : "hover:bg-brand-500/10 dark:hover:bg-white/5 text-content dark:text-white/70 hover:text-brand-500 dark:hover:text-brand-500"}
                   `}
                 >
-                  <span className="truncate">{opt.label}</span>
+                  <span className="flex items-center gap-2 min-w-0">
+                    {opt.color && (
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: opt.color }} />
+                    )}
+                    <span className="truncate">{opt.label}</span>
+                  </span>
                   {isActive && (
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" />

@@ -156,10 +156,16 @@ export default function CartSidebar({
                                     <span className="text-xl text-brand-500">
                                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                                     </span>
+                                    {/* La cédula manda: es el dato que se verifica al facturar, así que
+                                        va arriba y con el peso visual. El nombre queda de apoyo. */}
                                     <div className="min-w-0">
-                                        <div className="text-sm font-black text-content dark:text-white truncate">{selectedCustomer.name}</div>
-                                        {selectedCustomer.rif && (
-                                            <div className="text-[11px] font-black tracking-wide text-brand-600 dark:text-brand-400 truncate">{selectedCustomer.rif}</div>
+                                        {selectedCustomer.rif ? (
+                                            <>
+                                                <div className="text-sm font-black tracking-wide text-content dark:text-white truncate">{selectedCustomer.rif}</div>
+                                                <div className="text-[11px] font-black text-brand-600 dark:text-brand-400 truncate">{selectedCustomer.name}</div>
+                                            </>
+                                        ) : (
+                                            <div className="text-sm font-black text-content dark:text-white truncate">{selectedCustomer.name}</div>
                                         )}
                                     </div>
                                 </div>

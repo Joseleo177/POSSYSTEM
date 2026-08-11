@@ -423,7 +423,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                         <div className="text-[10px] font-black text-content-subtle dark:text-white/30 uppercase tracking-widest mb-0.5">Último costo unit.</div>
                                         <div className="text-sm font-black text-brand-500 tabular-nums">Ref. {fmt2(selected.cost_price)}</div>
                                         {invoiceRate > 1 && (
-                                            <div className="text-[10px] text-content-subtle/50 dark:text-white/20 tabular-nums mt-0.5">{invoiceSym} {fmt2(selected.cost_price * invoiceRate)}</div>
+                                            <div className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums mt-0.5">{invoiceSym} {fmt2(selected.cost_price * invoiceRate)}</div>
                                         )}
                                     </div>
                                 )}
@@ -482,7 +482,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                         className="input h-9 font-black tabular-nums text-brand-500"
                                     />
                                     {invoiceRate > 1 && pkgPriceBase > 0 && (
-                                        <p className="text-[9px] text-content-subtle/50 dark:text-white/20 tabular-nums">≈ Ref. {fmt2(pkgPriceBase)}</p>
+                                        <p className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(pkgPriceBase)}</p>
                                     )}
                                 </div>
                                 <div className="space-y-1.5">
