@@ -32,6 +32,15 @@ function normalizeSale(sale) {
         // distinguía de uno pagado: ambos terminaban en el total y el "gracias por su compra".
         amount_paid: parseFloat(sale.amount_paid ?? sale.paid ?? 0),
         balance: parseFloat(sale.balance ?? 0),
+        // Cobros de la venta. getOneSale los devuelve en `Payments`; el flujo de caja los va
+        // acumulando en `payments` a medida que se registran. Una venta puede cobrarse por
+        // varios canales —parte en divisas, parte en punto de venta— y el ticket tiene que
+        // decir cuánto entró por cada uno, no solo por el último.
+        payments: (sale.Payments || sale.payments || []).map(p => ({
+            journal_name: p.journal_name || null,
+            amount: parseFloat(p.amount || 0),
+            exchange_rate: parseFloat(p.exchange_rate || 1),
+        })),
     };
 }
 
@@ -41,10 +50,27 @@ function normalizeSale(sale) {
 function paymentSummary(s) {
     const status = (s.status || "").toLowerCase();
     const pendiente = ["pendiente", "parcial", "borrador", "espera"].includes(status);
+
+    // Un cobro por canal. Se agrupan por diario: pagar dos veces por la misma caja es una
+    // sola forma de pago con el monto sumado, no dos líneas repetidas en el papel.
+    const porDiario = [];
+    for (const p of s.payments || []) {
+        if (!p.journal_name) continue;
+        const found = porDiario.find(x => x.journal_name === p.journal_name);
+        if (found) found.amount += p.amount;
+        else porDiario.push({ journal_name: p.journal_name, amount: p.amount });
+    }
+    // Respaldo para el ticket que se imprime justo tras cobrar, cuando aún no hay lista de
+    // pagos pero sí se sabe por dónde entró.
+    if (!porDiario.length && s.journal_name) porDiario.push({ journal_name: s.journal_name, amount: s.amount_paid });
+
     return {
         pendiente,
-        // A crédito no hay diario todavía: nadie cobró nada.
-        metodo: s.journal_name || (pendiente ? "Crédito" : "—"),
+        canales: porDiario,
+        // Con un solo canal basta el nombre; con varios se listan aparte con su monto.
+        metodo: porDiario.length === 1 ? porDiario[0].journal_name
+            : porDiario.length > 1 ? "Combinado"
+            : (pendiente ? "Crédito" : "—"),
         etiqueta: status === "parcial" ? "Abono parcial"
             : status === "pagado" ? "Pagado"
             : pendiente ? "Pendiente de pago"
@@ -243,6 +269,9 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
 
     <div class="totals">
         <div class="total-row"><span>FORMA DE PAGO</span><span>${pago.metodo}</span></div>
+        ${pago.canales.length > 1
+            ? pago.canales.map(c => `<div class="total-row"><span>&nbsp;&nbsp;${c.journal_name}</span><span>${fmt(c.amount * rate, sym)}</span></div>`).join("")
+            : ""}
         ${pago.etiqueta ? `<div class="total-row"><span>ESTADO</span><span>${pago.etiqueta.toUpperCase()}</span></div>` : ""}
         ${s.amount_paid > 0 && pago.pendiente ? `<div class="total-row"><span>ABONADO</span><span>${fmt(s.amount_paid * rate, sym)}</span></div>` : ""}
         ${pago.pendiente && s.balance > 0 ? `<div class="total-row big"><span>QUEDA DEBIENDO</span><span>${fmt(s.balance * rate, sym)}</span></div>` : ""}
@@ -387,6 +416,14 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     <span className="text-content-muted dark:text-content-dark-muted">Forma de pago</span>
                     <span className="text-content dark:text-content-dark font-bold">{pago.metodo}</span>
                 </div>
+                {/* Con más de un canal se detalla cuánto entró por cada uno: "Combinado" a secas
+                    no permite cuadrar el ticket contra las cajas. */}
+                {pago.canales.length > 1 && pago.canales.map(c => (
+                    <div key={c.journal_name} className="flex justify-between items-center py-0.5 text-xs pl-3">
+                        <span className="text-content-muted dark:text-content-dark-muted">{c.journal_name}</span>
+                        <span className="text-content dark:text-content-dark font-medium tabular-nums">{fmt(c.amount * rate, sym)}</span>
+                    </div>
+                ))}
                 {pago.etiqueta && (
                     <div className="flex justify-between items-center py-0.5 text-xs">
                         <span className="text-content-muted dark:text-content-dark-muted">Estado</span>

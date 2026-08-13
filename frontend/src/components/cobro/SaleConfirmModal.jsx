@@ -90,13 +90,15 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     const currentBalance = saleBalance?.balance ?? parseFloat(receipt?.balance ?? receipt?.total ?? 0);
     const currentStatus  = saleBalance?.status  ?? receipt?.status ?? "pendiente";
 
-    // Diario por el que entró el cobro, para imprimirlo en el ticket. El backend devuelve el
-    // pago con su payment_journal_id pero no el nombre, así que se resuelve contra los diarios
-    // activos. Si la venta quedó a crédito no hay ninguno y el ticket lo dirá.
-    const paidJournalId = saleBalance?.payment?.payment_journal_id ?? receipt?.payment_journal_id ?? null;
-    const receiptJournalName = paidJournalId
-        ? ((activeJournals || []).find(j => j.id === paidJournalId)?.name || receipt?.journal_name || null)
-        : (receipt?.journal_name || null);
+    // Cobros de esta venta, con el nombre del diario resuelto: el backend devuelve cada pago
+    // con su payment_journal_id pero no con el nombre. Van todos, no solo el último — una
+    // venta puede cobrarse parte en divisas y parte por punto de venta, y el ticket debe
+    // decir cuánto entró por cada canal.
+    const receiptPayments = (saleBalance?.payments || []).map(p => ({
+        journal_name: (activeJournals || []).find(j => j.id === p?.payment_journal_id)?.name || null,
+        amount: parseFloat(p?.amount || 0),
+        exchange_rate: parseFloat(p?.exchange_rate || 1),
+    }));
     // Venta creada pero sin desenlace: ni cobrada ni facturada a crédito.
     const isUnresolved   = ["borrador", "espera"].includes(currentStatus);
 
@@ -317,7 +319,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     status: currentStatus,
                     amount_paid: paidBase,
                     balance: currentBalance,
-                    journal_name: receiptJournalName,
+                    payments: receiptPayments,
                 }}
             />
 

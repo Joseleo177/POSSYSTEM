@@ -146,9 +146,16 @@ export default function CobroPage() {
             currentCurrency={currentCurrency}
             onNext={() => { setReceipt(null); setSaleBalance(null); products.reload(); }}
             onPay={(res) => {
-                // El pago viaja entero: el ticket necesita saber por qué diario entró el dinero.
-                // El endpoint lo devuelve en `data`, no en `payment`.
-                setSaleBalance({ amount_paid: res.amount_paid, balance: res.balance, status: res.sale_status, payment: res.data });
+                // Los pagos se ACUMULAN: cobrar parte en divisas y el resto por punto de venta
+                // son dos llamadas, y el ticket debe listar ambos canales. Quedarse con el
+                // último haría desaparecer del comprobante la mitad del dinero recibido.
+                // El endpoint devuelve el pago en `data`, no en `payment`.
+                setSaleBalance(prev => ({
+                    amount_paid: res.amount_paid,
+                    balance: res.balance,
+                    status: res.sale_status,
+                    payments: [...(prev?.payments || []), res.data].filter(Boolean),
+                }));
                 if (res.invoice_number) setReceipt(prev => ({ ...prev, invoice_number: res.invoice_number }));
             }}
         />
