@@ -15,6 +15,16 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
   const lim = Math.min(Math.max(parseInt(limit) || 25, 1), 5000);
   const off = Math.max(parseInt(offset) || 0, 0);
 
+  // Aquí hacen falta dos criterios distintos y no uno solo. Para plata ("cuánto gastó")
+  // vale lo efectivamente cobrado. Para fechas ("cuándo compró por última vez") hay que
+  // contar también lo pendiente y lo parcial: si no, un cliente que se llevó mercancía
+  // a crédito ayer saldría listado como inactivo desde hace meses.
+  // Sin ninguno de los dos, un cliente con todas sus ventas anuladas figuraba de top.
+  const stPagado  = `AND status = 'pagado'`;
+  const stPagadoS = `AND s.status = 'pagado'`;
+  const stCompra  = `AND status NOT IN ('anulado','borrador','espera')`;
+  const stCompraS = `AND s.status NOT IN ('anulado','borrador','espera')`;
+
   const [topCustomers, inactiveCustomers, newCustomers, ticketStats, repeatRate, counts] = await Promise.all([
     sequelize.query(
       `SELECT c.id, c.name, c.phone, c.rif,
@@ -24,7 +34,7 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
               MAX(s.created_at) AS last_purchase
        FROM customers c
        JOIN sales s ON s.customer_id = c.id
-       WHERE c.type = 'cliente' ${tcS} ${dS}
+       WHERE c.type = 'cliente' ${tcS} ${dS} ${stPagadoS}
        GROUP BY c.id, c.name, c.phone, c.rif
        ORDER BY total_spent DESC
        LIMIT ${lim} OFFSET ${off}`,
@@ -38,7 +48,7 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
               EXTRACT(DAY FROM NOW() - MAX(s.created_at))::int AS days_inactive
        FROM customers c
        JOIN sales s ON s.customer_id = c.id
-       WHERE c.type = 'cliente' ${tcS}
+       WHERE c.type = 'cliente' ${tcS} ${stCompraS}
        GROUP BY c.id, c.name, c.phone, c.rif
        HAVING MAX(s.created_at) < NOW() - (${inactiveDays} * INTERVAL '1 day')
        ORDER BY days_inactive DESC
@@ -52,7 +62,7 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
               COALESCE(SUM(s.total), 0)::float AS total_spent
        FROM customers c
        JOIN sales s ON s.customer_id = c.id
-       WHERE c.type = 'cliente' ${tcC} ${dC}
+       WHERE c.type = 'cliente' ${tcC} ${dC} ${stCompraS}
        GROUP BY c.id, c.name, c.phone
        ORDER BY first_purchase DESC
        LIMIT ${lim} OFFSET ${off}`,
@@ -70,7 +80,7 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
          COUNT(*)::int AS count,
          COALESCE(SUM(total), 0)::float AS revenue
        FROM sales
-       WHERE TRUE ${tc} ${dR}
+       WHERE TRUE ${tc} ${dR} ${stPagado}
        GROUP BY range
        ORDER BY MIN(total)`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -83,10 +93,10 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
        JOIN (
          SELECT customer_id, COUNT(*) AS purchase_count
          FROM sales
-         WHERE customer_id IS NOT NULL ${tc} ${dR}
+         WHERE customer_id IS NOT NULL ${tc} ${dR} ${stCompra}
          GROUP BY customer_id
        ) sub ON s.customer_id = sub.customer_id
-       WHERE TRUE ${tcS} ${dS}`,
+       WHERE TRUE ${tcS} ${dS} ${stCompraS}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     // Totales sin paginar, con los mismos filtros y agrupaciones que cada lista. Sin esto el
@@ -95,18 +105,18 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
       `SELECT
          (SELECT COUNT(*) FROM (
             SELECT c.id FROM customers c JOIN sales s ON s.customer_id = c.id
-            WHERE c.type = 'cliente' ${tcS} ${dS}
+            WHERE c.type = 'cliente' ${tcS} ${dS} ${stPagadoS}
             GROUP BY c.id
           ) t)::int AS top_total,
          (SELECT COUNT(*) FROM (
             SELECT c.id FROM customers c JOIN sales s ON s.customer_id = c.id
-            WHERE c.type = 'cliente' ${tcS}
+            WHERE c.type = 'cliente' ${tcS} ${stCompraS}
             GROUP BY c.id
             HAVING MAX(s.created_at) < NOW() - (${inactiveDays} * INTERVAL '1 day')
           ) t)::int AS inactive_total,
          (SELECT COUNT(*) FROM (
             SELECT c.id FROM customers c JOIN sales s ON s.customer_id = c.id
-            WHERE c.type = 'cliente' ${tcC} ${dC}
+            WHERE c.type = 'cliente' ${tcC} ${dC} ${stCompraS}
             GROUP BY c.id
           ) t)::int AS new_total`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

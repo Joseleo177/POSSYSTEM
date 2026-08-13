@@ -8,6 +8,12 @@ async function auditReport({ date_from, date_to, limit, company_id, tcS, rep }) 
   const dR = dateClause(df, dt, 'r');
   const lim = parseInt(limit) || 0;   // 0 = usar defaults de pantalla
 
+  // Aplica al desempeño por empleado y a los descuentos: son ventas concretadas, no
+  // intentos. Antes un cajero cargaba en su total las que se le anularon, y un descuento
+  // sobre una venta anulada figuraba como descuento otorgado. Las devoluciones NO llevan
+  // este filtro: se miden sobre la tabla returns, que ya es de por sí lo devuelto.
+  const stS = `AND s.status = 'pagado'`;
+
   const [returnsSummary, returnsList, byEmployee, discounts] = await Promise.all([
     sequelize.query(
       `SELECT
@@ -43,7 +49,7 @@ async function auditReport({ date_from, date_to, limit, company_id, tcS, rep }) 
          COUNT(s.id) FILTER (WHERE s.discount_amount > 0)::int AS discounted_sales
        FROM sales s
        LEFT JOIN employees e ON s.employee_id = e.id
-       WHERE TRUE ${tcS} ${dS}
+       WHERE TRUE ${tcS} ${dS} ${stS}
        GROUP BY e.id, e.full_name
        ORDER BY revenue DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -56,7 +62,7 @@ async function auditReport({ date_from, date_to, limit, company_id, tcS, rep }) 
        FROM sales s
        LEFT JOIN employees e ON s.employee_id = e.id
        LEFT JOIN customers c ON s.customer_id = c.id
-       WHERE s.discount_amount > 0 ${tcS} ${dS}
+       WHERE s.discount_amount > 0 ${tcS} ${dS} ${stS}
        ORDER BY discount_pct DESC
        LIMIT ${lim || 30}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

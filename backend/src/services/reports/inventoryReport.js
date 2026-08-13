@@ -13,7 +13,11 @@ async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 5
   const stockJoin  = wid ? `JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = ${wid}` : '';
   const catFilter  = cid ? `AND p.category_id = ${cid}` : '';
   const searchFilter = search ? `AND p.name ILIKE '%${search.replace(/'/g, "''")}%'` : '';
-  const slowSubquery = `SELECT DISTINCT si.product_id FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE s.created_at >= NOW() - (${d} * INTERVAL '1 day') ${tcS}`;
+  // Mismo criterio de "venta realizada" que el resto de los reportes. Sin él, un producto
+  // cuyas únicas salidas fueron anuladas contaba como rotando y desaparecía del listado de
+  // lento movimiento, que es justo donde hace falta verlo.
+  const stS = `AND s.status = 'pagado'`;
+  const slowSubquery = `SELECT DISTINCT si.product_id FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE s.created_at >= NOW() - (${d} * INTERVAL '1 day') ${tcS} ${stS}`;
 
   const [criticalCount, zeroCount, slowCount, lockedValue] = await Promise.all([
     sequelize.query(`SELECT COUNT(*)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND p.min_stock > 0 AND ${stockField} < p.min_stock ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
@@ -52,7 +56,7 @@ async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 5
        FROM products p ${stockJoin}
        JOIN sale_items si ON si.product_id = p.id
        JOIN sales s ON si.sale_id = s.id
-       WHERE s.created_at >= NOW() - (${d} * INTERVAL '1 day')
+       WHERE s.created_at >= NOW() - (${d} * INTERVAL '1 day') ${stS}
          AND p.is_service = false AND p.is_combo = false ${tcS} ${tcP} ${catFilter} ${searchFilter}
        GROUP BY p.id, p.name, ${stockField}, p.unit
        ORDER BY units_sold DESC LIMIT ${lim} OFFSET ${off}`,
