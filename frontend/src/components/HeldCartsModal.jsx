@@ -116,7 +116,7 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                     {/* En uso por otra caja: en vez de botones se dice quién la tiene.
                                         Un administrador puede soltarla si esa caja quedó colgada. */}
                                     {heldByOther ? (
-                                        <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto justify-end">
+                                        <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto border-t border-black/5 dark:border-white/[0.06] pt-2.5 sm:border-0 sm:pt-0">
                                             <span className="text-[9px] font-black uppercase tracking-widest text-content-subtle flex items-center gap-1.5 whitespace-nowrap">
                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                                                 {c.held_by.name}
@@ -138,12 +138,12 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                         cursor: en un táctil no existe el hover, así que los botones
                                         quedaban invisibles para siempre y la cuenta no se podía
                                         recuperar ni eliminar desde el teléfono. */
-                                    <div className={`flex items-center gap-1.5 transition-all w-full sm:w-auto justify-end ${
+                                    <div className={`flex items-center gap-1.5 transition-all w-full sm:w-auto border-t border-black/5 dark:border-white/[0.06] pt-2.5 sm:border-0 sm:pt-0 ${
                                         isWebOrder ? "" : "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
                                     }`}>
                                         <button
                                             onClick={() => onRemove(c.id)}
-                                            className="w-8 h-8 rounded-lg bg-danger/10 text-danger hover:bg-danger hover:text-white transition-all flex items-center justify-center"
+                                            className="w-8 h-8 shrink-0 rounded-lg bg-danger/10 text-danger hover:bg-danger hover:text-white transition-all flex items-center justify-center"
                                             title={isWebOrder ? "Rechazar pedido" : "Eliminar"}
                                         >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -151,7 +151,7 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                         {isWebOrder ? (
                                             <button
                                                 onClick={() => onAcceptOrder(c.id)}
-                                                className="px-4 h-8 rounded-lg bg-info text-white font-black text-[10px] uppercase tracking-widest hover:brightness-110 shadow-lg shadow-info/20 transition-all flex items-center gap-1.5"
+                                                className="flex-1 sm:flex-none justify-center px-4 h-8 rounded-lg bg-info text-white font-black text-[10px] uppercase tracking-widest hover:brightness-110 shadow-lg shadow-info/20 transition-all flex items-center gap-1.5"
                                                 title="Descuenta el inventario y lo pasa a cuentas en espera"
                                             >
                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
@@ -160,7 +160,7 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                         ) : (
                                             <button
                                                 onClick={() => onTake(c.id)}
-                                                className="px-4 h-8 rounded-lg bg-brand-500 text-brand-900 font-black text-[10px] uppercase tracking-widest hover:bg-brand-600 shadow-lg shadow-brand-500/20 transition-all flex items-center gap-1.5"
+                                                className="flex-1 sm:flex-none justify-center px-4 h-8 rounded-lg bg-brand-500 text-brand-900 font-black text-[10px] uppercase tracking-widest hover:bg-brand-600 shadow-lg shadow-brand-500/20 transition-all flex items-center gap-1.5"
                                             >
                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                                                 Recuperar
