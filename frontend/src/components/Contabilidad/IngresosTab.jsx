@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useIngresos } from "../../hooks/contabilidad/useIngresos";
 import ConfirmModal from "../ui/ConfirmModal";
 import { Button } from "../ui/Button";
@@ -8,6 +9,7 @@ import CustomSelect from "../ui/CustomSelect";
 import Pagination from "../ui/Pagination";
 import RateField from "../ui/RateField";
 import { useApp } from "../../context/AppContext";
+import MovementDetailModal from "./MovementDetailModal";
 
 const STATUS_BADGE = {
     activo:  "badge-success",
@@ -31,6 +33,7 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
         hasFilters, totalPages,
     } = useIngresos({ notify, journals });
 
+    const [detail, setDetail] = useState(null);
     const { baseCurrency } = useApp();
     const baseSym = baseCurrency?.symbol || "Ref.";
 
@@ -139,12 +142,18 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                                         </div>
                                     </td>
                                     <td className="text-right pr-6">
-                                        {can("admin") && inc.status !== 'anulado' && (
-                                            <button onClick={() => setVoidConfirm(inc)}
-                                                className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90" title="Anular">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        <div className="flex items-center justify-end gap-1">
+                                            <button onClick={() => setDetail(inc)}
+                                                className="h-7 px-3 rounded-lg bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black text-[10px] font-black uppercase tracking-wide transition-all">
+                                                Detalle
                                             </button>
-                                        )}
+                                            {can("admin") && inc.status !== 'anulado' && (
+                                                <button onClick={() => setVoidConfirm(inc)}
+                                                    className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90" title="Anular">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -221,6 +230,8 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                     </div>
                 </div>
             </Modal>
+
+            <MovementDetailModal movement={detail} type="ingreso" baseSym={baseSym} onClose={() => setDetail(null)} />
 
             <ConfirmModal
                 isOpen={!!voidConfirm}

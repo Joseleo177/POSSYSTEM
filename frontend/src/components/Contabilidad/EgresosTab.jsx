@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useEgresos } from "../../hooks/contabilidad/useEgresos";
 import ConfirmModal from "../ui/ConfirmModal";
 import { Button } from "../ui/Button";
@@ -8,6 +9,7 @@ import CustomSelect from "../ui/CustomSelect";
 import Pagination from "../ui/Pagination";
 import RateField from "../ui/RateField";
 import { useApp } from "../../context/AppContext";
+import MovementDetailModal from "./MovementDetailModal";
 
 const STATUS_BADGE = {
     activo:  "badge-success",
@@ -32,6 +34,7 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
         hasFilters, totalPages,
     } = useEgresos({ notify, journals });
 
+    const [detail, setDetail] = useState(null);
     const { baseCurrency } = useApp();
     const baseSym = baseCurrency?.symbol || "Ref.";
 
@@ -173,6 +176,10 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                                     </td>
                                     <td className="text-right pr-6">
                                         <div className="flex items-center justify-end gap-1">
+                                            <button onClick={() => setDetail(exp)}
+                                                className="h-7 px-3 rounded-lg bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black text-[10px] font-black uppercase tracking-wide transition-all">
+                                                Detalle
+                                            </button>
                                             {can("admin") && exp.status !== 'anulado' && (
                                                 <button onClick={() => setVoidConfirm(exp)}
                                                     className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90"
@@ -269,6 +276,8 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                     </div>
                 </div>
             </Modal>
+            <MovementDetailModal movement={detail} type="egreso" baseSym={baseSym} onClose={() => setDetail(null)} />
+
 
             <ConfirmModal
                 isOpen={!!voidConfirm}
