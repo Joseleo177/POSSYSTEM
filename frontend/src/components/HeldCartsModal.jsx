@@ -54,7 +54,10 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                             const heldByOther = c.held_by && !c.held_by.is_mine;
 
                             return (
-                                <div key={c.id} className={`px-4 py-3 rounded-2xl border flex items-center gap-4 group transition-all ${
+                                // En móvil las acciones bajan a su propia línea: al lado del texto
+                                // dejaban tan poco ancho que cliente, empleado y total salían todos
+                                // recortados en puntos suspensivos.
+                                <div key={c.id} className={`px-4 py-3 rounded-2xl border flex flex-wrap items-center gap-3 sm:gap-4 group transition-all ${
                                     heldByOther
                                         ? "bg-surface-2 dark:bg-white/[0.02] border-black/5 dark:border-white/5 opacity-60"
                                         : isWebOrder
@@ -98,11 +101,13 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                                 Abrió: {c.employee_name}
                                             </div>
                                         )}
-                                        <div className="text-base font-black tracking-tight text-content dark:text-white truncate tabular-nums leading-tight">
+                                        {/* El importe no se trunca: un total a medias ("Ref. ...") no
+                                            informa nada y es justo el dato que se viene a mirar. */}
+                                        <div className="text-base font-black tracking-tight text-content dark:text-white tabular-nums leading-tight">
                                             {fmtMoney(totalDisplay, sym)}
                                         </div>
                                         {secondaryCurrency && totalSecondary !== null && (
-                                            <div className="text-[10px] font-bold text-content-subtle dark:text-white/50 truncate tabular-nums">
+                                            <div className="text-[10px] font-bold text-content-subtle dark:text-white/50 tabular-nums">
                                                 ≈ {fmtMoney(totalSecondary, secondaryCurrency.symbol)}
                                             </div>
                                         )}
@@ -111,7 +116,7 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                     {/* En uso por otra caja: en vez de botones se dice quién la tiene.
                                         Un administrador puede soltarla si esa caja quedó colgada. */}
                                     {heldByOther ? (
-                                        <div className="flex items-center gap-1.5 shrink-0">
+                                        <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto justify-end">
                                             <span className="text-[9px] font-black uppercase tracking-widest text-content-subtle flex items-center gap-1.5 whitespace-nowrap">
                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                                                 {c.held_by.name}
@@ -128,8 +133,14 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                         </div>
                                     ) : (
                                     /* Los pedidos web muestran sus acciones siempre: llegan solos y
-                                        hay que verlos, no descubrirlos pasando el cursor. */
-                                    <div className={`flex items-center gap-1.5 transition-all ${isWebOrder ? "" : "opacity-0 group-hover:opacity-100"}`}>
+                                        hay que verlos, no descubrirlos pasando el cursor.
+                                        El resto se revelan al pasar el cursor, pero SOLO donde hay
+                                        cursor: en un táctil no existe el hover, así que los botones
+                                        quedaban invisibles para siempre y la cuenta no se podía
+                                        recuperar ni eliminar desde el teléfono. */
+                                    <div className={`flex items-center gap-1.5 transition-all w-full sm:w-auto justify-end ${
+                                        isWebOrder ? "" : "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+                                    }`}>
                                         <button
                                             onClick={() => onRemove(c.id)}
                                             className="w-8 h-8 rounded-lg bg-danger/10 text-danger hover:bg-danger hover:text-white transition-all flex items-center justify-center"
