@@ -7,6 +7,11 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
   const dS = dateClause(df, dt, 's');
   const lim = parseInt(limit);
 
+  // Mismo criterio de "venta realizada" que salesReport y marginsReport: sin esto
+  // las anuladas contaban como ventas y productos que nunca se vendieron aparecían
+  // en el top (y desaparecían del listado de estancados, que es el efecto inverso).
+  const stS = `AND s.status = 'pagado'`;
+
   const [topByRevenue, topByQty, slowMovers, stockValue] = await Promise.all([
     sequelize.query(
       `SELECT si.product_id,
@@ -15,11 +20,11 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
               COUNT(DISTINCT si.sale_id)::int AS sale_count,
               COALESCE(SUM(si.quantity), 0)::float AS total_qty,
               COALESCE(SUM(si.subtotal), 0)::float AS total_revenue,
-              COALESCE(AVG(si.unit_price), 0)::float AS avg_price
+              COALESCE(AVG(si.price), 0)::float AS avg_price
        FROM sale_items si
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
-       WHERE TRUE ${tcS} ${dS}
+       WHERE TRUE ${tcS} ${dS} ${stS}
        GROUP BY si.product_id, si.name, p.category_id
        ORDER BY total_revenue DESC
        LIMIT ${lim}`,
@@ -31,7 +36,7 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
               COALESCE(SUM(si.subtotal), 0)::float AS total_revenue
        FROM sale_items si
        JOIN sales s ON si.sale_id = s.id
-       WHERE TRUE ${tcS} ${dS}
+       WHERE TRUE ${tcS} ${dS} ${stS}
        GROUP BY si.product_id, si.name
        ORDER BY total_qty DESC
        LIMIT ${lim}`,
@@ -48,7 +53,7 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
            SELECT DISTINCT si.product_id
            FROM sale_items si
            JOIN sales s ON si.sale_id = s.id
-           WHERE TRUE ${tcS} ${dS}
+           WHERE TRUE ${tcS} ${dS} ${stS}
          )
        ORDER BY p.name ASC
        LIMIT 20`,
