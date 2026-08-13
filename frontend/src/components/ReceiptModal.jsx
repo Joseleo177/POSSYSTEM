@@ -299,26 +299,35 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
 export default function ReceiptModal({ open, onClose, sale }) {
     const { storeName, companyInfo, baseCurrency, activeCurrencies, printerWidth } = useApp();
 
-    // Los listados (getAllSales) no traen los cobros: solo getOneSale los devuelve. Abriendo
-    // el ticket desde Contabilidad, la forma de pago salía en "—" porque el objeto venía sin
-    // Payments. Se completan aquí para que el comprobante sea el mismo se abra desde donde se
-    // abra. Recién cobrado en caja ya llegan con la venta, así que no se pide nada.
+    // El ticket se abre desde tres sitios y cada uno entrega algo distinto:
+    //   · caja        → la venta recién cobrada, con sus pagos ya compuestos
+    //   · Facturas    → la fila de getAllSales: tiene ítems, pero no los cobros
+    //   · Pagos       → un registro de PAGO, cuyo id es el del cobro y no trae ni total ni
+    //                   ítems de la venta (ahí el comprobante salía en Bs.0,00 y sin productos)
+    //
+    // Por eso el id de la venta se toma de sale_id cuando existe, y se completa con getOneSale
+    // —la única consulta que devuelve ítems y cobros juntos— salvo que ya venga todo.
+    const saleId = sale?.sale_id ?? sale?.id ?? null;
+    const yaCompleto = (sale?.Payments || sale?.payments || []).length > 0
+        && Array.isArray(sale?.items) && sale.items.length > 0;
+
     const [fetched, setFetched] = useState(null);
     useEffect(() => {
-        if (!open || !sale?.id) { setFetched(null); return; }
-        const yaTraePagos = (sale.Payments || sale.payments || []).length > 0;
-        if (yaTraePagos) { setFetched(null); return; }
+        if (!open || !saleId || yaCompleto) { setFetched(null); return; }
         let alive = true;
-        api.sales.getOne(sale.id)
+        api.sales.getOne(saleId)
             .then(r => alive && setFetched(r.data))
-            .catch(() => { /* el ticket se muestra igual, solo sin el detalle de cobros */ });
+            .catch(() => { /* se muestra lo que haya: mejor un ticket parcial que ninguno */ });
         return () => { alive = false; };
-    }, [open, sale?.id]); // eslint-disable-line
+    }, [open, saleId, yaCompleto]);
 
     if (!open || !sale) return null;
 
-    // El objeto del listado manda para lo ya cargado; lo pedido solo aporta los cobros.
-    const s = normalizeSale(fetched ? { ...sale, Payments: fetched.Payments } : sale);
+    // Lo pedido manda porque es la venta completa; encima van los datos que solo existen en el
+    // objeto del recibo (moneda y serie con que se cobró en caja).
+    const s = normalizeSale(fetched
+        ? { ...fetched, currency: sale.currency, exchangeRate: sale.exchangeRate, serie: sale.serie }
+        : sale);
 
     // Siempre mostrar en la moneda no-base (VES). Si no hay, fallback a base.
     const displayCurrency = activeCurrencies?.find(c => !c.is_base) || baseCurrency;
