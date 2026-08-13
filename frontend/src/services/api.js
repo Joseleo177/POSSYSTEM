@@ -315,6 +315,7 @@ export const api = {
     upsertCategory: (body)      => request("/incomes/categories",    { method: "POST", body: JSON.stringify(body) }),
     create:         (body)      => request("/incomes",               { method: "POST", body: JSON.stringify(body) }),
     void:           (id)        => request(`/incomes/${id}`,         { method: "DELETE" }),
+    delete:         (id)        => request(`/incomes/${id}/permanent`, { method: "DELETE" }),
   },
 
   // ── Egresos ──────────────────────────────────────────────────

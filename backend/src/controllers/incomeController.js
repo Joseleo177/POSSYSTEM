@@ -121,3 +121,16 @@ exports.voidIncome = async (req, res, next) => {
     res.json({ ok: true, message: 'Ingreso anulado' });
   } catch (err) { next(err); }
 };
+
+// Borrado definitivo, solo sobre un ingreso ya anulado. Mismo criterio que los egresos:
+// anular deja rastro y no mueve el saldo del diario; eliminar sí lo borra, así que exige
+// haber pasado antes por la anulación y no puede hacerse de un solo clic sobre un activo.
+exports.deleteIncome = async (req, res, next) => {
+  try {
+    const income = await Income.findByPk(req.params.id);
+    if (!income) return res.status(404).json({ ok: false, message: 'Ingreso no encontrado' });
+    if (income.status !== 'anulado') return res.status(400).json({ ok: false, message: 'Solo se pueden eliminar ingresos anulados' });
+    await income.destroy();
+    res.json({ ok: true, message: 'Ingreso eliminado permanentemente' });
+  } catch (err) { next(err); }
+};

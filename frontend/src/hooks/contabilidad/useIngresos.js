@@ -20,6 +20,7 @@ export function useIngresos({ notify, journals }) {
     const [activeCats, setActiveCats] = useState([]);
     const [showFilterDrop, setShowFilterDrop] = useState(false);
     const [voidConfirm, setVoidConfirm] = useState(null);
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
 
     const [showCreate, setShowCreate] = useState(false);
     const today = () => todayISO();
@@ -82,6 +83,11 @@ export function useIngresos({ notify, journals }) {
         catch (e) { notify(e.message, "err"); }
     };
 
+    const handleDelete = async (id) => {
+        try { await api.incomes.delete(id); notify("Ingreso eliminado"); loadIncomes(); }
+        catch (e) { notify(e.message, "err"); }
+    };
+
     const handleCreate = async () => {
         if (!form.description || !form.amount || !form.category_id)
             return notify("Descripción, monto y categoría son obligatorios", "err");
@@ -120,11 +126,12 @@ export function useIngresos({ notify, journals }) {
         activeFilters, activeCats,
         showFilterDrop, setShowFilterDrop,
         voidConfirm, setVoidConfirm,
+        deleteConfirm, setDeleteConfirm,
         showCreate, setShowCreate,
         form, setForm, saving,
         selectedJournal, currentRate, currentSymbol, configuredRate, baseEquivalent,
         toggleFilter, toggleCat, clearFilters,
-        handleVoid, handleCreate,
+        handleVoid, handleDelete, handleCreate,
         hasFilters, totalPages,
     };
 }

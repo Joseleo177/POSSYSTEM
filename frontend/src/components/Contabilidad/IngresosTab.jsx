@@ -25,11 +25,12 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
         activeFilters, activeCats,
         showFilterDrop, setShowFilterDrop,
         voidConfirm, setVoidConfirm,
+        deleteConfirm, setDeleteConfirm,
         showCreate, setShowCreate,
         form, setForm, saving,
         currentSymbol, currentRate, configuredRate, baseEquivalent, selectedJournal,
         toggleFilter, toggleCat, clearFilters,
-        handleVoid, handleCreate,
+        handleVoid, handleDelete, handleCreate,
         hasFilters, totalPages,
     } = useIngresos({ notify, journals });
 
@@ -153,6 +154,13 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                 </button>
                                             )}
+                                            {can("admin") && inc.status === 'anulado' && (
+                                                <button onClick={() => setDeleteConfirm(inc)}
+                                                    className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90"
+                                                    title="Eliminar permanentemente">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -241,6 +249,16 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                 onCancel={() => setVoidConfirm(null)}
                 type="danger"
                 confirmText="Sí, anular ingreso"
+            />
+
+            <ConfirmModal
+                isOpen={!!deleteConfirm}
+                title="¿Eliminar ingreso?"
+                message={`Esto eliminará permanentemente el ingreso "${deleteConfirm?.description}". Esta acción no se puede deshacer.`}
+                onConfirm={async () => { await handleDelete(deleteConfirm.id); setDeleteConfirm(null); }}
+                onCancel={() => setDeleteConfirm(null)}
+                type="danger"
+                confirmText="Sí, eliminar"
             />
         </div>
     );
