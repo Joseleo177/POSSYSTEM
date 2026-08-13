@@ -1,4 +1,27 @@
+import { useLayoutEffect, useRef, useState } from "react";
+
 export default function Page({ module = "Módulo", title, subheader, actions, children }) {
+    const barRef = useRef(null);
+    const [desvanecer, setDesvanecer] = useState(false);
+
+    // El efecto se recalcula en cada render a propósito: los botones de la barra aparecen
+    // y desaparecen según el contexto (p. ej. al seleccionar productos), y eso cambia el
+    // scrollWidth sin cambiar el tamaño del contenedor, que es lo único que ve el observer.
+    useLayoutEffect(() => {
+        const el = barRef.current;
+        if (!el) return;
+        const revisar = () => {
+            const hayMas   = el.scrollWidth - el.clientWidth > 1;
+            const alFinal  = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
+            setDesvanecer(prev => (prev === (hayMas && !alFinal) ? prev : hayMas && !alFinal));
+        };
+        revisar();
+        el.addEventListener("scroll", revisar, { passive: true });
+        const ro = new ResizeObserver(revisar);
+        ro.observe(el);
+        return () => { el.removeEventListener("scroll", revisar); ro.disconnect(); };
+    });
+
     return (
         <div className="h-full overflow-hidden flex flex-col">
 
@@ -17,14 +40,18 @@ export default function Page({ module = "Módulo", title, subheader, actions, ch
                     aparecía cortado sin ninguna pista de que hubiera más: se leía como un fallo
                     de maquetación. El desvanecido del borde derecho lo delata. Se hace con
                     mask-image y no con un degradado de color para no tener que acertarle al
-                    fondo del header en claro y en oscuro. */}
+                    fondo del header en claro y en oscuro.
+
+                    Solo se aplica cuando de verdad queda contenido a la derecha. Antes iba fijo,
+                    así que el último botón se veía difuminado incluso sin nada que revelar. */}
                 {actions && (
                     <div
+                        ref={barRef}
                         className="flex items-center gap-1.5 sm:gap-2 shrink min-w-0 overflow-x-auto no-scrollbar py-0.5 ml-auto"
-                        style={{
+                        style={desvanecer ? {
                             WebkitMaskImage: "linear-gradient(to right, #000 calc(100% - 20px), transparent)",
                             maskImage: "linear-gradient(to right, #000 calc(100% - 20px), transparent)",
-                        }}
+                        } : undefined}
                     >
                         {actions}
                     </div>
