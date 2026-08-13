@@ -16,37 +16,43 @@ export default function StoreHeader({
 }) {
     return (
         <header className="bg-surface dark:bg-surface-dark-2 border-b border-border dark:border-white/5 sticky top-0 z-20">
-            <div className="max-w-5xl mx-auto px-4 py-4 sm:py-5 flex items-center gap-3 sm:gap-4">
-                {store?.logo_url ? (
-                    <img
-                        src={resolveImageUrl(store.logo_url)}
-                        alt={store.name}
-                        onError={imgRetryOnError}
-                        className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover shrink-0 border border-border dark:border-white/10 shadow-sm"
-                    />
-                ) : (
-                    // Sin logo, la inicial ocupa su lugar: deja la cabecera equilibrada en vez
-                    // de que el nombre quede solo contra el borde.
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl shrink-0 bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-2xl font-black text-brand-500">
-                        {(store?.name || "C").charAt(0)}
-                    </div>
-                )}
-
-                {/* Sin shrink-0: este bloque es el que debe ceder ancho cuando la fila se queda
-                    corta. Con shrink-0 anulaba al min-w-0, el truncate del título no llegaba a
-                    activarse nunca y la fila desbordaba. */}
-                <div className="min-w-0 flex-1">
-                    <h1 className="text-xl sm:text-2xl font-black text-content dark:text-white tracking-tight truncate leading-tight">
-                        {store?.name || "Catálogo"}
-                    </h1>
-                    {store?.slogan && (
-                        <p className="text-[12px] sm:text-[13px] font-medium text-content-muted truncate mt-0.5">
-                            {store.slogan}
-                        </p>
+            {/* En móvil la identidad va en su propia fila. Compartiéndola con los tres botones
+                quedaban ~130px para el nombre y se cortaba en "MI TIEND…", que es justo lo que
+                no puede pasar en la pantalla que identifica a la tienda. */}
+            <div className="max-w-5xl mx-auto px-4 pt-4 pb-3 sm:py-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                    {store?.logo_url ? (
+                        <img
+                            src={resolveImageUrl(store.logo_url)}
+                            alt={store.name}
+                            onError={imgRetryOnError}
+                            // object-contain y no cover: casi todos los logos de tienda son una
+                            // marca con texto, y recortarla al cuadrado se come parte del nombre.
+                            className="w-16 h-16 rounded-2xl object-contain bg-white shrink-0 border border-border dark:border-white/10 shadow-sm p-1"
+                        />
+                    ) : (
+                        // Sin logo, la inicial ocupa su lugar: deja la cabecera equilibrada en
+                        // vez de que el nombre quede solo contra el borde.
+                        <div className="w-16 h-16 rounded-2xl shrink-0 bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-2xl font-black text-brand-500">
+                            {(store?.name || "C").charAt(0)}
+                        </div>
                     )}
+
+                    <div className="min-w-0 flex-1">
+                        {/* line-clamp en vez de truncate: un nombre largo baja a una segunda
+                            línea en lugar de cortarse a la mitad. */}
+                        <h1 className="text-xl sm:text-2xl font-black text-content dark:text-white tracking-tight leading-tight line-clamp-2">
+                            {store?.name || "Catálogo"}
+                        </h1>
+                        {store?.slogan && (
+                            <p className="text-[12px] sm:text-[13px] font-medium text-content-muted truncate mt-0.5">
+                                {store.slogan}
+                            </p>
+                        )}
+                    </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
                     {identity && (
                         <>
                             <button
@@ -61,7 +67,7 @@ export default function StoreHeader({
                                         </span>
                                     )}
                                 </span>
-                                <span className="hidden sm:inline text-[11px] font-bold">
+                                <span className="text-[11px] font-bold">
                                     Mis pedidos
                                 </span>
                             </button>
@@ -74,7 +80,7 @@ export default function StoreHeader({
                                 <div className="w-7 h-7 rounded-xl bg-brand-500/15 text-brand-500 flex items-center justify-center text-xs font-black uppercase">
                                     {(identity.name || identity.document || "U").charAt(0)}
                                 </div>
-                                <span className="hidden md:inline text-[11px] font-bold max-w-[100px] truncate">
+                                <span className="text-[11px] font-bold max-w-[100px] truncate">
                                     {identity.name ? identity.name.split(" ")[0] : identity.document}
                                 </span>
                             </button>
