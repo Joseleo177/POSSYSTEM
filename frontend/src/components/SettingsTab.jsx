@@ -30,7 +30,7 @@ const FIELDS_EMPRESA = [
 const FIELDS_FACTURA = [
     ["tax_name", "Nombre del impuesto", "text", "Ej: IVA"],
     ["tax_rate", "Tasa de impuesto (%)", "number", "16"],
-    ["receipt_footer", "Mensaje pie de factura", "text", "¡Gracias por su preferencia!"],
+    ["receipt_footer", "Mensaje pie de factura", "text", "¡Gracias por su compra!"],
 ];
 
 export default function SettingsTab({ notify }) {
@@ -130,16 +130,16 @@ export default function SettingsTab({ notify }) {
     };
 
     // ── Backup ─────────────────────────────────────────────────
-    const [backups, setBackups]           = useState([]);
+    const [backups, setBackups] = useState([]);
     const [backupLoading, setBackupLoading] = useState(false);
-    const [triggering, setTriggering]     = useState(false);
+    const [triggering, setTriggering] = useState(false);
 
     const loadBackups = useCallback(async () => {
         setBackupLoading(true);
         try {
             const r = await api.backup.list();
             setBackups(r.data || []);
-        } catch {} finally { setBackupLoading(false); }
+        } catch { } finally { setBackupLoading(false); }
     }, []);
 
     useEffect(() => { if (section === "respaldo") loadBackups(); }, [section]);
@@ -179,8 +179,8 @@ export default function SettingsTab({ notify }) {
                     key={key}
                     onClick={() => setSection(key)}
                     className={`text-[11px] font-black uppercase tracking-wide border-b-2 px-3 py-2.5 transition-all ${section === key
-                            ? "border-brand-500 text-brand-500"
-                            : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+                        ? "border-brand-500 text-brand-500"
+                        : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
                         }`}
                 >
                     {label}
@@ -389,11 +389,10 @@ export default function SettingsTab({ notify }) {
                                             key={val}
                                             type="button"
                                             onClick={() => setSettings(p => ({ ...p, printer_width: val }))}
-                                            className={`flex-1 py-2.5 px-3 rounded-xl border text-left transition-all ${
-                                                (settings.printer_width || "80") === val
+                                            className={`flex-1 py-2.5 px-3 rounded-xl border text-left transition-all ${(settings.printer_width || "80") === val
                                                     ? "border-brand-500 bg-brand-500/10 text-brand-500"
                                                     : "border-border/30 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-500/50"
-                                            }`}
+                                                }`}
                                         >
                                             <div className="text-[12px] font-black">{size}</div>
                                             <div className="text-[10px] font-semibold opacity-70">{desc}</div>
@@ -408,11 +407,10 @@ export default function SettingsTab({ notify }) {
                                 <button
                                     type="button"
                                     onClick={() => setSettings(p => ({ ...p, receipt_show_header: (p.receipt_show_header || "true") === "true" ? "false" : "true" }))}
-                                    className={`w-full py-2.5 px-3 rounded-xl border text-left transition-all flex items-center justify-between ${
-                                        (settings.receipt_show_header || "true") === "true"
+                                    className={`w-full py-2.5 px-3 rounded-xl border text-left transition-all flex items-center justify-between ${(settings.receipt_show_header || "true") === "true"
                                             ? "border-brand-500 bg-brand-500/10"
                                             : "border-border/30 dark:border-white/10"
-                                    }`}
+                                        }`}
                                 >
                                     <div>
                                         <div className={`text-[12px] font-black ${(settings.receipt_show_header || "true") === "true" ? "text-brand-500" : "text-content-subtle dark:text-white/40"}`}>

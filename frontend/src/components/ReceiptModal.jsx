@@ -325,9 +325,14 @@ export default function ReceiptModal({ open, onClose, sale }) {
 
     // Lo pedido manda porque es la venta completa; encima van los datos que solo existen en el
     // objeto del recibo (moneda y serie con que se cobró en caja).
-    const s = normalizeSale(fetched
+    //
+    // Esta variable es la fuente única del comprobante: la pantalla, el PDF y la impresión
+    // térmica parten de aquí. Antes la impresión recibía la prop `sale` sin completar, así que
+    // el papel salía con "FORMA DE PAGO —" mientras la pantalla mostraba el diario correcto.
+    const effectiveSale = fetched
         ? { ...fetched, currency: sale.currency, exchangeRate: sale.exchangeRate, serie: sale.serie }
-        : sale);
+        : sale;
+    const s = normalizeSale(effectiveSale);
 
     // Siempre mostrar en la moneda no-base (VES). Si no hay, fallback a base.
     const displayCurrency = activeCurrencies?.find(c => !c.is_base) || baseCurrency;
@@ -494,7 +499,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     PDF
                 </button>
                 <button
-                    onClick={() => printReceipt(sale, companyInfo, displayCurrency, printerWidth)}
+                    onClick={() => printReceipt(effectiveSale, companyInfo, displayCurrency, printerWidth)}
                     className="btn-md btn-primary w-full"
                     title="Ticket para la impresora térmica"
                     style={{ flex: 1.8 }}

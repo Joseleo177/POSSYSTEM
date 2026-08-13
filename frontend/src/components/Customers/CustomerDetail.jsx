@@ -300,7 +300,16 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                         <p className={`${LABEL} mt-0.5 normal-case`}>{new Date(sale.created_at).toLocaleDateString("es-VE")}</p>
                                     </div>
                                     <div className="text-right shrink-0">
-                                        <p className="text-[13px] font-black text-success tabular-nums">{fmtSale(sale, sale.total)}</p>
+                                        {/* En moneda base, no en la de la venta: sale.currency_id
+                                            solo dice cómo estaba puesta la pantalla al crearla, así
+                                            que la lista mezclaba Bs. y Ref. sin poder compararse ni
+                                            sumarse de un vistazo. Debajo, por dónde entró el dinero. */}
+                                        <p className="text-[13px] font-black text-success tabular-nums">{fmtPrice(sale.total)}</p>
+                                        {sale.paid_journals && (
+                                            <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 truncate max-w-[140px]">
+                                                {sale.paid_journals}
+                                            </p>
+                                        )}
                                     </div>
                                     <span className="text-[10px] font-bold text-content-subtle dark:text-white/20 group-hover:text-brand-500 transition-colors uppercase tracking-widest shrink-0">
                                         Ver →

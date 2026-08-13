@@ -167,6 +167,14 @@ async function getCustomerPurchases(id, { limit = 50, offset = 0 }) {
       include: [
         'id', 'total', 'status', 'currency_id', 'exchange_rate', 'created_at',
         [Sequelize.literal(`(SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = "Sale"."id")`), 'amount_paid'],
+        // Por dónde entró el dinero. sale.currency_id solo dice en qué moneda estaba puesta la
+        // pantalla al crear la venta, no cómo se cobró: una venta hecha en Ref. y cobrada por
+        // CAJA BS aparecía como si hubiera entrado en divisas.
+        [Sequelize.literal(`(
+          SELECT string_agg(DISTINCT pj.name, ', ')
+            FROM payments p JOIN payment_journals pj ON pj.id = p.payment_journal_id
+           WHERE p.sale_id = "Sale"."id"
+        )`), 'paid_journals'],
       ]
     },
     include: [
