@@ -39,7 +39,9 @@ async function paymentJournalsReport({ date_from, date_to, company_id }) {
             COALESCE(SUM(p.amount * COALESCE(p.exchange_rate, 1)), 0)::float AS amount_journal,
             COALESCE(SUM(p.amount), 0)::float                      AS amount_base
        FROM payments p
-       LEFT JOIN sales s ON s.id = p.sale_id
+      -- Aquí no va filtro por estado de la venta, a diferencia del resto de los reportes:
+      -- esto mide plata que entró a cada diario, no ventas. Al anular se registra un pago
+      -- inverso, así que el neto ya queda bien. (El JOIN a sales que había no se usaba.)
       WHERE p.payment_journal_id IS NOT NULL
         ${scoped ? "AND p.company_id = :cid" : ""}
         ${dateClause}

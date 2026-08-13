@@ -6,7 +6,7 @@ import CustomSelect from "../../components/ui/CustomSelect";
 import { fmtDate } from "../../helpers";
 import {
  fmt$,
- SectionHeader, Loading, usePagination, Pagination,
+ SectionHeader, Loading, usePagination, Pagination, DateRangePicker,
 } from "./reportes.utils";
 
 export default function CashSessionsReport() {
@@ -103,14 +103,10 @@ export default function CashSessionsReport() {
  ]}
  />
 
- {/* Rango de fechas */}
- <div className="flex items-center gap-1.5">
- <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
- className="h-10 px-3 bg-surface-2 dark:bg-white/[0.03] border border-border/40 dark:border-white/5 rounded-xl text-[11px] font-bold focus:border-brand-500/50 outline-none transition-all" />
- <span className="text-[10px] font-black text-content-subtle">→</span>
- <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
- className="h-10 px-3 bg-surface-2 dark:bg-white/[0.03] border border-border/40 dark:border-white/5 rounded-xl text-[11px] font-bold focus:border-brand-500/50 outline-none transition-all" />
- </div>
+ {/* Rango de fechas: el mismo selector que el resto de los reportes. Antes eran
+     dos input[type=date] sueltos, que renderizan el control nativo del navegador
+     y no se parecen a las demás pestañas. */}
+ <DateRangePicker from={dateFrom} to={dateTo} onChange={(f, t) => { setDateFrom(f); setDateTo(t); }} />
 
  {/* Limpiar filtros */}
  {hasFilters && (
