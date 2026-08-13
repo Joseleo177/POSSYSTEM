@@ -34,10 +34,14 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
         saleDetail, setSaleDetail,
         returnSale, setReturnSale,
         cancelConfirm, setCancelConfirm,
-        toggleFilter, clearFilters,
+        toggleFilter, toggleSerie, clearFilters,
         cancelSale, loadSales,
         hasFilters, totalPages,
     } = useTransacciones({ notify });
+
+    // Las notas de crédito viven en su propia pestaña: filtrar facturas por una serie de NC
+    // no devolvería nada y solo ensuciaría el desplegable.
+    const invoiceSeries = (allSeries || []).filter(s => s.type !== "nc");
 
     const [payModal, setPayModal] = useState(null);
     const [editModal, setEditModal] = useState(null);
@@ -91,6 +95,20 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                     ))}
                                 </div>
                             </div>
+                            {invoiceSeries.length > 1 && (
+                                <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Serie</div>
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                        {invoiceSeries.map(s => (
+                                            <button key={s.id} onClick={() => toggleSerie(s.id)}
+                                                className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all truncate ${activeSeries.includes(s.id) ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}
+                                                title={s.name}>
+                                                {s.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Rango de Fecha</div>
                                 <DateRangePicker from={histDateFrom} to={histDateTo} setFrom={setHistDateFrom} setTo={setHistDateTo} />
