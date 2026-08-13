@@ -55,7 +55,10 @@ export default function ClientesPage() {
                 <div className="flex-1 min-h-0 flex flex-col">
                     {/* Filtros rápidos: h-10 pattern */}
                     <div className="shrink-0 px-6 py-4 border-b border-border/10 dark:border-white/5 bg-surface-3/30 dark:bg-white/[0.01] flex flex-wrap items-center gap-2">
-                        <div className="relative flex-1 min-w-[220px] max-w-md group">
+                        {/* min-w-0 en móvil: con un mínimo de 220px el input no podía encogerse y
+                            empujaba el botón de filtros a una segunda línea, gastando alto de
+                            pantalla que ahí es lo más escaso. Desde sm recupera su ancho cómodo. */}
+                        <div className="relative flex-1 min-w-0 sm:min-w-[220px] max-w-md group">
                             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle opacity-40 group-focus-within:text-brand-500 group-focus-within:opacity-100 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
@@ -68,7 +71,7 @@ export default function ClientesPage() {
                         </div>
 
                         {/* Dropdown de filtros */}
-                        <div className="relative">
+                        <div className="relative shrink-0">
                             <button
                                 onClick={() => setShowFilterDrop(p => !p)}
                                 className={[
