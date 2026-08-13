@@ -17,7 +17,7 @@ function KeyHint({ n }) {
 }
 
 export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay }) {
-    const { notify, activeCurrencies } = useApp();
+    const { notify, activeCurrencies, activeJournals } = useApp();
     const [showReceiptModal, setShowReceiptModal] = useState(false);
     const [showPayModal, setShowPayModal] = useState(false);
     const [creditLoading, setCreditLoading] = useState(false);
@@ -89,6 +89,14 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // el saldo viene en el propio recibo, y recién si no hay ninguno se asume el total.
     const currentBalance = saleBalance?.balance ?? parseFloat(receipt?.balance ?? receipt?.total ?? 0);
     const currentStatus  = saleBalance?.status  ?? receipt?.status ?? "pendiente";
+
+    // Diario por el que entró el cobro, para imprimirlo en el ticket. El backend devuelve el
+    // pago con su payment_journal_id pero no el nombre, así que se resuelve contra los diarios
+    // activos. Si la venta quedó a crédito no hay ninguno y el ticket lo dirá.
+    const paidJournalId = saleBalance?.payment?.payment_journal_id ?? receipt?.payment_journal_id ?? null;
+    const receiptJournalName = paidJournalId
+        ? ((activeJournals || []).find(j => j.id === paidJournalId)?.name || receipt?.journal_name || null)
+        : (receipt?.journal_name || null);
     // Venta creada pero sin desenlace: ni cobrada ni facturada a crédito.
     const isUnresolved   = ["borrador", "espera"].includes(currentStatus);
 
@@ -296,7 +304,22 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                 </div>
             </div>
 
-            <ReceiptModal open={showReceiptModal} onClose={() => setShowReceiptModal(false)} sale={receipt} />
+            {/* El recibo se arma con el estado REAL, no con el de `receipt`: createSale deja la
+                venta en 'borrador' y el cobro la pasa a 'pagado' después, así que el objeto
+                original se queda desactualizado. Esta pantalla ya calculaba el estado bueno
+                para su propio distintivo (currentStatus); el ticket usaba el viejo y salía
+                impreso como "Crédito · PENDIENTE DE PAGO" una venta recién cobrada. */}
+            <ReceiptModal
+                open={showReceiptModal}
+                onClose={() => setShowReceiptModal(false)}
+                sale={{
+                    ...receipt,
+                    status: currentStatus,
+                    amount_paid: paidBase,
+                    balance: currentBalance,
+                    journal_name: receiptJournalName,
+                }}
+            />
 
             {showPayModal && (
                 <PaymentFormModal

@@ -146,7 +146,9 @@ export default function CobroPage() {
             currentCurrency={currentCurrency}
             onNext={() => { setReceipt(null); setSaleBalance(null); products.reload(); }}
             onPay={(res) => {
-                setSaleBalance({ amount_paid: res.amount_paid, balance: res.balance, status: res.sale_status });
+                // El pago viaja entero: el ticket necesita saber por qué diario entró el dinero,
+                // y eso solo está en res.payment.
+                setSaleBalance({ amount_paid: res.amount_paid, balance: res.balance, status: res.sale_status, payment: res.payment });
                 if (res.invoice_number) setReceipt(prev => ({ ...prev, invoice_number: res.invoice_number }));
             }}
         />
