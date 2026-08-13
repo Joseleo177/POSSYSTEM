@@ -26,7 +26,27 @@ export function CartProvider({ children }) {
   const [quotationId, setQuotationId] = useState(null);
 
   // ── Moneda seleccionada ────────────────────────────────────
-  const [selectedCurrency, setSelectedCurrency] = useState(null);
+  // Es una preferencia de quien atiende la caja —en qué moneda quiere ver los precios—, no un
+  // dato de la venta, así que sobrevive al cierre del carrito y a recargar la página. Antes
+  // clearCart la reseteaba y el cajero tenía que volver a poner bolívares en cada venta.
+  //
+  // Se guarda el id y no el objeto: al recargar, las monedas vienen del servidor con sus tasas
+  // al día, y un objeto guardado arrastraría una tasa vieja.
+  const CURRENCY_KEY = "pos_display_currency";
+  const [selectedCurrencyId, setSelectedCurrencyId] = useState(() => {
+    const saved = localStorage.getItem(CURRENCY_KEY);
+    return saved ? parseInt(saved, 10) : null;
+  });
+  // Si la moneda guardada dejó de estar activa, cae sola a la base en vez de quedar colgada.
+  const selectedCurrency = selectedCurrencyId
+    ? (activeCurrencies || []).find(c => c.id === selectedCurrencyId) || null
+    : null;
+  const setSelectedCurrency = useCallback((cur) => {
+    const id = cur?.id ?? null;
+    setSelectedCurrencyId(id);
+    if (id) localStorage.setItem(CURRENCY_KEY, String(id));
+    else localStorage.removeItem(CURRENCY_KEY);
+  }, []);
   const currentCurrency = selectedCurrency || baseCurrency;
   const exchangeRate = currentCurrency?.exchange_rate
     ? parseFloat(currentCurrency.exchange_rate) : 1;
@@ -236,7 +256,8 @@ export function CartProvider({ children }) {
   const clearCart = useCallback(() => {
     setCart([]);
     setSelectedCustomer(null);
-    setSelectedCurrency(null);
+    // La moneda NO se resetea: es la preferencia de visualización del cajero y se mantiene
+    // entre ventas. El cliente y la serie sí, porque pertenecen a la venta que se cerró.
     setSelectedSerieId(mySeries.length > 0 ? mySeries[0].id : null);
     setDiscountEnabled(false);
     setDiscountPct("");
