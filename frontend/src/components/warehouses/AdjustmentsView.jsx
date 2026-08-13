@@ -260,16 +260,19 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
         <div className="flex-1 flex flex-col min-h-0 bg-white/[0.01]">
 
             {/* ── Barra superior ── */}
-            <div className="shrink-0 px-4 h-10 border-b border-warning/15 bg-warning/[0.03] flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+            {/* min-h en vez de alto fijo, y wrap: con h-10 y sin flex-wrap los textos no cabían
+                en móvil, se comprimían por debajo de su contenido y terminaban encimados unos
+                sobre otros. Ahora bajan de línea en vez de pisarse. */}
+            <div className="shrink-0 px-4 py-2 min-h-10 border-b border-warning/15 bg-warning/[0.03] flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest min-w-0">
                         <svg className="w-3.5 h-3.5 text-warning shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                        <span className="text-warning/70">Almacén:</span>
+                        <span className="text-warning/70 shrink-0">Almacén:</span>
                         <span className="text-content dark:text-white truncate">{selectedWarehouse.name}</span>
                     </div>
                     {session && (
-                        <span className="flex items-center gap-1.5 text-[10px] font-black text-success uppercase tracking-widest">
-                            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                        <span className="flex items-center gap-1.5 text-[10px] font-black text-success uppercase tracking-widest whitespace-nowrap shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />
                             Sesión abierta · {session.line_count || (session.lines?.length || 0)} mov.
                         </span>
                     )}
@@ -279,7 +282,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                         <button
                             onClick={handleCloseSession}
                             disabled={closingSession}
-                            className="h-6 px-3 rounded-md bg-success/10 text-success border border-success/20 text-[10px] font-black uppercase tracking-widest hover:bg-success hover:text-black transition-all flex items-center gap-1.5 disabled:opacity-50"
+                            className="h-6 px-3 rounded-md bg-success/10 text-success border border-success/20 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-success hover:text-black transition-all flex items-center gap-1.5 disabled:opacity-50"
                         >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
                             {closingSession ? "Cerrando..." : "Cerrar Sesión"}
@@ -287,7 +290,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                     )}
                     {onChangeWarehouse && (
                         <button onClick={onChangeWarehouse}
-                            className="h-6 px-2.5 rounded-md text-warning hover:bg-warning hover:text-black text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5">
+                            className="h-6 px-2.5 rounded-md text-warning hover:bg-warning hover:text-black text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all flex items-center gap-1.5">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m-4 6H4m0 0l4 4m-4-4l4-4" /></svg>
                             Cambiar
                         </button>

@@ -15,10 +15,22 @@ const SESSION_INCLUDE = [
   { model: StockSessionLine,  as: 'lines',               required: false, order: [['created_at', 'ASC']] },
 ];
 
-async function getActiveSession(warehouseId, req) {
-  const companyId = req.employee?.company_id ?? null;
+// La sesión de ajustes es de QUIEN la abre, igual que la de caja. Antes el filtro solo miraba
+// almacén y empresa: si un usuario tenía una sesión abierta, el siguiente que entraba a
+// Movimiento Manual caía dentro de la ajena, sus ajustes quedaban atribuidos al otro —las
+// líneas no guardan autor— y podía cerrarle la sesión. En la operación que permite hacer
+// desaparecer mercancía, eso es justo lo que no puede pasar.
+function ownerScope(warehouseId, req) {
   const where = { warehouse_id: parseInt(warehouseId), status: 'open' };
-  if (companyId) where.company_id = companyId;
+  const companyId  = req.employee?.company_id ?? null;
+  const employeeId = req.employee?.id         ?? null;
+  if (companyId)  where.company_id  = companyId;
+  if (employeeId) where.employee_id = employeeId;
+  return where;
+}
+
+async function getActiveSession(warehouseId, req) {
+  const where = ownerScope(warehouseId, req);
 
   const session = await StockSession.findOne({ where, include: SESSION_INCLUDE, order: [['opened_at', 'DESC']] });
   return { data: session ? _sessionData(session) : null };
@@ -27,8 +39,7 @@ async function getActiveSession(warehouseId, req) {
 async function openSession(warehouseId, req) {
   const companyId  = req.employee?.company_id ?? null;
   const employeeId = req.employee?.id         ?? null;
-  const where = { warehouse_id: parseInt(warehouseId), status: 'open' };
-  if (companyId) where.company_id = companyId;
+  const where = ownerScope(warehouseId, req);
 
   const existing = await StockSession.findOne({ where, include: SESSION_INCLUDE });
   if (existing) return { data: _sessionData(existing) };
@@ -46,9 +57,9 @@ async function openSession(warehouseId, req) {
 }
 
 async function addLine(warehouseId, sessionId, { product_id, qty, type, reason, notes }, req) {
-  const companyId = req.employee?.company_id ?? null;
-  const where = { id: parseInt(sessionId), warehouse_id: parseInt(warehouseId), status: 'open' };
-  if (companyId) where.company_id = companyId;
+  // Solo el dueño de la sesión puede agregarle movimientos: si no, un id de sesión ajeno
+  // bastaría para colar ajustes en el registro de otro.
+  const where = { ...ownerScope(warehouseId, req), id: parseInt(sessionId) };
 
   const session = await StockSession.findOne({ where });
   if (!session) { const e = new Error('Sesión no encontrada o ya cerrada'); e.status = 404; throw e; }
@@ -103,9 +114,8 @@ async function addLine(warehouseId, sessionId, { product_id, qty, type, reason, 
 }
 
 async function closeSession(warehouseId, sessionId, { notes } = {}, req) {
-  const companyId = req.employee?.company_id ?? null;
-  const where = { id: parseInt(sessionId), warehouse_id: parseInt(warehouseId), status: 'open' };
-  if (companyId) where.company_id = companyId;
+  // Cada quien cierra la suya: antes cualquiera podía cerrar la sesión de otro usuario.
+  const where = { ...ownerScope(warehouseId, req), id: parseInt(sessionId) };
 
   const session = await StockSession.findOne({ where });
   if (!session) { const e = new Error('Sesión no encontrada o ya cerrada'); e.status = 404; throw e; }

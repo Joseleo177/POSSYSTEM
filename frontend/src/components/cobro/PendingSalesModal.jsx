@@ -83,7 +83,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border/20 dark:border-white/5 shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-xl bg-warning/10 flex items-center justify-center border border-warning/20">
-                            <svg className="w-4.5 h-4.5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                         </div>
@@ -97,10 +97,11 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                     </button>
                 </div>
 
-                {/* Toolbar */}
-                <div className="px-5 py-3 border-b border-border/20 dark:border-white/5 shrink-0 flex items-center gap-3">
+                {/* Toolbar. En móvil el buscador toma su propia línea: al lado de los cuatro
+                    tabs se comprimía hasta quedar en el ancho del icono y no se veía lo tecleado. */}
+                <div className="px-5 py-3 border-b border-border/20 dark:border-white/5 shrink-0 flex flex-wrap items-center gap-2 sm:gap-3">
                     {/* Search */}
-                    <div className="relative flex-1 max-w-xs">
+                    <div className="relative w-full sm:w-auto sm:flex-1 sm:max-w-xs">
                         <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
@@ -111,8 +112,8 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                             className="w-full h-9 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl pl-9 pr-3 text-[11px] text-content dark:text-white placeholder:text-content-subtle dark:placeholder:text-white/25 focus:outline-none focus:border-brand-500/50 focus:bg-brand-500/5 transition-all"
                         />
                     </div>
-                    {/* Status tabs */}
-                    <div className="flex items-center gap-1 ml-auto">
+                    {/* Status tabs — wrap para que el cuarto no quede cortado por el borde */}
+                    <div className="flex flex-wrap items-center gap-1 w-full sm:w-auto sm:ml-auto">
                         {STATUS_TABS.map(t => (
                             <button key={t.key} onClick={() => setStatusTab(t.key)}
                                 className={`h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${statusTab === t.key ? "bg-brand-500 text-black" : "bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/10"}`}>
@@ -140,7 +141,52 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                             <span className="text-[11px] font-bold">No hay facturas pendientes</span>
                         </div>
                     ) : (
-                        <table className="w-full text-left min-w-[720px]">
+                      <>
+                        {/* Móvil: tarjetas. La tabla pide 720px para sus ocho columnas, así que en
+                            un teléfono solo se veían las tres primeras y el saldo, el estado y el
+                            botón de cobrar quedaban tras un scroll horizontal que nadie descubre. */}
+                        <div className="lg:hidden p-3 space-y-2">
+                            {filtered.map(sale => (
+                                <div
+                                    key={sale.id}
+                                    onClick={() => onSelect(sale)}
+                                    className="bg-surface dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] rounded-2xl p-3 active:bg-surface-2 dark:active:bg-white/[0.06] transition-colors"
+                                >
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <div className="text-[12px] font-black text-content dark:text-white tabular-nums">
+                                                {sale.invoice_number || `Borrador #${sale.id}`}
+                                            </div>
+                                            <div className="text-[11px] text-content-muted dark:text-white/70 font-bold truncate">
+                                                {sale.customer_name || <span className="text-content-subtle dark:text-white/25 italic">Sin cliente</span>}
+                                            </div>
+                                            {sale.customer_rif && (
+                                                <div className="text-[10px] text-content-subtle dark:text-white/25 tabular-nums">{sale.customer_rif}</div>
+                                            )}
+                                        </div>
+                                        <StatusBadge status={sale.status} />
+                                    </div>
+
+                                    <div className="mt-2.5 pt-2.5 border-t border-black/5 dark:border-white/[0.06] flex items-end justify-between gap-2">
+                                        <div className="text-[10px] font-bold text-content-subtle tabular-nums">
+                                            <div>Total {fmt(sale.total)}</div>
+                                            {sale.amount_paid > 0 && (
+                                                <div className="text-green-600 dark:text-green-400">Pagado {fmt(sale.amount_paid)}</div>
+                                            )}
+                                            <div className="text-[9px] opacity-70 mt-0.5">{fmtDate(sale.created_at)}</div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <div className={`text-[14px] font-black tabular-nums ${sale.balance > 0 ? "text-warning" : "text-green-600 dark:text-green-400"}`}>
+                                                {fmt(sale.balance)}
+                                            </div>
+                                            <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle">Saldo</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <table className="hidden lg:table w-full text-left min-w-[720px]">
                             <thead>
                                 <tr className="border-b border-border/20 dark:border-white/5 text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/25 sticky top-0 bg-white dark:bg-surface-dark-2">
                                     <th className="px-5 py-3">Factura</th>
@@ -201,6 +247,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                 ))}
                             </tbody>
                         </table>
+                      </>
                     )}
                 </div>
 

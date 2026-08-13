@@ -3,12 +3,74 @@ import Pagination from "../ui/Pagination";
 
 const LIMIT = 50;
 
+// La tabla pide 720px para sus diez columnas, así que en un teléfono solo se veían las cuatro
+// primeras y el resto —total, estado, pago y acciones— quedaba tras un scroll horizontal que
+// nadie descubre. Desde lg se mantiene la tabla; por debajo, las mismas órdenes se pintan como
+// tarjetas. Badges y acciones se comparten entre ambas vistas para que no diverjan.
+
+function OrderBadge({ status }) {
+    const os = status || "recibido";
+    const oc = os === "recibido" ? "badge-success"
+        : os === "pendiente" ? "badge-warning"
+        : "bg-surface-3 dark:bg-white/10 text-content-subtle dark:text-white/40 shadow-none";
+    const ol = { borrador: "BORRADOR", pendiente: "PENDIENTE", recibido: "RECIBIDO" };
+    return <span className={`badge ${oc} shadow-none uppercase font-bold text-[9px] !px-2`}>{ol[os] || os}</span>;
+}
+
+function PayBadge({ status }) {
+    const s = status || "pendiente";
+    const bc = s === "pagado" ? "badge-success" : s === "parcial" ? "badge-warning" : "badge-danger";
+    const bl = { pagado: "PAGADO", parcial: "PARCIAL", pendiente: "DEBE" };
+    return <span className={`badge ${bc} shadow-none uppercase font-bold text-[9px] !px-2`}>{bl[s] || s}</span>;
+}
+
+function Total({ p }) {
+    return (
+        <>
+            <div className="font-bold text-brand-500 text-xs tabular-nums tracking-tighter">
+                Ref.{Number(p.total).toFixed(2)}
+            </div>
+            {p.amount_paid > 0 && p.payment_status !== "pagado" && (
+                <div className="text-[9px] font-bold text-warning tabular-nums opacity-70">
+                    −Ref.{Number(p.amount_paid).toFixed(2)} abonado
+                </div>
+            )}
+        </>
+    );
+}
+
+function Actions({ p, openDetail, setCancelConfirm }) {
+    return (
+        <div className="flex justify-end gap-1">
+            <button
+                onClick={() => openDetail(p.id)}
+                className="p-2 hover:bg-info/10 rounded-lg transition-all text-content-subtle hover:text-info active:scale-90"
+                title="Ver Detalle"
+            >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+            </button>
+            <button
+                onClick={() => setCancelConfirm(p)}
+                className="p-2 hover:bg-danger/10 rounded-lg transition-all text-content-subtle hover:text-danger active:scale-90"
+                title="Anular"
+            >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            </button>
+        </div>
+    );
+}
+
 export default function PurchasesTable({ state }) {
-    const { 
-        purchases, openDetail, setCancelConfirm, 
-        purchasesTotal, purchasesPage, setPurchasesPage 
+    const {
+        purchases, openDetail, setCancelConfirm,
+        purchasesTotal, purchasesPage, setPurchasesPage
     } = state;
-    
+
     const totalPages = Math.ceil((purchasesTotal || 0) / LIMIT);
 
     if (!purchases.length) {
@@ -22,8 +84,9 @@ export default function PurchasesTable({ state }) {
 
     return (
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-            {/* Contenedor de Tabla */}
-            <div className="card-premium overflow-auto flex-1">
+
+            {/* ── Escritorio: tabla ── */}
+            <div className="card-premium overflow-auto flex-1 hidden lg:block">
                 <table className="table-pos min-w-[720px]">
                     <thead>
                         <tr>
@@ -43,9 +106,7 @@ export default function PurchasesTable({ state }) {
                     <tbody className="divide-y divide-border/10 dark:divide-white/5">
                         {purchases.map((p) => (
                             <tr key={p.id} className="group transition-all hover:bg-brand-500/[0.02]">
-                                <td className="font-bold text-content-subtle tabular-nums text-[11px]">
-                                    #{p.id}
-                                </td>
+                                <td className="font-bold text-content-subtle tabular-nums text-[11px]">#{p.id}</td>
 
                                 <td>
                                     {p.warehouse_name ? (
@@ -69,38 +130,13 @@ export default function PurchasesTable({ state }) {
                                 </td>
 
                                 <td className="text-center">
-                                    <span className="text-xs font-bold text-content dark:text-white tabular-nums">
-                                        {p.item_count}
-                                    </span>
+                                    <span className="text-xs font-bold text-content dark:text-white tabular-nums">{p.item_count}</span>
                                 </td>
 
-                                <td className="text-right">
-                                    <div className="font-bold text-brand-500 text-xs tabular-nums tracking-tighter">
-                                        Ref.{Number(p.total).toFixed(2)}
-                                    </div>
-                                    {p.amount_paid > 0 && p.payment_status !== "pagado" && (
-                                        <div className="text-[9px] font-bold text-warning tabular-nums opacity-70">
-                                            −Ref.{Number(p.amount_paid).toFixed(2)} abonado
-                                        </div>
-                                    )}
-                                </td>
+                                <td className="text-right"><Total p={p} /></td>
 
-                                <td className="text-center">
-                                    {(() => {
-                                        const os = p.status || "recibido";
-                                        const oc = os === "recibido" ? "badge-success" : os === "pendiente" ? "badge-warning" : "bg-surface-3 dark:bg-white/10 text-content-subtle dark:text-white/40 shadow-none";
-                                        const ol = { borrador: "BORRADOR", pendiente: "PENDIENTE", recibido: "RECIBIDO" };
-                                        return <span className={`badge ${oc} shadow-none uppercase font-bold text-[9px] !px-2`}>{ol[os] || os}</span>;
-                                    })()}
-                                </td>
-                                <td className="text-center">
-                                    {(() => {
-                                        const s = p.payment_status || "pendiente";
-                                        const bc = s === "pagado" ? "badge-success" : s === "parcial" ? "badge-warning" : "badge-danger";
-                                        const bl = { pagado: "PAGADO", parcial: "PARCIAL", pendiente: "DEBE" };
-                                        return <span className={`badge ${bc} shadow-none uppercase font-bold text-[9px] !px-2`}>{bl[s] || s}</span>;
-                                    })()}
-                                </td>
+                                <td className="text-center"><OrderBadge status={p.status} /></td>
+                                <td className="text-center"><PayBadge status={p.payment_status} /></td>
 
                                 <td>
                                     <div className="flex items-center gap-2">
@@ -118,28 +154,7 @@ export default function PurchasesTable({ state }) {
                                 </td>
 
                                 <td className="text-right pr-6">
-                                    <div className="flex justify-end gap-1">
-                                        <button
-                                            onClick={() => openDetail(p.id)}
-                                            className="p-2 hover:bg-info/10 rounded-lg transition-all text-content-subtle hover:text-info active:scale-90"
-                                            title="Ver Detalle"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                            </svg>
-                                        </button>
-
-                                        <button
-                                            onClick={() => setCancelConfirm(p)}
-                                            className="p-2 hover:bg-danger/10 rounded-lg transition-all text-content-subtle hover:text-danger active:scale-90"
-                                            title="Anular"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
-                                        </button>
-                                    </div>
+                                    <Actions p={p} openDetail={openDetail} setCancelConfirm={setCancelConfirm} />
                                 </td>
                             </tr>
                         ))}
@@ -147,8 +162,58 @@ export default function PurchasesTable({ state }) {
                 </table>
             </div>
 
+            {/* ── Móvil y tablet: tarjetas ── */}
+            <div className="lg:hidden flex-1 overflow-auto space-y-2 px-1">
+                {purchases.map((p) => (
+                    <div
+                        key={p.id}
+                        onClick={() => openDetail(p.id)}
+                        className="bg-surface dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] rounded-2xl p-3 shadow-card dark:shadow-none active:bg-surface-2 dark:active:bg-white/[0.06] transition-colors"
+                    >
+                        <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-[11px] font-black text-content-subtle tabular-nums">#{p.id}</span>
+                                    {p.warehouse_name && (
+                                        <span className="badge badge-info shadow-none uppercase font-bold text-[9px] !px-2">
+                                            {p.warehouse_name}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="font-bold text-xs text-content dark:text-white uppercase tracking-tight mt-1 break-words">
+                                    {p.supplier_name || "PROVEEDOR FINAL"}
+                                </div>
+                                {p.supplier_rif && (
+                                    <div className="text-[9px] font-bold text-content-subtle uppercase tracking-widest mt-0.5">
+                                        {p.supplier_rif}
+                                    </div>
+                                )}
+                            </div>
+                            {/* stopPropagation: la tarjeta abre el detalle, pero anular no puede
+                                dispararlo de paso. */}
+                            <div className="shrink-0" onClick={e => e.stopPropagation()}>
+                                <Actions p={p} openDetail={openDetail} setCancelConfirm={setCancelConfirm} />
+                            </div>
+                        </div>
+
+                        <div className="mt-2.5 pt-2.5 border-t border-black/5 dark:border-white/[0.06] flex items-end justify-between gap-2">
+                            <div className="min-w-0">
+                                <Total p={p} />
+                                <div className="text-[9px] font-bold text-content-subtle uppercase tabular-nums mt-1">
+                                    {p.item_count} {p.item_count === 1 ? "item" : "items"} · {fmtDate(p.created_at)} · {p.employee_name || "Admin"}
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                                <OrderBadge status={p.status} />
+                                <PayBadge status={p.payment_status} />
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
             {/* Paginación Global Estandarizada */}
-            <Pagination 
+            <Pagination
                 page={purchasesPage}
                 totalPages={totalPages}
                 total={purchasesTotal}

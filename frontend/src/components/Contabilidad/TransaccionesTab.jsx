@@ -26,7 +26,7 @@ const STATUS_BADGE = {
 
 export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, setReceiptSale }) {
     const {
-        sales, total, page, setPage, loading, LIMIT,
+        sales, total, sumTotal, sumPaid, sumPending, page, setPage, loading, LIMIT,
         histDateFrom, setHistDateFrom, histDateTo, setHistDateTo,
         searchTerm, setSearchTerm,
         activeFilters, activeSeries,
@@ -35,7 +35,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
         returnSale, setReturnSale,
         cancelConfirm, setCancelConfirm,
         toggleFilter, clearFilters,
-        cancelSale, loadSales, handleExportCSV,
+        cancelSale, loadSales,
         hasFilters, totalPages,
     } = useTransacciones({ notify });
 
@@ -105,10 +105,6 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                 )}
             </div>
 
-            <div className="ml-auto flex items-center gap-2">
-                <Button className="h-8 px-3 text-[10px] bg-surface-2 dark:bg-white/5 text-content-subtle border border-border/30 dark:border-white/10 hover:text-content shadow-none" onClick={handleExportCSV}>CSV</Button>
-                <Button className="h-8 px-3 text-[10px] bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black shadow-none" onClick={() => window.print()}>Imprimir</Button>
-            </div>
         </div>
     );
 
@@ -199,6 +195,38 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                 </React.Fragment>
                             ))}
                         </tbody>
+
+                        {/* Sumador al pie. Los totales vienen del servidor y corresponden al filtro
+                            COMPLETO, no a la página. Van en moneda base, la única común entre
+                            facturas cobradas en distintas monedas. */}
+                        {!loading && sales.length > 0 && (
+                            <tfoot className="sticky bottom-0">
+                                <tr className="bg-surface-2 dark:bg-surface-dark-2 border-t-2 border-border/40 dark:border-white/10">
+                                    <td colSpan={4} className="py-2.5">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">
+                                            Total · {total} {total === 1 ? "factura" : "facturas"}
+                                        </span>
+                                    </td>
+                                    <td className="text-right pr-6 py-2.5">
+                                        <div className="text-[13px] font-black tabular-nums text-content dark:text-white">
+                                            {fmtPrice(sumTotal)}
+                                        </div>
+                                        <div className="text-[10px] font-bold tabular-nums text-success">
+                                            Cobrado {fmtPrice(sumPaid)}
+                                        </div>
+                                        {/* El pendiente lo calcula el servidor, no es total − cobrado:
+                                            así una factura anulada aportaba su monto completo a la
+                                            deuda pese a no deber nada. */}
+                                        {sumPending > 0.001 && (
+                                            <div className="text-[10px] font-bold tabular-nums text-danger">
+                                                Pendiente {fmtPrice(sumPending)}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td />
+                                </tr>
+                            </tfoot>
+                        )}
                     </table>
                 </div>
 

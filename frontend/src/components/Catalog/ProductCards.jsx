@@ -49,8 +49,10 @@ export default function ProductCards({
 
                         {/* La imagen va en posición absoluta: aspect-square define un alto
                             preferido, no un tope, así que una foto vertical en flujo normal
-                            estiraba la tarjeta y descuadraba toda la fila de la grilla. */}
-                        <div className="aspect-square bg-surface-2 dark:bg-white/5 relative overflow-hidden">
+                            estiraba la tarjeta y descuadraba toda la fila de la grilla.
+                            En móvil se achata a 4:3: en cuadrado, con dos columnas, cada foto se
+                            llevaba media pantalla y apenas entraban dos productos por pantallazo. */}
+                        <div className="aspect-[4/3] sm:aspect-square bg-surface-2 dark:bg-white/5 relative overflow-hidden">
                             {p.image_url ? (
                                 <img
                                     src={resolveImageUrl(p.image_url)}
@@ -86,9 +88,12 @@ export default function ProductCards({
                                 </span>
                             )}
 
-                            {/* Acciones: aparecen al pasar el cursor, como en la tabla */}
+                            {/* Acciones: aparecen al pasar el cursor, como en la tabla, pero SOLO
+                                donde hay cursor. En un táctil no existe el hover, así que editar,
+                                eliminar y publicar quedaban invisibles para siempre y no había
+                                manera de gestionar un producto desde el teléfono. */}
                             {canManageProducts && !isSelectionMode && (
-                                <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="absolute bottom-2 right-2 flex gap-1 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
                                     <button onClick={() => onToggleVisible?.(p)}
                                         className={`w-7 h-7 rounded-lg bg-white/90 dark:bg-black/70 backdrop-blur flex items-center justify-center shadow active:scale-90 transition-all ${p.visible_in_catalog ? "text-brand-500" : "text-content-subtle hover:text-brand-500"}`}
                                         title={p.visible_in_catalog ? "Quitar del catálogo público" : "Mostrar en el catálogo público"}>

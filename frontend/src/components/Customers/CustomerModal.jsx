@@ -129,7 +129,10 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
                   const newMax = RIF_PREFIXES.includes(newPrefix) ? 9 : 8;
                   setForm(p => ({ ...p, doc_prefix: newPrefix, rif: p.rif.slice(0, newMax) }));
                 }}
-                className="input h-10 w-20 font-black text-center cursor-pointer"
+                /* w-16 y no w-20: el prefijo es una sola letra y se llevaba casi la mitad de la
+                   columna, dejando el número —que son 7 u 8 dígitos— en una caja más chica que
+                   la del prefijo. shrink-0 evita que el select ceda cuando el número es largo. */
+                className="input h-10 w-16 shrink-0 font-black text-center cursor-pointer px-1"
               >
                 {DOC_PREFIXES.map(p => (
                   <option key={p} value={p}>{p}-</option>

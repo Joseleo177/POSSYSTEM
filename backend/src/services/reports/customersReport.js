@@ -1,16 +1,21 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause } = require("./shared");
 
-async function customersReport({ date_from, date_to, inactive_days = 45, limit, company_id, tc, tcS, tcC, rep }) {
+async function customersReport({ date_from, date_to, inactive_days = 45, limit, offset, company_id, tc, tcS, tcC, rep }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dS = dateClause(df, dt, 's');
   const dC = dateClause(df, dt, 'c');
   const dR = dateClause(df, dt);
   const inactiveDays = parseInt(inactive_days);
-  const lim = parseInt(limit) || 0;   // 0 = usar defaults de pantalla
+  // Paginación real. Antes había un LIMIT fijo por lista (20/30/20) sin forma de pedir la
+  // página siguiente: el reporte mostraba un top recortado y el resto de los clientes era
+  // inalcanzable. La paginación del front era local sobre ese recorte, así que ni siquiera
+  // llegaba a activarse. El export completo sigue funcionando: pide un limit alto.
+  const lim = Math.min(Math.max(parseInt(limit) || 25, 1), 5000);
+  const off = Math.max(parseInt(offset) || 0, 0);
 
-  const [topCustomers, inactiveCustomers, newCustomers, ticketStats, repeatRate] = await Promise.all([
+  const [topCustomers, inactiveCustomers, newCustomers, ticketStats, repeatRate, counts] = await Promise.all([
     sequelize.query(
       `SELECT c.id, c.name, c.phone, c.rif,
               COUNT(DISTINCT s.id)::int AS purchase_count,
@@ -22,7 +27,7 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
        WHERE c.type = 'cliente' ${tcS} ${dS}
        GROUP BY c.id, c.name, c.phone, c.rif
        ORDER BY total_spent DESC
-       LIMIT ${lim || 20}`,
+       LIMIT ${lim} OFFSET ${off}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -37,7 +42,7 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
        GROUP BY c.id, c.name, c.phone, c.rif
        HAVING MAX(s.created_at) < NOW() - (${inactiveDays} * INTERVAL '1 day')
        ORDER BY days_inactive DESC
-       LIMIT ${lim || 30}`,
+       LIMIT ${lim} OFFSET ${off}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -50,7 +55,7 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
        WHERE c.type = 'cliente' ${tcC} ${dC}
        GROUP BY c.id, c.name, c.phone
        ORDER BY first_purchase DESC
-       LIMIT ${lim || 20}`,
+       LIMIT ${lim} OFFSET ${off}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -84,6 +89,28 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
        WHERE TRUE ${tcS} ${dS}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
+    // Totales sin paginar, con los mismos filtros y agrupaciones que cada lista. Sin esto el
+    // front no sabe cuántas páginas hay y su paginador no puede pasar de la primera.
+    sequelize.query(
+      `SELECT
+         (SELECT COUNT(*) FROM (
+            SELECT c.id FROM customers c JOIN sales s ON s.customer_id = c.id
+            WHERE c.type = 'cliente' ${tcS} ${dS}
+            GROUP BY c.id
+          ) t)::int AS top_total,
+         (SELECT COUNT(*) FROM (
+            SELECT c.id FROM customers c JOIN sales s ON s.customer_id = c.id
+            WHERE c.type = 'cliente' ${tcS}
+            GROUP BY c.id
+            HAVING MAX(s.created_at) < NOW() - (${inactiveDays} * INTERVAL '1 day')
+          ) t)::int AS inactive_total,
+         (SELECT COUNT(*) FROM (
+            SELECT c.id FROM customers c JOIN sales s ON s.customer_id = c.id
+            WHERE c.type = 'cliente' ${tcC} ${dC}
+            GROUP BY c.id
+          ) t)::int AS new_total`,
+      { replacements: rep, type: Sequelize.QueryTypes.SELECT }
+    ),
   ]);
 
   return {
@@ -93,6 +120,12 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
     ticket_distribution: ticketStats,
     repeat_rate:         repeatRate[0] || {},
     inactive_days:       inactiveDays,
+    totals: {
+      top:      counts[0]?.top_total      || 0,
+      inactive: counts[0]?.inactive_total || 0,
+      new:      counts[0]?.new_total      || 0,
+    },
+    page_size: lim,
   };
 }
 

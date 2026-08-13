@@ -188,12 +188,15 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             </div>
                         )}
 
-                        {/* Saldo — empujado a la derecha */}
-                        <div className="ml-auto text-right">
+                        {/* Saldo — empujado a la derecha solo cuando la fila es una sola línea.
+                            En móvil el flex-wrap lo baja a su propio renglón, y ahí el ml-auto lo
+                            dejaba pegado al borde derecho con un hueco delante, desalineado de
+                            Transacciones y Facturación. */}
+                        <div className="sm:ml-auto sm:text-right">
                             <p className={`${LABEL} mb-0.5`}>Saldo Pendiente</p>
                             {hasPending
                                 ? <p className="text-[15px] font-black text-danger tabular-nums">{fmtPrice(detail.total_debt)}</p>
-                                : <div className="flex items-center justify-end gap-1 text-[12px] font-black text-success">
+                                : <div className="flex items-center sm:justify-end gap-1 text-[12px] font-black text-success">
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
                                     Al día
                                 </div>

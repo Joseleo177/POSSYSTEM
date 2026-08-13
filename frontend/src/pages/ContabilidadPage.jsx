@@ -213,7 +213,11 @@ export default function ContabilidadPage() {
  </div>
 
  {/* ── Nav agrupada ───────────────────── */}
- <div ref={navRef} className="shrink-0 flex items-stretch gap-0 px-4 border-b border-border/20 dark:border-white/5">
+ {/* flex-wrap y no overflow-x-auto: los cuatro grupos no caben en el ancho de un
+     teléfono y quedaban cortados sin forma de alcanzarlos. Con scroll horizontal se
+     resolvería el acceso, pero el overflow recortaría los desplegables de Movimientos
+     y Ventas, que son hijos absolute de esta misma barra. */}
+ <div ref={navRef} className="shrink-0 flex flex-wrap items-stretch gap-0 px-4 border-b border-border/20 dark:border-white/5">
    {NAV_GROUPS.map(group => {
      const isActive = group.items ? group.items.includes(subPage) : subPage === group.label;
      const isOpen   = openGroup === group.label;
@@ -223,7 +227,7 @@ export default function ContabilidadPage() {
          <button
            key={group.label}
            onClick={() => { setSubPage(group.label); setOpenGroup(null); }}
-           className={`px-4 py-2 text-[11px] font-black uppercase tracking-wide border-b-2 whitespace-nowrap transition-all ${
+           className={`px-2.5 sm:px-4 py-2 text-[10px] sm:text-[11px] font-black uppercase tracking-wide border-b-2 whitespace-nowrap transition-all ${
              isActive ? "border-brand-500 text-brand-500" : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
            }`}
          >
@@ -236,7 +240,7 @@ export default function ContabilidadPage() {
        <div key={group.label} className="relative">
          <button
            onClick={() => setOpenGroup(isOpen ? null : group.label)}
-           className={`flex items-center gap-1 px-4 py-2 text-[11px] font-black uppercase tracking-wide border-b-2 whitespace-nowrap transition-all ${
+           className={`flex items-center gap-1 px-2.5 sm:px-4 py-2 text-[10px] sm:text-[11px] font-black uppercase tracking-wide border-b-2 whitespace-nowrap transition-all ${
              isActive ? "border-brand-500 text-brand-500" : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
            }`}
          >

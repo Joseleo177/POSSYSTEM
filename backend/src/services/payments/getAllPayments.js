@@ -75,5 +75,34 @@ module.exports = async function getAllPayments(query, tenant = {}) {
     return item;
   });
 
-  return { data, total: count };
+  // Suma del filtro COMPLETO, no de la página: con 50 registros por página, totalizar solo
+  // lo visible daría una cifra que no corresponde a lo que el usuario filtró. Va en moneda
+  // base porque es la única común — sumar bolívares con divisas no significaría nada.
+  // Mismo where y mismo join required que el listado, o el total no cuadraría con las filas.
+  const [totals] = await Payment.findAll({
+    where,
+    include: [{ model: Sale, attributes: [], required: true }],
+    attributes: [
+      [Sequelize.fn("COALESCE", Sequelize.fn("SUM", Sequelize.col("Payment.amount")), 0), "sum_base"],
+      // Bolívares (o la moneda que sea) REALMENTE recibidos: cada cobro a la tasa del día en
+      // que se hizo. Es distinto de convertir el total base a la tasa de hoy, que es lo que
+      // hacía el pie del listado y por eso no cuadraba con el estado de cuenta del diario.
+      [Sequelize.literal(`COALESCE(SUM("Payment"."amount" * COALESCE("Payment"."exchange_rate", 1)), 0)`), "sum_local"],
+      // Solo tiene sentido mostrar sum_local si todo el filtro es de una misma moneda: si no,
+      // estaría sumando bolívares con divisas.
+      [Sequelize.literal(`COUNT(DISTINCT "Payment"."currency_id")`), "currency_count"],
+      [Sequelize.literal(`MIN("Payment"."currency_id")`), "currency_id"],
+    ],
+    raw: true,
+    subQuery: false,
+  });
+
+  return {
+    data,
+    total: count,
+    sum_base:       parseFloat(totals?.sum_base  || 0),
+    sum_local:      parseFloat(totals?.sum_local || 0),
+    currency_count: parseInt(totals?.currency_count || 0, 10),
+    currency_id:    totals?.currency_id ?? null,
+  };
 };

@@ -1,13 +1,16 @@
 import { useState, useCallback, useEffect } from "react";
 import { api } from "../../services/api";
-import { exportToCSV } from "../../utils/exportUtils";
-import { fmtDateShort } from "../../helpers";
 
 const LIMIT = 50;
 
 export function useTransacciones({ notify }) {
     const [sales, setSales] = useState([]);
     const [total, setTotal] = useState(0);
+    // Totales del filtro completo (moneda base), calculados en el servidor: sumar solo la
+    // página visible daría una cifra que no corresponde a lo filtrado.
+    const [sumTotal, setSumTotal] = useState(0);
+    const [sumPaid, setSumPaid]   = useState(0);
+    const [sumPending, setSumPending] = useState(0);
     const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(false);
 
@@ -41,6 +44,9 @@ export function useTransacciones({ notify }) {
             const r = await api.sales.getAll(params);
             setSales(r.data);
             setTotal(r.total || 0);
+            setSumTotal(parseFloat(r.sum_total || 0));
+            setSumPaid(parseFloat(r.sum_paid || 0));
+            setSumPending(parseFloat(r.sum_pending || 0));
         } catch (e) { notify(e.message, "err"); }
         finally { setLoading(false); }
     }, [histDateFrom, histDateTo, debouncedSearch, activeFilters, activeSeries, page, notify]);
@@ -64,21 +70,11 @@ export function useTransacciones({ notify }) {
         catch (e) { notify(e.message, "err"); }
     };
 
-    const handleExportCSV = () => {
-        const headers = ['Factura', 'Fecha', 'Cliente', 'RIF', 'Estado', 'Serie', 'Total', 'Abonado', 'Pendiente'];
-        const rows = sales.map(s => [
-            s.invoice_number || s.id, fmtDateShort(s.created_at),
-            s.customer_name || 'Sin Cliente', s.customer_rif || '',
-            s.status, s.serie_name || '', s.total, s.amount_paid, s.balance,
-        ]);
-        exportToCSV('Historial_Ventas', rows, headers);
-    };
-
     const totalPages = Math.ceil(total / LIMIT);
     const hasFilters = activeFilters.length > 0 || activeSeries.length > 0 || !!histDateFrom || !!histDateTo;
 
     return {
-        sales, total, page, setPage, loading, LIMIT,
+        sales, total, sumTotal, sumPaid, sumPending, page, setPage, loading, LIMIT,
         histDateFrom, setHistDateFrom,
         histDateTo, setHistDateTo,
         searchTerm, setSearchTerm,
@@ -88,7 +84,7 @@ export function useTransacciones({ notify }) {
         returnSale, setReturnSale,
         cancelConfirm, setCancelConfirm,
         toggleFilter, toggleSerie, clearFilters,
-        cancelSale, loadSales, handleExportCSV,
+        cancelSale, loadSales,
         hasFilters, totalPages,
     };
 }

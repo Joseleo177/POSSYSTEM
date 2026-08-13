@@ -63,7 +63,7 @@ export default function CartSidebar({
                     {/* Título */}
                     <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-8 h-8 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-500 shrink-0">
-                            <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
                         </div>
                         <div className="min-w-0">
                             <div className="text-[13px] font-black text-content dark:text-white tracking-tight leading-none">POS</div>
@@ -132,18 +132,52 @@ export default function CartSidebar({
                     <span className="text-[10px] font-black uppercase tracking-wide text-brand-500 truncate">{activeWarehouse?.name || "Sin almacén"}</span>
                 </div>
 
-                {/* Mobile session indicators */}
-                <div className="lg:hidden flex items-center justify-between pb-1">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-500 truncate" title="Almacén de venta">{activeWarehouse?.name || "Sin almacén"}</span>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => setShowHeldModal(true)} className="relative w-7 h-7 rounded-full bg-surface-2 dark:bg-white/5 flex items-center justify-center">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m9-.828l-1.414-1.414M3.707 18.293V21h2.707l14.586-14.586a2 2 0 10-2.828-2.828L3.707 18.293z" /></svg>
-                            {heldCarts.length > 0 && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-brand-500 text-brand-900 text-[9px] font-black rounded-full flex items-center justify-center">{heldCarts.length}</span>}
-                        </button>
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/5 border border-green-500/10">
-                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                            <span className="text-[9px] font-black uppercase text-green-500">Abierto</span>
-                        </div>
+                {/* Acciones de sesión en móvil. Antes esta barra solo tenía "en espera" y un
+                    indicador de estado que era un div: faltaba el acceso a facturas pendientes
+                    y, sobre todo, no había forma de cerrar la caja desde el teléfono —el resto
+                    de acciones vive en el bloque hidden lg:flex de arriba—. */}
+                <div className="lg:hidden flex items-center justify-between gap-2 pb-1">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-500 truncate min-w-0" title="Almacén de venta">{activeWarehouse?.name || "Sin almacén"}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        {cashSession ? (
+                            <>
+                                <button
+                                    onClick={() => setShowPendingSales(true)}
+                                    className="h-9 px-4 rounded-xl bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 flex items-center justify-center active:scale-90 transition-all"
+                                    title="Facturas pendientes"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                </button>
+
+                                <button
+                                    onClick={() => setShowHeldModal(true)}
+                                    className="relative h-9 px-4 rounded-xl bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 flex items-center justify-center active:scale-90 transition-all"
+                                    title="Cuentas en espera"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m9-.828l-1.414-1.414M3.707 18.293V21h2.707l14.586-14.586a2 2 0 10-2.828-2.828L3.707 18.293z" /></svg>
+                                    {heldCarts.length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-[#0c0c0c]">{heldCarts.length}</span>}
+                                </button>
+
+                                {/* Botón, no indicador: es el único acceso al cierre de turno en móvil. */}
+                                <button
+                                    onClick={() => setShowCierre(true)}
+                                    className="h-9 px-3 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center gap-1.5 active:scale-95 transition-all"
+                                    title="Cerrar turno"
+                                >
+                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
+                                    <span className="text-[9px] font-black uppercase tracking-wide text-green-500 whitespace-nowrap">Cerrar caja</span>
+                                </button>
+                            </>
+                        ) : (
+                            <button
+                                onClick={() => setShowApertura(true)}
+                                className="h-9 px-3 rounded-xl bg-danger/10 border border-danger/20 flex items-center gap-1.5 active:scale-95 transition-all"
+                                title="Abrir turno"
+                            >
+                                <div className="w-1.5 h-1.5 rounded-full bg-danger shrink-0" />
+                                <span className="text-[9px] font-black uppercase tracking-wide text-danger whitespace-nowrap">Abrir caja</span>
+                            </button>
+                        )}
                     </div>
                 </div>
 

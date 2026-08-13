@@ -68,16 +68,18 @@ export default function StockView({
                     se maneje igual en toda la app. El filtro se aplica en el servidor. */}
                 <div className="relative shrink-0">
                     <button onClick={() => setShowFilters(!showFilters)}
-                        className={`h-9 px-3 flex items-center gap-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${stockCategory ? "bg-warning/10 border-warning/30 text-warning" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/10 text-content-subtle hover:text-content"}`}>
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" /></svg>
+                        className={`h-9 px-2.5 flex items-center gap-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide border transition-all ${stockCategory ? "bg-warning/10 border-warning/30 text-warning" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/10 text-content-subtle hover:text-content"}`}>
+                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" /></svg>
                         Filtros
-                        {stockCategory && <span className="w-4 h-4 rounded-full bg-warning text-black text-[9px] font-black flex items-center justify-center">1</span>}
-                        <svg className={`w-3 h-3 transition-transform ${showFilters ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                        {stockCategory && <span className="w-4 h-4 rounded-full bg-warning text-black text-[9px] font-black flex items-center justify-center shrink-0">1</span>}
+                        <svg className={`w-3 h-3 shrink-0 transition-transform ${showFilters ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
                     </button>
                     {showFilters && (
                         <>
                             <div className="fixed inset-0 z-30" onClick={() => setShowFilters(false)} />
-                            <div className="absolute left-0 top-full mt-2 w-64 bg-surface-2 dark:bg-surface-dark-2 rounded-2xl border border-border/40 dark:border-white/10 shadow-2xl z-40 p-4 animate-in fade-in slide-in-from-top-2 duration-200 space-y-4">
+                            {/* Anclado por la derecha: el botón vive al final de la barra, así que
+                                con left-0 el panel crecía hacia afuera y se salía de la pantalla. */}
+                            <div className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] bg-surface-2 dark:bg-surface-dark-2 rounded-2xl border border-border/40 dark:border-white/10 shadow-2xl z-40 p-4 animate-in fade-in slide-in-from-top-2 duration-200 space-y-4">
                                 <div>
                                     <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mb-1.5">Categoría</div>
                                     {catError ? (
@@ -144,13 +146,18 @@ export default function StockView({
                                 </div>
                             )
                         ) : (
-                            <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5 p-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5 p-3">
+                                {/* Dos columnas fijas en móvil: con minmax(150px) una pantalla
+                                    angosta se quedaba en una sola columna y cada foto ocupaba el
+                                    ancho entero, así que apenas entraba un producto por pantallazo. */}
                                 {filteredStock.map(s => {
                                     const qty = parseFloat(s.qty);
                                     return (
                                         <article key={s.product_id}
                                             className="bg-surface dark:bg-surface-dark-2 rounded-2xl border border-border dark:border-white/5 overflow-hidden flex flex-col group">
-                                            <div className="aspect-square bg-surface-2 dark:bg-white/5 relative overflow-hidden">
+                                            {/* Menos alta en móvil: en cuadrado, la foto se comía
+                                                casi toda la pantalla y el stock quedaba fuera de vista. */}
+                                            <div className="aspect-[4/3] sm:aspect-square bg-surface-2 dark:bg-white/5 relative overflow-hidden">
                                                 {s.image_url ? (
                                                     <img src={resolveImageUrl(s.image_url)} alt={s.product_name} loading="lazy"
                                                         onError={imgRetryOnError}

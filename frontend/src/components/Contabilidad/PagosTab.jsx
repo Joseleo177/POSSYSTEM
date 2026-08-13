@@ -5,10 +5,12 @@ import { Button } from "../ui/Button";
 import ConfirmModal from "../ui/ConfirmModal";
 import Pagination from "../ui/Pagination";
 import DateRangePicker from "../ui/DateRangePicker";
+import CustomSelect from "../ui/CustomSelect";
+import { useApp } from "../../context/AppContext";
 
 export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayment, setReceiptSale, journals = [] }) {
     const {
-        data, total, page, setPage, loading, LIMIT,
+        data, total, sumBase, sumLocal, currencyCount, currencyId, page, setPage, loading, LIMIT,
         viewType,
         searchTerm, setSearchTerm,
         payDateFrom, setPayDateFrom,
@@ -19,9 +21,15 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
         payModal, setPayModal,
         deleteDialog, setDeleteDialog,
         clearFilters, reload,
-        confirmRemovePayment, handleExportCSV,
+        confirmRemovePayment,
         hasFilters, filterCount, totalPages,
     } = usePagos({ notify });
+
+    // Moneda en la que están hechos los cobros del filtro, cuando es una sola. El id lo dice el
+    // servidor junto con los totales, así que el pie rotula con el símbolo correcto sin suponer
+    // que la moneda secundaria del sistema es la del filtro.
+    const { activeCurrencies } = useApp();
+    const filterCurrency = currencyId ? (activeCurrencies || []).find(c => c.id === currencyId) : null;
 
     const subheader = (
         <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2">
@@ -53,14 +61,24 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                             {journals.length > 0 && (
                                 <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                     <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Diario de pago</div>
-                                    <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto custom-scrollbar">
-                                        {journals.map(j => (
-                                            <button key={j.id} onClick={() => setJournalFilter(p => String(p) === String(j.id) ? "" : String(j.id))}
-                                                className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all truncate ${String(journalFilter) === String(j.id) ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
-                                                {j.name}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    {/* Select y no rejilla de botones: los diarios los crea el usuario y
+                                        no tienen tope, así que en botones los nombres salían truncados
+                                        ("PAG MOVIL ME...") dentro de un scroll propio. Misma regla que
+                                        en el catálogo: lista abierta, select; lista corta y fija, botones. */}
+                                    <CustomSelect
+                                        value={journalFilter}
+                                        onChange={setJournalFilter}
+                                        height="h-9"
+                                        placeholder="Todos los diarios"
+                                        options={[
+                                            { value: "", label: "Todos los diarios" },
+                                            ...journals.map(j => ({
+                                                value: String(j.id),
+                                                label: j.name,
+                                                color: j.color || undefined,
+                                            })),
+                                        ]}
+                                    />
                                 </div>
                             )}
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
@@ -77,10 +95,6 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                 )}
             </div>
 
-            <div className="ml-auto flex items-center gap-2">
-                <Button className="h-8 px-3 text-[10px] bg-surface-2 dark:bg-white/5 text-content-subtle border border-border/30 dark:border-white/10 hover:text-content shadow-none" onClick={handleExportCSV}>CSV</Button>
-                <Button className="h-8 px-3 text-[10px] bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black shadow-none" onClick={() => window.print()}>Imprimir</Button>
-            </div>
         </div>
     );
 
@@ -92,7 +106,9 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                     <table className="table-pos min-w-[680px]">
                         <thead className="sticky top-0 z-10">
                             <tr>
-                                {["Referencia", "Estado / Tipo", "Cliente", "Fecha", "Monto", "Acciones"].map(h => (
+                                {/* La columna cambia de contenido según la vista: en el historial
+                                    muestra el diario del cobro; en pendientes, el estado de la factura. */}
+                                {["Referencia", viewType === "pendientes" ? "Estado" : "Diario", "Cliente", "Fecha", "Monto", "Acciones"].map(h => (
                                     <th key={h} className={h === "Acciones" || h === "Monto" ? "text-right pr-6" : "text-left"}>{h}</th>
                                 ))}
                             </tr>
@@ -115,21 +131,36 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                             )}
                                         </td>
                                         <td>
-                                            <span className={`badge shadow-none ${isInvoice
-                                                ? item.status === "parcial"  ? "badge-warning"
-                                                : item.status === "borrador" ? "badge-neutral"
-                                                : "badge-danger"
-                                                : "badge-info"}`}>
-                                                {isInvoice
-                                                    ? item.status === "parcial"  ? "Parcial"
-                                                    : item.status === "borrador" ? "Sin factura"
-                                                    : "Pendiente"
-                                                : "Cobro Realizado"}
-                                            </span>
+                                            {/* En el historial todas las filas son cobros hechos, así que
+                                                un badge "Cobro Realizado" repetido no decía nada: va el
+                                                diario, que es el dato que cambia de fila a fila y con el
+                                                que se concilia la caja. En pendientes sí manda el estado. */}
+                                            {isInvoice ? (
+                                                <span className={`badge shadow-none ${
+                                                    item.status === "parcial"  ? "badge-warning"
+                                                    : item.status === "borrador" ? "badge-neutral"
+                                                    : "badge-danger"}`}>
+                                                    {item.status === "parcial"  ? "Parcial"
+                                                     : item.status === "borrador" ? "Sin factura"
+                                                     : "Pendiente"}
+                                                </span>
+                                            ) : item.journal_name ? (
+                                                <span
+                                                    className="badge shadow-none border"
+                                                    style={{
+                                                        color: item.journal_color || undefined,
+                                                        backgroundColor: item.journal_color ? `${item.journal_color}14` : undefined,
+                                                        borderColor: item.journal_color ? `${item.journal_color}33` : undefined,
+                                                    }}
+                                                >
+                                                    {item.journal_name}
+                                                </span>
+                                            ) : (
+                                                <span className="badge badge-neutral shadow-none">Sin diario</span>
+                                            )}
                                         </td>
                                         <td className="truncate max-w-[200px]">
                                             <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight truncate block">{item.customer_name || "Consumidor Final"}</span>
-                                            {item.journal_name && <span className="text-[9px] font-black opacity-30 uppercase">{item.journal_name}</span>}
                                         </td>
                                         <td>
                                             <span className="text-[11px] font-bold text-content-subtle uppercase">{new Date(item.created_at).toLocaleDateString()}</span>
@@ -172,6 +203,40 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                 );
                             })}
                         </tbody>
+
+                        {/* Sumador al pie. El total viene del servidor y corresponde al filtro
+                            COMPLETO, no a la página: con 50 registros por página, sumar solo lo
+                            visible daría una cifra que no es la que el usuario filtró. Va en
+                            moneda base porque es la única común entre diarios de distinta moneda. */}
+                        {!loading && data.length > 0 && viewType !== "pendientes" && (
+                            <tfoot className="sticky bottom-0">
+                                <tr className="bg-surface-2 dark:bg-surface-dark-2 border-t-2 border-border/40 dark:border-white/10">
+                                    <td colSpan={4} className="py-2.5">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">
+                                            Total · {total} {total === 1 ? "cobro" : "cobros"}
+                                        </span>
+                                    </td>
+                                    <td className="text-right pr-6 py-2.5">
+                                        <div className="text-[13px] font-black tabular-nums text-success">
+                                            {fmtPrice(sumBase)}
+                                        </div>
+                                        {/* Si todo el filtro comparte moneda, se muestra el monto REAL
+                                            recibido —cada cobro a la tasa de su día—, que es el que
+                                            cuadra con el estado de cuenta del diario. Convertir el
+                                            total base a la tasa de hoy daba otra cifra: con tasas
+                                            entre 737 y 780, la diferencia llegaba a miles de bolívares.
+                                            Con monedas mezcladas no se muestra nada: sumar bolívares
+                                            con divisas no significaría nada. */}
+                                        {currencyCount === 1 && filterCurrency && !filterCurrency.is_base && (
+                                            <div className="text-[11px] font-bold tabular-nums text-content-subtle dark:text-white/45">
+                                                {filterCurrency.symbol}{sumLocal.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td />
+                                </tr>
+                            </tfoot>
+                        )}
                     </table>
                 </div>
 

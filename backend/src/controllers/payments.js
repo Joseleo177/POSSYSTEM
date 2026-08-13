@@ -6,7 +6,15 @@ const getAll = async (req, res) => {
     const company_id = req.employee?.company_id ?? null;
     const isSuperuser = !!req.is_superuser;
     const result = await paymentsService.getAllPayments(req.query, { company_id, isSuperuser });
-    res.json({ ok: true, data: result.data, total: result.total });
+    // Totales del filtro completo para el sumador al pie: en moneda base (sum_base) y en la
+    // moneda real de los cobros (sum_local), esta última solo utilizable si currency_count = 1.
+    res.json({
+      ok: true, data: result.data, total: result.total,
+      sum_base: result.sum_base,
+      sum_local: result.sum_local,
+      currency_count: result.currency_count,
+      currency_id: result.currency_id,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: err.message });

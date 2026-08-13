@@ -44,27 +44,30 @@ export default function WarehouseGrid({ warehouses, openAssign, startEdit, setDe
                             ))}
                         </div>
 
-                        {/* Botones de Acción Estándar */}
+                        {/* Botones de Acción Estándar.
+                            En móvil los rótulos van sin icono y con menos tracking: con los tres
+                            repartidos a flex-1 no cabía "Mov. Manual", el texto se partía en dos
+                            líneas y desbordaba el alto fijo del botón. */}
                         <div className="flex flex-wrap gap-2 pt-4 border-t border-border/10 dark:border-white/5">
                             <button
                                 onClick={() => { setSelectedWarehouse(w); setSubTab("stock"); }}
-                                className="flex-1 h-9 rounded-xl bg-brand-500/10 text-brand-500 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all flex items-center justify-center gap-1.5"
+                                className="flex-1 h-9 rounded-xl bg-brand-500/10 text-brand-500 text-[10px] font-black uppercase tracking-wide sm:tracking-widest whitespace-nowrap hover:bg-brand-500 hover:text-black transition-all flex items-center justify-center gap-1.5"
                             >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                                <svg className="w-3.5 h-3.5 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                                 Stock
                             </button>
                             <button
                                 onClick={() => openAssign(w)}
-                                className="flex-1 h-9 rounded-xl bg-violet-500/10 text-violet-400 text-[10px] font-black uppercase tracking-widest hover:bg-violet-500 hover:text-black transition-all flex items-center justify-center gap-1.5"
+                                className="flex-1 h-9 rounded-xl bg-violet-500/10 text-violet-400 text-[10px] font-black uppercase tracking-wide sm:tracking-widest whitespace-nowrap hover:bg-violet-500 hover:text-black transition-all flex items-center justify-center gap-1.5"
                             >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                                <svg className="w-3.5 h-3.5 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                                 Usuarios
                             </button>
                             <button
                                 onClick={() => { setSelectedWarehouse(w); setSubTab("ajustes"); }}
-                                className="flex-1 h-9 rounded-xl bg-warning/10 text-warning text-[10px] font-black uppercase tracking-widest hover:bg-warning hover:text-black transition-all flex items-center justify-center gap-1.5"
+                                className="flex-1 h-9 rounded-xl bg-warning/10 text-warning text-[10px] font-black uppercase tracking-wide sm:tracking-widest whitespace-nowrap hover:bg-warning hover:text-black transition-all flex items-center justify-center gap-1.5"
                             >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                                <svg className="w-3.5 h-3.5 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                                 Mov. Manual
                             </button>
                             <div className="flex gap-1 ml-auto">

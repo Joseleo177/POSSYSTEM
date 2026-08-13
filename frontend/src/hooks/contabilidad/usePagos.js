@@ -1,12 +1,18 @@
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
-import { exportToCSV } from "../../utils/exportUtils";
 
 const LIMIT = 50;
 
 export function usePagos({ notify }) {
     const [data, setData] = useState([]);
     const [total, setTotal] = useState(0);
+    // Suma del filtro completo en moneda base, calculada en el servidor: con 50 registros por
+    // página, totalizar solo lo visible daría una cifra que no corresponde a lo filtrado.
+    const [sumBase, setSumBase] = useState(0);
+    // Moneda real de los cobros. Solo es sumable si todo el filtro comparte moneda.
+    const [sumLocal, setSumLocal] = useState(0);
+    const [currencyCount, setCurrencyCount] = useState(0);
+    const [currencyId, setCurrencyId] = useState(null);
     const [loading, setLoading] = useState(true);
 
     const [viewType, setViewType] = useState("historial");
@@ -51,7 +57,7 @@ export function usePagos({ notify }) {
                 const res = query.viewType === "pendientes"
                     ? await api.payments.getPending(params)
                     : await api.payments.getAll(params);
-                if (!cancelled) { setData(res.data || []); setTotal(res.total || 0); }
+                if (!cancelled) { setData(res.data || []); setTotal(res.total || 0); setSumBase(parseFloat(res.sum_base || 0)); setSumLocal(parseFloat(res.sum_local || 0)); setCurrencyCount(parseInt(res.currency_count || 0, 10)); setCurrencyId(res.currency_id ?? null); }
             } catch (e) {
                 if (!cancelled) notify(e.message, "err");
             } finally {
@@ -84,27 +90,12 @@ export function usePagos({ notify }) {
         } catch (e) { notify(e.message, "err"); }
     };
 
-    const handleExportCSV = () => {
-        const headers = ["Referencia", "Estado", "Cliente", "Fecha", "Monto"];
-        const rows = data.map(item => {
-            const isInvoice = viewType === "pendientes";
-            return [
-                item.invoice_number || (isInvoice ? `Factura #${item.id}` : `Cobro #${item.id}`),
-                isInvoice ? (item.status === "parcial" ? "Parcial" : "Pendiente") : "Cobro Realizado",
-                item.customer_name || "Consumidor Final",
-                new Date(item.created_at).toLocaleDateString(),
-                isInvoice ? item.total : item.amount,
-            ];
-        });
-        exportToCSV("Cobros_Pagos", rows, headers);
-    };
-
     const totalPages = Math.ceil(total / LIMIT);
     const filterCount = (viewType !== "historial" ? 1 : 0) + (payDateFrom || payDateTo ? 1 : 0) + (journalFilter ? 1 : 0);
     const hasFilters = filterCount > 0;
 
     return {
-        data, total, page, setPage, loading, LIMIT,
+        data, total, sumBase, sumLocal, currencyCount, currencyId, page, setPage, loading, LIMIT,
         viewType, setViewType,
         searchTerm, setSearchTerm,
         payDateFrom, setPayDateFrom,
@@ -115,7 +106,7 @@ export function usePagos({ notify }) {
         payModal, setPayModal,
         deleteDialog, setDeleteDialog,
         clearFilters, reload,
-        confirmRemovePayment, handleExportCSV,
+        confirmRemovePayment,
         hasFilters, filterCount, totalPages,
     };
 }

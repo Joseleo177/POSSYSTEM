@@ -92,7 +92,11 @@ export default function ClientesPage() {
                             {showFilterDrop && (
                                 <>
                                     <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
-                                    <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                                    {/* Anclado por la derecha siempre: el botón vive al final de la
+                                        barra, así que con left-0 el panel crecía hacia afuera de la
+                                        pantalla y en móvil se salía por el borde. Desde right-0 crece
+                                        hacia adentro y queda visible completo. */}
+                                    <div className="absolute top-full right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
                                         <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                             <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Tipo de Contacto</div>
                                             <div className="grid grid-cols-2 gap-1.5">

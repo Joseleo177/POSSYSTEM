@@ -58,7 +58,8 @@ const getAll = async (req, res) => {
     const data = wantsHeld
       ? await salesService.annotateHolders(result.data, req.employee?.id ?? null)
       : result.data;
-    res.json({ ok: true, data, total: result.total });
+    // sum_total / sum_paid: totales del filtro completo en moneda base, para el sumador al pie.
+    res.json({ ok: true, data, total: result.total, sum_total: result.sum_total, sum_paid: result.sum_paid, sum_pending: result.sum_pending });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener ventas" });

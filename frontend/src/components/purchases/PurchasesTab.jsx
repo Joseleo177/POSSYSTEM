@@ -93,7 +93,9 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                     <div className="flex-1 min-h-0 flex flex-col">
                         {/* Subheader: buscador + dropdown de filtros */}
                         <div className="shrink-0 px-6 py-4 border-b border-border/10 dark:border-white/5 bg-surface-3/30 dark:bg-white/[0.01] flex flex-wrap items-center gap-3">
-                            <div className="relative max-w-md flex-1 min-w-[240px] group">
+                            {/* min-w-0 en móvil: el mínimo de 240px impedía que el input se
+                                encogiera y empujaba el botón de filtros a una segunda línea. */}
+                            <div className="relative max-w-md flex-1 min-w-0 sm:min-w-[240px] group">
                                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle opacity-40 group-focus-within:text-brand-500 group-focus-within:opacity-100 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
@@ -105,7 +107,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                 />
                             </div>
 
-                            <div className="relative">
+                            <div className="relative shrink-0">
                                 <button
                                     onClick={() => setShowFilterDrop(p => !p)}
                                     className={[
@@ -126,10 +128,17 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                 {showFilterDrop && (
                                     <>
                                         <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
-                                        <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                                        {/* Anclado por la derecha siempre: el botón vive al final de
+                                            la barra, así que con left-0 el panel crecía hacia afuera
+                                            y en móvil se salía de la pantalla. */}
+                                        <div className="absolute top-full right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
                                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado de Orden</div>
-                                                <div className="grid grid-cols-3 gap-1.5">
+                                                {/* flex-wrap y no grid-cols-3: en tres columnas fijas
+                                                    cada botón se quedaba en 81px y "PENDIENTE" no
+                                                    cabía, así que el rótulo salía cortado. Así se
+                                                    reparten el ancho y bajan de línea si hace falta. */}
+                                                <div className="flex flex-wrap gap-1.5">
                                                     {[
                                                         { id: "borrador",  label: "Borrador" },
                                                         { id: "pendiente", label: "Pendiente" },
@@ -139,7 +148,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                                         return (
                                                             <button key={f.id}
                                                                 onClick={() => { state.setListOrderStatus(active ? "" : f.id); state.setPurchasesPage(1); }}
-                                                                className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${active ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                                                className={`flex-1 whitespace-nowrap px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${active ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
                                                                 {f.label}
                                                             </button>
                                                         );
@@ -148,7 +157,11 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                             </div>
                                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado de Pago</div>
-                                                <div className="grid grid-cols-3 gap-1.5">
+                                                {/* flex-wrap y no grid-cols-3: en tres columnas fijas
+                                                    cada botón se quedaba en 81px y "PENDIENTE" no
+                                                    cabía, así que el rótulo salía cortado. Así se
+                                                    reparten el ancho y bajan de línea si hace falta. */}
+                                                <div className="flex flex-wrap gap-1.5">
                                                     {[
                                                         { id: "pagado",    label: "Pagado" },
                                                         { id: "parcial",   label: "Parcial" },
@@ -158,7 +171,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                                         return (
                                                             <button key={f.id}
                                                                 onClick={() => { state.setListStatus(active ? "" : f.id); state.setPurchasesPage(1); }}
-                                                                className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${active ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                                                className={`flex-1 whitespace-nowrap px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${active ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
                                                                 {f.label}
                                                             </button>
                                                         );

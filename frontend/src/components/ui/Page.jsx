@@ -13,8 +13,19 @@ export default function Page({ module = "Módulo", title, subheader, actions, ch
                     </h1>
                 </div>
 
+                {/* La barra ya podía desplazarse, pero con la scrollbar oculta el último botón
+                    aparecía cortado sin ninguna pista de que hubiera más: se leía como un fallo
+                    de maquetación. El desvanecido del borde derecho lo delata. Se hace con
+                    mask-image y no con un degradado de color para no tener que acertarle al
+                    fondo del header en claro y en oscuro. */}
                 {actions && (
-                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 max-w-full overflow-x-auto no-scrollbar py-0.5 ml-auto">
+                    <div
+                        className="flex items-center gap-1.5 sm:gap-2 shrink min-w-0 overflow-x-auto no-scrollbar py-0.5 ml-auto"
+                        style={{
+                            WebkitMaskImage: "linear-gradient(to right, #000 calc(100% - 20px), transparent)",
+                            maskImage: "linear-gradient(to right, #000 calc(100% - 20px), transparent)",
+                        }}
+                    >
                         {actions}
                     </div>
                 )}

@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { api } from "../../services/api";
-import { exportToCSV } from "../../utils/exportUtils";
-import { fmtDateShort, todayISO } from "../../helpers";
+import { todayISO } from "../../helpers";
 import { resolveRate } from "../../components/ui/RateField";
 
 const LIMIT = 50;
@@ -109,16 +108,6 @@ export function useIngresos({ notify, journals }) {
         finally { setSaving(false); }
     };
 
-    const handleExportCSV = () => {
-        const headers = ['Referencia', 'Fecha', 'Descripción', 'Categoría', 'Diario', 'Estado', 'Monto'];
-        const rows = incomes.map(e => [
-            e.reference || '-', fmtDateShort(e.created_at),
-            e.description, e.category_name, e.journal_name || '-',
-            e.status, e.amount,
-        ]);
-        exportToCSV('Historial_Ingresos', rows, headers);
-    };
-
     const totalPages = Math.ceil(total / LIMIT);
     const hasFilters = activeFilters.length > 0 || activeCats.length > 0 || !!histDateFrom || !!histDateTo;
 
@@ -135,7 +124,7 @@ export function useIngresos({ notify, journals }) {
         form, setForm, saving,
         selectedJournal, currentRate, currentSymbol, configuredRate, baseEquivalent,
         toggleFilter, toggleCat, clearFilters,
-        handleVoid, handleCreate, handleExportCSV,
+        handleVoid, handleCreate,
         hasFilters, totalPages,
     };
 }

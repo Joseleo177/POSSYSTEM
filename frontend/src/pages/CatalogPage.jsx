@@ -135,6 +135,11 @@ export default function CatalogPage() {
         }
     };
 
+    // Se calcula aparte del propio selectAll porque el botón necesita saber en qué estado
+    // está para rotular "Todos" o "Ninguno".
+    const pageIds = products.map(p => p.id);
+    const allOnPageSelected = pageIds.length > 0 && pageIds.every(id => selectedProducts.some(x => x.id === id));
+
     // ── Subheader: tabs ───────────────────────────────────────
     const subheader = (
         <div className="flex gap-1 px-4 border-b border-border/20 dark:border-white/5">
@@ -182,7 +187,24 @@ export default function CatalogPage() {
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         <span className="hidden sm:inline">{isSelectionMode ? "Cancelar" : "Seleccionar"}</span>
                     </Button>
-                    {can("config") && (
+                    {/* Seleccionar todo vivía solo en el checkbox de cabecera de la tabla, así que
+                        en vista de iconos no había forma de marcar la página entera. Va en la barra
+                        para que funcione igual en los dos modos. Actúa sobre la página cargada,
+                        que es el mismo alcance que tenía el checkbox. */}
+                    {isSelectionMode && products.length > 0 && (
+                        <Button onClick={selectAll} variant="ghost"
+                            className="h-8 px-2 sm:px-3 text-[10px] shadow-none border border-border dark:border-white/10 text-content-subtle hover:text-brand-500"
+                            title={allOnPageSelected ? "Quitar la selección de esta página" : "Seleccionar todos los de esta página"}>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={allOnPageSelected ? "M6 18L18 6M6 6l12 12" : "M9 12l2 2 4-4M4 6h16M4 18h16"} />
+                            </svg>
+                            <span className="hidden sm:inline">{allOnPageSelected ? "Ninguno" : "Todos"}</span>
+                        </Button>
+                    )}
+                    {/* Compartir y Nuevo se esconden mientras haya selección: no aplican a lo
+                        seleccionado y, sumados a Imprimir, Publicar y Ocultar, dejaban seis
+                        botones peleando por la barra. Vuelven al soltar la selección. */}
+                    {can("config") && selectedProducts.length === 0 && (
                         <Button onClick={() => setPublicLinkModal(true)} variant="ghost"
                             className="h-8 px-2 sm:px-3 text-[10px] shadow-none border border-border dark:border-white/10 text-content-subtle hover:text-brand-500"
                             title="Enlace de solo lectura para clientes">
@@ -190,7 +212,7 @@ export default function CatalogPage() {
                             <span className="hidden sm:inline">Compartir</span>
                         </Button>
                     )}
-                    {can("products") && (
+                    {can("products") && selectedProducts.length === 0 && (
                         <Button onClick={() => { setProductEditData(null); setProductModal(true); }} className="h-8 px-2.5 sm:px-3 text-[10px] shadow-none">
                             + <span className="hidden sm:inline">Nuevo Producto</span><span className="sm:hidden">Nuevo</span>
                         </Button>

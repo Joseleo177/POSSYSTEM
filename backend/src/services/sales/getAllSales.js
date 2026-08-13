@@ -81,5 +81,63 @@ module.exports = async function getAllSales(query, tenant = {}) {
     return item;
   });
 
-  return { data, total: count };
+  // Totales del filtro COMPLETO, no de la página. Se calculan en SQL sobre el mismo where:
+  // sumar solo las filas visibles daría una cifra que no corresponde a lo filtrado. Van en
+  // moneda base, que es la única común. El pendiente resta devoluciones y cobros, igual que
+  // el balance por fila, y se piso a 0 por venta para no restar los saldos negativos que
+  // dejan los cobros en divisas a tasa de efectivo.
+  // Sin JOIN a sale_items: ese join devuelve una fila por ítem y multiplicaría cada total por
+  // la cantidad de líneas de su venta. El EXISTS replica el `required: true` del listado
+  // —descartar ventas sin ítems— sin duplicar ninguna fila.
+  const [totals] = await Sale.findAll({
+    where: {
+      [Op.and]: [
+        ...andClauses,
+        Sequelize.literal('EXISTS (SELECT 1 FROM sale_items WHERE sale_id = "Sale"."id")'),
+      ],
+    },
+    attributes: [
+      // Las anuladas no suman: no son facturación. Siguen listándose —hay que poder verlas y
+      // auditarlas— pero quedan fuera de los tres totales, para que el pie hable solo de
+      // facturas válidas y las cifras cierren entre sí.
+      [Sequelize.literal(`COALESCE(SUM(CASE WHEN "Sale"."status" IN ('anulado','devuelto') THEN 0 ELSE "Sale"."total" END), 0)`), "sum_total"],
+      // "Cobrado" es lo aplicado a estas facturas, no el efectivo que entró:
+      //  - una factura 'pagado' cuenta por su total, porque el sistema ya la dio por saldada
+      //    aunque los cobros sumen unos céntimos menos (tolerancia de redondeo por línea);
+      //  - en las demás se topa al total, para que el sobrante de un cobro en divisas a tasa
+      //    de efectivo no infle la cifra.
+      // Lo que sobró sí entró a caja y se ve en el módulo de Pagos. Con este criterio,
+      // Total − Cobrado da exactamente el Pendiente.
+      [Sequelize.literal(`COALESCE(SUM(
+        CASE WHEN "Sale"."status" IN ('anulado','devuelto') THEN 0
+             WHEN "Sale"."status" = 'pagado' THEN "Sale"."total"
+             ELSE LEAST(
+               (SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = "Sale"."id")
+                 + (SELECT COALESCE(SUM(total),0) FROM returns WHERE sale_id = "Sale"."id"),
+               "Sale"."total")
+        END), 0)`), "sum_paid"],
+      // El pendiente NO es total - cobrado: así, una factura anulada aportaría su monto
+      // completo a la deuda pese a no deber nada. Se calcula por venta con el mismo criterio
+      // que item.balance de arriba —anulada, devuelta y pagada no arrastran saldo, y el piso
+      // es 0 para no restar los negativos que dejan los cobros en divisas a tasa de efectivo—
+      // y recién entonces se suma.
+      [Sequelize.literal(`COALESCE(SUM(
+        CASE WHEN "Sale"."status" IN ('anulado', 'devuelto', 'pagado') THEN 0
+             ELSE GREATEST(
+               "Sale"."total"
+                 - (SELECT COALESCE(SUM(total),0)  FROM returns  WHERE sale_id = "Sale"."id")
+                 - (SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = "Sale"."id"),
+               0)
+        END), 0)`), "sum_pending"],
+    ],
+    raw: true,
+  });
+
+  return {
+    data,
+    total: count,
+    sum_total:   parseFloat(totals?.sum_total   || 0),
+    sum_paid:    parseFloat(totals?.sum_paid    || 0),
+    sum_pending: parseFloat(totals?.sum_pending || 0),
+  };
 };

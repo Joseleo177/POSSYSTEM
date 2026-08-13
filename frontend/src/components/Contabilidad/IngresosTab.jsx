@@ -27,7 +27,7 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
         form, setForm, saving,
         currentSymbol, currentRate, configuredRate, baseEquivalent, selectedJournal,
         toggleFilter, toggleCat, clearFilters,
-        handleVoid, handleCreate, handleExportCSV,
+        handleVoid, handleCreate,
         hasFilters, totalPages,
     } = useIngresos({ notify, journals });
 
@@ -92,7 +92,6 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
-                <Button className="h-8 px-3 text-[10px] bg-surface-2 dark:bg-white/5 text-content-subtle border border-border/30 dark:border-white/10 hover:text-content shadow-none" onClick={handleExportCSV}>CSV</Button>
                 <Button className="h-8 px-3 text-[10px]" onClick={() => setShowCreate(true)}>+ Nuevo Ingreso</Button>
             </div>
         </div>

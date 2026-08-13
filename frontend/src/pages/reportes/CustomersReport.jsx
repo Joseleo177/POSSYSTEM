@@ -3,26 +3,35 @@ import { api } from "../../services/api";
 import { buildCustomersExcel } from "../../helpers/excel";
 import {
  fmt$, fmtN, pct,
- useReport, defaultRange, usePagination, Pagination, useExportFull,
+ useReport, defaultRange, Pagination, useExportFull,
  DateRangePicker, KpiCard, SectionHeader, Card, Loading, ExportButton,
 } from "./reportes.utils";
 
 export default function CustomersReport() {
  const [range, setRange] = useState(defaultRange(30));
  const [inactiveDays, setInactiveDays] = useState(45);
- const { data, loading, error } = useReport(api.reports.customersAnalysis, { date_from: range.from, date_to: range.to, inactive_days: inactiveDays }, [range, inactiveDays]);
- const exportFull = useExportFull(api.reports.customersAnalysis, { date_from: range.from, date_to: range.to, inactive_days: inactiveDays }, (d) => buildCustomersExcel(d, range));
  const [view, setView] = useState("top");
+ // Paginación en el servidor, no sobre lo ya recibido: el reporte traía un top recortado y
+ // el resto de los clientes era inalcanzable. La página viaja como offset, así que cambiarla
+ // pide datos nuevos. Al cambiar de pestaña vuelve a la primera.
+ const PAGE_SIZE = 25;
+ const [page, setPage] = useState(1);
+ const params = {
+   date_from: range.from, date_to: range.to, inactive_days: inactiveDays,
+   limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
+ };
+ const { data, loading, error } = useReport(api.reports.customersAnalysis, params, [range, inactiveDays, page]);
+ // El export pide el dataset completo aparte, así que va sin limit ni offset.
+ const exportFull = useExportFull(api.reports.customersAnalysis, { date_from: range.from, date_to: range.to, inactive_days: inactiveDays }, (d) => buildCustomersExcel(d, range));
  const rr = data?.repeat_rate;
- const topPag = usePagination(data?.top_customers ?? []);
- const inactivePag = usePagination(data?.inactive_customers ?? []);
- const newPag = usePagination(data?.new_customers ?? []);
+
+ const totalFor = { top: data?.totals?.top ?? 0, inactive: data?.totals?.inactive ?? 0, new: data?.totals?.new ?? 0 };
+ const currentTotal = totalFor[view] || 0;
+ const totalPages = Math.max(1, Math.ceil(currentTotal / PAGE_SIZE));
 
  const handleViewChange = (k) => {
   setView(k);
-  topPag.setPage(1);
-  inactivePag.setPage(1);
-  newPag.setPage(1);
+  setPage(1);
  };
 
  return (
@@ -38,10 +47,12 @@ export default function CustomersReport() {
  {!loading && !error && data && (
  <div className="flex-1 min-h-0 space-y-3 overflow-auto">
  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
- <KpiCard label="Nuevos Clientes" value={fmtN(data.new_customers.length)} icon="" color="text-brand-500" />
- <KpiCard label="Clientes Inactivos" value={fmtN(data.inactive_customers.length)} icon="" color="text-danger" sub={`>${inactiveDays}d`} />
+ {/* Los KPI salen de totals y no del largo de los arrays: ahora esos arrays son una página
+     de 25, así que contarlos daría 25 en cuanto haya más clientes que eso. */}
+ <KpiCard label="Nuevos Clientes" value={fmtN(totalFor.new)} icon="" color="text-brand-500" />
+ <KpiCard label="Clientes Inactivos" value={fmtN(totalFor.inactive)} icon="" color="text-danger" sub={`>${inactiveDays}d`} />
  <KpiCard label="Tasa Recurrencia" value={rr?.identified_customers > 0 ? `${pct(rr.repeat_customers, rr.identified_customers)}%` : "—"} icon="" color="text-blue-500" />
- <KpiCard label="Crecimiento" value={`+${pct(data.new_customers.length, (rr?.identified_customers || 1))}%`} icon="" color="text-green-500" />
+ <KpiCard label="Crecimiento" value={`+${pct(totalFor.new, (rr?.identified_customers || 1))}%`} icon="" color="text-green-500" />
  </div>
 
  <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide shrink-0">
@@ -94,7 +105,7 @@ export default function CustomersReport() {
  )}
  </thead>
  <tbody className="divide-y divide-border/20 dark:divide-white/5">
- {view === "top" && topPag.paginated.map((c, i) => (
+ {view === "top" && (data?.top_customers ?? []).map((c, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2">
  <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{c.name}</div>
@@ -106,7 +117,7 @@ export default function CustomersReport() {
  <td className="px-4 py-2 text-center text-[11px] font-black text-content-subtle uppercase">{new Date(c.last_purchase).toLocaleDateString("es-VE")}</td>
  </tr>
  ))}
- {view === "inactive" && inactivePag.paginated.map((c, i) => (
+ {view === "inactive" && (data?.inactive_customers ?? []).map((c, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2">
  <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{c.name}</div>
@@ -122,7 +133,7 @@ export default function CustomersReport() {
  ))}
  {view === "new" && (data.new_customers.length === 0
  ? <tr><td colSpan={5} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin clientes nuevos en este período</td></tr>
- : newPag.paginated.map((c, i) => (
+ : (data?.new_customers ?? []).map((c, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
  <td className="px-4 py-2 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{c.name}</td>
  <td className="px-4 py-2 text-[11px] text-content-subtle">{c.phone || "—"}</td>
@@ -147,9 +158,9 @@ export default function CustomersReport() {
  </tbody>
  </table>
  </div>
- {view === "top" && <Pagination page={topPag.page} totalPages={topPag.totalPages} total={topPag.total} onPage={topPag.setPage} />}
- {view === "inactive" && <Pagination page={inactivePag.page} totalPages={inactivePag.totalPages} total={inactivePag.total} onPage={inactivePag.setPage} />}
- {view === "new" && <Pagination page={newPag.page} totalPages={newPag.totalPages} total={newPag.total} onPage={newPag.setPage} />}
+ {/* Un solo paginador: el total sale de la vista activa y el backend responde esa página.
+     "Segmentación" no lista clientes, así que no lo lleva. */}
+ {view !== "ticket" && <Pagination page={page} totalPages={totalPages} total={currentTotal} onPage={setPage} />}
  </Card>
  </div>
  )}
