@@ -7,6 +7,11 @@ async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep }
   const dS = dateClause(df, dt, 's');
   const lim = parseInt(limit) || 0;   // 0 = usar defaults de pantalla
 
+  // Mismo criterio de "ingreso realizado" que salesReport. Va en una sola constante
+  // porque antes solo lo aplicaba la consulta por día: el resumen y los desgloses
+  // sumaban también las anuladas, así que la pantalla se contradecía a sí misma.
+  const stS = `AND s.status = 'pagado'`;
+
   const [byProduct, byCategory, summary, byDay] = await Promise.all([
     sequelize.query(
       `SELECT
@@ -26,7 +31,7 @@ async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep }
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
        LEFT JOIN categories c ON p.category_id = c.id
-       WHERE TRUE ${tcS} ${dS}
+       WHERE TRUE ${tcS} ${dS} ${stS}
          AND COALESCE(si.cost_price, p.cost_price) > 0
        GROUP BY si.product_id, si.name, c.name
        ORDER BY gross_margin DESC
@@ -48,7 +53,7 @@ async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep }
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
        LEFT JOIN categories c ON p.category_id = c.id
-       WHERE TRUE ${tcS} ${dS}
+       WHERE TRUE ${tcS} ${dS} ${stS}
        GROUP BY c.name
        ORDER BY gross_margin DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -66,7 +71,7 @@ async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep }
        FROM sale_items si
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
-       WHERE COALESCE(si.cost_price, p.cost_price) > 0 ${tcS} ${dS}`,
+       WHERE COALESCE(si.cost_price, p.cost_price) > 0 ${tcS} ${dS} ${stS}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -82,7 +87,7 @@ async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep }
        FROM sale_items si
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
-       WHERE s.status = 'pagado' ${tcS} ${dS}
+       WHERE TRUE ${tcS} ${dS} ${stS}
        GROUP BY ${localDate('s.created_at')}
        ORDER BY day ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

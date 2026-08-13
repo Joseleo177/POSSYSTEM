@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { fmtNumber, fmtInt, todayISO, toLocalISO } from "../../helpers";
 import GlobalDateRangePicker from "../../components/ui/DateRangePicker";
 
@@ -141,20 +141,32 @@ export function ProgressBar({ value, max, color = "bg-warning" }) {
  );
 }
 
-export function BarChart({ data, xKey, yKey, color = "#fabd2f", height = 160 }) {
+// `series` dibuja varios tramos apilados por barra ([{ key, color, label }], de abajo
+// hacia arriba); `yKey` + `color` siguen sirviendo para el caso de una sola serie.
+export function BarChart({ data, xKey, yKey, series, color = "#fabd2f", height = 160 }) {
  const ref = useRef(null);
+ const tramos = useMemo(
+ () => (series?.length ? series : [{ key: yKey, color }]),
+ [series, yKey, color]
+ );
  useEffect(() => {
  if (!data?.length || !ref.current) return;
  const canvas = ref.current;
  const ctx = canvas.getContext("2d");
  const W = canvas.offsetWidth; const H = height;
- canvas.width = W; canvas.height = H;
- const maxY = Math.max(...data.map(d => parseFloat(d[yKey]) || 0), 1);
+ // Sin esto el canvas se rasteriza a 1x y las barras salen borrosas en pantallas retina.
+ const dpr = window.devicePixelRatio || 1;
+ canvas.width = W * dpr; canvas.height = H * dpr;
+ ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+ const totalDe = d => tramos.reduce((t, s) => t + (parseFloat(d[s.key]) || 0), 0);
+ const maxY = Math.max(...data.map(totalDe), 1);
  const pad = { top: 10, right: 10, bottom: 28, left: 55 };
  const cW = W - pad.left - pad.right;
  const cH = H - pad.top - pad.bottom;
  const slotW = cW / data.length;
- const barW = Math.min(40, Math.max(3, slotW - 3));
+ // Antes el ancho se topaba en 40px, así que con pocos días las barras quedaban
+ // flotando en medio de slots enormes. Ahora llenan el slot menos una holgura.
+ const barW = Math.max(3, Math.min(slotW - Math.min(12, slotW * 0.14), 120));
  ctx.clearRect(0, 0, W, H);
  for (let i = 0; i <= 4; i++) {
  const y = pad.top + (cH / 4) * i;
@@ -166,20 +178,41 @@ export function BarChart({ data, xKey, yKey, color = "#fabd2f", height = 160 }) 
  }
  data.forEach((d, i) => {
  const x = pad.left + i * slotW + (slotW - barW) / 2;
- const barH = ((parseFloat(d[yKey]) || 0) / maxY) * cH;
- const y = pad.top + cH - barH;
- const grad = ctx.createLinearGradient(0, y, 0, pad.top + cH);
- grad.addColorStop(0, color + "cc"); grad.addColorStop(1, color + "22");
+ let base = pad.top + cH;   // se apila de abajo hacia arriba
+ tramos.forEach((s, si) => {
+ const alto = ((parseFloat(d[s.key]) || 0) / maxY) * cH;
+ if (alto <= 0) return;
+ const y = base - alto;
+ const grad = ctx.createLinearGradient(0, y, 0, base);
+ grad.addColorStop(0, s.color + "cc"); grad.addColorStop(1, s.color + "22");
  ctx.fillStyle = grad;
- ctx.beginPath(); ctx.roundRect(x, y, barW, barH, [3, 3, 0, 0]); ctx.fill();
+ // Solo el tramo de más arriba lleva las esquinas redondeadas.
+ const r = si === tramos.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0];
+ ctx.beginPath(); ctx.roundRect(x, y, barW, alto, r); ctx.fill();
+ base = y;
+ });
  const step = Math.ceil(data.length / 10);
  if (i % step === 0) {
  ctx.fillStyle = "rgba(150,150,150,0.7)"; ctx.font = "8px Inter,sans-serif"; ctx.textAlign = "center";
  ctx.fillText(String(d[xKey]).slice(5), x + barW / 2, H - 8);
  }
  });
- }, [data, yKey, xKey, color, height]);
- return <canvas ref={ref} className="w-full" style={{ height }} />;
+ }, [data, tramos, xKey, height]);
+ return (
+ <div>
+  <canvas ref={ref} className="w-full" style={{ height }} />
+  {tramos.length > 1 && (
+  <div className="flex items-center justify-center gap-4 mt-2">
+   {tramos.map(s => (
+   <span key={s.key} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/40">
+    <span className="w-2.5 h-2.5 rounded-sm" style={{ background: s.color }} />
+    {s.label || s.key}
+   </span>
+   ))}
+  </div>
+  )}
+ </div>
+ );
 }
 
 export function usePagination(items = [], pageSize = 25) {

@@ -15,13 +15,17 @@ function SalesChart({ data }) {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
         const W = canvas.offsetWidth; const H = canvas.offsetHeight;
-        canvas.width = W; canvas.height = H;
+        // Sin dpr el canvas se rasteriza a 1x y las barras salen borrosas en retina.
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = W * dpr; canvas.height = H * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const maxRev = Math.max(...data.map(d => d.revenue), 1);
         const pad = { top: 20, right: 10, bottom: 25, left: 40 };
         const chartW = W - pad.left - pad.right;
         const chartH = H - pad.top - pad.bottom;
         const slotW = chartW / data.length;
-        const barW = Math.min(30, Math.max(4, slotW - 6));
+        // El tope de 30px dejaba las barras flotando cuando hay pocos días con ventas.
+        const barW = Math.max(4, Math.min(slotW - Math.min(8, slotW * 0.14), 120));
 
         ctx.clearRect(0, 0, W, H);
         

@@ -49,7 +49,17 @@ export default function MarginsReport() {
  <SectionHeader title="Flujo de Rentabilidad" sub="Ingresos vs. utilidad diaria" />
  {(data.by_day ?? []).length > 0 ? (
  <div className="pt-2">
- <BarChart data={data.by_day} xKey="day" yKey="profit" color="#22c55e" height={140} />
+ {/* Apilado: costo + utilidad = ingreso del día, que es lo que promete el subtítulo.
+     Antes solo se dibujaba la utilidad y los ingresos no aparecían por ningún lado. */}
+ <BarChart
+  data={data.by_day}
+  xKey="day"
+  height={140}
+  series={[
+  { key: "cost",   color: "#94a3b8", label: "Costo" },
+  { key: "profit", color: "#22c55e", label: "Utilidad" },
+  ]}
+ />
  {(() => {
  const peak = data.by_day.reduce((a, b) => parseFloat(b.profit) > parseFloat(a.profit) ? b : a, data.by_day[0]);
  return (
