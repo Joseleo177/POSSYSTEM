@@ -742,8 +742,11 @@ export default function PublicCatalogPage({ token }) {
                 <div className="fixed inset-0 z-40 flex items-end sm:items-center sm:justify-center">
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                         onClick={() => (placedOrder ? closeConfirmation() : setCartOpen(false))} />
-                    <div className="relative w-full sm:max-w-md bg-surface dark:bg-surface-dark-2 rounded-t-3xl sm:rounded-3xl border-t sm:border border-border dark:border-white/10 max-h-[90vh] flex flex-col">
-                        <div className="relative px-4 pt-4 pb-3 flex flex-col items-center justify-center border-b border-border dark:border-white/5">
+                    {/* En escritorio el panel iba al mismo ancho que en el teléfono (max-w-md), así
+                        que los mismos controles —dimensionados para el pulgar— quedaban apretados
+                        contra los bordes y la fila del producto se leía desproporcionada. */}
+                    <div className="relative w-full sm:max-w-lg bg-surface dark:bg-surface-dark-2 rounded-t-3xl sm:rounded-3xl border-t sm:border border-border dark:border-white/10 max-h-[90vh] flex flex-col">
+                        <div className="relative px-5 pt-5 pb-4 flex flex-col items-center justify-center border-b border-border dark:border-white/5">
                             <h2 className="text-[13px] font-black uppercase tracking-tight text-content dark:text-white text-center">
                                 {placedOrder ? "Pedido enviado" : "Tu pedido"}
                             </h2>
@@ -810,9 +813,9 @@ export default function PublicCatalogPage({ token }) {
                             </div>
                         ) : (
                             <>
-                                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
                                     {cart.map(it => (
-                                        <div key={it.id} className="flex items-center gap-2.5">
+                                        <div key={it.id} className="flex items-center gap-3">
                                             <div className="w-11 h-11 rounded-xl bg-surface-2 dark:bg-white/5 overflow-hidden shrink-0 relative">
                                                 {it.image_url ? (
                                                     <img src={resolveImageUrl(it.image_url)} alt={it.name} onError={imgRetryOnError}
@@ -859,9 +862,11 @@ export default function PublicCatalogPage({ token }) {
                                                         +
                                                     </button>
                                                 </div>
+                                                {/* Mismo alto que el selector de cantidad de al lado: con
+                                                    w-9 sobresalía y desalineaba la fila. */}
                                                 <button onClick={() => removeFromCart(it.id)} title="Eliminar" aria-label={`Eliminar ${it.name}`}
-                                                    className="w-9 h-9 rounded-xl flex items-center justify-center text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90 transition-all">
-                                                    <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    className="w-8 h-8 rounded-xl flex items-center justify-center text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90 transition-all">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                 </button>
                                             </div>
                                         </div>
@@ -874,13 +879,13 @@ export default function PublicCatalogPage({ token }) {
                                                 value={delivery}
                                                 onChange={e => setDelivery(e.target.value)}
                                                 placeholder="Dirección, hora, retiro en tienda..."
-                                                className="w-full h-9 mt-1 px-3 rounded-xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-[12px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 placeholder:text-content-subtle"
+                                                className="w-full h-11 mt-1.5 px-3.5 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-[12px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 placeholder:text-content-subtle"
                                             />
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="px-4 py-3 border-t border-border dark:border-white/5 space-y-2">
+                                <div className="px-5 py-4 border-t border-border dark:border-white/5 space-y-3">
                                     <div className="flex items-baseline justify-between">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Total</span>
                                         <div className="text-right">
@@ -903,7 +908,7 @@ export default function PublicCatalogPage({ token }) {
                                             onClick={clearCart}
                                             disabled={sending}
                                             title="Vaciar pedido"
-                                            className="shrink-0 h-12 px-3.5 rounded-2xl border border-danger/30 text-danger flex items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-widest hover:bg-danger/10 active:scale-95 transition-all disabled:opacity-40"
+                                            className="shrink-0 h-11 px-4 rounded-2xl border border-danger/30 text-danger flex items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-widest hover:bg-danger/10 active:scale-95 transition-all disabled:opacity-40"
                                         >
                                             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                             <span className="hidden sm:inline">Vaciar</span>
@@ -911,7 +916,7 @@ export default function PublicCatalogPage({ token }) {
                                         <button
                                             onClick={submitOrder}
                                             disabled={!canSubmit || sending}
-                                            className="flex-1 h-12 rounded-2xl bg-brand-500 text-black text-[12px] font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-[0.99] transition-transform disabled:opacity-40"
+                                            className="flex-1 h-11 rounded-2xl bg-brand-500 text-black text-[12px] font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-[0.99] transition-transform disabled:opacity-40"
                                         >
                                             {sending ? "Enviando..." : "Realizar pedido"}
                                         </button>
