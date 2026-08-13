@@ -28,6 +28,27 @@ function normalizeSale(sale) {
         exchange_rate: sale.exchange_rate || sale.exchangeRate || 1,
         final_payment_rate: sale.final_payment_rate || null,
         status: sale.status || null,
+        // Cuánto se abonó y cuánto queda. Sin esto el ticket de una venta a crédito no se
+        // distinguía de uno pagado: ambos terminaban en el total y el "gracias por su compra".
+        amount_paid: parseFloat(sale.amount_paid ?? sale.paid ?? 0),
+        balance: parseFloat(sale.balance ?? 0),
+    };
+}
+
+// Cómo quedó la venta al emitir el ticket. Se imprime siempre —incluso pagada— porque el
+// papel es el comprobante que se llevan cliente y tienda: si no dice cómo se pagó, una venta
+// a crédito y una cobrada en efectivo son indistinguibles después.
+function paymentSummary(s) {
+    const status = (s.status || "").toLowerCase();
+    const pendiente = ["pendiente", "parcial", "borrador", "espera"].includes(status);
+    return {
+        pendiente,
+        // A crédito no hay diario todavía: nadie cobró nada.
+        metodo: s.journal_name || (pendiente ? "Crédito" : "—"),
+        etiqueta: status === "parcial" ? "Abono parcial"
+            : status === "pagado" ? "Pagado"
+            : pendiente ? "Pendiente de pago"
+            : null,
     };
 }
 
@@ -94,6 +115,7 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
     const rate = (effectiveRate > 1) ? effectiveRate : parseFloat(displayCurrency?.exchange_rate || 1);
     const sym = displayCurrency?.symbol || "Ref.";
     const totals = calcReceiptTotals(s, rate, sym);
+    const pago = paymentSummary(s);
     const dateStr = fmtDate(s.created_at);
 
     const fmtQty  = q => { const n = parseFloat(q); return n % 1 === 0 ? String(Math.round(n)) : n; };
@@ -219,6 +241,13 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
         <div class="total-row big"><span>TOTAL</span><span>${totals.fmtTotal}</span></div>
     </div>
 
+    <div class="totals">
+        <div class="total-row"><span>FORMA DE PAGO</span><span>${pago.metodo}</span></div>
+        ${pago.etiqueta ? `<div class="total-row"><span>ESTADO</span><span>${pago.etiqueta.toUpperCase()}</span></div>` : ""}
+        ${s.amount_paid > 0 && pago.pendiente ? `<div class="total-row"><span>ABONADO</span><span>${fmt(s.amount_paid * rate, sym)}</span></div>` : ""}
+        ${pago.pendiente && s.balance > 0 ? `<div class="total-row big"><span>QUEDA DEBIENDO</span><span>${fmt(s.balance * rate, sym)}</span></div>` : ""}
+    </div>
+
     <div class="footer">${companyInfo?.footer || "¡Gracias por su compra!<br>Vuelva pronto"}</div>
 </body>
 </html>`;
@@ -253,6 +282,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
     const rate = isBase ? 1 : parseFloat(effectiveRate > 1 ? effectiveRate : (displayCurrency.exchange_rate || 1));
     const sym = isBase ? (baseCurrency?.symbol || "Ref.") : (displayCurrency.symbol || "Ref.");
     const totals = calcReceiptTotals(s, rate, sym);
+    const pago = paymentSummary(s);
 
     const dateStr = fmtDate(s.created_at);
     const invoiceLabel = s.invoice_number || `#${s.id}`;
@@ -349,6 +379,34 @@ export default function ReceiptModal({ open, onClose, sale }) {
                         <div className="text-content dark:text-white font-black text-sm leading-none">{totals.fmtTotal}</div>
                     </div>
                 </div>
+            </div>
+
+            {/* Forma de pago y estado — mismo bloque que se imprime en el papel. */}
+            <div className="border-t border-border/10 dark:border-white/5 pt-2 mb-3">
+                <div className="flex justify-between items-center py-0.5 text-xs">
+                    <span className="text-content-muted dark:text-content-dark-muted">Forma de pago</span>
+                    <span className="text-content dark:text-content-dark font-bold">{pago.metodo}</span>
+                </div>
+                {pago.etiqueta && (
+                    <div className="flex justify-between items-center py-0.5 text-xs">
+                        <span className="text-content-muted dark:text-content-dark-muted">Estado</span>
+                        <span className={`font-black uppercase tracking-tight ${pago.pendiente ? "text-danger" : "text-success"}`}>
+                            {pago.etiqueta}
+                        </span>
+                    </div>
+                )}
+                {s.amount_paid > 0 && pago.pendiente && (
+                    <div className="flex justify-between items-center py-0.5 text-xs">
+                        <span className="text-content-muted dark:text-content-dark-muted">Abonado</span>
+                        <span className="text-success font-bold">{fmt(s.amount_paid * rate, sym)}</span>
+                    </div>
+                )}
+                {pago.pendiente && s.balance > 0 && (
+                    <div className="flex justify-between items-center py-1 border-t border-border/10 dark:border-white/5 mt-1 pt-1">
+                        <span className="text-content dark:text-content-dark font-black text-xs uppercase tracking-tighter">Queda debiendo</span>
+                        <span className="text-danger font-black text-sm">{fmt(s.balance * rate, sym)}</span>
+                    </div>
+                )}
             </div>
 
             {/* Footer */}
