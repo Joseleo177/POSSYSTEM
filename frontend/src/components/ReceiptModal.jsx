@@ -1,4 +1,6 @@
+import { useState, useEffect } from "react";
 import Modal from "./ui/Modal";
+import { api } from "../services/api";
 import { useApp } from "../context/AppContext";
 import { fmtMoney, fmtDate, resolveImageUrl, printInvoiceLetter } from "../helpers";
 
@@ -296,9 +298,27 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
 
 export default function ReceiptModal({ open, onClose, sale }) {
     const { storeName, companyInfo, baseCurrency, activeCurrencies, printerWidth } = useApp();
+
+    // Los listados (getAllSales) no traen los cobros: solo getOneSale los devuelve. Abriendo
+    // el ticket desde Contabilidad, la forma de pago salía en "—" porque el objeto venía sin
+    // Payments. Se completan aquí para que el comprobante sea el mismo se abra desde donde se
+    // abra. Recién cobrado en caja ya llegan con la venta, así que no se pide nada.
+    const [fetched, setFetched] = useState(null);
+    useEffect(() => {
+        if (!open || !sale?.id) { setFetched(null); return; }
+        const yaTraePagos = (sale.Payments || sale.payments || []).length > 0;
+        if (yaTraePagos) { setFetched(null); return; }
+        let alive = true;
+        api.sales.getOne(sale.id)
+            .then(r => alive && setFetched(r.data))
+            .catch(() => { /* el ticket se muestra igual, solo sin el detalle de cobros */ });
+        return () => { alive = false; };
+    }, [open, sale?.id]); // eslint-disable-line
+
     if (!open || !sale) return null;
 
-    const s = normalizeSale(sale);
+    // El objeto del listado manda para lo ya cargado; lo pedido solo aporta los cobros.
+    const s = normalizeSale(fetched ? { ...sale, Payments: fetched.Payments } : sale);
 
     // Siempre mostrar en la moneda no-base (VES). Si no hay, fallback a base.
     const displayCurrency = activeCurrencies?.find(c => !c.is_base) || baseCurrency;
