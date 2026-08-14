@@ -21,6 +21,7 @@ import CierreCajaModal     from "../components/CierreCajaModal";
 import CheckoutTypeModal       from "../components/cobro/CheckoutTypeModal";
 import QuotationConfirmModal  from "../components/cobro/QuotationConfirmModal";
 import QuantityModal          from "../components/cobro/QuantityModal";
+import CustomerDebtAlert      from "../components/cobro/CustomerDebtAlert";
 
 const fmt = fmtMoney;
 
@@ -108,12 +109,12 @@ export default function CobroPage() {
         customers: customer.customers,
         selectedCustIdx: customer.selectedCustIdx,
         setSelectedCustIdx: customer.setSelectedCustIdx,
-        setSelectedCustomer,
-        setCustomers: customer.setCustomers,
-        setCustSearch: customer.setCustSearch,
+        pickCustomer: customer.pickCustomer,
         openQtyModal: setQtyModalItem,
         setScanPending: (v) => { scanPendingRef.current = v; },
-        qtyModalOpen: !!qtyModalItem,
+        // Con un modal encima, las teclas no deben desviarse al buscador de productos:
+        // un escaneo mientras está el aviso de deuda escribiría en la pantalla de atrás.
+        modalOpen: !!qtyModalItem || !!customer.debtAlert,
         notify,
         setShowHeldModal, setShowPendingSales,
     });
@@ -184,6 +185,7 @@ export default function CobroPage() {
                 selectedCustomer={selectedCustomer} setSelectedCustomer={setSelectedCustomer}
                 custSearch={customer.custSearch} setCustSearch={customer.setCustSearch}
                 customers={customer.customers} setCustomers={customer.setCustomers}
+                pickCustomer={customer.pickCustomer}
                 selectedCustIdx={customer.selectedCustIdx}
                 setSelectedCustIdx={customer.setSelectedCustIdx}
                 setCustomerEditData={customer.setCustomerEditData}
@@ -232,6 +234,14 @@ export default function CobroPage() {
                 onSave={customer.saveCustomer}
                 editData={customer.customerEditData}
                 loading={customer.savingCustomer}
+            />
+            <CustomerDebtAlert
+                alert={customer.debtAlert}
+                onClose={() => customer.setDebtAlert(null)}
+                fmt={fmt}
+                convertToDisplay={convertToDisplay}
+                currSym={currSym}
+                baseCurrency={baseCurrency}
             />
             <PendingSalesModal
                 open={showPendingSales}

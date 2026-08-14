@@ -13,7 +13,7 @@ export default function CartSidebar({
     selectedSerieId, selectSerie, mySeries,
     activeWarehouse,
     selectedCustomer, setSelectedCustomer,
-    custSearch, setCustSearch, customers, setCustomers,
+    custSearch, setCustSearch, customers, setCustomers, pickCustomer,
     selectedCustIdx, setSelectedCustIdx,
     setCustomerEditData, setCustomerModal,
     cashSession, setShowCierre, setShowApertura, setShowHeldModal, heldCarts, setShowPendingSales,
@@ -227,13 +227,11 @@ export default function CartSidebar({
                                     } else if (e.key === "Enter") {
                                         e.preventDefault();
                                         if (selectedCustIdx >= 0 && selectedCustIdx < customers.length) {
-                                            const c = customers[selectedCustIdx];
-                                            setSelectedCustomer(c); setCustomers([]); setCustSearch(""); setSelectedCustIdx(-1);
+                                            pickCustomer(customers[selectedCustIdx]);
                                         } else if (selectedCustIdx === customers.length || customers.length === 0) {
                                             setCustomerEditData(buildNewCustomer(custSearch)); setCustomerModal(true); setCustSearch(""); setSelectedCustIdx(-1);
                                         } else if (customers.length === 1) {
-                                            const c = customers[0];
-                                            setSelectedCustomer(c); setCustomers([]); setCustSearch(""); setSelectedCustIdx(-1);
+                                            pickCustomer(customers[0]);
                                         }
                                     } else if (e.key === "Escape") {
                                         setCustSearch(""); setSelectedCustIdx(-1);
@@ -252,7 +250,7 @@ export default function CartSidebar({
                             {customers.map((c, idx) => (
                                 <button
                                     key={c.id}
-                                    onClick={() => { setSelectedCustomer(c); setCustomers([]); setCustSearch(""); setSelectedCustIdx(-1); }}
+                                    onClick={() => pickCustomer(c)}
                                     onMouseEnter={() => setSelectedCustIdx(idx)}
                                     className={`w-full text-left px-4 py-2 cursor-pointer border-b border-border/50 dark:border-border-dark/50 transition-colors flex flex-col
                                         ${idx === selectedCustIdx ? "bg-brand-500/20 border-l-4 border-l-brand-500" : "hover:bg-surface-3 dark:hover:bg-surface-dark-3"}`}

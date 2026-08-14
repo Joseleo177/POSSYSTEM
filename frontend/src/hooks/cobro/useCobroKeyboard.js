@@ -8,8 +8,8 @@ export function useCobroKeyboard({
     setSearch, setShowPayModal,
     searchInputRef,
     customers, selectedCustIdx, setSelectedCustIdx,
-    setSelectedCustomer, setCustomers, setCustSearch,
-    openQtyModal, setScanPending, qtyModalOpen, notify,
+    pickCustomer,
+    openQtyModal, setScanPending, modalOpen, notify,
     setShowHeldModal, setShowPendingSales,
 }) {
     useEffect(() => {
@@ -27,7 +27,7 @@ export function useCobroKeyboard({
             // Redirigir escritura al buscador si no hay ningún input enfocado
             const tag = e.target.tagName;
             const isInInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target.isContentEditable;
-            if (!isInInput && !qtyModalOpen && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            if (!isInInput && !modalOpen && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
                 e.preventDefault();
                 searchInputRef.current?.focus();
                 setSearch(prev => prev + e.key);
@@ -41,7 +41,7 @@ export function useCobroKeyboard({
                 if (e.key === "Enter" && selectedCustIdx >= 0) {
                     e.preventDefault();
                     const c = customers[selectedCustIdx];
-                    if (c) { setSelectedCustomer(c); setCustomers([]); setCustSearch(""); setSelectedCustIdx(-1); searchInputRef.current?.focus(); }
+                    if (c) { pickCustomer(c); searchInputRef.current?.focus(); }
                 }
                 return;
             }
@@ -120,7 +120,7 @@ export function useCobroKeyboard({
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [cart, holdCart, receipt, selectedIndex, filteredProducts, showConfirmCheckout,
-        checkout, customers, selectedCustIdx, setSelectedCustomer, setCustomers, setCustSearch,
+        checkout, customers, selectedCustIdx, pickCustomer,
         setSelectedCustIdx, setSelectedIndex, setSearch, setShowPayModal, setShowConfirmCheckout,
-        searchInputRef, openQtyModal, setScanPending, qtyModalOpen, notify]);
+        searchInputRef, openQtyModal, setScanPending, modalOpen, notify]);
 }
