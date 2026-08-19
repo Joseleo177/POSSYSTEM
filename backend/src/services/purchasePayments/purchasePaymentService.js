@@ -1,4 +1,5 @@
 const { PurchasePayment, Purchase, PaymentJournal, Currency, Employee, Expense, ExpenseCategory, sequelize } = require("../../models");
+const { assertWarehouseAccess } = require("../../middleware/auth");
 
 async function getPurchaseAmountPaid(purchase_id, t) {
   // Solo cuenta pagos cuyo Expense vinculado sigue activo (o no tiene Expense)
@@ -27,7 +28,11 @@ async function recalcPurchaseStatus(purchaseId, t) {
   return newStatus;
 }
 
-async function getPayments(purchaseId) {
+async function getPayments(purchaseId, req) {
+  // Los pagos son de la orden, y la orden es de una sucursal.
+  const purchaseRow = await Purchase.findByPk(purchaseId, { attributes: ["id", "warehouse_id"] });
+  if (purchaseRow) await assertWarehouseAccess(req, purchaseRow.warehouse_id, { optional: true });
+
   const payments = await PurchasePayment.findAll({
     where: { purchase_id: purchaseId },
     include: [
@@ -52,7 +57,7 @@ async function getPayments(purchaseId) {
   return { data };
 }
 
-async function createPayment(purchaseId, body, employeeId, companyId) {
+async function createPayment(purchaseId, body, employeeId, companyId, req) {
   const { amount, currency_id, exchange_rate, payment_journal_id, reference_date, reference_number, notes } = body;
 
   const payAmt = parseFloat(amount);
@@ -63,6 +68,8 @@ async function createPayment(purchaseId, body, employeeId, companyId) {
   try {
     const purchase = await Purchase.findByPk(purchaseId, { transaction: t, lock: true });
     if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
+    // Pagar a proveedor mueve dinero por cuenta de una sucursal concreta.
+    await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
     if (purchase.payment_status === "pagado") { const e = new Error("Esta compra ya fue pagada completamente"); e.status = 400; throw e; }
 
     const alreadyPaid    = await getPurchaseAmountPaid(purchase.id, t);
@@ -122,7 +129,7 @@ async function createPayment(purchaseId, body, employeeId, companyId) {
   }
 }
 
-async function removePayment(paymentId) {
+async function removePayment(paymentId, req) {
   const t = await sequelize.transaction();
   try {
     const payment = await PurchasePayment.findByPk(paymentId, { transaction: t, lock: true });
@@ -130,6 +137,7 @@ async function removePayment(paymentId) {
 
     const purchase = await Purchase.findByPk(payment.purchase_id, { transaction: t, lock: true });
     if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
+    await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
 
     await Expense.destroy({ where: { reference: `purchase_payment:${payment.id}` }, transaction: t });
     await payment.destroy({ transaction: t });

@@ -1,8 +1,13 @@
 const { Sale, SALE_INCLUDE } = require("./shared");
+const { assertWarehouseAccess } = require("../../middleware/auth");
 
-module.exports = async function getOneSale(id) {
+module.exports = async function getOneSale(id, req) {
   const s = await Sale.findByPk(id, { include: SALE_INCLUDE });
   if (!s) throw new Error("Venta no encontrada");
+
+  // El listado ya filtra por sucursal, pero pedir la factura por su id se saltaba el
+  // recorte: bastaba con adivinar el número para leer una venta de otra sucursal.
+  await assertWarehouseAccess(req, s.warehouse_id, { optional: true });
 
   const item = s.toJSON();
   item.customer_name = item.Customer?.name ?? null;

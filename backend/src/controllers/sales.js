@@ -5,7 +5,7 @@ const { visibleWarehouseIds, assertWarehouseAccess } = require("../middleware/au
 // PATCH /api/sales/:id
 const update = async (req, res) => {
   try {
-    const data = await salesService.updateSale(req.params.id, req.body);
+    const data = await salesService.updateSale(req.params.id, req.body, req);
     // Editar una cuenta en espera devuelve y vuelve a apartar inventario, igual que crearla
     // o anularla. Sin este aviso las otras cajas seguían mostrando el stock viejo hasta que
     // el cajero refrescaba a mano: era el único endpoint que movía existencias en silencio.
@@ -40,7 +40,7 @@ const acceptOrder = async (req, res) => {
 // GET /api/sales/:id
 const getOne = async (req, res) => {
   try {
-    const data = await salesService.getOneSale(req.params.id);
+    const data = await salesService.getOneSale(req.params.id, req);
     res.json({ ok: true, data });
   } catch (err) {
     res.status(err.status || 500).json({ ok: false, message: err.message });
@@ -73,7 +73,7 @@ const getAll = async (req, res) => {
 // POST /api/sales/:id/claim — la caja toma la cuenta para atenderla
 const claim = async (req, res) => {
   try {
-    await salesService.claimSale(req.params.id, req.employee?.id ?? null);
+    await salesService.claimSale(req.params.id, req.employee?.id ?? null, req);
     // Las demás cajas deben ver el candado al instante, no en su próxima recarga.
     broadcast(req.employee?.company_id ?? 0, 'sales:updated', {});
     res.json({ ok: true });
@@ -86,7 +86,7 @@ const claim = async (req, res) => {
 const release = async (req, res) => {
   try {
     const force = !!req.employee?.permissions?.all;
-    const data = await salesService.releaseSale(req.params.id, req.employee?.id ?? null, { force });
+    const data = await salesService.releaseSale(req.params.id, req.employee?.id ?? null, { force }, req);
     broadcast(req.employee?.company_id ?? 0, 'sales:updated', {});
     res.json({ ok: true, data });
   } catch (err) {
@@ -108,7 +108,7 @@ const getStats = async (req, res) => {
 // POST /api/sales
 const create = async (req, res) => {
   try {
-    const data = await salesService.createSale(req.body);
+    const data = await salesService.createSale(req.body, req);
     broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
     res.status(201).json({ ok: true, data });
   } catch (err) {
@@ -120,7 +120,7 @@ const create = async (req, res) => {
 // DELETE /api/sales/:id
 const cancel = async (req, res) => {
   try {
-    await salesService.cancelSale(req.params.id);
+    await salesService.cancelSale(req.params.id, req);
     broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
     res.json({ ok: true, message: "Venta anulada y stock restaurado" });
   } catch (err) {
@@ -132,7 +132,7 @@ const cancel = async (req, res) => {
 // POST /api/sales/:id/credit — entrega a crédito: asigna correlativo y deja por cobrar
 const confirmCredit = async (req, res) => {
   try {
-    const result = await salesService.confirmCreditSale(req.params.id);
+    const result = await salesService.confirmCreditSale(req.params.id, req);
     broadcast(req.employee?.company_id ?? 0, 'sales:updated', {});
     res.json({ ok: true, ...result });
   } catch (err) {

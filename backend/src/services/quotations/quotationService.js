@@ -66,11 +66,12 @@ async function getAll({ search, status, date_from, date_to, page = 1, limit = 30
   return { data: rows.map(withEmployeeName), total: count, page: parseInt(page), limit: parseInt(limit) };
 }
 
-async function getById(id) {
+async function getById(id, req) {
   const q = await Quotation.findByPk(id, {
     include: QUOT_INCLUDE,
   });
   if (!q) { const e = new Error("Cotización no encontrada"); e.status = 404; throw e; }
+  await assertWarehouseAccess(req, q.warehouse_id, { optional: true });
   return withEmployeeName(q);
 }
 
@@ -126,15 +127,16 @@ async function create(body, employeeId) {
   }
 }
 
-async function cancel(id) {
+async function cancel(id, req) {
   const q = await Quotation.findByPk(id);
   if (!q) { const e = new Error("Cotización no encontrada"); e.status = 404; throw e; }
+  await assertWarehouseAccess(req, q.warehouse_id, { optional: true });
   if (q.status !== 'pendiente') { const e = new Error("Solo se pueden anular cotizaciones pendientes"); e.status = 400; throw e; }
   await q.update({ status: 'anulada' });
   return q;
 }
 
-async function convert(quotationId, body, employeeId) {
+async function convert(quotationId, body, employeeId, req) {
   const { serie_id } = body;
   if (!serie_id) { const e = new Error("La serie es requerida"); e.status = 400; throw e; }
 
@@ -145,6 +147,7 @@ async function convert(quotationId, body, employeeId) {
     // y las líneas se leen aparte, dentro de la misma transacción.
     const quotation = await Quotation.findByPk(quotationId, { transaction: t, lock: true });
     if (!quotation) { const e = new Error("Cotización no encontrada"); e.status = 404; throw e; }
+    await assertWarehouseAccess(req, quotation.warehouse_id, { optional: true });
     const quotationItems = await QuotationItem.findAll({ where: { quotation_id: quotationId }, transaction: t });
     if (quotation.status !== 'pendiente') {
       const e = new Error("Solo se pueden convertir cotizaciones pendientes"); e.status = 400; throw e;
@@ -279,9 +282,10 @@ async function convert(quotationId, body, employeeId) {
   }
 }
 
-async function remove(id) {
+async function remove(id, req) {
   const q = await Quotation.findByPk(id, { include: [{ model: QuotationItem, as: 'items' }] });
   if (!q) { const e = new Error("Cotización no encontrada"); e.status = 404; throw e; }
+  await assertWarehouseAccess(req, q.warehouse_id, { optional: true });
   if (q.status !== 'anulada') { const e = new Error("Solo se pueden eliminar cotizaciones anuladas"); e.status = 400; throw e; }
   
   const t = await sequelize.transaction();

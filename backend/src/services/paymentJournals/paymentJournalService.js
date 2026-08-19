@@ -1,5 +1,6 @@
 const { PaymentJournal, Currency, Bank, Sale, Sequelize, sequelize } = require("../../models");
 const { localDate, TZ } = require("../reports/shared");
+const { visibleWarehouseIds } = require("../../middleware/auth");
 
 function flattenJournal(j) {
   const jj = j.toJSON ? j.toJSON() : j;
@@ -24,6 +25,38 @@ function tenantFilter(req) {
     tce: scoped ? `AND e.company_id = ${parseInt(company_id)}`  : '',
     tp:  scoped ? ` AND payment_journal_id = :id AND company_id = ${parseInt(company_id)}` : ' AND payment_journal_id = :id',
     texp:scoped ? ` AND payment_journal_id = :id AND company_id = ${parseInt(company_id)}` : ' AND payment_journal_id = :id',
+  };
+}
+
+// El diario (caja, banco) es de la empresa, pero lo que entra y sale de él ocurre en una
+// sucursal. Sin este recorte, el Estado de Cuenta mostraba a cualquier gerente el saldo
+// consolidado del negocio completo.
+//
+// Un cobro no guarda sucursal —la hereda de su venta—, así que se filtra por el join con
+// sales; los ingresos y egresos sí tienen almacén propio.
+// Las variantes `*Bare` son para las consultas de saldo, que van contra la tabla sin alias
+// ni join: ahí el almacén del cobro se resuelve con una subconsulta sobre sales.
+async function warehouseFilter(req) {
+  const allowed = await visibleWarehouseIds(req);
+  if (allowed === null) {                                          // admin: sin recorte
+    return { whP: '', whI: '', whE: '', whPBare: '', whIBare: '', whEBare: '', whPCount: '' };
+  }
+
+  const ids = allowed.filter(Number.isInteger);
+  if (!ids.length) {
+    const no = 'AND FALSE';
+    return { whP: no, whI: no, whE: no, whPBare: no, whIBare: no, whEBare: no, whPCount: no };
+  }
+
+  const list = ids.join(',');
+  return {
+    whP: `AND s.warehouse_id IN (${list})`,
+    whI: `AND i.warehouse_id IN (${list})`,
+    whE: `AND e.warehouse_id IN (${list})`,
+    whPBare: `AND sale_id IN (SELECT id FROM sales WHERE warehouse_id IN (${list}))`,
+    whPCount: `AND p.sale_id IN (SELECT id FROM sales WHERE warehouse_id IN (${list}))`,
+    whIBare: `AND warehouse_id IN (${list})`,
+    whEBare: `AND warehouse_id IN (${list})`,
   };
 }
 
@@ -80,6 +113,7 @@ async function deleteJournal(id) {
 async function getSummary(req) {
   const { date_from, date_to } = req.query;
   const { tenantWhere, tc, tce } = tenantFilter(req);
+  const { whP, whI, whE } = await warehouseFilter(req);
   const company_id  = req.employee?.company_id ?? null;
   const tci = company_id ? `AND i.company_id = ${parseInt(company_id)}` : '';
 
@@ -112,29 +146,29 @@ async function getSummary(req) {
       [Sequelize.literal(`(
         SELECT COUNT(p.id) FROM payments p
         LEFT JOIN sales s ON p.sale_id = s.id
-        WHERE p.payment_journal_id = "PaymentJournal".id ${pDate} ${tc}
+        WHERE p.payment_journal_id = "PaymentJournal".id ${pDate} ${tc} ${whP}
       )`), 'tx_count'],
       [Sequelize.literal(`(
         (SELECT COALESCE(SUM(p."amount" * COALESCE(p."exchange_rate", 1)), 0)
          FROM payments p LEFT JOIN sales s ON p.sale_id = s.id
-         WHERE p.payment_journal_id = "PaymentJournal".id ${pDate} ${tc})
+         WHERE p.payment_journal_id = "PaymentJournal".id ${pDate} ${tc} ${whP})
         +
         (SELECT COALESCE(SUM(i."amount" * COALESCE(i."rate", 1)), 0) FROM incomes i
-         WHERE i.payment_journal_id = "PaymentJournal".id AND i.status = 'activo' ${iDate} ${tci})
+         WHERE i.payment_journal_id = "PaymentJournal".id AND i.status = 'activo' ${iDate} ${tci} ${whI})
         -
         (SELECT COALESCE(SUM(e."amount" * COALESCE(e."rate", 1)), 0) FROM expenses e
-         WHERE e.payment_journal_id = "PaymentJournal".id AND e.status = 'activo' ${eDate} ${tce})
+         WHERE e.payment_journal_id = "PaymentJournal".id AND e.status = 'activo' ${eDate} ${tce} ${whE})
       )`), 'total_ingresos'],
       [Sequelize.literal(`(
         (SELECT COALESCE(SUM(p."amount" * COALESCE(p."exchange_rate", 1)), 0)
          FROM payments p LEFT JOIN sales s ON p.sale_id = s.id
-         WHERE p.payment_journal_id = "PaymentJournal".id AND ${todayP} ${tc})
+         WHERE p.payment_journal_id = "PaymentJournal".id AND ${todayP} ${tc} ${whP})
         +
         (SELECT COALESCE(SUM(i."amount" * COALESCE(i."rate", 1)), 0) FROM incomes i
-         WHERE i.payment_journal_id = "PaymentJournal".id AND i.status = 'activo' AND ${todayI} ${tci})
+         WHERE i.payment_journal_id = "PaymentJournal".id AND i.status = 'activo' AND ${todayI} ${tci} ${whI})
         -
         (SELECT COALESCE(SUM(e."amount" * COALESCE(e."rate", 1)), 0) FROM expenses e
-         WHERE e.payment_journal_id = "PaymentJournal".id AND e.status = 'activo' AND ${todayE} ${tce})
+         WHERE e.payment_journal_id = "PaymentJournal".id AND e.status = 'activo' AND ${todayE} ${tce} ${whE})
       )`), 'ingresos_hoy'],
     ],
     include: [
@@ -162,6 +196,7 @@ async function getMovements(req) {
   const { id } = req.params;
   const { date_from, date_to, limit = 200, offset = 0 } = req.query;
   const { tc, tce: te, tp, texp } = tenantFilter(req);
+  const { whP, whI, whE, whPBare, whIBare, whEBare, whPCount } = await warehouseFilter(req);
 
   // Tenant filter para incomes (mismo patrón que tp/texp pero para tabla incomes)
   const company_id  = req.employee?.company_id ?? null;
@@ -205,20 +240,20 @@ async function getMovements(req) {
   // Saldo real del diario — incluye payments (ventas) + incomes (manuales) - expenses
   const [currBal] = await sequelize.query(`
     SELECT (
-      COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE TRUE ${tp}), 0)
-      + COALESCE((SELECT SUM(amount * COALESCE(rate, 1))        FROM incomes  WHERE status = 'activo' AND TRUE ${ti}), 0)
-      - COALESCE((SELECT SUM(amount * COALESCE(rate, 1))        FROM expenses WHERE status = 'activo' AND TRUE ${texp}), 0)
+      COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE TRUE ${tp} ${whPBare}), 0)
+      + COALESCE((SELECT SUM(amount * COALESCE(rate, 1))        FROM incomes  WHERE status = 'activo' AND TRUE ${ti} ${whIBare}), 0)
+      - COALESCE((SELECT SUM(amount * COALESCE(rate, 1))        FROM expenses WHERE status = 'activo' AND TRUE ${texp} ${whEBare}), 0)
     ) as balance
   `, { replacements: { id }, type: Sequelize.QueryTypes.SELECT });
   const currentBalance = parseFloat(currBal?.balance || 0);
 
   const [countResult] = await sequelize.query(`
     SELECT (
-      (SELECT COUNT(*) FROM payments p WHERE p.payment_journal_id = :id ${datePay} ${tc})
+      (SELECT COUNT(*) FROM payments p WHERE p.payment_journal_id = :id ${datePay} ${tc} ${whPCount})
       +
-      (SELECT COUNT(*) FROM incomes  i WHERE i.payment_journal_id = :id AND i.status = 'activo' ${dateInc} ${tci})
+      (SELECT COUNT(*) FROM incomes  i WHERE i.payment_journal_id = :id AND i.status = 'activo' ${dateInc} ${tci} ${whI})
       +
-      (SELECT COUNT(*) FROM expenses e WHERE e.payment_journal_id = :id AND e.status = 'activo' ${dateExp} ${te})
+      (SELECT COUNT(*) FROM expenses e WHERE e.payment_journal_id = :id AND e.status = 'activo' ${dateExp} ${te} ${whE})
     ) as total
   `, { replacements: { id }, type: Sequelize.QueryTypes.SELECT });
 
@@ -227,9 +262,9 @@ async function getMovements(req) {
   if (safeFrom) {
     const [prevBal] = await sequelize.query(`
       SELECT (
-        COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE COALESCE(reference_date, ${localDate('created_at')}) < :date_from ${tp}), 0)
-        + COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM incomes  WHERE status = 'activo' AND ${localDate('COALESCE(date, created_at)')} < :date_from ${ti}), 0)
-        - COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM expenses WHERE status = 'activo' AND ${localDate('COALESCE(date, created_at)')} < :date_from ${texp}), 0)
+        COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE COALESCE(reference_date, ${localDate('created_at')}) < :date_from ${tp} ${whPBare}), 0)
+        + COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM incomes  WHERE status = 'activo' AND ${localDate('COALESCE(date, created_at)')} < :date_from ${ti} ${whIBare}), 0)
+        - COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM expenses WHERE status = 'activo' AND ${localDate('COALESCE(date, created_at)')} < :date_from ${texp} ${whEBare}), 0)
       ) as balance
     `, { replacements: { id, date_from: safeFrom }, type: Sequelize.QueryTypes.SELECT });
     preBalance = parseFloat(prevBal?.balance || 0);
@@ -260,7 +295,7 @@ async function getMovements(req) {
         FROM payments p
         LEFT JOIN sales s     ON s.id = p.sale_id
         LEFT JOIN customers c ON c.id = p.customer_id
-        WHERE p.payment_journal_id = :id ${datePay} ${tc}
+        WHERE p.payment_journal_id = :id ${datePay} ${tc} ${whP}
 
         UNION ALL
 
@@ -278,7 +313,7 @@ async function getMovements(req) {
           i.notes,
           i.status
         FROM incomes i
-        WHERE i.payment_journal_id = :id AND i.status = 'activo' ${dateInc} ${tci}
+        WHERE i.payment_journal_id = :id AND i.status = 'activo' ${dateInc} ${tci} ${whI}
 
         UNION ALL
 
@@ -296,7 +331,7 @@ async function getMovements(req) {
           e.notes,
           e.status
         FROM expenses e
-        WHERE e.payment_journal_id = :id AND e.status = 'activo' ${dateExp} ${te}
+        WHERE e.payment_journal_id = :id AND e.status = 'activo' ${dateExp} ${te} ${whE}
       ) all_movements
     ) with_balance
     ORDER BY date DESC, created_at DESC
@@ -356,6 +391,7 @@ async function getBankMovements(req) {
   const tc     = scoped ? `AND p.company_id = ${parseInt(company_id)}` : '';
   const tci    = scoped ? `AND i.company_id = ${parseInt(company_id)}` : '';
   const te     = scoped ? `AND e.company_id = ${parseInt(company_id)}` : '';
+  const { whP, whI, whE, whPBare, whIBare, whEBare, whPCount } = await warehouseFilter(req);
 
   const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;
   const safeFrom = sd(date_from);
@@ -379,18 +415,18 @@ async function getBankMovements(req) {
 
   const [currBal] = await sequelize.query(`
     SELECT (
-      COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE TRUE ${tp}), 0)
-      + COALESCE((SELECT SUM(amount * COALESCE(rate, 1))        FROM incomes  WHERE status = 'activo' AND TRUE ${tp.replace(/payment_journal_id/g, 'payment_journal_id')}), 0)
-      - COALESCE((SELECT SUM(amount * COALESCE(rate, 1))        FROM expenses WHERE status = 'activo' AND TRUE ${tp}), 0)
+      COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE TRUE ${tp} ${whPBare}), 0)
+      + COALESCE((SELECT SUM(amount * COALESCE(rate, 1))        FROM incomes  WHERE status = 'activo' AND TRUE ${tp} ${whIBare}), 0)
+      - COALESCE((SELECT SUM(amount * COALESCE(rate, 1))        FROM expenses WHERE status = 'activo' AND TRUE ${tp} ${whEBare}), 0)
     ) as balance
   `, { type: Sequelize.QueryTypes.SELECT });
   const currentBalance = parseFloat(currBal?.balance || 0);
 
   const [countResult] = await sequelize.query(`
     SELECT (
-      (SELECT COUNT(*) FROM payments p WHERE p.payment_journal_id IN (${jList}) ${datePay} ${tc})
-      + (SELECT COUNT(*) FROM incomes  i WHERE i.payment_journal_id IN (${jList}) AND i.status = 'activo' ${dateInc} ${tci})
-      + (SELECT COUNT(*) FROM expenses e WHERE e.payment_journal_id IN (${jList}) AND e.status = 'activo' ${dateExp} ${te})
+      (SELECT COUNT(*) FROM payments p WHERE p.payment_journal_id IN (${jList}) ${datePay} ${tc} ${whPCount})
+      + (SELECT COUNT(*) FROM incomes  i WHERE i.payment_journal_id IN (${jList}) AND i.status = 'activo' ${dateInc} ${tci} ${whI})
+      + (SELECT COUNT(*) FROM expenses e WHERE e.payment_journal_id IN (${jList}) AND e.status = 'activo' ${dateExp} ${te} ${whE})
     ) as total
   `, { type: Sequelize.QueryTypes.SELECT });
 
@@ -398,9 +434,9 @@ async function getBankMovements(req) {
   if (safeFrom) {
     const [prevBal] = await sequelize.query(`
       SELECT (
-        COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE COALESCE(reference_date, ${localDate('created_at')}) < '${safeFrom}'::date ${tp}), 0)
-        + COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM incomes  WHERE status = 'activo' AND ${localDate('COALESCE(date, created_at)')} < '${safeFrom}'::date ${tp}), 0)
-        - COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM expenses WHERE status = 'activo' AND ${localDate('COALESCE(date, created_at)')} < '${safeFrom}'::date ${tp}), 0)
+        COALESCE((SELECT SUM(amount * COALESCE(exchange_rate, 1)) FROM payments WHERE COALESCE(reference_date, ${localDate('created_at')}) < '${safeFrom}'::date ${tp} ${whPBare}), 0)
+        + COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM incomes  WHERE status = 'activo' AND ${localDate('COALESCE(date, created_at)')} < '${safeFrom}'::date ${tp} ${whIBare}), 0)
+        - COALESCE((SELECT SUM(amount * COALESCE(rate, 1)) FROM expenses WHERE status = 'activo' AND ${localDate('COALESCE(date, created_at)')} < '${safeFrom}'::date ${tp} ${whEBare}), 0)
       ) as balance
     `, { type: Sequelize.QueryTypes.SELECT });
     preBalance = parseFloat(prevBal?.balance || 0);
@@ -425,7 +461,7 @@ async function getBankMovements(req) {
         FROM payments p
         LEFT JOIN sales s     ON s.id = p.sale_id
         LEFT JOIN customers c ON c.id = p.customer_id
-        WHERE p.payment_journal_id IN (${jList}) ${datePay} ${tc}
+        WHERE p.payment_journal_id IN (${jList}) ${datePay} ${tc} ${whP}
 
         UNION ALL
 
@@ -437,7 +473,7 @@ async function getBankMovements(req) {
           i.amount AS amount_base, COALESCE(i.rate, 1) AS rate,
           NULL AS doc_ref, i.notes, i.status
         FROM incomes i
-        WHERE i.payment_journal_id IN (${jList}) AND i.status = 'activo' ${dateInc} ${tci}
+        WHERE i.payment_journal_id IN (${jList}) AND i.status = 'activo' ${dateInc} ${tci} ${whI}
 
         UNION ALL
 
@@ -449,7 +485,7 @@ async function getBankMovements(req) {
           e.amount AS amount_base, COALESCE(e.rate, 1) AS rate,
           NULL AS doc_ref, e.notes, e.status
         FROM expenses e
-        WHERE e.payment_journal_id IN (${jList}) AND e.status = 'activo' ${dateExp} ${te}
+        WHERE e.payment_journal_id IN (${jList}) AND e.status = 'activo' ${dateExp} ${te} ${whE}
       ) all_movements
     ) with_balance
     ORDER BY date DESC, created_at DESC

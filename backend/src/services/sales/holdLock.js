@@ -1,5 +1,6 @@
 const { Sale, Employee, sequelize } = require("./shared");
 const { Setting } = require("../../models");
+const { assertWarehouseAccess } = require("../../middleware/auth");
 
 // Una cuenta en espera recuperada queda "tomada" por la caja que la abrió. Sin esto, ocultarla
 // era un gesto puramente local: en el servidor seguía disponible y otra caja podía cobrarla o
@@ -32,13 +33,14 @@ function isExpired(sale, minutes) {
 
 // Marca la cuenta como atendida por este empleado. Devuelve la venta o lanza 409 si otra caja
 // la tiene tomada y su bloqueo sigue vigente.
-async function claimSale(saleId, employeeId) {
+async function claimSale(saleId, employeeId, req) {
   const minutes = await timeoutMinutes();
   const transaction = await sequelize.transaction();
   try {
     // El bloqueo de fila es lo que evita que dos cajas que pulsan "recuperar" en el mismo
     // instante se lleven las dos la cuenta.
     const sale = await Sale.findByPk(saleId, { transaction, lock: true });
+    if (sale) await assertWarehouseAccess(req, sale.warehouse_id, { optional: true });
     if (!sale) {
       throw Object.assign(new Error("Esta cuenta ya no existe: otra caja la eliminó."), { status: 404, code: "SALE_GONE" });
     }
@@ -66,8 +68,9 @@ async function claimSale(saleId, employeeId) {
 
 // Suelta el bloqueo. `force` lo usa un administrador para destrabar una caja que quedó colgada
 // sin esperar a que venza el plazo.
-async function releaseSale(saleId, employeeId, { force = false } = {}) {
+async function releaseSale(saleId, employeeId, { force = false } = {}, req) {
   const sale = await Sale.findByPk(saleId);
+  if (sale) await assertWarehouseAccess(req, sale.warehouse_id, { optional: true });
   // Si la venta ya no existe no hay nada que soltar: se responde bien para que la caja que
   // está limpiando su estado no tenga que distinguir ese caso.
   if (!sale) return { released: false };

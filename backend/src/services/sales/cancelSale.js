@@ -1,10 +1,14 @@
 const { Sale, SaleItem, Product, ProductComboItem, ProductStock, sequelize } = require("./shared");
 
-module.exports = async function cancelSale(id) {
+const { assertWarehouseAccess } = require("../../middleware/auth");
+
+module.exports = async function cancelSale(id, req) {
   const transaction = await sequelize.transaction();
   try {
     const sale = await Sale.findByPk(id, { transaction, lock: true });
     if (!sale) throw new Error("Venta no encontrada");
+    // Anular devuelve inventario a una sucursal concreta.
+    await assertWarehouseAccess(req, sale.warehouse_id, { optional: true });
 
     const items = await SaleItem.findAll({
       where: { sale_id: sale.id },

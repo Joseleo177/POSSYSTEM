@@ -104,7 +104,7 @@ async function getAll({ limit = 50, offset = 0, search, status, order_status, da
   return { data, total: Array.isArray(count) ? count.length : count };
 }
 
-async function getOne(id) {
+async function getOne(id, req) {
   const purchase = await Purchase.findByPk(id, {
     include: [
       { model: Employee,     attributes: ['full_name'], required: false },
@@ -113,6 +113,8 @@ async function getOne(id) {
     ]
   });
   if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
+  // Igual que en ventas: el listado filtra, pero pedir la orden por su id no lo hacía.
+  await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
 
   const data = purchase.toJSON();
   data.employee_name  = data.Employee?.full_name ?? null;
@@ -351,11 +353,13 @@ async function receivePurchase(id, req) {
   }
 }
 
-async function deletePurchase(id) {
+async function deletePurchase(id, req) {
   const transaction = await sequelize.transaction();
   try {
     const purchase = await Purchase.findByPk(id, { transaction, lock: true });
     if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
+    // Borrar una orden recibida devuelve stock: solo sobre almacenes propios.
+    await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
 
     // Only revert stock if goods were actually received
     if (purchase.status === 'recibido') {
@@ -478,9 +482,10 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
   }
 }
 
-async function updateItemLots(purchaseId, items) {
+async function updateItemLots(purchaseId, items, req) {
   const purchase = await Purchase.findByPk(purchaseId);
   if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
+  await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
   if (purchase.status === 'recibido') { const e = new Error("Esta compra ya fue recibida"); e.status = 400; throw e; }
 
   for (const { id, lot_number, expiration_date } of items) {

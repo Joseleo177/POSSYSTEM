@@ -2,14 +2,17 @@ const {
   Sale, SaleItem, Product, ProductStock, Employee, Customer,
   Return, ReturnItem, Payment, ProductComboItem, Serie, SerieRange, sequelize, Sequelize,
 } = require("../../models");
+const { assertWarehouseAccess } = require("../../middleware/auth");
 
-async function createReturn({ saleId, items, reason, employee_id }) {
+async function createReturn({ saleId, items, reason, employee_id }, req) {
   if (!items?.length) { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
 
   const transaction = await sequelize.transaction();
   try {
     const sale = await Sale.findByPk(saleId, { transaction, lock: true });
     if (!sale) throw new Error("Venta no encontrada");
+    // La devolución reingresa mercancía al almacén de la venta.
+    await assertWarehouseAccess(req, sale.warehouse_id, { optional: true });
 
     const saleItems = await SaleItem.findAll({ where: { sale_id: saleId }, transaction });
     const itemsMap  = Object.fromEntries(saleItems.map(i => [i.id, i]));

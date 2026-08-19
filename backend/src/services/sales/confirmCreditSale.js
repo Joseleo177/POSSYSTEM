@@ -10,11 +10,15 @@ const assignInvoiceNumber = require("./assignInvoiceNumber");
 //   - salesReport cuenta pending_count/pending_amount solo con ('pendiente','parcial')
 //   - getSessionSummary suma total_pending solo con status = 'pendiente'
 // Es decir, lo fiado no aparecía ni en el reporte de ventas ni en el cierre de caja.
-module.exports = async function confirmCreditSale(saleId) {
+const { assertWarehouseAccess } = require("../../middleware/auth");
+
+module.exports = async function confirmCreditSale(saleId, req) {
   const t = await sequelize.transaction();
   try {
     const sale = await Sale.findByPk(saleId, { transaction: t, lock: true });
     if (!sale) { const e = new Error("Venta no encontrada"); e.status = 404; throw e; }
+    // Entregar a crédito consume un correlativo de la serie de esa sucursal.
+    await assertWarehouseAccess(req, sale.warehouse_id, { optional: true });
 
     // Solo tiene sentido sobre lo que aún no se ha facturado. Una venta ya pendiente,
     // parcial o pagada no debe volver a consumir un número de la serie.

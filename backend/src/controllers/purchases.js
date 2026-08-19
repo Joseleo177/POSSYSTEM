@@ -23,7 +23,7 @@ const companyId = (req) => req.employee?.company_id ?? 0;
 
 module.exports = {
   getAll:       wrap(req => getAll(req.query, req)),
-  getOne:       wrap(req => getOne(req.params.id)),
+  getOne:       wrap(req => getOne(req.params.id, req)),
   create:       wrap(req => createPurchase({ body: req.body, employee_id: req.employee?.id ?? null }), 201),
   updateDraft:  wrap(req => updateDraft(req.params.id, req.body, req)),
   confirm:      wrap(req => confirmOrder(req.params.id, req)),
@@ -32,6 +32,6 @@ module.exports = {
     broadcast(companyId(req), 'products:updated', {});
     return result;
   }),
-  updateLots:   wrap(req => updateItemLots(req.params.id, req.body.items || [])),
-  remove:       wrap(async req => { const r = await deletePurchase(req.params.id); broadcast(companyId(req), 'products:updated', {}); return r; }),
+  updateLots:   wrap(req => updateItemLots(req.params.id, req.body.items || [], req)),
+  remove:       wrap(async req => { const r = await deletePurchase(req.params.id, req); broadcast(companyId(req), 'products:updated', {}); return r; }),
 };

@@ -1,6 +1,7 @@
 const { Payment, Sale, SaleItem, sequelize, getSaleBalance } = require("./shared");
 const { Expense, ExpenseCategory, PaymentJournal, Currency, Customer } = require("../../models");
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
+const { assertWarehouseAccess } = require("../../middleware/auth");
 
 // Respuesta de un cobro que ya estaba registrado. Se rearma desde la base para que el
 // reintento reciba exactamente lo mismo que recibió el envío que sí entró: la caja imprime
@@ -21,7 +22,7 @@ async function existingPaymentResult(payment) {
   };
 }
 
-module.exports = async function createPayment(body) {
+module.exports = async function createPayment(body, req) {
   // Cobro repetido: mismo `idempotency_key` que un pago ya guardado. Pasa cuando la
   // respuesta se pierde por red y la caja reintenta; sin esto el abono se registraba dos
   // veces (el guardia de estado solo frena la venta ya pagada, no un abono parcial).
@@ -62,6 +63,8 @@ module.exports = async function createPayment(body) {
 
     const sale = await Sale.findByPk(sale_id, { transaction: t, lock: true });
     if (!sale) throw new Error("Factura no encontrada");
+    // Solo se cobra lo facturado en una sucursal propia.
+    await assertWarehouseAccess(req, sale.warehouse_id, { optional: true });
     if (sale.status === "pagado") throw new Error("Esta factura ya fue pagada");
     if (sale.status === "anulado") throw new Error("Esta factura está anulada");
     if (sale.status === "devuelto") throw new Error("Esta factura fue devuelta en su totalidad, no tiene saldo por cobrar");

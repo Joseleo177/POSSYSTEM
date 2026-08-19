@@ -9,7 +9,7 @@ const getAll = async (req, res, next) => {
 
 const getOne = async (req, res, next) => {
   try {
-    const q = await svc.getById(req.params.id);
+    const q = await svc.getById(req.params.id, req);
     res.json({ ok: true, data: q });
   } catch (e) { next(e); }
 };
@@ -23,21 +23,21 @@ const create = async (req, res, next) => {
 
 const cancel = async (req, res, next) => {
   try {
-    const q = await svc.cancel(req.params.id);
+    const q = await svc.cancel(req.params.id, req);
     res.json({ ok: true, data: q });
   } catch (e) { next(e); }
 };
 
 const convert = async (req, res, next) => {
   try {
-    const result = await svc.convert(req.params.id, req.body, req.employee?.id);
+    const result = await svc.convert(req.params.id, req.body, req.employee?.id, req);
     res.json({ ok: true, data: result });
   } catch (e) { next(e); }
 };
 
 const remove = async (req, res, next) => {
   try {
-    const result = await svc.remove(req.params.id);
+    const result = await svc.remove(req.params.id, req);
     res.json({ ok: true, data: result });
   } catch (e) { next(e); }
 };

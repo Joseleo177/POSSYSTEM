@@ -8,6 +8,7 @@ const {
   sequelize,
 } = require("./shared");
 const getOneSale = require("./getOneSale");
+const { assertWarehouseAccess } = require("../../middleware/auth");
 
 const bad = (msg, status = 400, code = null) => Object.assign(new Error(msg), { status, code });
 
@@ -24,7 +25,7 @@ async function syncTotalStock(productId, transaction) {
   await Product.update({ stock: totalStock || 0 }, { where: { id: productId }, transaction });
 }
 
-module.exports = async function updateSale(saleId, body) {
+module.exports = async function updateSale(saleId, body, req) {
   const { items, discount_amount } = body;
 
   if (!items?.length) throw bad("Debes incluir al menos un producto");
@@ -38,6 +39,8 @@ module.exports = async function updateSale(saleId, body) {
     const sale = await Sale.findByPk(saleId, { transaction, lock: true });
 
     if (!sale) throw bad("Esta cuenta ya no existe: otra caja la eliminó.", 404, GONE);
+    // Editar una cuenta mueve inventario del almacén de la venta.
+    await assertWarehouseAccess(req, sale.warehouse_id, { optional: true });
     // 'espera' entra aquí junto a 'borrador': es el caso de agregar rondas a una cuenta
     // abierta. Ambos comparten lo esencial — todavía no tienen correlativo asignado.
     if (!["borrador", "espera"].includes(sale.status)) {
