@@ -490,6 +490,13 @@ export function CartProvider({ children }) {
           await api.sales.update(heldSaleId, {
             items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty) })),
             discount_amount: discountAmount,
+            // La cabecera viaja también al re-pausar: si el cajero cambió el cliente o la
+            // moneda antes de volver a dejarla en espera, la cuenta debe quedar con lo que
+            // se ve en pantalla, no con lo que tenía al abrirla.
+            customer_id: selectedCustomer?.id || null,
+            currency_id: currentCurrency?.id || null,
+            exchange_rate: exchangeRate,
+            serie_id: selectedSerieId,
           });
         } catch (e) {
           // Otra caja la eliminó o la cobró mientras se atendía: se guarda como cuenta
@@ -716,6 +723,13 @@ export function CartProvider({ children }) {
             items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty) })),
             discount_amount: discountAmount,
             status: "borrador",
+            // Se cobra con el cliente y la moneda que hay en pantalla, no con los que tenía
+            // la cuenta al pausarse: en restaurante la cuenta se abre a nombre de la mesa y
+            // el cliente real se elige justo antes de cobrar.
+            customer_id: selectedCustomer?.id || null,
+            currency_id: currentCurrency?.id || null,
+            exchange_rate: exchangeRate,
+            serie_id: selectedSerieId,
           });
         } catch (e) {
           // Otra caja eliminó o cobró esta cuenta mientras se atendía. En vez de dejar al

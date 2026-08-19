@@ -196,7 +196,11 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
         table { width: 100%; border-collapse: collapse; margin-bottom: 2mm; }
         th { text-align: left; border-bottom: 1px solid #000; padding: 1mm 0; font-size: ${printerWidth === 58 ? "7.5px" : "9px"}; }
         td { padding: 1mm 0; font-size: ${printerWidth === 58 ? "7.5px" : "9px"}; vertical-align: top; }
-        .item-name { max-width: ${printerWidth === 58 ? "20mm" : "32mm"}; word-break: break-word; font-weight: 600; text-transform: uppercase; }
+        /* overflow-wrap y no word-break: word-break parte la palabra en cuanto se acaba el
+           renglón, así que en la columna angosta del ticket "CAFE AMANECER" salía cortado en
+           pedazos letra a letra ("CAFE / AMA / NECE / R"). Así solo se parte la palabra que de
+           verdad no cabe entera. */
+        .item-name { max-width: ${printerWidth === 58 ? "20mm" : "32mm"}; overflow-wrap: break-word; font-weight: 600; text-transform: uppercase; }
         /* Separación entre columnas: sin ella cantidad, P.U. y total se leen como un solo bloque. */
         .td-center { text-align: center; padding-left: 1.5mm; padding-right: 1.5mm; }
         .td-right { text-align: right; padding-left: 1.5mm; }

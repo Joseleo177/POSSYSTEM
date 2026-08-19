@@ -101,7 +101,7 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
         td { padding: 10px 12px; font-size: 10.5px; vertical-align: middle; border-bottom: 1px solid #ededed; }
         /* En carta hay ancho de sobra: el nombre del producto va completo, sin el recorte
            a 32mm que obliga la térmica. */
-        .item-name { color: #2b2b2b; word-break: break-word; }
+        .item-name { color: #2b2b2b; overflow-wrap: break-word; }
         .td-center, th.td-center { text-align: center; white-space: nowrap; width: 85px; }
         .td-right, th.td-right { text-align: right; white-space: nowrap; width: 125px; }
         .td-total { font-weight: 700; color: #1a1a1a; }

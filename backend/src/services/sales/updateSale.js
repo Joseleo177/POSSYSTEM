@@ -172,6 +172,17 @@ module.exports = async function updateSale(saleId, body) {
       total += round2(unitPrice) * qty;
     }
 
+    // Datos de cabecera que la caja puede cambiar sobre una cuenta ya abierta. El caso típico
+    // es el restaurante: la cuenta se pausa a nombre de la mesa y al cobrar se cambia al
+    // cliente real. Sin esto la venta se cobraba a nombre de la mesa —el recibo mostraba el
+    // cliente nuevo y la base guardaba el viejo— y la deuda quedaba pegada a "Mesa 01".
+    // Solo se tocan las claves que vienen en el body: `null` es un valor válido (Cliente
+    // General), así que la guarda es contra `undefined`, no contra falsy.
+    const headerPatch = {};
+    for (const k of ["customer_id", "currency_id", "exchange_rate", "serie_id"]) {
+      if (body[k] !== undefined) headerPatch[k] = body[k];
+    }
+
     const discAmt = parseFloat(discount_amount ?? sale.discount_amount) || 0;
     // 2 decimales: sale.total es el monto "oficial" de la factura en $.
     // La precisión completa vive en sale_items (price/discount/subtotal).
@@ -189,7 +200,7 @@ module.exports = async function updateSale(saleId, body) {
     // terminan vaciando el carrito de la caja, así que a partir de este punto ya no la está
     // atendiendo nadie y otra caja debe poder tomarla.
     await sale.update(
-      { total, discount_amount: discAmt, held_by_employee_id: null, held_at: null, ...statusPatch },
+      { total, discount_amount: discAmt, held_by_employee_id: null, held_at: null, ...headerPatch, ...statusPatch },
       { transaction }
     );
 
