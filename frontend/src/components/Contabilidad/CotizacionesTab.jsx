@@ -3,7 +3,7 @@ import { useQuotations } from "../../hooks/contabilidad/useQuotations";
 import ConfirmModal from "../ui/ConfirmModal";
 import DateRangePicker from "../ui/DateRangePicker";
 import Pagination from "../ui/Pagination";
-import { fmtDateShort, fmtDate, printQuotationDoc } from "../../helpers";
+import { fmtDateShort, fmtDate, printQuotationDoc, printQuotationLetter } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import { useCart } from "../../context/CartContext";
 import { api } from "../../services/api";
@@ -95,26 +95,38 @@ function QuotDetailModal({ quot, onClose, onPrint, onLoadToCart, onCancel, onDel
 
                 {/* Footer */}
                 <div className="shrink-0 px-5 py-4 border-t border-border/10 dark:border-white/5">
-                    <div className="flex items-center justify-between gap-3">
-                        <div>
+                    {/* El pie envuelve: con cuatro acciones (anular, PDF, imprimir, abrir en
+                        caja) no caben en una línea y antes se partían las etiquetas letra a
+                        letra —"ABRIR EN CAJA" salía en tres renglones— y el total se rompía. */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="shrink-0">
                             <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Total</p>
-                            <p className="text-2xl font-black text-brand-500 tabular-nums">{fmtPrice(quot.total)}</p>
+                            <p className="text-2xl font-black text-brand-500 tabular-nums whitespace-nowrap">{fmtPrice(quot.total)}</p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
                             {quot.status === "pendiente" && can("admin") && (
                                 <button onClick={() => onCancel(quot)}
-                                    className="h-9 px-3 rounded-xl border border-danger/20 text-danger text-[10px] font-black uppercase tracking-widest hover:bg-danger/10 transition-all">
+                                    className="h-9 px-3 whitespace-nowrap rounded-xl border border-danger/20 text-danger text-[10px] font-black uppercase tracking-widest hover:bg-danger/10 transition-all">
                                     Anular
                                 </button>
                             )}
                             {quot.status === "anulada" && can("admin") && (
                                 <button onClick={() => onDelete(quot)}
-                                    className="h-9 px-3 rounded-xl border border-danger text-danger text-[10px] font-black uppercase tracking-widest hover:bg-danger hover:text-white transition-all">
+                                    className="h-9 px-3 whitespace-nowrap rounded-xl border border-danger text-danger text-[10px] font-black uppercase tracking-widest hover:bg-danger hover:text-white transition-all">
                                     Eliminar
                                 </button>
                             )}
+                            <button onClick={() => onPrint(quot, true)}
+                                title="Cotización tamaño carta, para enviar al cliente"
+                                className="h-9 px-4 whitespace-nowrap rounded-xl border border-border/30 dark:border-white/10 text-content-subtle text-[10px] font-black uppercase tracking-widest hover:text-brand-500 hover:border-brand-500/30 transition-all flex items-center gap-2">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                PDF
+                            </button>
                             <button onClick={() => onPrint(quot)}
-                                className="h-9 px-4 rounded-xl border border-border/30 dark:border-white/10 text-content-subtle text-[10px] font-black uppercase tracking-widest hover:text-brand-500 hover:border-brand-500/30 transition-all flex items-center gap-2">
+                                title="Cotización en la impresora térmica"
+                                className="h-9 px-4 whitespace-nowrap rounded-xl border border-border/30 dark:border-white/10 text-content-subtle text-[10px] font-black uppercase tracking-widest hover:text-brand-500 hover:border-brand-500/30 transition-all flex items-center gap-2">
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
@@ -122,7 +134,7 @@ function QuotDetailModal({ quot, onClose, onPrint, onLoadToCart, onCancel, onDel
                             </button>
                             {quot.status === "pendiente" && (
                                 <button onClick={() => onLoadToCart(quot)}
-                                    className="h-9 px-4 rounded-xl bg-success/10 text-success border border-success/20 text-[10px] font-black uppercase tracking-widest hover:bg-success hover:text-black transition-all flex items-center gap-1.5">
+                                    className="h-9 px-4 whitespace-nowrap rounded-xl bg-success/10 text-success border border-success/20 text-[10px] font-black uppercase tracking-widest hover:bg-success hover:text-black transition-all flex items-center gap-1.5">
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
                                     </svg>
@@ -143,10 +155,13 @@ export default function CotizacionesTab({ notify, can, fmtPrice }) {
     const { loadFromQuotation } = useCart();
     const [showFilterDrop, setShowFilterDrop] = useState(false);
 
-    const handlePrint = async (quot) => {
+    // Dos salidas del mismo documento: térmica para el mostrador y carta para enviárselo al
+    // cliente. El rollo guardado como PDF sale como una tira angosta que no se puede leer.
+    const handlePrint = async (quot, letter = false) => {
         try {
             const res = await api.quotations.getOne(quot.id);
-            printQuotationDoc(res.data, companyInfo, baseCurrency, activeCurrencies, printerWidth);
+            if (letter) printQuotationLetter(res.data, companyInfo, baseCurrency, activeCurrencies);
+            else printQuotationDoc(res.data, companyInfo, baseCurrency, activeCurrencies, printerWidth);
         } catch (e) {
             notify(e.message, "err");
         }

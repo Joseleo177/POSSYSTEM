@@ -37,9 +37,13 @@ export function printPurchaseOrderDoc(detail, items, companyInfo, printerWidth =
             line-height: 1.3;
             color: #000;
             background: white;
-            width: ${w58 ? "216px" : "302px"};
-            margin: 0 auto;
-            padding: ${w58 ? "6px" : "10px"};
+            /* Ancho en mm y sobre el ÁREA IMPRIMIBLE, igual que el ticket de caja: el rollo
+               de 80mm imprime 72 y el de 58 imprime 44. Antes iba en píxeles (302px = 79.9mm,
+               216px = 57.2mm), o sea el ancho total del papel: la térmica recortaba el
+               documento por la derecha aunque el @page declarara el tamaño correcto. */
+            width: ${w58 ? "44mm" : "72mm"};
+            margin: ${w58 ? "0" : "0 auto"};
+            padding: ${w58 ? "2mm" : "3mm"};
         }
         .header { display: flex; align-items: flex-start; gap: ${w58 ? "4px" : "8px"}; margin-bottom: ${w58 ? "6px" : "10px"}; border-bottom: 2px solid #000; padding-bottom: ${w58 ? "5px" : "8px"}; }
         .logo { max-height: ${w58 ? "35px" : "50px"}; max-width: ${w58 ? "55px" : "80px"}; object-fit: contain; }
@@ -126,10 +130,20 @@ export function printPurchaseOrderDoc(detail, items, companyInfo, printerWidth =
 </body>
 </html>`;
 
-    const win = window.open("", "_blank");
-    if (!win) { alert("El navegador bloqueó la ventana emergente. Permite popups para esta página e inténtalo de nuevo."); return; }
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); win.close(); }, 400);
+    // Iframe oculto en vez de window.open: ya no hace falta pedirle al usuario que permita
+    // emergentes —era el bloqueador lo que dejaba el botón sin hacer nada— ni queda una
+    // pestaña abierta cuando se cancela el diálogo de impresión.
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:400px;height:1200px;border:0;";
+    document.body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+    iframe.onload = () => {
+        setTimeout(() => {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            setTimeout(() => document.body.removeChild(iframe), 2000);
+        }, 350);
+    };
 }

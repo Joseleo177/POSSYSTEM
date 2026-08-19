@@ -10,6 +10,12 @@ export function printNotaCreditoDoc(returnData, sale, companyInfo, baseCurrency,
     const rate = isBase ? 1 : parseFloat(exchangeRate > 1 ? exchangeRate : (displayCurrency?.exchange_rate || 1));
     const sym = isBase ? (baseCurrency?.symbol || "Ref.") : (displayCurrency?.symbol || "Ref.");
     const fmtP = n => fmtMoney(parseFloat(n || 0) * rate, sym);
+    // Sequelize entrega las cantidades como texto decimal ("8.0000"): los enteros van sin
+    // decimales y los pesados (0.750 KG) conservan los suyos, sin ceros de relleno.
+    const fmtQty = q => {
+        const n = parseFloat(q || 0);
+        return n % 1 === 0 ? String(Math.round(n)) : String(parseFloat(n.toFixed(3)));
+    };
 
     const storeName = companyInfo?.name || "MI TIENDA POS";
     const dateStr = fmtDate(returnData.created_at || new Date().toISOString());
@@ -20,7 +26,7 @@ export function printNotaCreditoDoc(returnData, sale, companyInfo, baseCurrency,
     const itemsRows = (returnData.items || []).map(i => `
         <tr>
             <td><div class="item-name">${i.name}</div></td>
-            <td class="td-center">${i.qty}</td>
+            <td class="td-center">${fmtQty(i.qty)}</td>
             <td class="td-right">${fmtP(i.price)}</td>
             <td class="td-right"><b>${fmtP(i.subtotal)}</b></td>
         </tr>
@@ -41,9 +47,13 @@ export function printNotaCreditoDoc(returnData, sale, companyInfo, baseCurrency,
             line-height: 1.2;
             color: #000;
             background: white;
-            width: ${w58 ? "216px" : "302px"};
-            margin: 0 auto;
-            padding: ${w58 ? "6px" : "10px"};
+            /* Ancho en mm y sobre el ÁREA IMPRIMIBLE, igual que el ticket de caja: el rollo
+               de 80mm imprime 72 y el de 58 imprime 44. Antes iba en píxeles (302px = 79.9mm,
+               216px = 57.2mm), o sea el ancho total del papel: la térmica recortaba el
+               documento por la derecha aunque el @page declarara el tamaño correcto. */
+            width: ${w58 ? "44mm" : "72mm"};
+            margin: ${w58 ? "0" : "0 auto"};
+            padding: ${w58 ? "2mm" : "3mm"};
         }
         .header { display: flex; align-items: flex-start; gap: ${w58 ? "4px" : "8px"}; margin-bottom: ${w58 ? "6px" : "10px"}; border-bottom: 2px solid #000; padding-bottom: ${w58 ? "5px" : "8px"}; }
         .logo { max-height: ${w58 ? "35px" : "50px"}; max-width: ${w58 ? "55px" : "80px"}; object-fit: contain; }
@@ -119,9 +129,20 @@ export function printNotaCreditoDoc(returnData, sale, companyInfo, baseCurrency,
 </body>
 </html>`;
 
-    const win = window.open("", "_blank");
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); win.close(); }, 400);
+    // Iframe oculto en vez de window.open, igual que el ticket de caja: la pestaña nueva se
+    // queda abierta si el cajero cancela el diálogo, y en la caja suele haber bloqueador de
+    // emergentes, que dejaba el botón de imprimir sin hacer nada.
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:400px;height:1200px;border:0;";
+    document.body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+    iframe.onload = () => {
+        setTimeout(() => {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            setTimeout(() => document.body.removeChild(iframe), 2000);
+        }, 350);
+    };
 }

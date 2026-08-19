@@ -1,7 +1,7 @@
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import { Button } from "../ui/Button";
-import { printQuotationDoc } from "../../helpers";
+import { printQuotationDoc, printQuotationLetter } from "../../helpers";
 import { useEffect } from "react";
 
 export default function QuotationConfirmModal({ quotation, onNext }) {
@@ -25,10 +25,13 @@ export default function QuotationConfirmModal({ quotation, onNext }) {
         return () => window.removeEventListener("keydown", handler, true);
     }, [onNext]);
 
-    const handlePrint = async () => {
+    // IMPRIMIR saca el rollo térmico; PDF genera la misma cotización en carta, que es la que
+    // se manda por WhatsApp o correo —el rollo guardado como PDF es una tira ilegible—.
+    const emitir = async (letter) => {
         try {
             const res = await api.quotations.getOne(quotation.id);
-            printQuotationDoc(res.data, companyInfo, baseCurrency, activeCurrencies, printerWidth);
+            if (letter) printQuotationLetter(res.data, companyInfo, baseCurrency, activeCurrencies);
+            else printQuotationDoc(res.data, companyInfo, baseCurrency, activeCurrencies, printerWidth);
         } catch (e) {
             notify?.(e.message, "err");
         }
@@ -82,7 +85,13 @@ export default function QuotationConfirmModal({ quotation, onNext }) {
 
                 {/* Acciones */}
                 <div className="px-5 py-4 flex gap-2">
-                    <Button variant="ghost" onClick={handlePrint} className="flex-1 h-9 border border-border/30 dark:border-white/10">
+                    <Button variant="ghost" onClick={() => emitir(true)} className="flex-1 h-9 border border-border/30 dark:border-white/10" title="Cotización tamaño carta, para enviar al cliente">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        PDF
+                    </Button>
+                    <Button variant="ghost" onClick={() => emitir(false)} className="flex-1 h-9 border border-border/30 dark:border-white/10" title="Cotización en la impresora térmica">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                         </svg>

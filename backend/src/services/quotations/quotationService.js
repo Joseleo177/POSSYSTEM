@@ -7,6 +7,24 @@ const {
 } = require("../../models");
 const { Op } = Sequelize;
 
+// El vendedor sí se guarda al crear la cotización (create recibe employee_id), pero las
+// consultas solo traían las líneas: la pantalla y el impreso mostraban "Empleado —" en
+// cotizaciones que en la tabla tenían su employee_id. El cliente no hace falta unirlo —el
+// nombre y el RIF quedan copiados en la propia cotización, que es lo que se cotizó.
+const QUOT_INCLUDE = [
+  { model: QuotationItem, as: 'items' },
+  { model: Employee, attributes: ['full_name'], required: false },
+];
+
+// Sequelize devuelve el empleado anidado; la caja espera `employee_name` plano, igual que en
+// ventas (ver getAllSales).
+function withEmployeeName(row) {
+  const q = row.toJSON();
+  q.employee_name = q.Employee?.full_name ?? null;
+  delete q.Employee;
+  return q;
+}
+
 async function getAll({ search, status, date_from, date_to, page = 1, limit = 30 } = {}) {
   const where = {};
   if (status) where.status = status;
@@ -28,21 +46,21 @@ async function getAll({ search, status, date_from, date_to, page = 1, limit = 30
   const offset = (parseInt(page) - 1) * parseInt(limit);
   const { count, rows } = await Quotation.findAndCountAll({
     where,
-    include: [{ model: QuotationItem, as: 'items' }],
+    include: QUOT_INCLUDE,
     order: [["created_at", "DESC"]],
     limit: parseInt(limit),
     offset,
   });
 
-  return { data: rows, total: count, page: parseInt(page), limit: parseInt(limit) };
+  return { data: rows.map(withEmployeeName), total: count, page: parseInt(page), limit: parseInt(limit) };
 }
 
 async function getById(id) {
   const q = await Quotation.findByPk(id, {
-    include: [{ model: QuotationItem, as: 'items' }],
+    include: QUOT_INCLUDE,
   });
   if (!q) { const e = new Error("Cotización no encontrada"); e.status = 404; throw e; }
-  return q;
+  return withEmployeeName(q);
 }
 
 async function create(body, employeeId) {
@@ -50,6 +68,10 @@ async function create(body, employeeId) {
           currency_id, exchange_rate, discount_amount, notes } = body;
 
   if (!items?.length) { const e = new Error("items es requerido"); e.status = 400; throw e; }
+  // La caja ya lo valida, pero la regla vive aquí: una cotización sin cliente es un papel sin
+  // destinatario y después no hay forma de encontrarla más que por su número —el buscador
+  // filtra por nombre y RIF del cliente.
+  if (!customer_id) { const e = new Error("El cliente es requerido"); e.status = 400; throw e; }
 
   const discAmt = parseFloat(discount_amount) || 0;
   let subtotal = 0;

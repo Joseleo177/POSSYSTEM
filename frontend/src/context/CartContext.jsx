@@ -650,6 +650,10 @@ export function CartProvider({ children }) {
   const saveQuotation = useCallback(async (onSuccess) => {
     if (!cart.length) return notify("El carrito está vacío", "err");
     if (!activeWarehouse) return notify("Selecciona un almacén antes de continuar", "err");
+    // Igual que el cobro: una cotización es un documento nominal que se entrega y luego se
+    // busca por cliente. Sin cliente el papel sale sin destinatario y la cotización solo se
+    // puede volver a encontrar por su número.
+    if (!selectedCustomer) return notify("El cliente es requerido", "err");
 
     setLoading(true);
     try {
