@@ -76,7 +76,7 @@ async function request(path, options = {}) {
 
   if (!res.ok) {
     if (res.status === 403) {
-      throw buildApiError(403, "No tienes permisos para esta acción", "FORBIDDEN");
+      throw buildApiError(403, data.message || "No tienes permisos para esta acción", "FORBIDDEN", data);
     }
     // Siempre usar el mensaje real del servidor (ej: "Contraseña incorrecta")
     // El flujo de refresh token ya maneja la sesión expirada por separado

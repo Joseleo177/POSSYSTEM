@@ -7,7 +7,15 @@ const wrap = (fn, status = 200) => async (req, res) => {
     res.status(status).json({ ok: true, ...result });
   } catch (err) {
     console.error(err);
-    res.status(err.status || 500).json({ ok: false, message: err.message });
+    let msg = err.message || "Error al procesar la orden de compra";
+    if (msg.includes('null value in column "warehouse_id"') || msg.includes('warehouse_id')) {
+      msg = "Debe seleccionar un almacén de destino antes de recibir la mercancía";
+    } else if (msg.includes('violates not-null constraint')) {
+      msg = "Por favor completa todos los campos obligatorios antes de procesar";
+    } else if (msg.includes('violates foreign key constraint')) {
+      msg = "El proveedor o almacén seleccionado no es válido o ya no existe";
+    }
+    res.status(err.status || 400).json({ ok: false, message: msg });
   }
 };
 

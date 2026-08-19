@@ -114,6 +114,11 @@ async function getOne(id) {
 // Applies stock increments, lot tracking, price/cost updates and combo creation.
 // Called only when a purchase reaches status='recibido'.
 async function _applyStockAndPrices(purchase, items, transaction) {
+  if (!purchase.warehouse_id) {
+    const e = new Error("Debe seleccionar un almacén de destino antes de recibir la mercancía");
+    e.status = 400;
+    throw e;
+  }
   for (const item of items) {
     const {
       product_id, total_units, unit_cost, profit_margin, sale_price,
@@ -301,8 +306,10 @@ async function receivePurchase(id) {
   try {
     const purchase = await Purchase.findByPk(id, { transaction, lock: true });
     if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
-    if (purchase.status === 'recibido') {
-      const e = new Error("Esta compra ya fue recibida"); e.status = 400; throw e;
+    if (!purchase.warehouse_id) {
+      const e = new Error("Debe seleccionar un almacén de destino antes de recibir la mercancía");
+      e.status = 400;
+      throw e;
     }
 
     const items = await PurchaseItem.findAll({ where: { purchase_id: id }, transaction });

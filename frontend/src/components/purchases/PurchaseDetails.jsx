@@ -203,10 +203,13 @@ export default function PurchaseDetails({ state }) {
     }
   };
 
-  const handleReceivePendiente = () => {
+  const handleReceivePendiente = async () => {
     if (!localWarehouseId) {
       notify("Selecciona un almacén destino antes de recibir la mercancía", "err");
       return;
+    }
+    if (isDirty) {
+      await saveDraftChanges();
     }
     receivePurchase?.(detail.id);
   };
@@ -374,7 +377,7 @@ export default function PurchaseDetails({ state }) {
               <div className="col-span-2 lg:col-span-2">
                 <p className={`${LABEL} mb-1.5 text-center`}>Acciones</p>
                 <div className="flex items-center justify-center gap-2">
-                  <button onClick={() => receivePurchase?.(detail.id)} disabled={loading}
+                  <button onClick={handleReceivePendiente} disabled={loading}
                     className="h-7 px-3 rounded-lg bg-success/10 text-success border border-success/20 text-[10px] font-black uppercase tracking-wide hover:bg-success hover:text-black transition-all active:scale-95 disabled:opacity-50">
                     {loading ? "..." : "Recibir Mercancía ✓"}
                   </button>
