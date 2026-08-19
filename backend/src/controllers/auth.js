@@ -1,6 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt    = require("jsonwebtoken");
-const { Employee, Role, Warehouse } = require("../models");
+const { Employee, Role, Warehouse, Company } = require("../models");
 
 const SECRET  = process.env.JWT_SECRET;
 if (!SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -27,6 +27,23 @@ const login = async (req, res) => {
     const valid = await bcrypt.compare(password, emp.password_hash);
     if (!valid)
       return res.status(401).json({ ok: false, message: "Contraseña incorrecta" });
+
+    // Verificación de suscripción de la empresa
+    if (!emp.is_superuser && emp.company_id) {
+      const company = await Company.findByPk(emp.company_id, {
+        attributes: ['id', 'active', 'subscription_status', 'expires_at']
+      });
+
+      if (!company || !company.active) {
+        return res.status(403).json({ ok: false, message: "Tu empresa ha sido desactivada. Contacta al administrador." });
+      }
+      if (company.subscription_status === 'Suspendida') {
+        return res.status(403).json({ ok: false, message: "La suscripción de tu empresa está suspendida. Contacta al administrador." });
+      }
+      if (company.expires_at && new Date(company.expires_at) < new Date()) {
+        return res.status(403).json({ ok: false, message: "La suscripción de tu empresa ha expirado. Renueva tu plan para continuar." });
+      }
+    }
 
     const payload = {
       id:           emp.id,
