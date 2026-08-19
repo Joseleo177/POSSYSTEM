@@ -1,12 +1,13 @@
-const { Expense, ExpenseCategory, PaymentJournal, Employee, Currency, PurchasePayment } = require('../models');
+const { Expense, ExpenseCategory, PaymentJournal, Employee, Currency, Warehouse, PurchasePayment } = require('../models');
 const { Op } = require('sequelize');
 const { recalcPurchaseStatus } = require('../services/purchasePayments/purchasePaymentService');
 const { toLocalDate } = require('../utils/localDate');
+const { visibleWarehouseIds, assertWarehouseAccess } = require('../middleware/auth');
 
 // ── Listar egresos (paginado + filtros) ──────────────────────
 exports.getAll = async (req, res, next) => {
   try {
-    const { limit = 50, offset = 0, date_from, date_to, search, status, category_id } = req.query;
+    const { limit = 50, offset = 0, date_from, date_to, search, status, category_id, warehouse_id } = req.query;
     const company_id = req.employee?.company_id ?? null;
     const isSuperuser = !!req.is_superuser;
 
@@ -15,6 +16,15 @@ exports.getAll = async (req, res, next) => {
     if (status)      where.status = status;
     if (category_id) where.category_id = category_id;
     if (search)      where.description = { [Op.iLike]: `%${search}%` };
+
+    // Cada quien ve los egresos de sus sucursales; el admin, los de todas.
+    const allowedWarehouses = await visibleWarehouseIds(req);
+    if (warehouse_id) {
+      await assertWarehouseAccess(req, warehouse_id);
+      where.warehouse_id = parseInt(warehouse_id);
+    } else if (allowedWarehouses) {
+      where.warehouse_id = { [Op.in]: allowedWarehouses };
+    }
 
     if (date_from || date_to) {
       where.created_at = {};
@@ -29,6 +39,7 @@ exports.getAll = async (req, res, next) => {
         { model: PaymentJournal,  as: 'journal',  attributes: ['id', 'name', 'color'] },
         { model: Employee,        as: 'employee', attributes: ['id', 'full_name'] },
         { model: Currency,        as: 'currency', attributes: ['id', 'code', 'symbol'] },
+        { model: Warehouse,       as: 'warehouse', attributes: ['id', 'name'], required: false },
       ],
       order: [['created_at', 'DESC']],
       limit: parseInt(limit),
@@ -53,6 +64,8 @@ exports.getAll = async (req, res, next) => {
       employee_name: e.employee?.full_name || '',
       currency_code: e.currency?.code || '',
       currency_symbol: e.currency?.symbol || '',
+      warehouse_id:   e.warehouse_id,
+      warehouse_name: e.warehouse?.name || '',
     }));
 
     res.json({ ok: true, data, total: count });
@@ -88,11 +101,16 @@ exports.upsertCategory = async (req, res, next) => {
 // ── Crear egreso ─────────────────────────────────────────────
 exports.create = async (req, res, next) => {
   try {
-    const { description, amount, category_id, payment_journal_id, reference, notes, currency_id, rate, date } = req.body;
+    const { description, amount, category_id, payment_journal_id, reference, notes, currency_id, rate, date, warehouse_id } = req.body;
 
     if (!description || !amount || !category_id) {
       return res.status(400).json({ ok: false, message: 'Descripción, monto y categoría son obligatorios' });
     }
+    if (!warehouse_id) {
+      return res.status(400).json({ ok: false, message: 'Debes indicar el almacén al que corresponde el egreso' });
+    }
+    // Solo se puede cargar un gasto a una sucursal propia.
+    await assertWarehouseAccess(req, warehouse_id);
 
     const expense = await Expense.create({
       description,
@@ -104,6 +122,7 @@ exports.create = async (req, res, next) => {
       currency_id: currency_id || null,
       rate: rate || 1,
       employee_id: req.employee.id,
+      warehouse_id: parseInt(warehouse_id),
       status: 'activo',
       date: toLocalDate(date),
     });
@@ -126,6 +145,7 @@ exports.deleteExpense = async (req, res, next) => {
   try {
     const expense = await Expense.findByPk(req.params.id);
     if (!expense) return res.status(404).json({ ok: false, message: 'Egreso no encontrado' });
+    await assertWarehouseAccess(req, expense.warehouse_id, { optional: true });
     if (expense.status !== 'anulado') return res.status(400).json({ ok: false, message: 'Solo se pueden eliminar egresos anulados' });
     await expense.destroy();
     res.json({ ok: true, message: 'Egreso eliminado permanentemente' });
@@ -137,6 +157,7 @@ exports.voidExpense = async (req, res, next) => {
   try {
     const expense = await Expense.findByPk(req.params.id);
     if (!expense) return res.status(404).json({ ok: false, message: 'Egreso no encontrado' });
+    await assertWarehouseAccess(req, expense.warehouse_id, { optional: true });
     if (expense.status === 'anulado') return res.status(400).json({ ok: false, message: 'Ya está anulado' });
 
     await expense.update({ status: 'anulado' });

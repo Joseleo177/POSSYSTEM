@@ -1,7 +1,7 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause, localDate, TZ } = require("./shared");
 
-async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tcS, tcS2, rep }) {
+async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tcS, tcS2, rep, wh }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dS  = dateClause(df, dt, 's');
@@ -14,16 +14,16 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
          COUNT(*)::int AS total_sales,
          (COALESCE(SUM(CASE WHEN status = 'pagado' THEN total ELSE 0 END), 0) -
           COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id
-                    WHERE s2.status = 'pagado' ${tcS2} ${dS2}), 0))::float AS total_revenue,
+                    WHERE s2.status = 'pagado' ${tcS2} ${wh('s2')} ${dS2}), 0))::float AS total_revenue,
          COALESCE(AVG(CASE WHEN status = 'pagado' THEN total END), 0)::float AS avg_ticket,
          COALESCE(MAX(CASE WHEN status = 'pagado' THEN total END), 0)::float AS max_sale,
          COALESCE(MIN(CASE WHEN status = 'pagado' THEN total END), 0)::float AS min_sale,
          COUNT(CASE WHEN status IN ('pendiente','parcial') THEN 1 END)::int AS pending_count,
          COALESCE(SUM(CASE WHEN status IN ('pendiente','parcial') THEN total ELSE 0 END), 0)::float AS pending_amount,
          COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id
-                    WHERE s2.status = 'pagado' ${tcS2} ${dS2}), 0)::float AS total_returned
+                    WHERE s2.status = 'pagado' ${tcS2} ${wh('s2')} ${dS2}), 0)::float AS total_returned
        FROM sales
-       WHERE TRUE ${tc} ${dR}`,
+       WHERE TRUE ${tc} ${wh()} ${dR}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -35,7 +35,7 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
        FROM payments p
        LEFT JOIN payment_journals pj ON p.payment_journal_id = pj.id
        JOIN sales s ON p.sale_id = s.id
-       WHERE p.payment_journal_id IS NOT NULL ${tcS} ${dS}
+       WHERE p.payment_journal_id IS NOT NULL ${tcS} ${wh('s')} ${dS}
        GROUP BY pj.id, pj.name, pj.type
        ORDER BY total DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -44,7 +44,7 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
       `SELECT ${localDate('created_at')} AS day, COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS revenue
        FROM sales
-       WHERE status = 'pagado' ${tc} ${dR}
+       WHERE status = 'pagado' ${tc} ${wh()} ${dR}
        GROUP BY ${localDate('created_at')}
        ORDER BY day ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -56,7 +56,7 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
               COALESCE(AVG(s.total), 0)::float AS avg_ticket
        FROM sales s
        LEFT JOIN employees e ON s.employee_id = e.id
-       WHERE s.status = 'pagado' ${tcS} ${dS}
+       WHERE s.status = 'pagado' ${tcS} ${wh('s')} ${dS}
        GROUP BY e.id, e.full_name
        ORDER BY revenue DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -66,7 +66,7 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
               COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS revenue
        FROM sales
-       WHERE status = 'pagado' ${tc} ${dR}
+       WHERE status = 'pagado' ${tc} ${wh()} ${dR}
        GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE '${TZ}')
        ORDER BY hour ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

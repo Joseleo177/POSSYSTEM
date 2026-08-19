@@ -14,6 +14,11 @@ export function useWarehouses(notify) {
   const [editId, setEditId]         = useState(null);
   const [loading, setLoading]       = useState(false);
 
+  // Lista completa de la empresa (solo id/nombre). El backend limita `warehouses` a los
+  // almacenes asignados al empleado, pero el destino de una transferencia puede ser
+  // cualquier almacén, así que ese selector necesita la lista sin filtrar.
+  const [allWarehouses, setAllWarehouses] = useState([]);
+
   // ── Empleados (para asignación) ──────────────────────────────
   const [employees, setEmployees]           = useState([]);
   const [assignModal, setAssignModal]       = useState(null);
@@ -26,6 +31,13 @@ export function useWarehouses(notify) {
     } catch (e) { notify(e.message, "err"); }
   }, [notify]);
 
+  const loadAllWarehouses = useCallback(async () => {
+    try {
+      const r = await api.warehouses.getAll({ scope: "all" });
+      setAllWarehouses(r.data || []);
+    } catch (e) {}
+  }, []);
+
   const loadEmployees = useCallback(async () => {
     try {
       const r = await api.employees.getAll();
@@ -33,7 +45,7 @@ export function useWarehouses(notify) {
     } catch (e) {}
   }, []);
 
-  useEffect(() => { load(); loadEmployees(); }, [load, loadEmployees]);
+  useEffect(() => { load(); loadAllWarehouses(); loadEmployees(); }, [load, loadAllWarehouses, loadEmployees]);
 
   // ── CRUD ─────────────────────────────────────────────────────
   const save = useCallback(async () => {
@@ -96,6 +108,7 @@ export function useWarehouses(notify) {
 
   return {
     warehouses, load,
+    allWarehouses,
     form, setForm,
     editId,
     loading,

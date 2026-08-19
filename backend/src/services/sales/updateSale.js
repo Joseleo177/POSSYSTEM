@@ -4,6 +4,7 @@ const {
   Product,
   ProductComboItem,
   ProductStock,
+  Serie,
   sequelize,
 } = require("./shared");
 const getOneSale = require("./getOneSale");
@@ -181,6 +182,17 @@ module.exports = async function updateSale(saleId, body) {
     const headerPatch = {};
     for (const k of ["customer_id", "currency_id", "exchange_rate", "serie_id"]) {
       if (body[k] !== undefined) headerPatch[k] = body[k];
+    }
+
+    // Cambiar de serie no puede saltar de sucursal: la serie pertenece a un almacén.
+    if (headerPatch.serie_id && parseInt(headerPatch.serie_id) !== parseInt(sale.serie_id)) {
+      const nuevaSerie = await Serie.findByPk(headerPatch.serie_id, { transaction });
+      if (!nuevaSerie || !nuevaSerie.active) {
+        const e = new Error("Serie no encontrada o inactiva"); e.status = 400; throw e;
+      }
+      if (nuevaSerie.warehouse_id && sale.warehouse_id && parseInt(nuevaSerie.warehouse_id) !== parseInt(sale.warehouse_id)) {
+        const e = new Error("La serie seleccionada no pertenece al almacén de la venta"); e.status = 400; throw e;
+      }
     }
 
     const discAmt = parseFloat(discount_amount ?? sale.discount_amount) || 0;

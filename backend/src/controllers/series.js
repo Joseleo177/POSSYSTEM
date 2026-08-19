@@ -1,4 +1,4 @@
-const { Serie, SerieRange, Employee, UserSerie, sequelize } = require("../models");
+const { Serie, SerieRange, Employee, UserSerie, Warehouse, Sale, sequelize } = require("../models");
 const { Op } = require("sequelize");
 
 // GET /api/series  — todas con rangos y usuarios (admin)
@@ -8,6 +8,7 @@ const getAll = async (req, res) => {
       include: [
         { model: SerieRange, order: [['start_number', 'ASC']] },
         { model: Employee, attributes: ['id', 'full_name'], through: { attributes: [] } },
+        { model: Warehouse, attributes: ['id', 'name'], required: false },
       ],
       order: [['name', 'ASC']],
     });
@@ -17,12 +18,18 @@ const getAll = async (req, res) => {
   }
 };
 
-// GET /api/series/my  — series activas del usuario autenticado
+// GET /api/series/my?warehouse_id=  — series activas del usuario en un almacén
+//
+// La serie es de la sucursal, así que la caja solo puede facturar con las series del
+// almacén desde el que está vendiendo. Sin warehouse_id devuelve las del usuario en todos
+// sus almacenes (la pantalla de cobro siempre lo manda).
 const getMy = async (req, res) => {
   try {
     const employeeId = req.employee.id;
+    const warehouseId = parseInt(req.query.warehouse_id);
+
     const series = await Serie.findAll({
-      where: { active: true },
+      where: { active: true, ...(warehouseId ? { warehouse_id: warehouseId } : {}) },
       include: [
         { model: SerieRange },
         {
@@ -44,11 +51,20 @@ const getMy = async (req, res) => {
 // POST /api/series
 const create = async (req, res) => {
   try {
-    const { name, prefix, padding, type } = req.body;
+    const { name, prefix, padding, type, warehouse_id } = req.body;
     if (!name || !prefix) throw new Error("name y prefix son requeridos");
+    if (!warehouse_id) throw new Error("Debes indicar el almacén al que pertenece la serie");
+    const warehouse = await Warehouse.findByPk(warehouse_id);
+    if (!warehouse) throw new Error("Almacén no encontrado");
     const validTypes = ['factura', 'nc'];
     const serieType = validTypes.includes(type) ? type : 'factura';
-    const serie = await Serie.create({ name, prefix: prefix.toUpperCase(), padding: parseInt(padding) || 4, type: serieType });
+    const serie = await Serie.create({
+      name,
+      prefix: prefix.toUpperCase(),
+      padding: parseInt(padding) || 4,
+      type: serieType,
+      warehouse_id: parseInt(warehouse_id),
+    });
     res.json({ ok: true, data: serie });
   } catch (err) {
     res.status(400).json({ ok: false, message: err.message });
@@ -60,14 +76,29 @@ const update = async (req, res) => {
   try {
     const serie = await Serie.findByPk(req.params.id);
     if (!serie) throw new Error("Serie no encontrada");
-    const { name, prefix, padding, active, type } = req.body;
+    const { name, prefix, padding, active, type, warehouse_id } = req.body;
     const validTypes = ['factura', 'nc'];
+
+    // Mover una serie de sucursal solo se permite mientras no haya facturado nada: si ya
+    // emitió, sus correlativos quedaron atados a ese almacén y cambiarlo falsea el histórico.
+    let nextWarehouseId = serie.warehouse_id;
+    if (warehouse_id && parseInt(warehouse_id) !== serie.warehouse_id) {
+      const emitidas = await Sale.count({ where: { serie_id: serie.id } });
+      if (emitidas > 0) {
+        throw new Error(`No se puede cambiar el almacén: la serie ya tiene ${emitidas} documento(s) emitido(s)`);
+      }
+      const warehouse = await Warehouse.findByPk(warehouse_id);
+      if (!warehouse) throw new Error("Almacén no encontrado");
+      nextWarehouseId = parseInt(warehouse_id);
+    }
+
     await serie.update({
       name:    name    ?? serie.name,
       prefix:  prefix  ? prefix.toUpperCase() : serie.prefix,
       padding: padding ? parseInt(padding) : serie.padding,
       active:  active  !== undefined ? active : serie.active,
       type:    validTypes.includes(type) ? type : serie.type,
+      warehouse_id: nextWarehouseId,
     });
     res.json({ ok: true, data: serie });
   } catch (err) {

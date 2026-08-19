@@ -185,6 +185,8 @@ module.exports = async function createPayment(body) {
           payment_journal_id: change_journal_id,
           employee_id: employee_id || null,
           currency_id: changeCurrencyId,
+          // El vuelto sale de la caja de la sucursal que cobró.
+          warehouse_id: sale.warehouse_id || null,
           notes: null,
           status: "activo",
         },

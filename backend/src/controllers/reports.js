@@ -23,52 +23,52 @@ const wrap = (fn, errMsg) => async (req, res) => {
 };
 
 const getSalesReport = wrap(
-  req => salesReport({ ...req.query, ...buildTenantContext(req) }),
+  async req => salesReport({ ...req.query, ...(await buildTenantContext(req)) }),
   "Error al generar reporte de ventas"
 );
 
 const getProductsReport = wrap(
-  req => productsReport({ ...req.query, ...buildTenantContext(req) }),
+  async req => productsReport({ ...req.query, ...(await buildTenantContext(req)) }),
   "Error al generar reporte de productos"
 );
 
 const getReceivablesReport = wrap(
-  req => receivablesReport({ ...req.query, ...buildTenantContext(req) }),
+  async req => receivablesReport({ ...req.query, ...(await buildTenantContext(req)) }),
   "Error al generar reporte de cuentas por cobrar"
 );
 
 const getPurchasesReport = wrap(
-  req => purchasesReport({ ...req.query, ...buildTenantContext(req) }),
+  async req => purchasesReport({ ...req.query, ...(await buildTenantContext(req)) }),
   "Error al generar reporte de compras"
 );
 
 const getInventoryReport = wrap(
-  req => inventoryReport({ ...req.query, ...buildTenantContext(req) }),
+  async req => inventoryReport({ ...req.query, ...(await buildTenantContext(req)) }),
   "Error al generar reporte de inventario"
 );
 
 const getMarginsReport = wrap(
-  req => marginsReport({ ...req.query, ...buildTenantContext(req) }),
+  async req => marginsReport({ ...req.query, ...(await buildTenantContext(req)) }),
   "Error al generar reporte de márgenes"
 );
 
 const getCustomersAnalysis = wrap(
-  req => customersReport({ ...req.query, ...buildTenantContext(req) }),
+  async req => customersReport({ ...req.query, ...(await buildTenantContext(req)) }),
   "Error al generar análisis de clientes"
 );
 
 const getAuditReport = wrap(
-  req => auditReport({ ...req.query, ...buildTenantContext(req) }),
+  async req => auditReport({ ...req.query, ...(await buildTenantContext(req)) }),
   "Error al generar reporte de auditoría"
 );
 
 const getExpiryReport = wrap(
-  () => expiryReport(),
+  async req => expiryReport(await buildTenantContext(req)),
   "Error al generar reporte de vencimientos"
 );
 
 const getPaymentJournalsReport = wrap(
-  req => paymentJournalsReport({ ...req.query, ...buildTenantContext(req) }),
+  async req => paymentJournalsReport({ ...req.query, ...(await buildTenantContext(req)) }),
   "Error al generar reporte de diarios de pago"
 );
 

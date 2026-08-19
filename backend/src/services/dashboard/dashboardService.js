@@ -1,5 +1,5 @@
 const { Sale, SaleItem, Purchase, Sequelize, sequelize } = require("../../models");
-const { localDate, TZ } = require("../reports/shared");
+const { localDate, TZ, buildWarehouseScope } = require("../reports/shared");
 const { Op } = Sequelize;
 
 // "Hoy" y "últimos 30 días" se resuelven en la zona de operación, no en la del proceso
@@ -11,14 +11,33 @@ const MONTH  = `((NOW() AT TIME ZONE '${TZ}')::date - 30)`;
 const sinceToday = (col) => `${localDate(col)} = ${TODAY}`;
 const sinceMonth = (col) => `${localDate(col)} >= ${MONTH}`;
 
-async function getDashboard({ company_id, isSuperuser }) {
+async function getDashboard({ company_id, isSuperuser, allowedWarehouses }) {
 
   const tenantWhere  = company_id ? { company_id } : {};
   const tenantClause = company_id ? `AND company_id = :company_id` : "";
 
+  // Los KPIs se recortan a las sucursales del empleado; el admin ve la empresa entera.
+  // `wh` arma el fragmento SQL para el alias de cada consulta, y `whereScope` el equivalente
+  // para las consultas que van por el ORM.
+  const wh = buildWarehouseScope(allowedWarehouses ?? null);
+  const whereScope = Array.isArray(allowedWarehouses)
+    ? { warehouse_id: { [Op.in]: allowedWarehouses } }
+    : {};
+  const whIds = Array.isArray(allowedWarehouses) ? allowedWarehouses.filter(Number.isInteger) : null;
+  // Los cobros y el efectivo en caja no guardan sucursal: la heredan de la venta.
+  const paymentScope = whIds === null
+    ? ''
+    : (whIds.length ? `AND p.sale_id IN (SELECT id FROM sales WHERE warehouse_id IN (${whIds.join(',')}))` : 'AND FALSE');
+  // El aviso de stock bajo se mide sobre las existencias de las sucursales visibles. Va en
+  // el ON del LEFT JOIN, no en el WHERE: en el WHERE convertiría el join en interno y los
+  // productos sin stock en esas sucursales —justo los que hay que ver— desaparecerían.
+  const stockScope = whIds === null
+    ? ''
+    : (whIds.length ? `AND ps.warehouse_id IN (${whIds.join(',')})` : 'AND FALSE');
+
   const [kpiToday, kpiMonth] = await Promise.all([
     Sale.findOne({
-      where: { ...tenantWhere, [Op.and]: Sequelize.literal(sinceToday('"Sale"."created_at"')), status: { [Op.notIn]: ["anulado", "devuelto", "eliminado"] } },
+      where: { ...tenantWhere, ...whereScope, [Op.and]: Sequelize.literal(sinceToday('"Sale"."created_at"')), status: { [Op.notIn]: ["anulado", "devuelto", "eliminado"] } },
       attributes: [
         [Sequelize.fn("COUNT", Sequelize.col("id")), "count"],
         [Sequelize.fn("COALESCE", Sequelize.fn("SUM", Sequelize.col("total")), 0), "revenue"],
@@ -26,7 +45,7 @@ async function getDashboard({ company_id, isSuperuser }) {
       raw: true,
     }),
     Sale.findOne({
-      where: { ...tenantWhere, [Op.and]: Sequelize.literal(sinceMonth('"Sale"."created_at"')), status: { [Op.notIn]: ["anulado", "devuelto", "eliminado"] } },
+      where: { ...tenantWhere, ...whereScope, [Op.and]: Sequelize.literal(sinceMonth('"Sale"."created_at"')), status: { [Op.notIn]: ["anulado", "devuelto", "eliminado"] } },
       attributes: [
         [Sequelize.fn("COUNT", Sequelize.col("id")), "count"],
         [Sequelize.fn("COALESCE", Sequelize.fn("SUM", Sequelize.col("total")), 0), "revenue"],
@@ -36,17 +55,17 @@ async function getDashboard({ company_id, isSuperuser }) {
   ]);
 
   const [incomeToday, incomeMonth, expenseToday, expenseMonth] = await Promise.all([
-    sequelize.query(`SELECT COALESCE(SUM(p.amount), 0) as total FROM payments p LEFT JOIN sales s ON s.id = p.sale_id WHERE ${sinceToday('p.created_at')} AND (s.id IS NULL OR s.status != 'anulado') ${!!company_id ? "AND p.company_id = :company_id" : ""}`,   { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT }),
-    sequelize.query(`SELECT COALESCE(SUM(p.amount), 0) as total FROM payments p LEFT JOIN sales s ON s.id = p.sale_id WHERE ${sinceMonth('p.created_at')} AND (s.id IS NULL OR s.status != 'anulado') ${!!company_id ? "AND p.company_id = :company_id" : ""}`,   { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT }),
-    sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE ${sinceToday('created_at')} AND status = 'activo' ${tenantClause}`, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT }),
-    sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE ${sinceMonth('created_at')} AND status = 'activo' ${tenantClause}`, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(`SELECT COALESCE(SUM(p.amount), 0) as total FROM payments p LEFT JOIN sales s ON s.id = p.sale_id WHERE ${sinceToday('p.created_at')} AND (s.id IS NULL OR s.status != 'anulado') ${paymentScope} ${!!company_id ? "AND p.company_id = :company_id" : ""}`,   { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(`SELECT COALESCE(SUM(p.amount), 0) as total FROM payments p LEFT JOIN sales s ON s.id = p.sale_id WHERE ${sinceMonth('p.created_at')} AND (s.id IS NULL OR s.status != 'anulado') ${paymentScope} ${!!company_id ? "AND p.company_id = :company_id" : ""}`,   { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE ${sinceToday('created_at')} AND status = 'activo' ${tenantClause} ${wh()}`, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(`SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE ${sinceMonth('created_at')} AND status = 'activo' ${tenantClause} ${wh()}`, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT }),
   ]);
 
   const cashInHand = await sequelize.query(`
     SELECT (
-      (SELECT COALESCE(SUM(p.amount), 0) FROM payments p LEFT JOIN sales s ON s.id = p.sale_id WHERE (s.id IS NULL OR s.status != 'anulado') AND (p.reference_number IS NULL OR p.reference_number NOT LIKE 'ANUL-%') ${!!company_id ? "AND p.company_id = :company_id" : ""})
+      (SELECT COALESCE(SUM(p.amount), 0) FROM payments p LEFT JOIN sales s ON s.id = p.sale_id WHERE (s.id IS NULL OR s.status != 'anulado') AND (p.reference_number IS NULL OR p.reference_number NOT LIKE 'ANUL-%') ${paymentScope} ${!!company_id ? "AND p.company_id = :company_id" : ""})
       -
-      (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE status = 'activo' ${!!company_id ? "AND company_id = :company_id" : ""})
+      (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE status = 'activo' ${!!company_id ? "AND company_id = :company_id" : ""} ${wh()})
     ) as total
   `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 
@@ -58,7 +77,7 @@ async function getDashboard({ company_id, isSuperuser }) {
     ],
     include: [{
       model: Sale, attributes: [],
-      where: { ...tenantWhere, [Op.and]: Sequelize.literal(sinceMonth('"Sale"."created_at"')), status: { [Op.notIn]: ["anulado", "eliminado", "devuelto"] } },
+      where: { ...tenantWhere, ...whereScope, [Op.and]: Sequelize.literal(sinceMonth('"Sale"."created_at"')), status: { [Op.notIn]: ["anulado", "eliminado", "devuelto"] } },
       required: true,
     }],
     group: ["SaleItem.product_id", "SaleItem.name"],
@@ -74,7 +93,7 @@ async function getDashboard({ company_id, isSuperuser }) {
            COALESCE(SUM(total), 0)::float AS revenue
     FROM sales
     WHERE ${sinceMonth('created_at')}
-      AND status NOT IN ('anulado', 'eliminado', 'devuelto')
+      AND status NOT IN ('anulado', 'eliminado', 'devuelto') ${wh()}
       ${!!company_id ? "AND company_id = :company_id" : ""}
     GROUP BY ${localDate('created_at')}
     ORDER BY day ASC
@@ -84,14 +103,14 @@ async function getDashboard({ company_id, isSuperuser }) {
     SELECT COUNT(id) as count,
            COALESCE(SUM(total - (SELECT COALESCE(SUM(amount), 0) FROM payments p WHERE p.sale_id = s.id)), 0) as balance
     FROM sales s
-    WHERE s.status IN ('borrador', 'pendiente', 'parcial')
+    WHERE s.status IN ('borrador', 'pendiente', 'parcial') ${wh('s')}
     ${!!company_id ? "AND s.company_id = :company_id" : ""}
   `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 
   const lowStock = await sequelize.query(`
     SELECT p.id, p.name, p.unit, p.min_stock, COALESCE(SUM(ps.qty), 0) as total_stock
     FROM products p
-    LEFT JOIN product_stock ps ON ps.product_id = p.id
+    LEFT JOIN product_stock ps ON ps.product_id = p.id ${stockScope}
     WHERE p.min_stock > 0
     ${!!company_id ? "AND p.company_id = :company_id" : ""}
     GROUP BY p.id, p.name, p.unit, p.min_stock
@@ -101,7 +120,7 @@ async function getDashboard({ company_id, isSuperuser }) {
   `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 
   const purchasesMonth = await Purchase.findOne({
-    where: { ...tenantWhere, [Op.and]: Sequelize.literal(sinceMonth('"Purchase"."created_at"')) },
+    where: { ...tenantWhere, ...whereScope, [Op.and]: Sequelize.literal(sinceMonth('"Purchase"."created_at"')) },
     attributes: [
       [Sequelize.fn("COUNT", Sequelize.col("id")), "count"],
       [Sequelize.fn("COALESCE", Sequelize.fn("SUM", Sequelize.col("total")), 0), "total"],

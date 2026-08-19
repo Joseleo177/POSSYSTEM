@@ -449,8 +449,12 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     />
                 )}
 
-                {/* ── Si NO es servicio: Mostrar Costos y Rentabilidad ── */}
-                {!form.is_service && (
+                {/* ── Costos y Rentabilidad ──
+                    También para servicios: un servicio tiene costo (la hora del técnico, el
+                    material que consume) y sin cargarlo queda fuera del reporte de márgenes,
+                    que solo mide lo que tiene costo conocido. Lo que sí se les oculta es el
+                    embalaje y el stock mínimo, que no aplican. */}
+                {(
                     <div className="space-y-3 animate-in fade-in duration-300 mt-2">
                         {/* ── Rentabilidad ── */}
                         <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
@@ -517,7 +521,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         </div>
 
                         {/* ── Configuración Avanzada ── */}
-                        {!form.is_combo && (
+                        {!form.is_combo && !form.is_service && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
                                 <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">Unidades de Embalaje</h3>

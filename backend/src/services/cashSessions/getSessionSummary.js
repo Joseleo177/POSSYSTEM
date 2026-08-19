@@ -1,12 +1,16 @@
 const { CashSession, sequelize, Sequelize, SESSION_INCLUDE } = require("./shared");
+const { assertWarehouseAccess } = require("../../middleware/auth");
 
-module.exports = async function getSessionSummary(id) {
+module.exports = async function getSessionSummary(id, req) {
   const session = await CashSession.findByPk(id, { include: SESSION_INCLUDE });
   if (!session) {
     const err = new Error("Sesión no encontrada");
     err.status = 404;
     throw err;
   }
+
+  // El cuadre de una caja es de su sucursal: no se abre desde otra.
+  await assertWarehouseAccess(req, session.warehouse_id, { optional: true });
 
   const openedAt = session.opened_at;
   const closedAt = session.closed_at || new Date();

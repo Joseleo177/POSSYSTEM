@@ -24,8 +24,21 @@ export function useIngresos({ notify, journals }) {
 
     const [showCreate, setShowCreate] = useState(false);
     const today = () => todayISO();
-    const [form, setForm] = useState({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "", date: today(), rate: "" });
+    const [form, setForm] = useState({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "", date: today(), rate: "", warehouse_id: "" });
     const [saving, setSaving] = useState(false);
+
+    // Los ingresos son de una sucursal. La API ya devuelve solo los almacenes del usuario,
+    // así que si tiene uno solo se preselecciona y el campo queda de mero informativo.
+    const [warehouses, setWarehouses] = useState([]);
+    useEffect(() => {
+        api.warehouses.getAll()
+            .then(r => {
+                const list = r.data || [];
+                setWarehouses(list);
+                if (list.length === 1) setForm(p => p.warehouse_id ? p : { ...p, warehouse_id: String(list[0].id) });
+            })
+            .catch(() => {});
+    }, []);
 
     const selectedJournal = form.payment_journal_id ? journals?.find(j => j.id == form.payment_journal_id) : null;
     // La tasa del día a la que realmente se cobra no siempre es la cargada en configuración.
@@ -91,6 +104,8 @@ export function useIngresos({ notify, journals }) {
     const handleCreate = async () => {
         if (!form.description || !form.amount || !form.category_id)
             return notify("Descripción, monto y categoría son obligatorios", "err");
+        if (!form.warehouse_id)
+            return notify("Selecciona el almacén al que corresponde el ingreso", "err");
         setSaving(true);
         try {
             const inputAmount = parseFloat(form.amount);
@@ -105,10 +120,11 @@ export function useIngresos({ notify, journals }) {
                 currency_id: selectedJournal?.currency_id || null,
                 rate: currentRate,
                 date: form.date || null,
+                warehouse_id: parseInt(form.warehouse_id),
             });
             notify("Ingreso registrado correctamente");
             setShowCreate(false);
-            setForm({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "", date: today(), rate: "" });
+            setForm({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "", date: today(), rate: "", warehouse_id: warehouses.length === 1 ? String(warehouses[0].id) : "" });
             loadIncomes();
         } catch (e) { notify(e.message, "err"); }
         finally { setSaving(false); }
@@ -129,6 +145,7 @@ export function useIngresos({ notify, journals }) {
         deleteConfirm, setDeleteConfirm,
         showCreate, setShowCreate,
         form, setForm, saving,
+        warehouses,
         selectedJournal, currentRate, currentSymbol, configuredRate, baseEquivalent,
         toggleFilter, toggleCat, clearFilters,
         handleVoid, handleDelete, handleCreate,

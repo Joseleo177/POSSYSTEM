@@ -42,8 +42,14 @@ async function createReturn({ saleId, items, reason, employee_id }) {
     // Consume NC series if configured for this company
     let nc_number = null;
     try {
+      // La NC se numera con la serie de la misma sucursal que emitió la venta.
       const ncSerie = await Serie.findOne({
-        where: { type: 'nc', active: true, company_id: sale.company_id || null },
+        where: {
+          type: 'nc',
+          active: true,
+          company_id: sale.company_id || null,
+          ...(sale.warehouse_id ? { warehouse_id: sale.warehouse_id } : {}),
+        },
         transaction,
       });
       if (ncSerie) {

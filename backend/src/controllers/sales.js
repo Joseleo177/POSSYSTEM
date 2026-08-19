@@ -1,5 +1,6 @@
 const salesService = require("../services/sales");
 const { broadcast } = require("../services/sseService");
+const { visibleWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
 
 // PATCH /api/sales/:id
 const update = async (req, res) => {
@@ -51,7 +52,10 @@ const getAll = async (req, res) => {
   try {
     const company_id = req.employee?.company_id ?? null;
     const isSuperuser = !!req.is_superuser;
-    const result = await salesService.getAllSales(req.query, { company_id, isSuperuser });
+    // El listado se limita a las sucursales del empleado; el admin las ve todas.
+    if (req.query.warehouse_id) await assertWarehouseAccess(req, req.query.warehouse_id);
+    const allowedWarehouses = await visibleWarehouseIds(req);
+    const result = await salesService.getAllSales(req.query, { company_id, isSuperuser, allowedWarehouses });
     // Solo el listado de cuentas en espera necesita saber quién tiene cada una; en el
     // historial de facturas el dato no aplica y sería una consulta de más por página.
     const wantsHeld = [].concat(req.query.status || []).some(s => s === "espera" || s === "pedido");

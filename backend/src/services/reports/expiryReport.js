@@ -1,9 +1,13 @@
 const { ProductLot, Product, Warehouse, Sequelize } = require("../../models");
 const { Op } = Sequelize;
 
-async function expiryReport() {
+async function expiryReport({ allowedWarehouses } = {}) {
+  // Los lotes viven en un almacén: fuera del admin solo se muestran los de sus sucursales.
+  const where = { qty: { [Op.gt]: 0 } };
+  if (Array.isArray(allowedWarehouses)) where.warehouse_id = { [Op.in]: allowedWarehouses };
+
   const lots = await ProductLot.findAll({
-    where: { qty: { [Op.gt]: 0 } },
+    where,
     include: [
       { model: Product,    as: 'product',   attributes: ['name', 'unit'] },
       { model: Warehouse,  as: 'warehouse', attributes: ['name'] },

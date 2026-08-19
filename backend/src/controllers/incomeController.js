@@ -1,10 +1,11 @@
-const { Income, IncomeCategory, PaymentJournal, Employee, Currency } = require('../models');
+const { Income, IncomeCategory, PaymentJournal, Employee, Currency, Warehouse } = require('../models');
 const { Op } = require('sequelize');
 const { toLocalDate } = require('../utils/localDate');
+const { visibleWarehouseIds, assertWarehouseAccess } = require('../middleware/auth');
 
 exports.getAll = async (req, res, next) => {
   try {
-    const { limit = 50, offset = 0, date_from, date_to, search, status, category_id } = req.query;
+    const { limit = 50, offset = 0, date_from, date_to, search, status, category_id, warehouse_id } = req.query;
     const company_id = req.employee?.company_id ?? null;
     const isSuperuser = !!req.is_superuser;
 
@@ -13,6 +14,15 @@ exports.getAll = async (req, res, next) => {
     if (status)      where.status = status;
     if (category_id) where.category_id = category_id;
     if (search)      where.description = { [Op.iLike]: `%${search}%` };
+
+    // Cada quien ve los ingresos de sus sucursales; el admin, los de todas.
+    const allowedWarehouses = await visibleWarehouseIds(req);
+    if (warehouse_id) {
+      await assertWarehouseAccess(req, warehouse_id);
+      where.warehouse_id = parseInt(warehouse_id);
+    } else if (allowedWarehouses) {
+      where.warehouse_id = { [Op.in]: allowedWarehouses };
+    }
 
     if (date_from || date_to) {
       where.created_at = {};
@@ -27,6 +37,7 @@ exports.getAll = async (req, res, next) => {
         { model: PaymentJournal,  as: 'journal',  attributes: ['id', 'name', 'color'] },
         { model: Employee,        as: 'employee', attributes: ['id', 'full_name'] },
         { model: Currency,        as: 'currency', attributes: ['id', 'code', 'symbol'] },
+        { model: Warehouse,       as: 'warehouse', attributes: ['id', 'name'], required: false },
       ],
       order: [['created_at', 'DESC']],
       limit: parseInt(limit),
@@ -51,6 +62,8 @@ exports.getAll = async (req, res, next) => {
       employee_name:   e.employee?.full_name || '',
       currency_code:   e.currency?.code || '',
       currency_symbol: e.currency?.symbol || '',
+      warehouse_id:    e.warehouse_id,
+      warehouse_name:  e.warehouse?.name || '',
     }));
 
     res.json({ ok: true, data, total: count });
@@ -82,9 +95,13 @@ exports.upsertCategory = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
-    const { description, amount, category_id, payment_journal_id, reference, notes, currency_id, rate, date } = req.body;
+    const { description, amount, category_id, payment_journal_id, reference, notes, currency_id, rate, date, warehouse_id } = req.body;
     if (!description || !amount || !category_id)
       return res.status(400).json({ ok: false, message: 'Descripción, monto y categoría son obligatorios' });
+    if (!warehouse_id)
+      return res.status(400).json({ ok: false, message: 'Debes indicar el almacén al que corresponde el ingreso' });
+    // Solo se puede cargar un ingreso a una sucursal propia.
+    await assertWarehouseAccess(req, warehouse_id);
 
     const income = await Income.create({
       description,
@@ -96,6 +113,7 @@ exports.create = async (req, res, next) => {
       currency_id: currency_id || null,
       rate: rate || 1,
       employee_id: req.employee.id,
+      warehouse_id: parseInt(warehouse_id),
       status: 'activo',
       date: toLocalDate(date),
     });
@@ -116,6 +134,7 @@ exports.voidIncome = async (req, res, next) => {
   try {
     const income = await Income.findByPk(req.params.id);
     if (!income) return res.status(404).json({ ok: false, message: 'Ingreso no encontrado' });
+    await assertWarehouseAccess(req, income.warehouse_id, { optional: true });
     if (income.status === 'anulado') return res.status(400).json({ ok: false, message: 'Ya está anulado' });
     await income.update({ status: 'anulado' });
     res.json({ ok: true, message: 'Ingreso anulado' });
@@ -129,6 +148,7 @@ exports.deleteIncome = async (req, res, next) => {
   try {
     const income = await Income.findByPk(req.params.id);
     if (!income) return res.status(404).json({ ok: false, message: 'Ingreso no encontrado' });
+    await assertWarehouseAccess(req, income.warehouse_id, { optional: true });
     if (income.status !== 'anulado') return res.status(400).json({ ok: false, message: 'Solo se pueden eliminar ingresos anulados' });
     await income.destroy();
     res.json({ ok: true, message: 'Ingreso eliminado permanentemente' });

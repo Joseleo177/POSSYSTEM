@@ -77,4 +77,74 @@ const permit = (...perms) => (req, res, next) => {
   res.status(403).json({ ok: false, message: "Sin permiso para esta acción" });
 };
 
-module.exports = { auth, permit };
+// El admin (permissions.all) y el superusuario no están atados a almacenes concretos.
+const isAdmin = (req) => !!(req.is_superuser || req.employee?.permissions?.all);
+
+// Ids de almacén asignados al empleado en employee_warehouses.
+const employeeWarehouseIds = async (employeeId) => {
+  if (!employeeId) return [];
+  const { EmployeeWarehouse } = require("../models");
+  const rows = await EmployeeWarehouse.findAll({
+    where: { employee_id: employeeId },
+    attributes: ['warehouse_id'],
+    raw: true,
+  });
+  return rows.map(r => r.warehouse_id);
+};
+
+// Almacenes que el empleado puede ver en listados y reportes.
+// `null` = sin restricción (admin y superusuario ven la empresa completa).
+const visibleWarehouseIds = async (req) => {
+  if (!req || isAdmin(req)) return null;
+  return employeeWarehouseIds(req.employee?.id);
+};
+
+// Lanza 403 si el empleado no tiene asignado el almacén. Para usar dentro de un servicio,
+// cuando el almacén no viene en el request sino de la fila que se está tocando (p. ej. al
+// recibir una compra, el destino ya está guardado en la orden).
+//
+// `optional`: un almacén vacío pasa sin error (borradores que todavía no eligieron destino).
+const assertWarehouseAccess = async (req, warehouseId, { optional = false } = {}) => {
+  if (!req || isAdmin(req)) return;
+
+  // isOperational: el errorHandler central solo respeta `status` en errores marcados así;
+  // sin esto un 403 de acceso salía como 500.
+  const fail = (message, status) =>
+    Object.assign(new Error(message), { status, isOperational: true });
+
+  const wid = parseInt(warehouseId);
+  if (!wid) {
+    if (optional) return;
+    throw fail("Almacén no especificado", 400);
+  }
+
+  const allowed = await employeeWarehouseIds(req.employee?.id);
+  if (!allowed.includes(wid)) {
+    throw fail("No tienes acceso a este almacén", 403);
+  }
+};
+
+// Verifica que el empleado tenga asignado el almacén sobre el que va a operar.
+//
+// `permit()` solo mira los flags del rol, así que cualquiera con `inventory` o `config`
+// podía sumar, restar y transferir stock de CUALQUIER almacén de la empresa cambiando el
+// id de la URL. El aislamiento entre empresas ya lo daba tenantStorage; esto agrega el
+// aislamiento dentro de la empresa.
+//
+// `getId` permite leer el almacén de otro lugar del request (p. ej. el origen de una
+// transferencia o el destino de una compra, que vienen en el body).
+const warehouseAccess = (getId = (req) => req.params.id, opts = {}) => async (req, res, next) => {
+  try {
+    await assertWarehouseAccess(req, getId(req), opts);
+    next();
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ ok: false, message: err.message });
+    console.error("warehouseAccess Error:", err.message);
+    res.status(500).json({ ok: false, message: "No se pudo verificar el acceso al almacén" });
+  }
+};
+
+module.exports = {
+  auth, permit, warehouseAccess, assertWarehouseAccess,
+  visibleWarehouseIds, employeeWarehouseIds, isAdmin,
+};

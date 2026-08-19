@@ -28,6 +28,7 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
         deleteConfirm, setDeleteConfirm,
         showCreate, setShowCreate,
         form, setForm, saving,
+        warehouses,
         currentSymbol, currentRate, configuredRate, baseEquivalent, selectedJournal,
         toggleFilter, toggleCat, clearFilters,
         handleVoid, handleDelete, handleCreate,
@@ -224,13 +225,22 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                     )}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
+                            <label className="label">Almacén *</label>
+                            <CustomSelect
+                                value={form.warehouse_id}
+                                onChange={v => setForm(p => ({ ...p, warehouse_id: v }))}
+                                placeholder="Seleccionar..."
+                                options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
+                            />
+                        </div>
+                        <div>
                             <label className="label">Fecha del Movimiento</label>
                             <input type="date" className="input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
                         </div>
-                        <div>
-                            <label className="label">Notas</label>
-                            <textarea className="input resize-none" rows={1} placeholder="Observaciones..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
-                        </div>
+                    </div>
+                    <div>
+                        <label className="label">Notas</label>
+                        <textarea className="input resize-none" rows={1} placeholder="Observaciones..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
                     </div>
                     <div className="flex gap-2.5 pt-2 border-t border-border/20 dark:border-white/5">
                         <Button variant="ghost" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button>

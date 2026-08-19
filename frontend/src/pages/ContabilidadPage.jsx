@@ -32,6 +32,9 @@ export default function ContabilidadPage() {
 
  const [allSeries, setAllSeries] = useState([]);
  const [allEmployees, setAllEmployees] = useState([]);
+ // Cada serie pertenece a un almacén (la sucursal que la factura), así que el alta de
+ // series necesita la lista de almacenes.
+ const [allWarehouses, setAllWarehouses] = useState([]);
 
  const loadAllSeries = useCallback(async () => {
  try {
@@ -39,6 +42,13 @@ export default function ContabilidadPage() {
  setAllSeries(r.data);
  } catch (e) { notify(e.message, "err"); }
  }, [notify]);
+
+ const loadAllWarehouses = useCallback(async () => {
+ try {
+ const r = await api.warehouses.getAll({ scope: "all" });
+ setAllWarehouses(r.data || []);
+ } catch (e) {}
+ }, []);
 
  const loadAllEmployees = useCallback(async () => {
  try {
@@ -53,7 +63,8 @@ export default function ContabilidadPage() {
  if (!canConfig) return;
  loadAllSeries();
  loadAllEmployees();
- }, [canConfig, loadAllSeries, loadAllEmployees]);
+ loadAllWarehouses();
+ }, [canConfig, loadAllSeries, loadAllEmployees, loadAllWarehouses]);
 
  const [subPage, setSubPage] = useState("Estado de Cuenta");
  const [openGroup, setOpenGroup] = useState(null);
@@ -163,6 +174,7 @@ export default function ContabilidadPage() {
  allSeries={allSeries}
  loadAllSeries={loadAllSeries}
  allEmployees={allEmployees}
+ allWarehouses={allWarehouses}
  />
  );
  case "Diarios":

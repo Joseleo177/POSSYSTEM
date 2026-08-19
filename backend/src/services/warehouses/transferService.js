@@ -1,6 +1,7 @@
 const {
   Warehouse, Product, ProductStock, StockTransfer, Employee, Sequelize, sequelize
 } = require("../../models");
+const { isAdmin, employeeWarehouseIds } = require("../../middleware/auth");
 const { Op } = Sequelize;
 
 async function createTransfer(req) {
@@ -79,9 +80,24 @@ async function createTransfer(req) {
 async function getTransfers(req) {
   const { warehouse_id, product_id, limit = 50, offset = 0 } = req.query;
 
+  // Cada empleado ve solo las transferencias que tocan sus almacenes; el admin las ve todas.
+  let visibleIds = null;
+  if (!isAdmin(req)) {
+    visibleIds = await employeeWarehouseIds(req.employee?.id);
+    if (visibleIds.length === 0) return { data: [], total: 0 };
+    if (warehouse_id && !visibleIds.includes(parseInt(warehouse_id))) {
+      const e = new Error("No tienes acceso a este almacén"); e.status = 403; throw e;
+    }
+  }
+
   const where = {};
   if (warehouse_id) {
     where[Op.or] = [{ from_warehouse_id: warehouse_id }, { to_warehouse_id: warehouse_id }];
+  } else if (visibleIds) {
+    where[Op.or] = [
+      { from_warehouse_id: { [Op.in]: visibleIds } },
+      { to_warehouse_id:   { [Op.in]: visibleIds } },
+    ];
   }
   if (product_id) where.product_id = product_id;
 

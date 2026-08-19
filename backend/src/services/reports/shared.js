@@ -7,9 +7,31 @@ function sanitizeDate(val) {
   return match ? match[1] : null;
 }
 
-function buildTenantContext(req) {
+const { visibleWarehouseIds } = require("../../middleware/auth");
+
+// Recorta un reporte a las sucursales del empleado. Devuelve una función que arma el
+// fragmento SQL para el alias que corresponda: los reportes son SQL crudo y el mismo alias
+// ("p") significa purchases en un reporte y products en otro, así que el alias lo decide
+// cada consulta, no este helper.
+//
+// Los ids salen de la base y se validan como enteros antes de interpolarse.
+function buildWarehouseScope(allowedWarehouses) {
+  if (allowedWarehouses === null) return () => '';        // admin: sin recorte
+
+  const ids = (allowedWarehouses || []).filter(Number.isInteger);
+  if (!ids.length) return () => 'AND FALSE';              // sin almacenes asignados: no ve nada
+
+  const list = ids.join(',');
+  return (alias = '') => {
+    const prefix = alias ? `${alias}.` : '';
+    return `AND ${prefix}warehouse_id IN (${list})`;
+  };
+}
+
+async function buildTenantContext(req) {
   const company_id  = req.employee?.company_id ?? null;
   const scoped      = !!company_id;
+  const allowedWarehouses = await visibleWarehouseIds(req);
   return {
     company_id,
     isSuperuser: !scoped,
@@ -19,6 +41,8 @@ function buildTenantContext(req) {
     tcS2: scoped ? `AND s2.company_id = :cid` : '',
     tcP:  scoped ? `AND p.company_id = :cid`  : '',
     tcC:  scoped ? `AND c.company_id = :cid`  : '',
+    allowedWarehouses,
+    wh:   buildWarehouseScope(allowedWarehouses),
   };
 }
 
@@ -43,4 +67,4 @@ function dateClause(date_from, date_to, alias = '') {
   return parts.join(' ');
 }
 
-module.exports = { sanitizeDate, buildTenantContext, dateClause, localDate, TZ };
+module.exports = { sanitizeDate, buildTenantContext, buildWarehouseScope, dateClause, localDate, TZ };

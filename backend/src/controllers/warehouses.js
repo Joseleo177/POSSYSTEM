@@ -20,8 +20,8 @@ const cid = (req) => req.employee?.company_id ?? 0;
 const stockBroadcast = (req) => broadcast(cid(req), 'products:updated', {});
 
 module.exports = {
-  getAll:           wrap(() => getAll()),
-  getByEmployee:    wrap(req => getByEmployee(req.params.employeeId)),
+  getAll:           wrap(req => getAll(req)),
+  getByEmployee:    wrap(req => getByEmployee(req.params.employeeId, req)),
   create:           wrap(req => createWarehouse(req.body), 201),
   update:           wrap(req => updateWarehouse(req.params.id, req.body)),
   remove:           wrap(req => deleteWarehouse(req.params.id)),

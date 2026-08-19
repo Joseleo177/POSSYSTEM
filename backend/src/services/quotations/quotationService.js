@@ -5,6 +5,7 @@ const {
   Customer, Employee, Currency, Warehouse, Serie, SerieRange,
   sequelize, Sequelize,
 } = require("../../models");
+const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
 const { Op } = Sequelize;
 
 // El vendedor sí se guarda al crear la cotización (create recibe employee_id), pero las
@@ -25,8 +26,18 @@ function withEmployeeName(row) {
   return q;
 }
 
-async function getAll({ search, status, date_from, date_to, page = 1, limit = 30 } = {}) {
+async function getAll({ search, status, date_from, date_to, page = 1, limit = 30, warehouse_id } = {}, req) {
   const where = {};
+
+  // Cada quien ve las cotizaciones de sus sucursales; el admin, todas.
+  if (warehouse_id) {
+    await assertWarehouseAccess(req, warehouse_id);
+    where.warehouse_id = parseInt(warehouse_id);
+  } else {
+    const allowedWarehouses = await visibleWarehouseIds(req);
+    if (allowedWarehouses) where.warehouse_id = { [Op.in]: allowedWarehouses };
+  }
+
   if (status) where.status = status;
   if (date_from || date_to) {
     where.created_at = {};
@@ -141,6 +152,10 @@ async function convert(quotationId, body, employeeId) {
 
     const serie = await Serie.findByPk(serie_id, { transaction: t });
     if (!serie || !serie.active) { const e = new Error("Serie no encontrada o inactiva"); e.status = 400; throw e; }
+    // La serie es de una sucursal: debe coincidir con el almacén de la cotización.
+    if (serie.warehouse_id && quotation.warehouse_id && parseInt(serie.warehouse_id) !== parseInt(quotation.warehouse_id)) {
+      const e = new Error("La serie seleccionada no pertenece al almacén de la cotización"); e.status = 400; throw e;
+    }
 
     const activeRange = await SerieRange.findOne({
       where: {

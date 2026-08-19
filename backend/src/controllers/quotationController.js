@@ -2,7 +2,7 @@ const svc = require("../services/quotations/quotationService");
 
 const getAll = async (req, res, next) => {
   try {
-    const result = await svc.getAll(req.query);
+    const result = await svc.getAll(req.query, req);
     res.json({ ok: true, ...result });
   } catch (e) { next(e); }
 };

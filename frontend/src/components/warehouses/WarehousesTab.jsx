@@ -33,8 +33,12 @@ export default function WarehousesTab({ notify, currentEmployee }) {
         }
     };
 
+    // Crear, editar, borrar almacenes y asignar usuarios es exclusivo del admin; el backend
+    // lo rechaza igual, esto solo evita mostrar botones que van a fallar.
+    const isAdmin = !!currentEmployee?.permissions?.all;
+
     const {
-        warehouses, load: loadWarehouses,
+        warehouses, allWarehouses, load: loadWarehouses,
         form, setForm, editId, loading,
         save: saveWarehouseAction,
         remove: deleteWarehouseAction,
@@ -77,9 +81,11 @@ export default function WarehousesTab({ notify, currentEmployee }) {
 
     // ── Acciones dinámicas por sub-tab ────────────────────────
     const pageActions = subTab === "almacenes" ? (
-        <Button onClick={openNewWarehouse} className="h-8 px-2.5 sm:px-3 text-[10px]">
-            + <span className="hidden sm:inline">Nuevo Almacén</span><span className="sm:hidden">Nuevo</span>
-        </Button>
+        isAdmin ? (
+            <Button onClick={openNewWarehouse} className="h-8 px-2.5 sm:px-3 text-[10px]">
+                + <span className="hidden sm:inline">Nuevo Almacén</span><span className="sm:hidden">Nuevo</span>
+            </Button>
+        ) : null
     ) : subTab === "stock" && selectedWarehouse ? (
         <Button
             onClick={openAddStock}
@@ -112,6 +118,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
             {subTab === "almacenes" && (
                 <WarehouseGrid
                     warehouses={warehouses}
+                    isAdmin={isAdmin}
                     openAssign={openAssign}
                     startEdit={startEdit}
                     setDeleteConfirm={setDeleteConfirm}
@@ -180,6 +187,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                 open={transferModal}
                 onClose={() => setTransferModal(false)}
                 warehouses={warehouses}
+                destWarehouses={allWarehouses}
                 transferProductSearch={transferProductSearch}
                 setTransferProductSearch={setTransferProductSearch}
                 transferProductResults={transferProductResults}

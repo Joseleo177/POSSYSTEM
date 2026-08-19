@@ -1,15 +1,34 @@
 const { sequelize, Sequelize } = require("../../models");
 
-async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 50, offset = 0, view = "all", search = "", company_id, tcP, tcS, rep }) {
+async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 50, offset = 0, view = "all", search = "", company_id, tcP, tcS, rep, wh, allowedWarehouses }) {
   const lim = parseInt(limit);
   const off = parseInt(offset);
   const d   = parseInt(days);
   const wid = warehouse_id ? parseInt(warehouse_id) : null;
   const cid = category_id  ? parseInt(category_id)  : null;
 
+  // Pedir un almacén ajeno por query no puede saltarse el recorte.
+  if (wid && Array.isArray(allowedWarehouses) && !allowedWarehouses.includes(wid)) {
+    const e = new Error("No tienes acceso a este almacén"); e.status = 403; e.isOperational = true; throw e;
+  }
+
+  // Sin almacén elegido se suma el stock de la empresa; para quien no es admin, solo el de
+  // sus sucursales.
   const stockField = wid
     ? `COALESCE(ps.qty, 0)`
-    : `(SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id)`;
+    : `(SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id ${wh()})`;
+
+  // El catálogo es de la empresa, pero el reporte no lo es: sin esto, a quien tiene una sola
+  // sucursal le aparecían en "quiebre de stock" todos los productos que nunca se cargaron
+  // ahí. No es que se le acabaron —nunca los tuvo—, y el listado se volvía ruido.
+  // Con un almacén elegido no hace falta: stockJoin ya es un JOIN interno contra ese almacén.
+  const allowedIds = Array.isArray(allowedWarehouses) ? allowedWarehouses.filter(Number.isInteger) : null;
+  if (!wid && allowedIds) {
+    const presence = allowedIds.length
+      ? `AND EXISTS (SELECT 1 FROM product_stock ps2 WHERE ps2.product_id = p.id AND ps2.warehouse_id IN (${allowedIds.join(',')}))`
+      : `AND FALSE`;
+    tcP = `${tcP} ${presence}`;
+  }
   const stockJoin  = wid ? `JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = ${wid}` : '';
   const catFilter  = cid ? `AND p.category_id = ${cid}` : '';
   const searchFilter = search ? `AND p.name ILIKE '%${search.replace(/'/g, "''")}%'` : '';
@@ -17,7 +36,7 @@ async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 5
   // cuyas únicas salidas fueron anuladas contaba como rotando y desaparecía del listado de
   // lento movimiento, que es justo donde hace falta verlo.
   const stS = `AND s.status = 'pagado'`;
-  const slowSubquery = `SELECT DISTINCT si.product_id FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE s.created_at >= NOW() - (${d} * INTERVAL '1 day') ${tcS} ${stS}`;
+  const slowSubquery = `SELECT DISTINCT si.product_id FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE s.created_at >= NOW() - (${d} * INTERVAL '1 day') ${tcS} ${wh('s')} ${stS}`;
 
   const [criticalCount, zeroCount, slowCount, lockedValue] = await Promise.all([
     sequelize.query(`SELECT COUNT(*)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND p.min_stock > 0 AND ${stockField} < p.min_stock ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
@@ -57,7 +76,7 @@ async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 5
        JOIN sale_items si ON si.product_id = p.id
        JOIN sales s ON si.sale_id = s.id
        WHERE s.created_at >= NOW() - (${d} * INTERVAL '1 day') ${stS}
-         AND p.is_service = false AND p.is_combo = false ${tcS} ${tcP} ${catFilter} ${searchFilter}
+         AND p.is_service = false AND p.is_combo = false ${tcS} ${wh('s')} ${tcP} ${catFilter} ${searchFilter}
        GROUP BY p.id, p.name, ${stockField}, p.unit
        ORDER BY units_sold DESC LIMIT ${lim} OFFSET ${off}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

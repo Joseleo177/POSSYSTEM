@@ -1,7 +1,7 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause } = require("./shared");
 
-async function customersReport({ date_from, date_to, inactive_days = 45, limit, offset, company_id, tc, tcS, tcC, rep }) {
+async function customersReport({ date_from, date_to, inactive_days = 45, limit, offset, company_id, tc, tcS, tcC, rep, wh }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dS = dateClause(df, dt, 's');
@@ -20,10 +20,12 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
   // contar también lo pendiente y lo parcial: si no, un cliente que se llevó mercancía
   // a crédito ayer saldría listado como inactivo desde hace meses.
   // Sin ninguno de los dos, un cliente con todas sus ventas anuladas figuraba de top.
-  const stPagado  = `AND status = 'pagado'`;
-  const stPagadoS = `AND s.status = 'pagado'`;
-  const stCompra  = `AND status NOT IN ('anulado','borrador','espera')`;
-  const stCompraS = `AND s.status NOT IN ('anulado','borrador','espera')`;
+  // El recorte por sucursal viaja junto a estos criterios: toda consulta del reporte usa
+  // alguno de los cuatro, así que no queda ninguna sin acotar.
+  const stPagado  = `AND status = 'pagado' ${wh()}`;
+  const stPagadoS = `AND s.status = 'pagado' ${wh('s')}`;
+  const stCompra  = `AND status NOT IN ('anulado','borrador','espera') ${wh()}`;
+  const stCompraS = `AND s.status NOT IN ('anulado','borrador','espera') ${wh('s')}`;
 
   const [topCustomers, inactiveCustomers, newCustomers, ticketStats, repeatRate, counts] = await Promise.all([
     sequelize.query(

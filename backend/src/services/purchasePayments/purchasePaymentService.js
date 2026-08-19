@@ -104,6 +104,8 @@ async function createPayment(purchaseId, body, employeeId, companyId) {
       payment_journal_id: payment_journal_id || null,
       employee_id:        employeeId || null,
       company_id:         companyId || null,
+      // El egreso pertenece a la sucursal que recibió la compra.
+      warehouse_id:       purchase.warehouse_id || null,
       notes:              `Ref: ${purchaseRef}${notes?.trim() ? ` · ${notes.trim()}` : ""}`,
       status:             "activo",
     }, { transaction: t });

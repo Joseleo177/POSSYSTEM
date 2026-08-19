@@ -1,7 +1,7 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause, localDate } = require("./shared");
 
-async function purchasesReport({ date_from, date_to, limit, company_id, tc, tcP, rep }) {
+async function purchasesReport({ date_from, date_to, limit, company_id, tc, tcP, rep, wh }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dR  = dateClause(df, dt);
@@ -16,7 +16,7 @@ async function purchasesReport({ date_from, date_to, limit, company_id, tc, tcP,
          COALESCE(AVG(total), 0)::float AS avg_order,
          COALESCE(MAX(total), 0)::float AS max_order
        FROM purchases
-       WHERE TRUE ${tc} ${dR}`,
+       WHERE TRUE ${tc} ${wh()} ${dR}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -26,7 +26,7 @@ async function purchasesReport({ date_from, date_to, limit, company_id, tc, tcP,
          COALESCE(SUM(p.total), 0)::float AS total_cost
        FROM purchases p
        LEFT JOIN customers c ON p.supplier_id = c.id
-       WHERE TRUE ${tcP} ${dP}
+       WHERE TRUE ${tcP} ${wh('p')} ${dP}
        GROUP BY c.name, p.supplier_name
        ORDER BY total_cost DESC
        LIMIT ${lim || 20}`,
@@ -36,7 +36,7 @@ async function purchasesReport({ date_from, date_to, limit, company_id, tc, tcP,
       `SELECT ${localDate('created_at')} AS day, COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS cost
        FROM purchases
-       WHERE TRUE ${tc} ${dR}
+       WHERE TRUE ${tc} ${wh()} ${dR}
        GROUP BY ${localDate('created_at')}
        ORDER BY day ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -49,7 +49,7 @@ async function purchasesReport({ date_from, date_to, limit, company_id, tc, tcP,
          COALESCE(SUM(pi.package_qty * pi.package_price), 0)::float AS total_cost
        FROM purchase_items pi
        JOIN purchases p ON pi.purchase_id = p.id
-       WHERE TRUE ${tcP} ${dP}
+       WHERE TRUE ${tcP} ${wh('p')} ${dP}
        GROUP BY pi.product_id, pi.product_name
        ORDER BY total_cost DESC
        LIMIT ${lim || 15}`,

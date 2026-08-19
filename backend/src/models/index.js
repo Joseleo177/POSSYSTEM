@@ -250,6 +250,11 @@ if (Serie && SerieRange && Employee && UserSerie) {
   Employee.belongsToMany(Serie, { through: UserSerie, foreignKey: 'user_id', otherKey: 'serie_id' });
 }
 
+if (Serie && Warehouse) {
+  Serie.belongsTo(Warehouse, { foreignKey: 'warehouse_id' });
+  Warehouse.hasMany(Serie,    { foreignKey: 'warehouse_id' });
+}
+
 if (Sale && Serie && SerieRange) {
   Sale.belongsTo(Serie,      { foreignKey: 'serie_id' });
   Sale.belongsTo(SerieRange, { foreignKey: 'serie_range_id' });

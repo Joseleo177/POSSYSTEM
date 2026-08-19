@@ -1,7 +1,7 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause } = require("./shared");
 
-async function productsReport({ date_from, date_to, limit = 20, company_id, tcS, tcP, rep }) {
+async function productsReport({ date_from, date_to, limit = 20, company_id, tcS, tcP, rep, wh }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dS = dateClause(df, dt, 's');
@@ -24,7 +24,7 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
        FROM sale_items si
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
-       WHERE TRUE ${tcS} ${dS} ${stS}
+       WHERE TRUE ${tcS} ${wh('s')} ${dS} ${stS}
        GROUP BY si.product_id, si.name, p.category_id
        ORDER BY total_revenue DESC
        LIMIT ${lim}`,
@@ -36,7 +36,7 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
               COALESCE(SUM(si.subtotal), 0)::float AS total_revenue
        FROM sale_items si
        JOIN sales s ON si.sale_id = s.id
-       WHERE TRUE ${tcS} ${dS} ${stS}
+       WHERE TRUE ${tcS} ${wh('s')} ${dS} ${stS}
        GROUP BY si.product_id, si.name
        ORDER BY total_qty DESC
        LIMIT ${lim}`,
@@ -44,16 +44,16 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
     ),
     sequelize.query(
       `SELECT p.id, p.name,
-              (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id) AS stock,
+              (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id ${wh()}) AS stock,
               p.price, p.min_stock, p.cost_price
        FROM products p
        WHERE p.is_service = false AND p.is_combo = false ${tcP}
-         AND (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id) > 0
+         AND (SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id ${wh()}) > 0
          AND p.id NOT IN (
            SELECT DISTINCT si.product_id
            FROM sale_items si
            JOIN sales s ON si.sale_id = s.id
-           WHERE TRUE ${tcS} ${dS} ${stS}
+           WHERE TRUE ${tcS} ${wh('s')} ${dS} ${stS}
          )
        ORDER BY p.name ASC
        LIMIT 20`,
@@ -62,8 +62,8 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
     sequelize.query(
       `SELECT
          COUNT(*)::int AS product_count,
-         COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id) * price), 0)::float AS total_value_sale,
-         COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id) * COALESCE(cost_price, 0)), 0)::float AS total_value_cost
+         COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id ${wh()}) * price), 0)::float AS total_value_sale,
+         COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id ${wh()}) * COALESCE(cost_price, 0)), 0)::float AS total_value_cost
        FROM products p
        WHERE is_combo = false AND is_service = false ${tcP}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

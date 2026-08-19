@@ -8,6 +8,7 @@ module.exports = (sequelize, DataTypes) => {
       Income.belongsTo(models.PaymentJournal,  { foreignKey: 'payment_journal_id', as: 'journal' });
       Income.belongsTo(models.Employee,         { foreignKey: 'employee_id', as: 'employee' });
       Income.belongsTo(models.Currency,         { foreignKey: 'currency_id', as: 'currency' });
+      Income.belongsTo(models.Warehouse,        { foreignKey: 'warehouse_id', as: 'warehouse' });
     }
   }
   Income.init({
@@ -21,6 +22,8 @@ module.exports = (sequelize, DataTypes) => {
     payment_journal_id: { type: DataTypes.INTEGER, allowNull: true },
     employee_id: { type: DataTypes.INTEGER, allowNull: false },
     company_id:  { type: DataTypes.INTEGER, allowNull: true },
+    // Sucursal a la que pertenece el movimiento. Nullable por los registros históricos.
+    warehouse_id: { type: DataTypes.INTEGER, allowNull: true },
     notes:       { type: DataTypes.TEXT, allowNull: true },
     status:      { type: DataTypes.STRING(20), defaultValue: 'activo' },
     date:        { type: DataTypes.DATE, allowNull: true },

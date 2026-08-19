@@ -25,10 +25,10 @@ module.exports = {
   getAll:       wrap(req => getAll(req.query, req)),
   getOne:       wrap(req => getOne(req.params.id)),
   create:       wrap(req => createPurchase({ body: req.body, employee_id: req.employee?.id ?? null }), 201),
-  updateDraft:  wrap(req => updateDraft(req.params.id, req.body)),
-  confirm:      wrap(req => confirmOrder(req.params.id)),
+  updateDraft:  wrap(req => updateDraft(req.params.id, req.body, req)),
+  confirm:      wrap(req => confirmOrder(req.params.id, req)),
   receive:      wrap(async req => {
-    const result = await receivePurchase(req.params.id);
+    const result = await receivePurchase(req.params.id, req);
     broadcast(companyId(req), 'products:updated', {});
     return result;
   }),

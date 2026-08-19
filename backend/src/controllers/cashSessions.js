@@ -27,7 +27,7 @@ const getCurrent = async (req, res) => {
 // ── GET /api/cash-sessions/:id/summary ───────────────────────
 const getSummary = async (req, res) => {
   try {
-    const data = await cashSessionsService.getSessionSummary(req.params.id);
+    const data = await cashSessionsService.getSessionSummary(req.params.id, req);
     res.json({ ok: true, data });
   } catch (err) {
     res.status(err.status || 500).json({ ok: false, message: err.message });
@@ -48,7 +48,7 @@ const closeSession = async (req, res) => {
 // ── GET /api/cash-sessions/history ───────────────────────────
 const getHistory = async (req, res) => {
   try {
-    const sessions = await cashSessionsService.getHistory(req.query);
+    const sessions = await cashSessionsService.getHistory(req.query, req);
     res.json({ ok: true, data: sessions });
   } catch (err) {
     res.status(500).json({ ok: false, message: err.message });

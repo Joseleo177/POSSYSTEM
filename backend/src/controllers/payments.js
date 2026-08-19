@@ -1,11 +1,14 @@
 const paymentsService = require("../services/payments");
+const { visibleWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
 
 // GET /api/payments — historial de pagos registrados
 const getAll = async (req, res) => {
   try {
     const company_id = req.employee?.company_id ?? null;
     const isSuperuser = !!req.is_superuser;
-    const result = await paymentsService.getAllPayments(req.query, { company_id, isSuperuser });
+    if (req.query.warehouse_id) await assertWarehouseAccess(req, req.query.warehouse_id);
+    const allowedWarehouses = await visibleWarehouseIds(req);
+    const result = await paymentsService.getAllPayments(req.query, { company_id, isSuperuser, allowedWarehouses });
     // Totales del filtro completo para el sumador al pie: en moneda base (sum_base) y en la
     // moneda real de los cobros (sum_local), esta última solo utilizable si currency_count = 1.
     res.json({
@@ -26,7 +29,9 @@ const getPending = async (req, res) => {
   try {
     const company_id = req.employee?.company_id ?? null;
     const isSuperuser = !!req.is_superuser;
-    const result = await paymentsService.getPendingPayments(req.query, { company_id, isSuperuser });
+    if (req.query.warehouse_id) await assertWarehouseAccess(req, req.query.warehouse_id);
+    const allowedWarehouses = await visibleWarehouseIds(req);
+    const result = await paymentsService.getPendingPayments(req.query, { company_id, isSuperuser, allowedWarehouses });
     res.json({ ok: true, data: result.data, total: result.total });
   } catch (err) {
     console.error(err);

@@ -1,8 +1,17 @@
 const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Sequelize, Op } = require("./shared");
 
 module.exports = async function getAllPayments(query, tenant = {}) {
-  const { date_from, date_to, limit = 100, offset = 0, search } = query;
-  const { company_id, isSuperuser } = tenant;
+  const { date_from, date_to, limit = 100, offset = 0, search, warehouse_id } = query;
+  const { company_id, isSuperuser, allowedWarehouses } = tenant;
+
+  // Un cobro no guarda sucursal propia: la hereda de la venta, así que el filtro va sobre
+  // el join con sales (que ya es required).
+  const saleWhere = {};
+  if (warehouse_id) {
+    saleWhere.warehouse_id = parseInt(warehouse_id, 10);
+  } else if (Array.isArray(allowedWarehouses)) {
+    saleWhere.warehouse_id = { [Op.in]: allowedWarehouses };
+  }
   const andClauses = [
     // Excluir egresos de cambio (amount < 0) del historial visible
     { amount: { [Op.gt]: 0 } },
@@ -52,6 +61,7 @@ module.exports = async function getAllPayments(query, tenant = {}) {
         model: Sale,
         attributes: ["id", "total", "status", "exchange_rate", "currency_id", "created_at", "invoice_number"],
         required: true,
+        ...(Object.keys(saleWhere).length ? { where: saleWhere } : {}),
         include: [{ model: SaleItem, attributes: ["name", "quantity", "price", "subtotal"] }],
       },
     ],

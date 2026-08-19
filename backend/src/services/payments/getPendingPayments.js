@@ -1,8 +1,8 @@
 const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Sequelize, Op, getSaleBalance } = require("./shared");
 
 module.exports = async function getPendingPayments(query, tenant = {}) {
-  const { limit = 100, offset = 0, date_from, date_to, search } = query;
-  const { company_id, isSuperuser } = tenant;
+  const { limit = 100, offset = 0, date_from, date_to, search, warehouse_id } = query;
+  const { company_id, isSuperuser, allowedWarehouses } = tenant;
 
   const andClauses = [
     { status: { [Op.in]: ["borrador", "pendiente", "parcial"] } },
@@ -10,6 +10,13 @@ module.exports = async function getPendingPayments(query, tenant = {}) {
 
   if (company_id) {
     andClauses.push({ company_id });
+  }
+
+  // Aquí la consulta es sobre sales, así que el almacén se filtra directo.
+  if (warehouse_id) {
+    andClauses.push({ warehouse_id: parseInt(warehouse_id, 10) });
+  } else if (Array.isArray(allowedWarehouses)) {
+    andClauses.push({ warehouse_id: { [Op.in]: allowedWarehouses } });
   }
 
   // Filtro por diario de pago (caja / banco) asignado a la factura

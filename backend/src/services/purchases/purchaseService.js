@@ -2,12 +2,32 @@ const {
   Purchase, PurchaseItem, ProductLot, Employee, Warehouse, Customer,
   Product, ProductStock, ProductComboItem, PurchasePayment, Sequelize, sequelize
 } = require("../../models");
+const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
 const { Op } = Sequelize;
 
-async function getAll({ limit = 50, offset = 0, search, status, order_status, date_from, date_to }, req) {
+async function getAll({ limit = 50, offset = 0, search, status, order_status, date_from, date_to, warehouse_id }, req) {
   const company_id  = req.employee?.company_id ?? null;
   const isSuperuser = !!req.is_superuser;
   const where = (!isSuperuser && company_id) ? { company_id } : {};
+
+  // Cada quien ve las órdenes dirigidas a sus almacenes. Los borradores sin destino elegido
+  // quedan visibles: todavía no pertenecen a ninguna sucursal.
+  if (warehouse_id) {
+    await assertWarehouseAccess(req, warehouse_id);
+    where.warehouse_id = parseInt(warehouse_id);
+  } else {
+    const allowedWarehouses = await visibleWarehouseIds(req);
+    if (allowedWarehouses) {
+      // Va en Op.and porque el filtro de búsqueda de abajo ocupa Op.or: si se escribiera
+      // ahí, uno pisaría al otro y el listado dejaría de estar acotado.
+      where[Op.and] = [{
+        [Op.or]: [
+          { warehouse_id: { [Op.in]: allowedWarehouses } },
+          { warehouse_id: null },
+        ],
+      }];
+    }
+  }
 
   if (status)       where.payment_status = status;
   if (order_status) where.status = order_status;
@@ -78,7 +98,10 @@ async function getAll({ limit = 50, offset = 0, search, status, order_status, da
     return pp;
   });
 
-  return { data, total: count.length || count };
+  // Con GROUP BY, findAndCountAll devuelve un array de conteos. `count.length || count`
+  // funcionaba salvo con cero resultados: devolvía el array vacío como total, y ahora que
+  // el listado se filtra por almacén ese caso es corriente.
+  return { data, total: Array.isArray(count) ? count.length : count };
 }
 
 async function getOne(id) {
@@ -291,9 +314,11 @@ async function createPurchase({ body, employee_id }) {
   }
 }
 
-async function confirmOrder(id) {
+async function confirmOrder(id, req) {
   const purchase = await Purchase.findByPk(id);
   if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
+  // El destino ya está guardado en la orden: se valida contra los almacenes del empleado.
+  await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
   if (purchase.status !== 'borrador') {
     const e = new Error("Solo se pueden confirmar órdenes en estado borrador"); e.status = 400; throw e;
   }
@@ -301,11 +326,13 @@ async function confirmOrder(id) {
   return getOne(id);
 }
 
-async function receivePurchase(id) {
+async function receivePurchase(id, req) {
   const transaction = await sequelize.transaction();
   try {
     const purchase = await Purchase.findByPk(id, { transaction, lock: true });
     if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
+    // Recibir mueve stock: el destino tiene que ser un almacén propio, sin excepción.
+    await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
     if (!purchase.warehouse_id) {
       const e = new Error("Debe seleccionar un almacén de destino antes de recibir la mercancía");
       e.status = 400;
@@ -365,9 +392,12 @@ async function deletePurchase(id) {
   }
 }
 
-async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes, items, currency_id, exchange_rate }) {
+async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes, items, currency_id, exchange_rate }, req) {
   const purchase = await Purchase.findByPk(id);
   if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
+  // El destino nuevo lo valida la ruta; acá se valida el que ya tenía, para que nadie edite
+  // una orden dirigida a un almacén ajeno.
+  await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
   if (!['borrador', 'pendiente'].includes(purchase.status)) {
     const e = new Error("Solo se pueden editar órdenes en estado borrador o pendiente"); e.status = 400; throw e;
   }

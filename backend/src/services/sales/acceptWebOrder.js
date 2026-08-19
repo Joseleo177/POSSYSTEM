@@ -31,6 +31,10 @@ module.exports = async function acceptWebOrder(saleId, { warehouse_id, serie_id,
     if (!serie || !serie.active) {
       throw Object.assign(new Error("Serie no encontrada o inactiva"), { status: 400 });
     }
+    // La serie es de una sucursal: debe coincidir con el almacén que despacha el pedido.
+    if (serie.warehouse_id && parseInt(serie.warehouse_id) !== parseInt(warehouse_id)) {
+      throw Object.assign(new Error("La serie seleccionada no pertenece al almacén del pedido"), { status: 400 });
+    }
 
     const items = await SaleItem.findAll({ where: { sale_id: sale.id }, transaction });
     if (!items.length) throw Object.assign(new Error("El pedido no tiene líneas"), { status: 400 });

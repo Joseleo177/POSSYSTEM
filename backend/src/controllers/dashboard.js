@@ -1,4 +1,5 @@
 const { getDashboard } = require("../services/dashboard");
+const { visibleWarehouseIds } = require("../middleware/auth");
 
 const wrap = (fn, status = 200) => async (req, res) => {
   try {
@@ -11,8 +12,9 @@ const wrap = (fn, status = 200) => async (req, res) => {
 };
 
 module.exports = {
-  getDashboard: wrap(req => getDashboard({
+  getDashboard: wrap(async req => getDashboard({
     company_id:  req.employee?.company_id ?? null,
     isSuperuser: !!req.is_superuser,
+    allowedWarehouses: await visibleWarehouseIds(req),
   })),
 };

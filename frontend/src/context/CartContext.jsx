@@ -55,14 +55,16 @@ export function CartProvider({ children }) {
   const [selectedSerieId, setSelectedSerieId] = useState(null);
   const [mySeries, setMySeries] = useState([]);
 
-  const loadMySeries = useCallback(async () => {
-    if (!employee) return;
+  // Las series pertenecen al almacén (la sucursal factura con su propia numeración), así que
+  // solo se cargan las del almacén desde el que se está vendiendo.
+  const loadMySeries = useCallback(async (warehouseId) => {
+    if (!employee || !warehouseId) { setMySeries([]); setSelectedSerieId(null); return; }
     try {
-      const r = await api.series.getMy();
+      const r = await api.series.getMy({ warehouse_id: warehouseId });
       // El POS solo emite facturas — las series de nota de crédito no aplican aquí
       const series = (r.data || []).filter(s => s.type !== "nc");
       setMySeries(series);
-      if (series.length > 0) setSelectedSerieId(prev => prev ?? series[0].id);
+      setSelectedSerieId(prev => series.some(s => s.id === prev) ? prev : (series[0]?.id ?? null));
     } catch (e) { console.error(e); }
   }, [employee]);
 
@@ -114,6 +116,10 @@ export function CartProvider({ children }) {
     setActiveWarehouse(warehouse);
     setCart([]);
   }, []);
+
+  // Cambiar de sucursal cambia el juego de series: se recargan las del almacén nuevo y, si
+  // la que estaba elegida no es de ahí, se reemplaza por la primera disponible.
+  useEffect(() => { loadMySeries(activeWarehouse?.id); }, [activeWarehouse?.id, loadMySeries]);
 
   // ── Conversión de moneda ───────────────────────────────────
   // El precio del producto se guarda con precisión completa (5 decimales, ej. costo × margen =

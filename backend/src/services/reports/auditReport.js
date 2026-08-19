@@ -1,7 +1,7 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause } = require("./shared");
 
-async function auditReport({ date_from, date_to, limit, company_id, tcS, rep }) {
+async function auditReport({ date_from, date_to, limit, company_id, tcS, rep, wh }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dS = dateClause(df, dt, 's');
@@ -22,7 +22,7 @@ async function auditReport({ date_from, date_to, limit, company_id, tcS, rep }) 
          COALESCE(AVG(r.total), 0)::float AS avg_return
        FROM returns r
        JOIN sales s ON r.sale_id = s.id
-       WHERE TRUE ${tcS} ${dR}`,
+       WHERE TRUE ${tcS} ${wh('s')} ${dR}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -33,7 +33,7 @@ async function auditReport({ date_from, date_to, limit, company_id, tcS, rep }) 
        LEFT JOIN employees e ON r.employee_id = e.id
        LEFT JOIN sales s ON r.sale_id = s.id
        LEFT JOIN customers c ON s.customer_id = c.id
-       WHERE TRUE ${tcS} ${dR}
+       WHERE TRUE ${tcS} ${wh('s')} ${dR}
        ORDER BY r.created_at DESC
        LIMIT ${lim || 50}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -49,7 +49,7 @@ async function auditReport({ date_from, date_to, limit, company_id, tcS, rep }) 
          COUNT(s.id) FILTER (WHERE s.discount_amount > 0)::int AS discounted_sales
        FROM sales s
        LEFT JOIN employees e ON s.employee_id = e.id
-       WHERE TRUE ${tcS} ${dS} ${stS}
+       WHERE TRUE ${tcS} ${wh('s')} ${dS} ${stS}
        GROUP BY e.id, e.full_name
        ORDER BY revenue DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -62,7 +62,7 @@ async function auditReport({ date_from, date_to, limit, company_id, tcS, rep }) 
        FROM sales s
        LEFT JOIN employees e ON s.employee_id = e.id
        LEFT JOIN customers c ON s.customer_id = c.id
-       WHERE s.discount_amount > 0 ${tcS} ${dS} ${stS}
+       WHERE s.discount_amount > 0 ${tcS} ${wh('s')} ${dS} ${stS}
        ORDER BY discount_pct DESC
        LIMIT ${lim || 30}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

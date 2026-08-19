@@ -6,6 +6,8 @@ module.exports = (sequelize, DataTypes) => {
     active:  { type: DataTypes.BOOLEAN,     defaultValue: true },
     type:    { type: DataTypes.STRING(20),  allowNull: false, defaultValue: 'factura' }, // 'factura' | 'nc'
     company_id: { type: DataTypes.INTEGER, allowNull: true },
+    // Cada sucursal (almacén) numera sus facturas por su cuenta.
+    warehouse_id: { type: DataTypes.INTEGER, allowNull: false },
   }, { tableName: 'series', timestamps: true, createdAt: 'created_at', updatedAt: false });
   return Serie;
 };

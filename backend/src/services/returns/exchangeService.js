@@ -40,7 +40,16 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
     /* ── 3. Crear registro de devolución + NC ── */
     let nc_number = null;
     try {
-      const ncSerie = await Serie.findOne({ where: { type: 'nc', active: true, company_id: sale.company_id || null }, transaction: t });
+      // La NC se numera con la serie de la misma sucursal que emitió la venta.
+      const ncSerie = await Serie.findOne({
+        where: {
+          type: 'nc',
+          active: true,
+          company_id: sale.company_id || null,
+          ...(sale.warehouse_id ? { warehouse_id: sale.warehouse_id } : {}),
+        },
+        transaction: t,
+      });
       if (ncSerie) {
         const ncRange = await SerieRange.findOne({
           where: { serie_id: ncSerie.id, active: true, current_number: { [Sequelize.Op.lte]: Sequelize.col('end_number') } },

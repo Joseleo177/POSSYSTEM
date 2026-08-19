@@ -112,6 +112,10 @@ export default function InventoryReport() {
   const totalItems = data?.total || 0;
   const totalPages = Math.ceil(totalItems / LIMIT);
   const hasActiveFilters = !!categoryId || !!warehouseId;
+  // La lista de almacenes ya viene recortada a los del usuario.
+  const allWarehousesLabel = warehouses.length === 1
+    ? warehouses[0].name.toUpperCase()
+    : "TODOS MIS ALMACENES";
 
   return (
     <div className="h-full flex flex-col space-y-4 overflow-hidden">
@@ -178,14 +182,17 @@ export default function InventoryReport() {
 
                     <div className="space-y-1.5">
                       <label className="text-[9px] font-black uppercase tracking-widest text-content-subtle/60 ml-1">Almacén</label>
+                      {/* "Todos" es engañoso cuando el usuario tiene una sola sucursal: la
+                          API ya le devuelve solo la suya, así que la opción prometía un
+                          alcance que no existe. Con un único almacén se muestra su nombre. */}
                       <CustomSelect
                         value={warehouseId}
                         onChange={handleFilterChange(setWarehouseId)}
-                        placeholder="TODOS LOS ALMACENES"
+                        placeholder={allWarehousesLabel}
                         className="w-full"
                         options={[
-                          { value: "", label: "TODOS LOS ALMACENES" },
-                          ...warehouses.map(w => ({ value: String(w.id), label: w.name }))
+                          { value: "", label: allWarehousesLabel },
+                          ...(warehouses.length > 1 ? warehouses.map(w => ({ value: String(w.id), label: w.name })) : [])
                         ]}
                       />
                     </div>

@@ -235,7 +235,7 @@ export const api = {
     addStock: (id, body) => request(`/warehouses/${id}/stock`, { method: "POST", body: JSON.stringify(body) }),
     setStock: (id, productId, body) => request(`/warehouses/${id}/stock/${productId}`, { method: "PUT", body: JSON.stringify(body) }),
     removeStock: (id, productId) => request(`/warehouses/${id}/stock/${productId}`, { method: "DELETE" }),
-    getAll:          ()          => request("/warehouses"),
+    getAll:          (params={}) => request("/warehouses?" + new URLSearchParams(params)),
     create:          (body)      => request("/warehouses",             { method: "POST",   body: JSON.stringify(body) }),
     update:          (id, body)  => request(`/warehouses/${id}`,       { method: "PUT",    body: JSON.stringify(body) }),
     remove:          (id)        => request(`/warehouses/${id}`,       { method: "DELETE" }),
@@ -275,7 +275,7 @@ export const api = {
   // ── Series de facturación ───────────────────────────────────
   series: {
     getAll:      ()          => request("/series"),
-    getMy:       ()          => request("/series/my"),
+    getMy:       (params={}) => request("/series/my?" + new URLSearchParams(params)),
     create:      (body)      => request("/series",                 { method: "POST",   body: JSON.stringify(body) }),
     update:      (id, body)  => request(`/series/${id}`,           { method: "PUT",    body: JSON.stringify(body) }),
     remove:      (id)        => request(`/series/${id}`,           { method: "DELETE" }),

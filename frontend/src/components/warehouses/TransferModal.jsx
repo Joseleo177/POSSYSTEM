@@ -7,7 +7,7 @@ import { isIntegerUnit, fmtQtyUnit } from "../../helpers/unitFormatter";
 const EMPTY = { from_warehouse_id: "", to_warehouse_id: "", qty: "", note: "" };
 
 export default function TransferModal({
-    open, onClose, warehouses,
+    open, onClose, warehouses, destWarehouses,
     transferProductSearch, setTransferProductSearch,
     transferProductResults, setTransferProductResults,
     transferProductSelected, setTransferProductSelected,
@@ -29,7 +29,13 @@ export default function TransferModal({
         onClose();
     };
 
-    const warehouseOptions = warehouses
+    // El origen se limita a los almacenes propios (el backend rechaza cualquier otro);
+    // el destino puede ser cualquier almacén de la empresa.
+    const originOptions = warehouses
+        .filter(w => w.active)
+        .map(w => ({ value: w.id, label: w.name }));
+
+    const destOptions = (destWarehouses?.length ? destWarehouses : warehouses)
         .filter(w => w.active)
         .map(w => ({ value: w.id, label: w.name }));
 
@@ -90,7 +96,7 @@ export default function TransferModal({
                                 from_warehouse_id: val,
                                 to_warehouse_id: String(p.to_warehouse_id) === String(val) ? "" : p.to_warehouse_id,
                             }))}
-                            options={warehouseOptions}
+                            options={originOptions}
                             placeholder="Seleccionar origen..."
                             className="w-full"
                         />
@@ -100,7 +106,7 @@ export default function TransferModal({
                         <CustomSelect
                             value={transferForm.to_warehouse_id}
                             onChange={val => setTransferForm(p => ({ ...p, to_warehouse_id: val }))}
-                            options={warehouseOptions.filter(o => String(o.value) !== String(transferForm.from_warehouse_id))}
+                            options={destOptions.filter(o => String(o.value) !== String(transferForm.from_warehouse_id))}
                             placeholder="Seleccionar destino..."
                             className="w-full"
                         />

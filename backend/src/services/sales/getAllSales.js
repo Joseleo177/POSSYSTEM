@@ -1,13 +1,21 @@
 const { Sale, SaleItem, Customer, Employee, Currency, Warehouse, Serie, Sequelize, Op, PAYMENT_METHODS } = require("./shared");
 
 module.exports = async function getAllSales(query, tenant = {}) {
-  const { limit = 50, offset = 0, date_from, date_to, payment_method, status, serie_id, search } = query;
-  const { company_id, isSuperuser } = tenant;
+  const { limit = 50, offset = 0, date_from, date_to, payment_method, status, serie_id, search, warehouse_id } = query;
+  const { company_id, isSuperuser, allowedWarehouses } = tenant;
 
   const andClauses = [];
 
   if (company_id) {
     andClauses.push({ company_id });
+  }
+
+  // allowedWarehouses = null → sin restricción (admin). Un array limita la vista a las
+  // sucursales del empleado.
+  if (warehouse_id) {
+    andClauses.push({ warehouse_id: parseInt(warehouse_id, 10) });
+  } else if (Array.isArray(allowedWarehouses)) {
+    andClauses.push({ warehouse_id: { [Op.in]: allowedWarehouses } });
   }
 
   const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;

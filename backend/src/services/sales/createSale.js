@@ -71,6 +71,11 @@ module.exports = async function createSale(body) {
 
     const serie = await Serie.findByPk(serie_id, { transaction });
     if (!serie || !serie.active) throw new Error("Serie no encontrada o inactiva");
+    // La serie pertenece a una sucursal: facturar con la serie de otro almacén mezclaría
+    // los correlativos de dos sucursales.
+    if (serie.warehouse_id && parseInt(serie.warehouse_id) !== parseInt(warehouse_id)) {
+      throw new Error("La serie seleccionada no pertenece al almacén de la venta");
+    }
 
     const method = PAYMENT_METHODS.includes(payment_method) ? payment_method : "efectivo";
     const discAmt = parseFloat(discount_amount) || 0;

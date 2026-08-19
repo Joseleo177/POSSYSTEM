@@ -1,15 +1,35 @@
 const {
   Warehouse, ProductStock, EmployeeWarehouse, StockTransfer, Sale, Purchase, Sequelize, sequelize
 } = require("../../models");
+const { isAdmin, employeeWarehouseIds } = require("../../middleware/auth");
 const { Op } = Sequelize;
 
-async function getAll() {
+async function getAll(req) {
+  // `scope=all` devuelve solo id/nombre de todos los almacenes de la empresa. Lo necesita
+  // el selector de destino de una transferencia: el origen se limita a los almacenes
+  // propios, pero se puede enviar mercadería a cualquier otro.
+  if (req?.query?.scope === 'all') {
+    const data = await Warehouse.findAll({
+      attributes: ['id', 'name', 'active', 'sort_order'],
+      where: { active: true },
+      order: [['sort_order', 'ASC'], ['name', 'ASC']],
+      raw: true,
+    });
+    return { data };
+  }
+
+  // Fuera del admin, cada empleado solo ve los almacenes que tiene asignados.
+  const scoped = req && !isAdmin(req);
+  const allowedIds = scoped ? await employeeWarehouseIds(req.employee?.id) : null;
+  if (scoped && allowedIds.length === 0) return { data: [] };
+
   // Tres queries paralelas y simples en lugar de un GROUP BY con doble JOIN.
   // La versión anterior generaba un producto cartesiano sobre product_stock
   // que escalaba mal con el tamaño del inventario.
   const [warehouses, stockAggs, assignments] = await Promise.all([
     Warehouse.findAll({
       attributes: ['id', 'name', 'description', 'active', 'sort_order', 'created_at'],
+      ...(scoped ? { where: { id: { [Op.in]: allowedIds } } } : {}),
       order: [['sort_order', 'ASC'], ['name', 'ASC']],
       raw: true,
     }),
@@ -47,7 +67,12 @@ async function getAll() {
   return { data };
 }
 
-async function getByEmployee(employeeId) {
+async function getByEmployee(employeeId, req) {
+  // Solo el admin puede consultar los almacenes de otro empleado.
+  if (req && !isAdmin(req) && parseInt(employeeId) !== parseInt(req.employee?.id)) {
+    const e = new Error("No puedes consultar los almacenes de otro usuario"); e.status = 403; throw e;
+  }
+
   const warehouses = await Warehouse.findAll({
     include: [{
       model: EmployeeWarehouse,

@@ -15,12 +15,22 @@ const { sanitizeDate, TZ } = require("./shared");
 // de modo que amount * exchange_rate devuelve el monto en la moneda del diario. Se publican
 // los dos: el original es el que el cajero contó, el base es el único que se puede sumar
 // entre diarios de distinta moneda.
-async function paymentJournalsReport({ date_from, date_to, company_id }) {
+async function paymentJournalsReport({ date_from, date_to, company_id, allowedWarehouses }) {
   const from = sanitizeDate(date_from);
   const to   = sanitizeDate(date_to);
 
   const rep = { cid: company_id };
   const scoped = !!company_id;
+
+  // Un cobro no guarda sucursal: la hereda de su venta. Se resuelve con una subconsulta para
+  // no volver a meter el JOIN a sales que se quitó de la consulta principal.
+  let whClause = '';
+  if (Array.isArray(allowedWarehouses)) {
+    const ids = allowedWarehouses.filter(Number.isInteger);
+    whClause = ids.length
+      ? `AND p.sale_id IN (SELECT id FROM sales WHERE warehouse_id IN (${ids.join(',')}))`
+      : 'AND FALSE';
+  }
 
   // Las fechas se agrupan en hora de Caracas: en UTC, un cobro de las 8 de la noche cae al
   // día siguiente y el cuadre diario no coincidiría con el turno de caja. TZ sale de shared.js
@@ -44,6 +54,7 @@ async function paymentJournalsReport({ date_from, date_to, company_id }) {
       -- inverso, así que el neto ya queda bien. (El JOIN a sales que había no se usaba.)
       WHERE p.payment_journal_id IS NOT NULL
         ${scoped ? "AND p.company_id = :cid" : ""}
+        ${whClause}
         ${dateClause}
       GROUP BY day, p.payment_journal_id
       ORDER BY day DESC`,
