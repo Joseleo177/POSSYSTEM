@@ -102,7 +102,7 @@ function KpiCard({ label, valueBase, valueLocal, baseSym, localSym, sub, subValu
 }
 
 export default function DashboardPage() {
-    const { baseCurrency, activeCurrencies } = useApp();
+    const { baseCurrency, activeCurrencies, triggerAction } = useApp();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -217,16 +217,25 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="bg-white dark:bg-surface-dark-3 rounded-2xl border border-border/40 dark:border-white/10 shadow-sm p-6 relative overflow-hidden">
-                        <div className="flex items-center gap-3 mb-6 relative">
+                        {/* La cabecera lleva al reporte de ventas, donde está el detalle por
+                            producto: el tablero muestra el top, no lo explica. */}
+                        <button
+                            onClick={() => triggerAction("Reportes", "reportes:ventas")}
+                            title="Ver el reporte de ventas"
+                            className="flex items-center gap-3 mb-6 relative w-full text-left group/head"
+                        >
                             <div className="w-8 h-8 rounded-lg bg-warning/10 text-warning flex items-center justify-center">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
                             </div>
-                            <span className="text-[11px] font-black uppercase tracking-widest text-content dark:text-white">Lo más vendido</span>
-                        </div>
+                            <span className="text-[11px] font-black uppercase tracking-widest text-content dark:text-white group-hover/head:text-warning transition-colors">Lo más vendido</span>
+                            <svg className="w-3.5 h-3.5 ml-auto text-content-subtle group-hover/head:text-warning group-hover/head:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                        </button>
                         {top_products.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-20 opacity-20 italic text-[10px] uppercase font-bold text-content-subtle">Sin movimientos reportados</div>
                         ) : (
-                            <div className="space-y-4">
+                            /* Alto fijo con scroll propio: entran los 15 productos sin que la
+                               caja crezca y descuadre la fila del gráfico. */
+                            <div className="space-y-4 max-h-[268px] overflow-y-auto pr-1.5">
                                 {top_products.map((p, i) => {
                                     const pct = Math.round((p.total_qty / (top_products[0]?.total_qty || 1)) * 100);
                                     return (
@@ -253,16 +262,23 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     {/* Alertas de Inventario */}
                     <div className="bg-white dark:bg-surface-dark-3 rounded-2xl border border-danger/20 p-6 relative overflow-hidden">
-                         <div className="flex items-center gap-3 mb-6 relative">
+                         <button
+                            onClick={() => triggerAction("Reportes", "reportes:inventario")}
+                            title="Ver el reporte de inventario"
+                            className="flex items-center gap-3 mb-6 relative w-full text-left group/head"
+                        >
                             <div className="w-8 h-8 rounded-lg bg-danger/10 text-danger flex items-center justify-center">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                             </div>
                             <span className="text-[11px] font-black uppercase tracking-widest text-danger">Stock Bajo — Requiere Reposición</span>
-                        </div>
+                            <svg className="w-3.5 h-3.5 ml-auto text-content-subtle group-hover/head:text-danger group-hover/head:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                        </button>
                         {low_stock.length === 0 ? (
-                            <div className="py-10 text-center text-success/40 text-[10px] uppercase font-black tracking-widest">✓ Inventario en Rangos Óptimos</div>
+                            <div className="py-10 text-center text-success/40 text-[10px] uppercase font-black tracking-widest">Inventario en rangos óptimos</div>
                         ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            /* Mismo criterio que "Lo más vendido": la caja no crece, la lista
+                               se desplaza dentro. */
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[268px] overflow-y-auto pr-1.5">
                                 {low_stock.map(p => (
                                     <div key={p.id} className="flex items-center justify-between bg-surface-2 dark:bg-[#1c1c1c] border border-border/10 rounded-xl px-4 py-3 hover:border-danger/40 transition-all group">
                                         <div className="min-w-0">

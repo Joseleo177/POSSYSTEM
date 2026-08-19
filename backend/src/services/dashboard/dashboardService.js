@@ -63,7 +63,9 @@ async function getDashboard({ company_id, isSuperuser }) {
     }],
     group: ["SaleItem.product_id", "SaleItem.name"],
     order: [[Sequelize.literal("total_qty"), "DESC"]],
-    limit: 5, raw: true,
+    // 15 en vez de 5: el tablero muestra la lista en una caja de alto fijo con scroll, así
+    // que caben sin empujar el resto del layout y el top deja de cortarse en el quinto.
+    limit: 15, raw: true,
   });
 
   const salesByDay = await sequelize.query(`
@@ -95,7 +97,7 @@ async function getDashboard({ company_id, isSuperuser }) {
     GROUP BY p.id, p.name, p.unit, p.min_stock
     HAVING COALESCE(SUM(ps.qty), 0) < p.min_stock
     ORDER BY total_stock ASC
-    LIMIT 10
+    LIMIT 20
   `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 
   const purchasesMonth = await Purchase.findOne({
