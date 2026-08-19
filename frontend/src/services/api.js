@@ -25,7 +25,19 @@ async function request(path, options = {}) {
     ...options.headers,
   };
   
-  let res = await fetch(`${BASE}${path}`, { ...options, headers });
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, { ...options, headers });
+  } catch (err) {
+    if (err.message?.toLowerCase().includes("failed to fetch") || err.name === "TypeError") {
+      throw buildApiError(
+        503,
+        "No se pudo conectar con el servidor. Revisa tu conexión o intenta de nuevo en unos segundos.",
+        "NETWORK_ERROR"
+      );
+    }
+    throw err;
+  }
   
   if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login') {
     const refreshToken = localStorage.getItem("pos_refresh_token");
@@ -363,7 +375,19 @@ export const api = {
 // intenta refrescarlo y puede recargar la página. Nada de eso tiene sentido para un
 // cliente que solo abrió un enlace, y no queremos tocarle el localStorage.
 async function publicRequest(path, options) {
-  const res = await fetch(`${BASE}${path}`, options);
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, options);
+  } catch (err) {
+    if (err.message?.toLowerCase().includes("failed to fetch") || err.name === "TypeError") {
+      throw buildApiError(
+        503,
+        "No se pudo conectar con el servidor. Revisa tu conexión o intenta de nuevo en unos segundos.",
+        "NETWORK_ERROR"
+      );
+    }
+    throw err;
+  }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw buildApiError(res.status, json.message, json.code, json);
   return json;
