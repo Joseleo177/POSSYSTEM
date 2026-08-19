@@ -45,7 +45,7 @@ const tenantModels = [
 
 const applyTenantFilter = (modelName, options) => {
   const store = tenantStorage.getStore();
-  if (store && store.company_id && tenantModels.includes(modelName)) {
+  if (store && store.company_id && !store.bypass_tenant && tenantModels.includes(modelName)) {
     if (!options.where) options.where = {};
     options.where.company_id = store.company_id;
   }
@@ -66,7 +66,7 @@ sequelize.addHook('beforeBulkDestroy', (options) => {
 
 sequelize.addHook('beforeCreate', (instance, options) => {
   const store = tenantStorage.getStore();
-  if (store && store.company_id && tenantModels.includes(instance.constructor.name)) {
+  if (store && store.company_id && !store.bypass_tenant && tenantModels.includes(instance.constructor.name)) {
     if (!instance.getDataValue('company_id')) {
       instance.setDataValue('company_id', store.company_id);
     }
@@ -79,7 +79,7 @@ sequelize.addHook('beforeCreate', (instance, options) => {
 
 sequelize.addHook('beforeBulkCreate', (instances, options) => {
   const store = tenantStorage.getStore();
-  if (store && store.company_id) {
+  if (store && store.company_id && !store.bypass_tenant) {
     let patched = false;
     instances.forEach(instance => {
       if (tenantModels.includes(instance.constructor.name) && !instance.getDataValue('company_id')) {
@@ -108,7 +108,7 @@ tenantModels.forEach(modelName => {
 
   const hookFn = function(options) {
     const store = tenantStorage.getStore();
-    if (store && store.company_id) {
+    if (store && store.company_id && !store.bypass_tenant) {
       if (!options.where) options.where = {};
       options.where.company_id = store.company_id;
     }

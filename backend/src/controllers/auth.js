@@ -61,7 +61,10 @@ const login = async (req, res) => {
     const refresh_token = jwt.sign({ id: emp.id, company_id: emp.company_id }, SECRET, { expiresIn: '7d' });
     res.json({ ok: true, token, refresh_token, employee: payload });
   } catch (err) {
-    console.error(err);
+    // El detalle queda en el log; al cliente solo un mensaje genérico. El login es un
+    // endpoint público: el mensaje de error de Sequelize nombra tablas, columnas y hasta
+    // el host de la base, y es justo lo primero que se prueba desde fuera.
+    console.error("LOGIN ERROR:", err);
     res.status(500).json({ ok: false, message: "Error en el servidor" });
   }
 };

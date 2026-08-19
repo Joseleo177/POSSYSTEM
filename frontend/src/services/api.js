@@ -341,8 +341,9 @@ export const api = {
   },
   companies: {
     getAll: ()          => request("/companies"),
-    create: (body)      => request("/companies",       { method: "POST", body: JSON.stringify(body) }),
-    update: (id, body)  => request(`/companies/${id}`, { method: "PUT",  body: JSON.stringify(body) }),
+    create: (body)      => request("/companies",       { method: "POST",   body: JSON.stringify(body) }),
+    update: (id, body)  => request(`/companies/${id}`, { method: "PUT",    body: JSON.stringify(body) }),
+    remove: (id)        => request(`/companies/${id}`, { method: "DELETE" }),
   },
 
   // ── Cotizaciones ─────────────────────────────────────────────

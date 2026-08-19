@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const { tenantStorage } = require("../utils/tenantStorage");
+const { getCompanyStatus, setCompanyStatus } = require("../utils/companyStatusCache");
 
 const SECRET = process.env.JWT_SECRET;
 if (!SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -22,15 +23,27 @@ const auth = async (req, res, next) => {
   req.company_id = decoded.company_id;
   req.is_superuser = !!decoded.is_superuser;
 
-  // Verificación de suscripción universal
+  // Verificación de suscripción universal.
+  //
+  // Se apoya en una caché de 30 s por empresa: sin ella era una consulta a `companies` por
+  // cada request de cada caja para leer una fila que cambia una vez al mes. El panel de
+  // superusuario invalida la entrada al suspender, renovar o borrar, así que el corte sigue
+  // siendo inmediato.
   if (!req.is_superuser && req.company_id) {
     try {
-      const { Company } = require("../models");
-      const company = await Company.findByPk(req.company_id, {
-        attributes: ['id', 'active', 'subscription_status', 'expires_at']
-      });
-
+      let company = getCompanyStatus(req.company_id);
       if (!company) {
+        const { Company } = require("../models");
+        const row = await Company.findByPk(req.company_id, {
+          attributes: ['id', 'active', 'subscription_status', 'expires_at']
+        });
+        // Se cachea también el "no existe" (null): si alguien anda con un token de una
+        // empresa borrada, no tiene sentido repetir la consulta en cada intento.
+        company = row ? row.toJSON() : { missing: true };
+        setCompanyStatus(req.company_id, company);
+      }
+
+      if (company.missing) {
         return res.status(403).json({ ok: false, message: "Empresa no encontrada" });
       }
       if (!company.active) {

@@ -24,7 +24,9 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
         if (editData) {
             setForm({
                 ...editData,
-                expires_at: editData.expires_at ? new Date(editData.expires_at).toISOString().split('T')[0] : ""
+                expires_at: editData.expires_at ? new Date(editData.expires_at).toISOString().split('T')[0] : "",
+                admin_username: "",
+                admin_password: ""
             });
         } else {
             setForm({
@@ -37,7 +39,9 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                 subscription_status: "Demo",
                 expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                 max_users: 5,
-                active: true
+                active: true,
+                admin_username: "",
+                admin_password: ""
             });
         }
     }, [editData, open]);
@@ -48,7 +52,7 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
     };
 
     return (
-        <Modal open={open} onClose={onClose} title={editData ? "Editar Empresa" : "Nueva Empresa"} width={500}>
+        <Modal open={open} onClose={onClose} title={editData ? "Editar Empresa" : "Nueva Empresa"} width={520}>
             <form onSubmit={handleSubmit} className="space-y-4 py-2">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
@@ -90,6 +94,38 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                         />
                     </div>
                 </div>
+
+                {!editData && (
+                    <div className="p-4 bg-surface-2 dark:bg-white/[0.03] rounded-2xl border border-border/40 dark:border-white/5 space-y-3">
+                        <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest border-b border-brand-500/10 pb-2">
+                            Credenciales Administrador Inicial (Opcional)
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="label">USUARIO ADMINISTRADOR</label>
+                                <input
+                                    className="input h-10 font-mono text-[11px]"
+                                    value={form.admin_username}
+                                    onChange={e => setForm({ ...form, admin_username: e.target.value })}
+                                    placeholder="Dejar vacío para admin_ID"
+                                />
+                            </div>
+                            <div>
+                                <label className="label">CONTRASEÑA INICIAL</label>
+                                <input
+                                    type="text"
+                                    className="input h-10 font-mono text-[11px]"
+                                    value={form.admin_password}
+                                    onChange={e => setForm({ ...form, admin_password: e.target.value })}
+                                    placeholder="Dejar vacío para aleatoria"
+                                    minLength={8}
+                                />
+                                {/* El backend rechaza menos de 8; avisar aquí evita el viaje. */}
+                                <p className="mt-1 text-[10px] font-bold text-content-subtle">Mínimo 8 caracteres</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="p-4 bg-surface-2 dark:bg-white/[0.03] rounded-2xl border border-border/40 dark:border-white/5 space-y-4">
                     <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest border-b border-brand-500/10 pb-2">
