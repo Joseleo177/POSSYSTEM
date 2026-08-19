@@ -19,7 +19,23 @@ const getAll = async (req, res) => {
         ? settings.logo_filename
         : `/uploads/${settings.logo_filename}`;
     }
-    res.json({ ok: true, data: settings });
+
+    let companyInfo = null;
+    if (company_id) {
+      const { Company, Employee } = require("../models");
+      const company = await Company.findByPk(company_id, {
+        attributes: ['id', 'name', 'tax_id', 'plan_name', 'subscription_status', 'expires_at', 'max_users']
+      });
+      if (company) {
+        const userCount = await Employee.count({ where: { company_id, active: true } });
+        companyInfo = {
+          ...company.toJSON(),
+          current_users: userCount
+        };
+      }
+    }
+
+    res.json({ ok: true, data: settings, company: companyInfo });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener configuración" });

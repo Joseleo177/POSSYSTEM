@@ -10,6 +10,7 @@ import { useApp } from "../context/AppContext";
 
 const SECTIONS = [
     ["empresa", "Empresa"],
+    ["suscripcion", "Mi Suscripción"],
     ["factura", "Factura"],
     ["currencies", "Monedas"],
     ["respaldo", "Respaldo"],
@@ -36,6 +37,7 @@ const FIELDS_FACTURA = [
 export default function SettingsTab({ notify }) {
     const { loadCurrencies, loadSettings } = useApp();
     const [settings, setSettings] = useState({});
+    const [companyInfo, setCompanyInfo] = useState(null);
     const [currencies, setCurrencies] = useState([]);
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -49,6 +51,7 @@ export default function SettingsTab({ notify }) {
         try {
             const [sRes, cRes] = await Promise.all([api.settings.getAll(), api.currencies.getAll()]);
             setSettings(sRes.data);
+            if (sRes.company) setCompanyInfo(sRes.company);
             setCurrencies(cRes.data);
         } catch (e) { notify(e.message, "err"); }
     };
@@ -340,6 +343,69 @@ export default function SettingsTab({ notify }) {
                                         <div className="text-[9px] font-bold text-content-subtle uppercase tracking-tight leading-tight">{settings.store_address || "Calle Principal #1"}</div>
                                         <div className="text-[9px] font-bold text-content-subtle uppercase tracking-tight tabular-nums">{settings.store_phone || "0412-0000000"}</div>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── Mi Suscripción ── */}
+                {section === "suscripcion" && (
+                    <div className="max-w-2xl mx-auto space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="bg-white dark:bg-surface-dark-3 rounded-2xl p-6 border border-border/40 dark:border-white/10 shadow-sm space-y-5">
+                            <div className="flex items-center justify-between border-b border-border/20 dark:border-white/10 pb-4">
+                                <div>
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-brand-500">Suscripción y Licencia Actual</div>
+                                    <h2 className="text-base font-black text-content dark:text-white uppercase mt-0.5">{companyInfo?.name || "Mi Empresa"}</h2>
+                                    <span className="text-[10px] text-content-subtle font-mono">RIF: {companyInfo?.tax_id || "N/A"}</span>
+                                </div>
+                                <span className={`px-3 py-1 text-xs font-black rounded-full border ${
+                                    companyInfo?.subscription_status === 'Activa' || companyInfo?.subscription_status === 'Ilimitado'
+                                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+                                        : companyInfo?.subscription_status === 'Demo'
+                                        ? 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+                                        : 'bg-red-500/10 text-red-500 border-red-500/30'
+                                }`}>
+                                    {companyInfo?.subscription_status || "Demo"}
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="p-4 bg-surface-2/60 dark:bg-white/[0.02] rounded-xl border border-border/30 dark:border-white/5 space-y-1">
+                                    <span className="text-[9px] font-black uppercase text-content-subtle block">Plan de Suscripción</span>
+                                    <span className="text-lg font-black text-brand-500 uppercase">{companyInfo?.plan_name || "Básico"}</span>
+                                </div>
+
+                                <div className="p-4 bg-surface-2/60 dark:bg-white/[0.02] rounded-xl border border-border/30 dark:border-white/5 space-y-1">
+                                    <span className="text-[9px] font-black uppercase text-content-subtle block">Vencimiento de Licencia</span>
+                                    <span className="text-sm font-black text-content dark:text-white">
+                                        {companyInfo?.expires_at ? new Date(companyInfo.expires_at).toLocaleDateString() : "Vigencia Ilimitada"}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Usuarios Permitidos */}
+                            <div className="p-4 bg-surface-2/60 dark:bg-white/[0.02] rounded-xl border border-border/30 dark:border-white/5 space-y-2">
+                                <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                                    <span className="text-content-subtle">Usuarios de la Empresa</span>
+                                    <span className="text-content dark:text-white font-mono font-bold">
+                                        {companyInfo?.current_users || 0} / {companyInfo?.max_users === 0 ? "Ilimitados" : `${companyInfo?.max_users || 5} Máximo`}
+                                    </span>
+                                </div>
+                                {companyInfo?.max_users > 0 && (
+                                    <div className="w-full bg-border/30 dark:bg-white/10 h-2 rounded-full overflow-hidden">
+                                        <div 
+                                            className="bg-brand-500 h-full rounded-full transition-all duration-500" 
+                                            style={{ width: `${Math.min(100, ((companyInfo?.current_users || 0) / companyInfo.max_users) * 100)}%` }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-4 rounded-xl bg-brand-500/5 border border-brand-500/20 flex items-center gap-3">
+                                <svg className="w-5 h-5 text-brand-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                <div className="text-[11px] text-content-subtle dark:text-white/70">
+                                    Para renovar tu licencia, extender vigencia o aumentar el límite de usuarios, contacta al Administrador del Sistema.
                                 </div>
                             </div>
                         </div>
