@@ -1,5 +1,5 @@
 import { Button } from "../ui/Button";
-import ReceiptModal from "../ReceiptModal";
+import ReceiptModal, { printReceipt } from "../ReceiptModal";
 import PaymentFormModal from "../PaymentFormModal";
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
@@ -17,10 +17,11 @@ function KeyHint({ n }) {
 }
 
 export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay }) {
-    const { notify, activeCurrencies, activeJournals } = useApp();
+    const { notify, activeCurrencies, activeJournals, companyInfo, printerWidth } = useApp();
     const [showReceiptModal, setShowReceiptModal] = useState(false);
     const [showPayModal, setShowPayModal] = useState(false);
     const [creditLoading, setCreditLoading] = useState(false);
+    const [printing, setPrinting] = useState(false);
 
     // Entrega a crédito: el backend asigna el correlativo fiscal y deja la venta en
     // 'pendiente'. Sin esto la venta fiada se quedaba en borrador y no aparecía ni en el
@@ -113,14 +114,65 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     const actionKeys = [
         canSettle && "pay",
         canGiveCredit && "credit",
+        "print",
         "ticket",
         "next",
     ].filter(Boolean);
     const numOf = (key) => actionKeys.indexOf(key) + 1;
 
+    // Impresión directa, sin abrir la vista previa: en caja con cola, el cajero no necesita
+    // ver el ticket, necesita el papel.
+    //
+    // Se completa la venta con getOne cuando le faltan ítems o cobros —createSale no los
+    // devuelve juntos— porque si no el papel sale sin productos y sin forma de pago. Es la
+    // misma preparación que hace ReceiptModal antes de imprimir, para que el comprobante sea
+    // idéntico salga por donde salga.
+    const printDirect = async () => {
+        if (printing) return;
+        setPrinting(true);
+        try {
+            const yaCompleto = receiptPayments.length > 0
+                && Array.isArray(receipt?.items) && receipt.items.length > 0;
+
+            let full = receipt;
+            if (!yaCompleto && receipt?.id) {
+                try {
+                    full = (await api.sales.getOne(receipt.id)).data;
+                } catch { /* si la consulta falla se imprime con lo que haya: mejor un ticket parcial que ninguno */ }
+            }
+
+            // Los cobros de esta pantalla mandan cuando existen (son los más frescos); si no,
+            // valen los que trajo la consulta.
+            const payments = receiptPayments.length
+                ? receiptPayments
+                : (full?.payments ?? full?.Payments ?? []);
+
+            printReceipt(
+                {
+                    ...full,
+                    currency:      receipt.currency,
+                    exchangeRate:  receipt.exchangeRate,
+                    serie:         receipt.serie,
+                    status:        currentStatus,
+                    amount_paid:   paidBase,
+                    balance:       currentBalance,
+                    payments,
+                },
+                companyInfo,
+                activeCurrencies?.find(c => !c.is_base) || baseCurrency,
+                printerWidth,
+            );
+        } catch {
+            notify("No se pudo imprimir el ticket", "err");
+        } finally {
+            setPrinting(false);
+        }
+    };
+
     const runAction = (key) => {
         if (key === "pay")    return setShowPayModal(true);
         if (key === "credit") return creditLoading ? undefined : confirmCredit();
+        if (key === "print")  return printDirect();
         if (key === "ticket") return setShowReceiptModal(true);
         if (key === "next")   return onNext();
     };
@@ -152,7 +204,9 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         window.addEventListener("keydown", handler, true);
         return () => window.removeEventListener("keydown", handler, true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [onNext, showReceiptModal, showPayModal, actionKeys.join(","), creditLoading]);
+        // `printing` va en las dependencias: sin él, el handler quedaba capturado con el valor
+        // viejo y dos pulsaciones seguidas del atajo lanzaban dos impresiones.
+    }, [onNext, showReceiptModal, showPayModal, actionKeys.join(","), creditLoading, printing]);
     // La insignia describe el ESTADO de la factura, no la acción que se acaba de hacer.
     // "Abono parcial" nombraba el movimiento; lo que importa aquí es que queda saldo.
     const STATUS_LABELS = {
@@ -274,6 +328,19 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             )}
                         </div>
                     )}
+                    {/* Imprimir va solo y a ancho completo: es la acción que se repite en cada
+                        venta, y compartir fila con "Ver Ticket" invitaba a confundirlas. */}
+                    <Button
+                        onClick={printDirect}
+                        disabled={printing}
+                        className="h-9 bg-brand-500/10 text-brand-500 border border-brand-500/30 hover:bg-brand-500 hover:text-black shadow-none disabled:opacity-50"
+                        title="Imprime el ticket en la impresora térmica, sin abrir la vista previa"
+                    >
+                        <KeyHint n={numOf("print")} />
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                        {printing ? "Imprimiendo..." : "Imprimir Ticket"}
+                    </Button>
+
                     <div className="flex gap-2">
                         <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="flex-1 h-9 border border-border/30 dark:border-white/10">
                             <KeyHint n={numOf("ticket")} />

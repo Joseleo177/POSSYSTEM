@@ -122,17 +122,38 @@ function calcReceiptTotals(s, rate, sym) {
         totalBs = s.total_precise;
     }
 
+    // Lo abonado y lo que queda debiendo salen de la MISMA pista que el TOTAL.
+    //
+    // Antes el saldo se convertía por su cuenta (balance en base × tasa) mientras el total se
+    // arma redondeando cada línea y multiplicando por la cantidad. Con 20 unidades a Bs 775,34
+    // el papel totalizaba Bs 15.506,80 y en la línea de abajo decía que el cliente debía
+    // Bs 15.506,71: dos cifras distintas para la misma deuda, en el comprobante que se lleva.
+    //
+    // amount_paid ya viene neto de vuelto y con el crédito de cliente aplicado (getSaleBalance),
+    // así que restarlo del total reproduce el saldo real sin recalcular nada.
+    const paidBs    = isBs ? round2(s.amount_paid * rate) : s.amount_paid;
+    const balanceBs = Math.max(0, round2(totalBs - paidBs));
+
     return {
         items,
         fmtSubtotal: fmt(subtotalBs, sym),
         fmtDiscount: fmt(discountBs, sym),
         fmtTotal: fmt(totalBs, sym),
+        totalBs,
+        paidBs,
+        balanceBs,
+        fmtPaid:    fmt(paidBs, sym),
+        fmtBalance: fmt(balanceBs, sym),
     };
 }
 
 // displayCurrency: la moneda no-base (VES). Todos los montos del recibo se convierten a ella.
 // sale.total y item.price están siempre en USD base.
-function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
+//
+// Se exporta porque la caja imprime sin abrir el ticket: el cajero que atiende una cola no
+// necesita la vista previa, necesita el papel. Es la misma función que usa el botón de
+// impresión del modal, para que ambos caminos den exactamente el mismo comprobante.
+export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
     const storeName = companyInfo?.name || "MI TIENDA POS";
     const s = normalizeSale(sale);
     // Pagado: usar tasa del último pago (cuando se cerró la deuda)
@@ -279,8 +300,8 @@ function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
             ? pago.canales.map(c => `<div class="total-row"><span>&nbsp;&nbsp;${c.journal_name}</span><span>${fmt(c.amount * rate, sym)}</span></div>`).join("")
             : ""}
         ${pago.etiqueta ? `<div class="total-row"><span>ESTADO</span><span>${pago.etiqueta.toUpperCase()}</span></div>` : ""}
-        ${s.amount_paid > 0 && pago.pendiente ? `<div class="total-row"><span>ABONADO</span><span>${fmt(s.amount_paid * rate, sym)}</span></div>` : ""}
-        ${pago.pendiente && s.balance > 0 ? `<div class="total-row big"><span>QUEDA DEBIENDO</span><span>${fmt(s.balance * rate, sym)}</span></div>` : ""}
+        ${s.amount_paid > 0 && pago.pendiente ? `<div class="total-row"><span>ABONADO</span><span>${totals.fmtPaid}</span></div>` : ""}
+        ${pago.pendiente && s.balance > 0 && totals.balanceBs > 0 ? `<div class="total-row big"><span>QUEDA DEBIENDO</span><span>${totals.fmtBalance}</span></div>` : ""}
     </div>
 
     <div class="footer">${companyInfo?.footer || "¡Gracias por su compra!<br>Vuelva pronto"}</div>
@@ -470,16 +491,21 @@ export default function ReceiptModal({ open, onClose, sale }) {
                         </span>
                     </div>
                 )}
+                {/* Mismos importes que el papel: salen de calcReceiptTotals, no de una
+                    conversión aparte. Pantalla e impresión no pueden discrepar. */}
                 {s.amount_paid > 0 && pago.pendiente && (
                     <div className="flex justify-between items-center py-0.5 text-xs">
                         <span className="text-content-muted dark:text-content-dark-muted">Abonado</span>
-                        <span className="text-success font-bold">{fmt(s.amount_paid * rate, sym)}</span>
+                        <span className="text-success font-bold">{totals.fmtPaid}</span>
                     </div>
                 )}
-                {pago.pendiente && s.balance > 0 && (
+                {/* Si hay deuda lo decide el backend (s.balance); cuánto es, la pista del
+                    papel. Al revés, el residuo de redondeo imprimiría un "queda debiendo"
+                    de céntimos sobre una factura que el sistema ya da por saldada. */}
+                {pago.pendiente && s.balance > 0 && totals.balanceBs > 0 && (
                     <div className="flex justify-between items-center py-1 border-t border-border/10 dark:border-white/5 mt-1 pt-1">
                         <span className="text-content dark:text-content-dark font-black text-xs uppercase tracking-tighter">Queda debiendo</span>
-                        <span className="text-danger font-black text-sm">{fmt(s.balance * rate, sym)}</span>
+                        <span className="text-danger font-black text-sm">{totals.fmtBalance}</span>
                     </div>
                 )}
             </div>
