@@ -2,7 +2,34 @@ const { Payment, Sale, SaleItem, sequelize, getSaleBalance } = require("./shared
 const { Expense, ExpenseCategory, PaymentJournal, Currency, Customer } = require("../../models");
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
 
+// Respuesta de un cobro que ya estaba registrado. Se rearma desde la base para que el
+// reintento reciba exactamente lo mismo que recibió el envío que sí entró: la caja imprime
+// su ticket y sigue, sin saber que hubo un duplicado.
+async function existingPaymentResult(payment) {
+  const sale = await Sale.findByPk(payment.sale_id);
+  const saleTotal = parseFloat(sale?.total || 0);
+  const alreadyPaid = await getSaleBalance(payment.sale_id);
+  const balance = parseFloat((saleTotal - alreadyPaid).toFixed(6));
+  return {
+    payment,
+    sale_status: sale?.status || null,
+    amount_paid: alreadyPaid,
+    balance: balance <= 0.10 ? 0 : balance,
+    change_given: parseFloat(payment.change_given || 0),
+    invoice_number: sale?.invoice_number || null,
+    duplicated: true,
+  };
+}
+
 module.exports = async function createPayment(body) {
+  // Cobro repetido: mismo `idempotency_key` que un pago ya guardado. Pasa cuando la
+  // respuesta se pierde por red y la caja reintenta; sin esto el abono se registraba dos
+  // veces (el guardia de estado solo frena la venta ya pagada, no un abono parcial).
+  if (body?.idempotency_key) {
+    const previo = await Payment.findOne({ where: { idempotency_key: body.idempotency_key } });
+    if (previo) return await existingPaymentResult(previo);
+  }
+
   const t = await sequelize.transaction();
   try {
     const {
@@ -23,6 +50,7 @@ module.exports = async function createPayment(body) {
       change_to_credit,   // sobrante que va al crédito del cliente (en moneda base)
       // Crédito de cliente
       credit_amount,      // monto a descontar del credit_balance del cliente
+      idempotency_key,    // la genera la caja, una por cobro; se repite en los reintentos
     } = body;
 
     if (!sale_id) throw new Error("sale_id es requerido");
@@ -126,6 +154,7 @@ module.exports = async function createPayment(body) {
           notes: notes?.trim() || null,
           change_given: changeAmt > 0 ? changeAmt : null,
           change_journal_id: changeAmt > 0 ? change_journal_id : null,
+          idempotency_key: idempotency_key || null,
         },
         { transaction: t }
       );
@@ -224,6 +253,13 @@ module.exports = async function createPayment(body) {
     };
   } catch (err) {
     await t.rollback();
+    // Dos envíos del mismo cobro que cruzaron: la comprobación de arriba no los vio porque
+    // corrían a la vez, y el índice único decide. El que pierde devuelve el pago que sí
+    // quedó guardado en vez de un error que llevaría al cajero a cobrar otra vez.
+    if (body?.idempotency_key && err?.name === "SequelizeUniqueConstraintError") {
+      const previo = await Payment.findOne({ where: { idempotency_key: body.idempotency_key } });
+      if (previo) return await existingPaymentResult(previo);
+    }
     throw err;
   }
 };

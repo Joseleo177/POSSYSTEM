@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 import Modal from "./ui/Modal";
@@ -25,6 +25,8 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const { notify, baseCurrency, activeCurrencies, activeJournals } = useApp();
   const [form, setForm] = useState(getEmpty);
   const [loading, setLoading] = useState(false);
+  // Clave de idempotencia del cobro en curso (ver submit).
+  const payKeyRef = useRef(null);
   const [customerCredit, setCustomerCredit] = useState(0);
   const [creditToApply, setCreditToApply] = useState("");
 
@@ -174,8 +176,16 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
       : finalAmountBase;
 
     setLoading(true);
+    // Una clave por cobro, que sobrevive a los reintentos: si la respuesta se pierde por
+    // red y el cajero vuelve a darle, el servidor reconoce el cobro y no lo registra dos
+    // veces. Se renueva al cerrar el cobro con éxito, para que el siguiente abono a la
+    // misma factura sí sea uno nuevo.
+    if (!payKeyRef.current) {
+      payKeyRef.current = crypto?.randomUUID?.() ?? `p-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
     try {
       const res = await api.payments.create({
+        idempotency_key:    payKeyRef.current,
         sale_id:            sale.id,
         amount:             creditCoversAll ? 0 : payAmountToSend,
         currency_id:        payCur?.id || null,
@@ -191,12 +201,19 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
         change_to_credit:   (changeBase > 0 && form.credit_change) ? changeBase : undefined,
         credit_amount:      creditApplied > 0 ? creditApplied : undefined,
       });
-      if (res.sale_status === "pagado") notify("¡Factura pagada completamente!");
+      // `duplicated` llega cuando el servidor reconoció un reintento: el cobro ya estaba
+      // guardado. Se le dice al cajero para que no crea que se cobró dos veces.
+      if (res.duplicated) notify("Ese cobro ya estaba registrado");
+      else if (res.sale_status === "pagado") notify("¡Factura pagada completamente!");
       else notify("Pago parcial registrado");
+      payKeyRef.current = null; // cobro cerrado: el próximo abono lleva clave nueva
       setForm(getEmpty());
       setCreditToApply("");
       onSuccess?.(res);
-    } catch (e) { notify(e.message, "err"); }
+    } catch (e) {
+      // La clave se conserva a propósito: el reintento debe llevar la misma.
+      notify(e.message, "err");
+    }
     setLoading(false);
   };
 

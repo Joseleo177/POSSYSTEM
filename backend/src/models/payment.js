@@ -20,6 +20,10 @@ module.exports = (sequelize, DataTypes) => {
     notes:              { type: DataTypes.TEXT },
     change_given:       { type: DataTypes.DECIMAL(14, 4), allowNull: true },
     change_journal_id:  { type: DataTypes.INTEGER, allowNull: true },
+    // Clave que genera la caja una vez por cobro y repite en los reintentos: con el índice
+    // único de la base, un abono parcial reenviado tras un corte de red no se registra dos
+    // veces. Null en los pagos anteriores a la migración.
+    idempotency_key:    { type: DataTypes.STRING(100), allowNull: true },
     created_at:         { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,
