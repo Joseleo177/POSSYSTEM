@@ -114,7 +114,11 @@ export default function CobroPage() {
         setScanPending: (v) => { scanPendingRef.current = v; },
         // Con un modal encima, las teclas no deben desviarse al buscador de productos:
         // un escaneo mientras está el aviso de deuda escribiría en la pantalla de atrás.
-        modalOpen: !!qtyModalItem || !!customer.debtAlert,
+        // Con el listado de cuentas en espera abierto tampoco se redirige la escritura al
+        // buscador de productos: lo que se teclea es para su propio buscador de clientes, y
+        // si el foco se perdió (un clic en una tarjeta) las letras se colaban en la grilla
+        // de fondo.
+        modalOpen: !!qtyModalItem || !!customer.debtAlert || showHeldModal,
         notify,
         setShowHeldModal, setShowPendingSales,
     });

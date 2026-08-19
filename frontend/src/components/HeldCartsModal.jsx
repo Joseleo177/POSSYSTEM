@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { fmtMoney } from "../helpers";
 import OrderPreviewModal from "./OrderPreviewModal";
 
@@ -22,7 +22,29 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
 
     // Cerrar el listado limpia búsqueda y previsualización: al volver a abrirlo se espera la
     // lista completa, no el filtro que quedó tecleado hace media hora.
-    const cerrar = () => { setSearch(""); setPreview(null); onClose(); };
+    const cerrar = useCallback(() => { setSearch(""); setPreview(null); onClose(); }, [onClose]);
+
+    // El cursor entra al buscador al abrir: la cuenta se encuentra tecleando el nombre de la
+    // mesa, no paseando la vista por la lista.
+    const searchRef = useRef(null);
+    useEffect(() => {
+        if (!open) return;
+        const frame = requestAnimationFrame(() => searchRef.current?.focus());
+        return () => cancelAnimationFrame(frame);
+    }, [open]);
+
+    // Escape cierra el listado. Con una previsualización encima la tecla es suya —su propio
+    // modal la escucha— y solo debe cerrarse esa capa, no las dos de un golpe.
+    useEffect(() => {
+        if (!open || preview) return;
+        const onKey = e => {
+            if (e.key !== "Escape") return;
+            e.stopPropagation();
+            cerrar();
+        };
+        window.addEventListener("keydown", onKey, true); // capture: antes que la página de fondo
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [open, preview, cerrar]);
 
     if (!open) return null;
 
@@ -54,6 +76,7 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
                             <input
+                                ref={searchRef}
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                                 className="input h-9 pl-9 pr-9 text-[11px] w-full"
