@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers";
 import { fmtQtyUnit } from "../../helpers/unitFormatter";
 
@@ -137,6 +138,26 @@ export default function ProductGrid({
     products, total, loading, loadingMore, loadMore,
     cart, fmt, baseCur, altCur, ordersEnabled, onAdd,
 }) {
+    // Paginación por scroll en vez del botón "Ver más": una vitrina se recorre bajando, y
+    // pararla cada 12 fichas para pedir permiso corta justo el impulso de seguir mirando.
+    // El centinela va bajo la rejilla y dispara la carga 400px antes de asomar, así la
+    // siguiente tanda suele estar puesta cuando el visitante llega ahí.
+    const sentinelRef = useRef(null);
+    const hayMas = products.length < total;
+
+    useEffect(() => {
+        const el = sentinelRef.current;
+        // Mientras carga no se observa: al terminar, el efecto vuelve a montarse y, si el
+        // centinela sigue a la vista, pide la tanda siguiente. Así se encadena sin timers.
+        if (!el || !hayMas || loadingMore || loading) return;
+        const io = new IntersectionObserver(
+            entries => { if (entries[0].isIntersecting) loadMore(); },
+            { rootMargin: "400px" }
+        );
+        io.observe(el);
+        return () => io.disconnect();
+    }, [hayMas, loadingMore, loading, loadMore]);
+
     if (loading) {
         // Esqueleto en vez de la palabra "Cargando...": mantiene la forma de la rejilla, así
         // que el catálogo no da un salto cuando llegan los productos.
@@ -190,15 +211,12 @@ export default function ProductGrid({
                 ))}
             </div>
 
-            {products.length < total && (
-                <div className="pt-8 text-center">
-                    <button
-                        onClick={loadMore}
-                        disabled={loadingMore}
-                        className="h-11 px-7 rounded-full bg-surface dark:bg-surface-dark-2 border border-border dark:border-white/10 text-[11px] font-bold text-content dark:text-white shadow-sm hover:shadow-md hover:border-brand-500/40 hover:text-brand-500 active:scale-[0.98] transition-all disabled:opacity-50"
-                    >
-                        {loadingMore ? "Cargando..." : `Ver más (${total - products.length})`}
-                    </button>
+            {/* Centinela de la carga por scroll. Ocupa alto propio para que el observador
+                tenga qué ver aunque la última fila termine justo en el borde. */}
+            {hayMas && (
+                <div ref={sentinelRef} className="pt-8 pb-2 flex items-center justify-center gap-2 h-16 text-[11px] font-medium text-content-muted">
+                    <span className="w-4 h-4 rounded-full border-2 border-brand-500/25 border-t-brand-500 animate-spin" />
+                    Cargando más productos
                 </div>
             )}
         </main>
