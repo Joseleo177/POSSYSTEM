@@ -1,4 +1,5 @@
 const { Payment, Sale, SaleItem, sequelize, getSaleBalance } = require("./shared");
+const { PAYMENT_TOLERANCE } = require("../../utils/saleBalance");
 const { Expense, ExpenseCategory, PaymentJournal, Currency, Customer } = require("../../models");
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
 const { assertWarehouseAccess } = require("../../middleware/auth");
@@ -241,13 +242,15 @@ module.exports = async function createPayment(body, req) {
 
     // Tolerancia de $0.10 USD (10 céntimos): cubre desfasajes de redondeo por línea acumulados
     // en ventas con múltiples productos al pagar en bolívares.
-    const isFullPayment = isBsFullPay || totalPaidNow >= saleTotal - 0.10;
+    // La constante se comparte con quitar un pago y con anular una NC (utils/saleBalance),
+    // para que las tres rutas que fijan el estado no se desalineen.
+    const isFullPayment = isBsFullPay || totalPaidNow >= saleTotal - PAYMENT_TOLERANCE;
     const newStatus = isFullPayment ? "pagado" : "parcial";
     await sale.update({ status: newStatus }, { transaction: t });
     await t.commit();
 
     const rawBalance = parseFloat((saleTotal - totalPaidNow).toFixed(6));
-    const balance = (rawBalance <= 0.10 || isFullPayment) ? 0 : rawBalance;
+    const balance = (rawBalance <= PAYMENT_TOLERANCE || isFullPayment) ? 0 : rawBalance;
     return {
       payment,
       sale_status: newStatus,

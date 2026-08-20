@@ -3,6 +3,7 @@ const {
   Return, ReturnItem, Payment, ProductComboItem, sequelize, Sequelize,
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
+const { resolveSaleStatus } = require("../../utils/saleBalance");
 
 const Op = Sequelize.Op;
 const err = (message, status) => Object.assign(new Error(message), { status, isOperational: true });
@@ -141,24 +142,23 @@ module.exports = async function annulReturn(returnId, { employeeId }, req) {
     }
 
     /* ── 4. Devolver la factura a su estado real ── */
-    // Misma fórmula que al quitar un pago (ver removePayment): lo que se debe es el total
-    // menos lo ya acreditado por las devoluciones que siguen vivas —esta ya no cuenta— y el
-    // estado sale de compararlo con lo cobrado.
+    // Lo que se debe es el total menos lo acreditado por las devoluciones que siguen vivas
+    // —esta ya no cuenta—, comparado con lo cobrado. El criterio es compartido (ver
+    // utils/saleBalance) porque la factura se paga en bolívares contra los subtotales
+    // precisos y el total en dólares va redondeado por línea: exigir igualdad al centavo
+    // dejaba como 'parcial' una factura pagada completa.
     const saleTotal = parseFloat(sale.total);
     const pagado = parseFloat(await Payment.sum("amount", { where: { sale_id: sale.id }, transaction: t }) || 0);
     const devuelto = parseFloat(await Return.sum("total", {
       where: { sale_id: sale.id, status: { [Op.ne]: "anulado" } },
       transaction: t,
     }) || 0);
-    const porCobrar = Math.max(0, saleTotal - devuelto);
-
     let nuevoEstado = sale.status;
     // Una factura anulada lo está por su propio flujo: anular una NC no la revive.
     if (sale.status !== "anulado") {
-      if (porCobrar <= 0.01) nuevoEstado = "pagado";
-      else if (pagado <= 0) nuevoEstado = sale.invoice_number ? "pendiente" : "borrador";
-      else if (pagado >= porCobrar - 0.01) nuevoEstado = "pagado";
-      else nuevoEstado = "parcial";
+      nuevoEstado = resolveSaleStatus({
+        saleTotal, paid: pagado, returned: devuelto, hasInvoice: !!sale.invoice_number,
+      });
       await sale.update({ status: nuevoEstado }, { transaction: t });
     }
 

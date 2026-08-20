@@ -1,4 +1,5 @@
 const { Payment, Sale, Return, Sequelize, sequelize } = require("./shared");
+const { resolveSaleStatus } = require("../../utils/saleBalance");
 
 module.exports = async function removePayment(id) {
   const t = await sequelize.transaction();
@@ -18,18 +19,18 @@ module.exports = async function removePayment(id) {
       transaction: t,
     }) || 0);
     const saleTotal = parseFloat(sale.total);
-    // Lo realmente pendiente de cobrar descuenta las devoluciones ya acreditadas, no solo lo pagado.
-    const effectiveOwed = Math.max(0, saleTotal - totalReturned);
     let newStatus = sale.status;
 
     // 'anulado' y 'devuelto' son estados terminales fijados por otro flujo (anular / devolución
     // total); quitar un pago no debe revivir la factura a "pendiente" si ya no hay nada que cobrar.
     if (sale.status !== "anulado" && sale.status !== "devuelto") {
-      if (effectiveOwed <= 0.01) newStatus = "pagado";
-      else if (remainingPaid <= 0) newStatus = sale.invoice_number ? "pendiente" : "borrador";
-      else if (remainingPaid >= effectiveOwed - 0.01) newStatus = "pagado";
-      else newStatus = "parcial";
-
+      // Criterio compartido con cobrar y con anular una NC (ver utils/saleBalance): tolera el
+      // desfase de redondeo entre el total en dólares y los subtotales precisos con que se
+      // cobra en bolívares. Con el céntimo de margen anterior, quitarle un pago a una factura
+      // saldada la dejaba 'parcial' debiendo una centésima inexistente.
+      newStatus = resolveSaleStatus({
+        saleTotal, paid: remainingPaid, returned: totalReturned, hasInvoice: !!sale.invoice_number,
+      });
       await sale.update({ status: newStatus }, { transaction: t });
     }
     await t.commit();
