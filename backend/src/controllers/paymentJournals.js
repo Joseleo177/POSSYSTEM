@@ -12,9 +12,9 @@ const wrap = (fn, status = 200) => async (req, res) => {
 
 module.exports = {
   getAll:     wrap(req => getAll(req)),
-  create:     wrap(req => createJournal(req.body), 201),
-  update:     wrap(req => updateJournal(req.params.id, req.body)),
-  remove:     wrap(req => deleteJournal(req.params.id)),
+  create:     wrap(req => createJournal(req.body, req), 201),
+  update:     wrap(req => updateJournal(req.params.id, req.body, req)),
+  remove:     wrap(req => deleteJournal(req.params.id, req)),
   summary:       wrap(req => getSummary(req)),
   movements:     wrap(req => getMovements(req)),
   bankMovements: wrap(req => getBankMovements(req)),

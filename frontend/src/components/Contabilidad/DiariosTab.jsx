@@ -4,9 +4,9 @@ import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
 
-const EMPTY_JOURNAL = { name: "", type: "", color: "#6366f1", active: true, bank_id: null, currency_id: null };
+const EMPTY_JOURNAL = { name: "", type: "", color: "#6366f1", active: true, bank_id: null, currency_id: null, warehouse_id: null };
 
-export default function DiariosTab({ notify, can, journals, loadJournals, activeMethods, methodByCode, activeBanks, currencies }) {
+export default function DiariosTab({ notify, can, journals, loadJournals, activeMethods, methodByCode, activeBanks, currencies, warehouses = [] }) {
   const [newJournal, setNewJournal] = useState(EMPTY_JOURNAL);
   const [editJournal, setEditJournal] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -190,6 +190,26 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
             </select>
           </div>
         </div>
+        {/* Sucursal dueña de la caja. "Compartido" es lo correcto para una cuenta bancaria
+            de la empresa donde entran cobros de todas las tiendas; una caja de efectivo, en
+            cambio, es de una sola. Solo se pregunta si hay más de una sucursal. */}
+        {warehouses.length > 1 && (
+          <div className="mb-3">
+            <div className="label mb-1">Sucursal</div>
+            <select
+              value={form.warehouse_id || ""}
+              onChange={e => setForm(p => ({ ...p, warehouse_id: e.target.value || null }))}
+              className="input"
+            >
+              <option value="">— Compartido (todas las sucursales)</option>
+              {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+            <div className="text-[10px] font-bold text-content-subtle mt-1 opacity-60">
+              Con una sucursal elegida, esta caja solo aparece y suma en ella.
+            </div>
+          </div>
+        )}
+
         <div className="mb-3">
           <div className="label mb-1">Banco asociado</div>
           <select

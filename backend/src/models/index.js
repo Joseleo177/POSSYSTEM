@@ -255,6 +255,11 @@ if (Serie && Warehouse) {
   Warehouse.hasMany(Serie,    { foreignKey: 'warehouse_id' });
 }
 
+if (PaymentJournal && Warehouse) {
+  PaymentJournal.belongsTo(Warehouse, { foreignKey: 'warehouse_id' });
+  Warehouse.hasMany(PaymentJournal,   { foreignKey: 'warehouse_id' });
+}
+
 if (Sale && Serie && SerieRange) {
   Sale.belongsTo(Serie,      { foreignKey: 'serie_id' });
   Sale.belongsTo(SerieRange, { foreignKey: 'serie_range_id' });

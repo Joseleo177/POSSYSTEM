@@ -104,8 +104,15 @@ export function useEgresos({ notify, journals }) {
     const handleCreate = async () => {
         if (!form.description || !form.amount || !form.category_id)
             return notify("Descripción, monto y categoría son obligatorios", "err");
-        if (!form.warehouse_id)
-            return notify("Selecciona el almacén al que corresponde el egreso", "err");
+        if (!form.warehouse_id) {
+            // Sin almacenes asignados el backend lo rechaza igual: mejor decir por qué.
+            return notify(
+                warehouses.length
+                    ? "Selecciona el almacén al que corresponde el egreso"
+                    : "No tienes ningún almacén asignado: pide que te asignen uno para registrar movimientos",
+                "err"
+            );
+        }
         setSaving(true);
         try {
             const inputAmount = parseFloat(form.amount);

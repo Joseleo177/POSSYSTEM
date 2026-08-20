@@ -223,16 +223,20 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                             />
                         </div>
                     )}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="label">Almacén *</label>
-                            <CustomSelect
-                                value={form.warehouse_id}
-                                onChange={v => setForm(p => ({ ...p, warehouse_id: v }))}
-                                placeholder="Seleccionar..."
-                                options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
-                            />
-                        </div>
+                    {/* Mismo criterio que en egresos: el desplegable aparece solo si el
+                        usuario tiene más de una sucursal donde cargar el movimiento. */}
+                    <div className={warehouses.length > 1 ? "grid grid-cols-2 gap-3" : ""}>
+                        {warehouses.length > 1 && (
+                            <div>
+                                <label className="label">Almacén *</label>
+                                <CustomSelect
+                                    value={form.warehouse_id}
+                                    onChange={v => setForm(p => ({ ...p, warehouse_id: v }))}
+                                    placeholder="Seleccionar..."
+                                    options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
+                                />
+                            </div>
+                        )}
                         <div>
                             <label className="label">Fecha del Movimiento</label>
                             <input type="date" className="input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />

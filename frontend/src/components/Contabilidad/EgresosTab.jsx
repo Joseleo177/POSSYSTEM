@@ -259,16 +259,21 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                             />
                         </div>
                     )}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="label">Almacén *</label>
-                            <CustomSelect
-                                value={form.warehouse_id}
-                                onChange={v => setForm(p => ({ ...p, warehouse_id: v }))}
-                                placeholder="Seleccionar..."
-                                options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
-                            />
-                        </div>
+                    {/* El almacén solo se pregunta cuando hay algo que elegir: con una sola
+                        sucursal asignada, el hook ya la fija y un desplegable de una opción
+                        es un paso de más en una pantalla que se usa a diario. */}
+                    <div className={warehouses.length > 1 ? "grid grid-cols-2 gap-3" : ""}>
+                        {warehouses.length > 1 && (
+                            <div>
+                                <label className="label">Almacén *</label>
+                                <CustomSelect
+                                    value={form.warehouse_id}
+                                    onChange={v => setForm(p => ({ ...p, warehouse_id: v }))}
+                                    placeholder="Seleccionar..."
+                                    options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
+                                />
+                            </div>
+                        )}
                         <div>
                             <label className="label">Fecha del Movimiento</label>
                             <input type="date" className="input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />

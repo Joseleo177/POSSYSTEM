@@ -10,6 +10,9 @@ module.exports = (sequelize, DataTypes) => {
     name: { type: DataTypes.STRING(200), allowNull: false },
     type: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'efectivo' },
     company_id: { type: DataTypes.INTEGER, allowNull: true },
+    // Sucursal dueña del diario. NULL = compartido entre todas (p. ej. una cuenta bancaria
+    // de la empresa donde entran cobros de cualquier tienda).
+    warehouse_id: { type: DataTypes.INTEGER, allowNull: true },
     bank_id: { type: DataTypes.INTEGER },
     color: { type: DataTypes.STRING(7), allowNull: false, defaultValue: '#555555' },
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },

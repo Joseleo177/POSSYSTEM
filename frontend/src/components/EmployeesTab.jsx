@@ -5,8 +5,9 @@ import { Button } from "./ui/Button";
 import Modal from "./ui/Modal";
 import ConfirmModal from "./ui/ConfirmModal";
 import { PERM_LABELS } from "../constants/tabs";
+import { useApp } from "../context/AppContext";
 
-const EMPTY = { username: "", password: "", full_name: "", email: "", phone: "", role_id: "" };
+const EMPTY = { username: "", password: "", full_name: "", email: "", phone: "", role_id: "", warehouse_ids: [] };
 
 const TABS = [
     { id: "employees", label: "Empleados" },
@@ -14,7 +15,11 @@ const TABS = [
 ];
 
 export default function EmployeesTab({ notify }) {
+    const { employee: me } = useApp();
+    // Solo el admin reparte permisos entre roles; un encargado gestiona personas, no llaves.
+    const iAmAdmin = !!me?.permissions?.all;
     const [activeTab, setActiveTab] = useState("employees");
+    const [warehouses, setWarehouses] = useState([]);
 
     // ── Employees ──────────────────────────────────────────────
     const [employees, setEmployees] = useState([]);
@@ -28,9 +33,16 @@ export default function EmployeesTab({ notify }) {
 
     const load = async () => {
         try {
-            const [eRes, rRes] = await Promise.all([api.employees.getAll(), api.employees.getRoles()]);
+            // La lista de almacenes ya viene recortada a los del usuario: un encargado solo
+            // puede repartir su propia sucursal.
+            const [eRes, rRes, wRes] = await Promise.all([
+                api.employees.getAll(),
+                api.employees.getRoles(),
+                api.warehouses.getAll(),
+            ]);
             setEmployees(eRes.data);
             setRoles(rRes.data);
+            setWarehouses(wRes.data || []);
         } catch (e) { notify(e.message, "err"); }
     };
 
@@ -41,7 +53,7 @@ export default function EmployeesTab({ notify }) {
         setTimeout(() => nameRef.current?.focus(), 80);
     };
     const openEdit = (e) => {
-        setForm({ username: e.username, password: "", full_name: e.full_name, email: e.email || "", phone: e.phone || "", role_id: e.role_id, active: e.active });
+        setForm({ username: e.username, password: "", full_name: e.full_name, email: e.email || "", phone: e.phone || "", role_id: e.role_id, active: e.active, warehouse_ids: (e.warehouses || []).map(w => w.id) });
         setEditId(e.id); setModal(true);
         setTimeout(() => nameRef.current?.focus(), 80);
     };
@@ -102,7 +114,7 @@ export default function EmployeesTab({ notify }) {
     // ── Sub-header: tabs (patrón CatalogPage) ────────────────
     const subheader = (
         <div className="flex gap-1 px-4 border-b border-border/20 dark:border-white/5">
-            {TABS.map(tab => (
+            {TABS.filter(t => t.id !== "roles" || iAmAdmin).map(tab => (
                 <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
@@ -330,6 +342,42 @@ export default function EmployeesTab({ notify }) {
                             />
                         </div>
                     </div>
+
+                    {/* Sucursales del empleado. Con una sola disponible no se pregunta: el
+                        backend casa al usuario nuevo con la sucursal de quien lo crea, que es
+                        la única que hay. */}
+                    {warehouses.length > 1 && (
+                        <div>
+                            <label className="label mb-1.5 opacity-70">Sucursales con acceso</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {warehouses.map(w => {
+                                    const on = (form.warehouse_ids || []).includes(w.id);
+                                    return (
+                                        <div
+                                            key={w.id}
+                                            onClick={() => setForm(p => ({
+                                                ...p,
+                                                warehouse_ids: on
+                                                    ? (p.warehouse_ids || []).filter(id => id !== w.id)
+                                                    : [...(p.warehouse_ids || []), w.id],
+                                            }))}
+                                            className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${on ? "bg-success/5 border-success/30" : "bg-surface-2 dark:bg-white/[0.03] border-border/40"}`}
+                                        >
+                                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${on ? "bg-success border-success" : "border-border/60"}`}>
+                                                {on && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                            </div>
+                                            <span className={`text-[11px] font-black uppercase truncate ${on ? "text-content dark:text-white" : "text-content-subtle"}`}>
+                                                {w.name}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className="text-[10px] font-bold text-content-subtle mt-1.5 opacity-60">
+                                Sin ninguna marcada, el empleado hereda las sucursales de quien lo crea.
+                            </div>
+                        </div>
+                    )}
 
                     {editId && (
                         <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${form.active ? "bg-success/5 border-success/20" : "bg-surface-2 dark:bg-surface-dark-2 border-border/30 dark:border-white/5"}`}>

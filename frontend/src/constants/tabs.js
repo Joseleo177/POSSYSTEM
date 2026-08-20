@@ -11,7 +11,10 @@ export const ALL_TABS = [
     { key: "Compras",       label: "Compras",       mobileLabel: "Compras",    perm: "purchases",  color: "from-orange-500 to-orange-700" },
     { key: "Contabilidad",  label: "Contabilidad",  mobileLabel: "Contab.",    perm: "accounting", color: "from-green-500 to-green-700" },
     { key: "Reportes",      label: "Reportes",      mobileLabel: "Reportes",   perm: "reports",    color: "from-indigo-500 to-indigo-700" },
-    { key: "Empleados",     label: "Empleados",     mobileLabel: "Usuarios",   adminOnly: true,    color: "from-pink-500 to-pink-700" },
+    // Deja de ser exclusivo del admin: con el permiso `employees` un encargado gestiona el
+    // personal de SU sucursal. El backend es el que impone ese recorte —y que no pueda crear
+    // administradores—; acá solo se decide a quién se le muestra el módulo.
+    { key: "Empleados",     label: "Empleados",     mobileLabel: "Usuarios",   perm: "employees",  color: "from-pink-500 to-pink-700" },
     { key: "Empresas",      label: "Empresas",      mobileLabel: "Empresas",   superuserOnly: true, color: "from-rose-500 to-rose-700" },
     { key: "Configuración", label: "Configuración", mobileLabel: "Config.",    perm: "config",     color: "from-slate-500 to-slate-700" },
 ];
@@ -24,5 +27,8 @@ export const PERM_LABELS = [
     { key: "purchases",  label: "Compras" },
     { key: "accounting", label: "Contabilidad" },
     { key: "reports",    label: "Reportes" },
+    // Gestionar el personal de su propia sucursal. Nunca alcanza para tocar usuarios de otra
+    // sucursal ni para crear administradores: eso lo bloquea el backend.
+    { key: "employees",  label: "Usuarios de su sucursal" },
     { key: "config",     label: "Configuración" },
 ];

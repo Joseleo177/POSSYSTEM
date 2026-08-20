@@ -35,6 +35,9 @@ export default function ContabilidadPage() {
  // Cada serie pertenece a un almacén (la sucursal que la factura), así que el alta de
  // series necesita la lista de almacenes.
  const [allWarehouses, setAllWarehouses] = useState([]);
+ // Las del propio usuario. Una caja solo se puede casar con una sucursal a la que se tenga
+ // acceso: ofrecer las demás sería mostrar opciones que el backend va a rechazar.
+ const [myWarehouses, setMyWarehouses] = useState([]);
 
  const loadAllSeries = useCallback(async () => {
  try {
@@ -45,8 +48,12 @@ export default function ContabilidadPage() {
 
  const loadAllWarehouses = useCallback(async () => {
  try {
- const r = await api.warehouses.getAll({ scope: "all" });
- setAllWarehouses(r.data || []);
+ const [todos, mios] = await Promise.all([
+ api.warehouses.getAll({ scope: "all" }),
+ api.warehouses.getAll(),
+ ]);
+ setAllWarehouses(todos.data || []);
+ setMyWarehouses(mios.data || []);
  } catch (e) {}
  }, []);
 
@@ -188,6 +195,7 @@ export default function ContabilidadPage() {
  activeMethods={activeMethods}
  activeBanks={activeBanks}
  methodByCode={methodByCode}
+ warehouses={myWarehouses}
  />
  );
  case "Bancos":

@@ -1,6 +1,6 @@
-const { PaymentJournal, Currency, Bank, Sale, Sequelize, sequelize } = require("../../models");
+const { PaymentJournal, Currency, Bank, Sale, Warehouse, Sequelize, sequelize } = require("../../models");
 const { localDate, TZ } = require("../reports/shared");
-const { visibleWarehouseIds } = require("../../middleware/auth");
+const { visibleWarehouseIds, isAdmin, assertWarehouseAccess } = require("../../middleware/auth");
 
 function flattenJournal(j) {
   const jj = j.toJSON ? j.toJSON() : j;
@@ -12,7 +12,8 @@ function flattenJournal(j) {
   // rate 1. getSummary ya la exponía; getAll debe hacerlo igual.
   jj.exchange_rate    = jj.Currency?.exchange_rate ?? 1;
   jj.bank_name        = jj.Bank?.name         ?? null;
-  delete jj.Currency; delete jj.Bank;
+  jj.warehouse_name   = jj.Warehouse?.name    ?? null;
+  delete jj.Currency; delete jj.Bank; delete jj.Warehouse;
   return jj;
 }
 
@@ -60,23 +61,57 @@ async function warehouseFilter(req) {
   };
 }
 
+// Qué diarios ve un empleado: los de sus sucursales más los compartidos (warehouse_id NULL),
+// que son los que sirven a toda la empresa. El admin los ve todos.
+async function journalScope(req) {
+  const allowed = await visibleWarehouseIds(req);
+  if (allowed === null) return {};
+  return {
+    [Sequelize.Op.or]: [
+      { warehouse_id: null },
+      { warehouse_id: { [Sequelize.Op.in]: allowed } },
+    ],
+  };
+}
+
+// Un diario solo se puede crear o editar sobre una sucursal propia. `null` (compartido) es
+// cosa del admin: afecta a todas las sucursales, no solo a la suya.
+async function assertJournalWarehouse(req, warehouseId) {
+  if (isAdmin(req)) return warehouseId ? parseInt(warehouseId) : null;
+
+  const allowed = await visibleWarehouseIds(req);
+  if (!warehouseId) {
+    // Sin sucursal elegida se cae en la del propio empleado; si tiene varias, hay que decidir.
+    if (allowed.length === 1) return allowed[0];
+    const e = new Error("Indica la sucursal a la que pertenece el diario"); e.status = 400; e.isOperational = true; throw e;
+  }
+  const wid = parseInt(warehouseId);
+  if (!allowed.includes(wid)) {
+    const e = new Error("No tienes acceso a esa sucursal"); e.status = 403; e.isOperational = true; throw e;
+  }
+  return wid;
+}
+
 async function getAll(req) {
   const { tenantWhere } = tenantFilter(req);
   const journals = await PaymentJournal.findAll({
-    where: tenantWhere,
+    where: { ...tenantWhere, ...(await journalScope(req)) },
     include: [
       { model: Currency, attributes: ['code', 'symbol', 'is_base', 'exchange_rate'], required: false },
-      { model: Bank,     attributes: ['name'],                                        required: false }
+      { model: Bank,     attributes: ['name'],                                        required: false },
+      { model: Warehouse, attributes: ['id', 'name'],                                 required: false }
     ],
     order: [['sort_order', 'ASC'], ['id', 'ASC']]
   });
   return { data: journals.map(flattenJournal) };
 }
 
-async function createJournal({ name, type, bank_id, color, sort_order, currency_id }) {
+async function createJournal({ name, type, bank_id, color, sort_order, currency_id, warehouse_id }, req) {
   if (!name) { const e = new Error("El nombre es requerido"); e.status = 400; throw e; }
+  const wid = await assertJournalWarehouse(req, warehouse_id);
   const journal = await PaymentJournal.create({
     name,
+    warehouse_id: wid,
     type:        type        || null,
     bank_id:     bank_id     || null,
     color:       color       || "#555555",
@@ -86,11 +121,15 @@ async function createJournal({ name, type, bank_id, color, sort_order, currency_
   return { data: journal };
 }
 
-async function updateJournal(id, { name, type, bank_id, color, active, sort_order, currency_id }) {
+async function updateJournal(id, { name, type, bank_id, color, active, sort_order, currency_id, warehouse_id }, req) {
   const journal = await PaymentJournal.findByPk(id);
   if (!journal) { const e = new Error("Diario no encontrado"); e.status = 404; throw e; }
+  // No se edita un diario de otra sucursal; los compartidos son del admin.
+  await assertWarehouseAccess(req, journal.warehouse_id, { optional: true });
+  const wid = warehouse_id !== undefined ? await assertJournalWarehouse(req, warehouse_id) : journal.warehouse_id;
   await journal.update({
     name,
+    warehouse_id: wid,
     type:        type        || null,
     bank_id:     bank_id     || null,
     color:       color       || "#555555",
@@ -101,11 +140,12 @@ async function updateJournal(id, { name, type, bank_id, color, active, sort_orde
   return { data: journal };
 }
 
-async function deleteJournal(id) {
+async function deleteJournal(id, req) {
   const count = await Sale.count({ where: { payment_journal_id: id } });
   if (count > 0) { const e = new Error("No se puede eliminar: tiene ventas asociadas"); e.status = 400; throw e; }
   const journal = await PaymentJournal.findByPk(id);
   if (!journal) { const e = new Error("Diario no encontrado"); e.status = 404; throw e; }
+  await assertWarehouseAccess(req, journal.warehouse_id, { optional: true });
   await journal.destroy();
   return { message: "Diario eliminado" };
 }
@@ -175,7 +215,7 @@ async function getSummary(req) {
       { model: Currency, attributes: ['code', 'symbol', 'is_base', 'exchange_rate'], required: false },
       { model: Bank,     attributes: ['name'],                                        required: false }
     ],
-    where: { active: true, ...tenantWhere },
+    where: { active: true, ...tenantWhere, ...(await journalScope(req)) },
     order: [['sort_order', 'ASC'], ['id', 'ASC']]
   });
 
@@ -211,6 +251,8 @@ async function getMovements(req) {
     ],
   });
   if (!journal) { const e = new Error("Diario no encontrado"); e.status = 404; throw e; }
+  // Un diario de otra sucursal no se abre ni para mirar: sus movimientos son su caja.
+  await assertWarehouseAccess(req, journal.warehouse_id, { optional: true });
 
   const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;
   const safeFrom = sd(date_from);
@@ -371,9 +413,10 @@ async function getBankMovements(req) {
   const company_id = req.employee?.company_id ?? null;
   const scoped = !!company_id;
 
-  // Todos los diarios activos del banco (filtrado por empresa)
+  // Todos los diarios activos del banco (filtrado por empresa y por sucursal: un banco
+  // puede tener cajas de varias tiendas y cada una solo suma las suyas)
   const bankJournals = await PaymentJournal.findAll({
-    where: { bank_id: bankId, active: true, ...(scoped ? { company_id } : {}) },
+    where: { bank_id: bankId, active: true, ...(scoped ? { company_id } : {}), ...(await journalScope(req)) },
     include: [
       { model: Currency, attributes: ['code', 'symbol', 'is_base', 'exchange_rate'] },
       { model: Bank,     attributes: ['name', 'id'] },
