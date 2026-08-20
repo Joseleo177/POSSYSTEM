@@ -67,7 +67,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
             <thead className="sticky top-0 z-10">
               <tr>
                 <th className="w-12" />
-                {["Nombre del Diario", "Método", "Banco / Entidad", "Moneda", "Estado", can("config") && "Acciones"].filter(Boolean).map(h => (
+                {["Nombre del Diario", "Método", "Banco / Entidad", "Sucursal", "Moneda", "Estado", can("config") && "Acciones"].filter(Boolean).map(h => (
                   <th key={h} className={h === "Acciones" ? "text-right pr-6" : h === "Moneda" || h === "Estado" ? "text-center" : "text-left"}>
                     {h}
                   </th>
@@ -102,6 +102,11 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
                     </td>
                     <td>
                       <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest">{j.bank_name || j.bank || "—"}</span>
+                    </td>
+                    <td>
+                      {j.warehouse_name
+                        ? <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest">{j.warehouse_name}</span>
+                        : <span className="badge badge-neutral shadow-none">Compartido</span>}
                     </td>
                     <td className="text-center">
                       {j.currency_code ? (
@@ -170,7 +175,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <div className="label mb-1">Método de pago</div>
-            {/* `m.icon` no existe en payment_methods: la plantilla anterior dejaba un
+            {/* payment_methods no tiene columna `icon`: la plantilla anterior dejaba un
                 hueco delante de cada nombre. */}
             <CustomSelect
               value={form.type || ""}
@@ -198,16 +203,19 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
         {/* Sucursal dueña de la caja. "Compartido" es lo correcto para una cuenta bancaria
             de la empresa donde entran cobros de todas las tiendas; una caja de efectivo, en
             cambio, es de una sola. Solo se pregunta si hay más de una sucursal. */}
-        {warehouses.length > 1 && (
+        {(warehouses.length > 1 || can("admin")) && (
           <div className="mb-3">
             <div className="label mb-1">Sucursal</div>
             <CustomSelect
               value={form.warehouse_id ? String(form.warehouse_id) : ""}
               onChange={v => setForm(p => ({ ...p, warehouse_id: v || null }))}
               options={[
-                { value: "", label: "— Compartido (todas las sucursales)" },
+                // Compartido alcanza a sucursales que un encargado no administra: el backend
+                // se lo rechaza, así que tampoco se le ofrece.
+                ...(can("admin") ? [{ value: "", label: "— Compartido (todas las sucursales)" }] : []),
                 ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
               ]}
+              placeholder="Seleccionar sucursal..."
               className="w-full"
             />
             <div className="text-[10px] font-bold text-content-subtle mt-1 opacity-60">
