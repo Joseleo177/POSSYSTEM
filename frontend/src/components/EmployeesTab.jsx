@@ -20,6 +20,8 @@ export default function EmployeesTab({ notify }) {
     const iAmAdmin = !!me?.permissions?.all;
     const [activeTab, setActiveTab] = useState("employees");
     const [warehouses, setWarehouses] = useState([]);
+    // Módulos y acciones tal como los publica el backend: la matriz se dibuja con esto.
+    const [catalog, setCatalog] = useState([]);
 
     // ── Employees ──────────────────────────────────────────────
     const [employees, setEmployees] = useState([]);
@@ -35,14 +37,16 @@ export default function EmployeesTab({ notify }) {
         try {
             // La lista de almacenes ya viene recortada a los del usuario: un encargado solo
             // puede repartir su propia sucursal.
-            const [eRes, rRes, wRes] = await Promise.all([
+            const [eRes, rRes, wRes, pRes] = await Promise.all([
                 api.employees.getAll(),
                 api.employees.getRoles(),
                 api.warehouses.getAll(),
+                api.employees.getPermissionCatalog(),
             ]);
             setEmployees(eRes.data);
             setRoles(rRes.data);
             setWarehouses(wRes.data || []);
+            setCatalog(pRes.data || []);
         } catch (e) { notify(e.message, "err"); }
     };
 
@@ -94,6 +98,18 @@ export default function EmployeesTab({ notify }) {
         setRolePerms(map);
     }, [roles]);
 
+    // Marca o desmarca todas las acciones de un módulo de una vez: con 46 casillas, ir una
+    // por una para dar "acceso completo a Ventas" es donde se cometen los errores.
+    const toggleModule = (roleId, mod) => {
+        const keys = mod.actions.map(a => `${mod.key}.${a.key}`);
+        const todas = keys.every(k => rolePerms[roleId]?.[k]);
+        setRolePerms(prev => {
+            const next = { ...(prev[roleId] || {}) };
+            for (const k of keys) { if (todas) delete next[k]; else next[k] = true; }
+            return { ...prev, [roleId]: next };
+        });
+    };
+
     const togglePerm = (roleId, key) => {
         setRolePerms(prev => ({
             ...prev,
@@ -104,7 +120,12 @@ export default function EmployeesTab({ notify }) {
     const saveRole = async (role) => {
         setSavingRole(role.id);
         try {
-            await api.employees.updateRole(role.id, { permissions: rolePerms[role.id] });
+            // Solo las claves granulares: los permisos viejos siguen en la base como respaldo
+            // de la migración, y reenviarlos volvería a conceder todo lo que se acaba de quitar.
+            const soloNuevos = Object.fromEntries(
+                Object.entries(rolePerms[role.id] || {}).filter(([k, v]) => v && k.includes("."))
+            );
+            await api.employees.updateRole(role.id, { permissions: soloNuevos });
             notify(`Permisos de "${role.label}" actualizados`);
             await load();
         } catch (e) { notify(e.message, "err"); }
@@ -238,27 +259,55 @@ export default function EmployeesTab({ notify }) {
                                 {isAdmin ? (
                                     <p className="text-xs text-content-subtle">El rol Administrador tiene acceso total al sistema y no puede modificarse.</p>
                                 ) : (
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                        {PERM_LABELS.map(({ key, label }) => (
-                                            <label
-                                                key={key}
-                                                className={`flex items-center gap-2.5 p-3 rounded-lg border cursor-pointer transition-colors ${
-                                                    perms[key]
-                                                        ? "bg-brand-500/10 border-brand-500/30"
-                                                        : "bg-surface-2 dark:bg-surface-dark-2 border-border/30 dark:border-white/5 hover:border-brand-500/20"
-                                                }`}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={!!perms[key]}
-                                                    onChange={() => togglePerm(role.id, key)}
-                                                    className="accent-brand-500 w-4 h-4 shrink-0"
-                                                />
-                                                <span className={`text-[11px] font-bold ${perms[key] ? "text-brand-600 dark:text-brand-400" : "text-content-subtle"}`}>
-                                                    {label}
-                                                </span>
-                                            </label>
-                                        ))}
+                                    <div className="space-y-3">
+                                        {catalog.map(mod => {
+                                            const keys  = mod.actions.map(a => `${mod.key}.${a.key}`);
+                                            const dadas = keys.filter(k => perms[k]).length;
+                                            return (
+                                                <div key={mod.key} className="rounded-xl border border-border/30 dark:border-white/5 overflow-hidden">
+                                                    <div className="px-3 py-2 flex items-center justify-between gap-3 bg-surface-2/60 dark:bg-white/[0.03] border-b border-border/20 dark:border-white/5">
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <span className="text-[11px] font-black uppercase tracking-tight text-content dark:text-white truncate">{mod.label}</span>
+                                                            <span className={`text-[9px] font-black uppercase tracking-widest ${dadas ? "text-brand-500" : "text-content-subtle opacity-50"}`}>
+                                                                {dadas}/{keys.length}
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleModule(role.id, mod)}
+                                                            className="text-[9px] font-black uppercase tracking-widest text-brand-500 hover:underline shrink-0"
+                                                        >
+                                                            {dadas === keys.length ? "Quitar todo" : "Dar todo"}
+                                                        </button>
+                                                    </div>
+                                                    <div className="p-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5">
+                                                        {mod.actions.map(act => {
+                                                            const k = `${mod.key}.${act.key}`;
+                                                            return (
+                                                                <label
+                                                                    key={k}
+                                                                    className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border cursor-pointer transition-colors ${
+                                                                        perms[k]
+                                                                            ? "bg-brand-500/10 border-brand-500/30"
+                                                                            : "bg-surface-2 dark:bg-surface-dark-2 border-border/30 dark:border-white/5 hover:border-brand-500/20"
+                                                                    }`}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={!!perms[k]}
+                                                                        onChange={() => togglePerm(role.id, k)}
+                                                                        className="accent-brand-500 w-4 h-4 shrink-0"
+                                                                    />
+                                                                    <span className={`text-[10px] font-bold leading-tight ${perms[k] ? "text-brand-600 dark:text-brand-400" : "text-content-subtle"}`}>
+                                                                        {act.label}
+                                                                    </span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>

@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const { Employee, Role, EmployeeWarehouse, Warehouse, Sequelize } = require("../models");
 const { isAdmin, employeeWarehouseIds } = require("../middleware/auth");
+const { MODULES, ALL_KEYS } = require("../config/permissions");
 
 const { Op } = Sequelize;
 
@@ -83,6 +84,13 @@ const getAll = async (req, res) => {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener empleados" });
   }
+};
+
+// GET /api/employees/permissions — catálogo de módulos y acciones.
+// La pantalla de Roles se dibuja con esto: agregar un permiso al catálogo lo hace aparecer
+// en la interfaz sin tocar el frontend.
+const getPermissionCatalog = async (req, res) => {
+  res.json({ ok: true, data: MODULES });
 };
 
 // GET /api/employees/roles
@@ -227,8 +235,16 @@ const updateRole = async (req, res) => {
       return res.status(400).json({ ok: false, message: "No se puede modificar el rol admin" });
 
     const updates = {};
-    if (label)       updates.label       = label;
-    if (permissions) updates.permissions = permissions;
+    if (label) updates.label = label;
+    if (permissions) {
+      // Se guardan solo las claves del catálogo: una clave inventada quedaría muerta en la
+      // base y nadie sabría por qué ese permiso no hace nada.
+      const limpio = {};
+      for (const [k, v] of Object.entries(permissions)) {
+        if (v && ALL_KEYS.includes(k)) limpio[k] = true;
+      }
+      updates.permissions = limpio;
+    }
 
     await role.update(updates);
     res.json({ ok: true, data: role });
@@ -238,4 +254,4 @@ const updateRole = async (req, res) => {
   }
 };
 
-module.exports = { getAll, getRoles, create, update, remove, updateRole };
+module.exports = { getAll, getRoles, create, update, remove, updateRole, getPermissionCatalog };

@@ -175,6 +175,7 @@ export const api = {
   },
   employees: {
     getAll:      ()          => request("/employees"),
+    getPermissionCatalog: () => request("/employees/permissions"),
     getRoles:    ()          => request("/employees/roles"),
     create:      (body)      => request("/employees",            { method: "POST",   body: JSON.stringify(body) }),
     update:      (id, body)  => request(`/employees/${id}`,      { method: "PUT",    body: JSON.stringify(body) }),

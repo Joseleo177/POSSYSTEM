@@ -11,13 +11,13 @@ const customerValidations = [
   validateInput
 ];
 
-router.get("/",               auth, ctrl.getAll);
-router.get("/:id",            auth, ctrl.getOne);
-router.get("/:id/purchases",  auth, ctrl.getPurchases);
-router.post("/",              auth, permit("customers", "sales", "config"), customerValidations, ctrl.create);
-router.put("/:id",            auth, permit("customers", "sales", "config"), customerValidations, ctrl.update);
-router.patch("/:id/credit",          auth, permit("admin", "config"),              ctrl.adjustCredit);
-router.post("/:id/credit-refund",    auth, permit("admin", "config", "sales"),   ctrl.creditRefund);
-router.delete("/:id",         auth, permit("admin"),                        ctrl.remove);
+router.get("/",               auth, permit("customers.view", "sales.create", "purchases.view"), ctrl.getAll);
+router.get("/:id",            auth, permit("customers.view", "sales.create", "purchases.view"), ctrl.getOne);
+router.get("/:id/purchases",  auth, permit("customers.view", "sales.create", "purchases.view"), ctrl.getPurchases);
+router.post("/",              auth, permit("customers.create"), customerValidations, ctrl.create);
+router.put("/:id",            auth, permit("customers.edit"), customerValidations, ctrl.update);
+router.patch("/:id/credit",          auth, permit("customers.credit"),              ctrl.adjustCredit);
+router.post("/:id/credit-refund",    auth, permit("customers.credit"),   ctrl.creditRefund);
+router.delete("/:id",         auth, permit("customers.delete"),                        ctrl.remove);
 
 module.exports = router;

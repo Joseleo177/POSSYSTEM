@@ -2,12 +2,12 @@ const router = require("express").Router();
 const ctrl   = require("../controllers/paymentJournals");
 const { auth, permit } = require("../middleware/auth");
 
-router.get("/",                        auth, ctrl.getAll);
-router.get("/summary",                 auth, ctrl.summary);
-router.get("/bank/:bankId/movements",  auth, ctrl.bankMovements);
-router.get("/:id/movements",           auth, ctrl.movements);
-router.post("/",             auth, permit("config"), ctrl.create);
-router.put("/:id",           auth, permit("config"), ctrl.update);
-router.delete("/:id",        auth, permit("config"), ctrl.remove);
+router.get("/",                        auth, permit("journals.view", "sales.create", "purchases.pay", "accounting.view"), ctrl.getAll);
+router.get("/summary",                 auth, permit("journals.view"), ctrl.summary);
+router.get("/bank/:bankId/movements",  auth, permit("journals.view"), ctrl.bankMovements);
+router.get("/:id/movements",           auth, permit("journals.view"), ctrl.movements);
+router.post("/",             auth, permit("journals.manage"), ctrl.create);
+router.put("/:id",           auth, permit("journals.manage"), ctrl.update);
+router.delete("/:id",        auth, permit("journals.manage"), ctrl.remove);
 
 module.exports = router;

@@ -10,34 +10,34 @@ const ownWarehouse = warehouseAccess();
 
 // ── Almacenes ─────────────────────────────────────────────────
 // Crear, editar, borrar y asignar usuarios es administración del almacén: solo admin.
-router.get   ("/",                   wh.getAll);
-router.post  ("/",                   permit("admin"), wh.create);
-router.put   ("/:id",                permit("admin"), wh.update);
-router.delete("/:id",                permit("admin"), wh.remove);
+router.get   ("/", permit("inventory.view"),                   wh.getAll);
+router.post  ("/",                   permit("inventory.manage"), wh.create);
+router.put   ("/:id",                permit("inventory.manage"), wh.update);
+router.delete("/:id",                permit("inventory.manage"), wh.remove);
 
 // ── Stock ─────────────────────────────────────────────────────
-router.get  ("/:id/stock",           ownWarehouse, wh.getStock);
-router.post ("/:id/stock",           permit("inventory", "admin", "config"), ownWarehouse, wh.addStock);
-router.put  ("/:id/stock/:productId",permit("inventory", "admin", "config"), ownWarehouse, wh.setStock);
-router.delete("/:id/stock/:productId",permit("admin", "config"),             ownWarehouse, wh.removeStock);
-router.get  ("/:id/products",        ownWarehouse, wh.getProducts);
+router.get  ("/:id/stock", permit("inventory.view"),           ownWarehouse, wh.getStock);
+router.post ("/:id/stock",           permit("inventory.adjust"), ownWarehouse, wh.addStock);
+router.put  ("/:id/stock/:productId",permit("inventory.adjust"), ownWarehouse, wh.setStock);
+router.delete("/:id/stock/:productId",permit("inventory.adjust"),             ownWarehouse, wh.removeStock);
+router.get  ("/:id/products", permit("inventory.view"),        ownWarehouse, wh.getProducts);
 
 // ── Empleados por almacén ─────────────────────────────────────
 router.get  ("/employee/:employeeId", wh.getByEmployee);
-router.put  ("/:id/employees",        permit("admin"), wh.assignEmployees);
+router.put  ("/:id/employees",        permit("inventory.manage"), wh.assignEmployees);
 
 // ── Transferencias ────────────────────────────────────────────
 // El origen debe ser un almacén propio; el destino puede ser cualquiera de la empresa.
-router.post ("/transfer",            permit("inventory", "admin", "config"),
+router.post ("/transfer",            permit("inventory.transfer"),
                                      warehouseAccess(req => req.body?.from_warehouse_id),
                                      wh.transfer);
-router.get  ("/transfers",           wh.getTransfers);
+router.get  ("/transfers", permit("inventory.view"),           wh.getTransfers);
 
 // ── Sesiones de Movimiento Manual ─────────────────────────────
-router.get  ("/:id/sessions",                                permit("inventory", "admin", "config"), ownWarehouse, wh.getSessions);
-router.get  ("/:id/sessions/active",                         permit("inventory", "admin", "config"), ownWarehouse, wh.getActiveSession);
-router.post ("/:id/sessions",                                permit("inventory", "admin", "config"), ownWarehouse, wh.openSession);
-router.post ("/:id/sessions/:sessionId/lines",               permit("inventory", "admin", "config"), ownWarehouse, wh.addLine);
-router.patch("/:id/sessions/:sessionId/close",               permit("inventory", "admin", "config"), ownWarehouse, wh.closeSession);
+router.get  ("/:id/sessions",                                permit("inventory.adjust"), ownWarehouse, wh.getSessions);
+router.get  ("/:id/sessions/active",                         permit("inventory.adjust"), ownWarehouse, wh.getActiveSession);
+router.post ("/:id/sessions",                                permit("inventory.adjust"), ownWarehouse, wh.openSession);
+router.post ("/:id/sessions/:sessionId/lines",               permit("inventory.adjust"), ownWarehouse, wh.addLine);
+router.patch("/:id/sessions/:sessionId/close",               permit("inventory.adjust"), ownWarehouse, wh.closeSession);
 
 module.exports = router;

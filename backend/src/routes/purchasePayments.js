@@ -4,6 +4,6 @@ const ctrl = require("../controllers/purchasePayments");
 
 router.use(auth);
 
-router.delete("/:id", permit("admin", "products"), ctrl.removePayment);
+router.delete("/:id", permit("purchases.pay"), ctrl.removePayment);
 
 module.exports = router;

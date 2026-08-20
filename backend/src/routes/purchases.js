@@ -10,17 +10,17 @@ router.use(auth);
 // vuelve a validarlo, y ahí ya no puede estar vacío.
 const destWarehouse = warehouseAccess(req => req.body?.warehouse_id, { optional: true });
 
-router.get("/",     permit("products", "inventory"), ctrl.getAll);
-router.get("/:id",  permit("products", "inventory"), ctrl.getOne);
-router.post("/",    permit("products", "inventory"), destWarehouse, ctrl.create);
-router.patch("/:id",         permit("products", "inventory"), destWarehouse, ctrl.updateDraft);
-router.patch("/:id/confirm", permit("products", "inventory"), ctrl.confirm);
-router.patch("/:id/lots",    permit("products", "inventory"), ctrl.updateLots);
-router.patch("/:id/receive", permit("products", "inventory"), ctrl.receive);
-router.delete("/:id", permit("admin", "products"),  ctrl.remove);
+router.get("/",     permit("purchases.view"), ctrl.getAll);
+router.get("/:id",  permit("purchases.view"), ctrl.getOne);
+router.post("/",    permit("purchases.create"), destWarehouse, ctrl.create);
+router.patch("/:id",         permit("purchases.edit"), destWarehouse, ctrl.updateDraft);
+router.patch("/:id/confirm", permit("purchases.edit"), ctrl.confirm);
+router.patch("/:id/lots",    permit("purchases.edit"), ctrl.updateLots);
+router.patch("/:id/receive", permit("purchases.receive"), ctrl.receive);
+router.delete("/:id", permit("purchases.delete"),  ctrl.remove);
 
 // Pagos de compras
-router.get("/:id/payments",  permit("products", "inventory"), ppCtrl.getPayments);
-router.post("/:id/payments", permit("products", "inventory"), ppCtrl.createPayment);
+router.get("/:id/payments",  permit("purchases.view"), ppCtrl.getPayments);
+router.post("/:id/payments", permit("purchases.pay"), ppCtrl.createPayment);
 
 module.exports = router;

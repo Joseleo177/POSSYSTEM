@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const { tenantStorage } = require("../utils/tenantStorage");
 const { getCompanyStatus, setCompanyStatus } = require("../utils/companyStatusCache");
+const { LEGACY_MAP } = require("../config/permissions");
 
 const SECRET = process.env.JWT_SECRET;
 if (!SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -68,12 +69,37 @@ const auth = async (req, res, next) => {
 };
 
 
+// ¿Este empleado tiene ESTE permiso? Entiende los dos formatos:
+//   · "sales.create" — el granular, el que usan las rutas desde ahora
+//   · "sales"        — el viejo, un booleano por módulo entero
+//
+// La compatibilidad no es de adorno: un rol que todavía no pasó por la migración, o creado
+// por una versión anterior del sistema, tiene que seguir trabajando igual. Un permiso viejo
+// de módulo habilita todas las acciones de ese módulo (LEGACY_MAP).
+const hasPermission = (permissions, perm) => {
+  if (!permissions) return false;
+  if (permissions.all) return true;              // administrador
+  if (permissions[perm]) return true;            // concedido tal cual se pidió
+
+  if (perm === "admin") return false;           // solo el admin, y ya se comprobó arriba
+
+  // Pedido granular contra un rol todavía en formato viejo: vale el permiso del módulo.
+  if (perm.includes(".")) {
+    const modulo = perm.split(".")[0];
+    if (permissions[modulo] && (LEGACY_MAP[modulo] || []).includes(perm)) return true;
+    // El permiso `config` abría medio sistema; mientras el rol no se migre, se respeta.
+    if (permissions.config && (LEGACY_MAP.config || []).includes(perm)) return true;
+    return false;
+  }
+
+  // Pedido viejo contra un rol ya migrado: alcanza con tener alguna acción del módulo.
+  return (LEGACY_MAP[perm] || []).some(k => permissions[k]);
+};
+
 // Verifica que el empleado tenga alguno de los permisos indicados
 const permit = (...perms) => (req, res, next) => {
   const { permissions } = req.employee;
-  if (permissions?.all) return next();                        // admin pasa todo
-  const ok = perms.some((p) => permissions?.[p]);
-  if (ok) return next();
+  if (perms.some((p) => hasPermission(permissions, p))) return next();
   res.status(403).json({ ok: false, message: "Sin permiso para esta acción" });
 };
 
@@ -145,6 +171,6 @@ const warehouseAccess = (getId = (req) => req.params.id, opts = {}) => async (re
 };
 
 module.exports = {
-  auth, permit, warehouseAccess, assertWarehouseAccess,
+  auth, permit, hasPermission, warehouseAccess, assertWarehouseAccess,
   visibleWarehouseIds, employeeWarehouseIds, isAdmin,
 };

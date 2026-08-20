@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
+import { hasPermission } from "../constants/permissions";
 import { initSSE, closeSSE, onSSE } from "../services/sse";
 import { applyBrandColor, clearBrandColor, rememberBrandColor, applyRememberedBrandColor } from "../helpers/brandColor";
 
@@ -26,13 +27,9 @@ export function AppProvider({ children }) {
   const login  = (emp) => setEmployee(emp);
   const logout = () => { localStorage.removeItem("pos_token"); setEmployee(null); };
 
-  const can = useCallback((perm) => {
-    if (!employee) return false;
-    if (employee.permissions?.all) return true;
-    if (perm === "admin")     return !!employee.permissions?.all;
-    if (perm === "inventory") return !!(employee.permissions?.inventory || employee.permissions?.inventory_view);
-    return !!employee.permissions?.[perm];
-  }, [employee]);
+  // Delegado en el mismo evaluador que usa el backend: si la pantalla y la API no coinciden,
+  // el usuario ve botones que después le rebotan.
+  const can = useCallback((perm) => hasPermission(employee?.permissions, perm), [employee]);
 
   // ── Navegación global ──────────────────────────────────────
   const [pendingNav, setPendingNav] = useState(null);
