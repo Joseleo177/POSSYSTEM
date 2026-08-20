@@ -106,7 +106,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
         ? `Movimiento Manual · ${selectedWarehouse?.name || ""}`
         : subTab === "stock"
         ? `Stock · ${selectedWarehouse?.name || ""}`
-        : "Gestión de Almacenes";
+        : "Almacenes / Sucursales";
 
     return (
         <Page
