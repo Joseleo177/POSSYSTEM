@@ -20,6 +20,7 @@ export function usePublicCatalog(token) {
     const [store, setStore] = useState(null);
     const [currencies, setCurrencies] = useState([]);
     const [categories, setCategories] = useState([]);
+    const [warehouses, setWarehouses] = useState([]);
     const [products, setProducts] = useState([]);
     const [total, setTotal] = useState(0);
     const [search, setSearch] = useState("");
@@ -39,6 +40,17 @@ export function usePublicCatalog(token) {
     const [cartOpen, setCartOpen] = useState(false);
     const [showCats, setShowCats] = useState(false);
     const [delivery, setDelivery] = useState("");
+
+    // Sucursal elegida. El precio es de la empresa pero el stock es de cada local, así que
+    // toda la pantalla cuelga de esto: qué productos se listan y contra qué existencias se
+    // valida el pedido. Se recuerda por token —quien vuelve entra directo a su tienda de
+    // siempre— y si esa sucursal deja de publicarse, `branch` queda en null y se vuelve a
+    // preguntar en vez de mostrarle el catálogo de otra.
+    const branchKey = `catalog_branch_${token}`;
+    const [branchId, setBranchId] = useState(() => {
+        try { return localStorage.getItem(`catalog_branch_${token}`) || ""; }
+        catch { return ""; }
+    });
 
     // Identidad del visitante. Se recuerda en el navegador para que no tenga que
     // escribir su cédula cada vez que abre el enlace.
@@ -169,6 +181,28 @@ export function usePublicCatalog(token) {
     // la cédula para mirar precios no aportaría nada.
     // `store` null todavía = cabecera cargando; no se decide nada hasta tenerla.
     const gated = !!store && ordersEnabled && !identity;
+
+    // Con una sola tienda publicada no hay nada que preguntar. Con ninguna —la empresa no
+    // marcó ningún almacén como local de venta— se sigue con el stock de la empresa, que es
+    // como funcionaba el catálogo antes de que existieran las sucursales.
+    const branch = warehouses.find(w => String(w.id) === String(branchId))
+        || (warehouses.length === 1 ? warehouses[0] : null);
+    // `switching` es volver a la puerta desde la cabecera. Es un estado aparte y no un
+    // branchId vacío para no perder cuál era la tienda actual: hace falta para saber si el
+    // cliente terminó cambiándose o se quedó donde estaba.
+    const [switchingBranch, setSwitchingBranch] = useState(false);
+    const branchGate = !!store && warehouses.length > 1 && (!branch || switchingBranch);
+
+    const chooseBranch = (id) => {
+        // Cambiar de tienda cambia el catálogo: lo que estaba en el carrito puede no existir
+        // en la otra. Se vacía en vez de dejar que el pedido lo rechace línea por línea.
+        if (branch && String(branch.id) !== String(id)) setCart([]);
+        setBranchId(String(id));
+        setSwitchingBranch(false);
+        setCartOpen(false);
+        try { localStorage.setItem(branchKey, String(id)); } catch { /* modo privado */ }
+    };
+
     const cartTotal = cart.reduce((sum, it) => sum + parseFloat(it.price) * (parseFloat(it.qty) || 0), 0);
 
     // Paso de cantidad: las unidades contables van de uno en uno; peso y volumen admiten
@@ -252,6 +286,9 @@ export function usePublicCatalog(token) {
                 customer_document: identity.document,
                 note: delivery.trim(),
                 idempotency_key: orderKeyRef.current,
+                // El pedido nace en la tienda que el cliente eligió: es contra ese stock que
+                // se valida y es esa caja la que lo verá.
+                warehouse_id: branch?.id || null,
             });
             orderKeyRef.current = null;
             setPlacedOrder({ id: r.data.id, total: r.data.total });
@@ -291,6 +328,7 @@ export function usePublicCatalog(token) {
                 if (r.data.store?.brand_color) applyBrandColor(r.data.store.brand_color);
                 setCurrencies(r.data.currencies || []);
                 setCategories(r.data.categories || []);
+                setWarehouses(r.data.warehouses || []);
             })
             .catch(() => alive && setError("Este catálogo no está disponible."));
         return () => { alive = false; };
@@ -299,12 +337,14 @@ export function usePublicCatalog(token) {
     // Productos: se recargan al buscar o cambiar de categoría (con debounce en la búsqueda).
     // Mientras el visitante no se identifique no se pide nada: la pantalla que vería son
     // los datos de la tienda, no un catálogo.
+    // Tampoco antes de tener la tienda: hasta que no se sepa si hay sucursales, pedir
+    // productos sería listar el stock de todas para reemplazarlo enseguida.
     useEffect(() => {
-        if (gated) return;
+        if (!store || gated || branchGate) return;
         const id = ++reqRef.current;
         setLoading(true);
         const t = setTimeout(() => {
-            publicApi.getProducts(token, { search, category_id: category, limit: PAGE_SIZE, offset: 0 })
+            publicApi.getProducts(token, { search, category_id: category, limit: PAGE_SIZE, offset: 0, warehouse_id: branch?.id || "" })
                 .then(r => {
                     if (id !== reqRef.current) return; // llegó tarde, ya hay otra búsqueda
                     setProducts(r.data.products || []);
@@ -314,7 +354,7 @@ export function usePublicCatalog(token) {
                 .finally(() => id === reqRef.current && setLoading(false));
         }, search ? 300 : 0);
         return () => clearTimeout(t);
-    }, [token, search, category, gated]);
+    }, [token, search, category, gated, store, branchGate, branch?.id]);
 
     // Una carga al entrar para que el distintivo de "Mis pedidos" diga algo desde el
     // principio. No se repite sola: quien esté esperando abre el panel y ve el estado
@@ -326,11 +366,11 @@ export function usePublicCatalog(token) {
     const loadMore = useCallback(() => {
         if (loadingMore || products.length >= total) return;
         setLoadingMore(true);
-        publicApi.getProducts(token, { search, category_id: category, limit: PAGE_SIZE, offset: products.length })
+        publicApi.getProducts(token, { search, category_id: category, limit: PAGE_SIZE, offset: products.length, warehouse_id: branch?.id || "" })
             .then(r => setProducts(p => [...p, ...(r.data.products || [])]))
             .catch(() => { })
             .finally(() => setLoadingMore(false));
-    }, [token, search, category, products.length, total, loadingMore]);
+    }, [token, search, category, products.length, total, loadingMore, branch?.id]);
 
     return {
         // tema
@@ -340,6 +380,8 @@ export function usePublicCatalog(token) {
         search, setSearch, category, setCategory,
         loading, loadingMore, loadMore,
         baseCur, altCur, fmt, ordersEnabled, gated,
+        // sucursal
+        warehouses, branch, branchGate, chooseBranch, openBranchGate: () => setSwitchingBranch(true),
         // carrito
         cart, cartTotal, cartOpen, setCartOpen,
         addToCart, changeQty, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,

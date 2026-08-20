@@ -13,6 +13,7 @@ export default function StoreHeader({
     search, setSearch,
     categories, category, setCategory,
     showCats, setShowCats,
+    branch, canChangeBranch, onChangeBranch,
 }) {
     return (
         <header className="bg-surface dark:bg-surface-dark-2 border-b border-border dark:border-white/5 sticky top-0 z-20">
@@ -48,6 +49,20 @@ export default function StoreHeader({
                             <p className="text-[12px] sm:text-[13px] font-medium text-content-muted truncate mt-0.5">
                                 {store.slogan}
                             </p>
+                        )}
+                        {/* Con varias tiendas, cuál se está viendo tiene que estar a la vista
+                            siempre: lo que aparece agotado depende de eso. Con una sola no se
+                            muestra —no hay nada que distinguir— y el nombre repetiría la marca. */}
+                        {branch && canChangeBranch && (
+                            <button
+                                onClick={onChangeBranch}
+                                className="mt-1.5 h-7 pl-2 pr-2.5 rounded-full bg-brand-500/10 border border-brand-500/25 flex items-center gap-1.5 text-brand-500 hover:bg-brand-500/15 active:scale-95 transition-all max-w-full"
+                                title="Cambiar de tienda"
+                            >
+                                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                <span className="text-[10px] font-black uppercase tracking-widest truncate">{branch.name}</span>
+                                <svg className="w-3 h-3 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+                            </button>
                         )}
                     </div>
                 </div>

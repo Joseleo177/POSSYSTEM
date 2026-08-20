@@ -1,6 +1,8 @@
 const { Return, ReturnItem, Sale, Customer, Employee } = require("../models");
 const { Op } = require("sequelize");
 const { visibleWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
+const annulReturn = require("../services/returns/annulReturn");
+const { broadcast } = require("../services/sseService");
 
 exports.getAll = async (req, res) => {
   try {
@@ -59,5 +61,17 @@ exports.getAll = async (req, res) => {
     res.json({ data, total: count, page: parseInt(page), pages: Math.ceil(count / parseInt(limit)) });
   } catch (e) {
     res.status(500).json({ ok: false, message: e.message });
+  }
+};
+
+// PUT /api/credit-notes/:id/annul — deshace la devolución sin borrar el documento.
+exports.annul = async (req, res) => {
+  try {
+    const result = await annulReturn(parseInt(req.params.id), { employeeId: req.employee?.id ?? null }, req);
+    // El stock cambió: las cajas abiertas tienen que enterarse.
+    broadcast(req.employee?.company_id ?? 0, "products:updated", {});
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    res.status(e.status || 500).json({ ok: false, message: e.message });
   }
 };

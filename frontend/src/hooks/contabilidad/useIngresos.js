@@ -33,7 +33,9 @@ export function useIngresos({ notify, journals }) {
     useEffect(() => {
         api.warehouses.getAll()
             .then(r => {
-                const list = r.data || [];
+                // Un depósito no maneja dinero: los movimientos se cargan contra el almacén
+                // que atiende público.
+                const list = (r.data || []).filter(w => w.sells !== false);
                 setWarehouses(list);
                 if (list.length === 1) setForm(p => p.warehouse_id ? p : { ...p, warehouse_id: String(list[0].id) });
             })

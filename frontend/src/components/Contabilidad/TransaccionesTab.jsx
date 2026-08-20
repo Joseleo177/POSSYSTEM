@@ -194,7 +194,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                                 <button onClick={() => setReceiptSale(sale)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 active:scale-90" title="Ver Recibo">
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                                 </button>
-                                                {(sale.status === 'pagado' || sale.status === 'parcial' || sale.status === 'devuelto') && (
+                                                {(sale.status === 'pagado' || sale.status === 'parcial') && (
                                                     <button onClick={() => openReturnModal(sale)} disabled={loadingReturn === sale.id} className="p-2 rounded-xl transition-all text-content-subtle hover:text-warning hover:bg-warning/10 active:scale-90 disabled:opacity-40" title="Devolver">
                                                         {loadingReturn === sale.id
                                                             ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>

@@ -1,4 +1,4 @@
-const { Payment, Sale, Return, sequelize } = require("./shared");
+const { Payment, Sale, Return, Sequelize, sequelize } = require("./shared");
 
 module.exports = async function removePayment(id) {
   const t = await sequelize.transaction();
@@ -12,7 +12,11 @@ module.exports = async function removePayment(id) {
     await payment.destroy({ transaction: t });
 
     const remainingPaid = parseFloat(await Payment.sum("amount", { where: { sale_id: sale.id }, transaction: t }) || 0);
-    const totalReturned = parseFloat(await Return.sum("total", { where: { sale_id: sale.id }, transaction: t }) || 0);
+    // Una NC anulada no descuenta nada: la factura vuelve a deberse completa.
+    const totalReturned = parseFloat(await Return.sum("total", {
+      where: { sale_id: sale.id, status: { [Sequelize.Op.ne]: "anulado" } },
+      transaction: t,
+    }) || 0);
     const saleTotal = parseFloat(sale.total);
     // Lo realmente pendiente de cobrar descuenta las devoluciones ya acreditadas, no solo lo pagado.
     const effectiveOwed = Math.max(0, saleTotal - totalReturned);

@@ -11,6 +11,12 @@ module.exports = (sequelize, DataTypes) => {
     company_id: { type: DataTypes.INTEGER, allowNull: true },
     description: { type: DataTypes.TEXT },
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    // false = depósito: guarda mercancía pero no atiende público, así que no se factura
+    // desde él ni aparece en el selector de la caja.
+    sells: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    // Vincula un depósito (sells=false) con su almacén principal / sucursal.
+    // Solo informativo por ahora: ayuda a organizar la estructura.
+    parent_warehouse_id: { type: DataTypes.INTEGER, allowNull: true, defaultValue: null },
     sort_order: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

@@ -110,7 +110,8 @@ module.exports = async function getSessionSummary(id, req) {
     `
       SELECT COUNT(*)::int AS count, COALESCE(SUM(r.total), 0)::float AS total
       FROM returns r JOIN sales s ON r.sale_id = s.id
-      WHERE s.warehouse_id = :wid
+      WHERE r.status <> 'anulado'
+        AND s.warehouse_id = :wid
         AND r.created_at >= :openedAt AND r.created_at < :closedAt
     `,
     {

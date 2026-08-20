@@ -32,11 +32,15 @@ router.get("/:token", publicLimiter, async (req, res) => {
 
 router.get("/:token/products", publicLimiter, async (req, res) => {
   try {
-    const { search, category_id, limit, offset } = req.query;
-    const data = await svc.getProducts(req.params.token, { search, category_id, limit, offset });
+    // warehouse_id: la sucursal que eligió el cliente. Define qué existencias ve.
+    const { search, category_id, limit, offset, warehouse_id } = req.query;
+    const data = await svc.getProducts(req.params.token, { search, category_id, limit, offset, warehouse_id });
     if (!data) return res.status(404).json({ ok: false, message: "Catálogo no disponible" });
     res.json({ ok: true, data });
   } catch (err) {
+    // Los errores con status son validaciones y su texto está redactado para el cliente
+    // final ("La tienda seleccionada no está disponible"). El resto no se detalla.
+    if (err.status) return res.status(err.status).json({ ok: false, message: err.message });
     console.error("[public-catalog]", err.message);
     res.status(500).json({ ok: false, message: "Error al cargar los productos" });
   }

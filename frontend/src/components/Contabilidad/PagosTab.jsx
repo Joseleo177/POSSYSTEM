@@ -156,7 +156,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                                     {item.journal_name}
                                                 </span>
                                             ) : (
-                                                <span className="badge badge-neutral shadow-none">Sin diario</span>
+                                                <span className="badge badge-neutral shadow-none">Devolución</span>
                                             )}
                                         </td>
                                         <td className="truncate max-w-[200px]">

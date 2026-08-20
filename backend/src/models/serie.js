@@ -5,6 +5,7 @@ module.exports = (sequelize, DataTypes) => {
     padding: { type: DataTypes.INTEGER,     allowNull: false, defaultValue: 4 },
     active:  { type: DataTypes.BOOLEAN,     defaultValue: true },
     type:    { type: DataTypes.STRING(20),  allowNull: false, defaultValue: 'factura' }, // 'factura' | 'nc'
+    nc_serie_id: { type: DataTypes.INTEGER, allowNull: true },
     company_id: { type: DataTypes.INTEGER, allowNull: true },
     // Cada sucursal (almacén) numera sus facturas por su cuenta.
     warehouse_id: { type: DataTypes.INTEGER, allowNull: false },

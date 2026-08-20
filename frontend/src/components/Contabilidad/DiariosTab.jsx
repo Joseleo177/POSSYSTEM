@@ -213,7 +213,9 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
                 // Compartido alcanza a sucursales que un encargado no administra: el backend
                 // se lo rechaza, así que tampoco se le ofrece.
                 ...(can("admin") ? [{ value: "", label: "— Compartido (todas las sucursales)" }] : []),
-                ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
+                // Un depósito no cobra, así que no tiene caja: ofrecerlo acá sería crear
+                // un diario donde nunca va a entrar dinero.
+                ...warehouses.filter(w => w.sells !== false).map(w => ({ value: String(w.id), label: w.name })),
               ]}
               placeholder="Seleccionar sucursal..."
               className="w-full"

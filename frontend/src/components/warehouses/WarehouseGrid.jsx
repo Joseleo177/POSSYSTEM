@@ -21,13 +21,28 @@ export default function WarehouseGrid({ warehouses, isAdmin = false, openAssign,
                                         {w.description}
                                     </div>
                                 )}
+                                {w.sells === false && w.parent_warehouse_name && (
+                                    <div className="text-[10px] font-bold text-brand-400 mt-1 truncate flex items-center gap-1">
+                                        <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10.172 13.828a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.102 1.101" /></svg>
+                                        Depósito de: {w.parent_warehouse_name}
+                                    </div>
+                                )}
                             </div>
-                            <span className={[
-                                "badge shadow-none",
-                                w.active ? "badge-success" : "badge-danger",
-                            ].join(" ")}>
-                                {w.active ? "Activo" : "Inactivo"}
-                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {/* Solo se marca el depósito: el punto de venta es lo corriente
+                                    y no necesita anunciarse. */}
+                                {w.sells === false && (
+                                    <span className="badge badge-warning shadow-none" title="No factura: solo almacena">
+                                        Solo depósito
+                                    </span>
+                                )}
+                                <span className={[
+                                    "badge shadow-none",
+                                    w.active ? "badge-success" : "badge-danger",
+                                ].join(" ")}>
+                                    {w.active ? "Activo" : "Inactivo"}
+                                </span>
+                            </div>
                         </div>
 
                         {/* Métricas Principales */}

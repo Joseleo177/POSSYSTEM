@@ -97,14 +97,17 @@ export function CartProvider({ children }) {
     if (!employee) return;
     try {
       const r = await api.warehouses.getByEmployee(employee.id);
-      setEmployeeWarehouses(r.data);
+      // La caja solo lista los almacenes que atienden público: un depósito guarda mercancía
+      // pero no factura, y ofrecerlo acá solo lleva a vender contra el stock equivocado.
+      const vendedores = (r.data || []).filter(w => w.sells !== false);
+      setEmployeeWarehouses(vendedores);
 
-      if (r.data.length >= 1) {
+      if (vendedores.length >= 1) {
         setActiveWarehouse(prev => {
-          if (!prev) return r.data[0];
+          if (!prev) return vendedores[0];
           // Validar que el almacén previo siga asignado al empleado
-          const stillAssigned = r.data.find(w => w.id === prev.id);
-          return stillAssigned || r.data[0];
+          const stillAssigned = vendedores.find(w => w.id === prev.id);
+          return stillAssigned || vendedores[0];
         });
       } else {
         setActiveWarehouse(null);

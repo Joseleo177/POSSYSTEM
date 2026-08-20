@@ -1,4 +1,4 @@
-const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, Sequelize, sequelize } = require("../models");
+const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, ProductStock, Warehouse, Sequelize, sequelize } = require("../models");
 const { tenantStorage } = require("../utils/tenantStorage");
 const { calculateComboStockAndCost } = require("./products/productService");
 
@@ -132,6 +132,14 @@ async function getStore(token) {
         is_base: c.is_base,
       })),
       categories: categories.map((c) => ({ id: c.id, name: c.name })),
+      // Las sucursales que atienden público. El cliente elige en cuál compra: el stock y
+      // el pedido son de esa tienda, no del negocio en general. Los depósitos quedan
+      // fuera —no atienden a nadie— y de cada sucursal solo sale el nombre.
+      warehouses: (await Warehouse.findAll({
+        where: { active: true, sells: true },
+        attributes: ["id", "name"],
+        order: [["sort_order", "ASC"], ["name", "ASC"]],
+      })).map((w) => ({ id: w.id, name: w.name })),
     };
   });
 }
@@ -143,7 +151,7 @@ async function getStore(token) {
 // Trabaja sobre el stock global del producto, no por almacén: un pedido del catálogo nace
 // sin almacén asignado — lo elige quien lo acepta — así que aquí la pregunta es si el
 // negocio puede armarlo, no si puede armarlo una sucursal concreta.
-async function comboAvailability(comboIds) {
+async function comboAvailability(comboIds, warehouseId) {
   if (!comboIds.length) return {};
 
   const links = await ProductComboItem.findAll({
@@ -152,11 +160,26 @@ async function comboAvailability(comboIds) {
   });
   if (!links.length) return Object.fromEntries(comboIds.map((id) => [id, 0]));
 
+  const ingredientIds = [...new Set(links.map((l) => l.product_id))];
   const ingredients = await Product.findAll({
-    where: { id: { [Op.in]: [...new Set(links.map((l) => l.product_id))] } },
+    where: { id: { [Op.in]: ingredientIds } },
     attributes: ["id", "stock", "is_service", "cost_price"],
   });
   const byId = Object.fromEntries(ingredients.map((i) => [i.id, i.toJSON()]));
+
+  // Con sucursal elegida, lo que se puede armar depende de lo que haya EN ESA TIENDA. El
+  // stock global diría que sí y el cliente se llevaría un pedido que su sucursal no puede
+  // preparar.
+  if (warehouseId) {
+    const enTienda = await ProductStock.findAll({
+      where: { warehouse_id: warehouseId, product_id: { [Op.in]: ingredientIds } },
+      attributes: ["product_id", "qty"],
+    });
+    const qtyById = Object.fromEntries(enTienda.map((r) => [r.product_id, parseFloat(r.qty)]));
+    for (const id of ingredientIds) {
+      if (byId[id]) byId[id].stock = qtyById[id] ?? 0;
+    }
+  }
 
   const grouped = {};
   for (const l of links) {
@@ -170,7 +193,7 @@ async function comboAvailability(comboIds) {
   );
 }
 
-async function getProducts(token, { search, category_id, limit = 40, offset = 0 }) {
+async function getProducts(token, { search, category_id, limit = 40, offset = 0, warehouse_id }) {
   const company_id = await resolveCompanyId(token);
   if (!company_id) return null;
 
@@ -178,6 +201,35 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0 
     // El comercio decide producto por producto qué sale a la vitrina. Este filtro es la
     // única barrera: sin él, cualquier alta de inventario aparecería publicada.
     const where = { visible_in_catalog: true };
+    // La sucursal llega del selector de la vitrina. Se revalida contra la empresa y contra
+    // que atienda público: un id inventado no debe convertirse en un filtro cualquiera.
+    const whPedido = parseInt(warehouse_id, 10) || null;
+    const tienda = whPedido
+      ? await Warehouse.findOne({ where: { id: whPedido, active: true, sells: true }, attributes: ["id"] })
+      : null;
+    // Una sucursal que no existe, está inactiva o es un depósito no puede resolverse al
+    // stock global: el cliente vería disponible algo que esa tienda no tiene.
+    if (whPedido && !tienda) {
+      const e = new Error("La tienda seleccionada no está disponible."); e.status = 400; throw e;
+    }
+    const whId = tienda ? tienda.id : null;
+    // Existencias de la sucursal elegida; sin sucursal, la columna global del producto.
+    const stockExpr = whId
+      ? `COALESCE((SELECT qty FROM product_stock WHERE product_id = "Product"."id" AND warehouse_id = ${whId}), 0)`
+      : '"Product"."stock"';
+    // La vitrina de una sucursal solo lista lo que esa sucursal maneja, y "manejar" es
+    // tener ficha en su almacén —el mismo criterio del módulo Catálogo, para que las dos
+    // pantallas den siempre el mismo surtido—. Sin esto, elegir una tienda pequeña
+    // devolvía el catálogo entero de la empresa con doce AGOTADO que allí nunca se
+    // vendieron. Vale para todo, incluidos servicios y combos: el alta de producto les
+    // crea ficha igual, así que no hace falta exceptuarlos.
+    if (whId) {
+      where[Op.and] = [
+        Sequelize.literal(
+          `EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${whId})`
+        ),
+      ];
+    }
     if (category_id) where.category_id = parseInt(category_id, 10);
     if (search && String(search).trim()) {
       where.name = { [Op.iLike]: `%${String(search).trim()}%` };
@@ -187,7 +239,11 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0 
       where,
       // Se seleccionan solo columnas de vitrina. cost_price, profit_margin, barcode y
       // min_stock quedan fuera a propósito: son datos internos del negocio.
-      attributes: ["id", "name", "price", "stock", "unit", "image_filename", "is_service", "is_combo"],
+      attributes: [
+        "id", "name", "price", "unit", "image_filename", "is_service", "is_combo",
+        // "stock" pasa a ser el de la sucursal elegida, no el total del negocio.
+        [Sequelize.literal(stockExpr), "stock"],
+      ],
       include: [{ model: Category, attributes: ["name"], required: false }],
       // Disponibles primero. Es una vitrina: un cliente que abre el enlace debe ver lo que
       // puede comprar, no dos pantallas de agotados antes de llegar a algo. Como el
@@ -198,7 +254,7 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0 
       // comboAvailability). Se muestra correctamente como agotado y no se puede pedir, pero
       // no baja al final de la lista. Corregirlo exige mover ese cálculo a una subconsulta.
       order: [
-        [Sequelize.literal('(CASE WHEN "Product"."is_service" OR "Product"."is_combo" OR "Product"."stock" > 0 THEN 0 ELSE 1 END)'), "ASC"],
+        [Sequelize.literal(`(CASE WHEN "Product"."is_service" OR "Product"."is_combo" OR ${stockExpr} > 0 THEN 0 ELSE 1 END)`), "ASC"],
         ["name", "ASC"],
       ],
       limit: Math.min(parseInt(limit, 10) || 40, 60),
@@ -210,7 +266,7 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0 
     // se podían armar — el comercio solo se enteraba al aceptar el pedido, cuando el
     // descuento de stock fallaba. Se resuelve para los combos de esta página con dos
     // consultas, no una por producto.
-    const comboStock = await comboAvailability(rows.filter((r) => r.is_combo).map((r) => r.id));
+    const comboStock = await comboAvailability(rows.filter((r) => r.is_combo).map((r) => r.id), whId);
 
     return {
       total: count,
@@ -332,7 +388,7 @@ async function getMyOrders(token, document) {
 // público, así que cualquiera podría dejar el stock en cero con pedidos falsos si el
 // descuento ocurriera aquí. El inventario se mueve cuando el comercio acepta el pedido
 // desde la caja (ver services/sales/acceptWebOrder.js).
-async function createOrder(token, { items, customer_name, customer_phone, customer_document, note, idempotency_key }) {
+async function createOrder(token, { items, customer_name, customer_phone, customer_document, note, idempotency_key, warehouse_id }) {
   const company_id = await resolveCompanyId(token);
   if (!company_id) return null;
 
@@ -378,6 +434,32 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
     const products = await Product.findAll({ where: { id: { [Op.in]: ids }, visible_in_catalog: true } });
     const byId = Object.fromEntries(products.map((p) => [p.id, p]));
 
+    // La sucursal donde compra el cliente. Se revalida acá: el pedido puede llegar con
+    // cualquier cosa en el cuerpo, y de ella dependen tanto el control de existencias como
+    // a qué caja le entra el pedido.
+    const whPedido = parseInt(warehouse_id, 10) || null;
+    const tienda = whPedido
+      ? await Warehouse.findOne({ where: { id: whPedido, active: true, sells: true }, attributes: ["id", "name"] })
+      : null;
+    if (whPedido && !tienda) {
+      const e = new Error("La tienda seleccionada ya no está disponible."); e.status = 400; throw e;
+    }
+
+    // Existencias de esa tienda, en dos consultas: una para los productos simples y otra
+    // para lo que necesitan los combos. Cada sucursal responde por lo que tiene.
+    const stockEnTienda = {};
+    const comboEnTienda = {};
+    if (tienda) {
+      const filas = await ProductStock.findAll({
+        where: { warehouse_id: tienda.id, product_id: { [Op.in]: ids } },
+        attributes: ["product_id", "qty"],
+      });
+      for (const r of filas) stockEnTienda[r.product_id] = parseFloat(r.qty);
+
+      const comboIds = products.filter((p) => p.is_combo).map((p) => p.id);
+      Object.assign(comboEnTienda, await comboAvailability(comboIds, tienda.id));
+    }
+
     const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
     const enriched = [];
     let total = 0;
@@ -394,10 +476,22 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
       const price = parseFloat(p.price);
       if (!(price > 0)) { const e = new Error(`"${p.name}" no tiene precio publicado.`); e.status = 400; throw e; }
 
-      // A propósito no se valida existencia aquí: entre que el cliente miró y envió, algo
-      // pudo agotarse, y rechazarle el pedido entero por una línea es peor que dejar que
-      // el comercio lo vea y decida. El stock se verifica al aceptar, que es cuando se
-      // mueve de verdad.
+      // Cada sucursal responde por lo suyo: si la tienda elegida no tiene con qué cubrir la
+      // línea, se le dice al cliente ahora y no cuando el comercio intenta aceptarlo. Se
+      // nombra el producto para que pueda ajustar la cantidad o cambiar de tienda.
+      if (tienda && !p.is_service) {
+        const disponible = p.is_combo
+          ? (comboEnTienda[p.id] === null ? Infinity : (comboEnTienda[p.id] ?? 0))
+          : (stockEnTienda[p.id] ?? 0);
+        if (disponible < qty) {
+          const e = new Error(
+            disponible > 0
+              ? `En ${tienda.name} solo quedan ${disponible} de "${p.name}".`
+              : `"${p.name}" no está disponible en ${tienda.name}.`
+          );
+          e.status = 400; throw e;
+        }
+      }
 
       enriched.push({ product: p, qty, price });
       total += round2(price) * qty;

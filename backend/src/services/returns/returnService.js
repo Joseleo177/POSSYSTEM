@@ -3,6 +3,7 @@ const {
   Return, ReturnItem, Payment, ProductComboItem, Serie, SerieRange, sequelize, Sequelize,
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
+const { excludeAnnulledReturns } = require("./shared");
 
 async function createReturn({ saleId, items, reason, employee_id }, req) {
   if (!items?.length) { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
@@ -10,31 +11,35 @@ async function createReturn({ saleId, items, reason, employee_id }, req) {
   const transaction = await sequelize.transaction();
   try {
     const sale = await Sale.findByPk(saleId, { transaction, lock: true });
-    if (!sale) throw new Error("Venta no encontrada");
+    if (!sale) { const e = new Error("Venta no encontrada"); e.status = 404; throw e; }
     // La devolución reingresa mercancía al almacén de la venta.
     await assertWarehouseAccess(req, sale.warehouse_id, { optional: true });
 
     const saleItems = await SaleItem.findAll({ where: { sale_id: saleId }, transaction });
     const itemsMap  = Object.fromEntries(saleItems.map(i => [i.id, i]));
+    // Lo devuelto en una NC anulada vuelve a estar disponible para devolver.
+    const soloVivas = await excludeAnnulledReturns(saleId, transaction);
 
     let returnTotal = 0;
     const returnLines = [];
 
     for (const { sale_item_id, qty } of items) {
       const si = itemsMap[sale_item_id];
-      if (!si) throw new Error(`Ítem ${sale_item_id} no pertenece a esta venta`);
+      if (!si) { const e = new Error(`Ítem ${sale_item_id} no pertenece a esta venta`); e.status = 400; throw e; }
 
       const parsedQty = parseFloat(qty);
-      if (isNaN(parsedQty) || parsedQty <= 0)
-        throw new Error(`Cantidad inválida para ${si.name}`);
+      if (isNaN(parsedQty) || parsedQty <= 0) {
+        const e = new Error(`Cantidad inválida para ${si.name}`); e.status = 400; throw e;
+      }
 
-      const alreadyReturned = await ReturnItem.sum('qty', { where: { sale_item_id }, transaction }) || 0;
+      const alreadyReturned = await ReturnItem.sum('qty', { where: { sale_item_id, ...soloVivas }, transaction }) || 0;
       const availableToReturn = parseFloat(si.quantity) - parseFloat(alreadyReturned);
 
       if (parsedQty > availableToReturn) {
-        throw new Error(
+        const e = new Error(
           `Solo quedan ${availableToReturn} uds disponibles para devolver de "${si.name}" (ya se devolvieron ${alreadyReturned})`
         );
+        e.status = 400; throw e;
       }
 
       const subtotal = parseFloat(((si.price - si.discount) * parsedQty).toFixed(2));
@@ -45,16 +50,26 @@ async function createReturn({ saleId, items, reason, employee_id }, req) {
     // Consume NC series if configured for this company
     let nc_number = null;
     try {
-      // La NC se numera con la serie de la misma sucursal que emitió la venta.
-      const ncSerie = await Serie.findOne({
-        where: {
-          type: 'nc',
-          active: true,
-          company_id: sale.company_id || null,
-          ...(sale.warehouse_id ? { warehouse_id: sale.warehouse_id } : {}),
-        },
-        transaction,
-      });
+      let ncSerie = null;
+      if (sale.serie_id) {
+        const facturaSerie = await Serie.findByPk(sale.serie_id, { transaction });
+        if (facturaSerie && facturaSerie.nc_serie_id) {
+          ncSerie = await Serie.findOne({ where: { id: facturaSerie.nc_serie_id, active: true }, transaction });
+        }
+      }
+
+      if (!ncSerie) {
+        // Fallback: la NC se numera con la primera serie NC de la sucursal
+        ncSerie = await Serie.findOne({
+          where: {
+            type: 'nc',
+            active: true,
+            company_id: sale.company_id || null,
+            ...(sale.warehouse_id ? { warehouse_id: sale.warehouse_id } : {}),
+          },
+          transaction,
+        });
+      }
       if (ncSerie) {
         const ncRange = await SerieRange.findOne({
           where: {
@@ -78,7 +93,15 @@ async function createReturn({ saleId, items, reason, employee_id }, req) {
           );
         }
       }
-    } catch { /* serie opcional — no interrumpe la devolución */ }
+    } catch (e) {
+      // Propagar errores si ocurren durante la consulta
+      throw e;
+    }
+    
+    if (!nc_number) {
+      const e = new Error("No hay serie de Notas de Crédito vinculada o con correlativos disponibles para procesar esta devolución.");
+      e.status = 400; throw e;
+    }
 
     const returnRecord = await Return.create({
       sale_id:     saleId,
@@ -133,7 +156,7 @@ async function createReturn({ saleId, items, reason, employee_id }, req) {
     const allSaleItems = await SaleItem.findAll({ where: { sale_id: saleId }, transaction });
     let fullyReturned  = true;
     for (const si of allSaleItems) {
-      const totalRet = await ReturnItem.sum('qty', { where: { sale_item_id: si.id }, transaction }) || 0;
+      const totalRet = await ReturnItem.sum('qty', { where: { sale_item_id: si.id, ...soloVivas }, transaction }) || 0;
       if (parseFloat(totalRet) < parseFloat(si.quantity)) { fullyReturned = false; break; }
     }
     if (fullyReturned) await sale.update({ status: 'devuelto' }, { transaction });

@@ -111,6 +111,11 @@ exports.create = async (req, res, next) => {
     }
     // Solo se puede cargar un gasto a una sucursal propia.
     await assertWarehouseAccess(req, warehouse_id);
+    // Y contra un almacén que atienda público: un depósito no maneja caja.
+    const almacenMov = await Warehouse.findByPk(warehouse_id, { attributes: ['id', 'name', 'sells'] });
+    if (almacenMov && almacenMov.sells === false) {
+      return res.status(400).json({ ok: false, message: `${almacenMov.name} es un depósito: los movimientos se registran en un punto de venta` });
+    }
 
     const expense = await Expense.create({
       description,

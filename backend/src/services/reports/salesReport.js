@@ -14,14 +14,14 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
          COUNT(*)::int AS total_sales,
          (COALESCE(SUM(CASE WHEN status = 'pagado' THEN total ELSE 0 END), 0) -
           COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id
-                    WHERE s2.status = 'pagado' ${tcS2} ${wh('s2')} ${dS2}), 0))::float AS total_revenue,
+                    WHERE r.status <> 'anulado' AND s2.status = 'pagado' ${tcS2} ${wh('s2')} ${dS2}), 0))::float AS total_revenue,
          COALESCE(AVG(CASE WHEN status = 'pagado' THEN total END), 0)::float AS avg_ticket,
          COALESCE(MAX(CASE WHEN status = 'pagado' THEN total END), 0)::float AS max_sale,
          COALESCE(MIN(CASE WHEN status = 'pagado' THEN total END), 0)::float AS min_sale,
          COUNT(CASE WHEN status IN ('pendiente','parcial') THEN 1 END)::int AS pending_count,
          COALESCE(SUM(CASE WHEN status IN ('pendiente','parcial') THEN total ELSE 0 END), 0)::float AS pending_amount,
          COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id
-                    WHERE s2.status = 'pagado' ${tcS2} ${wh('s2')} ${dS2}), 0)::float AS total_returned
+                    WHERE r.status <> 'anulado' AND s2.status = 'pagado' ${tcS2} ${wh('s2')} ${dS2}), 0)::float AS total_returned
        FROM sales
        WHERE TRUE ${tc} ${wh()} ${dR}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

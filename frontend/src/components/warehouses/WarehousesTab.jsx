@@ -168,6 +168,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                 editId={editId}
                 loading={loading}
                 onSave={saveWarehouse}
+                parentOptions={warehouses.filter(w => w.sells !== false && w.active)}
             />
 
             <AddStockModal

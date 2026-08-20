@@ -67,6 +67,14 @@ module.exports = async function createSale(body) {
     if (!items?.length) throw new Error("items es requerido");
     if (paid == null) throw new Error("paid es requerido");
     if (!warehouse_id) throw new Error("warehouse_id es requerido");
+
+    // Desde un depósito no se factura: guarda mercancía, no atiende público. Sin esta
+    // comprobación se podía vender contra el stock de la trastienda por elegir mal en el
+    // selector, y el error que aparecía era "la serie es requerida", que no dice nada.
+    const almacenVenta = await Warehouse.findByPk(warehouse_id, { transaction });
+    if (almacenVenta && almacenVenta.sells === false) {
+      throw new Error(`${almacenVenta.name} es un depósito: no se puede facturar desde ahí`);
+    }
     if (!serie_id) throw new Error("La serie es requerida");
 
     const serie = await Serie.findByPk(serie_id, { transaction });

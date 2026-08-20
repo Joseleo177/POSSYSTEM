@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import DatePicker from "./ui/DatePicker";
+import CustomSelect from "./ui/CustomSelect";
 import { api } from "../services/api";
 import { fmtNumber, printNotaCreditoDoc, todayISO } from "../helpers";
 import { fmtQtyUnit } from "../helpers/unitFormatter";
@@ -10,7 +11,7 @@ import { useApp } from "../context/AppContext";
 const fmtPrice = (n) => `Ref. ${fmtNumber(n)}`;
 
 const EMPTY_REFUND = () => ({
-    enabled: false,
+    enabled: true,
     journal_id: '',
     currency_id: '',
     amount: '',
@@ -137,17 +138,37 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     const refundRate = (!refundCurrency || refundCurrency.is_base) ? 1 : parseFloat(refundCurrency.exchange_rate || 1);
     const refundAmountNum = parseFloat(String(refund.amount || '').replace(',', '.'));
 
+    // Calcula el monto de reembolso en la moneda del diario seleccionado.
+    const calcRefundAmount = (journalId) => {
+        const j = activeJournals.find(jj => jj.id === journalId);
+        const curId = j?.currency_id || baseCurrency?.id;
+        const cur = activeCurrencies.find(c => c.id === parseInt(curId));
+        const rate = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
+        return (totalReturn * rate).toFixed(2);
+    };
+
+    const handleSelectJournal = (journalId) => {
+        const jId = journalId ? parseInt(journalId) : '';
+        const j = activeJournals.find(jj => jj.id === jId);
+        const newCurId = j?.currency_id || baseCurrency?.id;
+        const newAmount = jId ? calcRefundAmount(jId) : '';
+        setRefund(p => ({ ...p, journal_id: jId, currency_id: newCurId || p.currency_id, amount: newAmount }));
+    };
+
     const handleToggleRefund = async () => {
-        if (!refund.enabled) {
+        if (refund.enabled) {
+            // Desactivar reembolso
+            setRefund(prev => ({ ...prev, enabled: false }));
+        } else {
+            // Reactivar reembolso
             if (!categories.length) {
                 try {
                     const res = await api.expenses.getCategories();
                     setCategories(res.data || []);
                 } catch {}
             }
-            setRefund(p => ({ ...p, enabled: true, amount: totalReturn.toFixed(2) }));
-        } else {
-            setRefund(EMPTY_REFUND());
+            const amt = refund.journal_id ? calcRefundAmount(refund.journal_id) : totalReturn.toFixed(2);
+            setRefund(p => ({ ...p, enabled: true, amount: amt }));
         }
     };
 
@@ -198,6 +219,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                             notes: refund.notes?.trim() || null,
                             currency_id: refundCurrency?.id || null,
                             rate: refundRate,
+                            warehouse_id: sale.warehouse_id,
                         });
                         refundOk = true;
                     } else {
@@ -353,11 +375,20 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                     )}
                 </div>
 
-                <div className="px-5 py-4 flex gap-2">
-                    <button onClick={onClose}
-                        className="flex-1 h-9 rounded-xl border border-border/30 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle hover:text-content dark:hover:text-white transition-all">
-                        Cerrar
-                    </button>
+                    <div className="px-5 py-4 flex gap-2">
+                        <button
+                            onClick={() => printNotaCreditoDoc({ ...exchangeResult, total: exchangeResult.return_total }, sale, companyInfo, baseCurrency, activeCurrencies, printerWidth)}
+                            className="flex-1 h-9 rounded-xl border border-border/30 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle hover:text-content dark:hover:text-white transition-all flex items-center justify-center gap-2"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                            </svg>
+                            Imprimir N/C
+                        </button>
+                        <button onClick={() => { onReturnSuccess(); onClose(); }}
+                            className="flex-1 h-9 rounded-xl border border-border/40 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle hover:text-content dark:hover:text-white transition-all">
+                            Cerrar
+                        </button>
                     {exchangeResult.remaining_to_pay > 0.001 && (
                         <button onClick={() => setShowPayDiff(true)}
                             className="flex-1 h-9 rounded-xl bg-success text-black text-[11px] font-black uppercase tracking-wide hover:brightness-110 transition-all shadow-lg shadow-success/20 flex items-center justify-center gap-2">
@@ -375,9 +406,12 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
             <PaymentFormModal
                 sale={{
                     id:          exchangeResult.new_sale_id,
+                    invoice_number: exchangeResult.new_invoice_number || `#${exchangeResult.new_sale_id}`,
                     balance:     exchangeResult.remaining_to_pay,
                     total:       exchangeResult.replacement_total,
+                    amount_paid: exchangeResult.credit_applied,
                     customer_id: sale.customer_id,
+                    exchange_rate: sale.exchange_rate,
                 }}
                 onClose={() => setShowPayDiff(false)}
                 onSuccess={() => { setShowPayDiff(false); onReturnSuccess(); onClose(); }}
@@ -394,37 +428,37 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                 onClick={onClose}
             >
                 <div
-                    className="relative w-full max-w-xl bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out"
+                    className="relative w-full max-w-md bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out"
                     onClick={e => e.stopPropagation()}
                 >
                     {/* Header */}
-                    <div className="shrink-0 px-5 py-4 border-b border-border/10 dark:border-white/5 flex items-center justify-between gap-3 bg-surface-2/50 dark:bg-white/[0.03]">
-                        <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-warning/10 text-warning border border-warning/20 flex items-center justify-center shrink-0">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="shrink-0 px-4 py-3 border-b border-border/10 dark:border-white/5 flex items-center justify-between gap-2 bg-surface-2/50 dark:bg-white/[0.03]">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-warning/10 text-warning border border-warning/20 flex items-center justify-center shrink-0">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                                 </svg>
                             </div>
                             <div>
-                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Devolución</div>
-                                <div className="text-sm font-black text-content dark:text-white">{sale.invoice_number || `#${sale.id}`}</div>
+                                <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Devolución</div>
+                                <div className="text-[13px] font-black text-content dark:text-white">{sale.invoice_number || `#${sale.id}`}</div>
                             </div>
                         </div>
                         <button
                             onClick={onClose}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-content-subtle hover:bg-surface-2 dark:hover:bg-white/10 transition-all"
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-content-subtle hover:bg-surface-2 dark:hover:bg-white/10 transition-all"
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
                     </div>
 
                     {/* Tabs: Devolución / Cambio */}
-                    <div className="shrink-0 px-5 pt-3 pb-0 flex gap-1.5">
+                    <div className="shrink-0 px-4 pt-2.5 pb-0 flex gap-1.5">
                         {[["devolucion","Devolución"],["cambio","Cambio de Producto"]].map(([key, label]) => (
                             <button key={key} type="button" onClick={() => setMode(key)}
-                                className={["flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
+                                className={["flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border",
                                     mode === key ? "bg-brand-500 text-black border-transparent" : "text-content-subtle dark:text-white/30 border-border/20 dark:border-white/5 hover:border-brand-500/30"
                                 ].join(" ")}>{label}</button>
                         ))}
@@ -434,16 +468,16 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                     <div className="flex-1 overflow-y-auto scrollbar-hide">
 
                         {/* Tabla de productos */}
-                        <div className="px-5 pt-4 pb-3">
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
+                        <div className="px-4 pt-3 pb-2">
+                            <div className="flex items-center justify-between mb-1.5">
+                                <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
                                     Productos ({sale.items.length})
                                 </div>
                                 <button
                                     onClick={handleReturnAll}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-2 dark:bg-white/5 hover:bg-warning/10 text-warning border border-warning/20 text-[10px] font-black uppercase tracking-wide transition-all"
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-2 dark:bg-white/5 hover:bg-warning/10 text-warning border border-warning/20 text-[9px] font-black uppercase tracking-wide transition-all"
                                 >
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                     </svg>
                                     {mode === "cambio" ? "Cambiar todo" : "Devolver todo"}
@@ -452,12 +486,12 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
 
                             <div className="rounded-xl border border-border/20 dark:border-white/5 overflow-hidden">
                                 {/* Thead */}
-                                <div className="grid grid-cols-12 bg-surface-2 dark:bg-white/[0.03] px-3 py-2">
-                                    <span className="col-span-4 text-[10px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30">Producto</span>
-                                    <span className="col-span-2 text-[10px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 text-right">P. Unit</span>
-                                    <span className="col-span-2 text-[10px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 text-center">Vendido</span>
-                                    <span className="col-span-2 text-[10px] font-black uppercase tracking-wide text-danger dark:text-danger/70 text-center">Devuelto</span>
-                                    <span className="col-span-2 text-[10px] font-black uppercase tracking-wide text-brand-500 text-right">{mode === "cambio" ? "A camb." : "A dev."}</span>
+                                <div className="grid grid-cols-12 bg-surface-2 dark:bg-white/[0.03] px-3 py-1.5">
+                                    <span className="col-span-4 text-[9px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30">Producto</span>
+                                    <span className="col-span-2 text-[9px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 text-right">P. Unit</span>
+                                    <span className="col-span-2 text-[9px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 text-center">Vend.</span>
+                                    <span className="col-span-2 text-[9px] font-black uppercase tracking-wide text-danger dark:text-danger/70 text-center">Dev.</span>
+                                    <span className="col-span-2 text-[9px] font-black uppercase tracking-wide text-brand-500 text-right">{mode === "cambio" ? "Camb." : "A dev."}</span>
                                 </div>
 
                                 <div className="divide-y divide-border/10 dark:divide-white/5">
@@ -466,18 +500,18 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                         return (
                                             <div
                                                 key={idx}
-                                                className={`grid grid-cols-12 items-center px-3 py-2.5 transition-colors ${available <= 0 ? "opacity-40 bg-surface-2/50 dark:bg-white/[0.02]" : "hover:bg-surface-2/30 dark:hover:bg-white/[0.02]"}`}
+                                                className={`grid grid-cols-12 items-center px-3 py-2 transition-colors ${available <= 0 ? "opacity-40 bg-surface-2/50 dark:bg-white/[0.02]" : "hover:bg-surface-2/30 dark:hover:bg-white/[0.02]"}`}
                                             >
                                                 <div className="col-span-4 min-w-0">
-                                                    <div className="text-[12px] font-bold text-content dark:text-white truncate">{item.name}</div>
+                                                    <div className="text-[11px] font-bold text-content dark:text-white truncate">{item.name}</div>
                                                 </div>
-                                                <div className="col-span-2 text-right text-[11px] font-bold text-content-subtle dark:text-white/40 tabular-nums">
+                                                <div className="col-span-2 text-right text-[10px] font-bold text-content-subtle dark:text-white/40 tabular-nums">
                                                     {fmtPrice(item.price)}
                                                 </div>
-                                                <div className="col-span-2 text-center text-[12px] font-bold text-content dark:text-white tabular-nums">
+                                                <div className="col-span-2 text-center text-[11px] font-bold text-content dark:text-white tabular-nums">
                                                     {parseFloat(item.quantity)}
                                                 </div>
-                                                <div className="col-span-2 text-center text-[12px] font-bold text-danger tabular-nums">
+                                                <div className="col-span-2 text-center text-[11px] font-bold text-danger tabular-nums">
                                                     {parseFloat(item.returned_qty || 0)}
                                                 </div>
                                                 <div className="col-span-2 flex justify-end">
@@ -487,7 +521,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                                         max={available}
                                                         step="1"
                                                         disabled={available <= 0}
-                                                        className="w-14 h-8 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-lg text-[12px] font-bold text-center outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed tabular-nums"
+                                                        className="w-12 h-7 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-lg text-[11px] font-bold text-center outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed tabular-nums"
                                                         value={returnQtys[item.id] === 0 ? "" : (returnQtys[item.id] || "")}
                                                         onChange={e => handleQtyChange(item.id, available, e.target.value)}
                                                         placeholder="0"
@@ -501,93 +535,76 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                         </div>
 
                         {/* Motivo */}
-                        <div className="px-5 pb-3">
-                            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Motivo / Notas</div>
+                        <div className="px-4 pb-2">
+                            <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1">Motivo / Notas</div>
                             <input
                                 value={reason}
                                 onChange={e => setReason(e.target.value)}
                                 placeholder="Ej: Producto dañado, cambio por defecto, cliente se arrepintió..."
-                                className="w-full h-10 bg-surface-2/50 dark:bg-white/[0.03] border border-border/20 dark:border-white/5 rounded-xl px-3.5 text-[12px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/20 transition-all placeholder:text-content-subtle dark:placeholder:text-white/20"
+                                className="w-full h-8 bg-surface-2/50 dark:bg-white/[0.03] border border-border/20 dark:border-white/5 rounded-xl px-3 text-[11px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/20 transition-all placeholder:text-content-subtle dark:placeholder:text-white/20"
                             />
                         </div>
 
-                        {/* Reembolso al cliente (solo modo devolución) */}
-                        {mode === "devolucion" && <div className="px-5 pb-3">
-                            <button
-                                type="button"
-                                onClick={handleToggleRefund}
-                                className={[
-                                    "w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-[11px] font-black uppercase tracking-wide",
-                                    refund.enabled
-                                        ? "border-success/40 bg-success/5 text-success"
-                                        : "border-border/20 dark:border-white/5 text-content-subtle dark:text-white/30 hover:border-border/40 dark:hover:border-white/10"
-                                ].join(" ")}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {/* Reembolso al cliente (solo modo devolución) — activo por defecto */}
+                        {mode === "devolucion" && <div className="px-4 pb-2">
+                            <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-1.5">
+                                    <svg className="w-3 h-3 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                     </svg>
-                                    Reembolsar al cliente
-                                </span>
-                                <span className={refund.enabled ? "text-success" : "opacity-40 text-[10px]"}>
-                                    {refund.enabled ? "✓ Activado" : "Opcional"}
-                                </span>
-                            </button>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Reembolso al cliente</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleToggleRefund}
+                                    className={[
+                                        "text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-md border transition-all",
+                                        refund.enabled
+                                            ? "border-success/30 text-success bg-success/5 hover:bg-danger/5 hover:text-danger hover:border-danger/30"
+                                            : "border-border/20 dark:border-white/10 text-content-subtle dark:text-white/30 hover:border-success/30 hover:text-success"
+                                    ].join(" ")}
+                                >
+                                    {refund.enabled ? "Desactivar" : "Activar"}
+                                </button>
+                            </div>
 
                             {refund.enabled && (
-                                <div className="mt-2 p-4 bg-surface-2/50 dark:bg-white/[0.03] rounded-xl border border-border/20 dark:border-white/5 space-y-4">
+                                <div className="p-3 bg-surface-2/50 dark:bg-white/[0.03] rounded-xl border border-border/20 dark:border-white/5 space-y-3">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Método de reembolso *</p>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {activeJournals.map(j => {
-                                                const active = refund.journal_id === j.id;
-                                                return (
-                                                    <button key={j.id} type="button"
-                                                        onClick={() => {
-                                                            const newCurId = j.currency_id || baseCurrency?.id;
-                                                            setRefund(p => ({ ...p, journal_id: j.id, currency_id: newCurId || p.currency_id }));
-                                                        }}
-                                                        style={active && j.color ? { borderColor: j.color, backgroundColor: j.color, color: "#000" } : undefined}
-                                                        className={[
-                                                            "px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all",
-                                                            active && !j.color
-                                                                ? "border-brand-500 bg-brand-500 text-black"
-                                                                : !active
-                                                                ? "border-border/20 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-400/50"
-                                                                : ""
-                                                        ].join(" ")}
-                                                    >
-                                                        {j.name}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1">Método de reembolso *</p>
+                                        <CustomSelect
+                                            value={refund.journal_id || ''}
+                                            onChange={v => handleSelectJournal(v)}
+                                            options={activeJournals.map(j => ({ value: j.id, label: j.name, color: j.color || undefined }))}
+                                            placeholder="Seleccionar método..."
+                                            height="h-8"
+                                        />
                                         {refundCurrency && !refundCurrency.is_base && (
-                                            <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1.5">
+                                            <p className="text-[9px] font-bold text-content-subtle dark:text-white/30 mt-1">
                                                 {refundCurrency.symbol} {refundCurrency.code} · tasa {parseFloat(refundCurrency.exchange_rate).toFixed(4)}
                                             </p>
                                         )}
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-2 gap-2">
                                         <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Monto *</p>
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1">Monto *</p>
                                             <input
                                                 type="text"
                                                 inputMode="decimal"
                                                 value={refund.amount}
                                                 onChange={e => setRefund(p => ({ ...p, amount: e.target.value.replace(/[^\d.,]/g, '') }))}
                                                 placeholder="0.00"
-                                                className="w-full h-10 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
+                                                className="w-full h-8 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3 text-[12px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
                                             />
                                             {refundCurrency && !refundCurrency.is_base && !isNaN(refundAmountNum) && refundAmountNum > 0 && (
-                                                <p className="text-[10px] font-bold text-success mt-1">
+                                                <p className="text-[9px] font-bold text-success mt-0.5">
                                                     ≈ {baseCurrency?.symbol}{(refundAmountNum / refundRate).toFixed(2)} {baseCurrency?.code}
                                                 </p>
                                             )}
                                         </div>
                                         <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Fecha *</p>
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1">Fecha *</p>
                                             <DatePicker
                                                 value={refund.date}
                                                 onChange={v => setRefund(p => ({ ...p, date: v }))}
@@ -598,25 +615,25 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
 
                                     {!isCashRefund && refund.journal_id && (
                                         <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">N° Referencia *</p>
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1">N° Referencia *</p>
                                             <input
                                                 type="text"
                                                 value={refund.reference}
                                                 onChange={e => setRefund(p => ({ ...p, reference: e.target.value }))}
                                                 placeholder="Ej: 000123456"
-                                                className="w-full h-10 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
+                                                className="w-full h-8 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3 text-[11px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
                                             />
                                         </div>
                                     )}
 
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Notas</p>
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1">Notas</p>
                                         <input
                                             type="text"
                                             value={refund.notes}
                                             onChange={e => setRefund(p => ({ ...p, notes: e.target.value }))}
                                             placeholder="Observaciones del reembolso..."
-                                            className="w-full h-10 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
+                                            className="w-full h-8 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3 text-[11px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
                                         />
                                     </div>
                                 </div>
@@ -625,10 +642,10 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
 
                         {/* Total a reintegrar (solo modo devolución) */}
                         {mode === "devolucion" && (
-                            <div className="px-5 pb-5">
-                                <div className="flex items-center justify-between px-4 py-3.5 bg-warning/5 border border-warning/20 rounded-xl">
-                                    <span className="text-[11px] font-black uppercase tracking-wide text-warning/70">Total a Reintegrar</span>
-                                    <span className="text-2xl font-black text-warning tabular-nums">{fmtPrice(totalReturn)}</span>
+                            <div className="px-4 pb-3">
+                                <div className="flex items-center justify-between px-3 py-2.5 bg-warning/5 border border-warning/20 rounded-xl">
+                                    <span className="text-[9px] font-black uppercase tracking-wide text-warning/70">Total a Reintegrar</span>
+                                    <span className="text-lg font-black text-warning tabular-nums">{fmtPrice(totalReturn)}</span>
                                 </div>
                             </div>
                         )}
@@ -715,21 +732,21 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                     </div>
 
                     {/* Footer */}
-                    <div className="shrink-0 px-5 py-4 border-t border-border/10 dark:border-white/5 bg-surface-2/30 dark:bg-white/[0.02] flex items-center justify-end gap-2">
+                    <div className="shrink-0 px-4 py-3 border-t border-border/10 dark:border-white/5 bg-surface-2/30 dark:bg-white/[0.02] flex items-center justify-end gap-2">
                         <button onClick={onClose} disabled={loading}
-                            className="h-9 px-4 rounded-xl border border-border/30 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle hover:text-content dark:hover:text-white transition-all disabled:opacity-50">
+                            className="h-8 px-3.5 rounded-xl border border-border/30 dark:border-white/10 text-[10px] font-black uppercase tracking-wide text-content-subtle hover:text-content dark:hover:text-white transition-all disabled:opacity-50">
                             Cerrar
                         </button>
                         {mode === "devolucion" ? (
                             <button onClick={handleSubmit} disabled={loading || totalReturn === 0}
-                                className={["h-9 px-5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all",
+                                className={["h-8 px-4 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all",
                                     loading || totalReturn === 0 ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed" : "bg-warning text-black hover:brightness-110 shadow-lg shadow-warning/20"
                                 ].join(" ")}>
                                 {loading ? "Procesando…" : "Confirmar Devolución"}
                             </button>
                         ) : (
                             <button onClick={handleExchangeSubmit} disabled={loading || totalReturn === 0 || replacementItems.length === 0}
-                                className={["h-9 px-5 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all",
+                                className={["h-8 px-4 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all",
                                     loading || totalReturn === 0 || replacementItems.length === 0 ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed" : "bg-brand-500 text-black hover:brightness-110 shadow-lg shadow-brand-500/20"
                                 ].join(" ")}>
                                 {loading ? "Procesando…" : "Confirmar Cambio"}

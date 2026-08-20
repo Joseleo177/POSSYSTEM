@@ -369,6 +369,7 @@ export const api = {
   // ── Notas de Crédito ──────────────────────────────────────────
   creditNotes: {
     getAll: (params = {}) => request("/credit-notes?" + new URLSearchParams(params)),
+    annul:  (id)          => request(`/credit-notes/${id}/annul`, { method: "PUT" }),
   },
 };
 

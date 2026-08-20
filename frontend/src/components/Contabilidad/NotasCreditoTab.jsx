@@ -3,6 +3,7 @@ import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import { fmtDateShort, fmtDate } from "../../helpers";
 import { printNotaCreditoDoc } from "../../helpers/printNotaCredito";
+import ConfirmModal from "../ui/ConfirmModal";
 import DateRangePicker from "../ui/DateRangePicker";
 import Pagination from "../ui/Pagination";
 
@@ -26,7 +27,16 @@ function NCDetailModal({ nc, onClose, onPrint, fmt }) {
             </div>
             <div>
               <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Nota de Crédito</div>
-              <div className="text-sm font-black text-content dark:text-white">{nc.nc_number || `NC-${nc.id}`}</div>
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-black ${nc.status === "anulado" ? "text-content-subtle line-through" : "text-content dark:text-white"}`}>
+                  {nc.nc_number || `NC-${nc.id}`}
+                </span>
+                {nc.status === "anulado" && (
+                  <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-danger/10 text-danger border border-danger/20">
+                    Anulado
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-content-subtle hover:bg-surface-2 dark:hover:bg-white/10 transition-all">
@@ -94,7 +104,9 @@ function NCDetailModal({ nc, onClose, onPrint, fmt }) {
 }
 
 export default function NotasCreditoTab({ notify, fmtPrice }) {
-  const { baseCurrency, activeCurrencies, companyInfo, printerWidth } = useApp();
+  const { baseCurrency, activeCurrencies, companyInfo, printerWidth, can } = useApp();
+  // Anular mueve inventario y saldos: es el mismo permiso que anular una factura.
+  const canAnnul = can("sales.void");
 
   const [items, setItems]       = useState([]);
   const [loading, setLoading]   = useState(false);
@@ -106,6 +118,8 @@ export default function NotasCreditoTab({ notify, fmtPrice }) {
   const [dateTo, setDateTo]     = useState("");
   const [showFilterDrop, setShowFilterDrop] = useState(false);
   const [selectedNC, setSelectedNC] = useState(null);
+  const [toAnnul, setToAnnul]   = useState(null);
+  const [annulling, setAnnulling] = useState(false);
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
@@ -123,6 +137,25 @@ export default function NotasCreditoTab({ notify, fmtPrice }) {
   }, [search, dateFrom, dateTo, notify]);
 
   useEffect(() => { load(1); }, [load]);
+
+  // Anular no borra la NC: el correlativo ya se emitió. Revierte inventario y saldo, y el
+  // servidor rechaza los casos que no puede deshacer solo (un cambio de producto, o un
+  // crédito que el cliente ya gastó) explicando qué hay que hacer antes.
+  const handleAnnul = async () => {
+    if (!toAnnul || annulling) return;
+    setAnnulling(true);
+    try {
+      const res = await api.creditNotes.annul(toAnnul.id);
+      notify(res.message || "Nota de crédito anulada", "ok");
+      setToAnnul(null);
+      setSelectedNC(null);
+      load(page);
+    } catch (e) {
+      notify(e.message, "err");
+    } finally {
+      setAnnulling(false);
+    }
+  };
 
   const clearFilters = () => {
     setDateFrom("");
@@ -218,12 +251,19 @@ export default function NotasCreditoTab({ notify, fmtPrice }) {
               ) : items.length === 0 ? (
                 <tr><td colSpan={8} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic">Sin notas de crédito emitidas</td></tr>
               ) : items.map(r => (
-                <tr key={r.id} className="group">
+                <tr key={r.id} className={`group ${r.status === "anulado" ? "opacity-60" : ""}`}>
                   <td>
-                    {r.nc_number
-                      ? <span className="text-[11px] font-black text-brand-500 tracking-tight">{r.nc_number}</span>
-                      : <span className="badge badge-warning shadow-none">Sin serie</span>
-                    }
+                    <div className="flex items-center gap-2">
+                      {r.nc_number
+                        ? <span className={`text-[11px] font-black tracking-tight ${r.status === "anulado" ? "text-content-subtle line-through" : "text-brand-500"}`}>{r.nc_number}</span>
+                        : <span className="badge badge-warning shadow-none">Sin serie</span>
+                      }
+                      {r.status === "anulado" && (
+                        <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-danger/10 text-danger border border-danger/20">
+                          Anulado
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     <span className="text-[11px] font-bold text-content-subtle uppercase">{fmtDateShort(r.created_at)}</span>
@@ -245,7 +285,7 @@ export default function NotasCreditoTab({ notify, fmtPrice }) {
                     </span>
                   </td>
                   <td className="text-right pr-6">
-                    <span className="text-[12px] font-black text-danger tabular-nums">-{fmt(r.total)}</span>
+                    <span className={`text-[12px] font-black tabular-nums ${r.status === "anulado" ? "text-content-subtle line-through" : "text-danger"}`}>-{fmt(r.total)}</span>
                   </td>
                   <td>
                     <span className="text-[11px] font-medium text-content-subtle dark:text-white/30 truncate block max-w-[120px]">
@@ -260,6 +300,15 @@ export default function NotasCreditoTab({ notify, fmtPrice }) {
                       >
                         Detalles
                       </button>
+                      {r.status !== "anulado" && canAnnul && (
+                        <button
+                          onClick={() => setToAnnul(r)}
+                          className="h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all bg-danger/10 text-danger border-danger/20 hover:bg-danger hover:text-white"
+                          title="Anular esta nota de crédito"
+                        >
+                          Anular
+                        </button>
+                      )}
                       <button
                         onClick={() => handlePrint(r)}
                         className="p-2 rounded-xl transition-all text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 active:scale-90"
@@ -276,6 +325,19 @@ export default function NotasCreditoTab({ notify, fmtPrice }) {
         </div>
         <Pagination page={page} totalPages={pages} total={total} limit={LIMIT} onPageChange={load} />
       </div>
+
+      <ConfirmModal
+        isOpen={!!toAnnul}
+        title={`Anular ${toAnnul?.nc_number || "nota de crédito"}`}
+        message={
+          `Esta acción devolverá el inventario al estado anterior a la devolución, le quitará al cliente ` +
+          `el saldo a favor de ${fmt(toAnnul?.total)} y recalculará la factura. ` +
+          `La nota queda registrada como anulada y su número no se reutiliza. ¿Continuar?`
+        }
+        confirmText={annulling ? "Anulando..." : "Sí, anular"}
+        onConfirm={handleAnnul}
+        onCancel={() => !annulling && setToAnnul(null)}
+      />
 
       <NCDetailModal
         nc={selectedNC}

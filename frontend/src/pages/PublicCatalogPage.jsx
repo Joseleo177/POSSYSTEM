@@ -1,4 +1,5 @@
 import { usePublicCatalog } from "../hooks/usePublicCatalog";
+import BranchGate from "../components/PublicCatalog/BranchGate";
 import IdentityGate from "../components/PublicCatalog/IdentityGate";
 import OrderDetailModal from "../components/PublicCatalog/OrderDetailModal";
 import ProductGrid from "../components/PublicCatalog/ProductGrid";
@@ -22,6 +23,7 @@ export default function PublicCatalogPage({ token }) {
         search, setSearch, category, setCategory,
         loading, loadingMore, loadMore,
         baseCur, altCur, fmt, ordersEnabled, gated,
+        warehouses, branch, branchGate, chooseBranch, openBranchGate,
         cart, cartTotal, cartOpen, setCartOpen,
         addToCart, changeQty, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,
         showCats, setShowCats, delivery, setDelivery,
@@ -49,6 +51,12 @@ export default function PublicCatalogPage({ token }) {
         );
     }
 
+    // La sucursal va antes que la identidad: define qué catálogo se muestra, y con varias
+    // tiendas no hay un "todo el stock" que enseñar mientras tanto.
+    if (branchGate) {
+        return <BranchGate store={store} warehouses={warehouses} onChoose={chooseBranch} currentId={branch?.id || null} />;
+    }
+
     // Puerta de entrada: la tienda pidió que nadie vea el catálogo sin identificarse.
     if (gated) {
         return <IdentityGate token={token} store={store} onIdentified={saveIdentity} />;
@@ -63,6 +71,8 @@ export default function PublicCatalogPage({ token }) {
                 search={search} setSearch={setSearch}
                 categories={categories} category={category} setCategory={setCategory}
                 showCats={showCats} setShowCats={setShowCats}
+                branch={branch} canChangeBranch={warehouses.length > 1}
+                onChangeBranch={openBranchGate}
             />
 
             <ProductGrid

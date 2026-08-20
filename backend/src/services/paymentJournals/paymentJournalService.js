@@ -76,7 +76,20 @@ async function journalScope(req) {
 
 // Un diario solo se puede crear o editar sobre una sucursal propia. `null` (compartido) es
 // cosa del admin: afecta a todas las sucursales, no solo a la suya.
+// Un depósito no atiende público ni cobra: una caja ahí no recibiría nunca un peso. Se
+// valida en el servidor y no solo en el selector, para que el criterio valga también si el
+// diario se crea por API.
+async function assertNoEsDeposito(warehouseId) {
+  if (!warehouseId) return;
+  const almacen = await Warehouse.findByPk(warehouseId, { attributes: ['id', 'name', 'sells'] });
+  if (almacen && almacen.sells === false) {
+    const e = new Error(`${almacen.name} es un depósito: no maneja caja`);
+    e.status = 400; e.isOperational = true; throw e;
+  }
+}
+
 async function assertJournalWarehouse(req, warehouseId) {
+  await assertNoEsDeposito(warehouseId);
   if (isAdmin(req)) return warehouseId ? parseInt(warehouseId) : null;
 
   const allowed = await visibleWarehouseIds(req);

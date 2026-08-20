@@ -253,11 +253,21 @@ if (Serie && SerieRange && Employee && UserSerie) {
 if (Serie && Warehouse) {
   Serie.belongsTo(Warehouse, { foreignKey: 'warehouse_id' });
   Warehouse.hasMany(Serie,    { foreignKey: 'warehouse_id' });
+
+  Serie.belongsTo(Serie, { as: 'NCSerie', foreignKey: 'nc_serie_id' });
+  Serie.hasMany(Serie, { as: 'LinkedSeries', foreignKey: 'nc_serie_id' });
 }
 
 if (PaymentJournal && Warehouse) {
   PaymentJournal.belongsTo(Warehouse, { foreignKey: 'warehouse_id' });
   Warehouse.hasMany(PaymentJournal,   { foreignKey: 'warehouse_id' });
+}
+
+// ── Relación padre-hijo entre almacenes ─────────────────────────────────
+// Un depósito (sells=false) se vincula a su almacén principal / sucursal.
+if (Warehouse) {
+  Warehouse.belongsTo(Warehouse, { as: 'ParentWarehouse',  foreignKey: 'parent_warehouse_id' });
+  Warehouse.hasMany(Warehouse,   { as: 'ChildWarehouses',  foreignKey: 'parent_warehouse_id' });
 }
 
 if (Sale && Serie && SerieRange) {

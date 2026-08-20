@@ -31,8 +31,13 @@ const SALE_INCLUDE = [
     model: SaleItem, 
     include: [
       { model: Product, attributes: ["id", "name"] },
-      { model: ReturnItem, attributes: ["qty"], required: false }
-    ] 
+      {
+        model: ReturnItem, attributes: ["qty"], required: false,
+        // Las líneas de una NC anulada no cuentan como devueltas: si contaran, esas
+        // unidades quedarían bloqueadas para siempre en el modal de devolución.
+        include: [{ model: Return, attributes: [], required: true, where: { status: { [Op.ne]: "anulado" } } }],
+      }
+    ]
   }
 ];
 

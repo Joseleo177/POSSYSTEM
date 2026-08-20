@@ -15,7 +15,15 @@ module.exports = async function getAllSales(query, tenant = {}) {
   if (warehouse_id) {
     andClauses.push({ warehouse_id: parseInt(warehouse_id, 10) });
   } else if (Array.isArray(allowedWarehouses)) {
-    andClauses.push({ warehouse_id: { [Op.in]: allowedWarehouses } });
+    andClauses.push({
+      [Op.or]: [
+        { warehouse_id: { [Op.in]: allowedWarehouses } },
+        // Un pedido del catálogo público nace sin sucursal —la define quien lo acepta—,
+        // así que tiene que verse desde cualquier caja. Sin esta excepción el recorte por
+        // almacén los dejaba fuera para todos salvo el admin: ninguna caja los recibía.
+        { warehouse_id: null, status: 'pedido' },
+      ],
+    });
   }
 
   const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;
@@ -51,7 +59,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
     attributes: {
       include: [
         [Sequelize.literal('(SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = "Sale"."id")'), "amount_paid"],
-        [Sequelize.literal('(SELECT COALESCE(SUM(total),0) FROM returns WHERE sale_id = "Sale"."id")'), "total_returned"],
+        [Sequelize.literal(`(SELECT COALESCE(SUM(total),0) FROM returns WHERE sale_id = "Sale"."id" AND status <> 'anulado')`), "total_returned"],
         [Sequelize.literal('(SELECT exchange_rate FROM payments WHERE sale_id = "Sale"."id" ORDER BY created_at DESC LIMIT 1)'), "final_payment_rate"],
         // Suma precisa de líneas (sin truncar a 2 dec). El frontend la usa para convertir a Bs.
         [Sequelize.literal('(SELECT COALESCE(SUM(subtotal),0) FROM sale_items WHERE sale_id = "Sale"."id")'), "total_precise"],
@@ -121,7 +129,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
              WHEN "Sale"."status" = 'pagado' THEN "Sale"."total"
              ELSE LEAST(
                (SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = "Sale"."id")
-                 + (SELECT COALESCE(SUM(total),0) FROM returns WHERE sale_id = "Sale"."id"),
+                 + (SELECT COALESCE(SUM(total),0) FROM returns WHERE sale_id = "Sale"."id" AND status <> 'anulado'),
                "Sale"."total")
         END), 0)`), "sum_paid"],
       // El pendiente NO es total - cobrado: así, una factura anulada aportaría su monto
@@ -133,7 +141,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
         CASE WHEN "Sale"."status" IN ('anulado', 'devuelto', 'pagado') THEN 0
              ELSE GREATEST(
                "Sale"."total"
-                 - (SELECT COALESCE(SUM(total),0)  FROM returns  WHERE sale_id = "Sale"."id")
+                 - (SELECT COALESCE(SUM(total),0)  FROM returns  WHERE sale_id = "Sale"."id" AND status <> 'anulado')
                  - (SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = "Sale"."id"),
                0)
         END), 0)`), "sum_pending"],

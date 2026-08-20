@@ -277,7 +277,9 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
           <CustomSelect
             value={form.warehouse_id ?? ""}
             onChange={val => setForm(p => ({ ...p, warehouse_id: val }))}
-            options={allWarehouses.filter(w => w.active).map(w => ({ value: w.id, label: w.name }))}
+            // Un depósito no factura: ofrecerle una serie es prometer una numeración que
+            // nunca va a usar.
+            options={allWarehouses.filter(w => w.active && w.sells !== false).map(w => ({ value: w.id, label: w.name }))}
             placeholder="Seleccionar almacén..."
             className="w-full"
           />
@@ -285,6 +287,21 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
             Cada almacén lleva su propia numeración. No se puede cambiar una vez que la serie emitió documentos.
           </div>
         </div>
+        {form.type === "factura" && (
+          <div className="mb-3">
+            <div className="label mb-1">Serie de N/C Vinculada (Opcional)</div>
+            <CustomSelect
+              value={form.nc_serie_id ?? ""}
+              onChange={val => setForm(p => ({ ...p, nc_serie_id: val }))}
+              options={[{ value: "", label: "Ninguna (Se usará la primera N/C del almacén)" }, ...allSeries.filter(s => s.type === "nc" && (!form.warehouse_id || s.warehouse_id === form.warehouse_id)).map(s => ({ value: s.id, label: `${s.name} (${s.prefix})` }))]}
+              placeholder="Seleccionar serie N/C..."
+              className="w-full"
+            />
+            <div className="text-[10px] font-bold text-content-subtle mt-1 opacity-60">
+              Las devoluciones de esta factura usarán esta serie para numerar la Nota de Crédito.
+            </div>
+          </div>
+        )}
         <div className="mb-3">
           <div className="label mb-1">Nombre de la serie *</div>
           <input

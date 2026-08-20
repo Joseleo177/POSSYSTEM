@@ -22,7 +22,7 @@ async function auditReport({ date_from, date_to, limit, company_id, tcS, rep, wh
          COALESCE(AVG(r.total), 0)::float AS avg_return
        FROM returns r
        JOIN sales s ON r.sale_id = s.id
-       WHERE TRUE ${tcS} ${wh('s')} ${dR}`,
+       WHERE r.status <> 'anulado' ${tcS} ${wh('s')} ${dR}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -33,7 +33,7 @@ async function auditReport({ date_from, date_to, limit, company_id, tcS, rep, wh
        LEFT JOIN employees e ON r.employee_id = e.id
        LEFT JOIN sales s ON r.sale_id = s.id
        LEFT JOIN customers c ON s.customer_id = c.id
-       WHERE TRUE ${tcS} ${wh('s')} ${dR}
+       WHERE r.status <> 'anulado' ${tcS} ${wh('s')} ${dR}
        ORDER BY r.created_at DESC
        LIMIT ${lim || 50}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

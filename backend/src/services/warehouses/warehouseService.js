@@ -10,7 +10,7 @@ async function getAll(req) {
   // propios, pero se puede enviar mercadería a cualquier otro.
   if (req?.query?.scope === 'all') {
     const data = await Warehouse.findAll({
-      attributes: ['id', 'name', 'active', 'sort_order'],
+      attributes: ['id', 'name', 'active', 'sells', 'sort_order', 'parent_warehouse_id'],
       where: { active: true },
       order: [['sort_order', 'ASC'], ['name', 'ASC']],
       raw: true,
@@ -28,7 +28,7 @@ async function getAll(req) {
   // que escalaba mal con el tamaño del inventario.
   const [warehouses, stockAggs, assignments] = await Promise.all([
     Warehouse.findAll({
-      attributes: ['id', 'name', 'description', 'active', 'sort_order', 'created_at'],
+      attributes: ['id', 'name', 'description', 'active', 'sells', 'sort_order', 'parent_warehouse_id', 'created_at'],
       ...(scoped ? { where: { id: { [Op.in]: allowedIds } } } : {}),
       order: [['sort_order', 'ASC'], ['name', 'ASC']],
       raw: true,
@@ -54,6 +54,9 @@ async function getAll(req) {
     empsByWh.get(row.warehouse_id).push({ employee_id: row.employee_id });
   }
 
+  // Mapa nombre del almacén padre para mostrarlo en el grid.
+  const nameById = new Map(warehouses.map(w => [w.id, w.name]));
+
   const data = warehouses.map(w => {
     const agg = aggByWh.get(w.id);
     return {
@@ -61,6 +64,7 @@ async function getAll(req) {
       product_count: agg ? agg.product_count : 0,
       total_stock:   agg ? agg.total_stock   : 0,
       assigned_employees: empsByWh.get(w.id) || [],
+      parent_warehouse_name: w.parent_warehouse_id ? (nameById.get(w.parent_warehouse_id) || null) : null,
     };
   });
 
@@ -85,12 +89,14 @@ async function getByEmployee(employeeId, req) {
   return { data: warehouses };
 }
 
-async function createWarehouse({ name, description, sort_order = 0 }) {
+async function createWarehouse({ name, description, sort_order = 0, sells = true, parent_warehouse_id = null }) {
   if (!name?.trim()) {
     const e = new Error("El nombre es requerido"); e.status = 400; throw e;
   }
+  // Solo los depósitos (sells=false) pueden tener almacén padre.
+  const parentId = (sells === false && parent_warehouse_id) ? parent_warehouse_id : null;
   try {
-    const warehouse = await Warehouse.create({ name: name.trim(), description: description || null, sort_order });
+    const warehouse = await Warehouse.create({ name: name.trim(), description: description || null, sort_order, sells: sells !== false, parent_warehouse_id: parentId });
     return { data: warehouse };
   } catch (err) {
     if (err.name === 'SequelizeUniqueConstraintError') {
@@ -100,7 +106,7 @@ async function createWarehouse({ name, description, sort_order = 0 }) {
   }
 }
 
-async function updateWarehouse(id, { name, description, active, sort_order }) {
+async function updateWarehouse(id, { name, description, active, sort_order, sells, parent_warehouse_id }) {
   if (!name?.trim()) {
     const e = new Error("El nombre es requerido"); e.status = 400; throw e;
   }
@@ -108,8 +114,11 @@ async function updateWarehouse(id, { name, description, active, sort_order }) {
   if (!warehouse) {
     const e = new Error("Almacén no encontrado"); e.status = 404; throw e;
   }
+  const finalSells = sells ?? warehouse.sells;
+  // Solo los depósitos (sells=false) pueden tener almacén padre.
+  const parentId = (finalSells === false && parent_warehouse_id) ? parent_warehouse_id : null;
   try {
-    await warehouse.update({ name: name.trim(), description: description || null, active: active ?? true, sort_order: sort_order ?? 0 });
+    await warehouse.update({ name: name.trim(), description: description || null, active: active ?? true, sort_order: sort_order ?? 0, sells: finalSells, parent_warehouse_id: parentId });
     return { data: warehouse };
   } catch (err) {
     if (err.name === 'SequelizeUniqueConstraintError') {
