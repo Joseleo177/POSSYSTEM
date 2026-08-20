@@ -91,6 +91,17 @@ export default function EmployeesTab({ notify }) {
     // ── Roles ──────────────────────────────────────────────────
     const [rolePerms, setRolePerms] = useState({});
     const [savingRole, setSavingRole] = useState(null);
+    // Rol cuya matriz se está editando. Los cambios se llevan en rolePerms; si se cancela,
+    // se restauran desde el rol para no dejar marcas a medias en pantalla.
+    const [permRole, setPermRole] = useState(null);
+
+    const openPerms = (role) => setPermRole(role);
+    const cancelPerms = () => {
+        if (permRole) {
+            setRolePerms(prev => ({ ...prev, [permRole.id]: permRole.permissions ?? {} }));
+        }
+        setPermRole(null);
+    };
 
     useEffect(() => {
         const map = {};
@@ -232,89 +243,163 @@ export default function EmployeesTab({ notify }) {
 
             {/* ── Sección Roles y Permisos ── */}
             {activeTab === "roles" && (
-                <div className="space-y-4 flex-1 overflow-auto">
+                <div className="flex-1 overflow-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 content-start py-3">
                     {roles.map(role => {
                         const isAdmin = role.name === "admin";
                         const perms   = rolePerms[role.id] ?? {};
+                        // Resumen por módulo: cuántas acciones de cada uno tiene concedidas.
+                        // Es lo que permite entender un rol de un vistazo, sin abrirlo.
+                        const resumen = catalog.map(mod => ({
+                            key:   mod.key,
+                            label: mod.label,
+                            dadas: mod.actions.filter(a => perms[`${mod.key}.${a.key}`]).length,
+                            total: mod.actions.length,
+                        }));
+                        const concedidas = resumen.reduce((a, m) => a + m.dadas, 0);
+                        const totales    = resumen.reduce((a, m) => a + m.total, 0);
+
                         return (
-                            <div key={role.id} className="card-premium p-5">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div>
-                                        <div className="text-sm font-black text-content dark:text-white uppercase tracking-tight">{role.label}</div>
+                            <div key={role.id} className="card-premium p-4 flex flex-col gap-3">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="text-[13px] font-black text-content dark:text-white uppercase tracking-tight truncate">{role.label}</div>
                                         <div className="text-[10px] font-bold text-content-subtle font-mono mt-0.5">{role.name}</div>
                                     </div>
-                                    {isAdmin ? (
-                                        <span className="badge badge-success text-[11px]">Acceso total</span>
-                                    ) : (
-                                        <Button
-                                            size="sm"
-                                            loading={savingRole === role.id}
-                                            onClick={() => saveRole(role)}
-                                            className="h-8 px-4 text-[10px] font-black uppercase tracking-wide"
-                                        >
-                                            Guardar
-                                        </Button>
-                                    )}
+                                    {isAdmin
+                                        ? <span className="badge badge-success shadow-none shrink-0">Acceso total</span>
+                                        : <span className="text-[10px] font-black tabular-nums text-brand-500 shrink-0">{concedidas}/{totales}</span>}
                                 </div>
+
                                 {isAdmin ? (
-                                    <p className="text-xs text-content-subtle">El rol Administrador tiene acceso total al sistema y no puede modificarse.</p>
+                                    <p className="text-[11px] font-bold text-content-subtle leading-relaxed flex-1">
+                                        Tiene acceso total al sistema y no puede modificarse.
+                                    </p>
                                 ) : (
-                                    <div className="space-y-3">
-                                        {catalog.map(mod => {
-                                            const keys  = mod.actions.map(a => `${mod.key}.${a.key}`);
-                                            const dadas = keys.filter(k => perms[k]).length;
-                                            return (
-                                                <div key={mod.key} className="rounded-xl border border-border/30 dark:border-white/5 overflow-hidden">
-                                                    <div className="px-3 py-2 flex items-center justify-between gap-3 bg-surface-2/60 dark:bg-white/[0.03] border-b border-border/20 dark:border-white/5">
-                                                        <div className="flex items-center gap-2 min-w-0">
-                                                            <span className="text-[11px] font-black uppercase tracking-tight text-content dark:text-white truncate">{mod.label}</span>
-                                                            <span className={`text-[9px] font-black uppercase tracking-widest ${dadas ? "text-brand-500" : "text-content-subtle opacity-50"}`}>
-                                                                {dadas}/{keys.length}
-                                                            </span>
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => toggleModule(role.id, mod)}
-                                                            className="text-[9px] font-black uppercase tracking-widest text-brand-500 hover:underline shrink-0"
-                                                        >
-                                                            {dadas === keys.length ? "Quitar todo" : "Dar todo"}
-                                                        </button>
-                                                    </div>
-                                                    <div className="p-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5">
-                                                        {mod.actions.map(act => {
-                                                            const k = `${mod.key}.${act.key}`;
-                                                            return (
-                                                                <label
-                                                                    key={k}
-                                                                    className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border cursor-pointer transition-colors ${
-                                                                        perms[k]
-                                                                            ? "bg-brand-500/10 border-brand-500/30"
-                                                                            : "bg-surface-2 dark:bg-surface-dark-2 border-border/30 dark:border-white/5 hover:border-brand-500/20"
-                                                                    }`}
-                                                                >
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={!!perms[k]}
-                                                                        onChange={() => togglePerm(role.id, k)}
-                                                                        className="accent-brand-500 w-4 h-4 shrink-0"
-                                                                    />
-                                                                    <span className={`text-[10px] font-bold leading-tight ${perms[k] ? "text-brand-600 dark:text-brand-400" : "text-content-subtle"}`}>
-                                                                        {act.label}
-                                                                    </span>
-                                                                </label>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                    <>
+                                        {/* Un renglón por módulo con algo concedido. Los que están en cero
+                                            no se listan: lo que importa de un vistazo es qué SÍ puede. */}
+                                        <div className="flex-1 flex flex-wrap gap-1.5 content-start">
+                                            {resumen.filter(m => m.dadas > 0).map(m => (
+                                                <span
+                                                    key={m.key}
+                                                    className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide border ${
+                                                        m.dadas === m.total
+                                                            ? "bg-brand-500/10 text-brand-500 border-brand-500/25"
+                                                            : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/40 dark:border-white/10"
+                                                    }`}
+                                                    title={`${m.label}: ${m.dadas} de ${m.total}`}
+                                                >
+                                                    {m.label} {m.dadas}/{m.total}
+                                                </span>
+                                            ))}
+                                            {concedidas === 0 && (
+                                                <span className="text-[11px] font-bold text-content-subtle opacity-60">Sin permisos asignados</span>
+                                            )}
+                                        </div>
+
+                                        <Button
+                                            variant="ghost"
+                                            onClick={() => openPerms(role)}
+                                            className="h-8 w-full text-[10px] border border-border/30 dark:border-white/10"
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                            Editar permisos
+                                        </Button>
+                                    </>
                                 )}
                             </div>
                         );
                     })}
                 </div>
             )}
+
+            {/* ── Modal: matriz de permisos de un rol ── */}
+            <Modal
+                open={!!permRole}
+                onClose={() => setPermRole(null)}
+                title={permRole ? `Permisos · ${permRole.label}` : ""}
+                width={720}
+            >
+                {permRole && (() => {
+                    const perms = rolePerms[permRole.id] ?? {};
+                    const concedidas = catalog.reduce((a, m) => a + m.actions.filter(x => perms[`${m.key}.${x.key}`]).length, 0);
+                    return (
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between gap-3 pb-1">
+                                <p className="text-[11px] font-bold text-content-subtle leading-relaxed">
+                                    Lo que este rol puede hacer en cada módulo.
+                                </p>
+                                <span className="text-[10px] font-black tabular-nums text-brand-500 shrink-0">{concedidas} activos</span>
+                            </div>
+
+                            {/* La matriz vive dentro de un contenedor con scroll propio: son 46
+                                casillas y el modal no debe crecer más que la pantalla. */}
+                            <div className="max-h-[55vh] overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+                                {catalog.map(mod => {
+                                    const keys  = mod.actions.map(a => `${mod.key}.${a.key}`);
+                                    const dadas = keys.filter(k => perms[k]).length;
+                                    return (
+                                        <div key={mod.key} className="rounded-xl border border-border/30 dark:border-white/5 overflow-hidden">
+                                            <div className="px-3 py-2 flex items-center justify-between gap-3 bg-surface-2/60 dark:bg-white/[0.03] border-b border-border/20 dark:border-white/5">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <span className="text-[11px] font-black uppercase tracking-tight text-content dark:text-white truncate">{mod.label}</span>
+                                                    <span className={`text-[9px] font-black uppercase tracking-widest ${dadas ? "text-brand-500" : "text-content-subtle opacity-50"}`}>
+                                                        {dadas}/{keys.length}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleModule(permRole.id, mod)}
+                                                    className="text-[9px] font-black uppercase tracking-widest text-brand-500 hover:underline shrink-0"
+                                                >
+                                                    {dadas === keys.length ? "Quitar todo" : "Dar todo"}
+                                                </button>
+                                            </div>
+                                            <div className="p-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                                {mod.actions.map(act => {
+                                                    const k = `${mod.key}.${act.key}`;
+                                                    return (
+                                                        <label
+                                                            key={k}
+                                                            className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border cursor-pointer transition-colors ${
+                                                                perms[k]
+                                                                    ? "bg-brand-500/10 border-brand-500/30"
+                                                                    : "bg-surface-2 dark:bg-surface-dark-2 border-border/30 dark:border-white/5 hover:border-brand-500/20"
+                                                            }`}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!perms[k]}
+                                                                onChange={() => togglePerm(permRole.id, k)}
+                                                                className="accent-brand-500 w-4 h-4 shrink-0"
+                                                            />
+                                                            <span className={`text-[10px] font-bold leading-tight ${perms[k] ? "text-brand-600 dark:text-brand-400" : "text-content-subtle"}`}>
+                                                                {act.label}
+                                                            </span>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-3 border-t border-border/10">
+                                <Button variant="ghost" onClick={() => { cancelPerms(); }}>Cancelar</Button>
+                                <Button
+                                    variant="primary"
+                                    loading={savingRole === permRole.id}
+                                    onClick={async () => { await saveRole(permRole); setPermRole(null); }}
+                                >
+                                    Guardar permisos
+                                </Button>
+                            </div>
+                        </div>
+                    );
+                })()}
+            </Modal>
+
 
             {/* ── Modal crear / editar empleado ── */}
             <Modal open={modal} onClose={closeModal} title={editId ? "Editar empleado" : "Nuevo empleado"} width={520}>
