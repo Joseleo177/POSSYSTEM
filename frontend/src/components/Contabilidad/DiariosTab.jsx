@@ -3,6 +3,7 @@ import { api } from "../../services/api";
 import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
+import CustomSelect from "../ui/CustomSelect";
 
 const EMPTY_JOURNAL = { name: "", type: "", color: "#6366f1", active: true, bank_id: null, currency_id: null, warehouse_id: null };
 
@@ -96,7 +97,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
                     <td>
                       {(() => {
                         const m = methodByCode[j.type];
-                        return <span className="text-[10px] font-black text-content-subtle opacity-60 uppercase tracking-wide">{m ? `${m.icon || ""} ${m.name}`.trim() : (j.type || "—")}</span>;
+                        return <span className="text-[10px] font-black text-content-subtle opacity-60 uppercase tracking-wide">{m ? m.name : (j.type || "—")}</span>;
                       })()}
                     </td>
                     <td>
@@ -169,25 +170,29 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <div className="label mb-1">Método de pago</div>
-            <select
+            {/* `m.icon` no existe en payment_methods: la plantilla anterior dejaba un
+                hueco delante de cada nombre. */}
+            <CustomSelect
               value={form.type || ""}
-              onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
-              className="input"
-            >
-              <option value="">— Ninguno</option>
-              {activeMethods.map(m => <option key={m.code} value={m.code}>{m.icon} {m.name}</option>)}
-            </select>
+              onChange={v => setForm(p => ({ ...p, type: v }))}
+              options={[
+                { value: "", label: "— Ninguno" },
+                ...activeMethods.map(m => ({ value: m.code, label: m.name })),
+              ]}
+              className="w-full"
+            />
           </div>
           <div>
             <div className="label mb-1">Moneda</div>
-            <select
-              value={form.currency_id || ""}
-              onChange={e => setForm(p => ({ ...p, currency_id: e.target.value || null }))}
-              className="input"
-            >
-              <option value="">— Base</option>
-              {currencies.map(c => <option key={c.id} value={c.id}>{c.symbol} {c.code}</option>)}
-            </select>
+            <CustomSelect
+              value={form.currency_id ? String(form.currency_id) : ""}
+              onChange={v => setForm(p => ({ ...p, currency_id: v || null }))}
+              options={[
+                { value: "", label: "— Base" },
+                ...currencies.map(c => ({ value: String(c.id), label: `${c.symbol} ${c.code}` })),
+              ]}
+              className="w-full"
+            />
           </div>
         </div>
         {/* Sucursal dueña de la caja. "Compartido" es lo correcto para una cuenta bancaria
@@ -196,14 +201,15 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
         {warehouses.length > 1 && (
           <div className="mb-3">
             <div className="label mb-1">Sucursal</div>
-            <select
-              value={form.warehouse_id || ""}
-              onChange={e => setForm(p => ({ ...p, warehouse_id: e.target.value || null }))}
-              className="input"
-            >
-              <option value="">— Compartido (todas las sucursales)</option>
-              {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
+            <CustomSelect
+              value={form.warehouse_id ? String(form.warehouse_id) : ""}
+              onChange={v => setForm(p => ({ ...p, warehouse_id: v || null }))}
+              options={[
+                { value: "", label: "— Compartido (todas las sucursales)" },
+                ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
+              ]}
+              className="w-full"
+            />
             <div className="text-[10px] font-bold text-content-subtle mt-1 opacity-60">
               Con una sucursal elegida, esta caja solo aparece y suma en ella.
             </div>
@@ -212,14 +218,15 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
 
         <div className="mb-3">
           <div className="label mb-1">Banco asociado</div>
-          <select
-            value={form.bank_id || ""}
-            onChange={e => setForm(p => ({ ...p, bank_id: e.target.value || null }))}
-            className="input"
-          >
-            <option value="">— Sin banco</option>
-            {activeBanks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
+          <CustomSelect
+            value={form.bank_id ? String(form.bank_id) : ""}
+            onChange={v => setForm(p => ({ ...p, bank_id: v || null }))}
+            options={[
+              { value: "", label: "— Sin banco" },
+              ...activeBanks.map(b => ({ value: String(b.id), label: b.name })),
+            ]}
+            className="w-full"
+          />
         </div>
         <div className="mb-4">
           <div className="label mb-1">Color identificador</div>
