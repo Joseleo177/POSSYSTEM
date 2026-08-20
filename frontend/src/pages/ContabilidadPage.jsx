@@ -57,21 +57,27 @@ export default function ContabilidadPage() {
  } catch (e) {}
  }, []);
 
+ // La lista de empleados es un dato auxiliar: solo la usa Series para asignar quién factura
+ // con cada una. Si el usuario no gestiona personal, ni se pide —antes se pedía igual y la
+ // pantalla recibía al entrar un "Sin permiso para esta acción" que no correspondía a nada
+ // que el gerente hubiera hecho. Y si aun así fallara, se calla: no es el objeto de esta
+ // pantalla y no hay nada que el usuario pueda hacer al respecto.
  const loadAllEmployees = useCallback(async () => {
  try {
  const r = await api.employees.getAll();
  setAllEmployees(r.data);
- } catch (e) { notify(e.message, "err"); }
- }, [notify]);
+ } catch (e) { /* sin permiso o sin red: Series simplemente no ofrece la asignación */ }
+ }, []);
 
  const canConfig = can("config");
+ const canManageUsers = can("admin") || can("employees");
 
  useEffect(() => {
  if (!canConfig) return;
  loadAllSeries();
- loadAllEmployees();
  loadAllWarehouses();
- }, [canConfig, loadAllSeries, loadAllEmployees, loadAllWarehouses]);
+ if (canManageUsers) loadAllEmployees();
+ }, [canConfig, canManageUsers, loadAllSeries, loadAllEmployees, loadAllWarehouses]);
 
  const [subPage, setSubPage] = useState("Estado de Cuenta");
  const [openGroup, setOpenGroup] = useState(null);

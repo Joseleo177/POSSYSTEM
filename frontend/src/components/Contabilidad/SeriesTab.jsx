@@ -209,6 +209,12 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
                   {/* Usuarios */}
                   <div>
                     <div className="text-[10px] font-black tracking-wider uppercase text-content-subtle mb-3 opacity-60">Usuarios con Acceso</div>
+                    {allEmployees.length === 0 && (
+                      <div className="text-[10px] font-bold text-content-subtle opacity-60 leading-relaxed">
+                        No tienes permiso para gestionar usuarios, así que no se puede asignar
+                        quién factura con esta serie. Pídeselo a un administrador.
+                      </div>
+                    )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {allEmployees.map(emp => {
                         const assigned = (serie.Employees || []).some(e => e.id === emp.id);
