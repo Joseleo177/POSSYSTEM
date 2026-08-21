@@ -51,6 +51,10 @@ export function usePublicCatalog(token) {
         try { return localStorage.getItem(`catalog_branch_${token}`) || ""; }
         catch { return ""; }
     });
+    // Volver a la puerta desde la cabecera. Es un estado aparte y no un branchId vacío para
+    // no perder cuál era la tienda actual: hace falta para saber si el cliente terminó
+    // cambiándose o se quedó donde estaba.
+    const [switchingBranch, setSwitchingBranch] = useState(false);
 
     // Identidad del visitante. Se recuerda en el navegador para que no tenga que
     // escribir su cédula cada vez que abre el enlace.
@@ -64,6 +68,16 @@ export function usePublicCatalog(token) {
         setIdentity(next);
         try { localStorage.setItem(identityKey, JSON.stringify(next)); } catch { /* modo privado */ }
     };
+
+    // Salir con el carrito lleno se pregunta: cerrar sesión también olvida la tienda, y con
+    // ella lo que el cliente venía armando deja de tener sentido.
+    const [logoutAsk, setLogoutAsk] = useState(false);
+    const requestLogout = () => {
+        if (cart.length > 0) return setLogoutAsk(true);
+        forgetIdentity();
+    };
+    const confirmLogout = () => { setLogoutAsk(false); forgetIdentity(); };
+    const cancelLogout = () => setLogoutAsk(false);
 
     const [profileOpen, setProfileOpen] = useState(false);
     const [editingProfile, setEditingProfile] = useState(false);
@@ -95,7 +109,16 @@ export function usePublicCatalog(token) {
         setOrdersOpen(false);
         setProfileOpen(false);
         setSelectedOrder(null);
-        try { localStorage.removeItem(identityKey); } catch { /* modo privado */ }
+        // Cerrar sesión es empezar de cero: también se olvida la tienda elegida, así que al
+        // volver a identificarse el cliente puede escoger otra. El carrito se va con ella
+        // porque lo que había dentro era stock de la sucursal anterior.
+        setBranchId("");
+        setSwitchingBranch(false);
+        setCart([]);
+        try {
+            localStorage.removeItem(identityKey);
+            localStorage.removeItem(branchKey);
+        } catch { /* modo privado */ }
     };
 
     // Seguimiento de pedidos. Los ids enviados desde este navegador se recuerdan aparte:
@@ -187,11 +210,10 @@ export function usePublicCatalog(token) {
     // como funcionaba el catálogo antes de que existieran las sucursales.
     const branch = warehouses.find(w => String(w.id) === String(branchId))
         || (warehouses.length === 1 ? warehouses[0] : null);
-    // `switching` es volver a la puerta desde la cabecera. Es un estado aparte y no un
-    // branchId vacío para no perder cuál era la tienda actual: hace falta para saber si el
-    // cliente terminó cambiándose o se quedó donde estaba.
-    const [switchingBranch, setSwitchingBranch] = useState(false);
-    const branchGate = !!store && warehouses.length > 1 && (!branch || switchingBranch);
+    // Va después de la identificación: primero el cliente dice quién es y recién entonces
+    // elige tienda. Al revés, quien cerraba sesión volvía a la cédula pero ya no podía
+    // cambiar de sucursal, porque la elección seguía guardada de la visita anterior.
+    const branchGate = !!store && !gated && warehouses.length > 1 && (!branch || switchingBranch);
 
     const chooseBranch = (id) => {
         // Cambiar de tienda cambia el catálogo: lo que estaba en el carrito puede no existir
@@ -388,6 +410,7 @@ export function usePublicCatalog(token) {
         showCats, setShowCats, delivery, setDelivery,
         // identidad y perfil
         identity, saveIdentity, forgetIdentity,
+        requestLogout, logoutAsk, confirmLogout, cancelLogout,
         profileOpen, setProfileOpen, openProfileModal, handleSaveProfile,
         editingProfile, setEditingProfile,
         editName, setEditName, editPhone, setEditPhone,

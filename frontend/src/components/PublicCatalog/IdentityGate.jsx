@@ -2,6 +2,7 @@ import { useState } from "react";
 import { publicApi } from "../../services/api";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers";
 import { useTheme } from "../../hooks/useTheme";
+import CustomSelect from "../ui/CustomSelect";
 import { DOC_PREFIXES, docMaxLen } from "./shared";
 
 // Puerta de entrada al catálogo público: identifica al cliente por cédula o RIF antes de
@@ -98,13 +99,14 @@ export default function IdentityGate({ token, store, onIdentified }) {
                                 </p>
                             </div>
                             <div className="flex gap-2">
-                                <select
+                                <CustomSelect
                                     value={prefix}
-                                    onChange={e => { setPrefix(e.target.value); setNumber(n => n.slice(0, docMaxLen(e.target.value))); }}
-                                    className="h-11 w-[72px] px-2 rounded-xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-[13px] font-black text-center text-content dark:text-white outline-none focus:border-brand-500/60"
-                                >
-                                    {DOC_PREFIXES.map(p => <option key={p} value={p}>{p}-</option>)}
-                                </select>
+                                    onChange={v => { setPrefix(v); setNumber(n => n.slice(0, docMaxLen(v))); }}
+                                    options={DOC_PREFIXES.map(p => ({ value: p, label: `${p}-` }))}
+                                    height="h-11"
+                                    className="w-[78px] shrink-0"
+                                    boxClassName="rounded-xl text-[13px]"
+                                />
                                 <input
                                     value={number}
                                     onChange={e => setNumber(e.target.value.replace(/\D/g, "").slice(0, docMaxLen(prefix)))}

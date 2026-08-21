@@ -1,6 +1,7 @@
 import { usePublicCatalog } from "../hooks/usePublicCatalog";
 import BranchGate from "../components/PublicCatalog/BranchGate";
 import IdentityGate from "../components/PublicCatalog/IdentityGate";
+import LogoutConfirm from "../components/PublicCatalog/LogoutConfirm";
 import OrderDetailModal from "../components/PublicCatalog/OrderDetailModal";
 import ProductGrid from "../components/PublicCatalog/ProductGrid";
 import StoreHeader from "../components/PublicCatalog/StoreHeader";
@@ -27,7 +28,8 @@ export default function PublicCatalogPage({ token }) {
         cart, cartTotal, cartOpen, setCartOpen,
         addToCart, changeQty, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,
         showCats, setShowCats, delivery, setDelivery,
-        identity, saveIdentity, forgetIdentity,
+        identity, saveIdentity,
+        requestLogout, logoutAsk, confirmLogout, cancelLogout,
         profileOpen, setProfileOpen, openProfileModal, handleSaveProfile,
         editingProfile, setEditingProfile,
         editName, setEditName, editPhone, setEditPhone,
@@ -51,15 +53,15 @@ export default function PublicCatalogPage({ token }) {
         );
     }
 
-    // La sucursal va antes que la identidad: define qué catálogo se muestra, y con varias
-    // tiendas no hay un "todo el stock" que enseñar mientras tanto.
-    if (branchGate) {
-        return <BranchGate store={store} warehouses={warehouses} onChoose={chooseBranch} currentId={branch?.id || null} />;
-    }
-
     // Puerta de entrada: la tienda pidió que nadie vea el catálogo sin identificarse.
     if (gated) {
         return <IdentityGate token={token} store={store} onIdentified={saveIdentity} />;
+    }
+
+    // Y recién después, dónde va a comprar. Al revés, quien cerraba sesión volvía a la
+    // cédula pero ya no podía cambiar de tienda: la elección anterior seguía guardada.
+    if (branchGate) {
+        return <BranchGate store={store} warehouses={warehouses} onChoose={chooseBranch} currentId={branch?.id || null} />;
     }
 
     return (
@@ -73,6 +75,7 @@ export default function PublicCatalogPage({ token }) {
                 showCats={showCats} setShowCats={setShowCats}
                 branch={branch} canChangeBranch={warehouses.length > 1}
                 onChangeBranch={openBranchGate}
+                onLogout={requestLogout}
             />
 
             <ProductGrid
@@ -133,8 +136,15 @@ export default function PublicCatalogPage({ token }) {
                 editPhone={editPhone}
                 setEditPhone={setEditPhone}
                 onSave={handleSaveProfile}
-                onForget={forgetIdentity}
+                onForget={requestLogout}
                 onOpenMyOrders={openMyOrders}
+            />
+
+            <LogoutConfirm
+                open={logoutAsk}
+                itemCount={cart.length}
+                onConfirm={confirmLogout}
+                onCancel={cancelLogout}
             />
 
             {/* ── Modal de Detalle de Pedido ── */}

@@ -4,7 +4,11 @@ import { createPortal } from "react-dom";
 // icon: nodo opcional que se dibuja DENTRO de la caja, antes de la etiqueta. Antes había
 // que superponerlo por fuera con position absolute y padding, y como `className` se aplica
 // al contenedor —no a la caja visible— el icono terminaba fuera del recuadro.
-export default function CustomSelect({ value, onChange, options, placeholder = "Seleccionar...", className = "", disabled = false, height = "h-10", icon = null }) {
+// boxClassName: clases para la caja visible, no para el contenedor. `className` envuelve al
+// componente entero, así que no alcanza para retocar la caja —por ejemplo igualar el radio y
+// el tamaño de letra a los de un input hermano, como en el catálogo público—. Vacío por
+// defecto: los usos existentes se ven igual que siempre.
+export default function CustomSelect({ value, onChange, options, placeholder = "Seleccionar...", className = "", disabled = false, height = "h-10", icon = null, boxClassName = "" }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0, openUp: false });
   const triggerRef = useRef(null);
@@ -56,7 +60,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
       <div
         ref={triggerRef}
         onClick={() => setOpen(!open)}
-        className={`${height} text-[11px] cursor-pointer flex items-center justify-between transition-all duration-200 border px-3 rounded-md
+        className={`${height} text-[11px] cursor-pointer flex items-center justify-between transition-all duration-200 border px-3 rounded-md ${boxClassName}
           ${open
             ? "border-brand-500 bg-brand-500/5 ring-[3px] ring-brand-500/15"
             : "bg-white dark:bg-[#12141a] border-border/80 dark:border-white/5 hover:border-brand-500/40"}

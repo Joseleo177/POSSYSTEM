@@ -1,5 +1,6 @@
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
+import CustomSelect from "../ui/CustomSelect";
 
 // Interruptor con el mismo trato que los de ProductModal: tarjeta con título, explicación y
 // el switch a la derecha. Antes "Activo" era una casilla suelta al lado de una tarjeta, y la
@@ -84,19 +85,17 @@ export default function WarehouseModal({ open, onClose, form, setForm, editId, l
                         <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mb-2 leading-relaxed">
                             Vincula este depósito con la tienda o sucursal a la que pertenece.
                         </div>
-                        <select
-                            value={form.parent_warehouse_id || ""}
-                            onChange={e => setForm(p => ({ ...p, parent_warehouse_id: e.target.value ? parseInt(e.target.value) : null }))}
-                            className="input text-xs"
-                        >
-                            <option value="">— Sin asignar —</option>
-                            {parentOptions
-                                .filter(w => w.id !== editId) // No puede ser su propio padre
-                                .map(w => (
-                                    <option key={w.id} value={w.id}>{w.name}</option>
-                                ))
-                            }
-                        </select>
+                        <CustomSelect
+                            value={form.parent_warehouse_id ?? ""}
+                            onChange={v => setForm(p => ({ ...p, parent_warehouse_id: v ? parseInt(v) : null }))}
+                            options={[
+                                { value: "", label: "— Sin asignar —" },
+                                // No puede ser su propio padre.
+                                ...parentOptions.filter(w => w.id !== editId).map(w => ({ value: w.id, label: w.name })),
+                            ]}
+                            placeholder="— Sin asignar —"
+                            className="w-full"
+                        />
                     </div>
                 )}
 

@@ -58,12 +58,12 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
       </div>
 
       <div className="card-premium overflow-auto flex-1">
-      {journals.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 opacity-20">
-          <div className="text-xs font-black uppercase tracking-wide">No hay diarios configurados</div>
-        </div>
-      ) : (
-        <table className="table-pos min-w-[680px]">
+        {journals.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 opacity-20">
+            <div className="text-xs font-black uppercase tracking-wide">No hay diarios configurados</div>
+          </div>
+        ) : (
+          <table className="table-pos min-w-[680px]">
             <thead className="sticky top-0 z-10">
               <tr>
                 <th className="w-12" />
@@ -152,7 +152,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
               })}
             </tbody>
           </table>
-      )}
+        )}
       </div>
 
       {/* Modal: crear / editar */}
@@ -181,7 +181,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
               value={form.type || ""}
               onChange={v => setForm(p => ({ ...p, type: v }))}
               options={[
-                { value: "", label: "— Ninguno" },
+                { value: "", label: "Ninguno" },
                 ...activeMethods.map(m => ({ value: m.code, label: m.name })),
               ]}
               className="w-full"
@@ -193,7 +193,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
               value={form.currency_id ? String(form.currency_id) : ""}
               onChange={v => setForm(p => ({ ...p, currency_id: v || null }))}
               options={[
-                { value: "", label: "— Base" },
+                { value: "", label: "Base" },
                 ...currencies.map(c => ({ value: String(c.id), label: `${c.symbol} ${c.code}` })),
               ]}
               className="w-full"
@@ -212,7 +212,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
               options={[
                 // Compartido alcanza a sucursales que un encargado no administra: el backend
                 // se lo rechaza, así que tampoco se le ofrece.
-                ...(can("admin") ? [{ value: "", label: "— Compartido (todas las sucursales)" }] : []),
+                ...(can("admin") ? [{ value: "", label: "Compartido (todas las sucursales)" }] : []),
                 // Un depósito no cobra, así que no tiene caja: ofrecerlo acá sería crear
                 // un diario donde nunca va a entrar dinero.
                 ...warehouses.filter(w => w.sells !== false).map(w => ({ value: String(w.id), label: w.name })),
@@ -232,7 +232,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
             value={form.bank_id ? String(form.bank_id) : ""}
             onChange={v => setForm(p => ({ ...p, bank_id: v || null }))}
             options={[
-              { value: "", label: "— Sin banco" },
+              { value: "", label: "Sin banco" },
               ...activeBanks.map(b => ({ value: String(b.id), label: b.name })),
             ]}
             className="w-full"

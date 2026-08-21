@@ -13,7 +13,7 @@ export default function StoreHeader({
     search, setSearch,
     categories, category, setCategory,
     showCats, setShowCats,
-    branch, canChangeBranch, onChangeBranch,
+    branch, canChangeBranch, onChangeBranch, onLogout,
 }) {
     return (
         <header className="bg-surface dark:bg-surface-dark-2 border-b border-border dark:border-white/5 sticky top-0 z-20">
@@ -98,6 +98,16 @@ export default function StoreHeader({
                                 <span className="text-[11px] font-bold max-w-[100px] truncate">
                                     {identity.name ? identity.name.split(" ")[0] : identity.document}
                                 </span>
+                            </button>
+
+                            {/* Salir a la vista, no enterrado en el perfil: en un catálogo abierto
+                                al público es normal que el teléfono lo use más de una persona. */}
+                            <button
+                                onClick={onLogout}
+                                title="Cerrar sesión"
+                                className="w-11 h-11 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 flex items-center justify-center text-content-muted hover:text-danger hover:border-danger/40 active:scale-95 transition-all shrink-0"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                             </button>
                         </>
                     )}
