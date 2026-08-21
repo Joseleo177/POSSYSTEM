@@ -31,17 +31,20 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
 // ── Rate limiting ─────────────────────────────────────────────
+// Las cajas de un local pegan contra el backend de su propia red y ahí el tope de intentos
+// estorba: un turno entero son miles de requests desde una sola IP.
+//
+// Los rangos van anclados al inicio a propósito. Con `includes` la comprobación miraba la
+// dirección entera, así que cualquier IP pública que contuviera la secuencia se daba por
+// LAN y quedaba exenta del límite de login: "85.110.4.7" contiene "10.", y "2001:db8::1234"
+// contiene "::1". Eso dejaba la fuerza bruta contra /auth/login sin tope desde fuera.
+const LAN_IPV4 = /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)/;
+
 const isLanIp = (req) => {
-  const ip = req.ip || req.connection?.remoteAddress || "";
-  return (
-    ip.includes("127.0.0.1") ||
-    ip.includes("::1") ||
-    ip.includes("::ffff:127.0.0.1") ||
-    ip.includes("192.168.") ||
-    ip.includes("10.") ||
-    /^::ffff:(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(ip) ||
-    /^172\.(1[6-9]|2[0-9]|3[01])\./.test(ip)
-  );
+  const raw = req.ip || req.connection?.remoteAddress || "";
+  if (raw === "::1") return true;                              // loopback IPv6
+  const ip = raw.startsWith("::ffff:") ? raw.slice(7) : raw;   // IPv4 mapeada a IPv6
+  return LAN_IPV4.test(ip);
 };
 
 const globalLimiter = rateLimit({
