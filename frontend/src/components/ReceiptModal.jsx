@@ -16,6 +16,10 @@ function normalizeSale(sale) {
         paid: parseFloat(sale.paid || 0),
         change: parseFloat(sale.change || 0),
         discount: parseFloat(sale.discount_amount || sale.discount || 0),
+        // Recargo de cabecera (propina, servicio, delivery). Va discriminado en el papel:
+        // el cliente tiene que poder ver qué parte del total no es mercancía.
+        charge: parseFloat(sale.service_charge || 0),
+        chargeLabel: (sale.service_charge_label || "Servicio").toUpperCase(),
         created_at: sale.created_at,
         items: (sale.items || []).map(i => ({
             ...i,
@@ -112,14 +116,23 @@ function calcReceiptTotals(s, rate, sym) {
 
     let subtotalBs = 0;
     let discountBs = isBs ? round2(s.discount * rate) : s.discount;
+    // El recargo se convierte una sola vez, al final, igual que el descuento: no es una línea
+    // que se multiplique por cantidad. Mismo criterio que saleTotalAtRate y que el backend.
+    const chargeBs = isBs ? round2(s.charge * rate) : s.charge;
     let totalBs = 0;
 
     if (isBs) {
         subtotalBs = items.reduce((acc, i) => acc + i.subtotalBs, 0);
-        totalBs = Math.max(0, subtotalBs - discountBs);
+        totalBs = Math.max(0, subtotalBs - discountBs + chargeBs);
     } else {
-        subtotalBs = s.total_precise + s.discount;
-        totalBs = s.total_precise;
+        // En divisas el subtotal sale de las mismas líneas que la pista en Bs. Antes se
+        // derivaba de total_precise —que es la suma bruta de líneas, sin el descuento
+        // aplicado—, así que un ticket en $ con descuento global lo mostraba en el renglón
+        // pero no lo restaba del total.
+        subtotalBs = items.length
+            ? items.reduce((acc, i) => acc + i.subtotalBs, 0)
+            : Math.max(0, s.total + s.discount - s.charge);
+        totalBs = Math.max(0, subtotalBs - discountBs + chargeBs);
     }
 
     // Lo abonado y lo que queda debiendo salen de la MISMA pista que el TOTAL.
@@ -138,6 +151,8 @@ function calcReceiptTotals(s, rate, sym) {
         items,
         fmtSubtotal: fmt(subtotalBs, sym),
         fmtDiscount: fmt(discountBs, sym),
+        chargeBs,
+        fmtCharge: fmt(chargeBs, sym),
         fmtTotal: fmt(totalBs, sym),
         totalBs,
         paidBs,
@@ -291,6 +306,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
     <div class="totals">
         <div class="total-row"><span>SUBTOTAL</span><span>${totals.fmtSubtotal}</span></div>
         ${s.discount > 0 ? `<div class="total-row discount"><span>DESCUENTO</span><span>-${totals.fmtDiscount}</span></div>` : ""}
+        ${s.charge > 0 ? `<div class="total-row"><span>${s.chargeLabel}</span><span>+${totals.fmtCharge}</span></div>` : ""}
         <div class="total-row big"><span>TOTAL</span><span>${totals.fmtTotal}</span></div>
     </div>
 
@@ -459,6 +475,12 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     <div className="flex justify-between items-center py-0.5 text-xs text-danger">
                         <span className="font-medium">Descuento</span>
                         <span className="font-bold">-{totals.fmtDiscount}</span>
+                    </div>
+                )}
+                {s.charge > 0 && (
+                    <div className="flex justify-between items-center py-0.5 text-xs text-content dark:text-content-dark">
+                        <span className="font-medium capitalize">{s.chargeLabel.toLowerCase()}</span>
+                        <span className="font-bold">+{totals.fmtCharge}</span>
                     </div>
                 )}
                 <div className="flex justify-between items-center py-1.5 border-t border-border/10 dark:border-white/5 mt-1 pt-1.5">

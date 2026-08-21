@@ -111,10 +111,14 @@ module.exports = async function createPayment(body, req) {
     const isBsPay = payRate > 1;
     const saleItems = await SaleItem.findAll({ where: { sale_id }, transaction: t });
     const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+    // El recargo (propina/servicio) se convierte y redondea igual que el descuento: es un
+    // monto de cabecera, no una línea, así que entra una sola vez al final de la suma.
     const totalBsAt = (rate) => round2(
       saleItems.reduce((acc, i) =>
         acc + round2((parseFloat(i.price || 0) - parseFloat(i.discount || 0)) * rate) * parseFloat(i.quantity || 0)
-      , 0) - round2(parseFloat(sale.discount_amount || 0) * rate)
+      , 0)
+      - round2(parseFloat(sale.discount_amount || 0) * rate)
+      + round2(parseFloat(sale.service_charge || 0) * rate)
     );
     const saleTotalBs = isBsPay ? totalBsAt(payRate) : saleTotal;
 

@@ -52,7 +52,7 @@ async function formatSale(saleId) {
 }
 
 module.exports = async function createSale(body) {
-  const { items, paid, customer_id, employee_id, currency_id, exchange_rate, payment_method, serie_id, discount_amount, warehouse_id, idempotency_key, quotation_id, hold } =
+  const { items, paid, customer_id, employee_id, currency_id, exchange_rate, payment_method, serie_id, discount_amount, service_charge, service_charge_label, warehouse_id, idempotency_key, quotation_id, hold } =
     body;
 
   // Idempotencia: si ya existe una venta con esta clave, devolverla sin
@@ -87,6 +87,10 @@ module.exports = async function createSale(body) {
 
     const method = PAYMENT_METHODS.includes(payment_method) ? payment_method : "efectivo";
     const discAmt = parseFloat(discount_amount) || 0;
+    // Recargo de cabecera (propina/servicio). Llega en moneda base, igual que el descuento, y
+    // suma al total en vez de restar. Negativo no: para bajar el total está el descuento.
+    const chargeAmt = Math.max(0, parseFloat(service_charge) || 0);
+    const chargeLabel = chargeAmt > 0 ? (service_charge_label?.trim().slice(0, 40) || "Servicio") : null;
     const rate = parseFloat(exchange_rate) || 1;
 
     // Cargar promociones activas para esta venta
@@ -191,7 +195,7 @@ module.exports = async function createSale(body) {
     }
 
     // 2 decimales: sale.total es el monto "oficial" de la factura en $.
-    total = parseFloat((total - discAmt).toFixed(2));
+    total = parseFloat((total - discAmt + chargeAmt).toFixed(2));
     if (total < 0) total = 0;
 
     const paidBase = parseFloat(paid) || 0;
@@ -207,6 +211,8 @@ module.exports = async function createSale(body) {
         currency_id: currency_id || null,
         exchange_rate: rate,
         discount_amount: discAmt,
+        service_charge: chargeAmt,
+        service_charge_label: chargeLabel,
         payment_method: method,
         warehouse_id,
         serie_id: serie.id,

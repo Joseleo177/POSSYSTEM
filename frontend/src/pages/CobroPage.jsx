@@ -33,6 +33,8 @@ export default function CobroPage() {
         subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
         discountPct, setDiscountPct, totalDisplay, totalSecondary,
         subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
+        chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel,
+        chargeInput, setChargeInput, setChargeFromPct, chargeAmountDisplay, chargePct,
         currentCurrency, setSelectedCurrency, secondaryCurrency,
         convertToDisplay, convertToSecondary,
         selectedSerieId, selectSerie, mySeries,
@@ -182,6 +184,11 @@ export default function CobroPage() {
                 totalDisplay={totalDisplay} totalSecondary={totalSecondary}
                 subtotalDisplay={subtotalDisplay} promoDiscountDisplay={promoDiscountDisplay}
                 discountAmountDisplay={discountAmountDisplay} promoLineDiscountDisplay={promoLineDiscountDisplay}
+                chargeEnabled={chargeEnabled} setChargeEnabled={setChargeEnabled}
+                chargeLabel={chargeLabel} setChargeLabel={setChargeLabel}
+                chargeInput={chargeInput} setChargeInput={setChargeInput}
+                setChargeFromPct={setChargeFromPct}
+                chargeAmountDisplay={chargeAmountDisplay} chargePct={chargePct}
                 convertToDisplay={convertToDisplay} convertToSecondary={convertToSecondary}
                 currSym={currSym} secondaryCurrency={secondaryCurrency} fmt={fmt}
                 currentCurrency={currentCurrency} setSelectedCurrency={setSelectedCurrency}

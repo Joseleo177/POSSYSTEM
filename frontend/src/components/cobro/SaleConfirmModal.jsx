@@ -75,7 +75,15 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     const totalMain = saleTotalAtRate(receipt, mainRate);
     const totalAlt  = saleTotalAtRate(receipt, altRate);
     const fmtTotal    = (t, sym) => `${sym}${t.toFixed(2)}`;
-    const fmtSubtotal = (t, rate, sym) => `${sym}${round2(t + round2(parseFloat(receipt?.discount_amount || 0) * rate)).toFixed(2)}`;
+    // El subtotal se reconstruye desde el total: se le devuelve el descuento y se le quita el
+    // recargo, cada uno convertido con el mismo redondeo que usó saleTotalAtRate.
+    const fmtSubtotal = (t, rate, sym) => `${sym}${round2(
+        t
+        + round2(parseFloat(receipt?.discount_amount || 0) * rate)
+        - round2(parseFloat(receipt?.service_charge || 0) * rate)
+    ).toFixed(2)}`;
+    const saleCharge = parseFloat(receipt?.service_charge || 0);
+    const saleChargeLabel = receipt?.service_charge_label || "Servicio";
 
     // Lo ya cobrado y lo devuelto se descuentan del total en la misma pista de moneda, igual
     // que en PaymentFormModal: así "Falta por cobrar" es exactamente el "Saldo pendiente"
@@ -248,7 +256,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
 
                 {/* Totales */}
                 <div className="px-5 py-4 space-y-2 border-b border-border/20 dark:border-white/5">
-                    {parseFloat(receipt.discount_amount) > 0 && (
+                    {(parseFloat(receipt.discount_amount) > 0 || saleCharge > 0) && (
                         <>
                             <div className="flex justify-between items-center">
                                 <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 uppercase tracking-wide">Subtotal</span>
@@ -256,10 +264,18 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                                     {fmtSubtotal(totalMain, mainRate, receiptSym)}
                                 </span>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-[11px] font-bold text-danger uppercase tracking-wide">Descuento</span>
-                                <span className="text-[11px] font-bold text-danger tabular-nums">-{fmt(receipt.discount_amount)}</span>
-                            </div>
+                            {parseFloat(receipt.discount_amount) > 0 && (
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[11px] font-bold text-danger uppercase tracking-wide">Descuento</span>
+                                    <span className="text-[11px] font-bold text-danger tabular-nums">-{fmt(receipt.discount_amount)}</span>
+                                </div>
+                            )}
+                            {saleCharge > 0 && (
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[11px] font-bold text-content-muted uppercase tracking-wide truncate pr-2">{saleChargeLabel}</span>
+                                    <span className="text-[11px] font-bold text-content-muted tabular-nums shrink-0">+{fmt(saleCharge)}</span>
+                                </div>
+                            )}
                         </>
                     )}
                     <div className="flex justify-between items-center pt-1">

@@ -8,6 +8,9 @@ export default function CartSidebar({
     subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
     discountPct, setDiscountPct, totalDisplay, totalSecondary,
     subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
+    chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel,
+    chargeInput, setChargeInput, setChargeFromPct,
+    chargeAmountDisplay = 0, chargePct = 0,
     convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt,
     currentCurrency, setSelectedCurrency, activeCurrencies,
     selectedSerieId, selectSerie, mySeries,
@@ -403,6 +406,52 @@ export default function CartSidebar({
                             </div>
                         )}
                     </div>
+
+                    {/* Recargo: propina, servicio, delivery. Se carga por MONTO en la moneda
+                        que está en pantalla, y los atajos de porcentaje solo rellenan ese
+                        monto, que el cajero puede seguir ajustando a mano. */}
+                    <div className="bg-surface-2 dark:bg-white/5 rounded-lg p-2 space-y-2 border border-black/5 dark:border-white/5">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setChargeEnabled(!chargeEnabled)} className={`w-8 h-5 lg:w-10 lg:h-6 rounded-full transition-all relative ${chargeEnabled ? "bg-brand-500" : "bg-surface-3 dark:bg-white/10"}`}>
+                                    <div className={`absolute top-0.5 lg:top-1 left-0.5 lg:left-1 w-4 h-4 bg-white rounded-full transition-all ${chargeEnabled ? "translate-x-3 lg:translate-x-4" : ""}`} />
+                                </button>
+                                <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide opacity-60 dark:text-content-dark-muted">Recargo</span>
+                            </div>
+                            {chargeEnabled && (
+                                <div className="relative w-24 lg:w-28">
+                                    <input
+                                        type="number" min="0" step="0.01" inputMode="decimal"
+                                        value={chargeInput}
+                                        onChange={e => setChargeInput(e.target.value)}
+                                        placeholder="0.00"
+                                        className="w-full bg-surface-2 dark:bg-white/10 h-7 lg:h-8 rounded-lg pl-10 pr-2 text-right text-xs font-black outline-none focus:ring-2 focus:ring-brand-500/20 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    />
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-black opacity-30 dark:text-white pointer-events-none">{currSym}</span>
+                                </div>
+                            )}
+                        </div>
+                        {chargeEnabled && (
+                            <div className="flex items-center gap-1.5">
+                                <input
+                                    type="text" maxLength={40}
+                                    value={chargeLabel}
+                                    onChange={e => setChargeLabel(e.target.value)}
+                                    placeholder="Servicio"
+                                    className="flex-1 min-w-0 bg-surface-2 dark:bg-white/10 h-7 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide outline-none focus:ring-2 focus:ring-brand-500/20 dark:text-white"
+                                />
+                                {[10, 15, 20].map(p => (
+                                    <button
+                                        key={p}
+                                        onClick={() => setChargeFromPct(p)}
+                                        className="h-7 px-2 rounded-lg bg-surface-2 dark:bg-white/10 text-[10px] font-black text-content-subtle dark:text-content-dark-muted hover:bg-brand-500 hover:text-white transition-all shrink-0"
+                                    >
+                                        {p}%
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                     <div className="bg-surface-2 dark:bg-white/5 p-3 rounded-xl border border-black/5 dark:border-white/10">
                         <div className="space-y-1 mb-2">
                             <div className="flex justify-between items-center opacity-60 dark:text-content-dark-muted">
@@ -419,6 +468,17 @@ export default function CartSidebar({
                                 <div className="flex justify-between items-center text-brand-500">
                                     <span className="text-[10px] lg:text-xs font-black uppercase tracking-wide">DESC. ({discountPct}%)</span>
                                     <span className="text-[11px] lg:text-sm font-black tabular-nums">-{fmt(discountAmountDisplay, currSym)}</span>
+                                </div>
+                            )}
+                            {chargeAmountDisplay > 0 && (
+                                <div className="flex justify-between items-center text-content dark:text-white">
+                                    <span className="text-[10px] lg:text-xs font-black uppercase tracking-wide truncate pr-2">
+                                        {/* Un recargo simbólico frente a un consumo grande da
+                                            0.0%: en ese caso no se rotula, en vez de mostrar
+                                            un porcentaje que parece un error de cálculo. */}
+                                        {chargeLabel?.trim() || "Servicio"}{chargePct >= 0.05 ? ` (${chargePct.toFixed(1)}%)` : ""}
+                                    </span>
+                                    <span className="text-[11px] lg:text-sm font-black tabular-nums shrink-0">+{fmt(chargeAmountDisplay, currSym)}</span>
                                 </div>
                             )}
                         </div>

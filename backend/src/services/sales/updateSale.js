@@ -26,7 +26,7 @@ async function syncTotalStock(productId, transaction) {
 }
 
 module.exports = async function updateSale(saleId, body, req) {
-  const { items, discount_amount } = body;
+  const { items, discount_amount, service_charge, service_charge_label } = body;
 
   if (!items?.length) throw bad("Debes incluir al menos un producto");
 
@@ -199,9 +199,15 @@ module.exports = async function updateSale(saleId, body, req) {
     }
 
     const discAmt = parseFloat(discount_amount ?? sale.discount_amount) || 0;
+    // El recargo se conserva si el body no lo trae: reabrir una cuenta para agregarle una
+    // ronda no debe borrar la propina que ya se le había cargado.
+    const chargeAmt = Math.max(0, parseFloat(service_charge ?? sale.service_charge) || 0);
+    const chargeLabel = chargeAmt > 0
+      ? ((service_charge_label ?? sale.service_charge_label)?.trim().slice(0, 40) || "Servicio")
+      : null;
     // 2 decimales: sale.total es el monto "oficial" de la factura en $.
     // La precisión completa vive en sale_items (price/discount/subtotal).
-    total = parseFloat((total - discAmt).toFixed(2));
+    total = parseFloat((total - discAmt + chargeAmt).toFixed(2));
     if (total < 0) total = 0;
 
     // Al cobrar una cuenta en espera se la pasa a 'borrador' para que el pago le asigne
@@ -215,7 +221,16 @@ module.exports = async function updateSale(saleId, body, req) {
     // terminan vaciando el carrito de la caja, así que a partir de este punto ya no la está
     // atendiendo nadie y otra caja debe poder tomarla.
     await sale.update(
-      { total, discount_amount: discAmt, held_by_employee_id: null, held_at: null, ...headerPatch, ...statusPatch },
+      {
+        total,
+        discount_amount: discAmt,
+        service_charge: chargeAmt,
+        service_charge_label: chargeLabel,
+        held_by_employee_id: null,
+        held_at: null,
+        ...headerPatch,
+        ...statusPatch,
+      },
       { transaction }
     );
 

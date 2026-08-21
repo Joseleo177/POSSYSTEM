@@ -70,7 +70,12 @@ export const convertToDisplay = (amountBase, currency) => {
  * Sin tasa (moneda base) o sin líneas no hay conversión por línea que aplicar: se
  * devuelve el total oficial de la factura, que es la fuente de verdad en divisas.
  *
- * @param {object} sale - Venta con { total, discount_amount, items[{ price, discount, quantity }] }
+ * El recargo de cabecera (propina/servicio) entra igual que el descuento pero sumando: es un
+ * monto de la factura, no una línea, así que se convierte y redondea una sola vez al final.
+ * Es el espejo exacto de totalBsAt() en el backend (services/payments/createPayment.js): si
+ * uno de los dos suma el recargo y el otro no, la factura nunca cierra en bolívares.
+ *
+ * @param {object} sale - Venta con { total, discount_amount, service_charge, items[{ price, discount, quantity }] }
  * @param {number} rate - Tasa a la que convertir
  */
 export const saleTotalAtRate = (sale, rate) => {
@@ -84,7 +89,11 @@ export const saleTotalAtRate = (sale, rate) => {
     const qty = parseFloat(i.quantity ?? i.qty ?? 0);
     return acc + round2(net * r) * qty;
   }, 0);
-  return round2(lines - round2(parseFloat(sale?.discount_amount || 0) * r));
+  return round2(
+    lines
+    - round2(parseFloat(sale?.discount_amount || 0) * r)
+    + round2(parseFloat(sale?.service_charge || 0) * r)
+  );
 };
 
 /**

@@ -86,6 +86,22 @@ export function CartProvider({ children }) {
   const [discountEnabled, setDiscountEnabled] = useState(false);
   const [discountPct, setDiscountPct] = useState("");
 
+  // ── Recargo (propina / servicio / delivery) ───────────────
+  // Es lo contrario del descuento: suma al total. Se carga por MONTO en la moneda que el
+  // cajero tiene en pantalla —así puede cobrar la propina exacta que deja el cliente— y la
+  // caja ve al lado a qué porcentaje del consumo equivale.
+  //
+  // No entra como línea del carrito a propósito: una propina no es un producto, no descuenta
+  // inventario y no debe aparecer en el reporte de lo vendido.
+  const [chargeEnabled, setChargeEnabled] = useState(false);
+  const [chargeLabel, setChargeLabel] = useState("Servicio");
+  const [chargeInput, setChargeInput] = useState("");
+  // En qué moneda está expresado chargeInput. El selector de arriba cambia la moneda de toda
+  // la pantalla, y un monto tecleado no puede quedarse en el mismo número al cambiarla: una
+  // propina de 2 Ref se convertiría sola en 2 Bs, o sea en nada. El descuento no sufre esto
+  // porque es un porcentaje.
+  const chargeIsVesRef = useRef(false);
+
   // ── Cliente seleccionado ───────────────────────────────────
   const [selectedCustomer, setSelectedCustomer] = useState(null);
 
@@ -270,6 +286,9 @@ export function CartProvider({ children }) {
     setSelectedSerieId(mySeries.length > 0 ? mySeries[0].id : null);
     setDiscountEnabled(false);
     setDiscountPct("");
+    setChargeEnabled(false);
+    setChargeInput("");
+    setChargeLabel("Servicio");
     setQuotationId(null);
   }, [mySeries]);
 
@@ -320,6 +339,30 @@ export function CartProvider({ children }) {
   const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
   const vesCurrency = activeCurrencies.find(c => !c.is_base) || null;
   const vesRate = vesCurrency?.exchange_rate ? parseFloat(vesCurrency.exchange_rate) : null;
+  const isVesPrimary = !!currentCurrency && !currentCurrency.is_base;
+
+  // El recargo se teclea en la moneda de pantalla y se persiste en base (como discount_amount).
+  // Cada pista lo usa sin ida y vuelta por la tasa: lo que el cajero escribió es exacto en su
+  // propia moneda, y la otra pista lo convierte una sola vez.
+  const chargeRaw = chargeEnabled
+    ? Math.max(0, parseFloat(String(chargeInput).replace(",", ".")) || 0)
+    : 0;
+  const chargeUsd = isVesPrimary ? (vesRate ? chargeRaw / vesRate : 0) : chargeRaw;
+  const chargeBs  = vesRate ? (isVesPrimary ? chargeRaw : round2(chargeRaw * vesRate)) : 0;
+
+  // Cambiar la moneda de la pantalla reexpresa el recargo, no lo reescribe: lo que valía
+  // Ref. 2.00 pasa a valer Bs. 1559.90, y el porcentaje sobre el consumo se mantiene. Sin
+  // esto el monto se leía como si fuera de la moneda nueva y la propina se evaporaba.
+  useEffect(() => {
+    const eraVes = chargeIsVesRef.current;
+    chargeIsVesRef.current = isVesPrimary;
+    if (eraVes === isVesPrimary || !vesRate) return;
+    setChargeInput(prev => {
+      const n = parseFloat(String(prev).replace(",", "."));
+      if (!(n > 0)) return prev;
+      return String(round2(isVesPrimary ? n * vesRate : n / vesRate));
+    });
+  }, [isVesPrimary, vesRate]);
 
   // USD — redondeo POR LÍNEA (round2(price) × qty) → 3 × 4.07 = 12.21
   // Bs — redondeo POR LÍNEA EN Bs (round2(price × vesRate) × qty) → 3 × 3000 = 9000 (bloque independiente abajo)
@@ -344,7 +387,8 @@ export function CartProvider({ children }) {
   }, [activePromos]);
 
   const promoDiscountUsd = cart.reduce((s, i) => s + promoLineDiscountUsd(i), 0);
-  const totalUsd = subtotalUsd - discountAmountUsd - promoDiscountUsd;
+  const netUsd = subtotalUsd - discountAmountUsd - promoDiscountUsd;
+  const totalUsd = netUsd + chargeUsd;
 
   const promoLineDiscountBs = useCallback((item) => {
     if (!vesRate) return 0;
@@ -367,12 +411,12 @@ export function CartProvider({ children }) {
   const discountAmountBs = (vesRate && discountEnabled && parseFloat(discountPct) > 0)
     ? subtotalBs * (parseFloat(discountPct) / 100) : 0;
   const promoDiscountBs = vesRate ? cart.reduce((s, i) => s + promoLineDiscountBs(i), 0) : 0;
-  const totalBs = vesRate ? (subtotalBs - discountAmountBs - promoDiscountBs) : null;
+  const netBs = vesRate ? (subtotalBs - discountAmountBs - promoDiscountBs) : null;
+  const totalBs = vesRate ? (netBs + chargeBs) : null;
 
   // ── Mapeo a "principal"/"secundaria" según la moneda seleccionada en el toggle ──
   // (subtotalUsd/discountAmountUsd/promoDiscountUsd/totalUsd se mantienen con estos nombres
   // porque checkout()/saveQuotation() los envían tal cual al backend, siempre en USD).
-  const isVesPrimary = !!currentCurrency && !currentCurrency.is_base;
   const subtotalBase    = subtotalUsd;
   const discountAmount  = discountAmountUsd;
   const promoLineDiscount = promoLineDiscountUsd;
@@ -385,6 +429,27 @@ export function CartProvider({ children }) {
   const promoLineDiscountDisplay = isVesPrimary ? promoLineDiscountBs : promoLineDiscountUsd;
   const totalDisplay    = isVesPrimary ? (totalBs ?? 0) : totalUsd;
   const totalSecondary  = isVesPrimary ? totalUsd : (totalBs ?? convertToSecondary(totalUsd));
+
+  // Lo que se muestra del recargo: el monto en la moneda de pantalla (tal cual se tecleó) y
+  // el porcentaje que representa sobre el consumo neto, que es la lectura que le interesa a
+  // la caja ("¿esta propina es el 10%?"). El neto va antes del recargo: un 10% sobre el
+  // consumo, no sobre sí mismo.
+  const chargeAmountBase    = chargeUsd;
+  const chargeAmountDisplay = isVesPrimary ? chargeBs : chargeUsd;
+  const netBeforeChargeDisplay = isVesPrimary ? (netBs ?? 0) : netUsd;
+  const chargePct = netBeforeChargeDisplay > 0
+    ? (chargeAmountDisplay / netBeforeChargeDisplay) * 100
+    : 0;
+
+  // Rellena el monto a partir de un porcentaje del neto: los botones de 10% / 15% del POS.
+  // Escribe en el mismo input que el cajero puede editar a mano, así que después de tocarlo
+  // el monto sigue siendo suyo.
+  const setChargeFromPct = useCallback((pct) => {
+    const base = isVesPrimary ? (netBs ?? 0) : netUsd;
+    if (!(base > 0)) return;
+    setChargeEnabled(true);
+    setChargeInput(String(round2(base * (parseFloat(pct) || 0) / 100)));
+  }, [isVesPrimary, netBs, netUsd]);
 
 
   // ── Cuentas en espera ─────────────────────────────────────
@@ -488,6 +553,8 @@ export function CartProvider({ children }) {
         serie_id: selectedSerieId,
         warehouse_id: activeWarehouse.id,
         discount_amount: discountAmount,
+        service_charge: chargeAmountBase,
+        service_charge_label: chargeLabel,
         hold: true,
       });
 
@@ -499,6 +566,8 @@ export function CartProvider({ children }) {
           await api.sales.update(heldSaleId, {
             items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty) })),
             discount_amount: discountAmount,
+            service_charge: chargeAmountBase,
+            service_charge_label: chargeLabel,
             // La cabecera viaja también al re-pausar: si el cajero cambió el cliente o la
             // moneda antes de volver a dejarla en espera, la cuenta debe quedar con lo que
             // se ve en pantalla, no con lo que tenía al abrirla.
@@ -529,7 +598,8 @@ export function CartProvider({ children }) {
       setLoading(false);
     }
   }, [cart, heldSaleId, activeWarehouse, selectedSerieId, selectedCustomer, employee,
-    currentCurrency, exchangeRate, discountAmount, clearCart, loadHeldCarts, notify]);
+    currentCurrency, exchangeRate, discountAmount, chargeAmountBase, chargeLabel,
+    clearCart, loadHeldCarts, notify]);
 
   // Dos cajas pueden acabar sobre la misma cuenta en espera: una la recupera y otra la
   // elimina o la cobra antes de que la primera termine. Ahí el PATCH devuelve SALE_GONE
@@ -620,6 +690,19 @@ export function CartProvider({ children }) {
       }
       if (held.serie_id) setSelectedSerieId(held.serie_id);
 
+      // El recargo vuelve con la cuenta. Sin esto, reabrir una mesa que ya tenía servicio
+      // cargado lo borraba en silencio al cobrarla: el carrito enviaría 0 y pisaría el monto
+      // guardado. Llega en moneda base y se repone en la moneda que la caja tiene en pantalla.
+      const heldCharge = parseFloat(held.service_charge || 0);
+      if (heldCharge > 0) {
+        setChargeEnabled(true);
+        setChargeLabel(held.service_charge_label || "Servicio");
+        setChargeInput(String(round2(isVesPrimary && vesRate ? heldCharge * vesRate : heldCharge)));
+      } else {
+        setChargeEnabled(false);
+        setChargeInput("");
+      }
+
       // Sale del listado: ya está en el carrito de esta caja, y dejarla visible invitaría
       // a que otra la recupere en paralelo. En el servidor sigue en 'espera', así que si
       // se abandona sin cobrarla ni volver a pausarla, reaparece en la próxima carga.
@@ -628,7 +711,7 @@ export function CartProvider({ children }) {
     } catch (e) {
       notify(e.message || "No se pudo recuperar la cuenta", "err");
     }
-  }, [heldCarts, activeWarehouse, notify]);
+  }, [heldCarts, activeWarehouse, isVesPrimary, vesRate, notify]);
 
   // Suelta el bloqueo de una cuenta que quedó tomada por una caja que ya no la está
   // atendiendo (se cerró el navegador, se fue el cajero). El bloqueo caduca solo, pero con
@@ -725,6 +808,8 @@ export function CartProvider({ children }) {
         serie_id: selectedSerieId,
         warehouse_id: activeWarehouse.id,
         discount_amount: discountAmount,
+        service_charge: chargeAmountBase,
+        service_charge_label: chargeLabel,
         idempotency_key: pendingKeyRef.current,
         quotation_id: quotationId || null,
       });
@@ -735,6 +820,8 @@ export function CartProvider({ children }) {
           res = await api.sales.update(heldSaleId, {
             items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty) })),
             discount_amount: discountAmount,
+            service_charge: chargeAmountBase,
+            service_charge_label: chargeLabel,
             status: "borrador",
             // Se cobra con el cliente y la moneda que hay en pantalla, no con los que tenía
             // la cuenta al pausarse: en restaurante la cuenta se abre a nombre de la mesa y
@@ -778,8 +865,11 @@ export function CartProvider({ children }) {
       setLoading(false);
       submittingRef.current = false;
     }
+    // discountAmount y el recargo van en la lista: sin ellos, cambiar el descuento o la
+    // propina y cobrar sin volver a tocar el carrito enviaba los valores del render anterior.
   }, [cart, activeWarehouse, selectedCustomer, selectedSerieId,
     employee, currentCurrency, exchangeRate, heldSaleId, loadHeldCarts,
+    discountAmount, chargeAmountBase, chargeLabel, quotationId,
     mySeries, notify, clearCart]);
 
   return (
@@ -790,6 +880,10 @@ export function CartProvider({ children }) {
       subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
       discountPct, setDiscountPct, totalBase, totalDisplay, totalSecondary,
       subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
+      // Recargo (propina / servicio)
+      chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel,
+      chargeInput, setChargeInput, setChargeFromPct,
+      chargeAmountBase, chargeAmountDisplay, chargePct,
       // Moneda
       selectedCurrency, setSelectedCurrency, currentCurrency, exchangeRate,
       secondaryCurrency,
