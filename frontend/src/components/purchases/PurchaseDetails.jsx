@@ -120,9 +120,13 @@ export default function PurchaseDetails({ state }) {
       const pkgSize  = parseFloat(next.package_size)  || 1;
       const pkgQty   = parseFloat(next.package_qty)   || 0;
       const pkgPrice = parseFloat(next.package_price) || 0;
-      const margin   = parseFloat(next.profit_margin) || 0;
+      // Margen vacío = no se toca el precio de venta (ver calcPurchaseItem). Con 0 implícito,
+      // editar la línea de un producto con precio manual lo dejaba vendiéndose al costo.
+      const marginRaw = String(next.profit_margin ?? "").trim();
+      const margin    = marginRaw === "" ? null : parseFloat(marginRaw);
+      const hasMargin = margin !== null && !isNaN(margin);
       const unit_cost  = pkgPrice > 0 ? pkgPrice / pkgSize : 0;
-      const sale_price = unit_cost * (1 + margin / 100);
+      const sale_price = hasMargin ? unit_cost * (1 + margin / 100) : (parseFloat(next.sale_price) || 0);
       return { ...next, unit_cost, sale_price, subtotal: pkgQty * pkgPrice, total_units: pkgQty * pkgSize };
     }));
     setIsDirty(true);

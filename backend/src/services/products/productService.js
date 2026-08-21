@@ -259,6 +259,17 @@ async function getOne(id, company_id) {
   return { data: p };
 }
 
+// Margen que se desprende de un precio puesto a mano. Hay productos cuyo precio no sale de
+// aplicarle un porcentaje al costo sino que se fija directo; dejar el margen vacío hacía que
+// la ficha mostrara 0% de algo que sí deja ganancia.
+function derivarMargen(price, cost_price, profit_margin) {
+  if (String(profit_margin ?? '').trim() !== '') return profit_margin;
+  const p = parseFloat(price);
+  const c = parseFloat(cost_price);
+  if (isNaN(p) || isNaN(c) || c <= 0 || p <= 0) return null;
+  return parseFloat((((p / c) - 1) * 100).toFixed(2));
+}
+
 async function createProduct({ body, file, company_id }) {
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
@@ -297,7 +308,7 @@ async function createProduct({ body, file, company_id }) {
       unit: unit || "unidad",
       qty_step: qty_step || 1,
       cost_price: isComboBool ? null : (cost_price || null),
-      profit_margin: profit_margin || null,
+      profit_margin: derivarMargen(price, cost_price, profit_margin),
       package_size: package_size || null,
       package_unit: package_unit || null,
       bulk_price: bulk_price || null,
@@ -384,7 +395,7 @@ async function updateProduct({ id, body, file, company_id }) {
       qty_step: qty_step || 1,
       stock: (isComboBool || isServiceBool) ? 0 : product.stock,
       cost_price: isComboBool ? null : (cost_price || null),
-      profit_margin: profit_margin || null,
+      profit_margin: derivarMargen(price, cost_price, profit_margin),
       package_size: package_size || null,
       package_unit: package_unit || null,
       bulk_price: bulk_price || null,

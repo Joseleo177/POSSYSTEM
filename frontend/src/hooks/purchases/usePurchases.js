@@ -80,6 +80,9 @@ export function usePurchases(notify, onProductsUpdated) {
   const [productModal, setProductModal] = useState(false);
   const [supplierEditData, setSupplierEditData] = useState(null);
   const [productEditData, setProductEditData] = useState(null);
+  // Nombre con el que se abre el alta desde el buscador. Va aparte de productEditData
+  // porque un objeto {name} ahí ponía el modal en modo edición de un producto inexistente.
+  const [productInitialName, setProductInitialName] = useState("");
   const [savingSupplier, setSavingSupplier] = useState(false);
   const [savingProduct, setSavingProduct] = useState(false);
 
@@ -166,6 +169,8 @@ export function usePurchases(notify, onProductsUpdated) {
     supplierEditData,
     setSupplierEditData,
     productEditData,
+    productInitialName,
+    setProductInitialName,
     setProductEditData,
 
     savingSupplier,
@@ -315,6 +320,9 @@ export function usePurchases(notify, onProductsUpdated) {
     ...modals,
     ...form,
     ...calc,
+
+    // nombre con el que se abre el alta de producto desde un buscador sin resultados
+    productInitialName,
 
     // moneda/tasa de la factura del proveedor
     invoiceCurrencyId,

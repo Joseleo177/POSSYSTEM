@@ -112,7 +112,11 @@ export default function PurchaseItemsTable({
 
                             {/* Precio Venta — editable + toggle para actualizar el PVP del producto al recibir */}
                             <td className="px-4 py-3 text-center">
-                                {isEditing && item.unit_cost > 0 ? (
+                                {/* Un insumo no tiene precio de venta: ni se muestra ni se ofrece
+                                    el interruptor, que aquí no cambiaría nada. */}
+                                {(item.product?.sellable === false || item.sellable === false) ? (
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-warning">Insumo</span>
+                                ) : isEditing && item.unit_cost > 0 ? (
                                     <div className="flex items-center justify-center gap-2">
                                         <div className={`flex flex-col items-center gap-0.5 ${item.update_price === false ? "opacity-30" : ""}`}>
                                             <EditablePriceInput

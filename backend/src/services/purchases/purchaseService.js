@@ -109,7 +109,7 @@ async function getOne(id, req) {
     include: [
       { model: Employee,     attributes: ['full_name'], required: false },
       { model: Warehouse,    attributes: ['name'],      required: false },
-      { model: PurchaseItem, include: [{ model: Product, attributes: ['image_filename', 'unit', 'stock'], required: false }] }
+      { model: PurchaseItem, include: [{ model: Product, attributes: ['image_filename', 'unit', 'stock', 'sellable'], required: false }] }
     ]
   });
   if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
@@ -124,6 +124,9 @@ async function getOne(id, req) {
     item.image_filename = item.Product?.image_filename ?? null;
     item.unit  = item.Product?.unit  ?? null;
     item.stock = item.Product?.stock ?? null;
+    // Al reabrir la línea, el modal necesita saber si el producto es insumo para no
+    // ofrecer margen ni precio de venta.
+    item.sellable = item.Product?.sellable ?? true;
     delete item.Product;
     return item;
   });
@@ -183,7 +186,10 @@ async function _applyStockAndPrices(purchase, items, transaction) {
       package_unit: package_unit || 'unidad',
       bulk_price: package_price || null,
     };
-    if (update_price !== false) {
+    // Un insumo no tiene precio de venta: comprarlo actualiza su costo, pero ponerle precio
+    // y margen le devolvería lo que la ficha le quita a propósito, y volvería a aparecer
+    // valorizado como si se vendiera.
+    if (update_price !== false && product.sellable !== false) {
       productChanges.price = sale_price;
       productChanges.profit_margin = profit_margin;
     }
@@ -256,10 +262,15 @@ async function createPurchase({ body, employee_id }) {
       const pkgSize  = parseFloat(package_size);
       const pkgQty   = parseFloat(package_qty);
       const pkgPrice = parseFloat(package_price);
-      const margin   = parseFloat(profit_margin) || 0;
+      // Margen vacío = conservar el precio de venta actual. Hay productos con precio
+      // puesto a mano, y tomarlo como 0 los dejaba vendiéndose al costo.
+      const marginRaw = String(profit_margin ?? '').trim();
+      const marginNum = marginRaw === '' ? NaN : parseFloat(marginRaw);
+      const hasMargin = !isNaN(marginNum);
+      const margin    = hasMargin ? marginNum : null;
 
       const unit_cost   = pkgPrice / pkgSize;
-      const sale_price  = unit_cost * (1 + margin / 100);
+      const sale_price  = hasMargin ? unit_cost * (1 + margin / 100) : null;
       const total_units = pkgQty * pkgSize;
       const subtotal    = pkgQty * pkgPrice;
       grandTotal += subtotal;
@@ -276,13 +287,17 @@ async function createPurchase({ body, employee_id }) {
         package_size: pkgSize,
         package_price: pkgPrice,
         unit_cost,
-        profit_margin: margin,
-        sale_price,
+        // Columnas NOT NULL: sin margen se deja constancia del precio vigente y margen 0,
+        // y es update_price el que dice que esta línea no cambia nada.
+        profit_margin: hasMargin ? margin : 0,
+        sale_price: hasMargin ? sale_price : (parseFloat(product.price) || 0),
         total_units,
         subtotal,
         lot_number: lot_number || null,
         expiration_date: expiration_date || null,
-        update_price: update_price !== false && update_price !== 'false'
+        // Un insumo no lleva precio de venta, así que la línea nace sin actualizarlo:
+        // el detalle de la compra no debe prometer algo que después no se aplica.
+        update_price: hasMargin && product.sellable !== false && update_price !== false && update_price !== 'false'
       }, { transaction });
 
       createdItems.push(purchaseItem);
@@ -427,9 +442,14 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
         const pkgSize  = parseFloat(package_size);
         const pkgQty   = parseFloat(package_qty);
         const pkgPrice = parseFloat(package_price) || 0;
-        const margin   = parseFloat(profit_margin) || 0;
+        // Margen vacío = conservar el precio de venta actual. Hay productos con precio
+        // puesto a mano, y tomarlo como 0 los dejaba vendiéndose al costo.
+        const marginRaw = String(profit_margin ?? '').trim();
+        const marginNum = marginRaw === '' ? NaN : parseFloat(marginRaw);
+        const hasMargin = !isNaN(marginNum);
+        const margin    = hasMargin ? marginNum : null;
         const unit_cost   = pkgPrice > 0 ? pkgPrice / pkgSize : 0;
-        const sale_price  = unit_cost * (1 + margin / 100);
+        const sale_price  = hasMargin ? unit_cost * (1 + margin / 100) : null;
         const total_units = pkgQty * pkgSize;
         const subtotal    = pkgQty * pkgPrice;
         grandTotal += subtotal;
@@ -446,13 +466,13 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
           package_size: pkgSize,
           package_price: pkgPrice,
           unit_cost,
-          profit_margin: margin,
-          sale_price,
+          profit_margin: hasMargin ? margin : 0,
+          sale_price: hasMargin ? sale_price : (parseFloat(product.price) || 0),
           total_units,
           subtotal,
           lot_number: lot_number || null,
           expiration_date: expiration_date || null,
-          update_price: update_price !== false && update_price !== 'false'
+          update_price: hasMargin && product.sellable !== false && update_price !== false && update_price !== 'false'
         }, { transaction });
       }
     }

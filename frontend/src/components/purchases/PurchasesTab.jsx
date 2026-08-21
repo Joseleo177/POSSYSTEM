@@ -50,6 +50,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
         closeProductModal,
         saveProduct,
         productEditData,
+        productInitialName,
         categories,
         savingProduct,
         selectedWarehouseId,
@@ -218,6 +219,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                 onClose={closeProductModal}
                 onSave={saveProduct}
                 editData={productEditData}
+                initialName={productInitialName}
                 categories={categories}
                 loading={savingProduct}
                 warehouseId={selectedWarehouseId || null}

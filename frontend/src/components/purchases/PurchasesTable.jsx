@@ -105,7 +105,14 @@ export default function PurchasesTable({ state }) {
 
                     <tbody className="divide-y divide-border/10 dark:divide-white/5">
                         {purchases.map((p) => (
-                            <tr key={p.id} className="group transition-all hover:bg-brand-500/[0.02]">
+                            // La fila entera abre el detalle, igual que la tarjeta en móvil:
+                            // apuntarle al ojo era pedir puntería para lo que uno hace todo el
+                            // tiempo. El ojo se queda porque señala qué pasa al hacer clic.
+                            <tr
+                                key={p.id}
+                                onClick={() => openDetail(p.id)}
+                                className="group transition-all cursor-pointer hover:bg-brand-500/[0.02]"
+                            >
                                 <td className="font-bold text-content-subtle tabular-nums text-[11px]">#{p.id}</td>
 
                                 <td>
@@ -153,7 +160,9 @@ export default function PurchasesTable({ state }) {
                                     {fmtDate(p.created_at)}
                                 </td>
 
-                                <td className="text-right pr-6">
+                                {/* stopPropagation: la fila abre el detalle, pero anular no
+                                    puede dispararlo de paso. */}
+                                <td className="text-right pr-6" onClick={e => e.stopPropagation()}>
                                     <Actions p={p} openDetail={openDetail} setCancelConfirm={setCancelConfirm} />
                                 </td>
                             </tr>

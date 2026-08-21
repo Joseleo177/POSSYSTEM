@@ -16,7 +16,7 @@ const EMPTY = {
     visible_in_catalog: false, sellable: true
 };
 
-export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName }) {
+export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName, initialName = "" }) {
     const { notify, activeCurrencies } = useApp();
     const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
     const exchangeRate = parseFloat(localCurrency?.exchange_rate || 0);
@@ -74,7 +74,10 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 });
                 setImagePreview(resolveImageUrl(editData.image_url) || null);
             } else {
-                setForm(EMPTY);
+                // initialName: lo que el usuario ya escribió en el buscador que lo trajo hasta
+                // acá. Volver a teclear el mismo nombre es trabajo repetido y una oportunidad
+                // de escribirlo distinto.
+                setForm({ ...EMPTY, name: initialName || "" });
                 setImagePreview(null);
             }
             setImageFile(null);
@@ -103,6 +106,19 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             }
         }
 
+        // Cambiar el costo de un producto con precio fijado a mano no debe moverle el precio:
+        // lo que cambia es cuánto se está ganando. Se recalcula el margen y el precio queda.
+        const precioFijoSinMargen = key === "cost_price"
+            && String(next.profit_margin ?? "").trim() === ""
+            && parseFloat(next.price) > 0;
+
+        if (precioFijoSinMargen) {
+            const m = deriveMargin(next.price, val);
+            if (m !== null) next.profit_margin = m;
+            setForm(next);
+            return;
+        }
+
         const suggested = calcSalePriceHelper(
             key === "cost_price" ? val : next.cost_price,
             key === "profit_margin" ? val : next.profit_margin
@@ -118,8 +134,23 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         setForm(next);
     };
 
+    // Margen que se desprende de un precio puesto a mano. El usuario fija el precio y el
+    // porcentaje sale solo, en vez de quedar en blanco: así la ficha no dice "0%" de algo
+    // que sí deja ganancia.
+    const deriveMargin = (price, cost) => {
+        const p = parseFloat(price);
+        const c = parseFloat(cost);
+        if (isNaN(p) || isNaN(c) || c <= 0 || p <= 0) return null;
+        return (((p / c) - 1) * 100).toFixed(2);
+    };
+
     const handlePriceChange = (val) => {
-        set("price", val);
+        setForm(prev => {
+            const next = { ...prev, price: val };
+            const m = deriveMargin(val, prev.cost_price);
+            if (m !== null) next.profit_margin = m;
+            return next;
+        });
         if (exchangeRate > 0 && val) {
             setPriceInBs((parseFloat(val) * exchangeRate).toFixed(2));
         } else {
@@ -143,7 +174,16 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         if (val && size > 0) {
             const unitCost = (parseFloat(val) / size).toFixed(4);
             updates.cost_price = unitCost;
-            
+
+            // Precio por caja con precio de venta ya fijado: el margen se deduce del costo
+            // unitario que acaba de salir de esa caja.
+            if (String(form.profit_margin ?? "").trim() === "" && parseFloat(form.price) > 0) {
+                const m = deriveMargin(form.price, unitCost);
+                if (m !== null) updates.profit_margin = m;
+                setForm(prev => ({ ...prev, ...updates }));
+                return;
+            }
+
             const suggested = calcSalePriceHelper(unitCost, form.profit_margin);
             if (suggested !== null) {
                 updates.price = suggested;

@@ -11,6 +11,7 @@ export function usePurchasesModals({
     supplierEditData,
     setSupplierEditData,
     productEditData,
+    setProductInitialName,
     setProductEditData,
 
     // loading
@@ -37,7 +38,8 @@ export function usePurchasesModals({
     };
 
     const openCreateProduct = (name = "") => {
-        setProductEditData({ name });
+        setProductEditData(null);
+        setProductInitialName(name);
         setProductModal(true);
     };
 

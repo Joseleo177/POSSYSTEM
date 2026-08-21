@@ -69,12 +69,20 @@ export default function PurchaseItemsList({ state }) {
                                 Ref. {fmt2(item.unit_cost)}
                             </td>
 
+                            {/* Insumo o margen vacío: la compra no toca el precio de venta, así
+                                que la fila no lo promete. */}
                             <td className="text-content-muted dark:text-content-dark-muted">
-                                {item.profit_margin}%
+                                {(item.product?.sellable === false || item.sellable === false || item.update_price === false)
+                                    ? "—"
+                                    : `${item.profit_margin}%`}
                             </td>
 
                             <td className="text-success font-bold">
-                                Ref. {fmt2(item.sale_price)}
+                                {(item.product?.sellable === false || item.sellable === false)
+                                    ? <span className="text-warning text-[10px] font-black uppercase tracking-widest">Insumo</span>
+                                    : item.update_price === false
+                                        ? <span className="text-content-subtle font-bold">Sin cambio</span>
+                                        : <>Ref. {fmt2(item.sale_price)}</>}
                             </td>
 
                             <td className="text-content dark:text-content-dark">

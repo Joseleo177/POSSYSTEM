@@ -21,16 +21,23 @@ export const calcPurchaseItem = (item) => {
   const pkgSize  = parseFloat(item.package_size)  || 0;
   const pkgQty   = parseFloat(item.package_qty)   || 0;
   const pkgPrice = parseFloat(item.package_price) || 0;
-  const margin   = parseFloat(item.profit_margin) || 0;
+
+  // Margen vacío significa "no toques el precio de venta", no "margen cero". Hay productos
+  // cuyo precio se fija a mano y no sale de aplicarle un porcentaje al costo; leerlo como 0
+  // los dejaba vendiéndose justo a lo que costaron.
+  const marginRaw = String(item.profit_margin ?? "").trim();
+  const margin    = marginRaw === "" ? null : parseFloat(marginRaw);
+  const hasMargin = margin !== null && !isNaN(margin);
 
   if (!pkgSize || !pkgPrice) {
-    return { unit_cost: 0, sale_price: 0, total_units: 0, subtotal: 0 };
+    return { unit_cost: 0, sale_price: null, total_units: 0, subtotal: 0, keepsPrice: !hasMargin };
   }
 
   const unit_cost   = pkgPrice / pkgSize;
-  const sale_price  = unit_cost * (1 + margin / 100);
+  const sale_price  = hasMargin ? unit_cost * (1 + margin / 100) : null;
   const total_units = pkgQty * pkgSize;
   const subtotal    = pkgQty * pkgPrice;
 
-  return { unit_cost, sale_price, total_units, subtotal };
+  // keepsPrice: la compra actualiza el costo y deja el precio de venta como estaba.
+  return { unit_cost, sale_price, total_units, subtotal, keepsPrice: !hasMargin };
 };

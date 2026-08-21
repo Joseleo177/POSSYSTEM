@@ -84,6 +84,9 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                 stock:      editStock,
                 unit:       editUnit,
                 cost_price: editItem.unit_cost ?? 0,
+                // Sin esto, reabrir la línea de un insumo volvía a ofrecer margen y precio
+                // de venta, que es justo lo que la compra no le va a escribir.
+                sellable: editItem.sellable ?? editItem.product?.sellable ?? true,
             });
             setForm({
                 package_unit:    normalizePkgUnit(editItem.package_unit),
@@ -214,6 +217,16 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         if (!selected) return;
         if (!form.package_qty || parseFloat(form.package_qty) <= 0) return;
         const result = { ...form, package_price: String(pkgPriceBase), product: selected, ...calc, key: Date.now() };
+        // El margen del formulario arrastra su valor por defecto aunque el campo no se vea.
+        // Sin limpiarlo, la línea de un insumo entraba a la orden prometiendo 30% y un precio
+        // de venta que la compra después no aplica.
+        if (selected.sellable === false) {
+            result.profit_margin = "";
+            result.sale_price    = null;
+            result.keepsPrice    = true;
+        }
+        // El servidor decide igual, pero la línea tiene que mostrar desde ya lo que va a pasar.
+        result.update_price = !(selected.sellable === false || result.keepsPrice);
         if (editItem?.id  !== undefined) result.id  = editItem.id;
         if (editItem?.key !== undefined) result.key = editItem.key;
         onAdd(result);
@@ -468,8 +481,9 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 </div>
                             </div>
 
-                            {/* Precio estimado y margen */}
-                            <div className="grid grid-cols-2 gap-3">
+                            {/* Precio estimado y margen. Sin margen, el costo ocupa la fila
+                                entera en vez de dejar media columna vacía. */}
+                            <div className={selected.sellable === false ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
                                         Costo × Embalaje{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70 normal-case font-bold">({invoiceSym})</span> : ""}
@@ -485,23 +499,45 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                         <p className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(pkgPriceBase)}</p>
                                     )}
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Margen (%)</label>
-                                    <input
-                                        type="text" inputMode="decimal"
-                                        value={form.profit_margin}
-                                        onChange={e => setF("profit_margin", sanitizeDecimal(e.target.value, true))}
-                                        className="input h-9 font-black tabular-nums"
-                                    />
-                                </div>
+                                {/* Un insumo no se vende, así que no hay margen que fijar:
+                                    comprarlo solo actualiza su costo. */}
+                                {selected.sellable !== false && (
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Margen (%)</label>
+                                        <input
+                                            type="text" inputMode="decimal"
+                                            value={form.profit_margin}
+                                            onChange={e => setF("profit_margin", sanitizeDecimal(e.target.value, true))}
+                                            placeholder="Sin cambio"
+                                            className="input h-9 font-black tabular-nums"
+                                        />
+                                        {/* Vaciarlo es una decisión válida, no un olvido: hay
+                                            productos con precio puesto a mano. */}
+                                        {calc?.keepsPrice && (
+                                            <p className="text-[10px] font-bold text-content-subtle dark:text-white/40 leading-snug">
+                                                Vacío: se actualiza el costo y el precio de venta queda como está.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Cálculos — solo si hay precio */}
                             {calc && parseFloat(form.package_price) > 0 && (
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className={selected.sellable === false ? "grid grid-cols-2 gap-2" : "grid grid-cols-3 gap-2"}>
                                     {[
                                         { label: "Costo Unit.", value: `Ref. ${fmt2(calc.unit_cost)}`, color: "text-info" },
-                                        { label: "Precio Venta", value: `Ref. ${fmt2(calc.sale_price)}`, color: "text-success" },
+                                        // El precio de venta se omite en los insumos: la compra
+                                        // no se lo va a escribir al producto.
+                                        ...(selected.sellable === false
+                                            ? []
+                                            : [{
+                                                label: "Precio Venta",
+                                                // Sin margen la compra no toca el precio, y decirlo
+                                                // evita que parezca que va a quedar en 0.
+                                                value: calc.keepsPrice ? "Sin cambio" : `Ref. ${fmt2(calc.sale_price)}`,
+                                                color: calc.keepsPrice ? "text-content-subtle dark:text-white/40" : "text-success",
+                                            }]),
                                         { label: "Total Unids.", value: fmtQtyUnit(calc.total_units, selected.unit), color: "text-warning" },
                                     ].map(({ label, value, color }) => (
                                         <div key={label} className="bg-surface-2/50 dark:bg-white/[0.03] rounded-xl p-2.5 border border-border/20 dark:border-white/5 text-center">
@@ -591,6 +627,9 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                     categories={categories}
                     loading={savingNew}
                     warehouseId={warehouseId}
+                    // Lo que se buscó y no apareció es, casi siempre, el nombre del producto
+                    // que se va a crear.
+                    initialName={search.trim()}
                 />
             )}
         </div>
