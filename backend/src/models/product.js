@@ -25,6 +25,9 @@ module.exports = (sequelize, DataTypes) => {
     min_stock: { type: DataTypes.DECIMAL(10, 3), allowNull: false, defaultValue: 0 },
     barcode: { type: DataTypes.STRING(50), allowNull: true },
     visible_in_catalog: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // false = insumo: entra por compras y se consume en combos, pero no se vende en caja ni
+    // se publica. Sigue siendo un producto normal para inventario y transferencias.
+    sellable: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

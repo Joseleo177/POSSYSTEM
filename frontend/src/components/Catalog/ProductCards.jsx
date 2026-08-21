@@ -88,12 +88,27 @@ export default function ProductCards({
                                 </span>
                             )}
 
+                            {/* Insumo: no se vende ni se publica. Sin esta marca no habría
+                                forma de distinguirlo en la grilla de uno que sí se vende, y
+                                los dos se ven idénticos. Nunca coincide con el ojo de arriba:
+                                un insumo no puede estar publicado. */}
+                            {p.sellable === false && !isSelectionMode && (
+                                <span className="absolute top-2 left-2 px-1.5 h-5 rounded-full bg-warning text-black flex items-center gap-1 shadow text-[9px] font-black uppercase tracking-wide"
+                                    title="Insumo: no se vende en caja ni se publica">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                                    Insumo
+                                </span>
+                            )}
+
                             {/* Acciones: aparecen al pasar el cursor, como en la tabla, pero SOLO
                                 donde hay cursor. En un táctil no existe el hover, así que editar,
                                 eliminar y publicar quedaban invisibles para siempre y no había
                                 manera de gestionar un producto desde el teléfono. */}
                             {canManageProducts && !isSelectionMode && (
                                 <div className="absolute bottom-2 right-2 flex gap-1 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
+                                    {/* El ojo no aparece en un insumo: publicarlo es lo único
+                                        que ese botón hace, y el servidor lo rechaza. */}
+                                    {p.sellable !== false && (
                                     <button onClick={() => onToggleVisible?.(p)}
                                         className={`w-7 h-7 rounded-lg bg-white/90 dark:bg-black/70 backdrop-blur flex items-center justify-center shadow active:scale-90 transition-all ${p.visible_in_catalog ? "text-brand-500" : "text-content-subtle hover:text-brand-500"}`}
                                         title={p.visible_in_catalog ? "Quitar del catálogo público" : "Mostrar en el catálogo público"}>
@@ -103,6 +118,7 @@ export default function ProductCards({
                                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
                                         )}
                                     </button>
+                                    )}
                                     <button onClick={() => openEditProduct(p)}
                                         className="w-7 h-7 rounded-lg bg-white/90 dark:bg-black/70 backdrop-blur flex items-center justify-center text-content-subtle hover:text-warning shadow active:scale-90 transition-all"
                                         title="Editar">
@@ -132,9 +148,20 @@ export default function ProductCards({
                             <h3 className="text-[10px] font-black uppercase tracking-tight text-content dark:text-white leading-tight line-clamp-2">
                                 {p.name}
                             </h3>
-                            <div className="mt-auto pt-1 text-[13px] font-black text-brand-500 tabular-nums tracking-tighter">
-                                {fmtPrice(p.price)}
-                            </div>
+                            {/* Un insumo no tiene precio de venta, así que mostrarlo en 0 solo
+                                ensucia. En su lugar va el costo, que es el dato que sí tiene
+                                y el que interesa de un producto que solo se consume. */}
+                            {p.sellable === false ? (
+                                <div className="mt-auto pt-1 text-[11px] font-black text-content-subtle dark:text-white/40 tabular-nums tracking-tighter">
+                                    {parseFloat(p.cost_price) > 0
+                                        ? <>Costo {fmtPrice(p.cost_price)}</>
+                                        : "Sin costo"}
+                                </div>
+                            ) : (
+                                <div className="mt-auto pt-1 text-[13px] font-black text-brand-500 tabular-nums tracking-tighter">
+                                    {fmtPrice(p.price)}
+                                </div>
+                            )}
                         </div>
                     </article>
                 );

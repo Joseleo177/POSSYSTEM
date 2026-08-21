@@ -89,7 +89,7 @@ async function getStore(token) {
     // Solo las categorías que hoy tienen algo publicado. Un chip que al pulsarlo muestra
     // "no se encontraron productos" hace ver la tienda vacía o rota.
     const usedCategoryIds = (await Product.findAll({
-      where: { visible_in_catalog: true, category_id: { [Op.ne]: null } },
+      where: { visible_in_catalog: true, sellable: true, category_id: { [Op.ne]: null } },
       attributes: ["category_id"],
       group: ["category_id"],
     })).map((r) => r.category_id);
@@ -200,7 +200,9 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
   return tenantStorage.run({ company_id }, async () => {
     // El comercio decide producto por producto qué sale a la vitrina. Este filtro es la
     // única barrera: sin él, cualquier alta de inventario aparecería publicada.
-    const where = { visible_in_catalog: true };
+    // sellable es cinturón y tirantes: al marcar un producto como insumo se lo despublica,
+    // pero un registro viejo o tocado a mano no debe poder colarse en la vitrina.
+    const where = { visible_in_catalog: true, sellable: true };
     // La sucursal llega del selector de la vitrina. Se revalida contra la empresa y contra
     // que atienda público: un id inventado no debe convertirse en un filtro cualquiera.
     const whPedido = parseInt(warehouse_id, 10) || null;
@@ -431,7 +433,7 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
     // solo una intención. Si el cliente dejó la pestaña abierta una semana, el pedido se
     // registra con el precio de hoy, no con el que tenía guardado en pantalla.
     const ids = [...new Set(lines.map((l) => parseInt(l.product_id, 10)).filter(Number.isInteger))];
-    const products = await Product.findAll({ where: { id: { [Op.in]: ids }, visible_in_catalog: true } });
+    const products = await Product.findAll({ where: { id: { [Op.in]: ids }, visible_in_catalog: true, sellable: true } });
     const byId = Object.fromEntries(products.map((p) => [p.id, p]));
 
     // La sucursal donde compra el cliente. Se revalida acá: el pedido puede llegar con

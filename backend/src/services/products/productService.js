@@ -54,13 +54,16 @@ async function handleImageDelete(imageValue) {
   }
 }
 
-async function getAll({ search, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, limit = 100, offset = 0, company_id }) {
+async function getAll({ search, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, limit = 100, offset = 0, company_id }) {
   const where = {};
   if (company_id) where.company_id = company_id;
   if (category_id) where.category_id = category_id;
   if (is_combo !== undefined) where.is_combo = is_combo === 'true';
   if (is_service !== undefined) where.is_service = is_service === 'true';
   if (visible_in_catalog !== undefined) where.visible_in_catalog = visible_in_catalog === 'true' || visible_in_catalog === true;
+  // El buscador de venta pide sellable=true; compras, inventario y transferencias no filtran,
+  // porque un insumo se compra y se mueve igual que cualquier otro producto.
+  if (sellable !== undefined) where.sellable = sellable === 'true' || sellable === true;
 
   if (not_in_warehouse_id) {
     const stocksInWarehouse = await ProductStock.findAll({
@@ -260,11 +263,15 @@ async function createProduct({ body, file, company_id }) {
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
     is_combo, combo_items, is_service, barcode, warehouse_id, bulk_price,
-    visible_in_catalog } = body;
+    visible_in_catalog, sellable } = body;
 
   if (!name || price == null) {
     const e = new Error("name y price son requeridos"); e.status = 400; throw e;
   }
+
+  // Si el campo no viene —un alta rápida desde compras, una integración vieja— el producto
+  // nace vendible, que es como se comportaba todo antes de que existiera la marca.
+  const esVendible = sellable === undefined ? true : !(sellable === 'false' || sellable === false);
 
   if (barcode) {
     const existing = await Product.findOne({ where: { barcode, company_id } });
@@ -298,7 +305,9 @@ async function createProduct({ body, file, company_id }) {
       is_combo: isComboBool,
       is_service: isServiceBool,
       barcode: barcode || null,
-      visible_in_catalog: visible_in_catalog === 'true' || visible_in_catalog === true,
+      // Un insumo no se publica nunca: aunque llegue marcado, se guarda apagado.
+      sellable: esVendible,
+      visible_in_catalog: esVendible && (visible_in_catalog === 'true' || visible_in_catalog === true),
       company_id,
     }, { transaction: t });
 
@@ -333,12 +342,17 @@ async function updateProduct({ id, body, file, company_id }) {
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
     is_combo, combo_items, is_service, barcode, bulk_price,
-    visible_in_catalog } = body;
+    visible_in_catalog, sellable } = body;
 
   const t = await sequelize.transaction();
   try {
     const product = await Product.findByPk(id, { transaction: t });
     if (!product) { const e = new Error("Producto no encontrado"); e.status = 404; throw e; }
+
+    // Sin el campo en la petición se conserva lo que ya tenía.
+    const esVendible = sellable === undefined
+      ? product.sellable
+      : !(sellable === 'false' || sellable === false);
 
     if (barcode && barcode !== product.barcode) {
       const existing = await Product.findOne({ where: { barcode, company_id }, transaction: t });
@@ -380,9 +394,11 @@ async function updateProduct({ id, body, file, company_id }) {
       barcode: barcode || null,
       // Sin el campo en el cuerpo se conserva lo que ya tenía: hay flujos que guardan el
       // producto sin pasar por el modal completo y no deben despublicarlo por omisión.
-      visible_in_catalog: visible_in_catalog === undefined
+      sellable: esVendible,
+      // Marcar el producto como insumo lo baja del catálogo en el mismo movimiento.
+      visible_in_catalog: !esVendible ? false : (visible_in_catalog === undefined
         ? product.visible_in_catalog
-        : (visible_in_catalog === 'true' || visible_in_catalog === true),
+        : (visible_in_catalog === 'true' || visible_in_catalog === true)),
     }, { transaction: t });
 
     if (isComboBool && combo_items !== undefined) {
@@ -456,9 +472,15 @@ async function setCatalogVisibility({ ids, visible, company_id }) {
     const e = new Error("No se recibieron productos"); e.status = 400; throw e;
   }
 
+  // Publicar en bloque no puede colar insumos al catálogo: al publicar solo se tocan los
+  // vendibles. Despublicar sí vale para todos, que siempre es ir hacia el lado seguro.
   const [updated] = await Product.update(
     { visible_in_catalog: !!visible },
-    { where: { id: { [Op.in]: list }, ...(company_id ? { company_id } : {}) } }
+    { where: {
+        id: { [Op.in]: list },
+        ...(company_id ? { company_id } : {}),
+        ...(visible ? { sellable: true } : {}),
+    } }
   );
 
   return { data: { updated } };

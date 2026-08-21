@@ -13,7 +13,7 @@ const EMPTY = {
     name: "", price: "", stock: "", category_id: "", unit: "UNIDAD", qty_step: "1",
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
     is_combo: false, combo_items: [], is_service: false, barcode: "", bulk_price: "",
-    visible_in_catalog: false
+    visible_in_catalog: false, sellable: true
 };
 
 export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName }) {
@@ -60,6 +60,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     is_service: editData.is_service || false,
                     barcode: editData.barcode || "",
                     visible_in_catalog: editData.visible_in_catalog || false,
+                    // Los productos creados antes de que existiera la marca vienen sin el
+                    // campo: se asumen vendibles, que es como se comportaban.
+                    sellable: editData.sellable !== false,
                     combo_items: editData.comboItems ? editData.comboItems.map(c => ({
                         product_id: c.ingredient.id,
                         name: c.ingredient.name,
@@ -182,9 +185,17 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     };
 
     const handleSave = () => {
-        if (parseFloat(form.price) <= 0 || form.price === "") return notify("El precio de venta debe ser mayor a 0", "err");
+        // Al insumo no se le pide precio porque no se vende; se guarda en 0 junto con el
+        // margen vacío, así no arrastra un precio viejo si algún día vuelve a venderse.
+        if (form.sellable && (parseFloat(form.price) <= 0 || form.price === "")) {
+            return notify("El precio de venta debe ser mayor a 0", "err");
+        }
         if (form.cost_price !== "" && parseFloat(form.cost_price) < 0) return notify("El costo unitario no puede ser negativo", "err");
         const submissionForm = { ...form };
+        if (!form.sellable) {
+            submissionForm.price = 0;
+            submissionForm.profit_margin = "";
+        }
         if (!isEdit && warehouseId) {
             submissionForm.warehouse_id = warehouseId;
         }
@@ -351,6 +362,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 <label className="label">Código de Barras</label>
                                 <input value={form.barcode} onChange={e => set("barcode", e.target.value)} className="input" placeholder="Ej. 123456789012" />
                             </div>
+                            {form.sellable && (
                             <div>
                                 <label className="label flex items-center justify-between">
                                     Precio de Venta
@@ -379,6 +391,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                     </div>
                                 )}
                             </div>
+                            )}
                             {editData?.id && !form.is_combo && !form.is_service && (
                                 <div>
                                     <label className="label">
@@ -425,18 +438,51 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     )}
                 </div>
 
-                {/* ── Catálogo público ── */}
-                <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 mt-1 ${form.visible_in_catalog ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
+                {/* Van juntos porque se leen juntos: el primero decide si el producto se
+                    vende, y el segundo solo tiene sentido si la respuesta es que sí. */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
+                {/* ── Insumo: entra al inventario pero no se vende ── */}
+                <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${!form.sellable ? "bg-warning/5 border-warning/30" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
                     <div>
-                        <div className="text-xs font-bold text-content dark:text-content-dark">Mostrar en catálogo público</div>
+                        <div className="text-xs font-bold text-content dark:text-content-dark">No disponible para venta</div>
                         <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5">
-                            Los clientes verán foto, categoría y precio. Nunca el stock ni el costo.
+                            Insumo de producción: se compra y se inventaría, pero no se cobra en caja.
                         </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" checked={form.visible_in_catalog} onChange={e => set("visible_in_catalog", e.target.checked)} />
+                        {/* Marcarlo lo baja del catálogo en el mismo gesto: un insumo publicado
+                            sería algo que el cliente puede pedir y la caja no puede cobrar. */}
+                        <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={!form.sellable}
+                            onChange={e => setForm(p => ({ ...p, sellable: !e.target.checked, visible_in_catalog: e.target.checked ? false : p.visible_in_catalog }))}
+                        />
+                        <div className="w-9 h-5 bg-border/50 peer-focus:outline-none dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-warning"></div>
+                    </label>
+                </div>
+
+                {/* ── Catálogo público ── */}
+                <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${!form.sellable ? "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5 opacity-50" : form.visible_in_catalog ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
+                    <div>
+                        <div className="text-xs font-bold text-content dark:text-content-dark">Mostrar en catálogo público</div>
+                        <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5">
+                            {form.sellable
+                                ? "Los clientes verán foto, categoría y precio. Nunca el stock ni el costo."
+                                : "No disponible: los insumos no se publican."}
+                        </div>
+                    </div>
+                    <label className={`relative inline-flex items-center ${form.sellable ? "cursor-pointer" : "cursor-not-allowed"}`}>
+                        <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={form.visible_in_catalog && form.sellable}
+                            disabled={!form.sellable}
+                            onChange={e => set("visible_in_catalog", e.target.checked)}
+                        />
                         <div className="w-9 h-5 bg-border/50 peer-focus:outline-none dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
                     </label>
+                </div>
                 </div>
 
                 {/* ── Componentes de Combo ── */}
@@ -458,8 +504,12 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     <div className="space-y-3 animate-in fade-in duration-300 mt-2">
                         {/* ── Rentabilidad ── */}
                         <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
-                            <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">Costos y Rentabilidad</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">
+                                {form.sellable ? "Costos y Rentabilidad" : "Costo del insumo"}
+                            </h3>
+                            {/* Sin precio de venta no hay rentabilidad que mostrar: el bloque
+                                queda con el costo solo, a ancho completo. */}
+                            <div className={form.sellable ? "grid grid-cols-1 md:grid-cols-2 gap-4" : ""}>
                                 <div className="space-y-3">
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
@@ -469,6 +519,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                                 <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.0001" min="0" className={`input !pl-6 ${form.is_combo ? "bg-surface-2 dark:bg-white/5" : ""}`} placeholder="0.0000" readOnly={form.is_combo} />
                                             </div>
                                         </div>
+                                        {form.sellable && (
                                         <div>
                                             <label className="label">Margen (%)</label>
                                             <div className="relative">
@@ -476,6 +527,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">%</span>
                                             </div>
                                         </div>
+                                        )}
                                     </div>
 
                                     {/* Precio por bulto */}
@@ -505,6 +557,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         </div>
                                     ) : null}
                                 </div>
+                                {form.sellable && (
                                 <div
                                     className={`flex flex-col justify-center p-3 px-4 rounded-lg border transition-all cursor-pointer ${suggestedPrice ? "bg-green-500/5 border-green-500/20 hover:bg-green-500/10" : "bg-surface-2 dark:bg-white/5 border-border/40 opacity-60"}`}
                                     onClick={() => { if (suggestedPrice) handlePriceChange(suggestedPrice); }}
@@ -517,6 +570,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         {suggestedPrice ? `Ref. ${suggestedPrice}` : "—"}
                                     </div>
                                 </div>
+                                )}
                             </div>
                         </div>
 

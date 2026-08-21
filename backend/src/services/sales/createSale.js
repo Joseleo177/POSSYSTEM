@@ -129,6 +129,12 @@ module.exports = async function createSale(body) {
     for (const item of items) {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
       if (!product) throw new Error(`Producto ${item.product_id} no encontrado`);
+      // Un insumo se consume dentro de un plato, no se cobra suelto. La comprobación va sobre
+      // la línea vendida: los ingredientes de un combo se descuentan más abajo y ahí no se
+      // valida, que es justamente lo que permite que el combo lleve harina o aceite.
+      if (product.sellable === false) {
+        throw new Error(`"${product.name}" es un insumo y no está disponible para la venta`);
+      }
 
       const rawPrice     = parseFloat(product.price);
       const roundedPrice = round2(rawPrice);

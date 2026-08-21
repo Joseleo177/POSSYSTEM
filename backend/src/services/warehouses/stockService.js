@@ -114,7 +114,7 @@ async function getStock(req) {
 }
 
 async function getProducts(req) {
-  const { search, category, category_id, simple_only, limit = 30, offset = 0 } = req.query;
+  const { search, category, category_id, simple_only, sellable_only, limit = 30, offset = 0 } = req.query;
   const warehouseId = parseInt(req.params.id);
   const tcp = buildTcp(req);
 
@@ -137,6 +137,11 @@ async function getProducts(req) {
   }
   if (simple_only === 'true') {
     filters.push(`p.is_combo = false AND p.is_service = false`);
+  }
+  // Lo pide la caja. Ajustes de inventario y transferencias no lo mandan a propósito: un
+  // insumo se cuenta, se corrige y se mueve entre almacenes como cualquier producto.
+  if (sellable_only === 'true') {
+    filters.push(`p.sellable = true`);
   }
   const whereExtra = filters.length ? `AND ` + filters.join(' AND ') : '';
   const countJoin = filters.length ? `LEFT JOIN categories c ON c.id = p.category_id` : '';

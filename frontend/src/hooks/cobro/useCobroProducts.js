@@ -32,7 +32,9 @@ export function useCobroProducts(activeWarehouse, notify) {
         if (!activeWarehouse) return;
         if (!replace) setLoadingMore(true);
         try {
-            const params = { search: q, limit: pageSize, offset: off };
+            // sellable_only: la caja no ofrece insumos. Inventario, ajustes y transferencias
+            // no mandan el filtro, porque ahí sí hay que poder contarlos y moverlos.
+            const params = { search: q, limit: pageSize, offset: off, sellable_only: true };
             if (cat && cat !== "all") params.category = cat;
             const r = await api.warehouses.getProducts(activeWarehouse.id, params);
             setTotal(r.total ?? 0);
