@@ -387,22 +387,44 @@ async function updateProduct({ id, body, file, company_id }) {
     const isComboBool = is_combo === 'true' || is_combo === true || (is_combo === undefined ? product.is_combo : false);
     const isServiceBool = is_service === 'true' || is_service === true || (is_service === undefined ? product.is_service : false);
 
+    // Campo ausente = no se toca; campo presente pero vacío = se vacía a propósito.
+    //
+    // Antes se reemplazaba el producto entero con lo que trajera el cuerpo, así que una
+    // petición parcial —un guardado desde otra pantalla, una integración— le borraba el
+    // costo, el embalaje o el código de barras sin que nadie lo pidiera. El modal manda
+    // siempre el formulario completo y por eso no se notaba.
+    const opt = (valor, actual, vacio = null) => {
+      if (valor === undefined) return actual;
+      return valor === "" || valor === null ? vacio : valor;
+    };
+
+    const precioFinal = opt(price, product.price, product.price);
+    const costoFinal  = isComboBool ? null : opt(cost_price, product.cost_price);
+    // El margen manda solo si viene escrito; si no, se recalcula. Conservar el anterior
+    // dejaba fichas que se contradicen —62% con un precio que sobre ese costo da 35%—, y el
+    // margen es justamente lo que se mira para saber cuánto deja el producto.
+    const margenExplicito = profit_margin !== undefined && String(profit_margin).trim() !== "";
+    const margenFinal = margenExplicito
+      ? parseFloat(profit_margin)
+      : derivarMargen(precioFinal, costoFinal, "");
+
     await product.update({
-      name, price,
-      category_id: category_id || null,
+      name: opt(name, product.name, product.name),
+      price: precioFinal,
+      category_id: opt(category_id, product.category_id),
       image_filename: currentImageValue,
-      unit: unit || "unidad",
-      qty_step: qty_step || 1,
+      unit: opt(unit, product.unit, "unidad"),
+      qty_step: opt(qty_step, product.qty_step, 1),
       stock: (isComboBool || isServiceBool) ? 0 : product.stock,
-      cost_price: isComboBool ? null : (cost_price || null),
-      profit_margin: derivarMargen(price, cost_price, profit_margin),
-      package_size: package_size || null,
-      package_unit: package_unit || null,
-      bulk_price: bulk_price || null,
-      min_stock: parseFloat(min_stock) || 0,
+      cost_price: costoFinal,
+      profit_margin: margenFinal,
+      package_size: opt(package_size, product.package_size),
+      package_unit: opt(package_unit, product.package_unit),
+      bulk_price: opt(bulk_price, product.bulk_price),
+      min_stock: min_stock === undefined ? product.min_stock : (parseFloat(min_stock) || 0),
       is_combo: isComboBool,
       is_service: isServiceBool,
-      barcode: barcode || null,
+      barcode: opt(barcode, product.barcode),
       // Sin el campo en el cuerpo se conserva lo que ya tenía: hay flujos que guardan el
       // producto sin pasar por el modal completo y no deben despublicarlo por omisión.
       sellable: esVendible,
