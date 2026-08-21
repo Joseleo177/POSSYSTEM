@@ -11,7 +11,8 @@ export default function Sidebar({ settings, storeName, visibleTabs, safeTab, goT
         <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-surface-dark-2 border-r border-border dark:border-border-dark shrink-0">
             <div className="flex items-center gap-2.5 px-4 py-4 border-b border-border dark:border-border-dark">
                 {settings.logo_url ? (
-                    <img src={resolveImageUrl(settings.logo_url)} alt="logo" className="h-8 w-auto object-contain" />
+                    // Mismo criterio que TopBar: un logo de 32px en una cabecera de 56 se pierde.
+                    <img src={resolveImageUrl(settings.logo_url)} alt="logo" className="h-10 w-auto object-contain shrink-0" />
                 ) : (
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shrink-0 shadow-sm shadow-brand-500/20">
                         <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">

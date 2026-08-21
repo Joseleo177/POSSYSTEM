@@ -25,25 +25,29 @@ export default function BranchGate({ store, warehouses, onChoose, currentId = nu
             </button>
 
             <div className="w-full max-w-sm space-y-5">
-                <div className="text-center space-y-3">
+                {/* Misma marca de portada que IdentityGate: las dos puertas de entrada se ven
+                    una detrás de la otra y no pueden cambiar de tamaño entre pantallas. */}
+                <div className="text-center space-y-4">
                     {store?.logo_url ? (
                         <img
                             src={resolveImageUrl(store.logo_url)}
                             alt={store.name}
                             onError={imgRetryOnError}
-                            className="w-16 h-16 rounded-2xl object-cover mx-auto border border-border dark:border-white/10"
+                            className="w-44 h-44 sm:w-52 sm:h-52 object-contain mx-auto"
                         />
                     ) : (
-                        <div className="w-16 h-16 rounded-2xl mx-auto bg-brand-500/10 flex items-center justify-center text-2xl font-black text-brand-500">
+                        <div className="w-28 h-28 rounded-3xl mx-auto bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-4xl font-black text-brand-500">
                             {(store?.name || "C").charAt(0)}
                         </div>
                     )}
-                    <div>
-                        <h1 className="text-base font-black text-content dark:text-white uppercase tracking-tight">
+                    <div className="space-y-1">
+                        {/* El nombre acompaña siempre al logo —puede no traer la marca escrita—
+                            y sube a titular cuando no hay logo que lo respalde. */}
+                        <h1 className={`font-black text-content dark:text-white uppercase tracking-tight leading-[1.1] break-words ${store?.logo_url ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl"}`}>
                             {store?.name || "Catálogo"}
                         </h1>
                         {store?.slogan && (
-                            <p className="text-[11px] font-bold text-content-muted italic">{store.slogan}</p>
+                            <p className="text-[12px] font-bold text-content-muted italic">{store.slogan}</p>
                         )}
                     </div>
                 </div>

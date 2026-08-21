@@ -59,7 +59,9 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
             {/* Logo + store name */}
             <div className="flex items-center gap-2 shrink-0">
                 {settings?.logo_url ? (
-                    <img src={resolveImageUrl(settings.logo_url)} alt="logo" className="h-8 w-auto object-contain" />
+                    // La barra mide h-14: con h-8 el logo quedaba nadando en el medio y no se
+                    // leía. h-10 lo acerca al alto útil dejando el aire justo arriba y abajo.
+                    <img src={resolveImageUrl(settings.logo_url)} alt="logo" className="h-10 w-auto object-contain shrink-0" />
                 ) : (
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-sm shadow-brand-500/20 shrink-0">
                         <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">

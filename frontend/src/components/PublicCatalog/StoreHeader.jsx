@@ -29,7 +29,11 @@ export default function StoreHeader({
                             onError={imgRetryOnError}
                             // object-contain y no cover: casi todos los logos de tienda son una
                             // marca con texto, y recortarla al cuadrado se come parte del nombre.
-                            className="w-16 h-16 rounded-2xl object-contain bg-white shrink-0 border border-border dark:border-white/10 shadow-sm p-1"
+                            //
+                            // Sin recuadro blanco ni borde: el logo ya trae su propia forma y su
+                            // propio fondo. Enmarcarlo dejaba las esquinas del cuadro asomando
+                            // alrededor de un emblema redondo, con pinta de estampilla pegada.
+                            className="w-16 h-16 object-contain shrink-0"
                         />
                     ) : (
                         // Sin logo, la inicial ocupa su lugar: deja la cabecera equilibrada en

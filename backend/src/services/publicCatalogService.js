@@ -39,7 +39,46 @@ async function findCustomerByDocument(normalized, transaction) {
   return rows[0] || null;
 }
 
-const TOKEN_KEY = "public_catalog_token";
+// El enlace del catálogo se dirige por el nombre de la tienda —/catalogo/el-gran-terminal—
+// y no por una cadena aleatoria de 32 caracteres. Un enlace que se lee es un enlace que el
+// cliente reconoce: el hash largo llegaba por WhatsApp con toda la pinta de ser phishing, y
+// nadie lo podía dictar por teléfono.
+//
+// A cambio, el catálogo pasa a ser público de verdad: el nombre de la tienda se adivina, así
+// que el enlace ya no funciona como llave. Lo que protege los datos no es el enlace sino lo
+// que se expone a través de él —solo campos de vitrina, ver PUBLIC_SETTING_KEYS— más los
+// límites de tasa de las rutas públicas. Para dejar de publicar la tienda ahora se apaga el
+// catálogo, que es una decisión explícita, en vez de rotar un secreto.
+const SLUG_KEY = "public_catalog_slug";
+
+// Clave del esquema anterior. Ya no resuelve ningún enlace: se conserva el nombre porque las
+// instalaciones viejas todavía tienen la fila guardada y conviene saber de dónde salió.
+const LEGACY_TOKEN_KEY = "public_catalog_token";
+
+// "EL GRAN TERMINAL" → "el-gran-terminal". Sin acentos (viajan mal en una URL escrita a mano)
+// y sin nada que no sea letra, número o guion.
+// NFD parte "á" en "a" + tilde combinante; el filtro descarta esas marcas por rango de code
+// point en vez de por un literal en la expresión regular, que sobrevive peor a un cambio de
+// codificación del archivo.
+function stripAccents(text) {
+  return text.normalize("NFD").split("").filter((c) => {
+    const cp = c.charCodeAt(0);
+    return cp < 0x300 || cp > 0x36f;
+  }).join("");
+}
+
+function slugify(raw) {
+  return stripAccents(String(raw || "").replace(/ñ/gi, "n"))
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    .replace(/-+$/g, "");
+}
+
+// Un slug tiene que poder distinguirse de un id o de una ruta suelta, y no puede quedar vacío
+// cuando el nombre de la tienda es solo símbolos.
+const isValidSlug = (s) => typeof s === "string" && /^[a-z0-9][a-z0-9-]{1,59}$/.test(s);
 
 // El aislamiento entre empresas NO vive en las consultas: lo aplica un AsyncLocalStorage
 // que normalmente activa el middleware `auth` (ver models/index.js). Estas rutas son
@@ -47,11 +86,15 @@ const TOKEN_KEY = "public_catalog_token";
 // tiene que ejecutarse dentro de tenantStorage.run(). Sin eso, los hooks beforeFind no
 // añaden el filtro company_id y se devolverían productos de todas las empresas.
 //
-// La única consulta que corre a propósito fuera del contexto es la resolución del token,
+// La única consulta que corre a propósito fuera del contexto es la resolución del enlace,
 // que es justamente la que descubre a qué empresa pertenece.
-async function resolveCompanyId(token) {
-  if (!token || typeof token !== "string" || token.length < 16) return null;
-  const row = await Setting.findOne({ where: { key: TOKEN_KEY, value: token } });
+//
+// El slug se compara en minúsculas: un enlace dictado por teléfono y escrito con mayúsculas
+// tiene que llevar a la misma tienda, no a un 404.
+async function resolveCompanyId(slug) {
+  const clean = String(slug || "").trim().toLowerCase();
+  if (!isValidSlug(clean)) return null;
+  const row = await Setting.findOne({ where: { key: SLUG_KEY, value: clean } });
   return row?.company_id ?? null;
 }
 
@@ -571,4 +614,7 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
   });
 }
 
-module.exports = { getStore, getProducts, identifyCustomer, getMyOrders, createOrder, TOKEN_KEY };
+module.exports = {
+  getStore, getProducts, identifyCustomer, getMyOrders, createOrder,
+  SLUG_KEY, LEGACY_TOKEN_KEY, slugify, isValidSlug,
+};

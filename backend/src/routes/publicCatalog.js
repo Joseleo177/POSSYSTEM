@@ -2,6 +2,7 @@ const router    = require("express").Router();
 const crypto    = require("crypto");
 const rateLimit = require("express-rate-limit");
 const { Setting } = require("../models");
+const { runWithoutTenant } = require("../utils/tenantStorage");
 const { auth, permit } = require("../middleware/auth");
 const svc = require("../services/publicCatalogService");
 
@@ -17,11 +18,11 @@ const publicLimiter = rateLimit({
 });
 
 // ── Público (sin autenticación) ───────────────────────────────
-router.get("/:token", publicLimiter, async (req, res) => {
+router.get("/:slug", publicLimiter, async (req, res) => {
   try {
-    const data = await svc.getStore(req.params.token);
-    // Mismo 404 para token inexistente y para catálogo desactivado: no se le confirma
-    // a quien prueba tokens al azar si acertó parcialmente.
+    const data = await svc.getStore(req.params.slug);
+    // Mismo 404 para tienda inexistente y para catálogo desactivado: no se distingue
+    // "no existe" de "existe pero no publica", que es información del comercio.
     if (!data) return res.status(404).json({ ok: false, message: "Catálogo no disponible" });
     res.json({ ok: true, data });
   } catch (err) {
@@ -30,11 +31,11 @@ router.get("/:token", publicLimiter, async (req, res) => {
   }
 });
 
-router.get("/:token/products", publicLimiter, async (req, res) => {
+router.get("/:slug/products", publicLimiter, async (req, res) => {
   try {
     // warehouse_id: la sucursal que eligió el cliente. Define qué existencias ve.
     const { search, category_id, limit, offset, warehouse_id } = req.query;
-    const data = await svc.getProducts(req.params.token, { search, category_id, limit, offset, warehouse_id });
+    const data = await svc.getProducts(req.params.slug, { search, category_id, limit, offset, warehouse_id });
     if (!data) return res.status(404).json({ ok: false, message: "Catálogo no disponible" });
     res.json({ ok: true, data });
   } catch (err) {
@@ -57,9 +58,9 @@ const identifyLimiter = rateLimit({
   message: { ok: false, message: "Demasiados intentos. Espera unos minutos." },
 });
 
-router.post("/:token/identify", identifyLimiter, async (req, res) => {
+router.post("/:slug/identify", identifyLimiter, async (req, res) => {
   try {
-    const data = await svc.identifyCustomer(req.params.token, req.body?.document);
+    const data = await svc.identifyCustomer(req.params.slug, req.body?.document);
     if (!data) return res.status(404).json({ ok: false, message: "Catálogo no disponible" });
     res.json({ ok: true, data });
   } catch (err) {
@@ -80,9 +81,9 @@ const myOrdersLimiter = rateLimit({
   message: { ok: false, message: "Demasiadas consultas. Espera unos minutos." },
 });
 
-router.get("/:token/my-orders", myOrdersLimiter, async (req, res) => {
+router.get("/:slug/my-orders", myOrdersLimiter, async (req, res) => {
   try {
-    const data = await svc.getMyOrders(req.params.token, req.query.document);
+    const data = await svc.getMyOrders(req.params.slug, req.query.document);
     if (!data) return res.status(404).json({ ok: false, message: "Catálogo no disponible" });
     res.json({ ok: true, data });
   } catch (err) {
@@ -102,9 +103,9 @@ const orderLimiter = rateLimit({
   message: { ok: false, message: "Has enviado demasiados pedidos. Intenta más tarde." },
 });
 
-router.post("/:token/orders", orderLimiter, async (req, res) => {
+router.post("/:slug/orders", orderLimiter, async (req, res) => {
   try {
-    const data = await svc.createOrder(req.params.token, req.body || {});
+    const data = await svc.createOrder(req.params.slug, req.body || {});
     if (!data) return res.status(404).json({ ok: false, message: "Catálogo no disponible" });
     res.status(201).json({ ok: true, data });
   } catch (err) {
@@ -121,22 +122,67 @@ router.post("/:token/orders", orderLimiter, async (req, res) => {
 // queden colgando del prefijo público por accidente.
 const adminRouter = require("express").Router();
 
+// El slug se deriva del nombre de la tienda, pero se guarda: si el comercio se renombra, el
+// enlace publicado NO cambia solo. Cambiarlo rompe todo lo que ya se repartió por WhatsApp,
+// así que es una decisión del comercio (botón "Actualizar enlace"), no un efecto colateral
+// de editar la ficha. `suggested` es lo que le correspondería hoy, para poder avisarlo.
+async function currentAndSuggested() {
+  const [slugRow, nameRow] = await Promise.all([
+    Setting.findOne({ where: { key: svc.SLUG_KEY } }),
+    Setting.findOne({ where: { key: "store_name" } }),
+  ]);
+  return {
+    slug: slugRow?.value || null,
+    suggested: svc.slugify(nameRow?.value) || null,
+  };
+}
+
+// Dos empresas pueden llamarse igual, y el slug es la dirección pública: tiene que ser único
+// en toda la instalación, no por empresa. Se busca la variante libre añadiendo -2, -3...
+//
+// La consulta corre sin el filtro de empresa a propósito: justamente hay que ver si OTRA se
+// quedó con ese nombre. No expone nada —solo responde si el slug está tomado.
+async function uniqueSlug(base, company_id) {
+  const taken = await runWithoutTenant(() =>
+    Setting.findAll({ where: { key: svc.SLUG_KEY }, attributes: ["value", "company_id"] })
+  );
+  const usedByOthers = new Set(
+    taken.filter((r) => r.company_id !== company_id).map((r) => String(r.value))
+  );
+  if (!usedByOthers.has(base)) return base;
+  for (let n = 2; n < 100; n++) {
+    const candidate = `${base}-${n}`.slice(0, 60).replace(/-+$/, "");
+    if (!usedByOthers.has(candidate)) return candidate;
+  }
+  // Salida de emergencia: 99 tiendas homónimas. Antes que fallar, un sufijo aleatorio corto.
+  return `${base}-${crypto.randomBytes(2).toString("hex")}`;
+}
+
 adminRouter.get("/", auth, permit("config"), async (_req, res) => {
-  const row = await Setting.findOne({ where: { key: svc.TOKEN_KEY } });
-  res.json({ ok: true, data: { token: row?.value || null } });
+  res.json({ ok: true, data: await currentAndSuggested() });
 });
 
-// Genera un token nuevo. Llamarlo otra vez revoca el anterior de inmediato: el enlace
-// viejo deja de funcionar porque la búsqueda es por valor exacto.
+// Crea o actualiza el enlace a partir del nombre actual de la tienda. Llamarlo cuando el
+// nombre cambió reemplaza el enlace: el anterior deja de resolver en el acto, porque la
+// búsqueda es por valor exacto.
 adminRouter.post("/", auth, permit("config"), async (req, res) => {
-  const token = crypto.randomBytes(16).toString("hex"); // 32 caracteres, no adivinable
-  await Setting.upsert({ key: svc.TOKEN_KEY, value: token, company_id: req.company_id });
-  res.json({ ok: true, data: { token } });
+  const nameRow = await Setting.findOne({ where: { key: "store_name" } });
+  const base = svc.slugify(nameRow?.value);
+  if (!svc.isValidSlug(base)) {
+    return res.status(400).json({
+      ok: false,
+      message: "El nombre de la tienda no sirve para armar un enlace. Ponle un nombre con letras o números en Configuración.",
+    });
+  }
+
+  const slug = await uniqueSlug(base, req.company_id);
+  await Setting.upsert({ key: svc.SLUG_KEY, value: slug, company_id: req.company_id });
+  res.json({ ok: true, data: { slug, suggested: base } });
 });
 
 adminRouter.delete("/", auth, permit("config"), async (_req, res) => {
-  await Setting.destroy({ where: { key: svc.TOKEN_KEY } });
-  res.json({ ok: true, message: "Enlace desactivado" });
+  await Setting.destroy({ where: { key: svc.SLUG_KEY } });
+  res.json({ ok: true, message: "Catálogo público desactivado" });
 });
 
 module.exports = { publicRouter: router, adminRouter };

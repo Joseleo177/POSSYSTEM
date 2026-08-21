@@ -4,11 +4,17 @@ import { Button } from "../ui/Button";
 import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
 
-// Genera, muestra y revoca el enlace público del catálogo. El token vive en `settings`
-// (clave public_catalog_token), así que no hizo falta migración.
+// Genera, muestra y desactiva el enlace público del catálogo. Vive en `settings`, clave
+// public_catalog_slug.
+//
+// El enlace es el nombre de la tienda: /catalogo/el-gran-terminal. No se edita a mano —se
+// deriva del nombre configurado— pero tampoco cambia solo cuando la tienda se renombra, que
+// dejaría muertos todos los enlaces ya repartidos. Cuando el nombre y el enlace dejan de
+// coincidir, aquí se avisa y el comercio decide si lo actualiza.
 export default function PublicLinkModal({ open, onClose }) {
     const { notify } = useApp();
     const [token, setToken]     = useState(null);
+    const [suggested, setSuggested] = useState(null);
     const [loading, setLoading] = useState(true);
     const [working, setWorking] = useState(false);
     const [confirmRevoke, setConfirmRevoke] = useState(false);
@@ -25,7 +31,8 @@ export default function PublicLinkModal({ open, onClose }) {
         setConfirmRevoke(false);
         Promise.all([api.catalogLink.get(), api.settings.getAll()])
             .then(([link, cfg]) => {
-                setToken(link.data?.token || null);
+                setToken(link.data?.slug || null);
+                setSuggested(link.data?.suggested || null);
                 const num = cfg.data?.catalog_whatsapp || "";
                 setWhatsapp(num);
                 setSavedWhatsapp(num);
@@ -59,12 +66,19 @@ export default function PublicLinkModal({ open, onClose }) {
         setWorking(true);
         try {
             const r = await api.catalogLink.create();
-            setToken(r.data.token);
-            notify(token ? "Enlace regenerado. El anterior dejó de funcionar." : "Enlace creado");
+            setToken(r.data.slug);
+            setSuggested(r.data.suggested || null);
+            notify(token ? "Enlace actualizado. El anterior dejó de funcionar." : "Enlace creado");
         } catch (e) { notify(e.message, "err"); }
         setWorking(false);
         setConfirmRevoke(false);
     };
+
+    // El enlace publicado quedó con el nombre viejo de la tienda. El sufijo que se agrega
+    // cuando otra empresa ya tenía ese nombre (-2, -3) no cuenta como desactualizado: ese
+    // enlace SÍ corresponde al nombre actual.
+    const outdated = !!token && !!suggested && token !== suggested
+        && !new RegExp(`^${suggested}-([0-9]{1,2}|[0-9a-f]{4})$`).test(token);
 
     const revoke = async () => {
         setWorking(true);
@@ -123,6 +137,26 @@ export default function PublicLinkModal({ open, onClose }) {
                             </div>
                         </div>
 
+                        {outdated && (
+                            <div className="rounded-xl border border-warning/40 bg-warning/5 p-3 space-y-2">
+                                <div className="text-[9px] font-black uppercase tracking-widest text-warning">
+                                    El enlace no coincide con el nombre
+                                </div>
+                                <p className="text-[11px] font-bold text-content-muted leading-relaxed">
+                                    Cambiaste el nombre de la tienda. El enlace de arriba sigue funcionando;
+                                    si lo actualizas a <span className="text-content dark:text-white">/catalogo/{suggested}</span>,
+                                    el anterior deja de servir y hay que repartirlo de nuevo.
+                                </p>
+                                <button
+                                    onClick={generate}
+                                    disabled={working}
+                                    className="h-8 px-3 rounded-lg bg-warning text-black text-[10px] font-black uppercase tracking-wide disabled:opacity-50"
+                                >
+                                    Actualizar enlace
+                                </button>
+                            </div>
+                        )}
+
                         {/* ── Pedidos por WhatsApp ── */}
                         <div className="rounded-xl border border-border dark:border-white/10 p-3 space-y-3">
                             <div className="flex items-start justify-between gap-3">
@@ -176,14 +210,18 @@ export default function PublicLinkModal({ open, onClose }) {
                             </div>
                         </div>
 
+                        {/* El enlace ya no es un secreto que se pueda rotar: lleva el nombre de
+                            la tienda, así que la única forma de dejar de publicar es apagar el
+                            catálogo. Decirlo aquí evita que alguien crea que el enlace protege
+                            algo por ser difícil de adivinar. */}
                         <div className="rounded-xl border border-border dark:border-white/10 p-3 space-y-2">
                             <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle">
-                                Si el enlace se filtró
+                                Dejar de publicar
                             </div>
                             {confirmRevoke ? (
                                 <div className="space-y-2">
                                     <p className="text-[11px] font-bold text-danger">
-                                        Quien tenga el enlace actual dejará de ver el catálogo. ¿Continuar?
+                                        El catálogo dejará de estar disponible para todos. ¿Continuar?
                                     </p>
                                     <div className="flex gap-2">
                                         <button
@@ -194,13 +232,6 @@ export default function PublicLinkModal({ open, onClose }) {
                                             Desactivar
                                         </button>
                                         <button
-                                            onClick={generate}
-                                            disabled={working}
-                                            className="h-8 px-3 rounded-lg bg-warning text-black text-[10px] font-black uppercase tracking-wide disabled:opacity-50"
-                                        >
-                                            Generar otro
-                                        </button>
-                                        <button
                                             onClick={() => setConfirmRevoke(false)}
                                             className="h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide text-content-subtle"
                                         >
@@ -209,12 +240,18 @@ export default function PublicLinkModal({ open, onClose }) {
                                     </div>
                                 </div>
                             ) : (
-                                <button
-                                    onClick={() => setConfirmRevoke(true)}
-                                    className="text-[11px] font-black uppercase tracking-wide text-danger hover:underline"
-                                >
-                                    Desactivar o regenerar
-                                </button>
+                                <>
+                                    <p className="text-[11px] font-bold text-content-muted leading-relaxed">
+                                        El enlace lleva el nombre de tu tienda, así que cualquiera que lo
+                                        escriba entra. Para que deje de verse hay que desactivar el catálogo.
+                                    </p>
+                                    <button
+                                        onClick={() => setConfirmRevoke(true)}
+                                        className="text-[11px] font-black uppercase tracking-wide text-danger hover:underline"
+                                    >
+                                        Desactivar catálogo
+                                    </button>
+                                </>
                             )}
                         </div>
                     </>

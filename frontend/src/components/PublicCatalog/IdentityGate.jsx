@@ -63,25 +63,37 @@ export default function IdentityGate({ token, store, onIdentified }) {
                 )}
             </button>
             <div className="w-full max-w-sm space-y-5">
-                <div className="text-center space-y-3">
+                {/* La marca es lo único que hay en esta pantalla: el cliente todavía no vio
+                    la tienda y tiene que reconocerla de un vistazo. Por eso el logo va en
+                    tamaño de portada, entero y sin recuadro —object-contain, como StoreHeader—:
+                    recortarlo al cuadrado se come parte del nombre o del emblema, y enmarcarlo
+                    deja las esquinas del cuadro asomando alrededor de un logo redondo.
+
+                    El nombre va siempre, aunque haya logo: un logo puede ser solo un emblema
+                    sin la marca escrita, y entonces nada diría en qué tienda está el cliente.
+                    Queda un escalón por debajo del logo —no es el titular de la pantalla, es
+                    su rótulo— para que no compitan. */}
+                <div className="text-center space-y-4">
                     {store?.logo_url ? (
                         <img
                             src={resolveImageUrl(store.logo_url)}
                             alt={store.name}
                             onError={imgRetryOnError}
-                            className="w-16 h-16 rounded-2xl object-cover mx-auto border border-border dark:border-white/10"
+                            className="w-44 h-44 sm:w-52 sm:h-52 object-contain mx-auto"
                         />
                     ) : (
-                        <div className="w-16 h-16 rounded-2xl mx-auto bg-brand-500/10 flex items-center justify-center text-2xl font-black text-brand-500">
+                        <div className="w-28 h-28 rounded-3xl mx-auto bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-4xl font-black text-brand-500">
                             {(store?.name || "C").charAt(0)}
                         </div>
                     )}
-                    <div>
-                        <h1 className="text-base font-black text-content dark:text-white uppercase tracking-tight">
+                    <div className="space-y-1">
+                        {/* Sin logo el nombre es lo único que identifica a la tienda, así que
+                            ahí sube a titular. */}
+                        <h1 className={`font-black text-content dark:text-white uppercase tracking-tight leading-[1.1] break-words ${store?.logo_url ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl"}`}>
                             {store?.name || "Catálogo"}
                         </h1>
                         {store?.slogan && (
-                            <p className="text-[11px] font-bold text-content-muted italic">{store.slogan}</p>
+                            <p className="text-[12px] font-bold text-content-muted italic">{store.slogan}</p>
                         )}
                     </div>
                 </div>
@@ -93,9 +105,12 @@ export default function IdentityGate({ token, store, onIdentified }) {
                                 <h2 className="text-[13px] font-black uppercase tracking-tight text-content dark:text-white">
                                     Identifícate para entrar
                                 </h2>
-                                <p className="text-[11px] font-bold text-content-muted leading-relaxed">
-                                    Escribe tu cédula o RIF. Lo usamos para asociar tus pedidos y
-                                    facturarte sin pedirte los datos cada vez.
+                                {/* "Escribe tu cédula o RIF" sobraba: el selector V- y el campo
+                                    ya lo dicen. Lo que no sobra es el porqué —pedir el documento
+                                    antes de dejar ver la tienda es una barrera poco común, y sin
+                                    una razón a la vista el cliente se va. */}
+                                <p className="text-[11px] font-medium text-content-muted leading-relaxed">
+                                    Lo usamos para asociar tus pedidos y facturarte.
                                 </p>
                             </div>
                             <div className="flex gap-2">
