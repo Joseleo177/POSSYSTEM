@@ -27,7 +27,8 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
     notes: "",
     // Qué se hace con lo que el cliente entregó de más.
     surplus_mode: "devolver",   // devolver | caja | credito
-    change_journal_id: "",
+    // Salidas del vuelto: una por caja. Empieza con una y se agregan las que hagan falta.
+    change_parts: [{ journal_id: "", amount: "" }],
   });
   const [loading, setLoading] = useState(false);
   // Una clave por lote: si la respuesta se pierde y el cajero reintenta, el servidor reconoce
@@ -63,12 +64,14 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   // pidiera un importe distinto al que muestra el resto del sistema para la misma factura.
   //
   // Lo ya cobrado se convierte a la tasa de su día, no a la de hoy: es el dinero que entró.
-  const saldoEnMonedaDePago = (s) => {
+  // Recibe la tasa como parámetro para poder calcular el monto sugerido con la moneda del
+  // diario que se acaba de elegir, antes de que el estado del formulario se haya actualizado.
+  const saldoEnMonedaDePagoAt = (s, r) => {
     const saldoBase = parseFloat(s.balance || 0);
-    if (!(rate > 1)) return round2(saldoBase);
+    if (!(r > 1)) return round2(saldoBase);
 
-    const hist = parseFloat(s.exchange_rate) > 1 ? parseFloat(s.exchange_rate) : rate;
-    const totalBs = saleTotalAtRate(s, rate);
+    const hist = parseFloat(s.exchange_rate) > 1 ? parseFloat(s.exchange_rate) : r;
+    const totalBs = saleTotalAtRate(s, r);
     const cobrado = round2(parseFloat(s.amount_paid || 0) * hist)
       + round2(parseFloat(s.total_returned || 0) * hist)
       + round2(parseFloat(s.forgiven_amount || 0) * hist);
@@ -76,7 +79,9 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   };
 
   // Lo que hay que pedirle al cliente, en la moneda con la que va a pagar.
-  const deudaEnPago = round2(ordenadas.reduce((acc, s) => acc + saldoEnMonedaDePago(s), 0));
+  const deudaEnPagoAt = (r) => round2(ordenadas.reduce((acc, s) => acc + saldoEnMonedaDePagoAt(s, r), 0));
+  const saldoEnMonedaDePago = (s) => saldoEnMonedaDePagoAt(s, rate);
+  const deudaEnPago = deudaEnPagoAt(rate);
 
   // Lo que el cliente entregó por encima de la deuda y hay que decidir qué hacer con ello.
   //
@@ -91,12 +96,32 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   const sobrante     = parseFloat((sobrantePago / rate).toFixed(6));
   const haySobrante  = sobrante > 0.10;
 
-  // Diario del que sale el vuelto: puede ser otro distinto al del cobro (se recibe en divisas
-  // y se devuelve en bolívares).
-  const changeJournal  = form.change_journal_id ? activeJournals.find(j => j.id === form.change_journal_id) : null;
-  const changeCurrency = changeJournal?.currency_id ? activeCurrencies.find(c => c.id === parseInt(changeJournal.currency_id)) : null;
-  const changeRate     = (!changeCurrency || changeCurrency.is_base) ? 1 : parseFloat(changeCurrency.exchange_rate || 1);
-  const changeSym      = changeCurrency?.symbol || baseCurrency?.symbol || "Ref.";
+  // Tasa y símbolo de la caja de una salida de vuelto: cada tramo se escribe en la moneda de
+  // SU caja, que es la que el cajero está contando al entregarlo.
+  const datosCaja = (journalId) => {
+    const j = journalId ? activeJournals.find(x => x.id === journalId) : null;
+    const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
+    const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
+    return { journal: j, rate: r, sym: cur?.symbol || baseCurrency?.symbol || "Ref." };
+  };
+
+  // El vuelto puede salir de VARIAS cajas: sin sencillo en divisas se devuelven 5$ en efectivo
+  // y el resto en bolívares. Cada tramo sale de la gaveta por la que salió de verdad; cargarlo
+  // todo a una dejaría esa corta y la otra larga.
+  const salidas = (form.change_parts || []).map(p => {
+    const { rate: r, sym: s } = datosCaja(p.journal_id);
+    const tecleado = parseFloat(String(p.amount).replace(",", "."));
+    const montoPago = Number.isFinite(tecleado) && tecleado >= 0 ? round2(tecleado) : 0;
+    return { ...p, rate: r, sym: s, montoPago, montoBase: parseFloat((montoPago / r).toFixed(6)) };
+  });
+
+  const vueltoBase = parseFloat(salidas.reduce((acc, s) => acc + s.montoBase, 0).toFixed(6));
+  // Lo que el cliente no se llevó: se queda en la caja y se registra como tal en el cobro.
+  const restoEnCaja = Math.max(0, parseFloat((sobrante - vueltoBase).toFixed(6)));
+  // Devolver más de lo que sobró sería sacar plata de la caja sin motivo: el servidor lo
+  // rechaza y acá se avisa antes de intentarlo.
+  const vueltoExcedido = vueltoBase > sobrante + 0.10;
+  const faltaCajaEnSalida = salidas.some(s => s.montoPago > 0 && !s.journal_id);
 
   // Vista previa del reparto. La cuenta la vuelve a hacer el servidor —es quien manda—, pero
   // el cajero necesita ver a dónde va el dinero antes de aceptar, no después.
@@ -114,9 +139,12 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ordenadas, amountLocal, deudaEnPago, haySobrante, rate]);
 
-  // Devolver el vuelto exige decir de qué caja sale: es dinero que sale de una gaveta concreta.
-  const faltaDiarioCambio = haySobrante && form.surplus_mode === "devolver" && !form.change_journal_id;
-  const canSubmit = !loading && form.journal_id && form.reference_date && amountBase > 0 && !faltaDiarioCambio;
+  // Devolver el vuelto exige decir de qué caja sale cada tramo: es dinero que sale de una
+  // gaveta concreta, y sin eso el arqueo de esa caja no cuadra.
+  const faltaDiarioCambio = haySobrante && form.surplus_mode === "devolver"
+    && (faltaCajaEnSalida || vueltoBase <= 0);
+  const canSubmit = !loading && form.journal_id && form.reference_date && amountBase > 0
+    && !faltaDiarioCambio && !vueltoExcedido;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -137,9 +165,15 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
         notes:              form.notes || null,
         // El sobrante viaja con su destino declarado; el servidor rechaza el cobro si sobra
         // dinero sin decir a dónde va.
-        change_given:      haySobrante && form.surplus_mode === "devolver" ? parseFloat(sobrante.toFixed(6)) : undefined,
-        change_journal_id: haySobrante && form.surplus_mode === "devolver" ? form.change_journal_id : undefined,
-        surplus_kept:      haySobrante && form.surplus_mode === "caja"     ? parseFloat(sobrante.toFixed(6)) : undefined,
+        // Cada tramo del vuelto con su caja: el servidor registra un egreso por cada una.
+        change_parts:      haySobrante && form.surplus_mode === "devolver"
+          ? salidas.filter(s => s.montoBase > 0).map(s => ({ journal_id: s.journal_id, amount: s.montoBase }))
+          : undefined,
+        // Al devolver, lo que no se entregó se queda en la caja: sin esto el servidor vería un
+        // sobrante sin destino y rechazaría el cobro.
+        surplus_kept:      haySobrante && form.surplus_mode === "caja"     ? parseFloat(sobrante.toFixed(6))
+                         : haySobrante && form.surplus_mode === "devolver" && restoEnCaja > 0.0001 ? restoEnCaja
+                         : undefined,
         change_to_credit:  haySobrante && form.surplus_mode === "credito"  ? parseFloat(sobrante.toFixed(6)) : undefined,
       });
       if (res.duplicated) notify("Ese cobro ya estaba registrado");
@@ -188,7 +222,22 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
             value={form.journal_id === "" ? "" : String(form.journal_id)}
             placeholder="Seleccionar método..."
             options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
-            onChange={(v) => setForm(p => ({ ...p, journal_id: v === "" ? "" : parseInt(v, 10), amount: "" }))}
+            onChange={(v) => {
+              const id = v === "" ? "" : parseInt(v, 10);
+              const j = activeJournals.find(x => x.id === id);
+              const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
+              const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
+              // Elegir el método deja el monto listo, igual que en el cobro de una factura:
+              // el caso corriente es cobrar la deuda completa, y cambiar de diario cambia de
+              // moneda, así que la cifra se recalcula con la tasa de la moneda nueva.
+              setForm(p => ({
+                ...p,
+                journal_id: id,
+                amount: j ? deudaEnPagoAt(r).toFixed(2) : "",
+                // El vuelto se replantea con la moneda nueva: sus montos eran de la anterior.
+                change_parts: [{ journal_id: "", amount: "" }],
+              }));
+            }}
           />
         </Field>
 
@@ -211,15 +260,6 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
             />
           </Field>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setForm(p => ({ ...p, amount: deudaEnPago.toFixed(2) }))}
-          disabled={!form.journal_id}
-          className="w-full h-9 rounded-xl border border-brand-500/30 text-brand-500 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          Pagar todo · {sym}{deudaEnPago.toFixed(2)}
-        </button>
 
         {rate !== 1 && amountLocal > 0 && (
           <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 tabular-nums -mt-1">
@@ -298,21 +338,87 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
             </div>
 
             {form.surplus_mode === "devolver" && (
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
                   Sale de *
                 </p>
-                <CustomSelect
-                  value={form.change_journal_id === "" ? "" : String(form.change_journal_id)}
-                  placeholder="Caja del vuelto..."
-                  options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
-                  onChange={(v) => setForm(p => ({ ...p, change_journal_id: v === "" ? "" : parseInt(v, 10) }))}
-                />
-                {form.change_journal_id && changeRate !== 1 && (
-                  <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1 tabular-nums">
-                    Entregar {changeSym}{(sobrante * changeRate).toFixed(2)}
-                  </p>
+
+                {salidas.map((salida, idx) => (
+                  <div key={idx} className="flex gap-2 items-start">
+                    <div className="flex-1 min-w-0">
+                      <CustomSelect
+                        value={salida.journal_id === "" ? "" : String(salida.journal_id)}
+                        placeholder="Caja del vuelto..."
+                        options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
+                        onChange={(v) => setForm(p => {
+                          const partes = [...p.change_parts];
+                          const id = v === "" ? "" : parseInt(v, 10);
+                          const { rate: r } = datosCaja(id);
+                          // Al elegir la caja se sugiere lo que falta por devolver, convertido
+                          // a su moneda: en la primera es el sobrante entero, en la siguiente
+                          // solo el resto.
+                          const yaAsignado = partes.reduce((acc, q, i) => {
+                            if (i === idx) return acc;
+                            const { rate: rr } = datosCaja(q.journal_id);
+                            const n = parseFloat(String(q.amount).replace(",", "."));
+                            return acc + (Number.isFinite(n) ? n / rr : 0);
+                          }, 0);
+                          const falta = Math.max(0, sobrante - yaAsignado);
+                          partes[idx] = { journal_id: id, amount: id === "" ? "" : round2(falta * r).toFixed(2) };
+                          return { ...p, change_parts: partes };
+                        })}
+                      />
+                    </div>
+                    <div className="w-32 shrink-0">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={salida.amount}
+                        onChange={e => setForm(p => {
+                          const partes = [...p.change_parts];
+                          partes[idx] = { ...partes[idx], amount: e.target.value.replace(/[^\d.,]/g, "") };
+                          return { ...p, change_parts: partes };
+                        })}
+                        placeholder={salida.sym}
+                        className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-warning/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20 tabular-nums"
+                      />
+                    </div>
+                    {salidas.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setForm(p => ({ ...p, change_parts: p.change_parts.filter((_, i) => i !== idx) }))}
+                        className="w-10 h-10 shrink-0 rounded-xl border border-border/30 dark:border-white/10 text-content-subtle hover:text-danger hover:border-danger/40 transition-all flex items-center justify-center"
+                        title="Quitar esta salida"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                {/* Sin sencillo en una sola moneda: parte en divisas y parte en bolívares. */}
+                {restoEnCaja > 0.0001 && (
+                  <button
+                    type="button"
+                    onClick={() => setForm(p => ({ ...p, change_parts: [...p.change_parts, { journal_id: "", amount: "" }] }))}
+                    className="w-full h-9 rounded-xl border border-dashed border-warning/40 text-warning text-[10px] font-black uppercase tracking-widest hover:bg-warning/10 transition-all"
+                  >
+                    Devolver el resto desde otra caja
+                  </button>
                 )}
+
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold text-content-subtle dark:text-white/30 tabular-nums">
+                    Entregado: {fmtP(vueltoBase)} de {fmtP(sobrante)}
+                  </span>
+                  {vueltoExcedido ? (
+                    <span className="text-[10px] font-black text-danger">Supera el sobrante</span>
+                  ) : restoEnCaja > 0.0001 ? (
+                    <span className="text-[10px] font-black text-warning tabular-nums">
+                      Quedan {fmtP(restoEnCaja)} en caja
+                    </span>
+                  ) : null}
+                </div>
               </div>
             )}
 

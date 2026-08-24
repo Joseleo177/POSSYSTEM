@@ -15,8 +15,9 @@ import { api } from "../../services/api";
 // son deudas: todavía no se han facturado, así que no deben leerse como una alerta.
 const STATUS_BADGE = {
     pagado:   "badge-success",
-    // Saldada sin dinero: se distingue de 'pagado' porque no entró nada a caja.
-    exonerado:"badge-warning",
+    // Saldada sin dinero: se distingue de 'pagado' porque no entró nada a caja. Violeta y no
+    // ámbar porque ese color ya es de 'parcial' y 'devuelto', y las tres se leían igual.
+    exonerado:"badge-violet",
     parcial:  "badge-warning",
     anulado:  "badge-neutral",
     devuelto: "badge-warning",
@@ -184,7 +185,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                                 <div className="text-[10px] font-bold text-danger tabular-nums">Saldo: {fmtPrice(sale.balance)}</div>
                                             )}
                                             {sale.forgiven_amount > 0.001 && (
-                                                <div className="text-[10px] font-bold text-warning tabular-nums">Exonerado: {fmtPrice(sale.forgiven_amount)}</div>
+                                                <div className="text-[10px] font-bold text-violet-500 dark:text-violet-400 tabular-nums">Exonerado: {fmtPrice(sale.forgiven_amount)}</div>
                                             )}
                                         </td>
                                         <td className="text-right pr-6">
@@ -217,7 +218,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                                     </button>
                                                 )}
                                                 {sale.status === 'exonerado' && can("sales.forgive") && (
-                                                    <button onClick={() => unforgive(sale)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-warning hover:bg-warning/10 active:scale-90" title="Deshacer exoneración: la factura vuelve a deberse">
+                                                    <button onClick={() => unforgive(sale)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-violet-500 hover:bg-violet-500/10 active:scale-90" title="Deshacer exoneración: la factura vuelve a deberse">
                                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                                                     </button>
                                                 )}
@@ -255,7 +256,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                             así una factura anulada aportaba su monto completo a la
                                             deuda pese a no deber nada. */}
                                         {sumForgiven > 0.001 && (
-                                            <div className="text-[10px] font-bold tabular-nums text-warning">
+                                            <div className="text-[10px] font-bold tabular-nums text-violet-500 dark:text-violet-400">
                                                 Exonerado {fmtPrice(sumForgiven)}
                                             </div>
                                         )}

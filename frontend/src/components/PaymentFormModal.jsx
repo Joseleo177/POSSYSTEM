@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 import Modal from "./ui/Modal";
-import { saleTotalAtRate, todayISO } from "../helpers";
+import { saleTotalAtRate, todayISO, PAYMENT_TOLERANCE } from "../helpers";
 import DatePicker from "./ui/DatePicker";
 import CustomSelect from "./ui/CustomSelect";
 
@@ -15,8 +15,8 @@ const getEmpty = () => ({
   pay_currency_id: "",
   // Cambio
   received_amount: "",
-  change_journal_id: "",
-  change_amount_override: "", // monto real a entregar (en moneda del diario de cambio)
+  // Salidas del vuelto: una por caja. Se agregan las que hagan falta cuando no hay sencillo.
+  change_parts: [{ journal_id: "", amount: "" }],
   keep_change: false,
   credit_change: false,
 });
@@ -87,9 +87,13 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const totalBsAt = (rate) => (sale?.items?.length && rate > 1)
     ? saleTotalAtRate(sale, rate)
     : roundBs2(parseFloat(sale?.total || 0) * historicalRate);
+  // Lo exonerado se descuenta igual que lo cobrado y lo devuelto: es saldo que ya no se debe.
+  // Sin esta línea, una factura con parte del saldo perdonado pedía en bolívares el importe
+  // completo —el saldo en Ref sí lo descontaba— y la pantalla se contradecía consigo misma.
   const pendingBsAt = (rate) => Math.max(0, roundBs2(totalBsAt(rate)
-    - roundBs2(parseFloat(sale?.amount_paid    || 0) * historicalRate)
-    - roundBs2(parseFloat(sale?.total_returned || 0) * historicalRate)
+    - roundBs2(parseFloat(sale?.amount_paid     || 0) * historicalRate)
+    - roundBs2(parseFloat(sale?.total_returned  || 0) * historicalRate)
+    - roundBs2(parseFloat(sale?.forgiven_amount || 0) * historicalRate)
     - roundBs2(creditApplied * historicalRate)));
 
   const totalPreciseBs   = totalBsAt(bsRate);
@@ -110,13 +114,16 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     ? (isNonBasePay ? amountNum / payRate : round2(amountNum / payRate))
     : 0;
 
-  // Ajuste anti-residuo en moneda base (USD):
-  // Si el cobro es en USD y se encuentra a ≤$0.10 del saldo oficial, se ajusta al saldo exacto.
-  // En Bs (moneda secundaria), se mantiene el monto exacto abonado (amountNum / payRate) para que
-  // la base de datos guarde exactamente los bolívares pagados (ej. Bs. 12364.30 y no Bs. 12396.41).
-  if (!isNonBasePay && pendingAfterCredit > 0 && Math.abs(amountBase - pendingAfterCredit) < 0.10) {
-    amountBase = pendingAfterCredit;
-  }
+  // Se registra el dinero que entró, ni un céntimo más.
+  //
+  // Antes, cobrando en divisas, un monto a menos de diez céntimos del saldo se subía al saldo
+  // exacto: el cliente entregaba 5,00 por una factura de 5,10 y el sistema anotaba 5,10. La
+  // gaveta quedaba con diez céntimos menos de los que decía la caja, en cada cobro.
+  //
+  // No hace falta inflarlo para cerrar la factura: el servidor la da por saldada cuando lo
+  // cobrado llega al saldo menos la tolerancia (ver PAYMENT_TOLERANCE en utils/saleBalance),
+  // que es justo el desfase de redondeo que este ajuste intentaba tapar. Lo único que se
+  // conserva es el tope: no se aplica a la factura más de lo que debe.
   amountBase = Math.min(amountBase, pendingAfterCredit + 0.0001);
 
   // Proyección de cómo queda la factura si se registra este pago. Se calcula sobre la
@@ -130,7 +137,23 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const paidTotalBs    = roundBs2(roundBs2(paidBeforeBase * historicalRate) + payAmountInBs);
   const remainingBase  = Math.max(0, pendingAfterCredit - amountBase);
   const remainingBs    = Math.max(0, roundBs2(pendingPreciseBs - payAmountInBs));
-  const settlesInvoice = hasBsRate ? remainingBs < 0.01 : remainingBase < 0.001;
+
+  // El saldo que queda se mide en la MISMA pista contra la que se topó el abono, y no siempre
+  // en bolívares.
+  //
+  // Cobrando en divisas el abono se recorta al saldo oficial en base (19,80), mientras que el
+  // saldo en Bs se calcula línea por línea (Bs.15.693,20, que son 20,00). Ese desfase de
+  // redondeo —el mismo que tolera utils/saleBalance— aparecía como "Saldo restante Bs.156,87"
+  // debajo de un campo que decía "PAGO COMPLETO A FACTURA": dos criterios distintos en la
+  // misma pantalla, y el que mentía era este, porque el servidor da la factura por saldada.
+  // La misma tolerancia que aplica el servidor al decidir si la factura queda saldada. Sin
+  // esto la pantalla anunciaba "abono parcial" y un saldo de diez céntimos para un cobro que
+  // el servidor iba a cerrar igual: dos veredictos distintos sobre el mismo pago.
+  const settlesInvoice = isNonBasePay ? remainingBs < 0.01 : remainingBase <= PAYMENT_TOLERANCE;
+  // Lo que se muestra: la cifra de la pista que manda, convertida a la moneda de pantalla. Si
+  // la factura queda saldada el resto es cero, no los céntimos que absorbe la tolerancia.
+  const remainingShown = settlesInvoice ? 0
+    : (isNonBasePay ? remainingBs : roundBs2(remainingBase * historicalRate));
 
   // Sobrante calculado en la moneda de pago (570 - 561.22 = 8.78 exacto),
   // sin ida-y-vuelta por USD que acumula error de redondeo
@@ -140,19 +163,30 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const changeBase = changeInPayCur > 0 ? changeInPayCur / payRate : 0;
   const changeDisplay = changeInPayCur;
 
-  // Moneda del diario de cambio (para mostrar equivalencia en Bs, etc.)
-  const changeJournalObj  = form.change_journal_id ? activeJournals.find(j => j.id === form.change_journal_id) : null;
-  const changeJournalCur  = changeJournalObj?.currency_id ? activeCurrencies.find(c => c.id === parseInt(changeJournalObj.currency_id)) : null;
-  const changeJournalRate = (!changeJournalCur || changeJournalCur.is_base) ? 1 : parseFloat(changeJournalCur.exchange_rate || 1);
-  const changeJournalSym  = changeJournalCur?.symbol || baseCurrency?.symbol || "Ref.";
-  const exactChangeInJournalCur = parseFloat((changeBase * changeJournalRate).toFixed(2));
+  // Tasa y símbolo de la caja de una salida de vuelto: cada tramo se escribe en la moneda de
+  // SU caja, que es la que el cajero cuenta al entregarlo.
+  const datosCaja = (journalId) => {
+    const j = journalId ? activeJournals.find(x => x.id === journalId) : null;
+    const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
+    const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
+    return { journal: j, rate: r, sym: cur?.symbol || baseCurrency?.symbol || "Ref." };
+  };
 
-  // Monto real que ingresó el cajero (puede redondearlo al billete más cercano)
-  const overrideNum   = parseFloat(String(form.change_amount_override || "").replace(",", "."));
-  const validOverride = !isNaN(overrideNum) && overrideNum > 0;
-  const actualChangeBase = (changeBase > 0 && validOverride)
-    ? overrideNum / changeJournalRate
-    : changeBase;
+  // El vuelto puede salir de VARIAS cajas: sin sencillo en divisas se devuelven 2$ en efectivo
+  // y los 0,66 restantes en bolívares. Cada tramo sale de la gaveta por la que salió de verdad.
+  const salidasCambio = (form.change_parts || []).map(p => {
+    const { rate: r, sym: s } = datosCaja(p.journal_id);
+    const tecleado = parseFloat(String(p.amount).replace(",", "."));
+    const montoPago = !isNaN(tecleado) && tecleado >= 0 ? roundBs2(tecleado) : 0;
+    return { ...p, rate: r, sym: s, montoPago, montoBase: parseFloat((montoPago / r).toFixed(6)) };
+  });
+
+  const actualChangeBase = parseFloat(salidasCambio.reduce((acc, s) => acc + s.montoBase, 0).toFixed(6));
+  const hayCajaDeCambio  = salidasCambio.some(s => s.journal_id && s.montoBase > 0);
+  const faltaCajaEnCambio = salidasCambio.some(s => s.montoPago > 0 && !s.journal_id);
+  // Lo que el cliente no se llevó porque no había sencillo: se queda en la caja. No se aplica
+  // a la factura —el abono ya está topado al saldo— pero el dinero está ahí y hay que decirlo.
+  const sobranteRetenido = Math.max(0, parseFloat((changeBase - actualChangeBase).toFixed(6)));
 
   const creditCoversAll = creditApplied >= balanceUsd - 0.001;
 
@@ -165,7 +199,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
       // todavía, el punto no lo imprime) y exigirla obligaba al cajero a inventarse algo
       // para poder cerrar la venta, que es peor que dejar el campo vacío.
     }
-    if (changeBase > 0 && !form.keep_change && !form.credit_change && !form.change_journal_id) return notify("Selecciona el diario del que saldrá el cambio", "err");
+    if (changeBase > 0 && !form.keep_change && !form.credit_change && !hayCajaDeCambio) return notify("Selecciona el diario del que saldrá el cambio", "err");
 
     // Con "Quedarse", el abono aplicado es el que se cobró en la moneda del pago, no el saldo
     // oficial en base: ese saldo vale más bolívares que el precio cobrado (Bs.54383.84 contra
@@ -176,7 +210,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     const finalAmountBase = form.keep_change
       ? (isNonBasePay ? amountBase : Math.min(receivedBase, pendingAfterCredit))
       : amountBase;
-    const payAmountToSend = (changeBase > 0 && !form.keep_change && (form.change_journal_id || form.credit_change))
+    const payAmountToSend = (changeBase > 0 && !form.keep_change && (hayCajaDeCambio || form.credit_change))
       ? receivedBase
       : finalAmountBase;
 
@@ -201,7 +235,10 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
         payment_journal_id: creditCoversAll ? null : (form.payment_journal_id || null),
         received_amount:    receivedBase > 0 ? receivedBase : undefined,
         change_given:       (changeBase > 0 && !form.keep_change && !form.credit_change) ? actualChangeBase : undefined,
-        change_journal_id:  (changeBase > 0 && !form.keep_change && !form.credit_change) ? form.change_journal_id : undefined,
+        // Cada tramo del vuelto con su caja: el servidor registra un egreso por cada una.
+        change_parts:       (changeBase > 0 && !form.keep_change && !form.credit_change)
+          ? salidasCambio.filter(s => s.journal_id && s.montoBase > 0).map(s => ({ journal_id: s.journal_id, amount: s.montoBase }))
+          : undefined,
         surplus_kept:       (changeBase > 0 && form.keep_change) ? changeBase : undefined,
         change_to_credit:   (changeBase > 0 && form.credit_change) ? changeBase : undefined,
         credit_amount:      creditApplied > 0 ? creditApplied : undefined,
@@ -247,7 +284,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   const canSubmit = !loading && form.reference_date && (
     creditCoversAll ||
     (form.payment_journal_id && !isNaN(amountNum) && amountNum > 0 &&
-      (changeBase <= 0 || form.keep_change || form.credit_change || form.change_journal_id))
+      (changeBase <= 0 || form.keep_change || form.credit_change || (hayCajaDeCambio && !faltaCajaEnCambio)))
   );
 
   const fmt     = (usdAmt) => `${defaultSym}${(Number(usdAmt || 0) * historicalRate).toFixed(2)}`;
@@ -264,13 +301,13 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
         <Row label="Total" value={fmtBase(sale.total)} />
         {sale.amount_paid > 0 && <Row label="Ya pagado" value={fmtBase(sale.amount_paid)} valueClass="text-success" />}
         <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
-          <Row label="Se dejará de cobrar" value={fmtBase(balanceUsd)} valueClass="text-warning font-black" />
+          <Row label="Se dejará de cobrar" value={fmtBase(balanceUsd)} valueClass="text-violet-500 dark:text-violet-400 font-black" />
         </div>
       </div>
 
-      <div className="rounded-xl border border-warning/30 bg-warning/5 p-3.5 mb-5">
+      <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 p-3.5 mb-5">
         <p className="text-[11px] font-bold text-content-subtle dark:text-white/50 leading-relaxed">
-          La factura queda cerrada como <span className="font-black text-warning">exonerada</span>: sale de
+          La factura queda cerrada como <span className="font-black text-violet-500 dark:text-violet-400">exonerada</span>: sale de
           cuentas por cobrar sin registrarse como cobrada. No devuelve mercancía al inventario ni genera
           crédito a favor del cliente. Se puede deshacer.
         </p>
@@ -295,7 +332,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
           Volver
         </button>
         <button onClick={submitForgive} disabled={loading || !forgiveReason.trim()}
-          className="flex-[2] h-10 rounded-xl bg-warning text-black text-[11px] font-black uppercase tracking-wide transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed">
+          className="flex-[2] h-10 rounded-xl bg-violet-500 text-white text-[11px] font-black uppercase tracking-wide transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed">
           {loading ? "Exonerando..." : `Exonerar ${fmtBase(balanceUsd)}`}
         </button>
       </div>
@@ -391,8 +428,8 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
                 pay_currency_id: newCurId || p.pay_currency_id,
                 amount: newAmt,
                 received_amount: newAmt,
-                change_journal_id: "",
-                change_amount_override: "",
+                // El vuelto se replantea con la moneda nueva: sus montos eran de la anterior.
+                change_parts: [{ journal_id: "", amount: "" }],
               }));
             }}
           />
@@ -454,7 +491,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
             {/* Toggle dar cambio / quedarse / crédito */}
             <div className="flex p-1 bg-white/[0.02] dark:bg-white/[0.04] rounded-xl border border-white/[0.06]">
               <button type="button"
-                onClick={() => setForm(p => ({ ...p, keep_change: false, credit_change: false, change_journal_id: "", change_amount_override: "" }))}
+                onClick={() => setForm(p => ({ ...p, keep_change: false, credit_change: false, change_parts: [{ journal_id: "", amount: "" }] }))}
                 className={[
                   "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
                   !form.keep_change && !form.credit_change
@@ -465,7 +502,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
                 Dar cambio
               </button>
               <button type="button"
-                onClick={() => setForm(p => ({ ...p, keep_change: true, credit_change: false, change_journal_id: "", change_amount_override: "" }))}
+                onClick={() => setForm(p => ({ ...p, keep_change: true, credit_change: false, change_parts: [{ journal_id: "", amount: "" }] }))}
                 className={[
                   "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
                   form.keep_change
@@ -477,7 +514,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
               </button>
               {sale?.customer_id && (
                 <button type="button"
-                  onClick={() => setForm(p => ({ ...p, keep_change: false, credit_change: true, change_journal_id: "", change_amount_override: "" }))}
+                  onClick={() => setForm(p => ({ ...p, keep_change: false, credit_change: true, change_parts: [{ journal_id: "", amount: "" }] }))}
                   className={[
                     "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
                     form.credit_change
@@ -503,58 +540,98 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
                 <p className="text-[10px] font-black uppercase tracking-widest text-warning/80 mb-1.5">DAR CAMBIO DESDE *</p>
                 {/* Mismo desplegable que el método de pago: son la misma lista de diarios y
                     tenerlos con dos formas distintas en un solo formulario confunde. */}
-                <CustomSelect
-                  value={form.change_journal_id === "" ? "" : String(form.change_journal_id)}
-                  placeholder="Seleccionar diario..."
-                  options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
-                  onChange={(v) => {
-                    const id = parseInt(v, 10);
-                    const j = activeJournals.find(x => x.id === id);
-                    if (!j) return;
-                    const cjCur = j.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
-                    const cjRate = (!cjCur || cjCur.is_base) ? 1 : parseFloat(cjCur.exchange_rate || 1);
-                    const exact  = parseFloat((changeBase * cjRate).toFixed(2));
-                    setForm(p => ({ ...p, change_journal_id: id, change_amount_override: String(exact) }));
-                  }}
-                />
-                {!form.change_journal_id && (
+                <div className="space-y-2">
+                  {salidasCambio.map((salida, idx) => (
+                    <div key={idx} className="flex gap-2 items-start">
+                      <div className="flex-1 min-w-0">
+                        <CustomSelect
+                          value={salida.journal_id === "" ? "" : String(salida.journal_id)}
+                          placeholder="Seleccionar diario..."
+                          options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
+                          onChange={(v) => setForm(p => {
+                            const partes = [...p.change_parts];
+                            const id = v === "" ? "" : parseInt(v, 10);
+                            const { rate: r } = datosCaja(id);
+                            // Al elegir la caja se sugiere lo que falta por devolver, ya
+                            // convertido a su moneda: en la primera el vuelto entero, en la
+                            // siguiente solo el resto.
+                            const yaAsignado = partes.reduce((acc, q, i) => {
+                              if (i === idx) return acc;
+                              const { rate: rr } = datosCaja(q.journal_id);
+                              const n = parseFloat(String(q.amount).replace(",", "."));
+                              return acc + (isNaN(n) ? 0 : n / rr);
+                            }, 0);
+                            const falta = Math.max(0, changeBase - yaAsignado);
+                            partes[idx] = { journal_id: id, amount: id === "" ? "" : (Math.round(falta * r * 100) / 100).toFixed(2) };
+                            return { ...p, change_parts: partes };
+                          })}
+                        />
+                      </div>
+                      <div className="w-28 shrink-0">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={salida.amount}
+                          placeholder={salida.sym}
+                          onChange={e => setForm(p => {
+                            const partes = [...p.change_parts];
+                            partes[idx] = { ...partes[idx], amount: e.target.value.replace(/[^\d.,]/g, "") };
+                            return { ...p, change_parts: partes };
+                          })}
+                          className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-warning/40 rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-warning/70 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20 tabular-nums"
+                        />
+                      </div>
+                      {salidasCambio.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setForm(p => ({ ...p, change_parts: p.change_parts.filter((_, i) => i !== idx) }))}
+                          className="w-10 h-10 shrink-0 rounded-xl border border-warning/30 text-content-subtle hover:text-danger hover:border-danger/40 transition-all flex items-center justify-center"
+                          title="Quitar esta salida"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {faltaCajaEnCambio && (
                   <p className="text-[10px] font-black text-danger mt-1.5">Selecciona de dónde saldrá el cambio</p>
                 )}
 
-                {/* Monto a entregar desde el diario seleccionado */}
-                {form.change_journal_id && (
-                  <div className="mt-3 pt-3 border-t border-warning/20 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black text-warning/70 uppercase tracking-widest">Cambio exacto</span>
-                      <span className="text-[12px] font-black text-warning tabular-nums">
-                        {changeJournalSym}{exactChangeInJournalCur.toFixed(2)}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-warning/70 uppercase tracking-widest mb-1.5">
-                        Monto real a entregar ({changeJournalSym})
-                      </p>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={form.change_amount_override}
-                        placeholder={exactChangeInJournalCur.toFixed(2)}
-                        onChange={e => {
-                          const val = e.target.value.replace(/[^\d.,]/g, "");
-                          setForm(p => ({ ...p, change_amount_override: val }));
-                        }}
-                        className="w-full h-9 bg-white/[0.02] dark:bg-white/[0.04] border border-warning/40 rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-warning/70 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
-                      />
-                    </div>
-                  </div>
+                {/* Sin sencillo en una sola moneda: parte en divisas y el resto en bolívares. */}
+                {sobranteRetenido > 0.001 && (
+                  <button
+                    type="button"
+                    onClick={() => setForm(p => ({ ...p, change_parts: [...p.change_parts, { journal_id: "", amount: "" }] }))}
+                    className="w-full h-9 mt-2 rounded-xl border border-dashed border-warning/50 text-warning text-[10px] font-black uppercase tracking-widest hover:bg-warning/10 transition-all"
+                  >
+                    Devolver el resto desde otra caja
+                  </button>
                 )}
+
+                <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-warning/20">
+                  <span className="text-[10px] font-black text-warning/70 uppercase tracking-widest tabular-nums">
+                    Entregado {fmtBase(actualChangeBase)} de {fmtBase(changeBase)}
+                  </span>
+                  {/* Devolver menos que el cambio exacto deja esa diferencia dentro de la caja.
+                      Se avisa acá y queda anotada en el cobro: es dinero que entró y que no
+                      cubre nada de la factura. */}
+                  {sobranteRetenido > 0.001 && (
+                    <span className="text-[10px] font-black text-warning tabular-nums">
+                      Quedan {fmtBase(sobranteRetenido)} en caja
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
         )}
 
         {/* Monto / Abono (readonly) */}
-        <Field label={amountBase >= pendingAfterCredit - 0.001 ? "PAGO COMPLETO A FACTURA" : "ABONO PARCIAL A FACTURA"}>
+        {/* La etiqueta usa el mismo criterio que el servidor: entregar 5,00 por una factura de
+            5,10 la cierra, así que llamarlo "abono parcial" sería anunciar algo que no va a pasar. */}
+        <Field label={settlesInvoice ? "PAGO COMPLETO A FACTURA" : "ABONO PARCIAL A FACTURA"}>
           <div className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 flex items-center text-[13px] font-black text-content dark:text-white tabular-nums">
             {paySym}{(payCur && !payCur.is_base ? amountNum : amountBase * payRate).toFixed(2)}
           </div>
@@ -573,15 +650,20 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
             <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/40">
               Después de este pago
             </div>
+            {/* En la moneda con la que se está cobrando, no siempre en bolívares.
+                Cobrando en divisas, convertir a Bs lo aplicado (5,10 → Bs.4.001,78) mostraba
+                un "total pagado" por encima del total de la factura (Bs.4.000,00): el mismo
+                desfase de redondeo de siempre, pero puesto donde el cajero lo lee como que
+                cobró de más. En divisas el número es el que él tiene en la mano. */}
             <Row
               label="Total pagado"
-              value={hasBsRate ? `${defaultSym}${paidTotalBs.toFixed(2)}` : fmt(paidTotalBase)}
+              value={isNonBasePay ? `${defaultSym}${paidTotalBs.toFixed(2)}` : fmtBase(paidTotalBase)}
               valueClass="text-success font-black"
             />
             <div className="border-t border-border/20 dark:border-white/5 pt-1.5">
               <Row
                 label={settlesInvoice ? "Factura saldada" : "Saldo restante"}
-                value={hasBsRate ? `${defaultSym}${remainingBs.toFixed(2)}` : fmt(remainingBase)}
+                value={isNonBasePay ? `${defaultSym}${remainingShown.toFixed(2)}` : fmtBase(settlesInvoice ? 0 : remainingBase)}
                 valueClass={`font-black ${settlesInvoice ? "text-success" : "text-warning"}`}
               />
             </div>
@@ -641,7 +723,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
           <button
             type="button"
             onClick={() => setForgiveMode(true)}
-            className="w-full h-10 rounded-xl border border-warning/40 text-warning text-[11px] font-black uppercase tracking-wide transition-all hover:bg-warning hover:text-black"
+            className="w-full h-10 rounded-xl border border-violet-500/40 text-violet-500 dark:text-violet-400 text-[11px] font-black uppercase tracking-wide transition-all hover:bg-violet-500 hover:text-white"
           >
             Exonerar saldo de {fmtBase(balanceUsd)}
           </button>

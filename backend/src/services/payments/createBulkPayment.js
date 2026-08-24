@@ -3,6 +3,7 @@ const { PAYMENT_TOLERANCE, RECEIVABLE_STATUSES, resolveSaleStatus } = require(".
 const { Expense, ExpenseCategory, PaymentJournal, Currency, Customer } = require("../../models");
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
 const { assertWarehouseAccess } = require("../../middleware/auth");
+const { toLocalDate } = require("../../utils/localDate");
 
 const err = (message, status = 400) =>
   Object.assign(new Error(message), { status, isOperational: true });
@@ -38,6 +39,11 @@ module.exports = async function createBulkPayment(body, req) {
     // factura suelta: se le devuelve, se queda en caja, o se le acredita a su favor.
     change_given,       // vuelto entregado, en moneda base
     change_journal_id,  // de qué caja sale ese vuelto
+    // Vuelto repartido entre varias cajas: [{ journal_id, amount }] con el monto en moneda
+    // BASE. Devolver 5$ en divisas y el resto en bolívares es lo corriente cuando no hay
+    // sencillo, y cada tramo tiene que salir de la caja por la que salió de verdad: cargarlo
+    // todo a una deja esa gaveta corta y la otra larga.
+    change_parts,
     surplus_kept,       // sobrante que se queda en la caja
     change_to_credit,   // sobrante que va al crédito del cliente
   } = body;
@@ -50,10 +56,20 @@ module.exports = async function createBulkPayment(body, req) {
   const totalPay = parseFloat(amount || 0);
   if (!(totalPay > 0)) throw err("El monto es requerido");
 
-  const changeAmt  = parseFloat(change_given || 0);
+  // Un vuelto de una sola caja se expresa igual que uno repartido: una parte.
+  const partesVuelto = (Array.isArray(change_parts) && change_parts.length)
+    ? change_parts
+        .map(p => ({ journal_id: p?.journal_id, amount: parseFloat(p?.amount || 0) }))
+        .filter(p => p.amount > 0)
+    : (parseFloat(change_given || 0) > 0
+        ? [{ journal_id: change_journal_id, amount: parseFloat(change_given) }]
+        : []);
+
+  if (partesVuelto.some(p => !p.journal_id)) throw err("Debes indicar de qué caja sale cada vuelto");
+
+  const changeAmt  = parseFloat(partesVuelto.reduce((acc, p) => acc + p.amount, 0).toFixed(6));
   const surplusAmt = parseFloat(surplus_kept || 0);
   const creditAmt  = parseFloat(change_to_credit || 0);
-  if (changeAmt > 0 && !change_journal_id) throw err("Debes indicar de qué caja sale el vuelto");
 
   // Reintento del mismo lote: la caja reenvía tras perder la respuesta. Las claves por factura
   // se derivan de esta, y se busca CUALQUIERA de ellas, no la de la primera factura de la
@@ -234,7 +250,10 @@ module.exports = async function createBulkPayment(body, req) {
       await Payment.update(
         { amount: parseFloat((primerPago.amount + changeAmt).toFixed(6)),
           change_given: changeAmt,
-          change_journal_id },
+          // Con el vuelto repartido, el pago apunta a la primera caja: es el marcador que hace
+          // que el saldo de la factura descuente el vuelto. El detalle de por dónde salió cada
+          // tramo vive en los egresos, uno por caja.
+          change_journal_id: partesVuelto[0].journal_id },
         { where: { id: primerPago.payment_id }, transaction: t }
       );
 
@@ -243,22 +262,36 @@ module.exports = async function createBulkPayment(body, req) {
         defaults: { name: "Cambio / Vuelto", active: true },
         transaction: t,
       });
-      const diarioCambio = await PaymentJournal.findByPk(change_journal_id, {
-        include: [{ model: Currency, attributes: ["id", "exchange_rate"] }],
-        transaction: t,
-      });
-      await Expense.create({
-        description: `Cambio entregado — cobro conjunto de ${conSaldo.length} facturas`,
-        amount: changeAmt,
-        rate: parseFloat(diarioCambio?.Currency?.exchange_rate || 1),
-        category_id: catCambio.id,
-        payment_journal_id: change_journal_id,
-        employee_id: employee_id || null,
-        currency_id: diarioCambio?.currency_id || null,
-        warehouse_id: conSaldo[0].venta.warehouse_id || null,
-        notes: null,
-        status: "activo",
-      }, { transaction: t });
+
+      const varias = partesVuelto.length > 1;
+      for (const parte of partesVuelto) {
+        const diarioCambio = await PaymentJournal.findByPk(parte.journal_id, {
+          include: [{ model: Currency, attributes: ["id", "exchange_rate"] }],
+          transaction: t,
+        });
+        if (!diarioCambio) throw err("La caja del vuelto no existe", 404);
+        await Expense.create({
+          description: varias
+            ? `Cambio entregado (parte) — cobro conjunto de ${conSaldo.length} facturas`
+            : `Cambio entregado — cobro conjunto de ${conSaldo.length} facturas`,
+          amount: parte.amount,
+          rate: parseFloat(diarioCambio?.Currency?.exchange_rate || 1),
+          // La fecha del vuelto es la del cobro, no la del instante en que se grabó: sin esto
+          // el egreso caía a su created_at con hora, mientras que los cobros van a medianoche
+          // por su reference_date, y el estado de cuenta separaba un cobro de su propio vuelto.
+          //
+          // Por toLocalDate: el string crudo se ancla a la zona del proceso y en Vercel (UTC)
+          // el egreso quedaría un día antes que su cobro.
+          date: toLocalDate(reference_date),
+          category_id: catCambio.id,
+          payment_journal_id: parte.journal_id,
+          employee_id: employee_id || null,
+          currency_id: diarioCambio?.currency_id || null,
+          warehouse_id: conSaldo[0].venta.warehouse_id || null,
+          notes: varias ? `Vuelto repartido en ${partesVuelto.length} cajas` : null,
+          status: "activo",
+        }, { transaction: t });
+      }
     }
 
     // Sobrante que se queda en la caja o que se le acredita al cliente: en los dos casos el

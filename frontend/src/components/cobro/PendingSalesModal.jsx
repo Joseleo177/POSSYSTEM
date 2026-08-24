@@ -16,8 +16,9 @@ function StatusBadge({ status }) {
         pendiente: "bg-danger/10 text-danger border-danger/20",
         parcial:   "bg-brand-500/10 text-brand-500 border-brand-500/20",
         pagado:    "bg-green-500/10 text-green-500 border-green-500/20",
-        // Cerrada, pero no cobrada: ámbar para que no se lea como dinero recibido.
-        exonerado: "bg-warning/10 text-warning border-warning/20",
+        // Cerrada, pero no cobrada: violeta, un color propio que no se confunde ni con lo
+        // cobrado (verde) ni con lo devuelto o parcial (ámbar).
+        exonerado: "bg-violet-500/10 text-violet-400 border-violet-500/20",
     };
     const label = { borrador: "Borrador", pendiente: "Pendiente", parcial: "Parcial", pagado: "Pagado", exonerado: "Exonerada" };
     return (

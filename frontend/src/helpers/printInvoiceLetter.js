@@ -45,9 +45,9 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
 <html>
 <head>
     <meta charset="utf-8" />
-    <!-- El navegador propone el título como nombre del archivo al "Guardar como PDF",
-         así que lleva tienda y número: el cliente recibe "Recibo A-0048 - Mi Tienda.pdf". -->
-    <title>Recibo ${esc(invoiceLabel)} - ${esc(storeName)}</title>
+    <!-- El navegador propone el título como nombre del archivo al "Guardar como PDF", así que
+         lleva tienda y número: el cliente recibe "Documento A-0048 - Mi Tienda.pdf". -->
+    <title>Documento ${esc(invoiceLabel)} - ${esc(storeName)}</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
@@ -121,7 +121,10 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
 
     <div class="top">
         <div>
-            <div class="doc-title">Ticket de caja</div>
+            <!-- Este es el formato carta: un documento de venta que el cliente se lleva o
+                 recibe en PDF, no el papel que sale de la impresora de la caja. Llamarlo
+                 "ticket" era describir el otro comprobante. -->
+            <div class="doc-title">Documento de venta</div>
             <div class="doc-warning">Documento no fiscal</div>
         </div>
         ${showHeader && companyInfo?.logo_url ? `<img src="${resolveImageUrl(companyInfo.logo_url)}" class="logo" />` : ""}
@@ -141,7 +144,7 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
             ${s.customer_rif ? `<div class="party-line">C.I./RIF: ${esc(s.customer_rif)}</div>` : ""}
         </div>` : `<div></div>`}
         <div class="meta">
-            <div class="meta-row"><span class="meta-label">Recibo N°:</span><span class="meta-value">${esc(invoiceLabel)}</span></div>
+            <div class="meta-row"><span class="meta-label">Documento N°:</span><span class="meta-value">${esc(invoiceLabel)}</span></div>
             <div class="meta-row"><span class="meta-label">Fecha:</span><span class="meta-value">${esc(fmtDate(s.created_at))}</span></div>
             ${s.employee_name ? `<div class="meta-row"><span class="meta-label">Cajero:</span><span class="meta-value">${esc(s.employee_name)}</span></div>` : ""}
         </div>

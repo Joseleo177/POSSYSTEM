@@ -3,6 +3,7 @@ const { PAYMENT_TOLERANCE } = require("../../utils/saleBalance");
 const { Expense, ExpenseCategory, PaymentJournal, Currency, Customer } = require("../../models");
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
 const { assertWarehouseAccess } = require("../../middleware/auth");
+const { toLocalDate } = require("../../utils/localDate");
 
 // Respuesta de un cobro que ya estaba registrado. Se rearma desde la base para que el
 // reintento reciba exactamente lo mismo que recibió el envío que sí entró: la caja imprime
@@ -48,6 +49,7 @@ module.exports = async function createPayment(body, req) {
       received_amount,    // lo que físicamente entregó el cliente (en moneda del pago)
       change_given,       // cambio a devolver (en moneda base)
       change_journal_id,  // diario del que sale el cambio
+      change_parts,       // vuelto repartido: [{ journal_id, amount }] en moneda base
       surplus_kept,       // sobrante que se queda en caja (en moneda base)
       change_to_credit,   // sobrante que va al crédito del cliente (en moneda base)
       // Crédito de cliente
@@ -81,10 +83,20 @@ module.exports = async function createPayment(body, req) {
     }
 
     const payAmt   = parseFloat(amount || 0);
-    const changeAmt = parseFloat(change_given || 0);
+
+    // El vuelto puede repartirse entre varias cajas; una sola es el caso de una parte.
+    const partesVuelto = (Array.isArray(change_parts) && change_parts.length)
+      ? change_parts
+          .map(p => ({ journal_id: p?.journal_id, amount: parseFloat(p?.amount || 0) }))
+          .filter(p => p.amount > 0)
+      : (parseFloat(change_given || 0) > 0
+          ? [{ journal_id: change_journal_id, amount: parseFloat(change_given) }]
+          : []);
+
+    const changeAmt = parseFloat(partesVuelto.reduce((acc, p) => acc + p.amount, 0).toFixed(6));
 
     // Validar que si hay cambio, se indicó de dónde sale
-    if (changeAmt > 0 && !change_journal_id) {
+    if (changeAmt > 0 && partesVuelto.some(p => !p.journal_id)) {
       throw new Error("Debes seleccionar el diario del que saldrá el cambio");
     }
 
@@ -164,7 +176,9 @@ module.exports = async function createPayment(body, req) {
           reference_number: reference_number?.trim() || null,
           notes: notes?.trim() || null,
           change_given: changeAmt > 0 ? changeAmt : null,
-          change_journal_id: changeAmt > 0 ? change_journal_id : null,
+          // Con el vuelto repartido, el pago apunta a la primera caja: es el marcador que hace
+          // que getSaleBalance descuente el vuelto. El detalle por caja vive en los egresos.
+          change_journal_id: changeAmt > 0 ? partesVuelto[0].journal_id : null,
           idempotency_key: idempotency_key || null,
         },
         { transaction: t }
@@ -172,15 +186,19 @@ module.exports = async function createPayment(body, req) {
     }
 
     // Si hay cambio: registrar como egreso en el diario del cambio
-    if (changeAmt > 0 && change_journal_id) {
+    if (changeAmt > 0 && partesVuelto.length) {
       const [changeCat] = await ExpenseCategory.findOrCreate({
         where: { name: "Cambio / Vuelto" },
         defaults: { name: "Cambio / Vuelto", active: true },
         transaction: t,
       });
 
-      // Obtener moneda y tasa del diario de cambio
-      const changeJournal = await PaymentJournal.findByPk(change_journal_id, {
+      // Un egreso por cada caja de la que salió dinero. Devolver parte en divisas y el resto
+      // en bolívares es lo corriente cuando no hay sencillo: cargarlo todo a una gaveta la
+      // deja corta y la otra larga.
+      const variasCajas = partesVuelto.length > 1;
+      for (const parte of partesVuelto) {
+      const changeJournal = await PaymentJournal.findByPk(parte.journal_id, {
         include: [{ model: Currency, attributes: ["id", "exchange_rate"] }],
         transaction: t,
       });
@@ -189,20 +207,29 @@ module.exports = async function createPayment(body, req) {
 
       await Expense.create(
         {
-          description: `Cambio entregado — Factura ${sale.invoice_number || "#" + sale_id}`,
-          amount: changeAmt,
+          description: `Cambio entregado${variasCajas ? " (parte)" : ""} — Factura ${sale.invoice_number || "#" + sale_id}`,
+          amount: parte.amount,
           rate: changeRate,
+          // Misma fecha que el cobro que lo generó. Sin `date`, el egreso se ordenaba por su
+          // created_at con hora mientras el cobro iba a medianoche por su reference_date, y en
+          // el estado de cuenta el vuelto se despegaba de su propia venta.
+          //
+          // Va por toLocalDate y no como string: 'YYYY-MM-DD' en una columna TIMESTAMPTZ se
+          // ancla a la medianoche de la zona DEL PROCESO. En Docker es Caracas y sale bien,
+          // pero en Vercel el runtime corre en UTC y el vuelto quedaría fechado el día anterior.
+          date: toLocalDate(reference_date),
           category_id: changeCat.id,
-          payment_journal_id: change_journal_id,
+          payment_journal_id: parte.journal_id,
           employee_id: employee_id || null,
           currency_id: changeCurrencyId,
           // El vuelto sale de la caja de la sucursal que cobró.
           warehouse_id: sale.warehouse_id || null,
-          notes: null,
+          notes: variasCajas ? `Vuelto repartido en ${partesVuelto.length} cajas` : null,
           status: "activo",
         },
         { transaction: t }
       );
+      }
     }
 
     // Si el sobrante va al crédito del cliente
@@ -245,6 +272,25 @@ module.exports = async function createPayment(body, req) {
           { transaction: t }
         );
       }
+    }
+
+    // Vuelto redondeado a la baja: el cajero devuelve 4 de un cambio de 4,70 porque no tiene
+    // sencillo. Esos 0,70 entraron a la caja y NO cubren nada de la factura —el abono ya se
+    // topó al saldo—, así que quedan anotados en el propio cobro. Sin esto el dinero seguía
+    // ahí sin que ningún registro lo explicara, y el pago aparecía por encima de lo facturado
+    // sin motivo visible. No se suma al monto: `amount` ya trae todo lo que el cliente entregó.
+    const noAplicado = parseFloat(((payAmt - changeAmt) - netCredit).toFixed(6));
+    if (payment && surplusAmt <= 0 && noAplicado > PAYMENT_TOLERANCE) {
+      const noteRate = parseFloat(exchange_rate) || 1;
+      await payment.update(
+        {
+          notes: [
+            payment.notes,
+            `Incluye sobrante de ${(noAplicado * noteRate).toFixed(2)} (vuelto redondeado, no aplicado a factura)`,
+          ].filter(Boolean).join(" · "),
+        },
+        { transaction: t }
+      );
     }
 
     // Tolerancia de $0.10 USD (10 céntimos): cubre desfasajes de redondeo por línea acumulados

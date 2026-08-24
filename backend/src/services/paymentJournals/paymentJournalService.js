@@ -329,12 +329,18 @@ async function getMovements(req) {
   }
 
   // Window function calcula el saldo acumulado en orden ASC; el query externo ordena DESC y pagina.
-  // created_at se usa como tiebreaker para evitar orden arbitrario cuando dos movimientos comparten fecha.
+  //
+  // Se ordena por el DÍA del movimiento y se desempata por created_at, y no por la fecha
+  // completa: `date` sale de un COALESCE que mezcla peras con manzanas —reference_date y
+  // expenses.date son fechas sin hora (medianoche), mientras que un egreso sin fecha propia
+  // cae a su created_at con la hora real—. Comparando el instante, ese egreso de las 13:33 se
+  // colaba por encima de todos los cobros del mismo día (fijados a las 00:00) y separaba un
+  // cobro de su propio vuelto. Por día, todo lo del 24 se ordena por la hora en que ocurrió.
   const rows = await sequelize.query(`
     SELECT * FROM (
       SELECT *,
         SUM(CASE WHEN type = 'ingreso' THEN amount_local ELSE -amount_local END)
-          OVER (ORDER BY date ASC, created_at ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+          OVER (ORDER BY ${localDate('date')} ASC, created_at ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
           + :pre_balance AS balance
       FROM (
         SELECT
@@ -423,7 +429,7 @@ async function getMovements(req) {
         WHERE e.payment_journal_id = :id AND e.status = 'activo' ${dateExp} ${te} ${whE}
       ) all_movements
     ) with_balance
-    ORDER BY date DESC, created_at DESC
+    ORDER BY ${localDate('date')} DESC, created_at DESC
     LIMIT :limit OFFSET :offset
   `, {
     replacements: { id, pre_balance: preBalance, limit: parseInt(limit), offset: parseInt(offset) },
@@ -539,7 +545,7 @@ async function getBankMovements(req) {
     SELECT * FROM (
       SELECT *,
         SUM(CASE WHEN type = 'ingreso' THEN amount_local ELSE -amount_local END)
-          OVER (ORDER BY date ASC, created_at ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+          OVER (ORDER BY ${localDate('date')} ASC, created_at ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
           + ${preBalance} AS balance
       FROM (
         SELECT p.id, 'ingreso' AS type, COALESCE(p.reference_date, p.created_at) AS date,
@@ -601,7 +607,7 @@ async function getBankMovements(req) {
         WHERE e.payment_journal_id IN (${jList}) AND e.status = 'activo' ${dateExp} ${te} ${whE}
       ) all_movements
     ) with_balance
-    ORDER BY date DESC, created_at DESC
+    ORDER BY ${localDate('date')} DESC, created_at DESC
     LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}
   `, { type: Sequelize.QueryTypes.SELECT });
 

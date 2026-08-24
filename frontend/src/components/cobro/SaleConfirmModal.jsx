@@ -107,6 +107,9 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         journal_name: (activeJournals || []).find(j => j.id === p?.payment_journal_id)?.name || null,
         amount: parseFloat(p?.amount || 0),
         exchange_rate: parseFloat(p?.exchange_rate || 1),
+        // El vuelto viaja al ticket para que el papel diga cuánto entregó el cliente y cuánto
+        // se le devolvió, también en el que se imprime al instante desde la caja.
+        change_given: parseFloat(p?.change_given || 0),
     }));
     // Venta creada pero sin desenlace: ni cobrada ni facturada a crédito.
     const isUnresolved   = ["borrador", "espera"].includes(currentStatus);
@@ -170,6 +173,8 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                 companyInfo,
                 activeCurrencies?.find(c => !c.is_base) || baseCurrency,
                 printerWidth,
+                // Cobrado todo en divisas, el papel sale en divisas (ver receiptCurrency).
+                baseCurrency,
             );
         } catch {
             notify("No se pudo imprimir el ticket", "err");
@@ -230,7 +235,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     const badgeClass     = currentStatus === "pagado"
         ? "bg-green-500/10 text-green-500 border-green-500/20"
         : currentStatus === "exonerado"
-        ? "bg-warning/10 text-warning border-warning/20"
+        ? "bg-violet-500/10 text-violet-400 border-violet-500/20"
         : currentStatus === "parcial"
         ? "bg-brand-500/10 text-brand-500 border-brand-500/20"
         : currentStatus === "borrador"
@@ -242,7 +247,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
             <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out" onKeyDown={e => e.stopPropagation()}>
 
                 {/* Header */}
-                <div className={`px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3 ${currentStatus === "pagado" ? "bg-success/5" : currentStatus === "exonerado" ? "bg-warning/5" : currentStatus === "borrador" ? "bg-surface-2/50" : "bg-danger/5"}`}>
+                <div className={`px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3 ${currentStatus === "pagado" ? "bg-success/5" : currentStatus === "exonerado" ? "bg-violet-500/5" : currentStatus === "borrador" ? "bg-surface-2/50" : "bg-danger/5"}`}>
                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${badgeClass}`}>
                         {/* Cuenta cerrada —cobrada o exonerada— lleva el visto; el reloj es para
                             la que todavía espera dinero. */}

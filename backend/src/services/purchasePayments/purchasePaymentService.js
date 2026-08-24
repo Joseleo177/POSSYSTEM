@@ -1,5 +1,6 @@
 const { PurchasePayment, Purchase, PaymentJournal, Currency, Employee, Expense, ExpenseCategory, sequelize } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
+const { toLocalDate } = require("../../utils/localDate");
 
 async function getPurchaseAmountPaid(purchase_id, t) {
   // Solo cuenta pagos cuyo Expense vinculado sigue activo (o no tiene Expense)
@@ -108,6 +109,10 @@ async function createPayment(purchaseId, body, employeeId, companyId, req) {
       currency_id:        currency_id || null,
       rate:               parseFloat(exchange_rate) || 1,
       category_id:        supplierCat.id,
+      // La fecha del egreso es la del pago, no la del instante en que se grabó. Sin esto caía
+      // a NULL y el estado de cuenta lo ordenaba por su created_at con hora, desalineado con
+      // el resto de los movimientos, que van a la medianoche de su día.
+      date:               toLocalDate(reference_date),
       payment_journal_id: payment_journal_id || null,
       employee_id:        employeeId || null,
       company_id:         companyId || null,

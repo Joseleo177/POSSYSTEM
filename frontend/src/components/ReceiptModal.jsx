@@ -46,6 +46,10 @@ function normalizeSale(sale) {
             journal_name: p.journal_name || null,
             amount: parseFloat(p.amount || 0),
             exchange_rate: parseFloat(p.exchange_rate || 1),
+            // El vuelto entregado en ese cobro. `amount` es el dinero que ENTRÓ —incluye lo
+            // que se devolvió—, así que sin esto el papel no puede decir cuánto entregó el
+            // cliente ni cuánto se le regresó: las dos cifras que mira al recibir el ticket.
+            change_given: parseFloat(p.change_given || 0),
         })),
     };
 }
@@ -70,9 +74,17 @@ function paymentSummary(s) {
     // pagos pero sí se sabe por dónde entró.
     if (!porDiario.length && s.journal_name) porDiario.push({ journal_name: s.journal_name, amount: s.amount_paid });
 
+    // Lo que el cliente puso sobre el mostrador y lo que se le devolvió. `amount` de cada
+    // cobro es el dinero recibido —el vuelto todavía está dentro—, así que el papel puede
+    // decir las dos cifras y que el cliente las verifique contra lo que tiene en la mano.
+    const recibido = (s.payments || []).reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
+    const vuelto   = (s.payments || []).reduce((acc, p) => acc + parseFloat(p.change_given || 0), 0);
+
     return {
         pendiente,
         canales: porDiario,
+        recibido,
+        vuelto,
         // Con un solo canal basta el nombre; con varios se listan aparte con su monto.
         metodo: porDiario.length === 1 ? porDiario[0].journal_name
             : porDiario.length > 1 ? "Combinado"
@@ -104,8 +116,16 @@ function calcReceiptTotals(s, rate, sym) {
                 subtotalBs,
             };
         } else {
-            const p = parseFloat(i.price || 0);
-            const sub = i.subtotal ?? (p * qty);
+            // Mismo redondeo por línea que en bolívares y que el backend al calcular
+            // sales.total: se redondea el precio unitario y ESE es el que se multiplica.
+            //
+            // Antes el subtotal salía del precio sin redondear (1,01955 × 20 = 20,39) mientras
+            // el papel imprimía el unitario ya redondeado (1,02), así que la propia línea del
+            // ticket no cuadraba —1,02 × 20 son 20,40— y el total discrepaba en un céntimo con
+            // el que el cliente acababa de ver en pantalla.
+            const p = round2(parseFloat(i.price || 0));
+            const d = round2(parseFloat(i.discount || 0));
+            const sub = round2((p - d) * qty);
             return {
                 ...i,
                 fmtPrice: fmt(p, sym),
@@ -126,10 +146,10 @@ function calcReceiptTotals(s, rate, sym) {
         subtotalBs = items.reduce((acc, i) => acc + i.subtotalBs, 0);
         totalBs = Math.max(0, subtotalBs - discountBs + chargeBs);
     } else {
-        // En divisas el subtotal sale de las mismas líneas que la pista en Bs. Antes se
-        // derivaba de total_precise —que es la suma bruta de líneas, sin el descuento
-        // aplicado—, así que un ticket en $ con descuento global lo mostraba en el renglón
-        // pero no lo restaba del total.
+        // En divisas el subtotal sale de las mismas líneas que la pista en Bs —ya redondeadas
+        // arriba—. Antes se derivaba de total_precise, que es la suma bruta de líneas sin el
+        // descuento aplicado, así que un ticket en $ con descuento global lo mostraba en el
+        // renglón pero no lo restaba del total.
         subtotalBs = items.length
             ? items.reduce((acc, i) => acc + i.subtotalBs, 0)
             : Math.max(0, s.total + s.discount - s.charge);
@@ -163,22 +183,51 @@ function calcReceiptTotals(s, rate, sym) {
     };
 }
 
-// displayCurrency: la moneda no-base (VES). Todos los montos del recibo se convierten a ella.
+/**
+ * En qué moneda se imprime el papel.
+ *
+ * El bolívar solo aparece cuando el papel describe bolívares que ya entraron: una factura
+ * saldada con dinero recibido en esa moneda. Ahí manda la moneda de pantalla, porque es la
+ * que permite cuadrar el comprobante contra lo que hay en la gaveta.
+ *
+ * En los demás casos va en divisas:
+ *   · cobrada íntegramente en divisas — el cliente pagó 17 cervezas a 1$ y eso es lo que
+ *     debe decir el papel, no su equivalente en bolívares a la tasa de hoy;
+ *   · con saldo pendiente (crédito, abono parcial, cuenta en espera) — una deuda impresa en
+ *     bolívares queda desactualizada apenas se mueve la tasa, y el cliente vuelve con un
+ *     papel que ya no dice lo que debe. En divisas el saldo sigue siendo el mismo mañana.
+ */
+export function receiptCurrency(s, displayCurrency, baseCurrency) {
+    const enDivisas = { rate: 1, sym: baseCurrency?.symbol || "Ref." };
+    const pagos = (s.payments || []).filter(p => parseFloat(p.amount) > 0);
+    // Basta con que ALGO haya entrado en bolívares: en un cobro mixto el papel se imprime en
+    // la moneda de la gaveta que hay que cuadrar. Sin bolívares de por medio —cobrada en
+    // divisas, exonerada, o todavía sin cobrar— no hay nada que expresar en esa moneda.
+    const huboBolivares = pagos.some(p => parseFloat(p.exchange_rate) > 1);
+    const saldada = ["pagado", "exonerado"].includes(String(s.status || "").toLowerCase());
+
+    if (!huboBolivares || !saldada) return enDivisas;
+
+    // Saldada con bolívares: se imprime a la tasa del pago que cerró la deuda, que es la que
+    // convierte el papel en los bolívares que de verdad se contaron.
+    const effectiveRate = parseFloat(s.final_payment_rate) > 1
+        ? parseFloat(s.final_payment_rate)
+        : parseFloat(s.exchange_rate || 1);
+    const rate = (effectiveRate > 1) ? effectiveRate : parseFloat(displayCurrency?.exchange_rate || 1);
+    return { rate, sym: displayCurrency?.symbol || "Ref." };
+}
+
+// displayCurrency: la moneda no-base (VES). Los montos del recibo se convierten a ella salvo
+// que el cobro haya entrado en divisas (ver receiptCurrency).
 // sale.total y item.price están siempre en USD base.
 //
 // Se exporta porque la caja imprime sin abrir el ticket: el cajero que atiende una cola no
 // necesita la vista previa, necesita el papel. Es la misma función que usa el botón de
 // impresión del modal, para que ambos caminos den exactamente el mismo comprobante.
-export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80) {
+export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80, baseCurrency = null) {
     const storeName = companyInfo?.name || "MI TIENDA POS";
     const s = normalizeSale(sale);
-    // Pagado: usar tasa del último pago (cuando se cerró la deuda)
-    // Pendiente/Parcial: usar tasa histórica de la venta
-    const effectiveRate = (s.status === 'pagado' && parseFloat(s.final_payment_rate) > 1)
-        ? parseFloat(s.final_payment_rate)
-        : parseFloat(s.exchange_rate || 1);
-    const rate = (effectiveRate > 1) ? effectiveRate : parseFloat(displayCurrency?.exchange_rate || 1);
-    const sym = displayCurrency?.symbol || "Ref.";
+    const { rate, sym } = receiptCurrency(s, displayCurrency, baseCurrency);
     const totals = calcReceiptTotals(s, rate, sym);
     const pago = paymentSummary(s);
     const dateStr = fmtDate(s.created_at);
@@ -316,6 +365,9 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
         ${pago.canales.length > 1
             ? pago.canales.map(c => `<div class="total-row"><span>&nbsp;&nbsp;${c.journal_name}</span><span>${fmt(c.amount * rate, sym)}</span></div>`).join("")
             : ""}
+        ${pago.vuelto > 0 ? `
+        <div class="total-row"><span>RECIBIDO</span><span>${fmt(pago.recibido * rate, sym)}</span></div>
+        <div class="total-row"><span>CAMBIO</span><span>${fmt(pago.vuelto * rate, sym)}</span></div>` : ""}
         ${pago.etiqueta ? `<div class="total-row"><span>ESTADO</span><span>${pago.etiqueta.toUpperCase()}</span></div>` : ""}
         ${s.amount_paid > 0 && pago.pendiente ? `<div class="total-row"><span>ABONADO</span><span>${totals.fmtPaid}</span></div>` : ""}
         ${pago.pendiente && s.balance > 0 && totals.balanceBs > 0 ? `<div class="total-row big"><span>QUEDA DEBIENDO</span><span>${totals.fmtBalance}</span></div>` : ""}
@@ -376,16 +428,14 @@ export default function ReceiptModal({ open, onClose, sale }) {
         : sale;
     const s = normalizeSale(effectiveSale);
 
-    // Siempre mostrar en la moneda no-base (VES). Si no hay, fallback a base.
+    // La moneda de pantalla es la no-base (VES); si no hay, se cae a la base.
     const displayCurrency = activeCurrencies?.find(c => !c.is_base) || baseCurrency;
     const isBase = !displayCurrency || displayCurrency.is_base;
-    // Pagado: tasa del último pago (cuando se cerró la deuda)
-    // Pendiente/Parcial: tasa histórica de la venta
-    const effectiveRate = (s.status === 'pagado' && parseFloat(s.final_payment_rate) > 1)
-        ? parseFloat(s.final_payment_rate)
-        : parseFloat(s.exchange_rate || 1);
-    const rate = isBase ? 1 : parseFloat(effectiveRate > 1 ? effectiveRate : (displayCurrency.exchange_rate || 1));
-    const sym = isBase ? (baseCurrency?.symbol || "Ref.") : (displayCurrency.symbol || "Ref.");
+    // La vista previa tiene que mostrar EXACTAMENTE el papel que va a salir, así que decide la
+    // moneda con la misma regla que la impresión.
+    const { rate, sym } = isBase
+        ? { rate: 1, sym: baseCurrency?.symbol || "Ref." }
+        : receiptCurrency(s, displayCurrency, baseCurrency);
     const totals = calcReceiptTotals(s, rate, sym);
     const pago = paymentSummary(s);
 
@@ -506,6 +556,20 @@ export default function ReceiptModal({ open, onClose, sale }) {
                         <span className="text-content dark:text-content-dark font-medium tabular-nums">{fmt(c.amount * rate, sym)}</span>
                     </div>
                 ))}
+                {/* Lo que entregó el cliente y lo que se le devolvió: las dos cifras que
+                    verifica contra el dinero que tiene en la mano al recibir el ticket. */}
+                {pago.vuelto > 0 && (
+                    <>
+                        <div className="flex justify-between items-center py-0.5 text-xs">
+                            <span className="text-content-muted dark:text-content-dark-muted">Recibido</span>
+                            <span className="text-content dark:text-content-dark font-medium tabular-nums">{fmt(pago.recibido * rate, sym)}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-0.5 text-xs">
+                            <span className="text-content-muted dark:text-content-dark-muted">Cambio</span>
+                            <span className="text-content dark:text-content-dark font-medium tabular-nums">{fmt(pago.vuelto * rate, sym)}</span>
+                        </div>
+                    </>
+                )}
                 {pago.etiqueta && (
                     <div className="flex justify-between items-center py-0.5 text-xs">
                         <span className="text-content-muted dark:text-content-dark-muted">Estado</span>
@@ -552,7 +616,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     PDF
                 </button>
                 <button
-                    onClick={() => printReceipt(effectiveSale, companyInfo, displayCurrency, printerWidth)}
+                    onClick={() => printReceipt(effectiveSale, companyInfo, displayCurrency, printerWidth, baseCurrency)}
                     className="btn-md btn-primary w-full"
                     title="Ticket para la impresora térmica"
                     style={{ flex: 1.8 }}

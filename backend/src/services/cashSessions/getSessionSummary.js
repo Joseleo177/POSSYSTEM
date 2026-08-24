@@ -76,22 +76,34 @@ module.exports = async function getSessionSummary(id, req) {
     }
   );
 
+  // Lo que salió de cada gaveta como vuelto se lee de los EGRESOS de "Cambio / Vuelto", que
+  // llevan una fila por caja con su monto.
+  //
+  // Antes se leía de `payments.change_given`, y eso solo funciona mientras el vuelto salga de
+  // una sola caja: cuando se devuelven 2$ en divisas y el resto en bolívares —lo corriente
+  // cuando no hay sencillo—, el pago guarda el TOTAL apuntando a la primera caja. El arqueo le
+  // reclamaba a esa gaveta un dinero que había salido de la otra, y a la otra no le descontaba
+  // nada. Los egresos sí saben de dónde salió cada tramo.
+  //
+  // El monto va a la tasa con la que se registró el egreso (e.rate), no a la de hoy: es la que
+  // convierte el importe en los billetes que de verdad se sacaron. Mismo criterio que los
+  // cobros, que se suman con la tasa de su propio pago.
   const changeOutByJournal = await sequelize.query(
     `
-      SELECT p.change_journal_id AS journal_id,
-             COALESCE(SUM(p.change_given * COALESCE(cur.exchange_rate, 1)), 0)::float AS total_out
-      FROM payments p
-      JOIN sales s ON p.sale_id = s.id
-      LEFT JOIN payment_journals pj ON p.change_journal_id = pj.id
-      LEFT JOIN currencies cur ON pj.currency_id = cur.id
-      WHERE p.change_journal_id IS NOT NULL
-        AND s.warehouse_id = :wid AND s.employee_id = :eid
-        AND p.created_at >= :openedAt AND p.created_at < :closedAt
-      GROUP BY p.change_journal_id
+      SELECT e.payment_journal_id AS journal_id,
+             COALESCE(SUM(e.amount * COALESCE(e.rate, 1)), 0)::float AS total_out
+      FROM expenses e
+      JOIN expense_categories ec ON ec.id = e.category_id
+      WHERE ec.name = 'Cambio / Vuelto'
+        AND e.status = 'activo'
+        AND e.payment_journal_id IS NOT NULL
+        AND e.warehouse_id = :wid
+        AND e.created_at >= :openedAt AND e.created_at < :closedAt
+      GROUP BY e.payment_journal_id
     `,
     {
       type: Sequelize.QueryTypes.SELECT,
-      replacements: { wid, eid, openedAt: openedAt.toISOString(), closedAt: closedAt.toISOString() },
+      replacements: { wid, openedAt: openedAt.toISOString(), closedAt: closedAt.toISOString() },
     }
   );
 

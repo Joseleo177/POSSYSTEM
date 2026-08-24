@@ -1,4 +1,14 @@
 /**
+ * Margen con el que el servidor da una factura por saldada, en moneda base.
+ *
+ * Es el desfase que dejan los dos redondeos de una misma venta: `sales.total` suma precios ya
+ * redondeados por línea, y el cobro en bolívares trabaja con los subtotales precisos. Debe
+ * valer lo mismo que PAYMENT_TOLERANCE en backend/src/utils/saleBalance.js — si la pantalla
+ * usa otro número, anuncia un resultado distinto del que el servidor va a registrar.
+ */
+export const PAYMENT_TOLERANCE = 0.10;
+
+/**
  * Formatea un número con símbolo de moneda.
  * Los símbolos de más de un carácter (ej. "Ref.", "Bs.") llevan espacio.
  * @param {number} n - Monto
