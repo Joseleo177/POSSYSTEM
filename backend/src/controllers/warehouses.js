@@ -1,7 +1,8 @@
 const {
   getAll, getByEmployee, createWarehouse, updateWarehouse, deleteWarehouse, assignEmployees,
   getStock, getProducts, addStock, setStock, removeStock,
-  createTransfer, getTransfers,
+  createTransfer, getTransfers, getTransfer, getTransferSummary,
+  receiveTransfer, resolveDifferences, cancelTransfer,
   getActiveSession, openSession, addLine, closeSession, getSessions,
 } = require("../services/warehouses");
 const { broadcast } = require("../services/sseService");
@@ -33,6 +34,11 @@ module.exports = {
   removeStock:      wrap(async req => { const r = await removeStock(req); stockBroadcast(req); return r; }),
   transfer:         wrap(async req => { const r = await createTransfer(req); stockBroadcast(req); return r; }, 201),
   getTransfers:     wrap(req => getTransfers(req)),
+  getTransfer:      wrap(req => getTransfer(req.params.id, req)),
+  transferSummary:  wrap(req => getTransferSummary(req)),
+  receiveTransfer:  wrap(async req => { const r = await receiveTransfer(req.params.id, req);    stockBroadcast(req); return r; }),
+  resolveTransfer:  wrap(async req => { const r = await resolveDifferences(req.params.id, req); stockBroadcast(req); return r; }),
+  cancelTransfer:   wrap(async req => { const r = await cancelTransfer(req.params.id, req);     stockBroadcast(req); return r; }),
   getActiveSession: wrap(req => getActiveSession(req.params.id, req)),
   openSession:      wrap(req => openSession(req.params.id, req), 201),
   addLine:          wrap(async req => { const r = await addLine(req.params.id, req.params.sessionId, req.body, req); stockBroadcast(req); return r; }, 201),

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useWarehouses } from "../../hooks/useWarehouses";
 import { useWarehouseOps } from "../../hooks/useWarehouseOps";
+import { useTransfers } from "../../hooks/useTransfers";
+import { useApp } from "../../context/AppContext";
 import Page from "../ui/Page";
 import { Button } from "../ui/Button";
 import ConfirmModal from "../ui/ConfirmModal";
@@ -12,6 +14,8 @@ import TransfersView from "./TransfersView";
 import WarehouseModal from "./WarehouseModal";
 import AddStockModal from "./AddStockModal";
 import TransferModal from "./TransferModal";
+import TransferReceiveModal from "./TransferReceiveModal";
+import TransferDetailModal from "./TransferDetailModal";
 import AssignEmployeesModal from "./AssignEmployeesModal";
 import EditStockModal from "./EditStockModal";
 import AdjustmentsView from "./AdjustmentsView";
@@ -47,6 +51,24 @@ export default function WarehousesTab({ notify, currentEmployee }) {
         openAssign, toggleAssign, saveAssign,
     } = useWarehouses(notify);
 
+    const { can, companyInfo, printerWidth } = useApp();
+
+    // Despachar y recibir son permisos distintos a propósito: el control cruzado se pierde
+    // si la misma persona hace las dos puntas.
+    const canReceive = can("inventory.receive");
+    const canDispatch = can("inventory.transfer");
+
+    const {
+        transfers, summary: transferSummary, loading: loadingTransfers,
+        load: loadTransfers,
+        search: transferSearch, setSearch: setTransferSearch,
+        filters: transferFilters, setFilter: setTransferFilter,
+        clearFilters: clearTransferFilters, activeFilterCount: transferFilterCount,
+        detail: transferDetail, setDetail: setTransferDetail,
+        receiving: transferReceiving, setReceiving: setTransferReceiving,
+        doReceive, doResolve, doCancel, saving: savingTransfer,
+    } = useTransfers(notify);
+
     const {
         loadStock, loadingStock,
         stockSearch, setStockSearch, filteredStock,
@@ -57,13 +79,12 @@ export default function WarehousesTab({ notify, currentEmployee }) {
         addStockModal, setAddStockModal, openAddStock,
         addStockForm, setAddStockForm,
         addStockProduct, selectAddStockProduct, clearAddStockProduct, doAddStock, savingStock,
-        transfers, loadTransfers,
         transferProductSearch, setTransferProductSearch,
         transferProductResults, setTransferProductResults,
         transferProductSelected, setTransferProductSelected,
         transferForm, setTransferForm, transferModal, setTransferModal, loadingTransfer, doTransfer,
         transferProductTotal, loadingTransferProducts, loadingMoreTransferProducts, loadMoreTransferProducts,
-    } = useWarehouseOps(notify, selectedWarehouse, loadWarehouses);
+    } = useWarehouseOps(notify, selectedWarehouse, loadWarehouses, loadTransfers);
 
     useEffect(() => {
         if (subTab === "transferencias") loadTransfers();
@@ -94,9 +115,11 @@ export default function WarehousesTab({ notify, currentEmployee }) {
             + <span className="hidden sm:inline">Registrar Stock</span><span className="sm:hidden">Stock</span>
         </Button>
     ) : subTab === "transferencias" ? (
-        <Button onClick={() => setTransferModal(true)} className="h-8 px-2.5 sm:px-3 text-[10px]">
-            + <span className="hidden sm:inline">Nueva Transferencia</span><span className="sm:hidden">Transferir</span>
-        </Button>
+        canDispatch ? (
+            <Button onClick={() => setTransferModal(true)} className="h-8 px-2.5 sm:px-3 text-[10px]">
+                + <span className="hidden sm:inline">Despachar Transferencia</span><span className="sm:hidden">Despachar</span>
+            </Button>
+        ) : null
     ) : null;
 
     // ── Título dinámico ───────────────────────────────────────
@@ -147,7 +170,23 @@ export default function WarehousesTab({ notify, currentEmployee }) {
             )}
 
             {subTab === "transferencias" && (
-                <TransfersView transfers={transfers} />
+                <TransfersView
+                    transfers={transfers}
+                    summary={transferSummary}
+                    loading={loadingTransfers}
+                    search={transferSearch}
+                    setSearch={setTransferSearch}
+                    filters={transferFilters}
+                    setFilter={setTransferFilter}
+                    clearFilters={clearTransferFilters}
+                    activeFilterCount={transferFilterCount}
+                    warehouses={warehouses}
+                    onOpenDetail={setTransferDetail}
+                    onOpenReceive={setTransferReceiving}
+                    canReceive={canReceive}
+                    currentEmployeeId={currentEmployee?.id}
+                    isAdmin={isAdmin}
+                />
             )}
 
             {subTab === "ajustes" && (
@@ -203,6 +242,26 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                 loadingTransferProducts={loadingTransferProducts}
                 loadingMoreTransferProducts={loadingMoreTransferProducts}
                 loadMoreTransferProducts={loadMoreTransferProducts}
+            />
+
+            <TransferReceiveModal
+                open={!!transferReceiving}
+                transfer={transferReceiving}
+                onClose={() => setTransferReceiving(null)}
+                onConfirm={doReceive}
+                saving={savingTransfer}
+            />
+
+            <TransferDetailModal
+                open={!!transferDetail}
+                transfer={transferDetail}
+                onClose={() => setTransferDetail(null)}
+                onResolve={doResolve}
+                onCancel={doCancel}
+                saving={savingTransfer}
+                canManage={canDispatch}
+                companyInfo={companyInfo}
+                printerWidth={printerWidth}
             />
 
             <AssignEmployeesModal

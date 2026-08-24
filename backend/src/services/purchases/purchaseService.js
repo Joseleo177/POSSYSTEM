@@ -3,6 +3,7 @@ const {
   Product, ProductStock, ProductComboItem, PurchasePayment, Sequelize, sequelize
 } = require("../../models");
 const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
+const { toLocalDate, endOfLocalDay } = require("../../utils/localDate");
 const { Op } = Sequelize;
 
 async function getAll({ limit = 50, offset = 0, search, status, order_status, date_from, date_to, warehouse_id }, req) {
@@ -33,8 +34,8 @@ async function getAll({ limit = 50, offset = 0, search, status, order_status, da
   if (order_status) where.status = order_status;
   if (date_from || date_to) {
     where.created_at = {};
-    if (date_from) where.created_at[Op.gte] = new Date(date_from);
-    if (date_to)   where.created_at[Op.lte] = new Date(new Date(date_to).setHours(23, 59, 59, 999));
+    if (date_from) where.created_at[Op.gte] = toLocalDate(date_from);
+    if (date_to)   where.created_at[Op.lte] = endOfLocalDay(date_to);
   }
 
   const supplierWhere = {};

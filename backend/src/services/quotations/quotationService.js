@@ -6,6 +6,7 @@ const {
   sequelize, Sequelize,
 } = require("../../models");
 const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
+const { toLocalDate, endOfLocalDay } = require("../../utils/localDate");
 const { Op } = Sequelize;
 
 // El vendedor sí se guarda al crear la cotización (create recibe employee_id), pero las
@@ -41,8 +42,8 @@ async function getAll({ search, status, date_from, date_to, page = 1, limit = 30
   if (status) where.status = status;
   if (date_from || date_to) {
     where.created_at = {};
-    if (date_from) where.created_at[Op.gte] = new Date(date_from + "T00:00:00");
-    if (date_to)   where.created_at[Op.lte] = new Date(date_to   + "T23:59:59");
+    if (date_from) where.created_at[Op.gte] = toLocalDate(date_from);
+    if (date_to)   where.created_at[Op.lte] = endOfLocalDay(date_to);
   }
   if (search) {
     const num = parseInt(search);

@@ -1,5 +1,6 @@
 const { Sequelize, sequelize, Customer, Sale, SaleItem, Purchase, Payment, Currency, Expense, ExpenseCategory, PaymentJournal } = require("../../models");
 const { assertWarehouseAccess, employeeWarehouseIds, visibleWarehouseIds } = require("../../middleware/auth");
+const { toLocalDate } = require("../../utils/localDate");
 
 // Deuda, gasto y cantidad de compras de un contacto, acotados a las sucursales del empleado.
 // El contacto es de la empresa —el mismo cliente compra en varias sucursales— pero sus
@@ -357,7 +358,11 @@ async function creditRefund(id, { amount, journal_id, reference_date, notes, emp
       currency_id:        currencyId,
       employee_id:        employee_id || null,
       warehouse_id:       refundWarehouseId,
-      date:               reference_date ? new Date(reference_date) : null,
+      // `reference_date` viene del formulario como 'YYYY-MM-DD'. Con `new Date()` a secas JS
+      // lo lee como medianoche UTC y el egreso quedaba fechado el día anterior —y este caso
+      // fallaba en todos los entornos, no solo en Vercel, porque no depende de la TZ del
+      // proceso sino del propio parseo del string.
+      date:               toLocalDate(reference_date),
       notes:              notes?.trim() || null,
       status:             'activo',
     }, { transaction: t });

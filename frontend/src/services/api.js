@@ -245,6 +245,11 @@ export const api = {
     assignEmployees: (id, body)  => request(`/warehouses/${id}/employees`, { method: "PUT", body: JSON.stringify(body) }),
     transfer:        (body)      => request("/warehouses/transfer",    { method: "POST",   body: JSON.stringify(body) }),
     getTransfers:    (params={}) => request("/warehouses/transfers?"   + new URLSearchParams(params)),
+    getTransfer:     (id)        => request(`/warehouses/transfers/${id}`),
+    transferSummary: (params={}) => request("/warehouses/transfers/summary?" + new URLSearchParams(params)),
+    receiveTransfer: (id, body)  => request(`/warehouses/transfers/${id}/receive`, { method: "POST", body: JSON.stringify(body) }),
+    resolveTransfer: (id, body)  => request(`/warehouses/transfers/${id}/resolve`, { method: "POST", body: JSON.stringify(body) }),
+    cancelTransfer:  (id, body)  => request(`/warehouses/transfers/${id}/cancel`,  { method: "POST", body: JSON.stringify(body) }),
     getProducts: (id, params = {}) => request(`/warehouses/${id}/products?` + new URLSearchParams(params)),
     sessions: {
       getActive:  (id)                  => request(`/warehouses/${id}/sessions/active`),

@@ -8,9 +8,13 @@ const EMPTY_ADD_STOCK = { product_id: "", qty: "" };
 const EMPTY_TRANSFER = { from_warehouse_id: "", to_warehouse_id: "", product_id: "", qty: "", note: "" };
 
 /**
- * Hook para gestionar operaciones de stock y transferencias en almacenes.
+ * Hook para gestionar operaciones de stock y el DESPACHO de transferencias.
+ * El listado, la recepción y la anulación viven en useTransfers: son el otro tiempo del
+ * documento y los ejecuta gente distinta.
+ *
+ * @param {Function} onTransferDone - se llama tras despachar, para refrescar el listado.
  */
-export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
+export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses, onTransferDone) {
   // ── Stock ──────────────────────────────────────────────────
   const [stock, setStock]               = useState([]);
   const [stockSearch, setStockSearch]   = useState("");
@@ -41,7 +45,6 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
   const [savingStock, setSavingStock]       = useState(false);
 
   // ── Transferencias ─────────────────────────────────────────
-  const [transfers, setTransfers]     = useState([]);
   const [transferProductSearch, setTransferProductSearch] = useState("");
   const debouncedTransferProductSearch = useDebounce(transferProductSearch, 250);
   const [transferProductResults, setTransferProductResults] = useState([]);
@@ -81,13 +84,6 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
     } catch (e) { notify(e.message, "err"); }
     finally { setLoadingStock(false); }
   }, [notify, stockLimit]);
-
-  const loadTransfers = useCallback(async () => {
-    try {
-      const r = await api.warehouses.getTransfers({ limit: 100 });
-      setTransfers(r.data);
-    } catch (e) { notify(e.message, "err"); }
-  }, [notify]);
 
   // ── Effects ────────────────────────────────────────────────
   // El cambio de almacén lo maneja WarehousesTab (evita doble fetch).
@@ -180,13 +176,15 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
         note: note || null,
         items: items.map(i => ({ product_id: i.product_id, qty: parseFloat(i.qty) })),
       });
-      notify(`Transferencia registrada ✓ (${items.length} producto${items.length !== 1 ? "s" : ""})`);
+      // La mercancía sale del origen y queda EN TRÁNSITO: no entra al destino hasta que
+      // alguien de ese almacén la cuente y confirme la recepción.
+      notify(`Despachada ✓ ${items.length} producto${items.length !== 1 ? "s" : ""} en tránsito, pendientes de recibir`);
       setTransferForm({ ...EMPTY_TRANSFER });
       setTransferProductSearch("");
       setTransferProductResults([]);
       setTransferProductSelected(null);
       setTransferModal(false);
-      await loadTransfers();
+      await onTransferDone?.();
       await loadWarehouses();
     } catch (e) { notify(e.message, "err"); }
     finally { setLoadingTransfer(false); }
@@ -246,8 +244,7 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses) {
     addStockModal, setAddStockModal, openAddStock,
     addStockForm, setAddStockForm,
     addStockProduct, selectAddStockProduct, clearAddStockProduct, doAddStock, savingStock,
-    // Transfers
-    transfers, loadTransfers,
+    // Transfers (despacho)
     transferProductSearch, setTransferProductSearch,
     transferProductResults, setTransferProductResults,
     transferProductSelected, setTransferProductSelected,

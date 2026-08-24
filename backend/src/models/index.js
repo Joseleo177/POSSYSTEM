@@ -119,7 +119,7 @@ tenantModels.forEach(modelName => {
 });
 
 // Centralized associations
-const { Company, Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment, Setting, Quotation, QuotationItem, Promotion, PromotionProduct } = db;
+const { Company, Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, StockTransferItem, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment, Setting, Quotation, QuotationItem, Promotion, PromotionProduct } = db;
 
 // ── Company Associations ────────────────────────────────────────
 if (Company) {
@@ -229,7 +229,16 @@ if(StockTransfer && Warehouse && Product && Employee) {
   StockTransfer.belongsTo(Warehouse, { as: 'FromWarehouse', foreignKey: 'from_warehouse_id' });
   StockTransfer.belongsTo(Warehouse, { as: 'ToWarehouse', foreignKey: 'to_warehouse_id' });
   StockTransfer.belongsTo(Product, { foreignKey: 'product_id' });
+  // `Employee` (sin alias) es quien despacha; el receptor y quien anula van con alias propio.
   StockTransfer.belongsTo(Employee, { foreignKey: 'employee_id' });
+  StockTransfer.belongsTo(Employee, { as: 'Receiver',  foreignKey: 'received_by' });
+  StockTransfer.belongsTo(Employee, { as: 'Canceller', foreignKey: 'cancelled_by' });
+}
+
+if(StockTransfer && StockTransferItem && Product) {
+  StockTransfer.hasMany(StockTransferItem, { as: 'items', foreignKey: 'transfer_id', onDelete: 'CASCADE' });
+  StockTransferItem.belongsTo(StockTransfer, { foreignKey: 'transfer_id' });
+  StockTransferItem.belongsTo(Product,       { foreignKey: 'product_id' });
 }
 
 if(Payment && Sale && Customer && Employee && Currency && PaymentJournal) {

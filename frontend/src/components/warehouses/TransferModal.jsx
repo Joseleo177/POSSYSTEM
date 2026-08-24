@@ -145,10 +145,14 @@ export default function TransferModal({
                                     <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle opacity-40 group-focus-within:text-brand-500 group-focus-within:opacity-100 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                     </svg>
+                                    {/* El menú se ancla al input pero no se ata a su ancho: la columna del
+                                        producto es angosta y los nombres llegaban cortados ("HARINA JU..."),
+                                        que es justo lo que hay que leer para elegir bien. Crece hacia la
+                                        derecha hasta donde da el modal. */}
                                     {showDropdown && (
                                         <div
                                             onScroll={handleProductScroll}
-                                            className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200 divide-y divide-border/10"
+                                            className="absolute top-full left-0 mt-1 min-w-full w-max max-w-[min(420px,calc(100vw-3rem))] bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200 divide-y divide-border/10"
                                         >
                                             {loadingTransferProducts && transferProductResults.length === 0 ? (
                                                 <div className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle">Buscando productos...</div>
@@ -162,10 +166,10 @@ export default function TransferModal({
                                                             key={p.id}
                                                             onMouseDown={e => e.preventDefault()}
                                                             onClick={() => { setTransferProductSelected(p); setTransferProductSearch(""); setShowDropdown(false); }}
-                                                            className="w-full px-4 py-2.5 text-[11px] font-black uppercase tracking-tight text-left hover:bg-brand-500/[0.03] hover:text-brand-500 transition-all flex items-center justify-between gap-2"
+                                                            className="w-full px-4 py-2.5 text-[11px] font-black uppercase tracking-tight text-left hover:bg-brand-500/[0.03] hover:text-brand-500 transition-all flex items-center justify-between gap-4"
                                                         >
-                                                            <span className="truncate">{p.name} {added && <span className="text-brand-500 opacity-70">· en lista</span>}</span>
-                                                            <span className="text-[9px] opacity-40 shrink-0">Stock: {fmtQtyUnit(p.stock, p.unit)}</span>
+                                                            <span className="min-w-0 truncate">{p.name} {added && <span className="text-brand-500 opacity-70">· en lista</span>}</span>
+                                                            <span className="text-[9px] opacity-40 shrink-0 whitespace-nowrap">Stock: {fmtQtyUnit(p.stock, p.unit)}</span>
                                                         </button>
                                                     );
                                                 })

@@ -18,7 +18,7 @@ export const LEGACY_MAP = {
   ],
   customers: ["customers.view", "customers.create", "customers.edit", "sales.create"],
   inventory: [
-    "inventory.view", "inventory.adjust", "inventory.transfer",
+    "inventory.view", "inventory.adjust", "inventory.transfer", "inventory.receive",
     "purchases.view", "purchases.create", "purchases.edit", "purchases.receive", "purchases.pay",
     "reports.view",
   ],
@@ -38,7 +38,7 @@ export const LEGACY_MAP = {
     "sales.view", "sales.create", "sales.edit", "sales.void", "sales.credit", "sales.cash",
     "products.view", "products.create", "products.edit",
     "customers.view", "customers.create", "customers.edit", "customers.credit",
-    "inventory.view", "inventory.adjust", "inventory.transfer",
+    "inventory.view", "inventory.adjust", "inventory.transfer", "inventory.receive",
   ],
 };
 

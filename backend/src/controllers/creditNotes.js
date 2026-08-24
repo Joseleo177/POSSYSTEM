@@ -1,6 +1,7 @@
 const { Return, ReturnItem, Sale, Customer, Employee } = require("../models");
 const { Op } = require("sequelize");
 const { visibleWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
+const { toLocalDate, endOfLocalDay } = require("../utils/localDate");
 const annulReturn = require("../services/returns/annulReturn");
 const { broadcast } = require("../services/sseService");
 
@@ -10,8 +11,8 @@ exports.getAll = async (req, res) => {
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     const where = {};
-    if (date_from) where.created_at = { ...where.created_at, [Op.gte]: new Date(date_from) };
-    if (date_to)   where.created_at = { ...where.created_at, [Op.lte]: new Date(date_to + "T23:59:59") };
+    if (date_from) where.created_at = { ...where.created_at, [Op.gte]: toLocalDate(date_from) };
+    if (date_to)   where.created_at = { ...where.created_at, [Op.lte]: endOfLocalDay(date_to) };
 
     // La NC no guarda sucursal: la hereda de la venta que corrige, así que el filtro va
     // sobre el join con sales.

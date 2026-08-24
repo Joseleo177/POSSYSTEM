@@ -1,7 +1,7 @@
 const { Expense, ExpenseCategory, PaymentJournal, Employee, Currency, Warehouse, PurchasePayment } = require('../models');
 const { Op } = require('sequelize');
 const { recalcPurchaseStatus } = require('../services/purchasePayments/purchasePaymentService');
-const { toLocalDate } = require('../utils/localDate');
+const { toLocalDate, endOfLocalDay } = require('../utils/localDate');
 const { visibleWarehouseIds, assertWarehouseAccess } = require('../middleware/auth');
 
 // ── Listar egresos (paginado + filtros) ──────────────────────
@@ -29,7 +29,7 @@ exports.getAll = async (req, res, next) => {
     if (date_from || date_to) {
       where.created_at = {};
       if (date_from) where.created_at[Op.gte] = toLocalDate(date_from);
-      if (date_to)   where.created_at[Op.lte] = new Date(toLocalDate(date_to).setHours(23, 59, 59, 999));
+      if (date_to)   where.created_at[Op.lte] = endOfLocalDay(date_to);
     }
 
     const { count, rows } = await Expense.findAndCountAll({

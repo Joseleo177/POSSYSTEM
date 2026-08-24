@@ -51,7 +51,8 @@ const MODULES = [
     actions: [
       { key: 'view',     label: 'Ver existencias' },
       { key: 'adjust',   label: 'Ajustar stock' },
-      { key: 'transfer', label: 'Transferir entre sucursales' },
+      { key: 'transfer', label: 'Despachar transferencias' },
+      { key: 'receive',  label: 'Recibir transferencias' },
       { key: 'manage',   label: 'Crear y editar almacenes' },
     ],
   },
@@ -171,7 +172,7 @@ const LEGACY_MAP = {
   // permit("products", "inventory") en compras; permit("inventory", "admin", "config") en
   // stock, transferencias y sesiones de ajuste.
   inventory: [
-    'inventory.view', 'inventory.adjust', 'inventory.transfer',
+    'inventory.view', 'inventory.adjust', 'inventory.transfer', 'inventory.receive',
     'purchases.view', 'purchases.create', 'purchases.edit', 'purchases.receive', 'purchases.pay',
     'reports.view',
   ],
@@ -202,7 +203,7 @@ const LEGACY_MAP = {
     'sales.view', 'sales.create', 'sales.edit', 'sales.void', 'sales.credit', 'sales.cash',
     'products.view', 'products.create', 'products.edit',
     'customers.view', 'customers.create', 'customers.edit', 'customers.credit',
-    'inventory.view', 'inventory.adjust', 'inventory.transfer',
+    'inventory.view', 'inventory.adjust', 'inventory.transfer', 'inventory.receive',
   ],
 };
 
