@@ -85,6 +85,41 @@ const contrastWithWhite = rgbString => 1.05 / (luminance(rgbString) + 0.05);
 // también al color por defecto y hay que revisar la interfaz entera.
 const MIN_CONTRAST = 2.2;
 
+/**
+ * El mismo color, pero legible como TEXTO sobre el fondo de la aplicación.
+ *
+ * Los colores de los diarios los elige quien configura la caja, y un amarillo o un cian puros
+ * sobre el velo claro del badge quedan casi invisibles: en la lista de cobros hay etiquetas
+ * que no se pueden leer. Se conservan el tono y la saturación —el color sigue identificando
+ * al diario de un vistazo— y se ajusta solo la luminosidad hasta alcanzar el contraste
+ * mínimo de lectura (4.5:1, el AA de WCAG para texto).
+ *
+ * En tema claro el color se oscurece; en oscuro se aclara. Devuelve null si el hex no es
+ * válido, para que quien llame decida el reemplazo.
+ */
+export function readableInk(hex, dark = false) {
+    const hsl = hexToHsl(hex);
+    if (!hsl) return null;
+
+    // Luminancia del fondo sobre el que va a leerse: el papel blanco del tema claro o el
+    // gris muy oscuro del tema oscuro.
+    const fondo = dark ? luminance("18 18 18") : luminance("255 255 255");
+    const contra = (l) => {
+        const lum = luminance(hslToRgbString(hsl.h, hsl.s, l));
+        return (Math.max(lum, fondo) + 0.05) / (Math.min(lum, fondo) + 0.05);
+    };
+
+    let l = hsl.l;
+    // Un paso de 2% basta: el ojo no distingue menos y evita iterar cincuenta veces.
+    const paso = dark ? 2 : -2;
+    for (let i = 0; i < 50 && contra(l) < 4.5; i++) {
+        const siguiente = l + paso;
+        if (siguiente < 0 || siguiente > 100) break;
+        l = siguiente;
+    }
+    return `hsl(${hsl.h.toFixed(0)} ${hsl.s.toFixed(0)}% ${l.toFixed(0)}%)`;
+}
+
 // { 50: "240 253 250", 100: "...", … } listo para volcar en las variables CSS.
 export function buildBrandScale(hex) {
     const hsl = hexToHsl(hex) || hexToHsl(DEFAULT_BRAND);

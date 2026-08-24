@@ -151,6 +151,13 @@ input[type=number] { -moz-appearance: textfield; }
   .badge-neutral { @apply badge bg-surface-3 text-content-muted border-border dark:bg-white/5 dark:text-white/40 dark:border-white/10; }
   .badge-violet  { @apply badge bg-violet-500/10 text-violet-400 border-violet-500/20; }
 
+  /* Etiqueta cuyo color lo elige el usuario (los diarios de caja y banco).
+     El tono viaja en dos variables ya corregidas para tener contraste de lectura —una por
+     tema, ver readableInk en helpers/brandColor.js— y el CSS elige según el tema activo.
+     Con el color crudo, un amarillo o un cian quedaban ilegibles sobre el velo del badge. */
+  .badge-ink     { color: var(--journal-ink); }
+  .dark .badge-ink { color: var(--journal-ink-dark); }
+
   /* ── Tablas de Grado Comercial ── */
   .table-pos { @apply w-full text-sm; }
   .table-pos thead th {

@@ -7,6 +7,7 @@ import Pagination from "../ui/Pagination";
 import DateRangePicker from "../ui/DateRangePicker";
 import CustomSelect from "../ui/CustomSelect";
 import { useApp } from "../../context/AppContext";
+import { readableInk } from "../../helpers/brandColor";
 
 export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayment, setReceiptSale, journals = [] }) {
     const {
@@ -153,9 +154,12 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                                 </span>
                                             ) : item.journal_name ? (
                                                 <span
-                                                    className="badge shadow-none border"
+                                                    className="badge shadow-none border badge-ink"
                                                     style={{
-                                                        color: item.journal_color || undefined,
+                                                        // El tono se corrige para que se lea: el color crudo del
+                                                        // diario puede ser un amarillo que desaparece sobre el velo.
+                                                        "--journal-ink": readableInk(item.journal_color, false) || undefined,
+                                                        "--journal-ink-dark": readableInk(item.journal_color, true) || undefined,
                                                         backgroundColor: item.journal_color ? `${item.journal_color}14` : undefined,
                                                         borderColor: item.journal_color ? `${item.journal_color}33` : undefined,
                                                     }}
