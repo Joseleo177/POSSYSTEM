@@ -492,6 +492,24 @@ export default function SettingsTab({ notify }) {
                                 </button>
                             </div>
 
+                            {/* Tope de exoneración. Solo limita a quien tenga el permiso "Exonerar
+                                saldo por cobrar" sin ser administrador: el admin no tiene tope. */}
+                            <div className="mb-4">
+                                <label className="label mb-1.5">Tope para exonerar saldo ({base?.symbol || "Ref."})</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="0 = sin límite"
+                                    value={settings.forgive_limit || ""}
+                                    onChange={e => setSettings(p => ({ ...p, forgive_limit: e.target.value }))}
+                                    className="input h-9"
+                                />
+                                <div className="text-[10px] font-semibold opacity-70 text-content-subtle dark:text-white/40 mt-1">
+                                    Monto máximo que puede perdonar por factura un usuario no administrador. Con 0 o vacío no hay límite.
+                                </div>
+                            </div>
+
                             <div className="flex justify-end border-t border-border/10 pt-3">
                                 <Button onClick={saveSettings} disabled={loading} className="h-8 px-6 text-[10px]">
                                     {loading ? "Guardando..." : "Guardar Configuración"}

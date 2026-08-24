@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../../services/api";
+import BulkPaymentModal from "../Customers/BulkPaymentModal";
 
 const STATUS_TABS = [
     { key: "all",      label: "Todos" },
@@ -15,8 +16,10 @@ function StatusBadge({ status }) {
         pendiente: "bg-danger/10 text-danger border-danger/20",
         parcial:   "bg-brand-500/10 text-brand-500 border-brand-500/20",
         pagado:    "bg-green-500/10 text-green-500 border-green-500/20",
+        // Cerrada, pero no cobrada: ámbar para que no se lea como dinero recibido.
+        exonerado: "bg-warning/10 text-warning border-warning/20",
     };
-    const label = { borrador: "Borrador", pendiente: "Pendiente", parcial: "Parcial", pagado: "Pagado" };
+    const label = { borrador: "Borrador", pendiente: "Pendiente", parcial: "Parcial", pagado: "Pagado", exonerado: "Exonerada" };
     return (
         <span className={`text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full border ${map[status] || neutral}`}>
             {label[status] || status}
@@ -29,6 +32,10 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
     const [loading, setLoading]     = useState(false);
     const [search, setSearch]       = useState("");
     const [statusTab, setStatusTab] = useState("all");
+    // Cobro conjunto: el cliente trae cuentas viejas y las salda todas con un solo monto.
+    // Solo entre facturas del MISMO cliente: un pago no puede cubrir la deuda de dos personas.
+    const [checkedIds, setCheckedIds] = useState([]);
+    const [showBulk, setShowBulk]     = useState(false);
     const sym = baseCurrency?.symbol || "Ref.";
 
     const load = useCallback(async () => {
@@ -52,7 +59,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
     }, [open, load, search]);
 
     useEffect(() => {
-        if (!open) { setSearch(""); setStatusTab("all"); }
+        if (!open) { setSearch(""); setStatusTab("all"); setCheckedIds([]); }
     }, [open]);
 
     useEffect(() => {
@@ -67,6 +74,19 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
     if (!open) return null;
 
     const filtered = statusTab === "all" ? sales : sales.filter(s => s.status === statusTab);
+
+    // Con qué cliente quedó amarrada la selección: la primera marcada fija el grupo y las
+    // demás quedan bloqueadas. Un cobro se aplica a las facturas de una sola persona.
+    const seleccionadas = sales.filter(s => checkedIds.includes(s.id));
+    const clienteFijado = seleccionadas[0]?.customer_id ?? null;
+    const totalSeleccionado = seleccionadas.reduce((acc, s) => acc + parseFloat(s.balance || 0), 0);
+    // Sin cliente identificado no hay a quién agrupar, y una factura sin saldo no se cobra.
+    const marcable = (sale) =>
+        !!sale.customer_id
+        && parseFloat(sale.balance || 0) > 0.10
+        && (clienteFijado === null || sale.customer_id === clienteFijado);
+    const toggleChecked = (sale) =>
+        setCheckedIds(p => p.includes(sale.id) ? p.filter(x => x !== sale.id) : [...p, sale.id]);
 
     const fmt = (n) => `${sym}${parseFloat(n || 0).toFixed(2)}`;
     const fmtDate = (d) => {
@@ -153,7 +173,18 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                     className="bg-surface dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] rounded-2xl p-3 active:bg-surface-2 dark:active:bg-white/[0.06] transition-colors"
                                 >
                                     <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0">
+                                        <button
+                                            onClick={e => { e.stopPropagation(); toggleChecked(sale); }}
+                                            disabled={!marcable(sale) && !checkedIds.includes(sale.id)}
+                                            className={`w-6 h-6 shrink-0 rounded-md border flex items-center justify-center transition-all ${
+                                                checkedIds.includes(sale.id)
+                                                    ? "bg-success border-success text-black"
+                                                    : "border-border/40 dark:border-white/20 text-transparent"
+                                            } disabled:opacity-20`}
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7"/></svg>
+                                        </button>
+                                        <div className="min-w-0 flex-1">
                                             <div className="text-[12px] font-black text-content dark:text-white tabular-nums">
                                                 {sale.invoice_number || `Borrador #${sale.id}`}
                                             </div>
@@ -189,7 +220,8 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                         <table className="hidden lg:table w-full text-left min-w-[720px]">
                             <thead>
                                 <tr className="border-b border-border/20 dark:border-white/5 text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/25 sticky top-0 bg-white dark:bg-surface-dark-2">
-                                    <th className="px-5 py-3">Factura</th>
+                                    <th className="pl-5 pr-1 py-3 w-8" />
+                                    <th className="px-3 py-3">Factura</th>
                                     <th className="px-3 py-3">Cliente</th>
                                     <th className="px-3 py-3 text-right">Total</th>
                                     <th className="px-3 py-3 text-right">Pagado</th>
@@ -201,8 +233,26 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                             </thead>
                             <tbody>
                                 {filtered.map(sale => (
-                                    <tr key={sale.id} className="border-b border-border/20 dark:border-white/5 hover:bg-surface-2 dark:hover:bg-white/[0.03] transition-colors group">
-                                        <td className="px-5 py-3">
+                                    <tr key={sale.id} className={`border-b border-border/20 dark:border-white/5 hover:bg-surface-2 dark:hover:bg-white/[0.03] transition-colors group ${checkedIds.includes(sale.id) ? "bg-success/5" : ""}`}>
+                                        <td className="pl-5 pr-1 py-3">
+                                            <button
+                                                onClick={() => toggleChecked(sale)}
+                                                disabled={!marcable(sale) && !checkedIds.includes(sale.id)}
+                                                title={
+                                                    !sale.customer_id ? "Sin cliente: no se puede cobrar junto a otras"
+                                                    : (clienteFijado !== null && sale.customer_id !== clienteFijado) ? "Es de otro cliente"
+                                                    : "Cobrar junto con las demás"
+                                                }
+                                                className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                                                    checkedIds.includes(sale.id)
+                                                        ? "bg-success border-success text-black"
+                                                        : "border-border/40 dark:border-white/20 text-transparent hover:border-success/60"
+                                                } disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:border-border/40`}
+                                            >
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7"/></svg>
+                                            </button>
+                                        </td>
+                                        <td className="px-3 py-3">
                                             <span className="text-[11px] font-black text-content dark:text-white tabular-nums">
                                                 {sale.invoice_number || `Borrador #${sale.id}`}
                                             </span>
@@ -253,16 +303,56 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
 
                 {/* Footer count */}
                 {!loading && filtered.length > 0 && (
-                    <div className="px-5 py-2.5 border-t border-border/20 dark:border-white/5 shrink-0 flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/20">
-                            {filtered.length} factura{filtered.length !== 1 ? "s" : ""}
-                        </span>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-warning">
-                            Saldo total: {fmt(filtered.reduce((s, x) => s + parseFloat(x.balance || 0), 0))}
-                        </span>
+                    <div className="px-5 py-2.5 border-t border-border/20 dark:border-white/5 shrink-0 flex items-center justify-between gap-3">
+                        {seleccionadas.length > 0 ? (
+                            <>
+                                <div className="min-w-0">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-success">
+                                        {seleccionadas.length} seleccionada{seleccionadas.length !== 1 ? "s" : ""} · {seleccionadas[0]?.customer_name}
+                                    </span>
+                                    <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/20">
+                                        A cobrar: {fmt(totalSeleccionado)}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                        onClick={() => setCheckedIds([])}
+                                        className="h-8 px-3 rounded-lg border border-border/30 dark:border-white/10 text-[10px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white transition-all"
+                                    >
+                                        Quitar
+                                    </button>
+                                    <button
+                                        onClick={() => setShowBulk(true)}
+                                        className="h-8 px-4 rounded-lg bg-success text-black text-[10px] font-black uppercase tracking-wide hover:brightness-110 transition-all active:scale-95"
+                                    >
+                                        Cobrar juntas
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <span className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/20">
+                                    {filtered.length} factura{filtered.length !== 1 ? "s" : ""}
+                                </span>
+                                <span className="text-[9px] font-black uppercase tracking-widest text-warning">
+                                    Saldo total: {fmt(filtered.reduce((s, x) => s + parseFloat(x.balance || 0), 0))}
+                                </span>
+                            </>
+                        )}
                     </div>
                 )}
             </div>
+
+            {showBulk && seleccionadas.length > 0 && (
+                <div onClick={e => e.stopPropagation()}>
+                    <BulkPaymentModal
+                        customer={{ id: clienteFijado, name: seleccionadas[0]?.customer_name }}
+                        sales={seleccionadas}
+                        onClose={() => setShowBulk(false)}
+                        onSuccess={() => { setShowBulk(false); setCheckedIds([]); load(); }}
+                    />
+                </div>
+            )}
         </div>
     );
 }

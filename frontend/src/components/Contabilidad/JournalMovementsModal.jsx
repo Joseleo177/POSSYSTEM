@@ -191,6 +191,13 @@ export default function JournalMovementsModal({ journalId, bankId, onClose }) {
                                                     <span className={`text-[10px] font-black tracking-tight ${isVoided ? "text-content-subtle line-through" : "text-brand-500"}`}>
                                                         {m.reference}
                                                     </span>
+                                                    {/* Un solo monto que saldó varias facturas: la línea es el
+                                                        movimiento de caja, y esto avisa que cubre más de un documento. */}
+                                                    {m.group_count > 1 && (
+                                                        <div className="text-[8px] font-black uppercase tracking-wider text-content-subtle mt-0.5">
+                                                            Cobro conjunto · {m.group_count} facturas
+                                                        </div>
+                                                    )}
                                                     {m.doc_ref && (
                                                         <div className="text-[8px] font-bold text-content-subtle mt-0.5">
                                                             Ref: {m.doc_ref}

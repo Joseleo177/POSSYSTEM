@@ -89,10 +89,15 @@ module.exports = async function getAllSales(query, tenant = {}) {
     item.amount_paid = parseFloat(item.amount_paid || 0);
     item.total_precise = parseFloat(item.total_precise || item.total || 0);
     const totalRet = parseFloat(item.total_returned || 0);
-    item.balance = parseFloat((parseFloat(item.total) - totalRet - item.amount_paid).toFixed(6));
-    // Igual que en getOneSale: una venta 'pagado' no arrastra saldo. Con divisas recibidas a
-    // tasa de efectivo la resta deja centavos que el cliente no debe.
-    if (item.status === 'pagado' || item.balance < 0) item.balance = 0;
+    item.forgiven_amount = parseFloat(item.forgiven_amount || 0);
+    // Lo exonerado salda igual que un cobro, pero se resta aparte: en `amount_paid` iría
+    // como dinero recibido y no lo es.
+    item.balance = parseFloat(
+      (parseFloat(item.total) - totalRet - item.amount_paid - item.forgiven_amount).toFixed(6)
+    );
+    // Igual que en getOneSale: una venta 'pagado' o 'exonerado' no arrastra saldo. Con divisas
+    // recibidas a tasa de efectivo la resta deja centavos que el cliente no debe.
+    if (item.status === 'pagado' || item.status === 'exonerado' || item.balance < 0) item.balance = 0;
     ["Customer", "Employee", "Currency", "Warehouse", "Serie", "SaleItems"].forEach((k) => delete item[k]);
     return item;
   });
@@ -123,7 +128,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
       //  - en las demás se topa al total, para que el sobrante de un cobro en divisas a tasa
       //    de efectivo no infle la cifra.
       // Lo que sobró sí entró a caja y se ve en el módulo de Pagos. Con este criterio,
-      // Total − Cobrado da exactamente el Pendiente.
+      // Total − Cobrado − Exonerado da exactamente el Pendiente.
       [Sequelize.literal(`COALESCE(SUM(
         CASE WHEN "Sale"."status" IN ('anulado','devuelto') THEN 0
              WHEN "Sale"."status" = 'pagado' THEN "Sale"."total"
@@ -138,13 +143,20 @@ module.exports = async function getAllSales(query, tenant = {}) {
       // es 0 para no restar los negativos que dejan los cobros en divisas a tasa de efectivo—
       // y recién entonces se suma.
       [Sequelize.literal(`COALESCE(SUM(
-        CASE WHEN "Sale"."status" IN ('anulado', 'devuelto', 'pagado') THEN 0
+        CASE WHEN "Sale"."status" IN ('anulado', 'devuelto', 'pagado', 'exonerado') THEN 0
              ELSE GREATEST(
                "Sale"."total"
                  - (SELECT COALESCE(SUM(total),0)  FROM returns  WHERE sale_id = "Sale"."id" AND status <> 'anulado')
-                 - (SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = "Sale"."id"),
+                 - (SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = "Sale"."id")
+                 - "Sale"."forgiven_amount",
                0)
         END), 0)`), "sum_pending"],
+      // Saldo perdonado del filtro. Va aparte de "cobrado" a propósito: es plata que se dejó
+      // de cobrar, y sumarla ahí diría que entró a caja. Es el único lugar donde el monto
+      // exonerado se ve totalizado, ya que no genera egreso.
+      [Sequelize.literal(`COALESCE(SUM(
+        CASE WHEN "Sale"."status" IN ('anulado','devuelto') THEN 0
+             ELSE "Sale"."forgiven_amount" END), 0)`), "sum_forgiven"],
     ],
     raw: true,
   });
@@ -152,8 +164,9 @@ module.exports = async function getAllSales(query, tenant = {}) {
   return {
     data,
     total: count,
-    sum_total:   parseFloat(totals?.sum_total   || 0),
-    sum_paid:    parseFloat(totals?.sum_paid    || 0),
-    sum_pending: parseFloat(totals?.sum_pending || 0),
+    sum_total:    parseFloat(totals?.sum_total    || 0),
+    sum_paid:     parseFloat(totals?.sum_paid     || 0),
+    sum_pending:  parseFloat(totals?.sum_pending  || 0),
+    sum_forgiven: parseFloat(totals?.sum_forgiven || 0),
   };
 };

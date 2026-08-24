@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, dateClause, localDate } = require("./shared");
+const { sanitizeDate, dateClause, localDate, SETTLED_SQL } = require("./shared");
 
 async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep, wh }) {
   const df = sanitizeDate(date_from);
@@ -10,7 +10,9 @@ async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep, 
   // Mismo criterio de "ingreso realizado" que salesReport. Va en una sola constante
   // porque antes solo lo aplicaba la consulta por día: el resumen y los desgloses
   // sumaban también las anuladas, así que la pantalla se contradecía a sí misma.
-  const stS = `AND s.status = 'pagado'`;
+  // Incluye las exoneradas: el costo de esa mercancía se incurrió igual. Con el ingreso en
+  // cero por el perdón, el margen que muestran es la pérdida real de haberla regalado.
+  const stS = `AND s.status IN (${SETTLED_SQL})`;
 
   // Costo unitario a usar: primero el congelado en la venta, luego el del producto, y para
   // los combos —que no guardan costo propio— la suma de sus componentes. Sin este último

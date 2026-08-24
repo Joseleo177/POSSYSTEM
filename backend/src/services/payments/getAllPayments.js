@@ -45,13 +45,43 @@ module.exports = async function getAllPayments(query, tenant = {}) {
 
   const where = { [Op.and]: andClauses };
 
-  const { count, rows } = await Payment.findAndCountAll({
+  // Un cobro conjunto son varios Payment —uno por factura, que es lo que exige el documento
+  // fiscal— pero un solo movimiento de dinero. Este listado habla de COBROS, así que la
+  // unidad es el acto de cobrar: las filas del mismo lote se muestran juntas, con su total.
+  // El desglose por factura sigue disponible al abrir el detalle.
+  //
+  // Se resuelve en dos pasos porque la agrupación tiene que ocurrir ANTES de paginar: primero
+  // se listan las unidades del filtro completo (consulta liviana, solo id/lote/fecha), se
+  // recortan a la página pedida, y recién entonces se cargan los cobros de esa página con
+  // todos sus datos. Agrupar después de paginar partiría lotes entre dos páginas.
+  const unidadesRaw = await Payment.findAll({
     where,
-    limit: parseInt(limit, 10),
-    offset: parseInt(offset, 10),
+    attributes: ["id", "batch_id", "created_at"],
+    order: [["created_at", "DESC"]],
+    include: [{ model: Sale, attributes: [], required: true, ...(Object.keys(saleWhere).length ? { where: saleWhere } : {}) }],
+    raw: true,
+    subQuery: false,
+  });
+
+  const unidades = [];
+  const porLote = new Map();
+  for (const p of unidadesRaw) {
+    if (!p.batch_id) { unidades.push({ ids: [p.id] }); continue; }
+    const yaVista = porLote.get(p.batch_id);
+    if (yaVista) { yaVista.ids.push(p.id); continue; }
+    const nueva = { ids: [p.id], batch_id: p.batch_id };
+    porLote.set(p.batch_id, nueva);
+    unidades.push(nueva);
+  }
+
+  const count = unidades.length;
+  const pagina = unidades.slice(parseInt(offset, 10), parseInt(offset, 10) + parseInt(limit, 10));
+  const idsPagina = pagina.flatMap(u => u.ids);
+
+  const rows = idsPagina.length ? await Payment.findAll({
+    where: { id: { [Op.in]: idsPagina } },
     order: [["created_at", "DESC"]],
     subQuery: false,
-    distinct: true,
     include: [
       { model: Customer, attributes: ["name", "rif"], required: false },
       { model: Employee, attributes: ["full_name"], required: false },
@@ -65,9 +95,9 @@ module.exports = async function getAllPayments(query, tenant = {}) {
         include: [{ model: SaleItem, attributes: ["name", "quantity", "price", "subtotal"] }],
       },
     ],
-  });
+  }) : [];
 
-  const data = rows.map((p) => {
+  const aItem = (p) => {
     const item = p.toJSON();
     item.customer_name = item.Customer?.name ?? null;
     item.customer_rif = item.Customer?.rif ?? null;
@@ -83,7 +113,39 @@ module.exports = async function getAllPayments(query, tenant = {}) {
     ["Customer", "Employee", "Currency", "PaymentJournal"].forEach((k) => delete item[k]);
     if (item.Sale) delete item.Sale.SaleItems;
     return item;
-  });
+  };
+
+  const porId = new Map(rows.map(p => [p.id, aItem(p)]));
+
+  const data = pagina.map(unidad => {
+    const partes = unidad.ids.map(id => porId.get(id)).filter(Boolean);
+    if (!partes.length) return null;
+    // Cobro corriente: una factura, un pago. Se devuelve tal cual.
+    if (partes.length === 1 && !unidad.batch_id) return partes[0];
+
+    // Cobro conjunto: los datos del acto (diario, cliente, fecha, referencia, tasa) son
+    // comunes a todas sus partes, así que se toman de la primera; lo único que se suma es
+    // el dinero. `items` lleva el desglose para el detalle.
+    const primera = partes[0];
+    return {
+      ...primera,
+      amount: partes.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0),
+      change_given: partes.reduce((acc, p) => acc + parseFloat(p.change_given || 0), 0) || null,
+      group_count: partes.length,
+      // Lo que se ve en la columna Referencia: las facturas que cubrió este único cobro.
+      invoice_number: partes.map(p => p.invoice_number || `#${p.sale_id}`).join(" · "),
+      items: partes.map(p => ({
+        payment_id: p.id,
+        sale_id: p.sale_id,
+        invoice_number: p.invoice_number,
+        amount: parseFloat(p.amount || 0),
+        sale_status: p.sale_status,
+      })),
+      // Los ítems de UNA de las facturas no representan al cobro conjunto: se omiten para
+      // que el detalle no muestre productos de una sola venta como si fueran de todas.
+      sale_items: [],
+    };
+  }).filter(Boolean);
 
   // Suma del filtro COMPLETO, no de la página: con 50 registros por página, totalizar solo
   // lo visible daría una cifra que no corresponde a lo que el usuario filtró. Va en moneda

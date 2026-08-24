@@ -1,10 +1,12 @@
 const { Payment, Sale, Sequelize } = require("./shared");
 
 module.exports = async function getPaymentsStats() {
-  const [pendingCount, parcialCount, paidCount, paymentStats] = await Promise.all([
+  const [pendingCount, parcialCount, paidCount, forgivenCount, paymentStats] = await Promise.all([
     Sale.count({ where: { status: "pendiente" } }),
     Sale.count({ where: { status: "parcial" } }),
     Sale.count({ where: { status: "pagado" } }),
+    // Las exoneradas van en su propio contador: cerradas sí, cobradas no.
+    Sale.count({ where: { status: "exonerado" } }),
     Payment.findOne({
       attributes: [
         [Sequelize.fn("COUNT", Sequelize.col("id")), "total_payments"],
@@ -23,6 +25,7 @@ module.exports = async function getPaymentsStats() {
     pending_invoices: pendingCount,
     parcial_invoices: parcialCount,
     paid_invoices: paidCount,
+    forgiven_invoices: forgivenCount,
     total_payments: parseInt(paymentStats?.total_payments || 0, 10),
     total_amount: parseFloat(paymentStats?.total_amount || 0),
     payments_today: parseInt(paymentStats?.payments_today || 0, 10),

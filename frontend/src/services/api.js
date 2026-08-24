@@ -159,6 +159,10 @@ export const api = {
     cancel:      (id)        => request(`/sales/${id}`,  { method: "DELETE" }),
     // Entrega a crédito: asigna correlativo y deja la venta en 'pendiente' (por cobrar)
     confirmCredit: (id)      => request(`/sales/${id}/credit`, { method: "POST" }),
+    // Exonerar: perdona el saldo pendiente y cierra la factura sin cobrarla. `reason` es
+    // obligatorio. Deshacerla la devuelve a por cobrar con el saldo que tenía.
+    forgive:     (id, reason) => request(`/sales/${id}/forgive`, { method: "POST", body: JSON.stringify({ reason }) }),
+    unforgive:   (id)         => request(`/sales/${id}/forgive`, { method: "DELETE" }),
     // Cuentas en espera y pedidos del catálogo público: visibles desde cualquier caja.
     // Los 'pedido' todavía no descontaron inventario; se listan juntos porque se
     // atienden en el mismo sitio y se distinguen por su status.
@@ -275,7 +279,12 @@ export const api = {
     getStats:   (params={}) => request("/payments/stats?"  + new URLSearchParams(params)),
     getPending: (params={}) => request("/payments/pending?" + new URLSearchParams(params)),
     create:     (body)      => request("/payments", { method: "POST", body: JSON.stringify(body) }),
+    // Un solo monto contra varias facturas del mismo cliente: el servidor lo reparte de la
+    // más vieja a la más nueva y registra un cobro por factura.
+    createBulk: (body)      => request("/payments/bulk", { method: "POST", body: JSON.stringify(body) }),
     remove:     (id)        => request(`/payments/${id}`, { method: "DELETE" }),
+    // Deshace un cobro conjunto entero: sus partes no se pueden borrar por separado.
+    removeBatch:(batchId)   => request(`/payments/batch/${encodeURIComponent(batchId)}`, { method: "DELETE" }),
   },
 
   // ── Series de facturación ───────────────────────────────────

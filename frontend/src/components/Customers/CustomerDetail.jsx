@@ -4,6 +4,7 @@ import { exportToCSV } from "../../utils/exportUtils";
 import { fmtBase, fmtSale as fmtSaleHelper, todayISO } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import SaleDetailModal from "./SaleDetailModal";
+import BulkPaymentModal from "./BulkPaymentModal";
 import Modal from "../ui/Modal";
 import Pagination from "../ui/Pagination";
 import { api } from "../../services/api";
@@ -25,6 +26,10 @@ const SCROLL_LIST = "flex-1 min-h-0 overflow-y-auto print:min-h-0 print:overflow
 export default function CustomerDetail({ detail, pending, paid, paidTotal, paidPage, onPaidPageChange, onClose, onPay, onRefresh }) {
     const { baseCurrency, notify, activeJournals, activeCurrencies, triggerAction } = useApp();
     const [selectedSaleId, setSelectedSaleId] = useState(null);
+    // Cobro conjunto: el cliente arrastra cuentas viejas, compra hoy y paga todo de una vez.
+    // Se marcan las facturas y se cobran con un solo monto (ver BulkPaymentModal).
+    const [checkedIds, setCheckedIds] = useState([]);
+    const [showBulk, setShowBulk] = useState(false);
     const [clearingCredit, setClearingCredit] = useState(false);
     const [confirmClear, setConfirmClear] = useState(false);
     const [showRefund, setShowRefund] = useState(false);
@@ -73,6 +78,15 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
 
     const pendingSales = pending || [];
     const paidSales    = paid || [];
+    // Las cuentas de un proveedor se pagan desde Compras, no acá.
+    const esCliente    = detail.type !== "proveedor";
+    // Un borrador sin correlativo se puede cobrar suelto (el cobro le asigna el número), pero
+    // no entra al cobro conjunto: mezclar la asignación de correlativos con el reparto de un
+    // monto es pedirle a la caja que revise dos cosas a la vez.
+    const cobrables    = esCliente ? pendingSales.filter(s => parseFloat(s.balance || 0) > 0.10) : [];
+    const seleccionadas = cobrables.filter(s => checkedIds.includes(s.id));
+    const totalSeleccionado = seleccionadas.reduce((acc, s) => acc + parseFloat(s.balance || 0), 0);
+    const toggleChecked = (id) => setCheckedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
     const hasPending   = parseFloat(detail.total_debt || 0) > 0;
     const paidTotalPages = Math.ceil((paidTotal || 0) / PAID_LIMIT);
 
@@ -213,6 +227,30 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             <p className="text-[10px] font-black uppercase tracking-widest text-danger opacity-70">
                                 {detail.type === 'proveedor' ? 'Cuentas por Pagar' : 'Cuentas por Cobrar'}
                             </p>
+
+                            {/* Cobro conjunto: con una sola factura no aporta nada, así que la
+                                selección solo aparece cuando hay más de una que cobrar. */}
+                            {cobrables.length > 1 && (
+                                <div className="ml-auto flex items-center gap-2 print-hidden">
+                                    <button
+                                        onClick={() => setCheckedIds(
+                                            seleccionadas.length === cobrables.length ? [] : cobrables.map(s => s.id)
+                                        )}
+                                        className="h-7 px-3 rounded-lg border border-border/30 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all"
+                                    >
+                                        {seleccionadas.length === cobrables.length ? "Ninguna" : "Todas"}
+                                    </button>
+                                    <button
+                                        onClick={() => setShowBulk(true)}
+                                        disabled={!seleccionadas.length}
+                                        className="h-7 px-3 rounded-lg border border-success/20 bg-success/5 text-success text-[10px] font-black uppercase tracking-widest hover:bg-success hover:text-black transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-success/5 disabled:hover:text-success"
+                                    >
+                                        {seleccionadas.length
+                                            ? `Cobrar ${seleccionadas.length} · ${fmtPrice(totalSeleccionado)}`
+                                            : "Cobrar juntas"}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                         <div className={`divide-y divide-border/10 dark:divide-white/[0.05] ${SCROLL_LIST}`}>
                             {pendingSales.map(sale => (
@@ -224,6 +262,22 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                         setSelectedSaleId(sale.id);
                                     }
                                 }}>
+                                    {/* Casilla del cobro conjunto. Va fuera del área que abre el
+                                        detalle: marcar una factura no es querer verla. */}
+                                    {cobrables.length > 1 && (
+                                        <button
+                                            onClick={e => { e.stopPropagation(); toggleChecked(sale.id); }}
+                                            disabled={!cobrables.some(c => c.id === sale.id)}
+                                            className={`w-5 h-5 rounded-md border shrink-0 flex items-center justify-center transition-all print-hidden ${
+                                                checkedIds.includes(sale.id)
+                                                    ? "bg-success border-success text-black"
+                                                    : "border-border/40 dark:border-white/20 text-transparent hover:border-success/60"
+                                            } disabled:opacity-20 disabled:cursor-not-allowed`}
+                                            title={cobrables.some(c => c.id === sale.id) ? "Incluir en el cobro conjunto" : "Sin saldo por cobrar"}
+                                        >
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7"/></svg>
+                                        </button>
+                                    )}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <span className="text-[12px] font-bold text-content dark:text-white">#{sale.id}</span>
@@ -334,6 +388,15 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
 
         {selectedSaleId && (
             <SaleDetailModal saleId={selectedSaleId} onClose={() => setSelectedSaleId(null)} />
+        )}
+
+        {showBulk && seleccionadas.length > 0 && (
+            <BulkPaymentModal
+                customer={detail}
+                sales={seleccionadas}
+                onClose={() => setShowBulk(false)}
+                onSuccess={() => { setShowBulk(false); setCheckedIds([]); onRefresh?.(); }}
+            />
         )}
 
         {/* ── Modal devolución de crédito ── */}

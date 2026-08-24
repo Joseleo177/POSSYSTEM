@@ -117,7 +117,8 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     //
     // Va después de currentStatus a propósito: al declararlo antes, el render reventaba con
     // "Cannot access before initialization" — const no se iza como var.
-    const canSettle     = currentStatus !== "pagado";
+    // Una exonerada tampoco se cobra: su saldo ya se dio por perdido.
+    const canSettle     = !["pagado", "exonerado"].includes(currentStatus);
     const canGiveCredit = canSettle && isUnresolved;
     const actionKeys = [
         canSettle && "pay",
@@ -219,6 +220,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // "Abono parcial" nombraba el movimiento; lo que importa aquí es que queda saldo.
     const STATUS_LABELS = {
         pagado:    "Pagada",
+        exonerado: "Exonerada",
         parcial:   "Saldo pendiente",
         borrador:  "Sin cobrar",
         espera:    "En espera",
@@ -227,6 +229,8 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     const statusLabel = STATUS_LABELS[currentStatus] || "Por cobrar";
     const badgeClass     = currentStatus === "pagado"
         ? "bg-green-500/10 text-green-500 border-green-500/20"
+        : currentStatus === "exonerado"
+        ? "bg-warning/10 text-warning border-warning/20"
         : currentStatus === "parcial"
         ? "bg-brand-500/10 text-brand-500 border-brand-500/20"
         : currentStatus === "borrador"
@@ -238,9 +242,11 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
             <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out" onKeyDown={e => e.stopPropagation()}>
 
                 {/* Header */}
-                <div className={`px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3 ${currentStatus === "pagado" ? "bg-success/5" : currentStatus === "borrador" ? "bg-surface-2/50" : "bg-danger/5"}`}>
+                <div className={`px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3 ${currentStatus === "pagado" ? "bg-success/5" : currentStatus === "exonerado" ? "bg-warning/5" : currentStatus === "borrador" ? "bg-surface-2/50" : "bg-danger/5"}`}>
                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${badgeClass}`}>
-                        {currentStatus === "pagado"
+                        {/* Cuenta cerrada —cobrada o exonerada— lleva el visto; el reloj es para
+                            la que todavía espera dinero. */}
+                        {["pagado", "exonerado"].includes(currentStatus)
                             ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                             : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2" /></svg>
                         }
@@ -318,7 +324,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                 {/* Acciones. Cada una lleva su número: en caja se opera con el teclado y sin
                     la etiqueta visible el atajo no existe para quien no lo memorizó. */}
                 <div className="px-5 py-4 flex flex-col gap-2">
-                    {currentStatus !== "pagado" && (
+                    {canSettle && (
                         <div className="flex gap-2">
                             <Button
                                 onClick={() => setShowPayModal(true)}

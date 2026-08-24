@@ -17,22 +17,49 @@
 const PAYMENT_TOLERANCE = 0.10;
 
 /**
- * Estado que le corresponde a una factura según lo cobrado y lo acreditado por devoluciones.
+ * Facturas cerradas: ya no se les cobra nada.
+ *
+ * 'exonerado' vive acá junto a 'pagado' porque la venta ocurrió igual —la mercancía salió y el
+ * documento se emitió—, solo que el saldo se perdonó en vez de cobrarse. Los reportes de lo
+ * VENDIDO (ventas, productos, márgenes, clientes, auditoría) usan esta lista para contarlas
+ * juntas; los de DINERO (arqueo de caja, cobranza) no la usan: suman sobre `payments`, que
+ * solo tiene plata real.
+ */
+const SETTLED_STATUSES = ["pagado", "exonerado"];
+// Para intercalar en SQL crudo: `status IN (${SETTLED_SQL})`.
+const SETTLED_SQL = SETTLED_STATUSES.map(s => `'${s}'`).join(", ");
+// Las que siguen en cuentas por cobrar.
+const RECEIVABLE_STATUSES = ["borrador", "pendiente", "parcial"];
+
+/**
+ * Estado que le corresponde a una factura según lo cobrado, lo acreditado por devoluciones y
+ * lo exonerado.
  *
  * No decide sobre 'anulado', 'devuelto', 'espera' ni 'pedido': esos los fija otro flujo y
  * quien llama debe respetarlos.
  */
-function resolveSaleStatus({ saleTotal, paid, returned = 0, hasInvoice = true }) {
+function resolveSaleStatus({ saleTotal, paid, returned = 0, hasInvoice = true, forgiven = 0 }) {
   const total = parseFloat(saleTotal) || 0;
   const cobrado = parseFloat(paid) || 0;
   const acreditado = parseFloat(returned) || 0;
+  const perdonado = parseFloat(forgiven) || 0;
   // Lo que realmente queda por cobrar descuenta las devoluciones vivas.
   const porCobrar = Math.max(0, total - acreditado);
 
   if (porCobrar <= PAYMENT_TOLERANCE) return "pagado";
+  // Lo perdonado salda igual que el dinero, pero deja constancia: mientras quede algo
+  // exonerado en pie, la factura no se hace pasar por cobrada.
+  if (cobrado + perdonado >= porCobrar - PAYMENT_TOLERANCE) {
+    return perdonado > 0 ? "exonerado" : "pagado";
+  }
   if (cobrado <= 0) return hasInvoice ? "pendiente" : "borrador";
-  if (cobrado >= porCobrar - PAYMENT_TOLERANCE) return "pagado";
   return "parcial";
 }
 
-module.exports = { PAYMENT_TOLERANCE, resolveSaleStatus };
+module.exports = {
+  PAYMENT_TOLERANCE,
+  SETTLED_STATUSES,
+  SETTLED_SQL,
+  RECEIVABLE_STATUSES,
+  resolveSaleStatus,
+};

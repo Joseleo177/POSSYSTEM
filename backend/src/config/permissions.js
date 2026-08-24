@@ -20,6 +20,7 @@ const MODULES = [
       { key: 'edit',     label: 'Editar cuenta abierta' },
       { key: 'void',     label: 'Anular venta' },
       { key: 'credit',   label: 'Entregar a crédito' },
+      { key: 'forgive',  label: 'Exonerar saldo por cobrar' },
       { key: 'return',   label: 'Devoluciones y canjes' },
       { key: 'cash',     label: 'Abrir y cerrar caja' },
     ],
@@ -148,6 +149,11 @@ const ALL_KEYS = MODULES.flatMap(m => m.actions.map(a => `${m.key}.${a.key}`));
 // `config` era un comodín: se expande a todo lo que de hecho abría, para que nadie pierda
 // acceso de un día para el otro. Recortarlo es una decisión que se toma desde la pantalla,
 // no algo que deba pasar solo.
+//
+// 'sales.forgive' a propósito NO aparece en ningún LEGACY_MAP: cerrar una factura sin cobrarla
+// es una facultad nueva y nadie debe heredarla en silencio por tener el viejo `sales` o
+// `config`. De entrada solo la tiene el administrador (permissions.all); al resto se le da
+// desde la pantalla de Roles, con el tope de `forgive_limit` como barandilla.
 const LEGACY_MAP = {
   // permit("sales", ...) aparecía en: cobrar, anular, crédito, devoluciones, caja, y además
   // en crear/editar clientes, ajustar su crédito y registrar cobros.

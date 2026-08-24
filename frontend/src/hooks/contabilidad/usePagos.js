@@ -82,9 +82,18 @@ export function usePagos({ notify }) {
 
     const confirmRemovePayment = async () => {
         if (!deleteDialog) return;
+        // La fila puede ser un cobro suelto o un cobro conjunto. El conjunto se deshace
+        // entero: borrar una de sus partes dejaría facturas saldadas por un pago inexistente
+        // y la caja con un ingreso a medias.
+        const objetivo = typeof deleteDialog === "object" ? deleteDialog : { id: deleteDialog };
         try {
-            await api.payments.remove(deleteDialog);
-            notify("Pago eliminado");
+            if (objetivo.batch_id && objetivo.group_count > 1) {
+                const r = await api.payments.removeBatch(objetivo.batch_id);
+                notify(r.message || "Cobro eliminado");
+            } else {
+                await api.payments.remove(objetivo.id);
+                notify("Pago eliminado");
+            }
             reload();
             setDeleteDialog(null);
         } catch (e) { notify(e.message, "err"); }

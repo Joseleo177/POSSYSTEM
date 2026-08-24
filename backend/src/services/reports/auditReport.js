@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, dateClause } = require("./shared");
+const { sanitizeDate, dateClause, SETTLED_SQL } = require("./shared");
 
 async function auditReport({ date_from, date_to, limit, company_id, tcS, rep, wh }) {
   const df = sanitizeDate(date_from);
@@ -12,7 +12,7 @@ async function auditReport({ date_from, date_to, limit, company_id, tcS, rep, wh
   // intentos. Antes un cajero cargaba en su total las que se le anularon, y un descuento
   // sobre una venta anulada figuraba como descuento otorgado. Las devoluciones NO llevan
   // este filtro: se miden sobre la tabla returns, que ya es de por sí lo devuelto.
-  const stS = `AND s.status = 'pagado'`;
+  const stS = `AND s.status IN (${SETTLED_SQL})`;
 
   const [returnsSummary, returnsList, byEmployee, discounts] = await Promise.all([
     sequelize.query(

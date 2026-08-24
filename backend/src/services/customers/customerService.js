@@ -1,6 +1,7 @@
 const { Sequelize, sequelize, Customer, Sale, SaleItem, Purchase, Payment, Currency, Expense, ExpenseCategory, PaymentJournal } = require("../../models");
 const { assertWarehouseAccess, employeeWarehouseIds, visibleWarehouseIds } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
+const { SETTLED_SQL, SETTLED_STATUSES, RECEIVABLE_STATUSES } = require("../../utils/saleBalance");
 
 // Deuda, gasto y cantidad de compras de un contacto, acotados a las sucursales del empleado.
 // El contacto es de la empresa —el mismo cliente compra en varias sucursales— pero sus
@@ -36,7 +37,7 @@ async function getAll({ search, type, debtors, limit = 100, offset = 0 }, req) {
     where[Sequelize.Op.and] = [
       ...(where[Sequelize.Op.and] || []),
       Sequelize.literal(`(
-        SELECT COALESCE(SUM(s.total - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.sale_id = s.id), 0)), 0)
+        SELECT COALESCE(SUM(s.total - s.forgiven_amount - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.sale_id = s.id), 0)), 0)
         FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial') ${whS}
       ) > 0.01`),
     ];
@@ -57,7 +58,7 @@ async function getAll({ search, type, debtors, limit = 100, offset = 0 }, req) {
           CASE WHEN "Customer"."type" = 'proveedor' THEN (
             SELECT COALESCE(SUM(p.total), 0) FROM purchases p WHERE p.supplier_id = "Customer"."id" AND p.payment_status = 'pagado' ${whP}
           ) ELSE (
-            SELECT COALESCE(SUM(s.total), 0) FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status = 'pagado' ${whS}
+            SELECT COALESCE(SUM(s.total), 0) FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN (${SETTLED_SQL}) ${whS}
           ) END
         )`), "total_spent"],
         [Sequelize.literal(`(
@@ -65,7 +66,7 @@ async function getAll({ search, type, debtors, limit = 100, offset = 0 }, req) {
             SELECT COALESCE(SUM(p.total - COALESCE((SELECT SUM(pp.amount) FROM purchase_payments pp WHERE pp.purchase_id = p.id), 0)), 0)
             FROM purchases p WHERE p.supplier_id = "Customer"."id" AND p.payment_status IN ('pendiente','parcial') ${whP}
           ) ELSE (
-            SELECT COALESCE(SUM(s.total - COALESCE((SELECT SUM(py.amount) FROM payments py WHERE py.sale_id = s.id), 0)), 0)
+            SELECT COALESCE(SUM(s.total - s.forgiven_amount - COALESCE((SELECT SUM(py.amount) FROM payments py WHERE py.sale_id = s.id), 0)), 0)
             FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial') ${whS}
           ) END
         )`), "total_debt"],
@@ -108,7 +109,7 @@ async function getOne(id, req) {
           CASE WHEN "Customer"."type" = 'proveedor' THEN (
             SELECT COALESCE(SUM(p.total), 0) FROM purchases p WHERE p.supplier_id = "Customer"."id" AND p.payment_status = 'pagado' ${whP}
           ) ELSE (
-            SELECT COALESCE(SUM(s.total), 0) FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status = 'pagado' ${whS}
+            SELECT COALESCE(SUM(s.total), 0) FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN (${SETTLED_SQL}) ${whS}
           ) END
         )`), "total_spent"],
         [Sequelize.literal(`(
@@ -123,7 +124,7 @@ async function getOne(id, req) {
             SELECT COALESCE(SUM(p.total - COALESCE((SELECT SUM(pp.amount) FROM purchase_payments pp WHERE pp.purchase_id = p.id), 0)), 0)
             FROM purchases p WHERE p.supplier_id = "Customer"."id" AND p.payment_status IN ('pendiente','parcial') ${whP}
           ) ELSE (
-            SELECT COALESCE(SUM(s.total - COALESCE((SELECT SUM(py.amount) FROM payments py WHERE py.sale_id = s.id), 0)), 0)
+            SELECT COALESCE(SUM(s.total - s.forgiven_amount - COALESCE((SELECT SUM(py.amount) FROM payments py WHERE py.sale_id = s.id), 0)), 0)
             FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial') ${whS}
           ) END
         )`), "total_debt"],
@@ -203,7 +204,9 @@ async function getCustomerPurchases(id, { limit = 50, offset = 0 }, req) {
       ]
     },
     include: [
-      { model: SaleItem, attributes: ['name', 'price', 'quantity', 'subtotal'] },
+      // `discount` viaja porque el cobro en bolívares valora cada línea por su precio NETO y
+      // redondea ahí (ver saleTotalAtRate): sin él, una línea con descuento pediría de más.
+      { model: SaleItem, attributes: ['name', 'price', 'quantity', 'subtotal', 'discount'] },
       { model: Currency,  attributes: ['symbol', 'code'], required: false },
     ],
     order: [['created_at', 'DESC']],
@@ -216,15 +219,22 @@ async function getCustomerPurchases(id, { limit = 50, offset = 0 }, req) {
     sale.currency_symbol = sale.Currency?.symbol ?? null;
     sale.currency_code   = sale.Currency?.code   ?? null;
     sale.amount_paid     = parseFloat(sale.amount_paid || 0);
-    sale.balance         = parseFloat((parseFloat(sale.total) - sale.amount_paid).toFixed(6));
+    // Lo exonerado no es un cobro, pero sí deja de deberse: sin restarlo, la ficha del
+    // cliente le seguiría mostrando como deuda el saldo que se le perdonó.
+    sale.forgiven_amount = parseFloat(sale.forgiven_amount || 0);
+    sale.balance         = parseFloat(
+      (parseFloat(sale.total) - sale.amount_paid - sale.forgiven_amount).toFixed(6)
+    );
     delete sale.SaleItems;
     delete sale.Currency;
     return sale;
   };
 
-  const pendingRows = await querySales({ status: ['borrador', 'pendiente', 'parcial'] });
-  const paidTotal = await Sale.count({ where: { customer_id: id, ...scope, status: ['pagado'] } });
-  const paidRows  = await querySales({ status: ['pagado'] }, { limit: parseInt(limit), offset: parseInt(offset) });
+  const pendingRows = await querySales({ status: RECEIVABLE_STATUSES });
+  // El historial cerrado incluye las exoneradas: si no, una factura perdonada desaparecía de
+  // la ficha del cliente —ya no está en cuentas por cobrar ni figura entre las pagadas—.
+  const paidTotal = await Sale.count({ where: { customer_id: id, ...scope, status: SETTLED_STATUSES } });
+  const paidRows  = await querySales({ status: SETTLED_STATUSES }, { limit: parseInt(limit), offset: parseInt(offset) });
 
   return {
     customer,

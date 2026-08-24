@@ -11,6 +11,9 @@ export function useTransacciones({ notify }) {
     const [sumTotal, setSumTotal] = useState(0);
     const [sumPaid, setSumPaid]   = useState(0);
     const [sumPending, setSumPending] = useState(0);
+    // Lo perdonado en el filtro. Va aparte de "cobrado": es plata que se dejó de cobrar y,
+    // como la exoneración no genera egreso, este pie es donde se ve totalizada.
+    const [sumForgiven, setSumForgiven] = useState(0);
     const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(false);
 
@@ -47,6 +50,7 @@ export function useTransacciones({ notify }) {
             setSumTotal(parseFloat(r.sum_total || 0));
             setSumPaid(parseFloat(r.sum_paid || 0));
             setSumPending(parseFloat(r.sum_pending || 0));
+            setSumForgiven(parseFloat(r.sum_forgiven || 0));
         } catch (e) { notify(e.message, "err"); }
         finally { setLoading(false); }
     }, [histDateFrom, histDateTo, debouncedSearch, activeFilters, activeSeries, page, notify]);
@@ -74,7 +78,7 @@ export function useTransacciones({ notify }) {
     const hasFilters = activeFilters.length > 0 || activeSeries.length > 0 || !!histDateFrom || !!histDateTo;
 
     return {
-        sales, total, sumTotal, sumPaid, sumPending, page, setPage, loading, LIMIT,
+        sales, total, sumTotal, sumPaid, sumPending, sumForgiven, page, setPage, loading, LIMIT,
         histDateFrom, setHistDateFrom,
         histDateTo, setHistDateTo,
         searchTerm, setSearchTerm,

@@ -376,6 +376,9 @@ const ORDER_STAGES = {
   pendiente: { stage: "facturado", label: "Facturado",  detail: "Pendiente de pago" },
   parcial:   { stage: "facturado", label: "Facturado",  detail: "Con abono parcial" },
   pagado:    { stage: "pagado",    label: "Pagado",     detail: "Gracias por tu compra" },
+  // Al cliente se le dice que su pedido está cerrado, no cómo se cerró por dentro: el motivo
+  // de una exoneración es un dato interno de la tienda.
+  exonerado: { stage: "pagado",    label: "Cerrado",    detail: "Sin saldo pendiente" },
   anulado:   { stage: "anulado",   label: "Anulado",    detail: "Este pedido fue anulado" },
 };
 

@@ -32,6 +32,12 @@ module.exports = (sequelize, DataTypes) => {
     invoice_number:     { type: DataTypes.STRING(50) },
     idempotency_key:    { type: DataTypes.STRING(64), allowNull: true, unique: true },
     credit_applied:     { type: DataTypes.DECIMAL(14, 6), allowNull: false, defaultValue: 0 },
+    // Saldo perdonado. No es un cobro: no entra a la tabla payments porque ese dinero nunca
+    // llegó a caja. Salda la factura y la deja en status 'exonerado' (ver forgiveSale.js).
+    forgiven_amount:    { type: DataTypes.DECIMAL(14, 6), allowNull: false, defaultValue: 0 },
+    forgiven_reason:    { type: DataTypes.STRING(300), allowNull: true },
+    forgiven_by:        { type: DataTypes.INTEGER, allowNull: true },
+    forgiven_at:        { type: DataTypes.DATE, allowNull: true },
     // Caja que tiene la cuenta abierta en su carrito. Mientras esté puesto, las demás la ven
     // bloqueada en lugar de poder tomarla o eliminarla. held_at permite soltarla sola si el
     // cajero abandona sin cerrarla (ver HOLD_TIMEOUT_MIN en holdLock.js).

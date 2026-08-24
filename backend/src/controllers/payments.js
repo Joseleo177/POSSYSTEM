@@ -68,6 +68,19 @@ const create = async (req, res) => {
   }
 };
 
+// POST /api/payments/bulk — un solo monto contra varias facturas del mismo cliente.
+// Adentro se registra un cobro por factura; ver createBulkPayment.
+const createBulk = async (req, res) => {
+  try {
+    const result = await paymentsService.createBulkPayment(
+      { ...req.body, employee_id: req.employee?.id || null }, req
+    );
+    res.status(201).json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ ok: false, message: err.message });
+  }
+};
+
 // DELETE /api/payments/:id — eliminar pago y recalcular status de la factura
 const remove = async (req, res) => {
   try {
@@ -79,4 +92,14 @@ const remove = async (req, res) => {
   }
 };
 
-module.exports = { getAll, getPending, getStats, create, remove };
+// DELETE /api/payments/batch/:batchId — deshace un cobro conjunto completo
+const removeBatch = async (req, res) => {
+  try {
+    const result = await paymentsService.removeBatchPayment(req.params.batchId);
+    res.json({ ok: true, message: `Cobro eliminado (${result.removed} facturas)`, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ ok: false, message: err.message });
+  }
+};
+
+module.exports = { getAll, getPending, getStats, create, createBulk, remove, removeBatch };

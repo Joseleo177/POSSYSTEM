@@ -67,6 +67,9 @@ module.exports = async function createPayment(body, req) {
     // Solo se cobra lo facturado en una sucursal propia.
     await assertWarehouseAccess(req, sale.warehouse_id, { optional: true });
     if (sale.status === "pagado") throw new Error("Esta factura ya fue pagada");
+    // El saldo se perdonó: ya no hay deuda que cobrar. Si el cliente igual quiere pagar, se
+    // deshace la exoneración primero (DELETE /sales/:id/forgive) y la factura vuelve a deberse.
+    if (sale.status === "exonerado") throw new Error("Esta factura fue exonerada: no tiene saldo por cobrar");
     if (sale.status === "anulado") throw new Error("Esta factura está anulada");
     if (sale.status === "devuelto") throw new Error("Esta factura fue devuelta en su totalidad, no tiene saldo por cobrar");
 

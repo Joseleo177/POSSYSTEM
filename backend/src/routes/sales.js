@@ -16,6 +16,10 @@ router.post("/:id/accept-order", permit("sales.create"), warehouseAccess(req => 
 // admin, y eso lo resuelve el controlador leyendo los permisos del empleado.
 router.post("/:id/claim",   permit("sales.edit"), ctrl.claim);
 router.delete("/:id/claim", permit("sales.edit"), ctrl.release);
+// Exonerar el saldo. Permiso propio: cerrar una factura sin cobrarla no es cobrar ni anular,
+// y quien puede una cosa no debería poder la otra por arrastre.
+router.post("/:id/forgive",   permit("sales.forgive"), ctrl.forgive);
+router.delete("/:id/forgive", permit("sales.forgive"), ctrl.unforgive);
 router.delete("/:id",    permit("sales.void"), ctrl.cancel);
 
 module.exports = router;

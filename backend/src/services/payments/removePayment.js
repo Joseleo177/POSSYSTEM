@@ -28,8 +28,12 @@ module.exports = async function removePayment(id) {
       // desfase de redondeo entre el total en dólares y los subtotales precisos con que se
       // cobra en bolívares. Con el céntimo de margen anterior, quitarle un pago a una factura
       // saldada la dejaba 'parcial' debiendo una centésima inexistente.
+      // El saldo exonerado sigue en pie: quitar un cobro no le devuelve al cliente la deuda
+      // que ya se le perdonó. Si al subir el saldo el perdón deja de cubrirlo, la factura
+      // vuelve sola a 'parcial' con la diferencia que nadie perdonó.
       newStatus = resolveSaleStatus({
-        saleTotal, paid: remainingPaid, returned: totalReturned, hasInvoice: !!sale.invoice_number,
+        saleTotal, paid: remainingPaid, returned: totalReturned,
+        forgiven: sale.forgiven_amount, hasInvoice: !!sale.invoice_number,
       });
       await sale.update({ status: newStatus }, { transaction: t });
     }

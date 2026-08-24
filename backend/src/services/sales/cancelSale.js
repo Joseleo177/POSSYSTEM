@@ -70,7 +70,15 @@ module.exports = async function cancelSale(id, req) {
     if (sale.status === 'espera' || sale.status === 'pedido') {
       await sale.destroy({ transaction });
     } else {
-      await sale.update({ status: 'anulado' }, { transaction });
+      // Si el saldo se había exonerado, el perdón muere con la factura: anulada ya no debe
+      // nada, y dejar el monto puesto lo seguiría contando como saldo perdonado del período.
+      await sale.update({
+        status: 'anulado',
+        forgiven_amount: 0,
+        forgiven_reason: null,
+        forgiven_by: null,
+        forgiven_at: null,
+      }, { transaction });
     }
 
     await transaction.commit();

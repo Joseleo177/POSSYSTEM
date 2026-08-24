@@ -25,7 +25,12 @@ module.exports = async function getSessionSummary(id, req) {
         COALESCE(SUM(CASE WHEN LOWER(status) IN ('pagada', 'pagado') THEN total ELSE 0 END), 0)::float AS total_paid,
         COALESCE(SUM(CASE WHEN LOWER(status) = 'pendiente' THEN total ELSE 0 END), 0)::float AS total_pending,
         COUNT(CASE WHEN LOWER(status) IN ('pagada', 'pagado') THEN 1 END)::int AS paid_count,
-        COUNT(CASE WHEN LOWER(status) = 'pendiente' THEN 1 END)::int AS pending_count
+        COUNT(CASE WHEN LOWER(status) = 'pendiente' THEN 1 END)::int AS pending_count,
+        -- Lo exonerado en el turno. Queda fuera de total_paid a propósito —ese dinero no está
+        -- en la gaveta y el arqueo lo reclamaría como faltante—, pero el cierre tiene que
+        -- poder explicar por qué se vendió más de lo que se cobró.
+        COALESCE(SUM(forgiven_amount), 0)::float AS total_forgiven,
+        COUNT(CASE WHEN LOWER(status) = 'exonerado' THEN 1 END)::int AS forgiven_count
       FROM sales
       WHERE warehouse_id = :wid AND employee_id = :eid
         AND created_at >= :openedAt AND created_at < :closedAt
@@ -46,7 +51,10 @@ module.exports = async function getSessionSummary(id, req) {
     `
       SELECT pj.id, pj.name AS journal_name, pj.type AS journal_type, pj.color AS journal_color,
         c.symbol AS currency_symbol,
-        COUNT(p.id)::int AS payment_count,
+        -- Un cobro conjunto entró como un solo pago aunque haya saldado varias facturas:
+        -- contarlo por factura inflaba el número de movimientos del turno frente a los
+        -- comprobantes que el cajero tiene en la mano.
+        COUNT(DISTINCT COALESCE(p.batch_id, CONCAT('p', p.id)))::int AS payment_count,
         COALESCE(SUM(p.amount * p.exchange_rate), 0)::float AS total
       FROM payments p
       JOIN payment_journals pj ON p.payment_journal_id = pj.id

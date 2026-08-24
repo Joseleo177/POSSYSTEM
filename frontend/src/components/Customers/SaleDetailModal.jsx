@@ -25,6 +25,7 @@ export default function SaleDetailModal({ saleId, onClose }) {
     const payments = sale?.Payments ?? [];
 
     const statusLabel = sale?.status === "pagado"   ? "Pagado"
+                      : sale?.status === "exonerado"? "Exonerada"
                       : sale?.status === "parcial"  ? "Parcial"
                       : sale?.status === "pendiente"? "Pendiente"
                       : sale?.status === "borrador" ? "Sin factura"
@@ -33,6 +34,7 @@ export default function SaleDetailModal({ saleId, onClose }) {
                       : sale?.status ?? "—";
 
     const statusClass = sale?.status === "pagado"   ? "bg-success/10 text-success border-success/20"
+                      : sale?.status === "exonerado"? "bg-warning/10 text-warning border-warning/20"
                       : sale?.status === "parcial"  ? "bg-warning/10 text-warning border-warning/20"
                       : sale?.status === "borrador" ? "bg-surface-3 dark:bg-white/5 text-content-subtle dark:text-white/40 border-border/30 dark:border-white/10"
                       : sale?.status === "anulado"  ? "bg-surface-3 dark:bg-white/5 text-content-subtle dark:text-white/40 border-border/30 dark:border-white/10"
@@ -185,6 +187,12 @@ export default function SaleDetailModal({ saleId, onClose }) {
                                     <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 uppercase">Abonado</span>
                                     <span className="text-[12px] font-bold text-success tabular-nums">{fmt(sale.amount_paid)}</span>
                                 </div>
+                                {parseFloat(sale.forgiven_amount || 0) > 0 && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[11px] font-bold text-warning uppercase">Exonerado</span>
+                                        <span className="text-[12px] font-black text-warning tabular-nums">{fmt(sale.forgiven_amount)}</span>
+                                    </div>
+                                )}
                                 {parseFloat(sale.balance || 0) > 0 && (
                                     <div className="flex justify-between items-center">
                                         <span className="text-[11px] font-bold text-danger uppercase">Saldo Pendiente</span>
@@ -192,6 +200,26 @@ export default function SaleDetailModal({ saleId, onClose }) {
                                     </div>
                                 )}
                             </div>
+
+                            {/* Constancia de la exoneración: sin egreso ni nota de crédito, este bloque
+                                es el único rastro visible de por qué la factura se cerró sin cobrarse. */}
+                            {parseFloat(sale.forgiven_amount || 0) > 0 && (
+                                <div className="px-5 pb-4">
+                                    <div className="rounded-xl border border-warning/30 bg-warning/5 p-3.5">
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-warning">Saldo exonerado</span>
+                                            <span className="text-[12px] font-black text-warning tabular-nums">{fmt(sale.forgiven_amount)}</span>
+                                        </div>
+                                        {sale.forgiven_reason && (
+                                            <p className="text-[11px] font-bold text-content dark:text-white/70 leading-snug">{sale.forgiven_reason}</p>
+                                        )}
+                                        <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1">
+                                            {sale.forgiven_by_name || "—"}
+                                            {sale.forgiven_at && ` · ${new Date(sale.forgiven_at).toLocaleDateString("es-VE", { day: "2-digit", month: "short", year: "numeric" })}`}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Pagos registrados */}
                             {(payments.length > 0 || parseFloat(sale.credit_applied || 0) > 0) && (

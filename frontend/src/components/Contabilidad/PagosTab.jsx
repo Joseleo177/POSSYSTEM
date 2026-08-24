@@ -126,6 +126,13 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                             <span className="text-[11px] font-black text-brand-500 tracking-tight">
                                                 {item.invoice_number || (isInvoice ? `Factura #${item.id}` : `Cobro #${item.id}`)}
                                             </span>
+                                            {/* Un solo movimiento de dinero que saldó varias facturas: la
+                                                fila es el cobro, no cada factura. */}
+                                            {item.group_count > 1 && (
+                                                <div className="text-[9px] font-black text-content-subtle uppercase tracking-tighter mt-0.5">
+                                                    Cobro conjunto · {item.group_count} facturas
+                                                </div>
+                                            )}
                                             {!isInvoice && item.reference_number && (
                                                 <div className="text-[9px] font-black text-content-subtle uppercase tracking-tighter mt-0.5">Ref: {item.reference_number}</div>
                                             )}
@@ -191,7 +198,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                                     <>
                                                         <button onClick={() => setPayDetail(item)} className="h-7 px-3 rounded-lg bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black text-[10px] font-black uppercase tracking-wide transition-all">Detalle</button>
                                                         {can("admin") && (
-                                                            <button onClick={() => setDeleteDialog(item.id)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90" title="Eliminar">
+                                                            <button onClick={() => setDeleteDialog(item)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90" title={item.group_count > 1 ? "Eliminar el cobro completo" : "Eliminar"}>
                                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                             </button>
                                                         )}
@@ -269,9 +276,31 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                     </div>
                                 )}
                             </div>
+                            {/* Desglose del cobro conjunto: el monto de arriba es lo que entró,
+                                y esto dice cuánto se aplicó a cada factura. */}
+                            {p.group_count > 1 && (
+                                <div>
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-1.5">
+                                        Aplicado a {p.group_count} facturas
+                                    </div>
+                                    <div className="rounded-xl border border-border/20 dark:border-white/5 divide-y divide-border/10 dark:divide-white/5">
+                                        {(p.items || []).map(it => (
+                                            <div key={it.payment_id} className="px-3 py-2 flex items-center justify-between gap-3">
+                                                <span className="text-[11px] font-black text-brand-500 truncate">
+                                                    {it.invoice_number || `#${it.sale_id}`}
+                                                </span>
+                                                <span className="text-[11px] font-black tabular-nums text-success">{fmtP(it.amount)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="space-y-1">
                                 {[
-                                    ["Documento", p.invoice_number || `#${p.sale_id}`, "text-brand-500 font-black"],
+                                    p.group_count > 1
+                                        ? ["Documentos", `${p.group_count} facturas`, "text-brand-500 font-black"]
+                                        : ["Documento", p.invoice_number || `#${p.sale_id}`, "text-brand-500 font-black"],
                                     p.customer_name && ["Cliente", p.customer_name, "uppercase"],
                                     p.journal_name  && ["Caja / Banco", p.journal_name, "uppercase"],
                                     !isBase && ["Tasa", `${rate.toFixed(4)} ${sym}/${baseSym}`, "tabular-nums"],
@@ -296,7 +325,9 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
             <ConfirmModal
                 isOpen={!!deleteDialog}
                 title="¿Eliminar cobro?"
-                message="Esta acción revertirá el cobro. El saldo de la factura se actualizará automáticamente."
+                message={deleteDialog?.group_count > 1
+                    ? `Este cobro cubrió ${deleteDialog.group_count} facturas y se revierte completo: todas vuelven a quedar con su saldo pendiente.`
+                    : "Esta acción revertirá el cobro. El saldo de la factura se actualizará automáticamente."}
                 onConfirm={confirmRemovePayment}
                 onCancel={() => setDeleteDialog(null)}
                 type="danger"

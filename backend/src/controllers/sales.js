@@ -63,7 +63,11 @@ const getAll = async (req, res) => {
       ? await salesService.annotateHolders(result.data, req.employee?.id ?? null)
       : result.data;
     // sum_total / sum_paid: totales del filtro completo en moneda base, para el sumador al pie.
-    res.json({ ok: true, data, total: result.total, sum_total: result.sum_total, sum_paid: result.sum_paid, sum_pending: result.sum_pending });
+    res.json({
+      ok: true, data, total: result.total,
+      sum_total: result.sum_total, sum_paid: result.sum_paid,
+      sum_pending: result.sum_pending, sum_forgiven: result.sum_forgiven,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al obtener ventas" });
@@ -140,4 +144,30 @@ const confirmCredit = async (req, res) => {
   }
 };
 
-module.exports = { getOne, getAll, getStats, create, cancel, update, confirmCredit, acceptOrder, claim, release };
+// POST /api/sales/:id/forgive — perdona el saldo pendiente y cierra la factura
+const forgive = async (req, res) => {
+  try {
+    const result = await salesService.forgiveSale(req.params.id, {
+      reason: req.body?.reason,
+      employee_id: req.employee?.id ?? null,
+    }, req);
+    // Las demás cajas deben ver la factura fuera de cuentas por cobrar sin recargar a mano.
+    broadcast(req.employee?.company_id ?? 0, 'sales:updated', {});
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ ok: false, message: err.message });
+  }
+};
+
+// DELETE /api/sales/:id/forgive — deshace la exoneración: la factura vuelve a deberse
+const unforgive = async (req, res) => {
+  try {
+    const result = await salesService.unforgiveSale(req.params.id, req);
+    broadcast(req.employee?.company_id ?? 0, 'sales:updated', {});
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ ok: false, message: err.message });
+  }
+};
+
+module.exports = { getOne, getAll, getStats, create, cancel, update, confirmCredit, acceptOrder, claim, release, forgive, unforgive };

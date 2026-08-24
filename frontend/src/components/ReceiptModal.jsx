@@ -79,6 +79,7 @@ function paymentSummary(s) {
             : (pendiente ? "Crédito" : "—"),
         etiqueta: status === "parcial" ? "Abono parcial"
             : status === "pagado" ? "Pagado"
+            : status === "exonerado" ? "Saldo exonerado"
             : pendiente ? "Pendiente de pago"
             : null,
     };

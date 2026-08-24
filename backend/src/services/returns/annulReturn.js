@@ -156,8 +156,11 @@ module.exports = async function annulReturn(returnId, { employeeId }, req) {
     let nuevoEstado = sale.status;
     // Una factura anulada lo está por su propio flujo: anular una NC no la revive.
     if (sale.status !== "anulado") {
+      // Lo exonerado sigue contando como saldado: anular la NC hace reaparecer el monto que
+      // esa nota descontaba, no el que se perdonó.
       nuevoEstado = resolveSaleStatus({
-        saleTotal, paid: pagado, returned: devuelto, hasInvoice: !!sale.invoice_number,
+        saleTotal, paid: pagado, returned: devuelto,
+        forgiven: sale.forgiven_amount, hasInvoice: !!sale.invoice_number,
       });
       await sale.update({ status: nuevoEstado }, { transaction: t });
     }

@@ -22,13 +22,18 @@ const getEmpty = () => ({
 });
 
 export default function PaymentFormModal({ sale, onClose, onSuccess }) {
-  const { notify, baseCurrency, activeCurrencies, activeJournals } = useApp();
+  const { notify, baseCurrency, activeCurrencies, activeJournals, can } = useApp();
   const [form, setForm] = useState(getEmpty);
   const [loading, setLoading] = useState(false);
   // Clave de idempotencia del cobro en curso (ver submit).
   const payKeyRef = useRef(null);
   const [customerCredit, setCustomerCredit] = useState(0);
   const [creditToApply, setCreditToApply] = useState("");
+  // Exonerar el saldo: perdonar lo que falta en vez de cobrarlo. Vive en este modal porque es
+  // la otra forma de cerrar la misma cuenta, y es acá donde el cajero ya tiene el saldo
+  // delante — no en una pantalla aparte a la que habría que ir a buscar la factura.
+  const [forgiveMode, setForgiveMode] = useState(false);
+  const [forgiveReason, setForgiveReason] = useState("");
 
   useEffect(() => {
     if (!sale?.customer_id) { setCustomerCredit(0); setCreditToApply(""); return; }
@@ -217,6 +222,28 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     setLoading(false);
   };
 
+  // Exonerar el saldo pendiente. No pide diario ni fecha: no hay dinero que ubicar en ninguna
+  // caja, solo una deuda que se deja de cobrar y el motivo por el que se dejó.
+  const canForgive = can("sales.forgive")
+    && balanceUsd > 0.10
+    && !["pagado", "exonerado", "anulado", "devuelto"].includes(sale?.status);
+
+  const submitForgive = async () => {
+    const motivo = forgiveReason.trim();
+    if (!motivo || loading) return;
+    setLoading(true);
+    try {
+      const res = await api.sales.forgive(sale.id, motivo);
+      notify(`Saldo exonerado: ${fmtBase(res.forgiven_now)}`);
+      setForgiveMode(false);
+      setForgiveReason("");
+      onSuccess?.(res);
+    } catch (e) {
+      notify(e.message, "err");
+    }
+    setLoading(false);
+  };
+
   const canSubmit = !loading && form.reference_date && (
     creditCoversAll ||
     (form.payment_journal_id && !isNaN(amountNum) && amountNum > 0 &&
@@ -225,6 +252,55 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
 
   const fmt     = (usdAmt) => `${defaultSym}${(Number(usdAmt || 0) * historicalRate).toFixed(2)}`;
   const fmtBase = (usdAmt) => `${baseCurrency?.symbol || "Ref."}${Number(usdAmt || 0).toFixed(2)}`;
+
+  // Pantalla de exoneración. Ocupa el modal entero en vez de ser un campo más del cobro:
+  // perdonar el saldo no es una variante de pagar y no debe poder marcarse de paso.
+  if (forgiveMode) return (
+    <Modal open={!!sale} onClose={() => { setForgiveMode(false); setForgiveReason(""); }} title="EXONERAR SALDO" width={460}>
+
+      <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 mb-5 space-y-1.5">
+        <Row label="Factura" value={sale.invoice_number || `#${sale.id}`} />
+        {sale.customer_name && <Row label="Cliente" value={sale.customer_name} />}
+        <Row label="Total" value={fmtBase(sale.total)} />
+        {sale.amount_paid > 0 && <Row label="Ya pagado" value={fmtBase(sale.amount_paid)} valueClass="text-success" />}
+        <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
+          <Row label="Se dejará de cobrar" value={fmtBase(balanceUsd)} valueClass="text-warning font-black" />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-warning/30 bg-warning/5 p-3.5 mb-5">
+        <p className="text-[11px] font-bold text-content-subtle dark:text-white/50 leading-relaxed">
+          La factura queda cerrada como <span className="font-black text-warning">exonerada</span>: sale de
+          cuentas por cobrar sin registrarse como cobrada. No devuelve mercancía al inventario ni genera
+          crédito a favor del cliente. Se puede deshacer.
+        </p>
+      </div>
+
+      <Field label="MOTIVO *">
+        <input
+          type="text"
+          autoFocus
+          maxLength={300}
+          value={forgiveReason}
+          onChange={e => setForgiveReason(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && forgiveReason.trim()) submitForgive(); }}
+          placeholder="Ej: consumo del personal, diferencia de redondeo..."
+          className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+        />
+      </Field>
+
+      <div className="flex gap-2.5 mt-6 pt-4 border-t border-border/20 dark:border-white/5">
+        <button onClick={() => { setForgiveMode(false); setForgiveReason(""); }}
+          className="flex-1 h-10 rounded-xl border border-border/40 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all">
+          Volver
+        </button>
+        <button onClick={submitForgive} disabled={loading || !forgiveReason.trim()}
+          className="flex-[2] h-10 rounded-xl bg-warning text-black text-[11px] font-black uppercase tracking-wide transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed">
+          {loading ? "Exonerando..." : `Exonerar ${fmtBase(balanceUsd)}`}
+        </button>
+      </div>
+    </Modal>
+  );
 
   return (
     <Modal open={!!sale} onClose={onClose} title="REGISTRAR PAGO" width={460}>
@@ -557,6 +633,20 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
           {loading ? "Registrando..." : "Confirmar pago"}
         </button>
       </div>
+
+      {/* Salida sin dinero. Mismo formato que los botones de arriba, pero en su propia fila y
+          en ámbar: es una acción, no un cobro alternativo. */}
+      {canForgive && (
+        <div className="mt-2.5">
+          <button
+            type="button"
+            onClick={() => setForgiveMode(true)}
+            className="w-full h-10 rounded-xl border border-warning/40 text-warning text-[11px] font-black uppercase tracking-wide transition-all hover:bg-warning hover:text-black"
+          >
+            Exonerar saldo de {fmtBase(balanceUsd)}
+          </button>
+        </div>
+      )}
     </Modal>
   );
 }

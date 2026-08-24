@@ -24,6 +24,10 @@ module.exports = (sequelize, DataTypes) => {
     // único de la base, un abono parcial reenviado tras un corte de red no se registra dos
     // veces. Null en los pagos anteriores a la migración.
     idempotency_key:    { type: DataTypes.STRING(100), allowNull: true },
+    // Cobros que entraron en un solo acto: el cliente saldó varias facturas con un único
+    // monto. Contra la caja eso es UN movimiento, y por eso el diario los agrupa por esta
+    // clave en vez de listar una línea por factura. Null en un cobro corriente.
+    batch_id:           { type: DataTypes.STRING(64), allowNull: true },
     created_at:         { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

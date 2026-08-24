@@ -304,7 +304,10 @@ async function getMovements(req) {
 
   const [countResult] = await sequelize.query(`
     SELECT (
-      (SELECT COUNT(*) FROM payments p WHERE p.payment_journal_id = :id ${datePay} ${tc} ${whPCount})
+      -- Un cobro conjunto es una sola línea en el listado, así que también cuenta como una
+      -- sola para la paginación; si no, la última página quedaba vacía.
+      (SELECT COUNT(DISTINCT COALESCE(p.batch_id, CONCAT('p', p.id))) FROM payments p
+        WHERE p.payment_journal_id = :id ${datePay} ${tc} ${whPCount})
       +
       (SELECT COUNT(*) FROM incomes  i WHERE i.payment_journal_id = :id AND i.status = 'activo' ${dateInc} ${tci} ${whI})
       +
@@ -346,11 +349,40 @@ async function getMovements(req) {
           COALESCE(p.exchange_rate, 1)                          AS rate,
           p.reference_number                                     AS doc_ref,
           p.notes,
+          1                                                      AS group_count,
           'activo'                                               AS status
         FROM payments p
         LEFT JOIN sales s     ON s.id = p.sale_id
         LEFT JOIN customers c ON c.id = p.customer_id
-        WHERE p.payment_journal_id = :id ${datePay} ${tc} ${whP}
+        WHERE p.payment_journal_id = :id AND p.batch_id IS NULL ${datePay} ${tc} ${whP}
+
+        UNION ALL
+
+        -- Cobro conjunto: varias facturas saldadas con un solo monto. Va como UNA línea, por
+        -- su total. La caja se cuadra contra lo que entró físicamente, y lo que entró fue un
+        -- pago; desglosarlo por factura acá obligaba a sumar a mano tres importes sueltos
+        -- para reconocer el billete que recibió el cajero. El detalle por factura sigue
+        -- entero en la tabla y en el módulo de Pagos.
+        SELECT
+          MIN(p.id)                                              AS id,
+          'ingreso'                                               AS type,
+          MIN(COALESCE(p.reference_date, p.created_at))         AS date,
+          MIN(p.created_at)                                      AS created_at,
+          string_agg(COALESCE(s.invoice_number, CONCAT('#', p.sale_id)), ' · '
+                     ORDER BY s.invoice_number)                  AS reference,
+          COALESCE(MIN(c.name), 'Pago de venta')                AS concept,
+          SUM(p.amount * COALESCE(p.exchange_rate, 1))          AS amount_local,
+          SUM(p.amount)                                          AS amount_base,
+          MAX(COALESCE(p.exchange_rate, 1))                     AS rate,
+          MIN(p.reference_number)                                AS doc_ref,
+          MIN(p.notes)                                           AS notes,
+          COUNT(*)::int                                          AS group_count,
+          'activo'                                               AS status
+        FROM payments p
+        LEFT JOIN sales s     ON s.id = p.sale_id
+        LEFT JOIN customers c ON c.id = p.customer_id
+        WHERE p.payment_journal_id = :id AND p.batch_id IS NOT NULL ${datePay} ${tc} ${whP}
+        GROUP BY p.batch_id
 
         UNION ALL
 
@@ -366,6 +398,7 @@ async function getMovements(req) {
           COALESCE(i.rate, 1)                                    AS rate,
           NULL                                                   AS doc_ref,
           i.notes,
+          1                                                      AS group_count,
           i.status
         FROM incomes i
         WHERE i.payment_journal_id = :id AND i.status = 'activo' ${dateInc} ${tci} ${whI}
@@ -384,6 +417,7 @@ async function getMovements(req) {
           COALESCE(e.rate, 1)                                   AS rate,
           NULL                                                   AS doc_ref,
           e.notes,
+          1                                                      AS group_count,
           e.status
         FROM expenses e
         WHERE e.payment_journal_id = :id AND e.status = 'activo' ${dateExp} ${te} ${whE}
@@ -402,6 +436,9 @@ async function getMovements(req) {
     amount_base:  parseFloat(row.amount_base  || 0),
     rate:         parseFloat(row.rate         || 1),
     balance:      parseFloat(row.balance      || 0),
+    // >1 cuando la línea resume un cobro conjunto: la caja recibió un solo monto por
+    // varias facturas.
+    group_count:  parseInt(row.group_count || 1, 10),
   }));
 
   const jj = journal.get({ plain: true });
@@ -480,7 +517,7 @@ async function getBankMovements(req) {
 
   const [countResult] = await sequelize.query(`
     SELECT (
-      (SELECT COUNT(*) FROM payments p WHERE p.payment_journal_id IN (${jList}) ${datePay} ${tc} ${whPCount})
+      (SELECT COUNT(DISTINCT COALESCE(p.batch_id, CONCAT('p', p.id))) FROM payments p WHERE p.payment_journal_id IN (${jList}) ${datePay} ${tc} ${whPCount})
       + (SELECT COUNT(*) FROM incomes  i WHERE i.payment_journal_id IN (${jList}) AND i.status = 'activo' ${dateInc} ${tci} ${whI})
       + (SELECT COUNT(*) FROM expenses e WHERE e.payment_journal_id IN (${jList}) AND e.status = 'activo' ${dateExp} ${te} ${whE})
     ) as total
@@ -513,11 +550,31 @@ async function getBankMovements(req) {
           p.amount                                          AS amount_base,
           COALESCE(p.exchange_rate, 1)                     AS rate,
           p.reference_number                                AS doc_ref,
-          p.notes, 'activo'                                 AS status
+          p.notes, 1 AS group_count, 'activo'               AS status
         FROM payments p
         LEFT JOIN sales s     ON s.id = p.sale_id
         LEFT JOIN customers c ON c.id = p.customer_id
-        WHERE p.payment_journal_id IN (${jList}) ${datePay} ${tc} ${whP}
+        WHERE p.payment_journal_id IN (${jList}) AND p.batch_id IS NULL ${datePay} ${tc} ${whP}
+
+        UNION ALL
+
+        -- Cobro conjunto: una línea por lote, igual que en el diario (ver getMovements).
+        SELECT MIN(p.id) AS id, 'ingreso' AS type,
+          MIN(COALESCE(p.reference_date, p.created_at))    AS date,
+          MIN(p.created_at)                                 AS created_at,
+          string_agg(COALESCE(s.invoice_number, CONCAT('#', p.sale_id)), ' · '
+                     ORDER BY s.invoice_number)             AS reference,
+          COALESCE(MIN(c.name), 'Pago de venta')           AS concept,
+          SUM(p.amount * COALESCE(p.exchange_rate, 1))     AS amount_local,
+          SUM(p.amount)                                     AS amount_base,
+          MAX(COALESCE(p.exchange_rate, 1))                AS rate,
+          MIN(p.reference_number)                           AS doc_ref,
+          MIN(p.notes) AS notes, COUNT(*)::int AS group_count, 'activo' AS status
+        FROM payments p
+        LEFT JOIN sales s     ON s.id = p.sale_id
+        LEFT JOIN customers c ON c.id = p.customer_id
+        WHERE p.payment_journal_id IN (${jList}) AND p.batch_id IS NOT NULL ${datePay} ${tc} ${whP}
+        GROUP BY p.batch_id
 
         UNION ALL
 
@@ -527,7 +584,7 @@ async function getBankMovements(req) {
           i.description AS concept,
           (i.amount * COALESCE(i.rate, 1)) AS amount_local,
           i.amount AS amount_base, COALESCE(i.rate, 1) AS rate,
-          NULL AS doc_ref, i.notes, i.status
+          NULL AS doc_ref, i.notes, 1 AS group_count, i.status
         FROM incomes i
         WHERE i.payment_journal_id IN (${jList}) AND i.status = 'activo' ${dateInc} ${tci} ${whI}
 
@@ -539,7 +596,7 @@ async function getBankMovements(req) {
           e.description AS concept,
           (e.amount * COALESCE(e.rate, 1)) AS amount_local,
           e.amount AS amount_base, COALESCE(e.rate, 1) AS rate,
-          NULL AS doc_ref, e.notes, e.status
+          NULL AS doc_ref, e.notes, 1 AS group_count, e.status
         FROM expenses e
         WHERE e.payment_journal_id IN (${jList}) AND e.status = 'activo' ${dateExp} ${te} ${whE}
       ) all_movements

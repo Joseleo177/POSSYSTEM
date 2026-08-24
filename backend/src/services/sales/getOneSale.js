@@ -92,11 +92,26 @@ module.exports = async function getOneSale(id, req) {
   item.credit_applied = creditApplied;
   item.amount_paid = parseFloat(await Payment.sum('amount', { where: { sale_id: id } }) || 0) + creditApplied;
   item.total_returned = parseFloat(await Return.sum('total', { where: { sale_id: id } }) || 0);
-  item.balance = parseFloat((parseFloat(item.total) - item.total_returned - item.amount_paid).toFixed(6));
+  // El saldo perdonado cierra la factura pero no es un cobro: se resta aparte de amount_paid
+  // para que la ficha pueda mostrarlo con su motivo en vez de disfrazarlo de pago.
+  const forgiven = parseFloat(item.forgiven_amount || 0);
+  item.forgiven_amount = forgiven;
+  item.balance = parseFloat(
+    (parseFloat(item.total) - item.total_returned - item.amount_paid - forgiven).toFixed(6)
+  );
   // Una factura cerrada no tiene saldo: el estado manda sobre la resta. Cobrando divisas a
   // tasa de efectivo entran menos dólares que el saldo oficial (el dólar físico vale más
   // bolívares), y esos centavos no son deuda del cliente — ya pagó todo lo que debía en Bs.
-  if (item.status === 'pagado' || item.balance < 0 || item.balance <= 0.10) item.balance = 0;
+  if (item.status === 'pagado' || item.status === 'exonerado' || item.balance < 0 || item.balance <= 0.10) item.balance = 0;
+
+  // Quién autorizó el perdón: en la ficha de la factura importa tanto como el monto.
+  if (item.forgiven_by) {
+    const { Employee } = require("../../models");
+    const quien = await Employee.findByPk(item.forgiven_by, { attributes: ['full_name'] });
+    item.forgiven_by_name = quien?.full_name || null;
+  } else {
+    item.forgiven_by_name = null;
+  }
 
   return item;
 };

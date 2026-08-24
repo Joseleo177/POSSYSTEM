@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, dateClause, localDate, TZ } = require("./shared");
+const { sanitizeDate, dateClause, localDate, TZ, SETTLED_SQL } = require("./shared");
 
 async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tcS, tcS2, rep, wh }) {
   const df = sanitizeDate(date_from);
@@ -12,16 +12,20 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
     sequelize.query(
       `SELECT
          COUNT(*)::int AS total_sales,
-         (COALESCE(SUM(CASE WHEN status = 'pagado' THEN total ELSE 0 END), 0) -
+         (COALESCE(SUM(CASE WHEN status IN (${SETTLED_SQL}) THEN total ELSE 0 END), 0) -
           COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id
-                    WHERE r.status <> 'anulado' AND s2.status = 'pagado' ${tcS2} ${wh('s2')} ${dS2}), 0))::float AS total_revenue,
-         COALESCE(AVG(CASE WHEN status = 'pagado' THEN total END), 0)::float AS avg_ticket,
-         COALESCE(MAX(CASE WHEN status = 'pagado' THEN total END), 0)::float AS max_sale,
-         COALESCE(MIN(CASE WHEN status = 'pagado' THEN total END), 0)::float AS min_sale,
+                    WHERE r.status <> 'anulado' AND s2.status IN (${SETTLED_SQL}) ${tcS2} ${wh('s2')} ${dS2}), 0))::float AS total_revenue,
+         COALESCE(AVG(CASE WHEN status IN (${SETTLED_SQL}) THEN total END), 0)::float AS avg_ticket,
+         COALESCE(MAX(CASE WHEN status IN (${SETTLED_SQL}) THEN total END), 0)::float AS max_sale,
+         COALESCE(MIN(CASE WHEN status IN (${SETTLED_SQL}) THEN total END), 0)::float AS min_sale,
          COUNT(CASE WHEN status IN ('pendiente','parcial') THEN 1 END)::int AS pending_count,
          COALESCE(SUM(CASE WHEN status IN ('pendiente','parcial') THEN total ELSE 0 END), 0)::float AS pending_amount,
          COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id
-                    WHERE r.status <> 'anulado' AND s2.status = 'pagado' ${tcS2} ${wh('s2')} ${dS2}), 0)::float AS total_returned
+                    WHERE r.status <> 'anulado' AND s2.status IN (${SETTLED_SQL}) ${tcS2} ${wh('s2')} ${dS2}), 0)::float AS total_returned,
+         -- Cuánto de esa facturación se perdonó en el período. El total_revenue de arriba la
+         -- incluye —la venta ocurrió—, así que sin esta cifra no habría cómo distinguir lo
+         -- que entró a caja de lo que se dejó de cobrar: la exoneración no genera egreso.
+         COALESCE(SUM(CASE WHEN status IN (${SETTLED_SQL}) THEN forgiven_amount ELSE 0 END), 0)::float AS total_forgiven
        FROM sales
        WHERE TRUE ${tc} ${wh()} ${dR}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -44,7 +48,7 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
       `SELECT ${localDate('created_at')} AS day, COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS revenue
        FROM sales
-       WHERE status = 'pagado' ${tc} ${wh()} ${dR}
+       WHERE status IN (${SETTLED_SQL}) ${tc} ${wh()} ${dR}
        GROUP BY ${localDate('created_at')}
        ORDER BY day ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -56,7 +60,7 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
               COALESCE(AVG(s.total), 0)::float AS avg_ticket
        FROM sales s
        LEFT JOIN employees e ON s.employee_id = e.id
-       WHERE s.status = 'pagado' ${tcS} ${wh('s')} ${dS}
+       WHERE s.status IN (${SETTLED_SQL}) ${tcS} ${wh('s')} ${dS}
        GROUP BY e.id, e.full_name
        ORDER BY revenue DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -66,7 +70,7 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
               COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS revenue
        FROM sales
-       WHERE status = 'pagado' ${tc} ${wh()} ${dR}
+       WHERE status IN (${SETTLED_SQL}) ${tc} ${wh()} ${dR}
        GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE '${TZ}')
        ORDER BY hour ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -84,6 +88,7 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
       pending_count:  parseInt(s.pending_count  || 0),
       pending_amount: parseFloat(s.pending_amount || 0),
       total_returned: parseFloat(s.total_returned || 0),
+      total_forgiven: parseFloat(s.total_forgiven || 0),
     },
     by_method:   byMethod,
     by_day:      byDay,

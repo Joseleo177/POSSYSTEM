@@ -68,9 +68,13 @@ module.exports = async function getPendingPayments(query, tenant = {}) {
       const item = s.toJSON();
       // El saldo se deriva de los pagos reales (pagos − vuelto + crédito aplicado),
       // igual que createPayment/removePayment. Antes referenciaba una variable inexistente.
-      const amount_paid = parseFloat(await getSaleBalance(item.id)) || 0;
-      const rawBalance = parseFloat((parseFloat(item.total) - amount_paid).toFixed(6));
+      const credited = parseFloat(await getSaleBalance(item.id)) || 0;
+      const rawBalance = parseFloat((parseFloat(item.total) - credited).toFixed(6));
       const balance = rawBalance <= 0.10 ? 0 : rawBalance;
+      // getSaleBalance suma lo exonerado porque decide el saldo; "Ya pagado" no debe incluirlo:
+      // en el modal de cobro eso se lee como dinero recibido.
+      const forgiven = parseFloat(item.forgiven_amount || 0);
+      const amount_paid = parseFloat((credited - forgiven).toFixed(6));
 
       item.customer_name = item.Customer?.name ?? null;
       item.customer_rif = item.Customer?.rif ?? null;
@@ -81,6 +85,7 @@ module.exports = async function getPendingPayments(query, tenant = {}) {
       item.journal_color = item.PaymentJournal?.color ?? null;
       item.items = item.SaleItems ?? [];
       item.amount_paid = amount_paid;
+      item.forgiven_amount = forgiven;
       item.total_precise = parseFloat(item.total_precise || item.total || 0);
       item.balance = balance;
       ["Customer", "Employee", "Currency", "PaymentJournal", "SaleItems"].forEach((k) => delete item[k]);

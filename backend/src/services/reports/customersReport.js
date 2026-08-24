@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, dateClause } = require("./shared");
+const { sanitizeDate, dateClause, SETTLED_SQL } = require("./shared");
 
 async function customersReport({ date_from, date_to, inactive_days = 45, limit, offset, company_id, tc, tcS, tcC, rep, wh }) {
   const df = sanitizeDate(date_from);
@@ -22,8 +22,10 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
   // Sin ninguno de los dos, un cliente con todas sus ventas anuladas figuraba de top.
   // El recorte por sucursal viaja junto a estos criterios: toda consulta del reporte usa
   // alguno de los cuatro, así que no queda ninguna sin acotar.
-  const stPagado  = `AND status = 'pagado' ${wh()}`;
-  const stPagadoS = `AND s.status = 'pagado' ${wh('s')}`;
+  // La exonerada cuenta como compra cerrada: el cliente se llevó la mercancía, y dejarla
+  // fuera lo haría figurar como inactivo o rebajaría su ticket promedio sin motivo.
+  const stPagado  = `AND status IN (${SETTLED_SQL}) ${wh()}`;
+  const stPagadoS = `AND s.status IN (${SETTLED_SQL}) ${wh('s')}`;
   const stCompra  = `AND status NOT IN ('anulado','borrador','espera') ${wh()}`;
   const stCompraS = `AND s.status NOT IN ('anulado','borrador','espera') ${wh('s')}`;
 

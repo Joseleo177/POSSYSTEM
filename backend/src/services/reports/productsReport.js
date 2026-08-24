@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, dateClause } = require("./shared");
+const { sanitizeDate, dateClause, SETTLED_SQL } = require("./shared");
 
 async function productsReport({ date_from, date_to, limit = 20, company_id, tcS, tcP, rep, wh }) {
   const df = sanitizeDate(date_from);
@@ -10,7 +10,9 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
   // Mismo criterio de "venta realizada" que salesReport y marginsReport: sin esto
   // las anuladas contaban como ventas y productos que nunca se vendieron aparecían
   // en el top (y desaparecían del listado de estancados, que es el efecto inverso).
-  const stS = `AND s.status = 'pagado'`;
+  // Lo vendido incluye las facturas exoneradas: la mercancía salió igual, solo que el saldo
+  // se perdonó en vez de cobrarse (ver utils/saleBalance).
+  const stS = `AND s.status IN (${SETTLED_SQL})`;
 
   const [topByRevenue, topByQty, slowMovers, stockValue] = await Promise.all([
     sequelize.query(

@@ -15,6 +15,8 @@ import { api } from "../../services/api";
 // son deudas: todavía no se han facturado, así que no deben leerse como una alerta.
 const STATUS_BADGE = {
     pagado:   "badge-success",
+    // Saldada sin dinero: se distingue de 'pagado' porque no entró nada a caja.
+    exonerado:"badge-warning",
     parcial:  "badge-warning",
     anulado:  "badge-neutral",
     devuelto: "badge-warning",
@@ -26,7 +28,7 @@ const STATUS_BADGE = {
 
 export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, setReceiptSale }) {
     const {
-        sales, total, sumTotal, sumPaid, sumPending, page, setPage, loading, LIMIT,
+        sales, total, sumTotal, sumPaid, sumPending, sumForgiven, page, setPage, loading, LIMIT,
         histDateFrom, setHistDateFrom, histDateTo, setHistDateTo,
         searchTerm, setSearchTerm,
         activeFilters, activeSeries,
@@ -46,6 +48,15 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
     const [payModal, setPayModal] = useState(null);
     const [editModal, setEditModal] = useState(null);
     const [loadingReturn, setLoadingReturn] = useState(null);
+
+    // Deshacer una exoneración: la factura vuelve a cuentas por cobrar con el saldo que tenía.
+    const unforgive = async (sale) => {
+        try {
+            await api.sales.unforgive(sale.id);
+            notify("Exoneración deshecha: la factura vuelve a deberse");
+            loadSales();
+        } catch (e) { notify(e.message, "err"); }
+    };
 
     const openReturnModal = async (sale) => {
         setLoadingReturn(sale.id);
@@ -87,7 +98,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado</div>
                                 <div className="grid grid-cols-2 gap-1.5">
-                                    {[{ id: 'borrador', label: 'Borrador' }, { id: 'pendiente', label: 'Pendiente' }, { id: 'parcial', label: 'Parcial' }, { id: 'pagado', label: 'Pagado' }, { id: 'anulado', label: 'Anulado' }].map(f => (
+                                    {[{ id: 'borrador', label: 'Borrador' }, { id: 'pendiente', label: 'Pendiente' }, { id: 'parcial', label: 'Parcial' }, { id: 'pagado', label: 'Pagado' }, { id: 'exonerado', label: 'Exonerada' }, { id: 'anulado', label: 'Anulado' }].map(f => (
                                         <button key={f.id} onClick={() => toggleFilter(f.id)}
                                             className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${activeFilters.includes(f.id) ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
                                             {f.label}
@@ -172,6 +183,9 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                             {sale.status === 'parcial' && (
                                                 <div className="text-[10px] font-bold text-danger tabular-nums">Saldo: {fmtPrice(sale.balance)}</div>
                                             )}
+                                            {sale.forgiven_amount > 0.001 && (
+                                                <div className="text-[10px] font-bold text-warning tabular-nums">Exonerado: {fmtPrice(sale.forgiven_amount)}</div>
+                                            )}
                                         </td>
                                         <td className="text-right pr-6">
                                             <div className="flex items-center justify-end gap-1.5">
@@ -200,6 +214,11 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                                             ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
                                                             : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                                                         }
+                                                    </button>
+                                                )}
+                                                {sale.status === 'exonerado' && can("sales.forgive") && (
+                                                    <button onClick={() => unforgive(sale)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-warning hover:bg-warning/10 active:scale-90" title="Deshacer exoneración: la factura vuelve a deberse">
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                                                     </button>
                                                 )}
                                                 {can("admin") && sale.status !== 'anulado' && (
@@ -235,6 +254,11 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                         {/* El pendiente lo calcula el servidor, no es total − cobrado:
                                             así una factura anulada aportaba su monto completo a la
                                             deuda pese a no deber nada. */}
+                                        {sumForgiven > 0.001 && (
+                                            <div className="text-[10px] font-bold tabular-nums text-warning">
+                                                Exonerado {fmtPrice(sumForgiven)}
+                                            </div>
+                                        )}
                                         {sumPending > 0.001 && (
                                             <div className="text-[10px] font-bold tabular-nums text-danger">
                                                 Pendiente {fmtPrice(sumPending)}
