@@ -329,11 +329,14 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                 {/* Acciones. Cada una lleva su número: en caja se opera con el teclado y sin
                     la etiqueta visible el atajo no existe para quien no lo memorizó. */}
                 <div className="px-5 py-4 flex flex-col gap-2">
+                    {/* En teléfono van uno debajo del otro: los botones no se encogen (llevan
+                        whitespace-nowrap) y en fila estiraban el modal más allá de la pantalla,
+                        dejando "A Crédito" y "Dejar Pendiente" cortados contra el borde. */}
                     {canSettle && (
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                             <Button
                                 onClick={() => setShowPayModal(true)}
-                                className="flex-1 h-9 bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none"
+                                className="flex-1 min-w-0 h-9 bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none"
                             >
                                 <KeyHint n={numOf("pay")} />
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
@@ -345,7 +348,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                                 <Button
                                     onClick={confirmCredit}
                                     disabled={creditLoading}
-                                    className="flex-1 h-9 bg-warning/10 text-warning border border-warning/30 hover:bg-warning hover:text-black shadow-none disabled:opacity-50"
+                                    className="flex-1 min-w-0 h-9 bg-warning/10 text-warning border border-warning/30 hover:bg-warning hover:text-black shadow-none disabled:opacity-50"
                                     title="Entregar a crédito: emite la factura y queda por cobrar"
                                 >
                                     <KeyHint n={numOf("credit")} />
@@ -368,15 +371,15 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                         {printing ? "Imprimiendo..." : "Imprimir Ticket"}
                     </Button>
 
-                    <div className="flex gap-2">
-                        <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="flex-1 h-9 border border-border/30 dark:border-white/10">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                        <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="flex-1 min-w-0 h-9 border border-border/30 dark:border-white/10">
                             <KeyHint n={numOf("ticket")} />
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                             Ver Ticket
                         </Button>
                         {/* Si la venta sigue sin resolver, el botón dice a dónde va: sin esto
                             el cajero salía sin saber que quedaba un borrador sin factura. */}
-                        <Button onClick={onNext} className="flex-1 h-9 shadow-none" title={isUnresolved ? "La venta queda sin cobrar, en Facturas Pendientes" : undefined}>
+                        <Button onClick={onNext} className="flex-1 min-w-0 h-9 shadow-none" title={isUnresolved ? "La venta queda sin cobrar, en Facturas Pendientes" : undefined}>
                             <KeyHint n={numOf("next")} />
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             {isUnresolved ? "Dejar Pendiente" : "Siguiente"}
