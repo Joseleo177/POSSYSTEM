@@ -244,18 +244,30 @@ async function getCustomerPurchases(id, { limit = 50, offset = 0 }, req) {
   };
 }
 
+// Nombres en mayúsculas, como el RIF.
+//
+// El dato entra desde teclados distintos —el de una tablet capitaliza o no según cómo esté
+// configurado— y así el mismo cliente quedaba como "Carlos eduardo" en un equipo y "CARLOS
+// EDUARDO" en otro. Normalizarlo en el servidor lo deja igual venga de donde venga, y es como
+// se lee en las facturas y en los listados. Los espacios de sobra también se colapsan: un
+// doble espacio invisible convierte a un cliente en dos.
+const normalizarNombre = (v) => {
+  const limpio = String(v ?? "").trim().replace(/\s+/g, " ");
+  return limpio ? limpio.toUpperCase() : null;
+};
+
 function buildPayload({ type, name, phone, email, address, rif, tax_name, notes }) {
   if (!name) { const e = new Error("El nombre es requerido");      e.status = 400; throw e; }
   if (!rif)  { const e = new Error("La cédula / RIF es requerida"); e.status = 400; throw e; }
   const recordType = ["cliente", "proveedor"].includes(type) ? type : "cliente";
   return {
     type:     recordType,
-    name,
+    name:     normalizarNombre(name),
     phone:    phone    || null,
     email:    email    || null,
     address:  address  || null,
     rif:      rif      ? rif.toUpperCase() : null,
-    tax_name: recordType === "proveedor" ? (tax_name || null) : null,
+    tax_name: recordType === "proveedor" ? normalizarNombre(tax_name) : null,
     notes:    notes    || null,
   };
 }

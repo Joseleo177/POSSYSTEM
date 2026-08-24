@@ -28,6 +28,9 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
         const match = fullRif.match(/^([VEJGP])-(.*)$/);
         setForm({
           ...editData,
+          // El nombre puede venir de un alta rápida hecha desde el buscador del POS, donde
+          // nadie tecleó en este campo y el toUpperCase del onChange nunca corrió.
+          name: (editData.name || "").toUpperCase(),
           doc_prefix: match ? match[1] : "V",
           rif: match ? match[2] : fullRif,
         });
@@ -39,7 +42,7 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
         setForm({
           ...EMPTY,
           type: editData?._newType || "cliente",
-          name: editData?._newName || editData?.name || "",
+          name: (editData?._newName || editData?.name || "").toUpperCase(),
           doc_prefix: preMatch ? preMatch[1] : "V",
           rif: preMatch ? preMatch[2] : preRif,
         });

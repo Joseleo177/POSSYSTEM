@@ -562,7 +562,9 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
         try {
           customer = await Customer.create({
             type: "cliente",
-            name,
+            // En mayúsculas y sin espacios de sobra, igual que una ficha creada desde el POS:
+            // el nombre lo teclea el visitante en su teléfono y llegaba como lo escribiera.
+            name: String(name ?? "").trim().replace(/\s+/g, " ").toUpperCase() || null,
             phone,
             rif: doc.canonical,
             company_id,
