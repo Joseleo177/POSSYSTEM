@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, TZ } = require("./shared");
+const { sanitizeDate, TZ, localDate } = require("./shared");
 
 // Cobros por día y por diario de pago.
 //
@@ -7,14 +7,20 @@ const { sanitizeDate, TZ } = require("./shared");
 // del mismo banco (un punto de venta y un pago móvil, por ejemplo) sus montos quedan sumados
 // sin forma de separarlos. Aquí cada diario es su propia columna.
 //
-// Solo cuenta cobros de ventas: no incluye ingresos ni egresos manuales, a diferencia del
-// Estado de Cuenta. Es a propósito —responde "cuánto entró por cada método"— pero explica por
-// qué los totales pueden no coincidir con aquella pantalla.
+// La matriz por día son SOLO cobros de ventas, y eso no es una omisión: su total tiene que
+// cuadrar contra el reporte de ventas, y una celda debe poder conciliarse contra el punto o
+// el banco. Mezclarle ingresos y egresos manuales la volvería un número que no cuadra ni con
+// ventas ni con caja.
+//
+// Pero el dinero cargado a mano también está en esa caja, así que va aparte: `manual` trae
+// ingresos y egresos por diario para pintarlos como filas de resumen bajo el total, y de ahí
+// sale el movimiento neto. Cada cifra conserva su significado y el cierre del día se lee en
+// una sola pantalla, sin entrar diario por diario al Estado de Cuenta.
 //
 // Sobre los montos: payments.amount está en moneda base y exchange_rate es la tasa aplicada,
 // de modo que amount * exchange_rate devuelve el monto en la moneda del diario. Se publican
 // los dos: el original es el que el cajero contó, el base es el único que se puede sumar
-// entre diarios de distinta moneda.
+// entre diarios de distinta moneda. incomes y expenses guardan lo mismo en `amount` y `rate`.
 async function paymentJournalsReport({ date_from, date_to, company_id, allowedWarehouses }) {
   const from = sanitizeDate(date_from);
   const to   = sanitizeDate(date_to);
@@ -42,6 +48,22 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
   if (to)   rep.dto   = to;
   const dateClause = parts.join(" ");
 
+  // Ingresos y egresos sí llevan su propia sucursal, así que no hace falta la subconsulta a
+  // sales que necesitan los cobros.
+  const manualWhClause = (alias) => {
+    if (!Array.isArray(allowedWarehouses)) return '';
+    const ids = allowedWarehouses.filter(Number.isInteger);
+    return ids.length ? `AND ${alias}.warehouse_id IN (${ids.join(',')})` : 'AND FALSE';
+  };
+
+  const manualDateClause = (alias) => {
+    const col = localDate(`COALESCE(${alias}.date, ${alias}.created_at)`);
+    const p = [];
+    if (from) p.push(`AND ${col} >= :dfrom`);
+    if (to)   p.push(`AND ${col} <= :dto`);
+    return p.join(" ");
+  };
+
   const rows = await sequelize.query(
     `SELECT (p.created_at AT TIME ZONE '${TZ}')::date            AS day,
             p.payment_journal_id                                  AS journal_id,
@@ -61,9 +83,35 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
     { replacements: rep, type: Sequelize.QueryTypes.SELECT }
   );
 
+  // ── Ingresos y egresos cargados a mano ────────────────────────────────────────
+  // Se agrupan por COALESCE(date, created_at) y no por created_at a secas: `date` es el día
+  // que la persona eligió al registrar el movimiento, y ese es el día en que el dinero entró
+  // o salió de la caja. Agrupar por la fecha de captura mandaría al día equivocado todo lo
+  // que se carga con fecha atrasada.
+  const manualQuery = (table, alias) => `
+    SELECT ${localDate(`COALESCE(${alias}.date, ${alias}.created_at)`)} AS day,
+           ${alias}.payment_journal_id                                   AS journal_id,
+           COUNT(${alias}.id)::int                                       AS tx_count,
+           COALESCE(SUM(${alias}.amount * COALESCE(${alias}.rate, 1)), 0)::float AS amount_journal,
+           COALESCE(SUM(${alias}.amount), 0)::float                      AS amount_base
+      FROM ${table} ${alias}
+     WHERE ${alias}.payment_journal_id IS NOT NULL
+       -- Un movimiento anulado no mueve plata: queda en el histórico, no en el cuadre.
+       AND ${alias}.status = 'activo'
+       ${scoped ? `AND ${alias}.company_id = :cid` : ""}
+       ${manualWhClause(alias)}
+       ${manualDateClause(alias)}
+     GROUP BY day, ${alias}.payment_journal_id`;
+
+  const [incomeRows, expenseRows] = await Promise.all([
+    sequelize.query(manualQuery('incomes',  'i'), { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(manualQuery('expenses', 'e'), { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
+  ]);
+
   // Solo los diarios que tuvieron movimiento en el rango: una columna vacía en todas las
-  // filas no aporta nada y ensancha la tabla.
-  const usedIds = [...new Set(rows.map(r => r.journal_id))];
+  // filas no aporta nada y ensancha la tabla. Un diario que solo recibió un ingreso manual
+  // también cuenta: si no, su fila de resumen no tendría columna donde caer.
+  const usedIds = [...new Set([...rows, ...incomeRows, ...expenseRows].map(r => r.journal_id))];
   const journals = usedIds.length
     ? await sequelize.query(
         `SELECT pj.id, pj.name, pj.color, pj.type,
@@ -105,10 +153,41 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
     totals.tx_count     += r.tx_count;
   }
 
+  // Filas de resumen: un total por diario de lo cargado a mano. No se abren por día —el
+  // detalle está en el Estado de Cuenta— porque lo que hace falta al cerrar es cuánto
+  // sumar y cuánto restar a lo cobrado para saber qué debería haber en cada caja.
+  const summarize = (src) => {
+    const out = { cells: {}, total_base: 0, tx_count: 0 };
+    for (const r of src) {
+      const cell = out.cells[r.journal_id] || (out.cells[r.journal_id] = { amount_journal: 0, amount_base: 0, tx_count: 0 });
+      cell.amount_journal += r.amount_journal;
+      cell.amount_base    += r.amount_base;
+      cell.tx_count       += r.tx_count;
+      out.total_base      += r.amount_base;
+      out.tx_count        += r.tx_count;
+    }
+    return out;
+  };
+
+  const incomes  = summarize(incomeRows);
+  const expenses = summarize(expenseRows);
+
+  // Cobros + ingresos − egresos: lo que efectivamente movió cada diario en el rango.
+  const net = { cells: {}, total_base: 0 };
+  for (const id of usedIds) {
+    const v = (s) => s.cells[id] || { amount_journal: 0, amount_base: 0 };
+    net.cells[id] = {
+      amount_journal: v(totals).amount_journal + v(incomes).amount_journal - v(expenses).amount_journal,
+      amount_base:    v(totals).amount_base    + v(incomes).amount_base    - v(expenses).amount_base,
+    };
+  }
+  net.total_base = totals.total_base + incomes.total_base - expenses.total_base;
+
   return {
     journals,
     days: [...byDay.values()],
     totals,
+    manual: { incomes, expenses, net },
   };
 }
 

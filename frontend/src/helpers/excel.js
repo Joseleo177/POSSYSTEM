@@ -417,8 +417,15 @@ export function buildPaymentJournalsExcel(data, range) {
 
   const dayRows = (data.days || []).map(flatten);
   // El total va como una fila más de la misma hoja: en Excel es lo que se espera al pie de
-  // un cuadre, y así se puede comprobar la suma sin saltar de pestaña.
-  if (data.totals) dayRows.push({ ...flatten({ ...data.totals, date: "TOTAL" }) });
+  // un cuadre, y así se puede comprobar la suma sin saltar de pestaña. Debajo, lo cargado a
+  // mano y el neto, en el mismo orden que la pantalla —quien exporta el cuadre necesita las
+  // tres líneas, no solo los cobros—.
+  if (data.totals) dayRows.push(flatten({ ...data.totals, date: "TOTAL VENTAS" }));
+  if (data.manual) {
+    dayRows.push(flatten({ ...data.manual.incomes,  date: "+ INGRESOS MANUALES" }));
+    dayRows.push(flatten({ ...data.manual.expenses, date: "- EGRESOS MANUALES" }));
+    dayRows.push(flatten({ ...data.manual.net,      date: "MOVIMIENTO NETO" }));
+  }
 
   download(buildWb([
     { name: "Por Día", rows: dayRows, headers: dayHeaders },
