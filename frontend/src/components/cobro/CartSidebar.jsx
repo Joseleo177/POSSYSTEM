@@ -1,6 +1,10 @@
+import { useState } from "react";
 import CustomSelect from "../ui/CustomSelect";
+import CustomerModal from "../Customers/CustomerModal";
 import { fmtQtyUnit } from "../../helpers/unitFormatter";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers";
+import { useApp } from "../../context/AppContext";
+import { api } from "../../services/api";
 
 export default function CartSidebar({
     mobileTab, setMobileTab,
@@ -31,6 +35,24 @@ export default function CartSidebar({
 
     // Si lo tecleado en el buscador es solo un documento (dígitos, con prefijo opcional
     // tipo V- o J-), lo llevamos al campo cédula/RIF del alta en vez de al nombre.
+    // Edición del cliente ya elegido, sin abandonar la venta.
+    const { can, notify } = useApp();
+    const [editandoCliente, setEditandoCliente] = useState(false);
+    const [guardandoCliente, setGuardandoCliente] = useState(false);
+
+    const guardarCliente = async (payload) => {
+        setGuardandoCliente(true);
+        try {
+            const r = await api.customers.update(selectedCustomer.id, payload);
+            // El carrito se queda con los datos nuevos: si se corrigió la cédula, la factura
+            // debe salir con esa y no con la que estaba cargada al elegir al cliente.
+            setSelectedCustomer({ ...selectedCustomer, ...(r.data || payload) });
+            notify("Datos del cliente actualizados");
+            setEditandoCliente(false);
+        } catch (e) { notify(e.message, "err"); }
+        setGuardandoCliente(false);
+    };
+
     const buildNewCustomer = (q) => {
         const txt = (q || "").trim();
         const doc = txt.match(/^([VEJGP])?-?(\d+)$/i);
@@ -207,9 +229,23 @@ export default function CartSidebar({
                                         )}
                                     </div>
                                 </div>
-                            <button onClick={() => setSelectedCustomer(null)} className="w-7 h-7 lg:w-8 lg:h-8 rounded-full bg-brand-500/20 text-brand-500 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all shrink-0">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {/* Corregir la cédula o completar los datos sin salir de la venta:
+                                    el error se descubre justo al facturar, y hasta ahora había que
+                                    quitar el cliente, irse al módulo de Clientes y volver. */}
+                                {can("customers.edit") && (
+                                    <button
+                                        onClick={() => setEditandoCliente(true)}
+                                        title="Editar datos del cliente"
+                                        className="w-7 h-7 lg:w-8 lg:h-8 rounded-full bg-brand-500/20 text-brand-500 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                    </button>
+                                )}
+                                <button onClick={() => setSelectedCustomer(null)} title="Quitar cliente" className="w-7 h-7 lg:w-8 lg:h-8 rounded-full bg-brand-500/20 text-brand-500 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
                         </div>
                     ) : (
                         <>
@@ -535,6 +571,18 @@ export default function CartSidebar({
                     </div>
                 </div>
             </div>
+
+            {/* Mismo formulario que el módulo de Clientes: si cambian los campos de un cliente,
+                cambian en los dos sitios a la vez. */}
+            {editandoCliente && selectedCustomer && (
+                <CustomerModal
+                    open={editandoCliente}
+                    editData={selectedCustomer}
+                    loading={guardandoCliente}
+                    onClose={() => setEditandoCliente(false)}
+                    onSave={guardarCliente}
+                />
+            )}
         </aside>
     );
 }

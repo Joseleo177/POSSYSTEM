@@ -289,7 +289,9 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                         <td className="px-3 py-3">
                                             <button
                                                 onClick={() => onSelect(sale)}
-                                                className="h-7 px-3 bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black rounded-lg text-[10px] font-black uppercase tracking-wide transition-all opacity-0 group-hover:opacity-100"
+                                                // Siempre visible: en tablet no hay hover que revele
+                                                // el botón, y esta es la acción principal de la fila.
+                                                className="h-7 px-3 bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black rounded-lg text-[10px] font-black uppercase tracking-wide transition-all"
                                             >
                                                 Cobrar
                                             </button>
