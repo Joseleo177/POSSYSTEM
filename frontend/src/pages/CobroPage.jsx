@@ -31,7 +31,8 @@ export default function CobroPage() {
     const {
         cart, addToCart, removeFromCart, changeQty, setQtyDirect,
         subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
-        discountPct, setDiscountPct, totalDisplay, totalSecondary,
+        discountPct, setDiscountPct, discountMode, setDiscountMode,
+        totalDisplay, totalSecondary,
         subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
         chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel,
         chargeInput, setChargeInput, setChargeFromPct, chargeAmountDisplay, chargePct,
@@ -181,6 +182,7 @@ export default function CobroPage() {
                 subtotalBase={subtotalBase} discountAmount={discountAmount}
                 discountEnabled={discountEnabled} setDiscountEnabled={setDiscountEnabled}
                 discountPct={discountPct} setDiscountPct={setDiscountPct}
+                discountMode={discountMode} setDiscountMode={setDiscountMode}
                 totalDisplay={totalDisplay} totalSecondary={totalSecondary}
                 subtotalDisplay={subtotalDisplay} promoDiscountDisplay={promoDiscountDisplay}
                 discountAmountDisplay={discountAmountDisplay} promoLineDiscountDisplay={promoLineDiscountDisplay}

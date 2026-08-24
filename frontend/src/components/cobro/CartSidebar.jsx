@@ -6,7 +6,8 @@ export default function CartSidebar({
     mobileTab, setMobileTab,
     cart, addToCart, removeFromCart, changeQty, setQtyDirect,
     subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
-    discountPct, setDiscountPct, totalDisplay, totalSecondary,
+    discountPct, setDiscountPct, discountMode, setDiscountMode,
+    totalDisplay, totalSecondary,
     subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
     chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel,
     chargeInput, setChargeInput, setChargeFromPct,
@@ -400,9 +401,35 @@ export default function CartSidebar({
                             <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide opacity-60 dark:text-content-dark-muted">Dto. Global</span>
                         </div>
                         {discountEnabled && (
-                            <div className="relative w-20 lg:w-24">
-                                <input type="number" min="0" max="100" value={discountPct} onChange={e => setDiscountPct(e.target.value)} placeholder="0" className="w-full bg-surface-2 dark:bg-white/10 h-7 lg:h-8 rounded-lg px-3 text-right text-xs font-black outline-none focus:ring-2 focus:ring-brand-500/20 dark:text-white" />
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-black opacity-30 dark:text-white">%</span>
+                            <div className="flex items-center gap-1.5">
+                                {/* Porcentaje o monto fijo: "el 10%" y "déjalo en 5 menos" son
+                                    los dos descuentos que se piden en el mostrador, y el
+                                    segundo obligaba a calcular el porcentaje de cabeza. Dos
+                                    botones y no un desplegable: son dos opciones y el cajero
+                                    las alterna de un toque. */}
+                                <div className="flex rounded-lg overflow-hidden border border-black/10 dark:border-white/10">
+                                    {[["pct", "%"], ["amount", currentCurrency?.symbol || "Ref."]].map(([modo, etiqueta]) => (
+                                        <button
+                                            key={modo}
+                                            onClick={() => { setDiscountMode(modo); setDiscountPct(""); }}
+                                            className={`h-7 lg:h-8 px-2 text-[10px] font-black transition-all ${discountMode === modo
+                                                ? "bg-brand-500 text-black"
+                                                : "bg-surface-2 dark:bg-white/10 text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white"}`}
+                                        >
+                                            {etiqueta}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="w-16 lg:w-20">
+                                    <input
+                                        type="number" min="0" step={discountMode === "pct" ? "1" : "0.01"}
+                                        max={discountMode === "pct" ? "100" : undefined}
+                                        value={discountPct}
+                                        onChange={e => setDiscountPct(e.target.value)}
+                                        placeholder={discountMode === "pct" ? "0" : "0.00"}
+                                        className="w-full bg-surface-2 dark:bg-white/10 h-7 lg:h-8 rounded-lg px-2 text-right text-xs font-black outline-none focus:ring-2 focus:ring-brand-500/20 dark:text-white"
+                                    />
+                                </div>
                             </div>
                         )}
                     </div>
@@ -466,7 +493,11 @@ export default function CartSidebar({
                             )}
                             {discountEnabled && discountAmount > 0 && (
                                 <div className="flex justify-between items-center text-brand-500">
-                                    <span className="text-[10px] lg:text-xs font-black uppercase tracking-wide">DESC. ({discountPct}%)</span>
+                                    {/* Por monto el "%" sobraba: el renglón ya muestra el importe
+                                        descontado y repetirlo como porcentaje era falso. */}
+                                    <span className="text-[10px] lg:text-xs font-black uppercase tracking-wide">
+                                        DESC.{discountMode === "pct" ? ` (${discountPct}%)` : ""}
+                                    </span>
                                     <span className="text-[11px] lg:text-sm font-black tabular-nums">-{fmt(discountAmountDisplay, currSym)}</span>
                                 </div>
                             )}

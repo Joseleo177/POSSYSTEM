@@ -84,7 +84,11 @@ export function CartProvider({ children }) {
 
   // ── Descuento global ──────────────────────────────────────
   const [discountEnabled, setDiscountEnabled] = useState(false);
+  // Valor tecleado en el descuento global. Se interpreta según `discountMode`: como porcentaje
+  // del subtotal, o como un monto fijo en la moneda que está en pantalla —"te dejo 5$ menos"
+  // es tan corriente como "te hago el 10%", y antes había que calcular el porcentaje a mano.
   const [discountPct, setDiscountPct] = useState("");
+  const [discountMode, setDiscountMode] = useState("pct");   // pct | amount
 
   // ── Recargo (propina / servicio / delivery) ───────────────
   // Es lo contrario del descuento: suma al total. Se carga por MONTO en la moneda que el
@@ -286,6 +290,7 @@ export function CartProvider({ children }) {
     setSelectedSerieId(mySeries.length > 0 ? mySeries[0].id : null);
     setDiscountEnabled(false);
     setDiscountPct("");
+    setDiscountMode("pct");
     setChargeEnabled(false);
     setChargeInput("");
     setChargeLabel("Servicio");
@@ -322,6 +327,9 @@ export function CartProvider({ children }) {
         const pct = parseFloat(quot.discount_amount) / parseFloat(quot.subtotal || quot.total) * 100;
         if (!isNaN(pct) && pct > 0) {
           setDiscountEnabled(true);
+          // La cotización guarda el descuento como monto en base; se recarga como porcentaje
+          // para que siga valiendo lo mismo aunque los precios hayan cambiado.
+          setDiscountMode("pct");
           setDiscountPct(String(Math.round(pct * 100) / 100));
         }
       }
@@ -362,6 +370,15 @@ export function CartProvider({ children }) {
       if (!(n > 0)) return prev;
       return String(round2(isVesPrimary ? n * vesRate : n / vesRate));
     });
+    // El descuento por monto se reexpresa igual: los 5 Ref. que se rebajaron pasan a valer
+    // Bs.3.923,32. En porcentaje no hay nada que convertir, el 10% es el mismo en las dos.
+    setDiscountPct(prev => {
+      if (discountMode !== "amount") return prev;
+      const n = parseFloat(String(prev).replace(",", "."));
+      if (!(n > 0)) return prev;
+      return String(round2(isVesPrimary ? n * vesRate : n / vesRate));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVesPrimary, vesRate]);
 
   // USD — redondeo POR LÍNEA (round2(price) × qty) → 3 × 4.07 = 12.21
@@ -369,8 +386,20 @@ export function CartProvider({ children }) {
   // La diferencia de 0.01 entre ambas pistas es inherente al redondeo dual y se gestiona en
   // PaymentFormModal con la tolerancia de 0.02 USD al calcular el abono en Bs.
   const subtotalUsd = cart.reduce((s, i) => s + round2(i.price) * i.qty, 0);
-  const discountAmountUsd = discountEnabled && parseFloat(discountPct) > 0
-    ? subtotalUsd * (parseFloat(discountPct) / 100) : 0;
+
+  // Lo tecleado en el descuento global, ya sea porcentaje o monto.
+  const discountRaw = discountEnabled
+    ? Math.max(0, parseFloat(String(discountPct).replace(",", ".")) || 0)
+    : 0;
+  // Por monto se teclea en la moneda de pantalla y cada pista lo usa sin ida y vuelta por la
+  // tasa, igual que el recargo. Se topa al subtotal: un descuento mayor dejaría el total en
+  // negativo y la venta cobrando al revés.
+  const discountAmountUsd = Math.min(
+    discountMode === "pct"
+      ? subtotalUsd * (discountRaw / 100)
+      : (isVesPrimary ? (vesRate ? discountRaw / vesRate : 0) : discountRaw),
+    subtotalUsd
+  );
 
   const promoLineDiscountUsd = useCallback((item) => {
     for (const promo of activePromos) {
@@ -408,8 +437,16 @@ export function CartProvider({ children }) {
   const subtotalBs = vesRate
     ? cart.reduce((s, i) => s + round2((parseFloat(i.price) || 0) * vesRate) * i.qty, 0)
     : null;
-  const discountAmountBs = (vesRate && discountEnabled && parseFloat(discountPct) > 0)
-    ? subtotalBs * (parseFloat(discountPct) / 100) : 0;
+  // Misma regla que en la pista en divisas, calculada aquí en bolívares para no arrastrar el
+  // redondeo de la conversión.
+  const discountAmountBs = vesRate
+    ? Math.min(
+        discountMode === "pct"
+          ? subtotalBs * (discountRaw / 100)
+          : (isVesPrimary ? discountRaw : round2(discountRaw * vesRate)),
+        subtotalBs
+      )
+    : 0;
   const promoDiscountBs = vesRate ? cart.reduce((s, i) => s + promoLineDiscountBs(i), 0) : 0;
   const netBs = vesRate ? (subtotalBs - discountAmountBs - promoDiscountBs) : null;
   const totalBs = vesRate ? (netBs + chargeBs) : null;
@@ -878,7 +915,8 @@ export function CartProvider({ children }) {
       cart, addToCart, removeFromCart, changeQty, setQtyDirect, clearCart,
       // Totales
       subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
-      discountPct, setDiscountPct, totalBase, totalDisplay, totalSecondary,
+      discountPct, setDiscountPct, discountMode, setDiscountMode,
+      totalBase, totalDisplay, totalSecondary,
       subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
       // Recargo (propina / servicio)
       chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel,
