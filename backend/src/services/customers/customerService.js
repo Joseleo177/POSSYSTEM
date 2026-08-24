@@ -33,12 +33,22 @@ async function getAll({ search, type, debtors, limit = 100, offset = 0 }, req) {
       { tax_name: { [Sequelize.Op.iLike]: `%${search}%` } },
     ];
   }
+  // "Con saldo pendiente" según de qué lado esté el contacto: a un cliente se le cobra, a un
+  // proveedor se le paga. Antes el filtro miraba solo las ventas, así que marcar deudores con
+  // la lista de proveedores no devolvía a nadie —justo la pregunta de "¿a quién le debo?"—.
+  // Es el mismo criterio de la columna `total_debt` de abajo, para que el filtro y la cifra
+  // que se muestra no puedan discrepar.
   if (debtors === 'true') {
     where[Sequelize.Op.and] = [
       ...(where[Sequelize.Op.and] || []),
       Sequelize.literal(`(
-        SELECT COALESCE(SUM(s.total - s.forgiven_amount - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.sale_id = s.id), 0)), 0)
-        FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial') ${whS}
+        CASE WHEN "Customer"."type" = 'proveedor' THEN (
+          SELECT COALESCE(SUM(p.total - COALESCE((SELECT SUM(pp.amount) FROM purchase_payments pp WHERE pp.purchase_id = p.id), 0)), 0)
+          FROM purchases p WHERE p.supplier_id = "Customer"."id" AND p.payment_status IN ('pendiente','parcial') ${whP}
+        ) ELSE (
+          SELECT COALESCE(SUM(s.total - s.forgiven_amount - COALESCE((SELECT SUM(py.amount) FROM payments py WHERE py.sale_id = s.id), 0)), 0)
+          FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial') ${whS}
+        ) END
       ) > 0.01`),
     ];
   }

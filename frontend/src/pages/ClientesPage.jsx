@@ -123,8 +123,15 @@ export default function ClientesPage() {
                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                 </svg>
-                                                Solo Deudores
+                                                {/* La misma casilla sirve para las dos preguntas, y el texto
+                                                    dice cuál según la lista que se esté viendo. */}
+                                                {typeFilter === "proveedor" ? "Solo a los que debo" : "Solo Deudores"}
                                             </button>
+                                            {!typeFilter && debtorsFilter && (
+                                                <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1.5 leading-snug">
+                                                    Clientes que deben y proveedores por pagar. Filtra por tipo para ver uno solo.
+                                                </p>
+                                            )}
                                         </div>
                                         {hasFilters && (
                                             <div className="px-4 py-2">
