@@ -173,12 +173,14 @@ export default function CashSessionsReport() {
  <Pagination page={sessionsPag.page} totalPages={sessionsPag.totalPages} total={sessionsPag.total} onPage={sessionsPag.setPage} />
  </div>
 
+ {/* En teléfono el resumen ocupa la pantalla completa: centrado y con margen quedaba en una
+     columna estrecha, con las tablas cortadas y doble barra de scroll. */}
  {selectedSession && (
- <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
- <div className="bg-white dark:bg-surface-dark-2 w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] border border-border dark:border-white/5">
+ <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4">
+ <div className="bg-white dark:bg-surface-dark-2 w-full max-w-3xl rounded-none sm:rounded-2xl shadow-2xl flex flex-col h-full sm:h-auto max-h-none sm:max-h-[90vh] border-0 sm:border border-border dark:border-white/5">
 
  {/* Header */}
- <div className="shrink-0 px-5 py-4 border-b border-border dark:border-white/5 flex items-center justify-between bg-surface-2 dark:bg-white/5 rounded-t-2xl">
+ <div className="shrink-0 px-5 py-4 border-b border-border dark:border-white/5 flex items-center justify-between bg-surface-2 dark:bg-white/5 rounded-none sm:rounded-t-2xl">
  <div>
  <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-0.5">RESUMEN DE CAJA</div>
  <h3 className="text-sm font-black text-content dark:text-white uppercase tracking-tight">#{selectedSession.id} — {selectedSession.warehouse?.name}</h3>
@@ -188,7 +190,7 @@ export default function CashSessionsReport() {
  </div>
 
  {/* Body scrollable */}
- <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
+ <div className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-5">
  {loadingSummary ? (
  <Loading />
  ) : summaryData ? (
@@ -213,7 +215,33 @@ export default function CashSessionsReport() {
  {/* Ventas del turno */}
  <div className="space-y-2">
  <SectionHeader title="Listado de Ventas del Turno" sub="Auditoría granular de transacciones" />
- <div className="rounded-xl border border-border dark:border-white/5 overflow-hidden">
+ {/* Teléfono: una tarjeta por venta. Las cinco columnas de la tabla no caben y se
+     cortaban por la mitad. */}
+ <div className="lg:hidden space-y-2">
+ {summaryData.sales_list?.length > 0 ? summaryData.sales_list.map((sale, sIdx) => (
+ <div key={sIdx} className="rounded-xl border border-border dark:border-white/5 p-3 flex items-center gap-3">
+ <div className="min-w-0 flex-1">
+ <div className="text-[11px] font-black uppercase tabular-nums text-content dark:text-white truncate">{sale.invoice_number || `#${sale.id}`}</div>
+ <div className="text-[10px] font-bold text-content-subtle opacity-60 truncate">{sale.customer_name || "Venta Casual"}</div>
+ <div className="flex items-center gap-2 mt-1">
+ <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${(sale.status?.toLowerCase() === 'pagada' || sale.status?.toLowerCase() === 'pagado') ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+ {sale.status}
+ </span>
+ <span className="text-[10px] font-bold text-content-subtle tabular-nums">{new Date(sale.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+ </div>
+ </div>
+ <div className="text-right shrink-0">
+ <div className="text-[12px] font-black text-success tabular-nums">{fmt$(sale.total)}</div>
+ <button onClick={() => setDetailSaleId(sale.id)}
+ className="mt-1 text-[9px] font-black uppercase tracking-wide text-brand-500">Detalle</button>
+ </div>
+ </div>
+ )) : (
+ <div className="p-5 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">No se registraron ventas en este turno</div>
+ )}
+ </div>
+
+ <div className="hidden lg:block rounded-xl border border-border dark:border-white/5 overflow-hidden">
  <table className="w-full text-left">
  <thead className="bg-surface-2 dark:bg-white/5">
  <tr>
@@ -262,7 +290,38 @@ export default function CashSessionsReport() {
  {/* Conciliación */}
  <div className="space-y-2">
  <SectionHeader title="Conciliación por Diario" sub="Comparativa entre monto esperado y declarado" />
- <div className="rounded-xl border border-border dark:border-white/5 overflow-hidden">
+
+ {/* Teléfono: una tarjeta por caja. Siete columnas no entran de ninguna manera, y es
+     justo la tabla que hay que leer para cuadrar el turno. */}
+ <div className="lg:hidden space-y-2">
+ {summaryData.journal_summary.map((js, idx) => (
+ <div key={idx} className="rounded-xl border border-border dark:border-white/5 p-3">
+ <div className="flex items-center gap-2.5 mb-2">
+ <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: js.journal_color }} />
+ <span className="text-[11px] font-black text-content dark:text-white uppercase">{js.journal_name}</span>
+ <span className={`ml-auto text-[11px] font-black tabular-nums ${(js.difference || 0) < 0 ? "text-danger" : (js.difference || 0) > 0 ? "text-success" : "text-content-subtle"}`}>
+ {(js.difference || 0) === 0 ? "OK" : (js.difference || 0).toFixed(2)}
+ </span>
+ </div>
+ <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-bold">
+ {[
+ ["Inicio", js.opening_amount.toFixed(2), "text-content-subtle"],
+ ["Ventas", `+${js.cash_in.toFixed(2)}`, "text-brand-500"],
+ ["Cambio", (js.change_out || 0) > 0 ? `−${js.change_out.toFixed(2)}` : "—", (js.change_out || 0) > 0 ? "text-danger" : "text-content-subtle"],
+ ["Esperado", js.expected_amount.toFixed(2), "text-content dark:text-white"],
+ ["Declarado", js.closing_amount?.toFixed(2) || "0.00", "text-success"],
+ ].map(([etiqueta, valor, clase]) => (
+ <div key={etiqueta} className="flex justify-between gap-2">
+ <span className="text-content-subtle uppercase">{etiqueta}</span>
+ <span className={`tabular-nums font-black ${clase}`}>{valor}</span>
+ </div>
+ ))}
+ </div>
+ </div>
+ ))}
+ </div>
+
+ <div className="hidden lg:block rounded-xl border border-border dark:border-white/5 overflow-hidden">
  <table className="w-full text-left">
  <thead className="bg-surface-2 dark:bg-white/5">
  <tr>
