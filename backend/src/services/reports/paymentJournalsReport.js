@@ -21,12 +21,38 @@ const { sanitizeDate, TZ, localDate } = require("./shared");
 // de modo que amount * exchange_rate devuelve el monto en la moneda del diario. Se publican
 // los dos: el original es el que el cajero contó, el base es el único que se puede sumar
 // entre diarios de distinta moneda. incomes y expenses guardan lo mismo en `amount` y `rate`.
-async function paymentJournalsReport({ date_from, date_to, company_id, allowedWarehouses }) {
+// Ids que llegan por query: pueden venir como lista repetida (?ids=1&ids=2) o separados por
+// coma. Se validan como enteros antes de interpolarse, que es como se arma el resto del SQL
+// crudo de los reportes.
+function idList(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const crudos = Array.isArray(value) ? value : String(value).split(",");
+  const ids = crudos.map(n => parseInt(n, 10)).filter(Number.isInteger);
+  return ids.length ? ids : null;
+}
+
+async function paymentJournalsReport({ date_from, date_to, company_id, allowedWarehouses, employee_ids, serie_ids }) {
   const from = sanitizeDate(date_from);
   const to   = sanitizeDate(date_to);
 
   const rep = { cid: company_id };
   const scoped = !!company_id;
+
+  // ── Filtros opcionales ────────────────────────────────────────────────────────
+  // Por usuario: manda quién registró el cobro, no quién hizo la venta —el reporte mide el
+  // dinero que pasó por cada caja—. Los cobros antiguos sin empleado caen al de su venta,
+  // para que no desaparezcan del filtro.
+  const empleados = idList(employee_ids);
+  const empClause = empleados
+    ? `AND COALESCE(p.employee_id, (SELECT s.employee_id FROM sales s WHERE s.id = p.sale_id)) IN (${empleados.join(',')})`
+    : '';
+
+  // Por serie: vive en la venta, así que el cobro se filtra por la suya. Un cobro sin venta
+  // asociada no tiene serie y queda fuera, que es lo correcto: la serie es del documento.
+  const series = idList(serie_ids);
+  const serieClause = series
+    ? `AND p.sale_id IN (SELECT id FROM sales WHERE serie_id IN (${series.join(',')}))`
+    : '';
 
   // Un cobro no guarda sucursal: la hereda de su venta. Se resuelve con una subconsulta para
   // no volver a meter el JOIN a sales que se quitó de la consulta principal.
@@ -78,6 +104,8 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
         ${scoped ? "AND p.company_id = :cid" : ""}
         ${whClause}
         ${dateClause}
+        ${empClause}
+        ${serieClause}
       GROUP BY day, p.payment_journal_id
       ORDER BY day DESC`,
     { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -101,6 +129,10 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
        ${scoped ? `AND ${alias}.company_id = :cid` : ""}
        ${manualWhClause(alias)}
        ${manualDateClause(alias)}
+       ${empleados ? `AND ${alias}.employee_id IN (${empleados.join(',')})` : ""}
+       -- Filtrando por serie, lo cargado a mano queda fuera: un ingreso o un egreso manual no
+       -- pertenece a ninguna serie de facturación, y colarlo inflaría el neto de ese corte.
+       ${series ? "AND FALSE" : ""}
      GROUP BY day, ${alias}.payment_journal_id`;
 
   const [incomeRows, expenseRows] = await Promise.all([
