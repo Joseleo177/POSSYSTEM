@@ -8,7 +8,10 @@ import { createPortal } from "react-dom";
 // componente entero, así que no alcanza para retocar la caja —por ejemplo igualar el radio y
 // el tamaño de letra a los de un input hermano, como en el catálogo público—. Vacío por
 // defecto: los usos existentes se ven igual que siempre.
-export default function CustomSelect({ value, onChange, options, placeholder = "Seleccionar...", className = "", disabled = false, height = "h-10", icon = null, boxClassName = "" }) {
+// menuMinWidth: ancho mínimo del desplegable, en px. El menú copia el ancho de la caja, que
+// es lo correcto casi siempre; pero con una caja deliberadamente angosta —el prefijo V-/J- de
+// un documento— ese ancho deja las opciones sin sitio ni para su padding. 0 = como siempre.
+export default function CustomSelect({ value, onChange, options, placeholder = "Seleccionar...", className = "", disabled = false, height = "h-10", icon = null, boxClassName = "", menuMinWidth = 0 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0, openUp: false });
   const triggerRef = useRef(null);
@@ -33,14 +36,14 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
       const spaceBelow = window.innerHeight - r.bottom;
       const openUp = spaceBelow < menuH + 16 && r.top > menuH + 16;
       let left = r.left;
-      const menuWidth = r.width;
+      const menuWidth = Math.max(r.width, menuMinWidth);
       if (left + menuWidth > window.innerWidth - 12) {
         left = Math.max(12, window.innerWidth - menuWidth - 12);
       }
       setPos({
         top: openUp ? r.top - menuH - 6 : r.bottom + 6,
         left,
-        width: r.width,
+        width: menuWidth,
         openUp,
       });
     };
@@ -51,7 +54,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
       window.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
     };
-  }, [open, options.length]);
+  }, [open, options.length, menuMinWidth]);
 
   const selectedOption = options.find(o => String(o.value) === String(value));
 

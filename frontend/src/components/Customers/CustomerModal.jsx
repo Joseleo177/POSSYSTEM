@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
+import CustomSelect from "../ui/CustomSelect";
 
 const DOC_PREFIXES = ["V", "E", "J", "G", "P"];
 const RIF_PREFIXES = ["J", "G", "P"];
@@ -102,9 +103,11 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        {/* Una sola columna en teléfono: documento y teléfono compartiendo fila dejaban al
+            número del documento un tercio de la pantalla. Desde tablet vuelven a ir en dos. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Nombre */}
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className={`label mb-1.5 ${isProveedor ? "text-violet-500" : "text-brand-500"}`}>
               {isProveedor ? "Razón Social / Empresa" : "Nombre completo"} <span className="text-danger">*</span>
             </label>
@@ -125,29 +128,35 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
               {isRif ? "RIF" : "Cédula de identidad"}
             </label>
             <div className="flex gap-2">
-              <select
+              {/* El prefijo es una sola letra: la caja se queda en lo justo para mostrarla y
+                  todo el ancho restante va al número, que son 7 u 8 dígitos y es lo que de
+                  verdad se teclea. En un teléfono esa diferencia es la que decide si el
+                  documento se lee entero o recortado.
+                  El desplegable se abre más ancho que la caja (menuMinWidth), porque con 52 px
+                  las opciones no tendrían sitio ni para su propio padding. */}
+              <CustomSelect
                 value={form.doc_prefix}
-                onChange={e => {
-                  const newPrefix = e.target.value;
-                  const newMax = RIF_PREFIXES.includes(newPrefix) ? 9 : 8;
-                  setForm(p => ({ ...p, doc_prefix: newPrefix, rif: p.rif.slice(0, newMax) }));
+                onChange={val => {
+                  const newMax = RIF_PREFIXES.includes(val) ? 9 : 8;
+                  setForm(p => ({ ...p, doc_prefix: val, rif: p.rif.slice(0, newMax) }));
                 }}
-                /* w-16 y no w-20: el prefijo es una sola letra y se llevaba casi la mitad de la
-                   columna, dejando el número —que son 7 u 8 dígitos— en una caja más chica que
-                   la del prefijo. shrink-0 evita que el select ceda cuando el número es largo. */
-                className="input h-10 w-16 shrink-0 font-black text-center cursor-pointer px-1"
-              >
-                {DOC_PREFIXES.map(p => (
-                  <option key={p} value={p}>{p}-</option>
-                ))}
-              </select>
+                options={DOC_PREFIXES.map(p => ({ value: p, label: `${p}-` }))}
+                height="h-10"
+                menuMinWidth={104}
+                className="shrink-0"
+                /* El `!` es necesario: la caja trae px-3 de serie y, entre dos utilidades de
+                   padding, gana la que Tailwind emite última, no la que se pase aquí. */
+                boxClassName="w-[52px] !px-1.5 font-black rounded-lg"
+              />
               <input
                 value={form.rif}
                 onChange={e => setForm(p => ({ ...p, rif: e.target.value.replace(/\D/g, "") }))}
                 onKeyDown={onEnterSave}
                 maxLength={maxRifLen}
                 inputMode="numeric"
-                className="input h-10 font-bold tabular-nums flex-1"
+                /* Misma letra que los demás campos: lo que tenía que crecer era la caja —el
+                   ancho que le cede el prefijo—, no el número. */
+                className="input h-10 flex-1 min-w-0 font-bold tabular-nums"
                 placeholder={"0".repeat(maxRifLen)}
               />
             </div>
@@ -169,7 +178,7 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
           </div>
 
           {/* Correo */}
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="label mb-1.5 opacity-70">Correo electrónico</label>
             <input
               value={form.email}
@@ -184,7 +193,7 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
           </div>
 
           {/* Dirección */}
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="label mb-1.5 opacity-70">Dirección</label>
             <input
               value={form.address}
@@ -197,7 +206,7 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
           </div>
 
           {/* Notas */}
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="label mb-1.5 opacity-70">Observaciones internas</label>
             <textarea
               value={form.notes}

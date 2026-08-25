@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "../../services/api";
+import FilterPopover from "../../components/ui/FilterPopover";
 import { fmtNumber } from "../../helpers/numbers";
 import { buildPaymentJournalsExcel } from "../../helpers/excel";
 import {
@@ -59,6 +60,7 @@ export default function PaymentJournalsReport() {
     const [empSel, setEmpSel]     = useState([]);
     const [serieSel, setSerieSel] = useState([]);
     const [showFilters, setShowFilters] = useState(false);
+    const filtrosBtnRef = useRef(null);
     const [empleados, setEmpleados] = useState([]);
     const [series, setSeries]       = useState([]);
 
@@ -100,6 +102,7 @@ export default function PaymentJournalsReport() {
 
                     <div className="relative">
                         <button
+                            ref={filtrosBtnRef}
                             onClick={() => setShowFilters(p => !p)}
                             className={`h-9 px-3 rounded-lg text-[11px] font-black uppercase tracking-wide border flex items-center gap-2 transition-all ${filtrosActivos
                                 ? "bg-brand-500/10 text-brand-500 border-brand-500/30"
@@ -112,10 +115,7 @@ export default function PaymentJournalsReport() {
                             )}
                         </button>
 
-                        {showFilters && (
-                            <>
-                                <div className="fixed inset-0 z-[60]" onClick={() => setShowFilters(false)} />
-                                <div className="absolute top-full left-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                        <FilterPopover open={showFilters} onClose={() => setShowFilters(false)} anchorRef={filtrosBtnRef}>
                                     {[
                                         { titulo: "Usuario", vacio: "Sin usuarios", items: empleados.map(e => ({ id: e.id, label: e.full_name || e.username })), sel: empSel, set: setEmpSel },
                                         { titulo: "Serie",   vacio: "Sin series",   items: series.map(s => ({ id: s.id, label: s.name })),                     sel: serieSel, set: setSerieSel },
@@ -162,9 +162,7 @@ export default function PaymentJournalsReport() {
                                             </button>
                                         </div>
                                     )}
-                                </div>
-                            </>
-                        )}
+                        </FilterPopover>
                     </div>
                 </div>
 

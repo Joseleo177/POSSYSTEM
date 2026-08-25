@@ -8,6 +8,7 @@ import SaleDetailModal from "../Customers/SaleDetailModal";
 import { Button } from "../ui/Button";
 import { fmtDateShort } from "../../helpers";
 import DateRangePicker from "../ui/DateRangePicker";
+import CustomSelect from "../ui/CustomSelect";
 import Pagination from "../ui/Pagination";
 import { api } from "../../services/api";
 
@@ -33,6 +34,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
         histDateFrom, setHistDateFrom, histDateTo, setHistDateTo,
         searchTerm, setSearchTerm,
         activeFilters, activeSeries,
+        employeeId, setEmployeeId, employees,
         showFilterDrop, setShowFilterDrop,
         saleDetail, setSaleDetail,
         returnSale, setReturnSale,
@@ -88,7 +90,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                     Filtros
                     {hasFilters && (
                         <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">
-                            {activeFilters.length + activeSeries.length + (histDateFrom || histDateTo ? 1 : 0)}
+                            {activeFilters.length + activeSeries.length + (employeeId ? 1 : 0) + (histDateFrom || histDateTo ? 1 : 0)}
                         </span>
                     )}
                 </button>
@@ -119,6 +121,25 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                             </button>
                                         ))}
                                     </div>
+                                </div>
+                            )}
+                            {/* Empleado: un desplegable y no botones como estado y serie, porque
+                                la lista crece con la nómina y en una plantilla de diez no
+                                entrarían en el panel. Sin permiso para ver empleados la lista
+                                llega vacía y la sección no se dibuja. */}
+                            {employees.length > 0 && (
+                                <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Empleado</div>
+                                    <CustomSelect
+                                        value={employeeId}
+                                        onChange={setEmployeeId}
+                                        height="h-8"
+                                        placeholder="Todos"
+                                        options={[
+                                            { value: "", label: "Todos" },
+                                            ...employees.map(e => ({ value: e.id, label: e.full_name || e.username })),
+                                        ]}
+                                    />
                                 </div>
                             )}
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">

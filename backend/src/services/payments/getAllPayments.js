@@ -25,6 +25,12 @@ module.exports = async function getAllPayments(query, tenant = {}) {
   const pj = parseInt(query.payment_journal_id, 10);
   if (Number.isInteger(pj)) andClauses.push({ payment_journal_id: pj });
 
+  // Quién cobró. El cobro guarda su propio empleado —no lo hereda de la venta—, que es lo
+  // correcto aquí: una factura la puede emitir un cajero y cobrarla otro al día siguiente.
+  // Va en andClauses, así que el pie totaliza lo de ese empleado y no lo de toda la caja.
+  const emp = parseInt(query.employee_id, 10);
+  if (Number.isInteger(emp)) andClauses.push({ employee_id: emp });
+
   const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;
   const safeFrom = sd(date_from);
   const safeTo   = sd(date_to);

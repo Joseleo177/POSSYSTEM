@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useIngresos } from "../../hooks/contabilidad/useIngresos";
+import FilterPopover from "../ui/FilterPopover";
 import ConfirmModal from "../ui/ConfirmModal";
 import { Button } from "../ui/Button";
 import { fmtDateShort } from "../../helpers";
@@ -36,6 +37,7 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
     } = useIngresos({ notify, journals });
 
     const [detail, setDetail] = useState(null);
+    const filtrosBtnRef = useRef(null);
     const { baseCurrency } = useApp();
     const baseSym = baseCurrency?.symbol || "Ref.";
 
@@ -50,7 +52,7 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
             </div>
 
             <div className="relative">
-                <button onClick={() => setShowFilterDrop(p => !p)}
+                <button ref={filtrosBtnRef} onClick={() => setShowFilterDrop(p => !p)}
                     className={["h-8 px-3 rounded-lg text-[11px] font-black uppercase tracking-wide border flex items-center gap-2 transition-all",
                         hasFilters ? "bg-brand-500/10 text-brand-500 border-brand-500/30"
                             : "bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"].join(" ")}>
@@ -58,10 +60,7 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                     Filtros
                     {hasFilters && <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">{activeFilters.length + activeCats.length + (histDateFrom || histDateTo ? 1 : 0)}</span>}
                 </button>
-                {showFilterDrop && (
-                    <>
-                        <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
-                        <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                <FilterPopover open={showFilterDrop} onClose={() => setShowFilterDrop(false)} anchorRef={filtrosBtnRef}>
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado</div>
                                 <div className="grid grid-cols-2 gap-1.5">
@@ -91,9 +90,7 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                             <div className="px-4 py-2">
                                 <button onClick={clearFilters} className="w-full py-1.5 text-[10px] font-black uppercase tracking-wide text-danger hover:bg-danger/5 rounded-lg transition-colors">Limpiar todo</button>
                             </div>
-                        </div>
-                    </>
-                )}
+                </FilterPopover>
             </div>
 
             <div className="ml-auto flex items-center gap-2">

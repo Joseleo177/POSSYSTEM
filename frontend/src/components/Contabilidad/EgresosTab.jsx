@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useEgresos } from "../../hooks/contabilidad/useEgresos";
+import FilterPopover from "../ui/FilterPopover";
 import ConfirmModal from "../ui/ConfirmModal";
 import { Button } from "../ui/Button";
 import { fmtDateShort } from "../../helpers";
@@ -36,6 +37,7 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
     } = useEgresos({ notify, journals });
 
     const [detail, setDetail] = useState(null);
+    const filtrosBtnRef = useRef(null);
     const { baseCurrency } = useApp();
     const baseSym = baseCurrency?.symbol || "Ref.";
 
@@ -56,6 +58,7 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
 
             <div className="relative">
                 <button
+                    ref={filtrosBtnRef}
                     onClick={() => setShowFilterDrop(p => !p)}
                     className={[
                         "h-8 px-3 rounded-lg text-[11px] font-black uppercase tracking-wide border flex items-center gap-2 transition-all",
@@ -72,10 +75,7 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                         </span>
                     )}
                 </button>
-                {showFilterDrop && (
-                    <>
-                        <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
-                        <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                <FilterPopover open={showFilterDrop} onClose={() => setShowFilterDrop(false)} anchorRef={filtrosBtnRef}>
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado</div>
                                 <div className="grid grid-cols-2 gap-1.5">
@@ -107,9 +107,7 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                                     Limpiar todo
                                 </button>
                             </div>
-                        </div>
-                    </>
-                )}
+                </FilterPopover>
             </div>
 
             <div className="ml-auto flex items-center gap-2">

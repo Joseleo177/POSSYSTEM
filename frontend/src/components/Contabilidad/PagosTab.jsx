@@ -1,4 +1,6 @@
+import { useRef } from "react";
 import { usePagos } from "../../hooks/contabilidad/usePagos";
+import FilterPopover from "../ui/FilterPopover";
 import PaymentFormModal from "../PaymentFormModal";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
@@ -17,6 +19,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
         payDateFrom, setPayDateFrom,
         payDateTo, setPayDateTo,
         journalFilter, setJournalFilter,
+        employeeFilter, setEmployeeFilter, employees,
         showFilterDrop, setShowFilterDrop,
         payDetail, setPayDetail,
         payModal, setPayModal,
@@ -31,6 +34,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
     // que la moneda secundaria del sistema es la del filtro.
     const { activeCurrencies } = useApp();
     const filterCurrency = currencyId ? (activeCurrencies || []).find(c => c.id === currencyId) : null;
+    const filtrosBtnRef = useRef(null);
 
     const subheader = (
         <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2">
@@ -43,6 +47,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
 
             <div className="relative">
                 <button
+                    ref={filtrosBtnRef}
                     onClick={() => setShowFilterDrop(p => !p)}
                     className={["h-8 px-3 rounded-lg text-[11px] font-black uppercase tracking-wide border flex items-center gap-2 transition-all",
                         hasFilters ? "bg-brand-500/10 text-brand-500 border-brand-500/30" : "bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"
@@ -52,10 +57,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                     Filtros
                     {hasFilters && <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">{filterCount}</span>}
                 </button>
-                {showFilterDrop && (
-                    <>
-                        <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
-                        <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                <FilterPopover open={showFilterDrop} onClose={() => setShowFilterDrop(false)} anchorRef={filtrosBtnRef}>
                             {/* El selector de vista Historial / Por Cobrar se retiró de aquí: las
                                 cuentas por cobrar tienen su propio módulo. La vista "pendientes"
                                 sigue implementada en usePagos y en la tabla por si se reactiva. */}
@@ -82,6 +84,25 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                     />
                                 </div>
                             )}
+                            {/* Quién cobró. El cobro guarda su propio empleado: una factura la
+                                puede emitir un cajero y cobrarla otro, así que este filtro no
+                                es el mismo que el de Ventas. Select por lo mismo que el diario:
+                                la lista crece con la nómina. */}
+                            {employees.length > 0 && (
+                                <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Empleado</div>
+                                    <CustomSelect
+                                        value={employeeFilter}
+                                        onChange={setEmployeeFilter}
+                                        height="h-9"
+                                        placeholder="Todos"
+                                        options={[
+                                            { value: "", label: "Todos" },
+                                            ...employees.map(e => ({ value: String(e.id), label: e.full_name || e.username })),
+                                        ]}
+                                    />
+                                </div>
+                            )}
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Rango de fechas</div>
                                 <DateRangePicker compact from={payDateFrom} to={payDateTo} setFrom={setPayDateFrom} setTo={setPayDateTo} />
@@ -91,9 +112,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                     Limpiar todo
                                 </button>
                             </div>
-                        </div>
-                    </>
-                )}
+                </FilterPopover>
             </div>
 
         </div>

@@ -20,14 +20,26 @@ export function usePagos({ notify }) {
     const [payDateFrom, setPayDateFrom] = useState("");
     const [payDateTo, setPayDateTo] = useState("");
     const [journalFilter, setJournalFilter] = useState("");
+    // Quién cobró. "" = todos. La lista se pide una vez; si el usuario no tiene permiso para
+    // ver empleados llega vacía y el filtro no se ofrece, en vez de reventar la pestaña.
+    const [employeeFilter, setEmployeeFilter] = useState("");
+    const [employees, setEmployees] = useState([]);
     const [showFilterDrop, setShowFilterDrop] = useState(false);
+
+    useEffect(() => {
+        let vivo = true;
+        api.employees.getAll()
+            .then(r => { if (vivo) setEmployees(r.data || []); })
+            .catch(() => { /* sin permiso: sin filtro */ });
+        return () => { vivo = false; };
+    }, []);
 
     const [payDetail, setPayDetail] = useState(null);
     const [payModal, setPayModal] = useState(null);
     const [deleteDialog, setDeleteDialog] = useState(null);
 
     // Query unificado — cualquier cambio recarga desde página 1
-    const [query, setQuery] = useState({ viewType: "historial", search: "", dateFrom: "", dateTo: "", journalId: "", page: 1, refresh: 0 });
+    const [query, setQuery] = useState({ viewType: "historial", search: "", dateFrom: "", dateTo: "", journalId: "", employeeId: "", page: 1, refresh: 0 });
 
     useEffect(() => {
         const timer = setTimeout(() => setQuery(q => {
@@ -39,10 +51,10 @@ export function usePagos({ notify }) {
 
     useEffect(() => {
         setQuery(q => {
-            if (q.viewType === viewType && q.dateFrom === payDateFrom && q.dateTo === payDateTo && q.journalId === journalFilter) return q;
-            return { ...q, viewType, dateFrom: payDateFrom, dateTo: payDateTo, journalId: journalFilter, page: 1 };
+            if (q.viewType === viewType && q.dateFrom === payDateFrom && q.dateTo === payDateTo && q.journalId === journalFilter && q.employeeId === employeeFilter) return q;
+            return { ...q, viewType, dateFrom: payDateFrom, dateTo: payDateTo, journalId: journalFilter, employeeId: employeeFilter, page: 1 };
         });
-    }, [viewType, payDateFrom, payDateTo, journalFilter]); // eslint-disable-line
+    }, [viewType, payDateFrom, payDateTo, journalFilter, employeeFilter]); // eslint-disable-line
 
     useEffect(() => {
         let cancelled = false;
@@ -54,6 +66,7 @@ export function usePagos({ notify }) {
                 if (query.dateFrom) params.date_from = query.dateFrom;
                 if (query.dateTo)   params.date_to   = query.dateTo;
                 if (query.journalId) params.payment_journal_id = query.journalId;
+                if (query.employeeId) params.employee_id = query.employeeId;
                 const res = query.viewType === "pendientes"
                     ? await api.payments.getPending(params)
                     : await api.payments.getAll(params);
@@ -77,6 +90,7 @@ export function usePagos({ notify }) {
         setPayDateFrom("");
         setPayDateTo("");
         setJournalFilter("");
+        setEmployeeFilter("");
         setShowFilterDrop(false);
     };
 
@@ -100,7 +114,7 @@ export function usePagos({ notify }) {
     };
 
     const totalPages = Math.ceil(total / LIMIT);
-    const filterCount = (viewType !== "historial" ? 1 : 0) + (payDateFrom || payDateTo ? 1 : 0) + (journalFilter ? 1 : 0);
+    const filterCount = (viewType !== "historial" ? 1 : 0) + (payDateFrom || payDateTo ? 1 : 0) + (journalFilter ? 1 : 0) + (employeeFilter ? 1 : 0);
     const hasFilters = filterCount > 0;
 
     return {
@@ -110,6 +124,7 @@ export function usePagos({ notify }) {
         payDateFrom, setPayDateFrom,
         payDateTo, setPayDateTo,
         journalFilter, setJournalFilter,
+        employeeFilter, setEmployeeFilter, employees,
         showFilterDrop, setShowFilterDrop,
         payDetail, setPayDetail,
         payModal, setPayModal,

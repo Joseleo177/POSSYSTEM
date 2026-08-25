@@ -23,6 +23,9 @@ export function useTransacciones({ notify }) {
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [activeFilters, setActiveFilters] = useState([]);
     const [activeSeries, setActiveSeries] = useState([]);
+    // Filtro por quién hizo la venta. "" = todos.
+    const [employeeId, setEmployeeId] = useState("");
+    const [employees, setEmployees] = useState([]);
     const [showFilterDrop, setShowFilterDrop] = useState(false);
     const [saleDetail, setSaleDetail] = useState(null);
     const [returnSale, setReturnSale] = useState(null);
@@ -33,7 +36,18 @@ export function useTransacciones({ notify }) {
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-    useEffect(() => { setPage(1); }, [debouncedSearch, histDateFrom, histDateTo, activeFilters, activeSeries]);
+    useEffect(() => { setPage(1); }, [debouncedSearch, histDateFrom, histDateTo, activeFilters, activeSeries, employeeId]);
+
+    // La lista para el desplegable. Si el empleado no tiene permiso para verla (employees.view)
+    // se queda vacía y el filtro simplemente no se ofrece, en vez de saltar un error al abrir
+    // la pestaña. Se incluyen los inactivos: sus ventas siguen en el histórico.
+    useEffect(() => {
+        let vivo = true;
+        api.employees.getAll()
+            .then(r => { if (vivo) setEmployees(r.data || []); })
+            .catch(() => { /* sin permiso: sin filtro */ });
+        return () => { vivo = false; };
+    }, []);
 
     const loadSales = useCallback(async () => {
         setLoading(true);
@@ -44,6 +58,7 @@ export function useTransacciones({ notify }) {
             if (debouncedSearch)      params.search    = debouncedSearch;
             if (activeFilters.length) params.status    = activeFilters[0];
             if (activeSeries.length)  params.serie_id  = activeSeries[0];
+            if (employeeId)           params.employee_id = employeeId;
             const r = await api.sales.getAll(params);
             setSales(r.data);
             setTotal(r.total || 0);
@@ -53,7 +68,7 @@ export function useTransacciones({ notify }) {
             setSumForgiven(parseFloat(r.sum_forgiven || 0));
         } catch (e) { notify(e.message, "err"); }
         finally { setLoading(false); }
-    }, [histDateFrom, histDateTo, debouncedSearch, activeFilters, activeSeries, page, notify]);
+    }, [histDateFrom, histDateTo, debouncedSearch, activeFilters, activeSeries, employeeId, page, notify]);
 
     useEffect(() => { loadSales(); }, [loadSales]);
 
@@ -63,6 +78,7 @@ export function useTransacciones({ notify }) {
     const clearFilters = () => {
         setActiveFilters([]);
         setActiveSeries([]);
+        setEmployeeId("");
         setHistDateFrom("");
         setHistDateTo("");
         setSearchTerm("");
@@ -75,7 +91,7 @@ export function useTransacciones({ notify }) {
     };
 
     const totalPages = Math.ceil(total / LIMIT);
-    const hasFilters = activeFilters.length > 0 || activeSeries.length > 0 || !!histDateFrom || !!histDateTo;
+    const hasFilters = activeFilters.length > 0 || activeSeries.length > 0 || !!employeeId || !!histDateFrom || !!histDateTo;
 
     return {
         sales, total, sumTotal, sumPaid, sumPending, sumForgiven, page, setPage, loading, LIMIT,
@@ -83,6 +99,7 @@ export function useTransacciones({ notify }) {
         histDateTo, setHistDateTo,
         searchTerm, setSearchTerm,
         activeFilters, activeSeries,
+        employeeId, setEmployeeId, employees,
         showFilterDrop, setShowFilterDrop,
         saleDetail, setSaleDetail,
         returnSale, setReturnSale,

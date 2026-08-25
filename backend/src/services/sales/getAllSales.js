@@ -1,7 +1,7 @@
 const { Sale, SaleItem, Customer, Employee, Currency, Warehouse, Serie, Sequelize, Op, PAYMENT_METHODS } = require("./shared");
 
 module.exports = async function getAllSales(query, tenant = {}) {
-  const { limit = 50, offset = 0, date_from, date_to, payment_method, status, serie_id, search, warehouse_id } = query;
+  const { limit = 50, offset = 0, date_from, date_to, payment_method, status, serie_id, search, warehouse_id, employee_id } = query;
   const { company_id, isSuperuser, allowedWarehouses } = tenant;
 
   const andClauses = [];
@@ -37,6 +37,12 @@ module.exports = async function getAllSales(query, tenant = {}) {
     andClauses.push(statuses.length === 1 ? { status: statuses[0] } : { status: { [Op.in]: statuses } });
   }
   if (serie_id) andClauses.push({ serie_id: parseInt(serie_id, 10) });
+  // Quién hizo la venta. Entra en andClauses como los demás filtros, así que los totales
+  // del pie —que se calculan sobre este mismo where— hablan del empleado filtrado y no de
+  // toda la caja.
+  if (employee_id && !isNaN(parseInt(employee_id, 10))) {
+    andClauses.push({ employee_id: parseInt(employee_id, 10) });
+  }
 
   if (search) {
     const safe = search.slice(0, 100).replace(/[\x00-\x1f\\]/g, '');
