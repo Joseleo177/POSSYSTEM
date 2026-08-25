@@ -88,30 +88,57 @@ module.exports = async function getSessionSummary(id, req) {
   // El monto va a la tasa con la que se registró el egreso (e.rate), no a la de hoy: es la que
   // convierte el importe en los billetes que de verdad se sacaron. Mismo criterio que los
   // cobros, que se suman con la tasa de su propio pago.
-  const changeOutByJournal = await sequelize.query(
+  // TODO egreso de la caja, no solo el vuelto: pagar un flete o comprar hielo con la plata de
+  // la gaveta la deja igual de corta que devolver un cambio. Antes solo se descontaba la
+  // categoría 'Cambio / Vuelto', así que cualquier otro gasto aparecía como faltante al cerrar.
+  //
+  // Se atribuye a quien lo registró (e.employee_id): el egreso sale de UNA caja, la de esa
+  // persona. Sin ese filtro, con dos cajeros en la misma sucursal el gasto de uno se le
+  // descontaba también al otro.
+  const expensesByJournal = await sequelize.query(
     `
       SELECT e.payment_journal_id AS journal_id,
              COALESCE(SUM(e.amount * COALESCE(e.rate, 1)), 0)::float AS total_out
       FROM expenses e
-      JOIN expense_categories ec ON ec.id = e.category_id
-      WHERE ec.name = 'Cambio / Vuelto'
-        AND e.status = 'activo'
+      WHERE e.status = 'activo'
         AND e.payment_journal_id IS NOT NULL
         AND e.warehouse_id = :wid
+        AND e.employee_id = :eid
         AND e.created_at >= :openedAt AND e.created_at < :closedAt
       GROUP BY e.payment_journal_id
     `,
     {
       type: Sequelize.QueryTypes.SELECT,
-      replacements: { wid, openedAt: openedAt.toISOString(), closedAt: closedAt.toISOString() },
+      replacements: { wid, eid, openedAt: openedAt.toISOString(), closedAt: closedAt.toISOString() },
+    }
+  );
+
+  // Y lo que entró a mano: un ingreso manual en efectivo es dinero que está en la gaveta, así
+  // que suma al esperado igual que un cobro. Sin esto aparecía como sobrante al cerrar.
+  const incomesByJournal = await sequelize.query(
+    `
+      SELECT i.payment_journal_id AS journal_id,
+             COALESCE(SUM(i.amount * COALESCE(i.rate, 1)), 0)::float AS total_in
+      FROM incomes i
+      WHERE i.status = 'activo'
+        AND i.payment_journal_id IS NOT NULL
+        AND i.warehouse_id = :wid
+        AND i.employee_id = :eid
+        AND i.created_at >= :openedAt AND i.created_at < :closedAt
+      GROUP BY i.payment_journal_id
+    `,
+    {
+      type: Sequelize.QueryTypes.SELECT,
+      replacements: { wid, eid, openedAt: openedAt.toISOString(), closedAt: closedAt.toISOString() },
     }
   );
 
   const journalSummary = (session.journals || []).map((sj) => {
     const collected = paymentsByJournal.find((p) => p.id === sj.journal_id);
     const cashIn = parseFloat(collected?.total || 0);
-    const changeOut = parseFloat(changeOutByJournal.find((c) => c.journal_id === sj.journal_id)?.total_out || 0);
-    const expected = parseFloat(sj.opening_amount || 0) + cashIn - changeOut;
+    const manualIn = parseFloat(incomesByJournal.find((i) => i.journal_id === sj.journal_id)?.total_in || 0);
+    const cashOut = parseFloat(expensesByJournal.find((c) => c.journal_id === sj.journal_id)?.total_out || 0);
+    const expected = parseFloat(sj.opening_amount || 0) + cashIn + manualIn - cashOut;
     return {
       journal_id: sj.journal_id,
       journal_name: sj.journal?.name,
@@ -119,7 +146,11 @@ module.exports = async function getSessionSummary(id, req) {
       currency_symbol: sj.journal?.Currency?.symbol || collected?.currency_symbol || "Ref.",
       opening_amount: parseFloat(sj.opening_amount || 0),
       cash_in: cashIn,
-      change_out: changeOut,
+      manual_in: manualIn,
+      // Todas las salidas de la gaveta: vueltos y gastos. `change_out` se mantiene con el
+      // mismo valor para no romper lo que ya lo leía.
+      cash_out: cashOut,
+      change_out: cashOut,
       expected_amount: parseFloat(expected.toFixed(2)),
       closing_amount: sj.closing_amount != null ? parseFloat(sj.closing_amount) : null,
       difference: sj.difference != null ? parseFloat(sj.difference) : null,

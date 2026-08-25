@@ -307,7 +307,9 @@ export default function CashSessionsReport() {
  {[
  ["Inicio", js.opening_amount.toFixed(2), "text-content-subtle"],
  ["Ventas", `+${js.cash_in.toFixed(2)}`, "text-brand-500"],
- ["Cambio", (js.change_out || 0) > 0 ? `−${js.change_out.toFixed(2)}` : "—", (js.change_out || 0) > 0 ? "text-danger" : "text-content-subtle"],
+ // "Salidas" y no "Cambio": desde que el arqueo descuenta todos los egresos de la
+ // caja —un flete, el hielo—, esta cifra ya no son solo los vueltos.
+ ["Salidas", (js.cash_out ?? js.change_out ?? 0) > 0 ? `−${(js.cash_out ?? js.change_out).toFixed(2)}` : "—", (js.cash_out ?? js.change_out ?? 0) > 0 ? "text-danger" : "text-content-subtle"],
  ["Esperado", js.expected_amount.toFixed(2), "text-content dark:text-white"],
  ["Declarado", js.closing_amount?.toFixed(2) || "0.00", "text-success"],
  ].map(([etiqueta, valor, clase]) => (
@@ -325,7 +327,7 @@ export default function CashSessionsReport() {
  <table className="w-full text-left">
  <thead className="bg-surface-2 dark:bg-white/5">
  <tr>
- {["Diario", "Inicio", "Ventas", "Cambio", "Esperado", "Declarado", "Dif."].map((h, i) => (
+ {["Diario", "Inicio", "Ventas", "Salidas", "Esperado", "Declarado", "Dif."].map((h, i) => (
  <th key={h} className={`px-4 py-2.5 text-[10px] font-black uppercase tracking-wide text-content-muted ${i >= 1 && i <= 5 ? "text-right" : i === 6 ? "text-center" : ""}`}>{h}</th>
  ))}
  </tr>
@@ -340,8 +342,8 @@ export default function CashSessionsReport() {
  <td className="px-4 py-2.5 text-right text-content-subtle tabular-nums">{js.opening_amount.toFixed(2)}</td>
  <td className="px-4 py-2.5 text-right text-brand-500 tabular-nums">+{js.cash_in.toFixed(2)}</td>
  <td className="px-4 py-2.5 text-right tabular-nums">
- {(js.change_out || 0) > 0
-  ? <span className="text-danger">−{(js.change_out).toFixed(2)}</span>
+ {(js.cash_out ?? js.change_out ?? 0) > 0
+  ? <span className="text-danger">−{(js.cash_out ?? js.change_out).toFixed(2)}</span>
   : <span className="text-content-subtle">—</span>}
  </td>
  <td className="px-4 py-2.5 text-right tabular-nums">{js.expected_amount.toFixed(2)}</td>

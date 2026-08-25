@@ -159,12 +159,15 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
                                                     {[
                                                         { label: "Fondo Inicial",     value: f(j.opening_amount),  color: "" },
                                                         { label: "Ingresos (Cobros)", value: `+${f(j.cash_in)}`,   color: "text-success" },
-                                                        // El vuelto sale de esta caja y el servidor ya lo resta del esperado.
-                                                        // Sin mostrarlo, el desglose no cuadraba a la vista: el cajero sumaba
-                                                        // fondo + ingresos y le daba más que el total, sin saber de dónde
-                                                        // salía la diferencia. Solo aparece si hubo cambios entregados.
-                                                        ...(parseFloat(j.change_out) > 0
-                                                            ? [{ label: "Cambios Entregados", value: `-${f(j.change_out)}`, color: "text-danger" }]
+                                                        // Cada movimiento que tocó la gaveta aparece con su signo: sin el
+                                                        // desglose el cajero sumaba fondo + cobros, le daba distinto del
+                                                        // total y no sabía de dónde salía la diferencia. Las líneas en cero
+                                                        // se omiten para no llenar el resumen de ruido.
+                                                        ...(parseFloat(j.manual_in) > 0
+                                                            ? [{ label: "Ingresos Manuales", value: `+${f(j.manual_in)}`, color: "text-success" }]
+                                                            : []),
+                                                        ...(parseFloat(j.cash_out ?? j.change_out) > 0
+                                                            ? [{ label: "Egresos y Vueltos", value: `-${f(j.cash_out ?? j.change_out)}`, color: "text-danger" }]
                                                             : []),
                                                         { label: "Total Esperado",    value: f(j.expected_amount), color: "text-warning", bold: true },
                                                     ].map(({ label, value, color, bold }) => (
