@@ -124,7 +124,16 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   // cobrado llega al saldo menos la tolerancia (ver PAYMENT_TOLERANCE en utils/saleBalance),
   // que es justo el desfase de redondeo que este ajuste intentaba tapar. Lo único que se
   // conserva es el tope: no se aplica a la factura más de lo que debe.
-  amountBase = Math.min(amountBase, pendingAfterCredit + 0.0001);
+  //
+  // El tope se aplica en la moneda contra la que se cobró, no siempre en la base. Cobrando en
+  // Bs la pantalla pide el saldo línea por línea (Bs.1895,00 = 2,4028 en base) mientras que el
+  // saldo oficial es el total de la factura redondeado a dos decimales (2,40 = Bs.1892,79).
+  // Recortar ahí el cobro registraba 2,4001 por 1895 bolívares recibidos: la gaveta quedaba con
+  // 2,13 más de lo que decía la caja, en cada cobro completo. El input ya está topado contra
+  // pendingPreciseBs, que es el tope correcto en esa moneda, y el servidor limita aparte lo que
+  // se aplica a la factura (netCredit), así que el sobrante de redondeo no la sobrepaga.
+  // Es el mismo criterio que ya usa `finalAmountBase` para el vuelto que se queda la caja.
+  if (!isNonBasePay) amountBase = Math.min(amountBase, pendingAfterCredit + 0.0001);
 
   // Proyección de cómo queda la factura si se registra este pago. Se calcula sobre la
   // misma pista que el resumen de arriba: en Bs cuando hay tasa (pendingPreciseBs), en
