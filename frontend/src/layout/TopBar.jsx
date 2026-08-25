@@ -120,8 +120,15 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
                 <div className="w-7 h-7 rounded-full bg-brand-500/10 flex items-center justify-center text-brand-500 text-xs font-black shrink-0">
                     {employee?.full_name?.charAt(0)?.toUpperCase()}
                 </div>
-                <div className="flex flex-col items-start leading-none">
-                    <span className="text-xs font-semibold text-content dark:text-content-dark truncate max-w-[100px]">
+                <div className="flex flex-col items-start leading-none min-w-0">
+                    {/* El tope crece con la pantalla: 100px fijos recortaban "GENESIS ARRIETA"
+                        incluso en un monitor con media barra vacía. Sigue habiendo un límite
+                        —y el truncate— para que un nombre muy largo no empuje los botones de
+                        tema y salir, que son los que tienen que quedar siempre a mano. */}
+                    <span
+                        className="text-xs font-semibold text-content dark:text-content-dark truncate max-w-[110px] sm:max-w-[180px] lg:max-w-[280px]"
+                        title={employee?.full_name || ""}
+                    >
                         {employee?.full_name}
                     </span>
                     <span className={`text-[10px] font-semibold px-1 py-px rounded border mt-0.5 ${roleClass}`}>

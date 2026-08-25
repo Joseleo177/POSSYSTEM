@@ -109,19 +109,23 @@ export function ExportButton({ onClick, loading = false }) {
  if (loading) {
  return (
  <button disabled
- className="flex items-center gap-2 px-4 py-2 text-[11px] font-black uppercase tracking-wide rounded-xl border border-green-500\30 text-green-500 bg-green-500\5 opacity-60 animate-pulse shadow-sm">
- <div className="w-4 h-4 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin" />
+ className="shrink-0 whitespace-nowrap flex items-center gap-2 px-3 sm:px-4 py-2 text-[11px] font-black uppercase tracking-wide rounded-xl border border-green-500/30 text-green-500 bg-green-500/5 opacity-60 animate-pulse shadow-sm">
+ <div className="w-4 h-4 shrink-0 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin" />
  Generando...
  </button>
  );
  }
  return (
- <button onClick={onClick}
- className="flex items-center gap-2 px-4 py-2 text-[11px] font-black uppercase tracking-wide rounded-xl border border-green-500/30 text-green-500 bg-green-500/5 hover:bg-green-500 hover:text-white transition-all shadow-sm">
- <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ // shrink-0 y whitespace-nowrap: compartiendo fila con el buscador y los filtros, el botón se
+ // comprimía hasta partir "Exportar Excel" en dos líneas y quedaba el doble de alto que sus
+ // vecinos. En pantallas estrechas la etiqueta se acorta en vez de envolverse.
+ <button onClick={onClick} title="Exportar a Excel"
+ className="shrink-0 whitespace-nowrap flex items-center gap-2 px-3 sm:px-4 py-2 text-[11px] font-black uppercase tracking-wide rounded-xl border border-green-500/30 text-green-500 bg-green-500/5 hover:bg-green-500 hover:text-white transition-all shadow-sm">
+ <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
  </svg>
- Exportar Excel
+ <span className="hidden sm:inline">Exportar Excel</span>
+ <span className="sm:hidden">Excel</span>
  </button>
  );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../../services/api";
 import { buildInventoryExcel } from "../../helpers/excel";
 import { fmtNumber, fmtInt } from "../../helpers";
@@ -7,6 +7,7 @@ import {
   KpiCard, SectionHeader, Card, Loading, ExportButton, StockBadge,
 } from "./reportes.utils";
 import CustomSelect from "../../components/ui/CustomSelect";
+import FilterPopover from "../../components/ui/FilterPopover";
 
 const TH = ({ children, right, center }) => (
   <th className={`px-4 py-2 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted ${right ? "text-right" : center ? "text-center" : ""}`}>
@@ -32,6 +33,7 @@ export default function InventoryReport() {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showFilterDrop, setShowFilterDrop] = useState(false);
+  const filtrosBtnRef = useRef(null);
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -120,9 +122,12 @@ export default function InventoryReport() {
   return (
     <div className="h-full flex flex-col space-y-4 overflow-hidden">
       {/* TOOLBAR PREMIUM ESTILO CONTABILIDAD */}
-      <div className="shrink-0 flex items-center gap-2">
+      {/* En tablet los tres controles no caben en una fila: el buscador cedía todo su ancho y
+          quedaba reducido a la lupa. Hasta 1024px ocupa su propia fila completa y debajo van
+          los filtros y la exportación; desde ahí vuelven a ir en línea. */}
+      <div className="shrink-0 flex flex-wrap items-center gap-2">
         {/* Buscador de Producto */}
-        <div className="relative flex-1 group">
+        <div className="relative group basis-full lg:basis-auto lg:flex-1 min-w-0 order-1">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle opacity-40 group-focus-within:opacity-100 group-focus-within:text-brand-500 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -136,8 +141,9 @@ export default function InventoryReport() {
         </div>
 
         {/* Botón de Filtros Dropdown */}
-        <div className="relative">
+        <div className="relative order-2">
           <button
+            ref={filtrosBtnRef}
             onClick={() => setShowFilterDrop(!showFilterDrop)}
             className={`h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border flex items-center gap-2.5 transition-all
               ${hasActiveFilters 
@@ -156,10 +162,8 @@ export default function InventoryReport() {
             )}
           </button>
 
-          {showFilterDrop && (
-            <>
-              <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
-              <div className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-[#1a1a1a] border border-border/40 dark:border-white/10 rounded-2xl shadow-2xl z-[70] p-5 animate-in fade-in slide-in-from-top-2 duration-200">
+          <FilterPopover open={showFilterDrop} onClose={() => setShowFilterDrop(false)} anchorRef={filtrosBtnRef}>
+              <div className="p-5">
                 <div className="space-y-5">
                   <header className="flex items-center justify-between border-b border-border/10 pb-3 mb-1">
                     <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Opciones de filtrado</span>
@@ -214,12 +218,13 @@ export default function InventoryReport() {
                   </footer>
                 </div>
               </div>
-            </>
-          )}
+          </FilterPopover>
         </div>
 
-        <div className="h-10 border-l border-border/20 mx-1" />
-        {data && <ExportButton onClick={handleExport} loading={exporting} />}
+        <div className="hidden lg:block h-10 border-l border-border/20 mx-1 order-2" />
+        <div className="order-3 ml-auto lg:ml-0">
+          {data && <ExportButton onClick={handleExport} loading={exporting} />}
+        </div>
       </div>
 
       {loading && !data && <div className="flex-1 flex items-center justify-center"><Loading /></div>}
