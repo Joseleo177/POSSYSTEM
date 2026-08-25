@@ -299,6 +299,12 @@ export default function CobroPage() {
                 // que venza el bloqueo.
                 canForceRelease={can("admin")}
                 onForceRelease={releaseHeldCart}
+                // Lo que necesita la vista de barra para editar una cuenta sin traerla al
+                // carrito: el almacén manda el catálogo y las existencias, y onRefresh vuelve
+                // a pedir las cuentas cuando una ronda ya se guardó.
+                activeWarehouse={activeWarehouse}
+                notify={notify}
+                onRefresh={loadHeldCarts}
             />
             <CheckoutTypeModal
                 open={showConfirmCheckout}
