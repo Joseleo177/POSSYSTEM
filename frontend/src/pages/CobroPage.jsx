@@ -35,7 +35,7 @@ export default function CobroPage() {
         totalDisplay, totalSecondary,
         subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
         chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel,
-        chargeInput, setChargeInput, setChargeFromPct, chargeAmountDisplay, chargePct,
+        chargeInput, setChargeInput, chargeMode, setChargeMode, setChargeFromPct, chargeAmountDisplay, chargePct,
         currentCurrency, setSelectedCurrency, secondaryCurrency,
         convertToDisplay, convertToSecondary,
         selectedSerieId, selectSerie, mySeries,
@@ -189,6 +189,7 @@ export default function CobroPage() {
                 chargeEnabled={chargeEnabled} setChargeEnabled={setChargeEnabled}
                 chargeLabel={chargeLabel} setChargeLabel={setChargeLabel}
                 chargeInput={chargeInput} setChargeInput={setChargeInput}
+                chargeMode={chargeMode} setChargeMode={setChargeMode}
                 setChargeFromPct={setChargeFromPct}
                 chargeAmountDisplay={chargeAmountDisplay} chargePct={chargePct}
                 convertToDisplay={convertToDisplay} convertToSecondary={convertToSecondary}
@@ -283,7 +284,12 @@ export default function CobroPage() {
                 open={showHeldModal}
                 onClose={() => setShowHeldModal(false)}
                 carts={heldCarts}
-                onTake={id => { takeHeldCart(id); setShowHeldModal(false); }}
+                // Recuperar una cuenta lleva al carrito, no al catálogo: en móvil y tablet
+                // ambos ocupan la pantalla entera y solo se ve uno a la vez, así que al
+                // cerrarse el listado la mesa recuperada quedaba fuera de la vista y había
+                // que ir a buscarla a la pestaña de al lado. En escritorio no cambia nada:
+                // las dos columnas están siempre visibles.
+                onTake={id => { takeHeldCart(id); setShowHeldModal(false); setMobileTab("cart"); }}
                 onRemove={removeHeldCart}
                 // Aceptar no cierra el modal: lo normal al abrirlo es despachar varios
                 // pedidos seguidos, y volver a abrirlo entre cada uno estorba.

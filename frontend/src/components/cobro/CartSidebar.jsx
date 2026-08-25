@@ -13,7 +13,7 @@ export default function CartSidebar({
     discountPct, setDiscountPct, discountMode, setDiscountMode,
     totalDisplay, totalSecondary,
     subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
-    chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel,
+    chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel, chargeMode, setChargeMode,
     chargeInput, setChargeInput, setChargeFromPct,
     chargeAmountDisplay = 0, chargePct = 0,
     convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt,
@@ -482,15 +482,35 @@ export default function CartSidebar({
                                 <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide opacity-60 dark:text-content-dark-muted">Recargo</span>
                             </div>
                             {chargeEnabled && (
-                                <div className="relative w-24 lg:w-28">
-                                    <input
-                                        type="number" min="0" step="0.01" inputMode="decimal"
-                                        value={chargeInput}
-                                        onChange={e => setChargeInput(e.target.value)}
-                                        placeholder="0.00"
-                                        className="w-full bg-surface-2 dark:bg-white/10 h-7 lg:h-8 rounded-lg pl-10 pr-2 text-right text-xs font-black outline-none focus:ring-2 focus:ring-brand-500/20 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    />
-                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-black opacity-30 dark:text-white pointer-events-none">{currSym}</span>
+                                <div className="flex items-center gap-1.5">
+                                    {/* Mismo selector que el descuento: la propina se pide de
+                                        las dos formas —"el 10%" y "ponle 5 de servicio"— y con
+                                        solo monto había que calcular el porcentaje de cabeza
+                                        cada vez que cambiaba el consumo. */}
+                                    <div className="flex rounded-lg overflow-hidden border border-black/10 dark:border-white/10">
+                                        {[["pct", "%"], ["amount", currentCurrency?.symbol || "Ref."]].map(([modo, etiqueta]) => (
+                                            <button
+                                                key={modo}
+                                                onClick={() => { setChargeMode(modo); setChargeInput(""); }}
+                                                className={`h-7 lg:h-8 px-2 text-[10px] font-black transition-all ${chargeMode === modo
+                                                    ? "bg-brand-500 text-black"
+                                                    : "bg-surface-2 dark:bg-white/10 text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white"}`}
+                                            >
+                                                {etiqueta}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="w-16 lg:w-20">
+                                        <input
+                                            type="number" min="0" inputMode="decimal"
+                                            step={chargeMode === "pct" ? "1" : "0.01"}
+                                            max={chargeMode === "pct" ? "100" : undefined}
+                                            value={chargeInput}
+                                            onChange={e => setChargeInput(e.target.value)}
+                                            placeholder={chargeMode === "pct" ? "0" : "0.00"}
+                                            className="w-full bg-surface-2 dark:bg-white/10 h-7 lg:h-8 rounded-lg px-2 text-right text-xs font-black outline-none focus:ring-2 focus:ring-brand-500/20 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                    </div>
                                 </div>
                             )}
                         </div>

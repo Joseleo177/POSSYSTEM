@@ -100,6 +100,10 @@ export function CartProvider({ children }) {
   const [chargeEnabled, setChargeEnabled] = useState(false);
   const [chargeLabel, setChargeLabel] = useState("Servicio");
   const [chargeInput, setChargeInput] = useState("");
+  // Cómo se lee chargeInput, igual que discountMode en el descuento: "amount" es un monto en la
+  // moneda de pantalla y "pct" un porcentaje del consumo neto. Por defecto monto, que es como
+  // funcionaba antes y como se carga una propina ya calculada.
+  const [chargeMode, setChargeMode] = useState("amount");   // amount | pct
   // En qué moneda está expresado chargeInput. El selector de arriba cambia la moneda de toda
   // la pantalla, y un monto tecleado no puede quedarse en el mismo número al cambiarla: una
   // propina de 2 Ref se convertiría sola en 2 Bs, o sea en nada. El descuento no sufre esto
@@ -355,8 +359,8 @@ export function CartProvider({ children }) {
   const chargeRaw = chargeEnabled
     ? Math.max(0, parseFloat(String(chargeInput).replace(",", ".")) || 0)
     : 0;
-  const chargeUsd = isVesPrimary ? (vesRate ? chargeRaw / vesRate : 0) : chargeRaw;
-  const chargeBs  = vesRate ? (isVesPrimary ? chargeRaw : round2(chargeRaw * vesRate)) : 0;
+  // chargeUsd y chargeBs se calculan más abajo, junto a los totales: en modo porcentaje
+  // dependen del consumo neto, que necesita el subtotal y los descuentos ya resueltos.
 
   // Cambiar la moneda de la pantalla reexpresa el recargo, no lo reescribe: lo que valía
   // Ref. 2.00 pasa a valer Bs. 1559.90, y el porcentaje sobre el consumo se mantiene. Sin
@@ -366,6 +370,8 @@ export function CartProvider({ children }) {
     chargeIsVesRef.current = isVesPrimary;
     if (eraVes === isVesPrimary || !vesRate) return;
     setChargeInput(prev => {
+      // En porcentaje no hay nada que reexpresar: el 10% es el mismo en las dos monedas.
+      if (chargeMode !== "amount") return prev;
       const n = parseFloat(String(prev).replace(",", "."));
       if (!(n > 0)) return prev;
       return String(round2(isVesPrimary ? n * vesRate : n / vesRate));
@@ -417,7 +423,6 @@ export function CartProvider({ children }) {
 
   const promoDiscountUsd = cart.reduce((s, i) => s + promoLineDiscountUsd(i), 0);
   const netUsd = subtotalUsd - discountAmountUsd - promoDiscountUsd;
-  const totalUsd = netUsd + chargeUsd;
 
   const promoLineDiscountBs = useCallback((item) => {
     if (!vesRate) return 0;
@@ -449,6 +454,20 @@ export function CartProvider({ children }) {
     : 0;
   const promoDiscountBs = vesRate ? cart.reduce((s, i) => s + promoLineDiscountBs(i), 0) : 0;
   const netBs = vesRate ? (subtotalBs - discountAmountBs - promoDiscountBs) : null;
+
+  // El recargo, ya con el neto resuelto. En porcentaje se aplica sobre el consumo neto —el
+  // 10% es del consumo, no de sí mismo— y cada pista lo calcula en su propia moneda, sin ida
+  // y vuelta por la tasa, igual que el descuento.
+  const chargeUsd = chargeMode === "pct"
+    ? netUsd * (chargeRaw / 100)
+    : (isVesPrimary ? (vesRate ? chargeRaw / vesRate : 0) : chargeRaw);
+  const chargeBs = vesRate
+    ? (chargeMode === "pct"
+        ? (netBs ?? 0) * (chargeRaw / 100)
+        : (isVesPrimary ? chargeRaw : round2(chargeRaw * vesRate)))
+    : 0;
+
+  const totalUsd = netUsd + chargeUsd;
   const totalBs = vesRate ? (netBs + chargeBs) : null;
 
   // ── Mapeo a "principal"/"secundaria" según la moneda seleccionada en el toggle ──
@@ -482,11 +501,14 @@ export function CartProvider({ children }) {
   // Escribe en el mismo input que el cajero puede editar a mano, así que después de tocarlo
   // el monto sigue siendo suyo.
   const setChargeFromPct = useCallback((pct) => {
+    setChargeEnabled(true);
+    // En modo porcentaje el atajo es el propio número: escribir el monto ahí lo leería como
+    // un 1.234%. En modo monto se rellena la cifra, que el cajero puede seguir ajustando.
+    if (chargeMode === "pct") return setChargeInput(String(parseFloat(pct) || 0));
     const base = isVesPrimary ? (netBs ?? 0) : netUsd;
     if (!(base > 0)) return;
-    setChargeEnabled(true);
     setChargeInput(String(round2(base * (parseFloat(pct) || 0) / 100)));
-  }, [isVesPrimary, netBs, netUsd]);
+  }, [chargeMode, isVesPrimary, netBs, netUsd]);
 
 
   // ── Cuentas en espera ─────────────────────────────────────
@@ -734,6 +756,9 @@ export function CartProvider({ children }) {
       if (heldCharge > 0) {
         setChargeEnabled(true);
         setChargeLabel(held.service_charge_label || "Servicio");
+        // La cuenta guarda el recargo como monto en base: se repone como monto, sea cual sea
+        // el modo en que estuviera el selector.
+        setChargeMode("amount");
         setChargeInput(String(round2(isVesPrimary && vesRate ? heldCharge * vesRate : heldCharge)));
       } else {
         setChargeEnabled(false);
@@ -920,7 +945,7 @@ export function CartProvider({ children }) {
       subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
       // Recargo (propina / servicio)
       chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel,
-      chargeInput, setChargeInput, setChargeFromPct,
+      chargeInput, setChargeInput, chargeMode, setChargeMode, setChargeFromPct,
       chargeAmountBase, chargeAmountDisplay, chargePct,
       // Moneda
       selectedCurrency, setSelectedCurrency, currentCurrency, exchangeRate,
