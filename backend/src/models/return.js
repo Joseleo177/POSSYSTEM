@@ -11,7 +11,10 @@ module.exports = (sequelize, DataTypes) => {
     employee_id: { type: DataTypes.INTEGER },
     reason: { type: DataTypes.STRING(500) },
     nc_number: { type: DataTypes.STRING(50), allowNull: true },
-    total: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 },
+    // 6 decimales, como payments.amount y customers.credit_balance: el crédito de la nota va a
+    // parar ahí, y redondear aquí a dos decimales le devolvía al cliente unos bolívares menos
+    // de los que pagó (ver la migración returns-money-precision).
+    total: { type: DataTypes.DECIMAL(14, 6), allowNull: false, defaultValue: 0 },
     // 'activo' | 'anulado'. La anulada se conserva por auditoría —el correlativo ya se
     // quemó— pero no cuenta en inventario, saldos ni en el descuento sobre la factura.
     status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'activo' },

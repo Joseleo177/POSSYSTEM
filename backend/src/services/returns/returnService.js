@@ -42,7 +42,10 @@ async function createReturn({ saleId, items, reason, employee_id }, req) {
         e.status = 400; throw e;
       }
 
-      const subtotal = parseFloat(((si.price - si.discount) * parsedQty).toFixed(2));
+      // 6 decimales y no 2: el precio de la línea puede tener cinco (sale_items.price), y
+      // redondear aquí devolvía menos dinero del que se cobró. Lo que se muestra al cajero sí
+      // se redondea a dos, pero eso es presentación, no lo que se guarda.
+      const subtotal = parseFloat(((si.price - si.discount) * parsedQty).toFixed(6));
       returnTotal += subtotal;
       returnLines.push({ sale_item_id, product_id: si.product_id, name: si.name, price: si.price, qty: parsedQty, subtotal });
     }
@@ -108,7 +111,7 @@ async function createReturn({ saleId, items, reason, employee_id }, req) {
       employee_id: employee_id || null,
       reason:      reason || null,
       nc_number:   nc_number,
-      total:       parseFloat(returnTotal.toFixed(2)),
+      total:       parseFloat(returnTotal.toFixed(6)),
       company_id:  sale.company_id || null,
     }, { transaction });
 

@@ -8,6 +8,10 @@ const { resolveSaleStatus } = require("../../utils/saleBalance");
 const Op = Sequelize.Op;
 const err = (message, status) => Object.assign(new Error(message), { status, isOperational: true });
 const round2 = (n) => parseFloat(parseFloat(n || 0).toFixed(2));
+// Los montos se revierten con la precisión con la que se acreditaron (6 decimales, ver la
+// migración returns-money-precision). round2 se reserva para los mensajes al cajero: descontar
+// el crédito redondeado dejaba céntimos de saldo a favor que ya no respaldaba ninguna nota.
+const round6 = (n) => parseFloat(parseFloat(n || 0).toFixed(6));
 
 /**
  * Anula una nota de crédito y deshace todo lo que hizo.
@@ -66,11 +70,13 @@ module.exports = async function annulReturn(returnId, { employeeId }, req) {
     }
 
     /* ── Guarda 2: el crédito ya se consumió ── */
-    const acreditado = round2(ret.total);
+    const acreditado = round6(ret.total);
     let customer = null;
     if (sale.customer_id) {
       customer = await Customer.findByPk(sale.customer_id, { transaction: t, lock: true });
-      const disponible = round2(customer?.credit_balance);
+      const disponible = round6(customer?.credit_balance);
+      // La holgura de un céntimo se mantiene: el crédito pudo consumirse en cobros que
+      // redondearon, y por esa diferencia no se bloquea una anulación legítima.
       if (customer && disponible + 0.01 < acreditado) {
         throw err(
           `No se puede anular ${etiqueta}: de los ${acreditado.toFixed(2)} acreditados a ` +

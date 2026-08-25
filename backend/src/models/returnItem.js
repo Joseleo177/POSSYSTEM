@@ -11,9 +11,11 @@ module.exports = (sequelize, DataTypes) => {
     sale_item_id: { type: DataTypes.INTEGER },
     product_id: { type: DataTypes.INTEGER },
     name: { type: DataTypes.STRING(300), allowNull: false },
-    price: { type: DataTypes.DECIMAL(12, 4), allowNull: false },
+    // price iguala a sale_items.price (14,5), que es de donde se copia; subtotal va a 6
+    // decimales como el total de la nota.
+    price: { type: DataTypes.DECIMAL(14, 5), allowNull: false },
     qty: { type: DataTypes.DECIMAL(10, 3), allowNull: false },
-    subtotal: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
+    subtotal: { type: DataTypes.DECIMAL(14, 6), allowNull: false },
     company_id: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,
