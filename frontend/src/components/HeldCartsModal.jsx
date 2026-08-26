@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { fmtMoney } from "../helpers";
 import { api } from "../services/api";
 import OrderPreviewModal from "./OrderPreviewModal";
-import HeldCartBarCard from "./HeldCartBarCard";
+import HeldCartBarCard, { totalCuentaEn } from "./HeldCartBarCard";
 
 // La pestaña elegida se recuerda entre sesiones: en un bar la vista de barra es la de todos
 // los días, y volver a la lista cada vez que se abre el modal es un clic de peaje.
@@ -278,15 +278,15 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                         visibles.map(c => {
                             // Las cuentas vienen del servidor (ventas con status 'espera'),
                             // así que el total ya viene calculado y no hay que rearmarlo.
-                            const total = parseFloat(c.total || 0);
-                            // El total viene en moneda base. Antes se rotulaba con
-                            // c.currency_symbol —el símbolo con el que se abrió la cuenta— sin
-                            // convertir el monto, así que una cuenta abierta en Bs. mostraba la
-                            // cifra en Ref. con el símbolo "Bs.". Se convierte igual que en el
-                            // carrito, para que el modal hable siempre en la moneda seleccionada.
+                            // El total se arma desde las líneas en la moneda que está en pantalla,
+                            // no convirtiendo el total en base de la venta: son dos redondeos
+                            // distintos y la misma cuenta salía con dos céntimos de diferencia
+                            // entre este listado y el carrito. Mismo criterio que la vista de
+                            // barra y que el carrito (ver totalCuentaEn).
+                            const lineas = (c.items || []).map(i => ({ price: parseFloat(i.price), qty: parseFloat(i.quantity) }));
                             const sym = currSym || baseCurrency?.symbol || "Ref.";
-                            const totalDisplay = convertToDisplay ? convertToDisplay(total) : total;
-                            const totalSecondary = convertToSecondary ? convertToSecondary(total) : null;
+                            const totalDisplay = totalCuentaEn(lineas, c, convertToDisplay);
+                            const totalSecondary = convertToSecondary ? totalCuentaEn(lineas, c, convertToSecondary) : null;
                             // Un pedido del catálogo todavía no descontó inventario: no se puede
                             // llevar al carrito sin aceptarlo primero, porque el cobro daría por
                             // hecho que la mercancía ya salió.

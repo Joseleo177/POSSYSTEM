@@ -10,6 +10,25 @@ const SAVE_DELAY = 900;
 
 // Redondeo a 3 decimales, el mismo que usa el carrito para no arrastrar 0.30000000000000004.
 const round3 = (n) => parseFloat((parseFloat(n) || 0).toFixed(3));
+const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+
+/**
+ * Total de una cuenta en la moneda que se está mirando, redondeando el precio LÍNEA POR LÍNEA.
+ *
+ * Es el mismo criterio del carrito (ver subtotalBs en CartContext), y por eso importa: cinco
+ * cervezas de Bs.784,66 son Bs.3.923,30. Convertir el total en base —Ref.5,00 por la tasa— da
+ * Bs.3.923,32, y la misma cuenta mostraba dos cifras distintas según se mirara desde la barra
+ * o desde el carrito. Cada moneda se calcula por su cuenta, sin derivar una de la otra.
+ *
+ * `conv` convierte un monto en base a la moneda destino; sin ella se asume la base.
+ */
+export function totalCuentaEn(lineas, extras, conv) {
+  const aMoneda = (n) => round2(conv ? conv(n) : n);
+  const sub = (lineas || []).reduce((acc, l) => acc + aMoneda(l.price) * (parseFloat(l.qty) || 0), 0);
+  const recargo   = aMoneda(parseFloat(extras?.service_charge  || 0));
+  const descuento = aMoneda(parseFloat(extras?.discount_amount || 0));
+  return Math.max(0, round2(sub + recargo - descuento));
+}
 
 const fromCart = (cart) => (cart.items || []).map(i => ({
     product_id: i.product_id,
@@ -247,12 +266,12 @@ export default function HeldCartBarCard({
     // ── Totales ───────────────────────────────────────────────
     // Se calculan en vivo con lo que hay en pantalla, sin esperar al servidor: el descuento y
     // el recargo ya guardados se conservan tal cual (updateSale no los toca si no viajan).
-    const subtotal = lines.reduce((acc, l) => acc + Math.round(l.price * 100) / 100 * l.qty, 0);
-    const extras = parseFloat(cart.service_charge || 0) - parseFloat(cart.discount_amount || 0);
-    const total = Math.max(0, subtotal + extras);
     const sym = currSym || "Ref.";
-    const totalDisplay = convertToDisplay ? convertToDisplay(total) : total;
-    const totalSecondary = convertToSecondary ? convertToSecondary(total) : null;
+    const totalDisplay   = totalCuentaEn(lines, cart, convertToDisplay);
+    const totalSecondary = convertToSecondary ? totalCuentaEn(lines, cart, convertToSecondary) : null;
+    // Precio unitario ya en la moneda de pantalla: de ahí sale el subtotal de la línea, para
+    // que multiplicar lo que se ve dé exactamente lo que se ve.
+    const precioEn = (p) => round2(convertToDisplay ? convertToDisplay(p) : p);
     const isWebOrder = cart.status === "pedido";
 
     const estado = saving
@@ -350,9 +369,9 @@ export default function HeldCartBarCard({
                                 <div className="flex-1 min-w-0">
                                     <div className="text-[11px] font-black text-content dark:text-white truncate leading-tight">{l.name}</div>
                                     <div className="text-[9px] font-bold text-content-subtle tabular-nums">
-                                        {fmtMoney(convertToDisplay ? convertToDisplay(l.price) : l.price, sym)}
+                                        {fmtMoney(precioEn(l.price), sym)}
                                         {" · "}
-                                        {fmtMoney(convertToDisplay ? convertToDisplay(l.price * l.qty) : l.price * l.qty, sym)}
+                                        {fmtMoney(precioEn(l.price) * l.qty, sym)}
                                     </div>
                                 </div>
 
