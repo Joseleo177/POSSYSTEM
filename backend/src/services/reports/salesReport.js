@@ -8,7 +8,7 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
   const dR  = dateClause(df, dt);
   const dS2 = dateClause(df, dt, 's2');
 
-  const [summary, byMethod, byDay, byEmployee, byHour] = await Promise.all([
+  const [summary, byMethod, byDay, byEmployee, byHour, bySerie] = await Promise.all([
     sequelize.query(
       `SELECT
          COUNT(*)::int AS total_sales,
@@ -75,6 +75,25 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
        ORDER BY hour ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
+    // Facturación por serie. Con un punto de venta por caja —o una serie por sucursal— es el
+    // corte que dice cuánto emitió cada numeración, y es además con el que se cuadra contra
+    // el correlativo. Mismo criterio de "venta realizada" que el resto del reporte.
+    //
+    // Una venta sin serie cae en "Sin serie": son las cuentas que aún no llegaron a factura.
+    sequelize.query(
+      `SELECT COALESCE(se.name, 'Sin serie') AS serie_name,
+              COALESCE(se.prefix, '') AS prefix,
+              COUNT(s.id)::int AS count,
+              COALESCE(SUM(s.total), 0)::float AS revenue,
+              MIN(s.invoice_number) AS first_invoice,
+              MAX(s.invoice_number) AS last_invoice
+       FROM sales s
+       LEFT JOIN series se ON s.serie_id = se.id
+       WHERE s.status IN (${SETTLED_SQL}) ${tcS} ${wh('s')} ${dS}
+       GROUP BY se.id, se.name, se.prefix
+       ORDER BY revenue DESC`,
+      { replacements: rep, type: Sequelize.QueryTypes.SELECT }
+    ),
   ]);
 
   const s = summary[0] || {};
@@ -94,6 +113,7 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
     by_day:      byDay,
     by_employee: byEmployee,
     by_hour:     byHour,
+    by_serie:    bySerie,
   };
 }
 

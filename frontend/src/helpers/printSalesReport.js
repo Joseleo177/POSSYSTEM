@@ -58,13 +58,41 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
         </tr>`).join("")
         : `<tr><td colspan="7" class="empty">Sin ventas registradas en el período</td></tr>`;
 
-    const empleadosHtml = (sales?.by_employee || []).slice(0, 8).map(e => `
+    // Sin recortes: con un total al pie, mostrar solo los primeros dejaría una suma que no
+    // cuadra con las líneas de arriba.
+    const empleados = sales?.by_employee || [];
+    const metodos   = sales?.by_method   || [];
+
+    const totalEmpleados = empleados.reduce((acc, e) => acc + parseFloat(e.revenue || 0), 0);
+    const totalMetodos   = metodos.reduce((acc, m) => acc + parseFloat(m.total || 0), 0);
+    const pendiente      = parseFloat(s.pending_amount || 0);
+    const exonerado      = parseFloat(s.total_forgiven || 0);
+
+    // Facturación por serie: con un punto de venta por caja es el corte con el que se cuadra
+    // contra el correlativo, así que va con el rango emitido y no solo con el monto.
+    const series = sales?.by_serie || [];
+    const totalSeries = series.reduce((acc, x) => acc + parseFloat(x.revenue || 0), 0);
+    const seriesHtml = series.map(x => {
+        const rango = [x.first_invoice, x.last_invoice].filter(Boolean);
+        const correlativos = rango.length
+            ? (rango[0] === rango[rango.length - 1] ? esc(rango[0]) : `${esc(rango[0])} — ${esc(rango[rango.length - 1])}`)
+            : "—";
+        return `
+        <tr>
+            <td class="item-name">${esc(x.serie_name)}</td>
+            <td class="td-center">${esc(x.count)}</td>
+            <td class="td-center td-corr">${correlativos}</td>
+            <td class="td-right td-total">${fmtP(x.revenue)}</td>
+        </tr>`;
+    }).join("");
+
+    const empleadosHtml = empleados.map(e => `
         <div class="row-line">
             <span>${esc(e.employee_name || "Desconocido")} <span class="muted">· ${esc(e.count)} ventas</span></span>
             <span class="strong">${fmtP(e.revenue)}</span>
         </div>`).join("");
 
-    const metodosHtml = (sales?.by_method || []).map(m => `
+    const metodosHtml = metodos.map(m => `
         <div class="row-line">
             <span>${esc(m.method_name)} <span class="muted">· ${esc(m.count)} trans.</span></span>
             <span class="strong">${fmtP(m.total)}</span>
@@ -87,12 +115,19 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
-        @page { size: letter; margin: 0; }
+        /* El aire va en @page y NO en el padding del body, al revés que la factura o la
+           cotización: el padding solo abre margen al principio y al final del flujo, así que
+           en un documento de varias hojas —y el detalle por producto de un mes lo es— la
+           segunda página arrancaba pegada al borde del papel.
+           Con margen de página el ancho útil ya viene recortado por el navegador, de ahí que
+           el body no lleve el width fijo de 216mm que usan los documentos de una sola hoja:
+           con los dos a la vez, el contenido se salía por la derecha. */
+        @page { size: letter; margin: 14mm 12mm; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Outfit', system-ui, sans-serif;
             font-size: 10.5px; line-height: 1.5; color: #2b2b2b; background: #fff;
-            width: 216mm; padding: 14mm 12mm;
+            width: 100%;
         }
 
         .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
@@ -128,11 +163,24 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
         .td-total { font-weight: 700; color: #1a1a1a; }
         .td-pct { color: #777; width: 58px; }
         .empty { text-align: center; color: #999; padding: 24px 0; font-style: italic; }
+        /* El pie de la tabla va como grupo normal para que salga UNA vez, al final del
+           listado: como table-footer-group el navegador lo repite en cada hoja y el mismo
+           "Total · N productos" aparecería tres veces en un reporte de tres páginas. */
+        tfoot { display: table-row-group; }
         tfoot td { border-top: 2px solid #ddd; border-bottom: none; font-weight: 700; background: #f7f7f7; }
+
+        /* La tabla de series es corta: se mantiene entera en una hoja en vez de dejar el
+           encabezado al final de una página y las filas en la siguiente. */
+        .serie-block { margin-top: 20px; page-break-inside: avoid; }
+        .td-corr, th.td-corr { width: 190px; color: #666; }
 
         .cols { display: flex; gap: 24px; margin-top: 20px; page-break-inside: avoid; }
         .col { flex: 1; }
         .row-line { display: flex; justify-content: space-between; gap: 16px; font-size: 10px; padding: 4px 0; border-bottom: 1px solid #f2f2f2; }
+        .total-line { border-top: 2px solid #ddd; border-bottom: none; margin-top: 2px; padding-top: 6px; font-weight: 700; color: #1a1a1a; }
+        /* Lo pendiente y lo exonerado no entraron a caja: se despegan del total cobrado para
+           que nadie los lea como parte de él. */
+        .pending-line { border-bottom: none; color: #a33; padding-top: 2px; }
         .muted { color: #999; }
         .strong { font-weight: 700; color: #1a1a1a; white-space: nowrap; }
 
@@ -207,10 +255,64 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
         </tfoot>` : ""}
     </table>
 
+    ${seriesHtml ? `
+    <div class="serie-block">
+        <div class="block-label">Facturación por serie</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Serie</th>
+                    <th class="td-center">Facturas</th>
+                    <th class="td-center td-corr">Correlativos emitidos</th>
+                    <th class="td-right">Facturado</th>
+                </tr>
+            </thead>
+            <tbody>${seriesHtml}</tbody>
+            ${series.length > 1 ? `
+            <tfoot>
+                <tr>
+                    <td>Total · ${series.length} series</td>
+                    <td class="td-center"></td>
+                    <td class="td-center td-corr"></td>
+                    <td class="td-right">${fmtP(totalSeries)}</td>
+                </tr>
+            </tfoot>` : ""}
+        </table>
+    </div>` : ""}
+
     ${(metodosHtml || empleadosHtml) ? `
     <div class="cols">
-        ${metodosHtml ? `<div class="col"><div class="block-label">Cobros por método</div>${metodosHtml}</div>` : ""}
-        ${empleadosHtml ? `<div class="col"><div class="block-label">Ventas por empleado</div>${empleadosHtml}</div>` : ""}
+        ${metodosHtml ? `
+        <div class="col">
+            <div class="block-label">Cobros por método</div>
+            ${metodosHtml}
+            <div class="row-line total-line">
+                <span>Total cobrado</span>
+                <span class="strong">${fmtP(totalMetodos)}</span>
+            </div>
+            <!-- Lo cobrado en el período no tiene por qué igualar lo facturado: una factura a
+                 crédito se emite hoy y se cobra la semana que viene. Estas dos líneas explican
+                 la diferencia en vez de dejar al lector restando de cabeza. -->
+            ${pendiente > 0 ? `
+            <div class="row-line pending-line">
+                <span>Pendiente por cobrar <span class="muted">· ${esc(s.pending_count ?? 0)} facturas</span></span>
+                <span class="strong">${fmtP(pendiente)}</span>
+            </div>` : ""}
+            ${exonerado > 0 ? `
+            <div class="row-line pending-line">
+                <span>Exonerado <span class="muted">· saldo perdonado</span></span>
+                <span class="strong">${fmtP(exonerado)}</span>
+            </div>` : ""}
+        </div>` : ""}
+        ${empleadosHtml ? `
+        <div class="col">
+            <div class="block-label">Ventas por empleado</div>
+            ${empleadosHtml}
+            <div class="row-line total-line">
+                <span>Total facturado</span>
+                <span class="strong">${fmtP(totalEmpleados)}</span>
+            </div>
+        </div>` : ""}
     </div>` : ""}
 
     <div class="footer">
