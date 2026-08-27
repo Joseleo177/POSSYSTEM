@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { api } from "../../services/api";
 import { buildSalesExcel } from "../../helpers/excel";
+import { printSalesReport } from "../../helpers/printSalesReport";
+import { useApp } from "../../context/AppContext";
 import {
  fmt$, fmtN, pct, METHOD_COLORS,
  useReport, defaultRange,
@@ -12,12 +14,49 @@ export default function SalesReport() {
  const [range, setRange] = useState(defaultRange(30));
  const { data, loading, error } = useReport(api.reports.sales, { date_from: range.from, date_to: range.to }, [range]);
  const s = data?.summary;
+ const { companyInfo, baseCurrency, notify } = useApp();
+ const [pdfLoading, setPdfLoading] = useState(false);
+
+ // El desglose por producto no viene con el reporte de la pantalla —esta vista muestra
+ // resúmenes, no el catálogo entero—, así que se pide al generar el PDF. `limit` alto: el
+ // papel lleva TODO lo vendido en el período, no el top 20 de la pantalla.
+ const generarPdf = async () => {
+   setPdfLoading(true);
+   try {
+     const r = await api.reports.products({ date_from: range.from, date_to: range.to, limit: 1000 });
+     printSalesReport(data, r.data?.top_by_revenue || r.top_by_revenue || [], range, companyInfo, baseCurrency);
+   } catch (e) {
+     notify?.(e.message || "No se pudo generar el reporte", "err");
+   } finally {
+     setPdfLoading(false);
+   }
+ };
 
  return (
  <div className="h-full flex flex-col space-y-4 overflow-auto">
  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
- {data && <ExportButton onClick={() => buildSalesExcel(data, range)} />}
+ {data && (
+ <div className="flex items-center gap-2">
+ <button
+ onClick={generarPdf}
+ disabled={pdfLoading}
+ title="Reporte del período en PDF, con el detalle por producto"
+ className="shrink-0 whitespace-nowrap flex items-center gap-2 px-3 sm:px-4 py-2 text-[11px] font-black uppercase tracking-wide rounded-xl border border-danger/30 text-danger bg-danger/5 hover:bg-danger hover:text-white transition-all shadow-sm disabled:opacity-60"
+ >
+ {pdfLoading ? (
+ <div className="w-4 h-4 shrink-0 border-2 border-danger/30 border-t-danger rounded-full animate-spin" />
+ ) : (
+ <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+ </svg>
+ )}
+ <span className="hidden sm:inline">{pdfLoading ? "Generando..." : "Reporte PDF"}</span>
+ <span className="sm:hidden">PDF</span>
+ </button>
+ <ExportButton onClick={() => buildSalesExcel(data, range)} />
+ </div>
+ )}
  </div>
 
  {loading && <div className="flex-1 flex items-center justify-center"><Loading /></div>}
