@@ -1,5 +1,7 @@
 import { api } from "../../services/api";
 import { buildReceivablesExcel } from "../../helpers/excel";
+import { printReceivablesReport } from "../../helpers/printReceivablesReport";
+import { useApp } from "../../context/AppContext";
 import {
     fmt$, fmtN, pct,
     useReport, usePagination, Pagination,
@@ -8,13 +10,27 @@ import {
 
 export default function ReceivablesReport() {
     const { data, loading, error } = useReport(api.reports.receivables, {}, []);
+    const { companyInfo, baseCurrency, activeCurrencies } = useApp();
     const s = data?.summary;
     const a = data?.aging;
     const custPag = usePagination(data?.by_customer ?? []);
 
     return (
         <div className="h-full flex flex-col space-y-4 overflow-auto">
-            <div className="flex justify-end shrink-0">
+            <div className="flex justify-end shrink-0 gap-2">
+                {data && (
+                    <button
+                        onClick={() => printReceivablesReport(data, companyInfo, baseCurrency, activeCurrencies)}
+                        title="Estado de cuentas por cobrar en PDF, para salir a cobrar"
+                        className="shrink-0 whitespace-nowrap flex items-center gap-2 px-3 sm:px-4 py-2 text-[11px] font-black uppercase tracking-wide rounded-xl border border-danger/30 text-danger bg-danger/5 hover:bg-danger hover:text-white transition-all shadow-sm"
+                    >
+                        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span className="hidden sm:inline">Reporte PDF</span>
+                        <span className="sm:hidden">PDF</span>
+                    </button>
+                )}
                 {data && <ExportButton onClick={() => buildReceivablesExcel(data)} />}
             </div>
 

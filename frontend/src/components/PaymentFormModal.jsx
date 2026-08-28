@@ -5,9 +5,13 @@ import Modal from "./ui/Modal";
 import { saleTotalAtRate, todayISO, PAYMENT_TOLERANCE } from "../helpers";
 import DatePicker from "./ui/DatePicker";
 import CustomSelect from "./ui/CustomSelect";
+import RateField, { resolveRate } from "./ui/RateField";
 
 const getEmpty = () => ({
   amount: "",
+  // Vacío = la tasa del sistema de la moneda con la que se cobra. Solo se llena si el cajero
+  // la escribe a mano para este pago.
+  rate: "",
   reference_date: todayISO(),
   reference_number: "",
   notes: "",
@@ -48,13 +52,20 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
 
   const payCur = activeCurrencies.find(c => c.id === parseInt(form.pay_currency_id));
   const payCurRate = (!payCur || payCur.is_base) ? 1 : parseFloat(payCur.exchange_rate || 1);
-  // El cobro de una factura SIEMPRE se valora a la tasa del sistema (BCV). Una factura es un
-  // documento fiscal: si debe 10, son 10 $ BCV, se paguen en divisa o en bolívares. Antes la
-  // tasa se podía escribir a mano aquí y eso rompía el cuadre —el total se convertía a la tasa
-  // tecleada y lo ya pagado a la oficial, así que "Ya pagado" mostraba Bs.7600 donde debía
-  // decir 8500, y el abono terminaba recortado contra el saldo en base. La tasa manual sigue
-  // existiendo donde sí corresponde: ingresos y egresos, que no son documentos fiscales.
-  const payRate = (!payCur || payCur.is_base) ? 1 : payCurRate;
+  // Tasa de ESTE cobro. Arranca en la del sistema y se puede escribir a mano: la deuda se pacta
+  // en divisas y el cliente paga con la tasa del día en que paga, que no siempre es la que está
+  // cargada —una factura vieja se cobra semanas después, o el negocio trabaja con una tasa y el
+  // cliente transfiere a la del BCV—. Sin esto había que cambiar la tasa global, a todo el
+  // mundo, para poder registrar un solo pago.
+  //
+  // Vale solo para este pago: se guarda en payments.exchange_rate, que es la tasa con la que el
+  // arqueo y los reportes convierten ese movimiento. No toca la tasa del sistema ni el valor
+  // fiscal de la factura, que sigue siendo su total en moneda base.
+  //
+  // Lo que en su momento rompió el cuadre no fue la tasa manual en sí, sino mezclarla: el total
+  // se convertía con la tecleada y lo ya pagado con la oficial. Por eso `pendingBsAt` convierte
+  // ahora TODOS sus términos con la misma tasa (ver más abajo).
+  const payRate = (!payCur || payCur.is_base) ? 1 : resolveRate(form.rate, payCurRate);
   const paySym = payCur?.symbol || baseCurrency?.symbol || "Ref.";
 
   const selectedJournal = activeJournals.find(j => j.id === form.payment_journal_id);
@@ -85,16 +96,25 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   // Misma regla —y mismo helper— que usa SaleConfirmModal para pintar el total de la
   // venta: si cada modal la reimplementa, vuelven a divergir en un céntimo.
   const totalBsAt = (rate) => (sale?.items?.length && rate > 1)
+    // El respaldo también respeta la tasa pedida: ignorarla y usar la de la factura hacía que
+    // una venta sin líneas cargadas contradijera al resto de la pantalla.
     ? saleTotalAtRate(sale, rate)
-    : roundBs2(parseFloat(sale?.total || 0) * historicalRate);
+    : roundBs2(parseFloat(sale?.total || 0) * (rate > 1 ? rate : historicalRate));
   // Lo exonerado se descuenta igual que lo cobrado y lo devuelto: es saldo que ya no se debe.
   // Sin esta línea, una factura con parte del saldo perdonado pedía en bolívares el importe
   // completo —el saldo en Ref sí lo descontaba— y la pantalla se contradecía consigo misma.
+  //
+  // Todos los términos se convierten con la MISMA tasa que el total. Restar bolívares
+  // calculados a tasas distintas no da bolívares: el total iba a la tasa del cobro y lo ya
+  // pagado a la de la factura, y en una factura vieja —o con la tasa escrita a mano— el
+  // "Saldo pendiente" salía de una resta entre dos monedas que no eran la misma. La pregunta
+  // que responde esta cifra es "a esta tasa, cuántos bolívares faltan", y esa se contesta con
+  // una sola tasa.
   const pendingBsAt = (rate) => Math.max(0, roundBs2(totalBsAt(rate)
-    - roundBs2(parseFloat(sale?.amount_paid     || 0) * historicalRate)
-    - roundBs2(parseFloat(sale?.total_returned  || 0) * historicalRate)
-    - roundBs2(parseFloat(sale?.forgiven_amount || 0) * historicalRate)
-    - roundBs2(creditApplied * historicalRate)));
+    - roundBs2(parseFloat(sale?.amount_paid     || 0) * rate)
+    - roundBs2(parseFloat(sale?.total_returned  || 0) * rate)
+    - roundBs2(parseFloat(sale?.forgiven_amount || 0) * rate)
+    - roundBs2(creditApplied * rate)));
 
   const totalPreciseBs   = totalBsAt(bsRate);
   const pendingPreciseBs = pendingBsAt(bsRate);
@@ -138,12 +158,17 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   // Proyección de cómo queda la factura si se registra este pago. Se calcula sobre la
   // misma pista que el resumen de arriba: en Bs cuando hay tasa (pendingPreciseBs), en
   // la moneda base cuando no la hay, para que los números cuadren con "Saldo pendiente".
+  //
+  // `vistaBsRate` es la tasa con la que se pinta TODA la pista de bolívares: la del cobro
+  // cuando se cobra en Bs (incluida la escrita a mano) y la del sistema cuando no. Mezclarla
+  // con la de la factura era lo que descuadraba el recuadro "Después de este pago".
+  const vistaBsRate = hasBsRate ? bsRate : historicalRate;
   const payAmountInBs = isNonBasePay
     ? (isNaN(amountNum) ? 0 : amountNum)
-    : roundBs2(amountBase * historicalRate);
+    : roundBs2(amountBase * vistaBsRate);
   const paidBeforeBase = parseFloat(sale?.amount_paid || 0);
   const paidTotalBase  = paidBeforeBase + amountBase;
-  const paidTotalBs    = roundBs2(roundBs2(paidBeforeBase * historicalRate) + payAmountInBs);
+  const paidTotalBs    = roundBs2(roundBs2(paidBeforeBase * vistaBsRate) + payAmountInBs);
   const remainingBase  = Math.max(0, pendingAfterCredit - amountBase);
   const remainingBs    = Math.max(0, roundBs2(pendingPreciseBs - payAmountInBs));
 
@@ -162,7 +187,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
   // Lo que se muestra: la cifra de la pista que manda, convertida a la moneda de pantalla. Si
   // la factura queda saldada el resto es cero, no los céntimos que absorbe la tolerancia.
   const remainingShown = settlesInvoice ? 0
-    : (isNonBasePay ? remainingBs : roundBs2(remainingBase * historicalRate));
+    : (isNonBasePay ? remainingBs : roundBs2(remainingBase * vistaBsRate));
 
   // Sobrante calculado en la moneda de pago (570 - 561.22 = 8.78 exacto),
   // sin ida-y-vuelta por USD que acumula error de redondeo
@@ -437,6 +462,9 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
                 pay_currency_id: newCurId || p.pay_currency_id,
                 amount: newAmt,
                 received_amount: newAmt,
+                // La tasa escrita a mano era de la moneda anterior: se vuelve a la del sistema
+                // de la nueva, que es con la que se acaba de recalcular el monto de arriba.
+                rate: "",
                 // El vuelto se replantea con la moneda nueva: sus montos eran de la anterior.
                 change_parts: [{ journal_id: "", amount: "" }],
               }));
@@ -444,19 +472,29 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
           />
         </Field>
 
-        {/* La tasa del cobro no se edita: una factura se valora a la tasa del sistema y ese es
-            el dato con validez legal. Se muestra para que el cajero sepa a cuánto está
-            convirtiendo, pero no se toca desde aquí. */}
+        {/* Arranca en la del sistema y se puede escribir a mano para este cobro: la deuda se
+            pacta en divisas y el cliente paga a la tasa del día en que paga —una factura vieja
+            se cobra semanas después—. Mismo campo que ya usan ingresos y egresos, así que se
+            comporta igual en todo el sistema: al tocarlo se pone en ámbar y ofrece restaurar. */}
         {isNonBasePay && (
           <Field label={`TASA DE CAMBIO (${payCur.code})`}>
-            <div className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 flex items-center justify-between">
-              <span className="text-[13px] font-bold tabular-nums text-content dark:text-white">
-                {payCurRate.toFixed(4)}
-              </span>
-              <span className="text-[9px] font-black uppercase tracking-wide text-content-subtle/60 dark:text-white/25">
-                Tasa del sistema
-              </span>
-            </div>
+            <RateField
+              value={form.rate}
+              onChange={v => setForm(p => {
+                // Cambiar la tasa cambia cuántos bolívares es el saldo, así que el monto
+                // prellenado la sigue. Solo mientras nadie lo haya tocado: si el cajero ya
+                // escribió un abono parcial, esa cifra es suya y no se pisa.
+                const prevPend = pendingBsAt(resolveRate(p.rate, payCurRate));
+                const nextRate = resolveRate(v, payCurRate);
+                const tecleado = parseFloat(String(p.amount).replace(",", "."));
+                const seguiaAlSaldo = !isNaN(tecleado) && Math.abs(tecleado - prevPend) < 0.01;
+                if (!seguiaAlSaldo || !(nextRate > 1)) return { ...p, rate: v };
+                const nuevo = pendingBsAt(nextRate).toFixed(2);
+                return { ...p, rate: v, amount: nuevo, received_amount: nuevo };
+              })}
+              configuredRate={payCurRate}
+              currency={payCur}
+            />
           </Field>
         )}
 
