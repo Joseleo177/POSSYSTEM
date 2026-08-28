@@ -1,9 +1,10 @@
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
-const { Company, Employee, Role, Currency, sequelize } = require("../models");
+const { Company, Employee, Role, Currency, ExpenseCategory, IncomeCategory, sequelize } = require("../models");
 const models = require("../models");
 const { runWithoutTenant } = require("../utils/tenantStorage");
 const { invalidateCompanyStatus } = require("../utils/companyStatusCache");
+const { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } = require("../config/defaultCategories");
 
 // Longitud mínima de la contraseña que el superusuario fija a mano. Las generadas al azar
 // son de 12 caracteres hex, así que el mínimo solo afecta a las escritas.
@@ -90,6 +91,22 @@ const create = async (req, res) => {
         { code: 'USD', name: 'Dólar Americano', symbol: 'Ref.', exchange_rate: 1.0, is_base: true, active: true, company_id: company.id },
         { code: 'VES', name: 'Bolívar Venezolano', symbol: 'Bs.', exchange_rate: 36.0, is_base: false, active: true, company_id: company.id }
       ], { transaction });
+
+      // Sin categorías, la empresa nace sin poder mover dinero: `expenses.category_id` e
+      // `incomes.category_id` son NOT NULL, así que el desplegable salía vacío y no se podía
+      // guardar ni un gasto hasta que alguien las escribiera a mano en la base.
+      //
+      // El `company_id` va explícito, igual que en las monedas: el hook de tenant solo
+      // completa el que falta, y aquí quien crea es el superusuario —le pondría su propia
+      // empresa, no la que se está dando de alta—.
+      await ExpenseCategory.bulkCreate(
+        DEFAULT_EXPENSE_CATEGORIES.map((name) => ({ name, active: true, company_id: company.id })),
+        { transaction }
+      );
+      await IncomeCategory.bulkCreate(
+        DEFAULT_INCOME_CATEGORIES.map((name) => ({ name, active: true, company_id: company.id })),
+        { transaction }
+      );
 
       const username = wantedUser || `admin_${company.id}`;
 
