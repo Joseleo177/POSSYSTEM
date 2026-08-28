@@ -10,6 +10,7 @@ import { api } from "../../services/api";
 import { fmtDateShort } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import { printPurchaseOrderDoc } from "../../helpers/printPurchaseOrder";
+import { printPurchaseLetter } from "../../helpers/printPurchaseLetter";
 
 const fmt2 = (num) => Number(num || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // En claro el fondo de página ya es surface-2 (#f9fafb), así que un panel surface-2 era
@@ -512,12 +513,33 @@ export default function PurchaseDetails({ state }) {
                   printerWidth
                 )}
                 className="h-7 px-3 rounded-lg bg-surface-2 dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] text-[10px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 flex items-center gap-1.5 hover:bg-surface-3 dark:hover:bg-white/[0.07] transition-all active:scale-95"
-                title="Imprimir lista de productos"
+                title="Ticket para el depósito: lista de productos con casillas para marcar"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
-                Imprimir
+                Ticket
+              </button>
+            )}
+            {/* La hoja carta es la otra mitad: el comprobante que se archiva y con el que se
+                cuadra con el proveedor, con costos, total y saldo. Mismo par que en las notas
+                de traslado (térmica + carta). */}
+            {(isBorrador ? localItems : (detail.items || [])).length > 0 && (
+              <button
+                onClick={() => printPurchaseLetter(
+                  detail,
+                  isBorrador ? localItems : (detail.items || []),
+                  companyInfo,
+                  baseCurrency,
+                  activeCurrencies
+                )}
+                className="h-7 px-3 rounded-lg bg-danger/5 border border-danger/25 text-[10px] font-black uppercase tracking-wide text-danger flex items-center gap-1.5 hover:bg-danger hover:text-white transition-all active:scale-95"
+                title="Comprobante en hoja carta, con costos y saldo al proveedor"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                PDF
               </button>
             )}
             {!isEditable && (

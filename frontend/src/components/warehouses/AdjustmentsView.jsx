@@ -5,6 +5,7 @@ import { useDebounce } from "../../hooks/useDebounce";
 import { isIntegerUnit } from "../../helpers/unitFormatter";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers/image";
 import { useApp } from "../../context/AppContext";
+import { printCountSheet } from "../../helpers/printCountSheet";
 
 const REASONS_OUT = [
     { value: "merma",       label: "Merma (Deterioro/Rotura)" },
@@ -43,7 +44,7 @@ const fmtDate = d => d ? new Date(d).toLocaleString("es-VE", { day: "2-digit", m
 export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWarehouse, onSessionChange }) {
     // Las categorías ya viven en el contexto y se cargan una vez al entrar: no hace falta
     // pedirlas otra vez desde esta pantalla.
-    const { categories } = useApp();
+    const { categories, companyInfo } = useApp();
     const [allProducts, setAllProducts]         = useState([]);
     const [loadingList, setLoadingList]         = useState(false);
     const [search, setSearch]                   = useState("");
@@ -167,6 +168,33 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
         } catch (e) { notify(e.message, "err"); }
         finally { setOpeningSession(false); }
     };
+
+    // ── Planilla de conteo ────────────────────────────────────────
+    // La lista de la pantalla está paginada, así que se vuelve a pedir con los mismos filtros
+    // y sin tope práctico: la hoja tiene que traer TODO lo que hay que contar, no la primera
+    // página que alcanzó a cargar el scroll.
+    const [printing, setPrinting] = useState(false);
+    const imprimirPlanilla = useCallback(async () => {
+        if (!selectedWarehouse) return;
+        setPrinting(true);
+        try {
+            const r = await api.warehouses.getProducts(selectedWarehouse.id, {
+                search: debouncedSearch,
+                ...(categoryId ? { category_id: categoryId } : {}),
+                limit: 1000,
+                simple_only: true,
+            });
+            printCountSheet(r.data || [], {
+                warehouseName: selectedWarehouse.name,
+                categoryName: (categories || []).find(c => String(c.id) === String(categoryId))?.name,
+                search: debouncedSearch,
+            }, companyInfo);
+        } catch (e) {
+            notify?.(e.message || "No se pudo generar la planilla", "err");
+        } finally {
+            setPrinting(false);
+        }
+    }, [selectedWarehouse, debouncedSearch, categoryId, categories, companyInfo, notify]);
 
     // ── Registrar ajuste ──────────────────────────────────────────
     const handleSave = async () => {
@@ -385,6 +413,25 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                             <span className="text-success ml-1.5">· {adjustedCount.size} ajustado{adjustedCount.size !== 1 ? "s" : ""}</span>
                                         )}
                                     </p>
+                                    {/* La planilla para contar en el depósito. Va acá porque es
+                                        el paso previo a este mismo formulario: se imprime, se
+                                        cuenta a mano y se vuelve a cargar los números aquí. */}
+                                    <button
+                                        onClick={imprimirPlanilla}
+                                        disabled={printing || !selectedWarehouse}
+                                        title="Planilla en blanco para el conteo físico, con los filtros de esta pantalla"
+                                        className="h-7 px-2.5 shrink-0 rounded-lg bg-danger/5 border border-danger/25 text-[9px] font-black uppercase tracking-wide text-danger flex items-center gap-1.5 hover:bg-danger hover:text-white transition-all active:scale-95 disabled:opacity-50"
+                                    >
+                                        {printing ? (
+                                            <div className="w-3 h-3 border-2 border-danger/30 border-t-danger rounded-full animate-spin" />
+                                        ) : (
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                        )}
+                                        Planilla
+                                    </button>
+
                                     {/* Mismo selector de vista que el Catálogo, para que la
                                         interfaz se comporte igual en las dos pantallas. */}
                                     <div className="flex items-center rounded-lg border border-border/40 dark:border-white/10 overflow-hidden h-7 shrink-0">
