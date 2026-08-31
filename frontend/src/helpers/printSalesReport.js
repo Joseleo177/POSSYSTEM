@@ -90,7 +90,10 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
     const franja = range?.hour_from && range?.hour_to
         ? ` · ${range.hour_from} a ${range.hour_to}${range.hour_to < range.hour_from ? " del día siguiente" : ""}`
         : "";
-    const periodo = `${fmtDateShort(range?.from)} — ${fmtDateShort(range?.to)}${franja}`;
+    // Igual que la franja: un PDF de una sola serie tiene que decirlo, o quien lo reciba lo
+    // lee como el total del negocio y no cuadra con nada.
+    const serie = range?.serie_name ? ` · Serie ${range.serie_name}` : "";
+    const periodo = `${fmtDateShort(range?.from)} — ${fmtDateShort(range?.to)}${franja}${serie}`;
 
     const html = `<!DOCTYPE html>
 <html>

@@ -53,6 +53,11 @@ const sufijoFranja = (range) =>
     ? `_${String(range.hour_from).replace(":", "")}-${String(range.hour_to).replace(":", "")}`
     : "";
 
+// Serie en el nombre del archivo, por lo mismo que la franja. Se limpia de todo lo que no
+// sea alfanumérico: los nombres de serie llevan barras y espacios que no van en un archivo.
+const sufijoSerie = (range) =>
+  range?.serie_name ? `_${String(range.serie_name).replace(/[^A-Za-z0-9]+/g, "-").slice(0, 20)}` : "";
+
 // ── Exportadores por módulo ──────────────────────────────────
 
 export function buildSalesExcel(data, range) {
@@ -107,7 +112,7 @@ export function buildSalesExcel(data, range) {
         { key: "revenue", label: "Ingresos ($)" },
       ],
     },
-  ]), `Ventas_${range.from}_${range.to}${sufijoFranja(range)}`);
+  ]), `Ventas_${range.from}_${range.to}${sufijoFranja(range)}${sufijoSerie(range)}`);
 }
 
 export function buildInventoryExcel(data) {

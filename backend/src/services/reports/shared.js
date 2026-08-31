@@ -52,6 +52,29 @@ function buildWarehouseScope(allowedWarehouses) {
   };
 }
 
+// Ids que llegan por query: pueden venir como lista repetida (?ids=1&ids=2) o separados por
+// coma. Se validan como enteros antes de interpolarse, que es como se arma el resto del SQL
+// crudo de los reportes.
+function idList(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const crudos = Array.isArray(value) ? value : String(value).split(",");
+  const ids = crudos.map(n => parseInt(n, 10)).filter(Number.isInteger);
+  return ids.length ? ids : null;
+}
+
+// Recorte por serie de facturación, con la misma forma que buildWarehouseScope: devuelve una
+// función que arma el fragmento para el alias que corresponda, porque el mismo alias significa
+// cosas distintas en cada consulta. Sin series pedidas no recorta nada.
+//
+// La serie vive en la venta. Un cobro se filtra por la de la suya —ver los usos con
+// subconsulta— y lo cargado a mano queda fuera: un ingreso manual no pertenece a ninguna.
+function buildSerieScope(serie_ids) {
+  const ids = idList(serie_ids);
+  if (!ids) return () => '';
+  const list = ids.join(',');
+  return (alias = '') => `AND ${alias ? `${alias}.` : ''}serie_id IN (${list})`;
+}
+
 async function buildTenantContext(req) {
   const company_id  = req.employee?.company_id ?? null;
   const scoped      = !!company_id;
@@ -121,4 +144,4 @@ function dateClause(date_from, date_to, alias = '', hours = null) {
 // propio shared —igual que dateClause— y no de una ruta a utils distinta en cada archivo.
 const { SETTLED_SQL } = require("../../utils/saleBalance");
 
-module.exports = { sanitizeDate, sanitizeHour, buildHours, buildTenantContext, buildWarehouseScope, dateClause, hourClause, localDate, TZ, SETTLED_SQL };
+module.exports = { sanitizeDate, sanitizeHour, buildHours, buildTenantContext, buildWarehouseScope, buildSerieScope, idList, dateClause, hourClause, localDate, TZ, SETTLED_SQL };

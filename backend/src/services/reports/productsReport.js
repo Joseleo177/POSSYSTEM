@@ -1,10 +1,13 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, dateClause, SETTLED_SQL } = require("./shared");
+const { sanitizeDate, dateClause, buildSerieScope, SETTLED_SQL } = require("./shared");
 
-async function productsReport({ date_from, date_to, limit = 20, company_id, tcS, tcP, rep, wh, hours }) {
+async function productsReport({ date_from, date_to, serie_ids, limit = 20, company_id, tcS, tcP, rep, wh, hours }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dS = dateClause(df, dt, 's', hours);
+  // Mismo recorte por serie que salesReport: este reporte alimenta el detalle por producto
+  // del PDF de ventas, y con filtros distintos las líneas no sumarían el total que lo encabeza.
+  const se = buildSerieScope(serie_ids);
   const lim = parseInt(limit);
 
   // Mismo criterio de "venta realizada" que salesReport y marginsReport: sin esto
@@ -33,7 +36,7 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
        FROM sale_items si
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
-       WHERE TRUE ${tcS} ${wh('s')} ${dS} ${stS}
+       WHERE TRUE ${tcS} ${wh('s')} ${se('s')} ${dS} ${stS}
        GROUP BY si.product_id, si.name, p.category_id
        ORDER BY total_revenue DESC
        LIMIT ${lim}`,
@@ -45,7 +48,7 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
               COALESCE(SUM(si.subtotal), 0)::float AS total_revenue
        FROM sale_items si
        JOIN sales s ON si.sale_id = s.id
-       WHERE TRUE ${tcS} ${wh('s')} ${dS} ${stS}
+       WHERE TRUE ${tcS} ${wh('s')} ${se('s')} ${dS} ${stS}
        GROUP BY si.product_id, si.name
        ORDER BY total_qty DESC
        LIMIT ${lim}`,
@@ -62,7 +65,7 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
            SELECT DISTINCT si.product_id
            FROM sale_items si
            JOIN sales s ON si.sale_id = s.id
-           WHERE TRUE ${tcS} ${wh('s')} ${dS} ${stS}
+           WHERE TRUE ${tcS} ${wh('s')} ${se('s')} ${dS} ${stS}
          )
        ORDER BY p.name ASC
        LIMIT 20`,

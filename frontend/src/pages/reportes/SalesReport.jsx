@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "../../services/api";
+import CustomSelect from "../../components/ui/CustomSelect";
 import { buildSalesExcel } from "../../helpers/excel";
 import { printSalesReport } from "../../helpers/printSalesReport";
 import { useApp } from "../../context/AppContext";
@@ -13,7 +14,24 @@ import {
 export default function SalesReport() {
  const [range, setRange] = useState(defaultRange(30));
  const hr = useHourRange();
- const { data, loading, error } = useReport(api.reports.sales, { date_from: range.from, date_to: range.to, ...hr.params }, [range, hr.key]);
+
+ // Serie de facturación. Con una serie por sucursal o por caja, es el corte con el que se
+ // separa lo que emitió cada punto. Las notas de crédito no facturan: no son un corte válido
+ // de un reporte de ventas, mismo criterio que el reporte de diarios de pago.
+ const [serieId, setSerieId] = useState("");
+ const [series, setSeries] = useState([]);
+ useEffect(() => {
+  api.series.getAll()
+   .then(r => setSeries((r.data || []).filter(s => s.type !== "nc")))
+   .catch(e => console.error("[SalesReport] no se pudieron cargar las series:", e));
+ }, []);
+ const serieParams = serieId ? { serie_ids: serieId } : {};
+ // Para el encabezado del PDF y el nombre del Excel: un reporte de una sola serie tiene que
+ // decir cuál, o es indistinguible del de todas y parece mal sumado.
+ const serieNombre = serieId ? (series.find(s => String(s.id) === String(serieId))?.name || "") : "";
+
+ const params = { date_from: range.from, date_to: range.to, ...hr.params, ...serieParams };
+ const { data, loading, error } = useReport(api.reports.sales, params, [range, hr.key, serieId]);
  const s = data?.summary;
  // La distribución de canales se mide contra lo cobrado, no contra el ingreso bruto: son
  // cortes distintos —una venta a crédito factura sin entrar a caja, y un abono de una factura
@@ -31,8 +49,14 @@ export default function SalesReport() {
    try {
      // La misma franja que la pantalla, o el detalle por producto del PDF no cuadraría con
      // los totales que lo encabezan.
-     const r = await api.reports.products({ date_from: range.from, date_to: range.to, ...hr.params, limit: 1000 });
-     printSalesReport(data, r.data?.top_by_revenue || r.top_by_revenue || [], { ...range, ...hr.params }, companyInfo, baseCurrency);
+     const r = await api.reports.products({ ...params, limit: 1000 });
+     printSalesReport(
+       data,
+       r.data?.top_by_revenue || r.top_by_revenue || [],
+       { ...range, ...hr.params, serie_name: serieNombre },
+       companyInfo,
+       baseCurrency,
+     );
    } catch (e) {
      notify?.(e.message || "No se pudo generar el reporte", "err");
    } finally {
@@ -46,6 +70,25 @@ export default function SalesReport() {
  <div className="flex items-center gap-2 flex-wrap">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
  <HourRangePicker from={hr.hours.from} to={hr.hours.to} onChange={hr.setHours} />
+ {/* Con una sola serie, "todas" promete un alcance que no existe: se muestra su nombre.
+     Mismo criterio que el selector de sucursal del reporte de márgenes. */}
+ {series.length > 0 && (
+ <CustomSelect
+  value={serieId}
+  onChange={setSerieId}
+  placeholder={series.length === 1 ? series[0].name : "TODAS LAS SERIES"}
+  boxClassName="h-10 min-w-[180px]"
+  icon={
+   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+   </svg>
+  }
+  options={[
+   { value: "", label: series.length === 1 ? series[0].name : "TODAS LAS SERIES" },
+   ...(series.length > 1 ? series.map(s => ({ value: String(s.id), label: s.name })) : []),
+  ]}
+ />
+ )}
  {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} />}
  </div>
  {data && (
@@ -66,7 +109,7 @@ export default function SalesReport() {
  <span className="hidden sm:inline">{pdfLoading ? "Generando..." : "Reporte PDF"}</span>
  <span className="sm:hidden">PDF</span>
  </button>
- <ExportButton onClick={() => buildSalesExcel(data, { ...range, ...hr.params })} />
+ <ExportButton onClick={() => buildSalesExcel(data, { ...range, ...hr.params, serie_name: serieNombre })} />
  </div>
  )}
  </div>

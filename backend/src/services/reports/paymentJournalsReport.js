@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, localDate, hourClause } = require("./shared");
+const { sanitizeDate, localDate, hourClause, idList } = require("./shared");
 
 // Cobros por día y por diario de pago.
 //
@@ -21,16 +21,6 @@ const { sanitizeDate, localDate, hourClause } = require("./shared");
 // de modo que amount * exchange_rate devuelve el monto en la moneda del diario. Se publican
 // los dos: el original es el que el cajero contó, el base es el único que se puede sumar
 // entre diarios de distinta moneda. incomes y expenses guardan lo mismo en `amount` y `rate`.
-// Ids que llegan por query: pueden venir como lista repetida (?ids=1&ids=2) o separados por
-// coma. Se validan como enteros antes de interpolarse, que es como se arma el resto del SQL
-// crudo de los reportes.
-function idList(value) {
-  if (value === undefined || value === null || value === "") return null;
-  const crudos = Array.isArray(value) ? value : String(value).split(",");
-  const ids = crudos.map(n => parseInt(n, 10)).filter(Number.isInteger);
-  return ids.length ? ids : null;
-}
-
 async function paymentJournalsReport({ date_from, date_to, company_id, allowedWarehouses, employee_ids, serie_ids, hours }) {
   const from = sanitizeDate(date_from);
   const to   = sanitizeDate(date_to);
