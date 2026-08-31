@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, TZ, localDate } = require("./shared");
+const { sanitizeDate, localDate, hourClause } = require("./shared");
 
 // Cobros por día y por diario de pago.
 //
@@ -31,9 +31,13 @@ function idList(value) {
   return ids.length ? ids : null;
 }
 
-async function paymentJournalsReport({ date_from, date_to, company_id, allowedWarehouses, employee_ids, serie_ids }) {
+async function paymentJournalsReport({ date_from, date_to, company_id, allowedWarehouses, employee_ids, serie_ids, hours }) {
   const from = sanitizeDate(date_from);
   const to   = sanitizeDate(date_to);
+  // Día al que se imputa cada movimiento. Sin franja horaria es la fecha de Caracas de
+  // siempre; con una franja nocturna es la jornada, para que la madrugada del domingo caiga
+  // en la fila del sábado en vez de abrir una fila propia con la cola de la noche.
+  const diaPago = localDate('p.created_at', hours);
 
   const rep = { cid: company_id };
   const scoped = !!company_id;
@@ -68,10 +72,14 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
   // día siguiente y el cuadre diario no coincidiría con el turno de caja. TZ sale de shared.js
   // para que todos los reportes definan "día" igual.
   const parts = [];
-  if (from) parts.push(`AND (p.created_at AT TIME ZONE '${TZ}')::date >= :dfrom`);
-  if (to)   parts.push(`AND (p.created_at AT TIME ZONE '${TZ}')::date <= :dto`);
+  if (from) parts.push(`AND ${diaPago} >= :dfrom`);
+  if (to)   parts.push(`AND ${diaPago} <= :dto`);
   if (from) rep.dfrom = from;
   if (to)   rep.dto   = to;
+  // El recorte a la franja va aparte del recorte por día: uno dice qué jornadas entran, el
+  // otro qué horas de cada jornada.
+  const franja = hourClause('p.created_at', hours);
+  if (franja) parts.push(franja);
   const dateClause = parts.join(" ");
 
   // Ingresos y egresos sí llevan su propia sucursal, así que no hace falta la subconsulta a
@@ -82,6 +90,9 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
     return ids.length ? `AND ${alias}.warehouse_id IN (${ids.join(',')})` : 'AND FALSE';
   };
 
+  // Los manuales quedan fuera de la franja horaria a propósito: `date` es un día que la
+  // persona eligió a mano, sin hora, así que recortarlo por horas lo borraría del cuadre.
+  // Siguen imputándose a su fecha de calendario aunque los cobros se agrupen por jornada.
   const manualDateClause = (alias) => {
     const col = localDate(`COALESCE(${alias}.date, ${alias}.created_at)`);
     const p = [];
@@ -91,7 +102,7 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
   };
 
   const rows = await sequelize.query(
-    `SELECT (p.created_at AT TIME ZONE '${TZ}')::date            AS day,
+    `SELECT ${diaPago}                                            AS day,
             p.payment_journal_id                                  AS journal_id,
             COUNT(p.id)::int                                      AS tx_count,
             COALESCE(SUM(p.amount * COALESCE(p.exchange_rate, 1)), 0)::float AS amount_journal,

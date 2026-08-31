@@ -85,7 +85,12 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
             <span class="strong">${fmtP(m.total)}</span>
         </div>`).join("");
 
-    const periodo = `${fmtDateShort(range?.from)} — ${fmtDateShort(range?.to)}`;
+    // La franja horaria va en el período y no en una nota al pie: sin ella, dos PDF del mismo
+    // rango con recortes distintos son indistinguibles, y el de la noche parece mal sumado.
+    const franja = range?.hour_from && range?.hour_to
+        ? ` · ${range.hour_from} a ${range.hour_to}${range.hour_to < range.hour_from ? " del día siguiente" : ""}`
+        : "";
+    const periodo = `${fmtDateShort(range?.from)} — ${fmtDateShort(range?.to)}${franja}`;
 
     const html = `<!DOCTYPE html>
 <html>

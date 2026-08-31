@@ -98,6 +98,10 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
       {open && createPortal(
         <div
           ref={menuRef}
+          // El menú se monta en un portal, fuera del árbol de quien use el select. Un panel
+          // que cierre al hacer clic afuera —un popover de filtros— no tiene otra forma de
+          // reconocer este menú como parte suya y no cerrarse cuando se elige una opción.
+          data-custom-select-menu=""
           style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width }}
           className="bg-white dark:bg-[#1a1c23] border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[9999] max-h-64 overflow-y-auto scrollbar-none animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-3xl"
         >

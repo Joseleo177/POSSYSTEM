@@ -1,10 +1,12 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause, localDate, SETTLED_SQL } = require("./shared");
 
-async function marginsReport({ date_from, date_to, limit, warehouse_id, company_id, tcS, rep, wh, allowedWarehouses }) {
+async function marginsReport({ date_from, date_to, limit, warehouse_id, company_id, tcS, rep, wh, allowedWarehouses, hours }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
-  const dS = dateClause(df, dt, 's');
+  const dS = dateClause(df, dt, 's', hours);
+  // Misma expresión de día que el filtro: con franja nocturna es la jornada, no la fecha.
+  const diaS = localDate('s.created_at', hours);
   const lim = parseInt(limit) || 0;   // 0 = usar defaults de pantalla
 
   // Margen de una sucursal concreta. Cobra sentido ahora que el costo es por sucursal: la
@@ -107,7 +109,7 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, company_
     ),
     sequelize.query(
       `SELECT
-         ${localDate('s.created_at')} AS day,
+         ${diaS} AS day,
          COALESCE(SUM(si.subtotal), 0)::float AS revenue,
          COALESCE(SUM(si.quantity * ${unitCost}), 0)::float AS cost,
          COALESCE(SUM(si.subtotal) - SUM(si.quantity * ${unitCost}), 0)::float AS profit,
@@ -119,7 +121,7 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, company_
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
        WHERE TRUE ${tcS} ${whS} ${dS} ${stS}
-       GROUP BY ${localDate('s.created_at')}
+       GROUP BY ${diaS}
        ORDER BY day ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),

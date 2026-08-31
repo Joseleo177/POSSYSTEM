@@ -3,8 +3,8 @@ import { api } from "../../services/api";
 import { buildMarginsExcel } from "../../helpers/excel";
 import {
  fmt$, fmtN,
- useReport, defaultRange, usePagination, Pagination, useExportFull,
- DateRangePicker, KpiCard, SectionHeader, Card, Loading, ExportButton, BarChart,
+ useReport, defaultRange, useHourRange, usePagination, Pagination, useExportFull,
+ DateRangePicker, HourRangePicker, NightShiftNotice, KpiCard, SectionHeader, Card, Loading, ExportButton, BarChart,
 } from "./reportes.utils";
 import CustomSelect from "../../components/ui/CustomSelect";
 
@@ -20,9 +20,10 @@ export default function MarginsReport() {
    .catch(e => console.error("[MarginsReport] no se pudieron cargar los almacenes:", e));
  }, []);
 
- const params = { date_from: range.from, date_to: range.to, warehouse_id: warehouseId };
- const { data, loading, error } = useReport(api.reports.margins, params, [range, warehouseId]);
- const exportFull = useExportFull(api.reports.margins, params, (d) => buildMarginsExcel(d, range));
+ const hr = useHourRange();
+ const params = { date_from: range.from, date_to: range.to, warehouse_id: warehouseId, ...hr.params };
+ const { data, loading, error } = useReport(api.reports.margins, params, [range, warehouseId, hr.key]);
+ const exportFull = useExportFull(api.reports.margins, params, (d) => buildMarginsExcel(d, { ...range, ...hr.params }));
  const [view, setView] = useState("top");
 
  // Con una sola sucursal, "todas" promete un alcance que no existe: la API ya devuelve solo
@@ -43,8 +44,10 @@ export default function MarginsReport() {
  return (
  <div className="h-full flex flex-col space-y-4 overflow-auto">
  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
- <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+ <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
+ <HourRangePicker from={hr.hours.from} to={hr.hours.to} onChange={hr.setHours} />
+ {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} />}
  <CustomSelect
   value={warehouseId}
   onChange={setWarehouseId}

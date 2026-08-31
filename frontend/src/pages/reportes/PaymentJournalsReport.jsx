@@ -4,7 +4,7 @@ import FilterPopover from "../../components/ui/FilterPopover";
 import { fmtNumber } from "../../helpers/numbers";
 import { buildPaymentJournalsExcel } from "../../helpers/excel";
 import {
-    useReport, defaultRange, DateRangePicker,
+    useReport, defaultRange, useHourRange, DateRangePicker, HourRangePicker, NightShiftNotice,
     SectionHeader, Loading, ExportButton, KpiCard,
 } from "./reportes.utils";
 
@@ -70,14 +70,15 @@ export default function PaymentJournalsReport() {
         api.series.getAll().then(r => setSeries((r.data || []).filter(s => s.type !== "nc"))).catch(() => setSeries([]));
     }, []);
 
-    const params = { date_from: range.from, date_to: range.to };
+    const hr = useHourRange();
+    const params = { date_from: range.from, date_to: range.to, ...hr.params };
     if (empSel.length)   params.employee_ids = empSel.join(",");
     if (serieSel.length) params.serie_ids    = serieSel.join(",");
 
     const { data, loading, error } = useReport(
         api.reports.paymentJournals,
         params,
-        [range.from, range.to, empSel.join(","), serieSel.join(",")]
+        [range.from, range.to, hr.key, empSel.join(","), serieSel.join(",")]
     );
 
     const toggle = (setter) => (id) =>
@@ -99,6 +100,8 @@ export default function PaymentJournalsReport() {
             <div className="flex flex-wrap gap-2 justify-between items-center shrink-0">
                 <div className="flex flex-wrap items-center gap-2">
                     <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
+                    <HourRangePicker from={hr.hours.from} to={hr.hours.to} onChange={hr.setHours} />
+                    {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} />}
 
                     <div className="relative">
                         <button
@@ -167,7 +170,7 @@ export default function PaymentJournalsReport() {
                 </div>
 
                 {data && days.length > 0 && (
-                    <ExportButton onClick={() => buildPaymentJournalsExcel(data, range)} />
+                    <ExportButton onClick={() => buildPaymentJournalsExcel(data, { ...range, ...hr.params })} />
                 )}
             </div>
 

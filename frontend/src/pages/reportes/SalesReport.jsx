@@ -5,14 +5,15 @@ import { printSalesReport } from "../../helpers/printSalesReport";
 import { useApp } from "../../context/AppContext";
 import {
  fmt$, fmtN, pct, METHOD_COLORS,
- useReport, defaultRange,
- DateRangePicker, KpiCard, SectionHeader, Card, Loading,
+ useReport, defaultRange, useHourRange,
+ DateRangePicker, HourRangePicker, NightShiftNotice, KpiCard, SectionHeader, Card, Loading,
  ExportButton, ProgressBar, BarChart, HeatmapHours,
 } from "./reportes.utils";
 
 export default function SalesReport() {
  const [range, setRange] = useState(defaultRange(30));
- const { data, loading, error } = useReport(api.reports.sales, { date_from: range.from, date_to: range.to }, [range]);
+ const hr = useHourRange();
+ const { data, loading, error } = useReport(api.reports.sales, { date_from: range.from, date_to: range.to, ...hr.params }, [range, hr.key]);
  const s = data?.summary;
  // La distribución de canales se mide contra lo cobrado, no contra el ingreso bruto: son
  // cortes distintos —una venta a crédito factura sin entrar a caja, y un abono de una factura
@@ -28,8 +29,10 @@ export default function SalesReport() {
  const generarPdf = async () => {
    setPdfLoading(true);
    try {
-     const r = await api.reports.products({ date_from: range.from, date_to: range.to, limit: 1000 });
-     printSalesReport(data, r.data?.top_by_revenue || r.top_by_revenue || [], range, companyInfo, baseCurrency);
+     // La misma franja que la pantalla, o el detalle por producto del PDF no cuadraría con
+     // los totales que lo encabezan.
+     const r = await api.reports.products({ date_from: range.from, date_to: range.to, ...hr.params, limit: 1000 });
+     printSalesReport(data, r.data?.top_by_revenue || r.top_by_revenue || [], { ...range, ...hr.params }, companyInfo, baseCurrency);
    } catch (e) {
      notify?.(e.message || "No se pudo generar el reporte", "err");
    } finally {
@@ -40,7 +43,11 @@ export default function SalesReport() {
  return (
  <div className="h-full flex flex-col space-y-4 overflow-auto">
  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+ <div className="flex items-center gap-2 flex-wrap">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
+ <HourRangePicker from={hr.hours.from} to={hr.hours.to} onChange={hr.setHours} />
+ {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} />}
+ </div>
  {data && (
  <div className="flex items-center gap-2">
  <button
@@ -59,7 +66,7 @@ export default function SalesReport() {
  <span className="hidden sm:inline">{pdfLoading ? "Generando..." : "Reporte PDF"}</span>
  <span className="sm:hidden">PDF</span>
  </button>
- <ExportButton onClick={() => buildSalesExcel(data, range)} />
+ <ExportButton onClick={() => buildSalesExcel(data, { ...range, ...hr.params })} />
  </div>
  )}
  </div>

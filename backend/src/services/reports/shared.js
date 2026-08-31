@@ -7,6 +7,30 @@ function sanitizeDate(val) {
   return match ? match[1] : null;
 }
 
+// Hora del filtro de franja: "18", "18:30" → "18:00", "18:30". Se normaliza a HH:MM porque
+// se interpola en el SQL como literal TIME, igual que las fechas.
+function sanitizeHour(val) {
+  if (val === undefined || val === null || val === "") return null;
+  const m = String(val).match(/^(\d{1,2})(?::([0-5]\d))?$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  if (h > 23) return null;
+  return `${String(h).padStart(2, "0")}:${m[2] ?? "00"}`;
+}
+
+// Franja horaria opcional del reporte. Devuelve null —que es "el día completo", el
+// comportamiento de siempre— salvo que lleguen las dos horas y sean distintas: una franja de
+// 00:00 a 00:00 no se sabe si son 24 horas o ninguna, así que se trata como sin filtro.
+//
+// `overnight` es el caso que motivó todo esto: 18:00 → 04:00 no es un rango vacío, es una
+// jornada nocturna que cruza la medianoche.
+function buildHours(query = {}) {
+  const from = sanitizeHour(query.hour_from);
+  const to   = sanitizeHour(query.hour_to);
+  if (!from || !to || from === to) return null;
+  return { from, to, overnight: to < from };
+}
+
 const { visibleWarehouseIds } = require("../../middleware/auth");
 
 // Recorta un reporte a las sucursales del empleado. Devuelve una función que arma el
@@ -43,6 +67,9 @@ async function buildTenantContext(req) {
     tcC:  scoped ? `AND c.company_id = :cid`  : '',
     allowedWarehouses,
     wh:   buildWarehouseScope(allowedWarehouses),
+    // Franja horaria del filtro. Viaja con el contexto porque entra por el mismo query que
+    // las fechas y la necesita cada consulta que corte por período.
+    hours: buildHours(req.query),
   };
 }
 
@@ -55,15 +82,37 @@ const TZ = process.env.DB_TIMEZONE || 'America/Caracas';
 // Fecha local de un TIMESTAMPTZ. Usar en filtros y en GROUP BY por día para que
 // ambos definan "día" igual; de lo contrario el total del rango no cuadra con
 // la suma de sus días.
-function localDate(col) {
-  return `(${col} AT TIME ZONE '${TZ}')::date`;
+//
+// Con una franja nocturna (18:00 → 04:00) el "día" deja de ser la fecha del calendario y
+// pasa a ser la jornada: la madrugada del domingo pertenece a la noche del sábado, que es
+// como la cuenta quien cierra la caja. Se logra corriendo el reloj hacia atrás hasta la hora
+// de apertura, con lo que los dos lados de la medianoche caen en la misma fecha. Sin franja
+// —o con una que no cruza medianoche— la expresión es la de siempre.
+function localDate(col, hours = null) {
+  const local = `(${col} AT TIME ZONE '${TZ}')`;
+  if (hours?.overnight) return `((${local} - INTERVAL '${hours.from}')::date)`;
+  return `${local}::date`;
 }
 
-function dateClause(date_from, date_to, alias = '') {
-  const col = localDate(alias ? `${alias}.created_at` : 'created_at');
+// Recorte a la franja horaria, aparte del recorte por día. El extremo superior es exclusivo
+// para que dos franjas contiguas (08:00–14:00 y 14:00–20:00) no cuenten dos veces la venta
+// que cayó justo en el borde.
+function hourClause(col, hours = null) {
+  if (!hours) return '';
+  const t = `(${col} AT TIME ZONE '${TZ}')::time`;
+  return hours.overnight
+    ? `AND (${t} >= TIME '${hours.from}' OR ${t} < TIME '${hours.to}')`
+    : `AND ${t} >= TIME '${hours.from}' AND ${t} < TIME '${hours.to}'`;
+}
+
+function dateClause(date_from, date_to, alias = '', hours = null) {
+  const raw = alias ? `${alias}.created_at` : 'created_at';
+  const col = localDate(raw, hours);
   const parts = [];
   if (date_from) parts.push(`AND ${col} >= '${date_from}'::date`);
   if (date_to)   parts.push(`AND ${col} <= '${date_to}'::date`);
+  const h = hourClause(raw, hours);
+  if (h) parts.push(h);
   return parts.join(' ');
 }
 
@@ -72,4 +121,4 @@ function dateClause(date_from, date_to, alias = '') {
 // propio shared —igual que dateClause— y no de una ruta a utils distinta en cada archivo.
 const { SETTLED_SQL } = require("../../utils/saleBalance");
 
-module.exports = { sanitizeDate, buildTenantContext, buildWarehouseScope, dateClause, localDate, TZ, SETTLED_SQL };
+module.exports = { sanitizeDate, sanitizeHour, buildHours, buildTenantContext, buildWarehouseScope, dateClause, hourClause, localDate, TZ, SETTLED_SQL };

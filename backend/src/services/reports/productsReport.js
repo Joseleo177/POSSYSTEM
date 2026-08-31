@@ -1,10 +1,10 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause, SETTLED_SQL } = require("./shared");
 
-async function productsReport({ date_from, date_to, limit = 20, company_id, tcS, tcP, rep, wh }) {
+async function productsReport({ date_from, date_to, limit = 20, company_id, tcS, tcP, rep, wh, hours }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
-  const dS = dateClause(df, dt, 's');
+  const dS = dateClause(df, dt, 's', hours);
   const lim = parseInt(limit);
 
   // Mismo criterio de "venta realizada" que salesReport y marginsReport: sin esto

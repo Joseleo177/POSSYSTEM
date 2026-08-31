@@ -45,6 +45,14 @@ function buildWb(sheets) {
   return wb;
 }
 
+// Franja horaria en el nombre del archivo: dos exportaciones del mismo rango con recortes
+// distintos se pisarían en la carpeta de descargas, y sin abrirlas no habría cómo saber
+// cuál es cuál. Los dos puntos no son válidos en un nombre de archivo en Windows.
+const sufijoFranja = (range) =>
+  range?.hour_from && range?.hour_to
+    ? `_${String(range.hour_from).replace(":", "")}-${String(range.hour_to).replace(":", "")}`
+    : "";
+
 // ── Exportadores por módulo ──────────────────────────────────
 
 export function buildSalesExcel(data, range) {
@@ -99,7 +107,7 @@ export function buildSalesExcel(data, range) {
         { key: "revenue", label: "Ingresos ($)" },
       ],
     },
-  ]), `Ventas_${range.from}_${range.to}`);
+  ]), `Ventas_${range.from}_${range.to}${sufijoFranja(range)}`);
 }
 
 export function buildInventoryExcel(data) {
@@ -210,7 +218,7 @@ export function buildMarginsExcel(data, range) {
         { key: "margin_pct",   label: "Margen (%)" },
       ],
     },
-  ]), `Margenes_${range.from}_${range.to}`);
+  ]), `Margenes_${range.from}_${range.to}${sufijoFranja(range)}`);
 }
 
 export function buildCustomersExcel(data, range) {
@@ -448,5 +456,5 @@ export function buildPaymentJournalsExcel(data, range) {
         { key: "amount_base",     label: "Total (Ref.)" },
       ],
     },
-  ]), `DiariosPago_${range.from}_${range.to}`);
+  ]), `DiariosPago_${range.from}_${range.to}${sufijoFranja(range)}`);
 }

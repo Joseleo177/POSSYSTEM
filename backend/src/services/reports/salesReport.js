@@ -1,15 +1,19 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause, localDate, TZ, SETTLED_SQL } = require("./shared");
 
-async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tcS, tcS2, tcP, rep, wh, allowedWarehouses }) {
+async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tcS, tcS2, tcP, rep, wh, allowedWarehouses, hours }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
-  const dS  = dateClause(df, dt, 's');
-  const dR  = dateClause(df, dt);
-  const dS2 = dateClause(df, dt, 's2');
+  const dS  = dateClause(df, dt, 's', hours);
+  const dR  = dateClause(df, dt, '', hours);
+  const dS2 = dateClause(df, dt, 's2', hours);
   // Los canales de pago se cortan por la fecha del COBRO, no por la de la venta: ver el
   // comentario de esa consulta más abajo.
-  const dP  = dateClause(df, dt, 'p');
+  const dP  = dateClause(df, dt, 'p', hours);
+  // Día al que pertenece cada registro. Con franja nocturna es la jornada, no la fecha del
+  // calendario, y tiene que ser la MISMA expresión que usa el filtro o el total del rango no
+  // cuadraría con la suma de las filas por día.
+  const diaR = localDate('created_at', hours);
 
   // Recorte por sucursal para una consulta que sale de payments y no pasa por sales: el
   // cobro no guarda almacén, lo hereda de su venta. Mismo criterio que paymentJournalsReport,
@@ -71,11 +75,11 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
-      `SELECT ${localDate('created_at')} AS day, COUNT(*)::int AS count,
+      `SELECT ${diaR} AS day, COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS revenue
        FROM sales
        WHERE status IN (${SETTLED_SQL}) ${tc} ${wh()} ${dR}
-       GROUP BY ${localDate('created_at')}
+       GROUP BY ${diaR}
        ORDER BY day ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),

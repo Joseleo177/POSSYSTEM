@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { fmtNumber, fmtInt, todayISO, toLocalISO } from "../../helpers";
 import GlobalDateRangePicker from "../../components/ui/DateRangePicker";
+import GlobalHourRangePicker from "../../components/ui/HourRangePicker";
 
 // ── Helpers ───────────────────────────────────────────────────
 export const fmt$ = (n) => `Ref. ${fmtNumber(n, 2)}`;
@@ -36,6 +37,27 @@ export function defaultRange(days = 30) {
  return { from: toLocalISO(d), to: t };
 }
 
+// Franja horaria del reporte. Arranca vacía —todo el día, como siempre— y solo se manda al
+// servidor cuando están las dos horas: con una sola no hay franja que aplicar.
+export function useHourRange() {
+ const [hours, setHours] = useState({ from: "", to: "" });
+ const params = hours.from && hours.to && hours.from !== hours.to
+   ? { hour_from: hours.from, hour_to: hours.to }
+   : {};
+ return {
+   hours,
+   setHours: (from, to) => setHours({ from, to }),
+   params,
+   // Para las deps de useReport: un string cambia de identidad solo si cambió la franja.
+   key: `${params.hour_from || ""}-${params.hour_to || ""}`,
+   activa: Boolean(params.hour_from),
+   // Una franja que termina antes de empezar cruza la medianoche, y ahí el servidor imputa
+   // la madrugada a la jornada anterior. Las pantallas lo dicen para que el corrimiento de
+   // los días no se lea como un error.
+   nocturna: Boolean(params.hour_from && params.hour_to < params.hour_from),
+ };
+}
+
 // ── Export completo: pide el dataset sin límites antes de generar el Excel ──
 export function useExportFull(fetchFn, params, build) {
  const [exporting, setExporting] = useState(false);
@@ -55,6 +77,26 @@ export function useExportFull(fetchFn, params, build) {
 
 export function DateRangePicker({ from, to, onChange }) {
  return <GlobalDateRangePicker from={from} to={to} onRangeChange={(f, t) => onChange(f, t)} />;
+}
+
+export function HourRangePicker({ from, to, onChange }) {
+ return <GlobalHourRangePicker from={from} to={to} onChange={onChange} />;
+}
+
+// Aviso de jornada nocturna para la barra de filtros. Va junto a los selectores porque la
+// pregunta ("¿por qué el sábado incluye la madrugada del domingo?") aparece mirando el
+// filtro, no el pie de la tabla.
+export function NightShiftNotice({ from, to }) {
+ return (
+   <div className="flex items-center gap-1.5 px-2.5 h-10 rounded-md border border-brand-500/20 bg-brand-500/5 shrink-0">
+     <svg className="w-3 h-3 shrink-0 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+     </svg>
+     <span className="text-[10px] font-bold uppercase tracking-tight text-brand-500 whitespace-nowrap">
+       Jornada nocturna {from}–{to} · la madrugada cuenta en el día que abrió
+     </span>
+   </div>
+ );
 }
 
 export function KpiCard({ label, value, sub, icon, color = "text-brand-500", delta: d }) {
