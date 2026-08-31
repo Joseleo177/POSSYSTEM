@@ -37,10 +37,6 @@ export default function WarehousesTab({ notify, currentEmployee }) {
         }
     };
 
-    // Crear, editar, borrar almacenes y asignar usuarios es exclusivo del admin; el backend
-    // lo rechaza igual, esto solo evita mostrar botones que van a fallar.
-    const isAdmin = !!currentEmployee?.permissions?.all;
-
     const {
         warehouses, allWarehouses, load: loadWarehouses,
         form, setForm, editId, loading,
@@ -57,6 +53,11 @@ export default function WarehousesTab({ notify, currentEmployee }) {
     // si la misma persona hace las dos puntas.
     const canReceive = can("inventory.receive");
     const canDispatch = can("inventory.transfer");
+    const esAdmin = !!currentEmployee?.permissions?.all;
+    // Abrir, cerrar o renombrar una sucursal y repartir sus usuarios es del administrador y
+    // de nadie más: la ruta de asignación decide qué sucursales ve cada quien, así que un rol
+    // con esa facultad podría sumarse a las demás tiendas por su cuenta.
+    const canManageWarehouses = esAdmin;
 
     const {
         transfers, summary: transferSummary, loading: loadingTransfers,
@@ -102,7 +103,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
 
     // ── Acciones dinámicas por sub-tab ────────────────────────
     const pageActions = subTab === "almacenes" ? (
-        isAdmin ? (
+        canManageWarehouses ? (
             <Button onClick={openNewWarehouse} className="h-8 px-2.5 sm:px-3 text-[10px]">
                 + <span className="hidden sm:inline">Nuevo Almacén</span><span className="sm:hidden">Nuevo</span>
             </Button>
@@ -141,7 +142,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
             {subTab === "almacenes" && (
                 <WarehouseGrid
                     warehouses={warehouses}
-                    isAdmin={isAdmin}
+                    canManage={canManageWarehouses}
                     openAssign={openAssign}
                     startEdit={startEdit}
                     setDeleteConfirm={setDeleteConfirm}
@@ -185,7 +186,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                     onOpenReceive={setTransferReceiving}
                     canReceive={canReceive}
                     currentEmployeeId={currentEmployee?.id}
-                    isAdmin={isAdmin}
+                    isAdmin={esAdmin}
                 />
             )}
 

@@ -3,6 +3,7 @@ import { api } from "../../services/api";
 import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
+import CustomSelect from "../ui/CustomSelect";
 import { todayISO } from "../../helpers";
 
 const TYPE_LABELS = { percentage: "Porcentaje", buy_x_get_y: "Compra X lleva Y" };
@@ -19,7 +20,8 @@ function isExpired(ends_at) {
 
 const EMPTY_FORM = {
     name: "", type: "percentage", discount_pct: "", buy_qty: "", get_qty: "",
-    starts_at: todayISO(), ends_at: "", active: true, product_ids: [],
+    // warehouse_id vacío = corre en todas las sucursales, que es el caso habitual.
+    starts_at: todayISO(), ends_at: "", active: true, product_ids: [], warehouse_id: "",
 };
 
 export default function PromotionsTab({ notify, can, triggerNew }) {
@@ -33,6 +35,9 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
     // Para el selector de productos
     const [allProducts, setAllProducts] = useState([]);
     const [productSearch, setProductSearch] = useState("");
+    // Sucursales donde puede correr la promoción. Solo las que atienden público: en un
+    // depósito no se factura, así que un descuento ahí no tendría dónde aplicarse.
+    const [warehouses, setWarehouses] = useState([]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -48,7 +53,14 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
         } catch (e) { console.error(e); }
     }, []);
 
-    useEffect(() => { load(); loadProducts(); }, [load, loadProducts]);
+    const loadWarehouses = useCallback(async () => {
+        try {
+            const r = await api.warehouses.getAll();
+            setWarehouses((r.data || []).filter(w => w.active && w.sells !== false));
+        } catch (e) { console.error(e); }
+    }, []);
+
+    useEffect(() => { load(); loadProducts(); loadWarehouses(); }, [load, loadProducts, loadWarehouses]);
 
     const openNew = useCallback(() => { setForm(EMPTY_FORM); setProductSearch(""); setModal("new"); }, []);
     
@@ -72,6 +84,7 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
             ends_at: p.ends_at ? p.ends_at.slice(0, 10) : "",
             active: p.active,
             product_ids: (p.Products || []).map(pr => pr.id),
+            warehouse_id: p.warehouse_id ?? "",
         });
         setProductSearch("");
         setModal(p);
@@ -101,6 +114,7 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                 ends_at: form.ends_at || null,
                 active: form.active,
                 product_ids: form.product_ids,
+                warehouse_id: form.warehouse_id || null,
             };
             if (modal === "new") {
                 await api.promotions.create(body);
@@ -164,6 +178,13 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                                         <tr key={p.id} className="group hover:bg-brand-500/[0.02] transition-colors">
                                             <td className="px-4 py-3">
                                                 <span className="text-[13px] font-black text-content dark:text-white">{p.name}</span>
+                                                {/* Solo se nombra cuando está limitada: decir "todas"
+                                                    en cada fila sería ruido, porque es lo normal. */}
+                                                {p.warehouse_id && (
+                                                    <div className="text-[10px] font-black uppercase tracking-widest text-brand-500 mt-0.5 truncate">
+                                                        {warehouses.find(w => w.id === p.warehouse_id)?.name || "Sucursal"}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-4 py-3">
                                                 <span className="text-[11px] font-bold text-content-subtle dark:text-white/40">{TYPE_LABELS[p.type] || p.type}</span>
@@ -189,7 +210,7 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                                                 <span className={`text-[10px] font-black px-2 py-1 rounded-lg border ${statusClass}`}>{statusLabel}</span>
                                             </td>
                                             <td className="px-4 py-3 text-right">
-                                                {can("products") && (
+                                                {can("products.edit") && (
                                                     <div className="flex items-center justify-end gap-1.5">
                                                         <button onClick={() => openEdit(p)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black transition-all" title="Editar">
                                                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
@@ -263,6 +284,22 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                             <label className="label">HASTA (opcional)</label>
                             <input type="date" value={form.ends_at} onChange={e => setForm(p => ({ ...p, ends_at: e.target.value }))} className="input" />
                         </div>
+                    </div>
+
+                    {/* Sucursal donde corre. Lo normal es que sea en todas; limitarla es la
+                        excepción, así que esa es la opción por defecto. */}
+                    <div>
+                        <label className="label">SUCURSAL</label>
+                        <CustomSelect
+                            value={String(form.warehouse_id || "")}
+                            onChange={val => setForm(p => ({ ...p, warehouse_id: val }))}
+                            options={[
+                                { value: "", label: "Todas las sucursales" },
+                                ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
+                            ]}
+                            placeholder="Todas las sucursales"
+                            className="w-full"
+                        />
                     </div>
 
                     {/* Activo */}

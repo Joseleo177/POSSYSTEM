@@ -9,11 +9,13 @@ router.use(auth);
 const ownWarehouse = warehouseAccess();
 
 // ── Almacenes ─────────────────────────────────────────────────
-// Crear, editar, borrar y asignar usuarios es administración del almacén: solo admin.
+// Abrir, cerrar o renombrar una sucursal no es una tarea operativa: arrastra series fiscales
+// propias, numeración separada y empleados asignados. Va solo con `admin`, y a propósito NO
+// con un permiso concedible: ver más abajo por qué asignar usuarios obliga a lo mismo.
 router.get   ("/", permit("inventory.view"),                   wh.getAll);
-router.post  ("/",                   permit("inventory.manage"), wh.create);
-router.put   ("/:id",                permit("inventory.manage"), wh.update);
-router.delete("/:id",                permit("inventory.manage"), wh.remove);
+router.post  ("/",                   permit("admin"), wh.create);
+router.put   ("/:id",                permit("admin"), wh.update);
+router.delete("/:id",                permit("admin"), wh.remove);
 
 // ── Stock ─────────────────────────────────────────────────────
 router.get  ("/:id/stock", permit("inventory.view"),           ownWarehouse, wh.getStock);
@@ -23,8 +25,11 @@ router.delete("/:id/stock/:productId",permit("inventory.adjust"),             ow
 router.get  ("/:id/products", permit("inventory.view"),        ownWarehouse, wh.getProducts);
 
 // ── Empleados por almacén ─────────────────────────────────────
+// Esta ruta reparte visibilidad: `employee_warehouses` es lo que decide qué sucursales ve
+// cada quien —ventas, stock, arqueos y reportes—. Concederla a un rol le permitiría asignarse
+// a sí mismo a las demás tiendas, que es justo lo que el recorte por sucursal evita. Solo admin.
 router.get  ("/employee/:employeeId", wh.getByEmployee);
-router.put  ("/:id/employees",        permit("inventory.manage"), wh.assignEmployees);
+router.put  ("/:id/employees",        permit("admin"), wh.assignEmployees);
 
 // ── Transferencias ────────────────────────────────────────────
 // Documento de dos tiempos: `transfer` despacha (saca del origen, deja en tránsito) y

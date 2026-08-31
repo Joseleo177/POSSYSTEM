@@ -164,7 +164,7 @@ export default function CatalogPage() {
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                                 <span className="hidden sm:inline">Imprimir</span> ({selectedProducts.length})
                             </Button>
-                            {can("products") && (
+                            {can("products.edit") && (
                                 <>
                                     <Button onClick={() => bulkVisibility(true)} variant="ghost"
                                         className="h-8 px-2 sm:px-3 text-[10px] shadow-none bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black"
@@ -204,7 +204,7 @@ export default function CatalogPage() {
                     {/* Compartir y Nuevo se esconden mientras haya selección: no aplican a lo
                         seleccionado y, sumados a Imprimir, Publicar y Ocultar, dejaban seis
                         botones peleando por la barra. Vuelven al soltar la selección. */}
-                    {can("config") && selectedProducts.length === 0 && (
+                    {can("config.edit") && selectedProducts.length === 0 && (
                         <Button onClick={() => setPublicLinkModal(true)} variant="ghost"
                             className="h-8 px-2 sm:px-3 text-[10px] shadow-none border border-border dark:border-white/10 text-content-subtle hover:text-brand-500"
                             title="Enlace de solo lectura para clientes">
@@ -212,7 +212,7 @@ export default function CatalogPage() {
                             <span className="hidden sm:inline">Compartir</span>
                         </Button>
                     )}
-                    {can("products") && selectedProducts.length === 0 && (
+                    {can("products.create") && selectedProducts.length === 0 && (
                         <Button onClick={() => { setProductEditData(null); setProductModal(true); }} className="h-8 px-2.5 sm:px-3 text-[10px] shadow-none">
                             + <span className="hidden sm:inline">Nuevo Producto</span><span className="sm:hidden">Nuevo</span>
                         </Button>
@@ -220,13 +220,13 @@ export default function CatalogPage() {
                 </>
             )}
 
-            {activeTab === "categories" && can("products") && (
+            {activeTab === "categories" && can("products.edit") && (
                 <Button onClick={() => setTriggerNewCategory(prev => prev + 1)} className="h-8 px-2.5 sm:px-3 text-[10px] shadow-none">
                     + <span className="hidden sm:inline">Nueva Categoría</span><span className="sm:hidden">Nueva</span>
                 </Button>
             )}
 
-            {activeTab === "promotions" && can("products") && (
+            {activeTab === "promotions" && can("products.edit") && (
                 <Button onClick={() => setTriggerNewPromo(prev => prev + 1)} className="h-8 px-2.5 sm:px-3 text-[10px] shadow-none">
                     + <span className="hidden sm:inline">Nueva Promoción</span><span className="sm:hidden">Nueva</span>
                 </Button>
@@ -423,7 +423,8 @@ export default function CatalogPage() {
                             {viewMode === "grid" ? (
                                 <ProductCards
                                     products={products}
-                                    canManageProducts={can("products")}
+                                    canEditProducts={can("products.edit")}
+                                    canDeleteProducts={can("products.delete")}
                                     openEditProduct={(p) => { setProductEditData(p); setProductModal(true); }}
                                     setDeleteProductDialog={setDeleteProductDialog}
                                     selectedProducts={selectedProducts.map(p => p.id)}
@@ -436,7 +437,8 @@ export default function CatalogPage() {
                             ) : (
                                 <ProductTable
                                     products={products}
-                                    canManageProducts={can("products")}
+                                    canEditProducts={can("products.edit")}
+                                    canDeleteProducts={can("products.delete")}
                                     openEditProduct={(p) => { setProductEditData(p); setProductModal(true); }}
                                     setDeleteProductDialog={setDeleteProductDialog}
                                     selectedProducts={selectedProducts.map(p => p.id)}

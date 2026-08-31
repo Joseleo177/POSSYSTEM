@@ -75,9 +75,12 @@ export function CartProvider({ children }) {
   // ── Promociones activas ────────────────────────────────────
   const [activePromos, setActivePromos] = useState([]);
 
-  const loadActivePromos = useCallback(async () => {
+  // Las promociones también son de la sucursal: se piden las de este almacén más las que
+  // corren en todas. Sin almacén no se pide nada, porque el carrito tampoco puede cobrar.
+  const loadActivePromos = useCallback(async (warehouseId) => {
+    if (!warehouseId) { setActivePromos([]); return; }
     try {
-      const r = await api.promotions.getActive();
+      const r = await api.promotions.getActive({ warehouse_id: warehouseId });
       setActivePromos(r.data || []);
     } catch (e) { console.error(e); }
   }, []);
@@ -147,6 +150,10 @@ export function CartProvider({ children }) {
   // Cambiar de sucursal cambia el juego de series: se recargan las del almacén nuevo y, si
   // la que estaba elegida no es de ahí, se reemplaza por la primera disponible.
   useEffect(() => { loadMySeries(activeWarehouse?.id); }, [activeWarehouse?.id, loadMySeries]);
+
+  // Y el juego de promociones, por lo mismo: una promo de la otra tienda no debe seguir
+  // descontando en el carrito después de cambiar de sucursal.
+  useEffect(() => { loadActivePromos(activeWarehouse?.id); }, [activeWarehouse?.id, loadActivePromos]);
 
   // ── Conversión de moneda ───────────────────────────────────
   // El precio del producto se guarda con precisión completa (5 decimales, ej. costo × margen =

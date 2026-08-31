@@ -169,7 +169,9 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
       as: 'stocks',
       where: { warehouse_id: parseInt(warehouse_id) },
       required: false,
-      attributes: ['qty']
+      // price, min_stock y cost_price salen de la misma fila: viendo un almacén, lo que vale
+      // es lo que esa sucursal tenga definido.
+      attributes: ['qty', 'price', 'min_stock', 'cost_price']
     });
   }
 
@@ -207,10 +209,24 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
     delete prod.Category;
     prod.image_url = imageUrl(prod.image_filename);
     if (prod.stocks?.length > 0) {
-      prod.warehouse_stock = parseFloat(prod.stocks[0].qty || 0);
+      const ficha = prod.stocks[0];
+      prod.warehouse_stock = parseFloat(ficha.qty || 0);
+      // Precio y mínimo de la sucursal pisan a los del producto: quien consulta un almacén
+      // —el POS, el catálogo, las etiquetas— debe ver lo que rige ahí, sin tener que saber
+      // que existe una herencia detrás. Los flags `_own` son para la pantalla de stock, que
+      // sí necesita distinguir lo propio de lo heredado.
+      prod.price_own = ficha.price != null;
+      if (prod.price_own) prod.price = ficha.price;
+      prod.min_stock_own = ficha.min_stock != null;
+      if (prod.min_stock_own) prod.min_stock = ficha.min_stock;
+      prod.cost_own = ficha.cost_price != null;
+      if (prod.cost_own) prod.cost_price = ficha.cost_price;
       delete prod.stocks;
     } else if (warehouse_id) {
       prod.warehouse_stock = 0;
+      prod.price_own = false;
+      prod.min_stock_own = false;
+      prod.cost_own = false;
     }
     if (prod.is_combo) {
       const stats = calculateComboStockAndCost(prod.comboItems);
@@ -349,11 +365,17 @@ async function createProduct({ body, file, company_id }) {
   }
 }
 
-async function updateProduct({ id, body, file, company_id }) {
+async function updateProduct({ id, body, file, company_id, warehouse_id = null }) {
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
     is_combo, combo_items, is_service, barcode, bulk_price,
     visible_in_catalog, sellable } = body;
+
+  // Editar el catálogo parado en una sucursal cambia el precio DE ESA SUCURSAL, no el de
+  // todas. Un encargado de área maneja su tienda y no debería mover —ni enterarse de— las
+  // demás. El precio del producto queda como el de referencia con que nació y como el que
+  // heredan las sucursales que no fijaron uno propio.
+  const alcanceSucursal = !!warehouse_id;
 
   const t = await sequelize.transaction();
   try {
@@ -408,20 +430,26 @@ async function updateProduct({ id, body, file, company_id }) {
       ? parseFloat(profit_margin)
       : derivarMargen(precioFinal, costoFinal, "");
 
+    // Con alcance de sucursal, los tres valores que tienen ficha propia —precio, costo y
+    // mínimo— no se tocan en el producto: se escriben más abajo en `product_stock`. Lo demás
+    // (nombre, categoría, unidad, código de barras, combo) es del producto y sigue siendo
+    // igual para todas las sucursales, porque no tendría sentido de otro modo.
     await product.update({
       name: opt(name, product.name, product.name),
-      price: precioFinal,
+      price: alcanceSucursal ? product.price : precioFinal,
       category_id: opt(category_id, product.category_id),
       image_filename: currentImageValue,
       unit: opt(unit, product.unit, "unidad"),
       qty_step: opt(qty_step, product.qty_step, 1),
       stock: (isComboBool || isServiceBool) ? 0 : product.stock,
-      cost_price: costoFinal,
-      profit_margin: margenFinal,
+      cost_price: alcanceSucursal ? product.cost_price : costoFinal,
+      profit_margin: alcanceSucursal ? product.profit_margin : margenFinal,
       package_size: opt(package_size, product.package_size),
       package_unit: opt(package_unit, product.package_unit),
       bulk_price: opt(bulk_price, product.bulk_price),
-      min_stock: min_stock === undefined ? product.min_stock : (parseFloat(min_stock) || 0),
+      min_stock: alcanceSucursal
+        ? product.min_stock
+        : (min_stock === undefined ? product.min_stock : (parseFloat(min_stock) || 0)),
       is_combo: isComboBool,
       is_service: isServiceBool,
       barcode: opt(barcode, product.barcode),
@@ -433,6 +461,53 @@ async function updateProduct({ id, body, file, company_id }) {
         ? product.visible_in_catalog
         : (visible_in_catalog === 'true' || visible_in_catalog === true)),
     }, { transaction: t });
+
+    // ── Lo que es de la sucursal, a la ficha de la sucursal ──────────────────────────
+    if (warehouse_id) {
+      const ficha = await ProductStock.findOne({
+        where: { warehouse_id, product_id: product.id },
+        transaction: t,
+        lock: true,
+      });
+
+      {
+        // Solo se escribe lo que de verdad cambió. Sin esta comparación, guardar el producto
+        // para corregirle el nombre convertía en propio un precio que venía heredado, y esa
+        // sucursal dejaba de enterarse de los cambios generales sin que nadie lo pidiera.
+        const cambio = (nuevo, vigente) => {
+          if (nuevo === undefined) return false;
+          if (nuevo === "" || nuevo === null) return vigente != null;   // vaciar = volver a heredar
+          return Math.abs(parseFloat(nuevo) - parseFloat(vigente ?? NaN)) > 1e-9 || vigente == null;
+        };
+        // Un valor propio idéntico al general no es un valor propio: es el general escrito a
+        // mano. Se guarda NULL para que la sucursal siga heredando; si no, quedaría anclada a
+        // ese número y el próximo cambio general la dejaría atrás sin que nadie lo note.
+        const valor = (v, general) => {
+          if (v === "" || v === null) return null;
+          const n = parseFloat(v);
+          return Math.abs(n - parseFloat(general ?? NaN)) < 1e-9 ? null : n;
+        };
+
+        const cambios = {};
+        if (cambio(price,      ficha?.price      ?? product.price))      cambios.price      = valor(price,      product.price);
+        if (cambio(cost_price, ficha?.cost_price ?? product.cost_price)) cambios.cost_price = valor(cost_price, product.cost_price);
+        if (cambio(min_stock,  ficha?.min_stock  ?? product.min_stock))  cambios.min_stock  = valor(min_stock,  product.min_stock);
+
+        if (Object.keys(cambios).length) {
+          if (ficha) {
+            await ficha.update(cambios, { transaction: t });
+          } else if (!isComboBool && !isServiceBool) {
+            // La sucursal no manejaba este producto y le acaban de poner precio propio: pasa
+            // a formar parte de su surtido, en cero hasta que entre mercancía. Combos y
+            // servicios no llevan ficha de existencias.
+            await ProductStock.create(
+              { warehouse_id, product_id: product.id, qty: 0, company_id, ...cambios },
+              { transaction: t }
+            );
+          }
+        }
+      }
+    }
 
     if (isComboBool && combo_items !== undefined) {
       await ProductComboItem.destroy({ where: { combo_id: product.id }, transaction: t });

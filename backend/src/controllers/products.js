@@ -1,5 +1,6 @@
 const { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility } = require("../services/products");
 const { broadcast } = require("../services/sseService");
+const { assertWarehouseAccess } = require("../middleware/auth");
 
 const wrap = (fn, status = 200) => async (req, res) => {
   try {
@@ -20,7 +21,19 @@ module.exports = {
     return result;
   }, 201),
   update:  wrap(async req => {
-    const result = await updateProduct({ id: req.params.id, body: req.body, file: req.file, company_id: req.employee?.company_id ?? null });
+    // El almacén desde el que se está editando: si viene, el precio, el costo y el mínimo
+    // son de esa sucursal y no de la empresa entera. Se valida el acceso para que nadie
+    // toque una sucursal ajena mandando otro id en el cuerpo.
+    const wid = parseInt(req.body?.warehouse_id, 10) || null;
+    if (wid) await assertWarehouseAccess(req, wid);
+
+    const result = await updateProduct({
+      id: req.params.id,
+      body: req.body,
+      file: req.file,
+      company_id: req.employee?.company_id ?? null,
+      warehouse_id: wid,
+    });
     broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
     return result;
   }),

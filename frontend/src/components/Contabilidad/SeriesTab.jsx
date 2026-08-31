@@ -14,7 +14,10 @@ const SERIE_TYPES = [
 const EMPTY_RANGE = { start_number: "", end_number: "" };
 
 export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEmployees, allWarehouses = [] }) {
-  const canConfig = can("config");
+  // La numeración fiscal tiene su propio permiso desde que `config` dejó de ser un segundo
+  // administrador. Preguntar por el viejo dejaba el botón a la vista de cualquiera que
+  // tuviera alguna acción del mapa de compatibilidad, y el servidor después lo rebotaba.
+  const canConfig = can("series.manage");
   const [serieForm, setSerieForm] = useState(EMPTY_SERIE);
   const [editSerie, setEditSerie] = useState(null);
   const [expandSerie, setExpandSerie] = useState(null);

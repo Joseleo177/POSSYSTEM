@@ -326,7 +326,11 @@ export default function InventoryReport() {
                           <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
                             <td className="px-4 py-3">
                               <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.name}</div>
-                              <div className="text-[10px] font-bold text-content-subtle uppercase">{p.category_name}</div>
+                              {/* Sin almacén elegido la falta es de una sucursal concreta, y el
+                                  mismo producto puede aparecer por varias. */}
+                              <div className="text-[10px] font-bold text-content-subtle uppercase">
+                                {p.warehouse_name ? `${p.warehouse_name} · ${p.category_name}` : p.category_name}
+                              </div>
                             </td>
                             <td className="px-4 py-3 text-right tabular-nums font-black text-danger text-[11px]">{fmtNumber(p.stock, 2)}</td>
                             <td className="px-4 py-3 text-right tabular-nums text-[11px] text-content-subtle">{fmtNumber(p.min_stock, 2)}</td>

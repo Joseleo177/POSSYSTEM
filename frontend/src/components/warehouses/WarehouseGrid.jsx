@@ -1,4 +1,4 @@
-export default function WarehouseGrid({ warehouses, isAdmin = false, openAssign, startEdit, setDeleteConfirm, setSelectedWarehouse, setSubTab }) {
+export default function WarehouseGrid({ warehouses, canManage = false, openAssign, startEdit, setDeleteConfirm, setSelectedWarehouse, setSubTab }) {
     return (
         <div className="flex-1 overflow-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 content-start py-3">
             {warehouses.map(w => (
@@ -71,7 +71,7 @@ export default function WarehouseGrid({ warehouses, isAdmin = false, openAssign,
                                 <svg className="w-3.5 h-3.5 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                                 Stock
                             </button>
-                            {isAdmin && (
+                            {canManage && (
                                 <button
                                     onClick={() => openAssign(w)}
                                     className="flex-1 h-9 rounded-xl bg-violet-500/10 text-violet-400 text-[10px] font-black uppercase tracking-wide sm:tracking-widest whitespace-nowrap hover:bg-violet-500 hover:text-black transition-all flex items-center justify-center gap-1.5"
@@ -87,7 +87,7 @@ export default function WarehouseGrid({ warehouses, isAdmin = false, openAssign,
                                 <svg className="w-3.5 h-3.5 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                                 Mov. Manual
                             </button>
-                            {isAdmin && (
+                            {canManage && (
                             <div className="flex gap-1 ml-auto">
                                 <button
                                     onClick={() => startEdit(w)}

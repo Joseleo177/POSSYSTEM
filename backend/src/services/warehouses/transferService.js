@@ -150,6 +150,9 @@ async function createTransfer(req) {
         product_name: product.name,
         unit:         product.unit || null,
         qty_sent:     parsedQty,
+        // Lo que costaba en el origen. Si esa sucursal nunca recibió una compra propia, el
+        // del catálogo es la única referencia que hay.
+        unit_cost:    fromStock.cost_price ?? product.cost_price ?? null,
       }, { transaction }));
     }
 
@@ -201,6 +204,16 @@ async function receiveTransfer(id, req) {
           lock: true,
         });
         await toStock.increment('qty', { by: received, transaction });
+
+        // El costo viaja con la mercancía: llega valorizada a lo que costó donde estaba. Sin
+        // esto, un producto que la sucursal destino nunca compró se quedaba con el costo del
+        // catálogo —que puede ser de otra tienda y de otro mes— y el margen de esa venta
+        // salía inventado. `line.unit_cost` se congeló al despachar, así que un cambio de
+        // costo en el origen mientras la carga iba en camino no altera lo que llega.
+        if (line.unit_cost != null) {
+          await toStock.update({ cost_price: line.unit_cost }, { transaction });
+        }
+
         await syncProductStock(line.product_id, transaction);
       }
 

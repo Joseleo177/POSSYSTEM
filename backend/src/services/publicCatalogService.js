@@ -262,6 +262,11 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
     const stockExpr = whId
       ? `COALESCE((SELECT qty FROM product_stock WHERE product_id = "Product"."id" AND warehouse_id = ${whId}), 0)`
       : '"Product"."stock"';
+    // Y el precio, igual: la vitrina de una tienda tiene que mostrar lo que esa tienda cobra.
+    // Sin sucursal elegida no hay a quién preguntarle: rige el del catálogo.
+    const priceExpr = whId
+      ? `COALESCE((SELECT price FROM product_stock WHERE product_id = "Product"."id" AND warehouse_id = ${whId}), "Product"."price")`
+      : '"Product"."price"';
     // La vitrina de una sucursal solo lista lo que esa sucursal maneja, y "manejar" es
     // tener ficha en su almacén —el mismo criterio del módulo Catálogo, para que las dos
     // pantallas den siempre el mismo surtido—. Sin esto, elegir una tienda pequeña
@@ -285,9 +290,10 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
       // Se seleccionan solo columnas de vitrina. cost_price, profit_margin, barcode y
       // min_stock quedan fuera a propósito: son datos internos del negocio.
       attributes: [
-        "id", "name", "price", "unit", "image_filename", "is_service", "is_combo",
-        // "stock" pasa a ser el de la sucursal elegida, no el total del negocio.
+        "id", "name", "unit", "image_filename", "is_service", "is_combo",
+        // "stock" y "price" pasan a ser los de la sucursal elegida, no los del negocio.
         [Sequelize.literal(stockExpr), "stock"],
+        [Sequelize.literal(priceExpr), "price"],
       ],
       include: [{ model: Category, attributes: ["name"], required: false }],
       // Disponibles primero. Es una vitrina: un cliente que abre el enlace debe ver lo que
@@ -496,13 +502,19 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
     // Existencias de esa tienda, en dos consultas: una para los productos simples y otra
     // para lo que necesitan los combos. Cada sucursal responde por lo que tiene.
     const stockEnTienda = {};
+    const precioEnTienda = {};
     const comboEnTienda = {};
     if (tienda) {
       const filas = await ProductStock.findAll({
         where: { warehouse_id: tienda.id, product_id: { [Op.in]: ids } },
-        attributes: ["product_id", "qty"],
+        // El precio sale de la misma consulta: el pedido tiene que cerrarse al precio de la
+        // tienda que el cliente eligió, el mismo que le mostró la vitrina.
+        attributes: ["product_id", "qty", "price"],
       });
-      for (const r of filas) stockEnTienda[r.product_id] = parseFloat(r.qty);
+      for (const r of filas) {
+        stockEnTienda[r.product_id] = parseFloat(r.qty);
+        if (r.price != null) precioEnTienda[r.product_id] = parseFloat(r.price);
+      }
 
       const comboIds = products.filter((p) => p.is_combo).map((p) => p.id);
       Object.assign(comboEnTienda, await comboAvailability(comboIds, tienda.id));
@@ -521,7 +533,7 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
         const e = new Error(`Cantidad inválida para "${p.name}".`); e.status = 400; throw e;
       }
 
-      const price = parseFloat(p.price);
+      const price = precioEnTienda[p.id] ?? parseFloat(p.price);
       if (!(price > 0)) { const e = new Error(`"${p.name}" no tiene precio publicado.`); e.status = 400; throw e; }
 
       // Cada sucursal responde por lo suyo: si la tienda elegida no tiene con qué cubrir la

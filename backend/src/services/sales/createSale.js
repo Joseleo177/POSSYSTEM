@@ -93,13 +93,19 @@ module.exports = async function createSale(body) {
     const chargeLabel = chargeAmt > 0 ? (service_charge_label?.trim().slice(0, 40) || "Servicio") : null;
     const rate = parseFloat(exchange_rate) || 1;
 
-    // Cargar promociones activas para esta venta
+    // Cargar promociones activas para esta venta: las de la sucursal donde se factura, más
+    // las que corren en todas. El filtro tiene que estar acá y no solo en la caja — el
+    // descuento se recalcula en el servidor, así que sin esto una promoción de otra tienda se
+    // seguiría aplicando aunque el carrito no la haya mostrado nunca.
     const now = new Date();
     const activePromos = await Promotion.findAll({
       where: {
         active: true,
         starts_at: { [Op.lte]: now },
-        [Op.or]: [{ ends_at: null }, { ends_at: { [Op.gte]: now } }],
+        [Op.and]: [
+          { [Op.or]: [{ ends_at: null }, { ends_at: { [Op.gte]: now } }] },
+          { [Op.or]: [{ warehouse_id: null }, { warehouse_id }] },
+        ],
       },
       include: [{ model: Product, through: { attributes: [] }, attributes: ['id'] }],
       transaction,
@@ -140,7 +146,18 @@ module.exports = async function createSale(body) {
         throw new Error(`"${product.name}" es un insumo y no está disponible para la venta`);
       }
 
-      const rawPrice     = parseFloat(product.price);
+      // El precio que rige es el de la sucursal, si lo fijó. Sale de la misma fila que más
+      // abajo descuenta las existencias —con lock—, así que no cuesta una consulta extra.
+      // Servicios y combos no tienen ficha de almacén: siguen con el precio del producto.
+      const fichaSucursal = (product.is_service || product.is_combo)
+        ? null
+        : await ProductStock.findOne({
+            where: { warehouse_id, product_id: product.id },
+            transaction,
+            lock: true,
+          });
+
+      const rawPrice     = parseFloat(fichaSucursal?.price ?? product.price);
       const roundedPrice = round2(rawPrice);
       // lineDiscountUsd: usa roundedPrice (pista $, para sale.total)
       // lineDiscountBs:  usa rawPrice    (pista Bs, para SaleItem.discount y subtotal generado)
@@ -149,7 +166,7 @@ module.exports = async function createSale(body) {
 
       if (product.is_service) {
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, lineDiscountBs });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, lineDiscountBs, unitPrice: rawPrice });
       } else if (product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
         if (!comboItems || comboItems.length === 0) {
@@ -176,13 +193,10 @@ module.exports = async function createSale(body) {
         }
 
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs, unitPrice: rawPrice });
       } else {
-        const stockEntry = await ProductStock.findOne({
-          where: { warehouse_id, product_id: product.id },
-          transaction,
-          lock: true,
-        });
+        // La ficha ya se cargó arriba con lock para leer el precio de la sucursal.
+        const stockEntry = fichaSucursal;
 
         const currentQty = parseFloat(stockEntry?.qty || 0);
         if (currentQty < item.quantity) {
@@ -190,7 +204,7 @@ module.exports = async function createSale(body) {
         }
 
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs, unitPrice: rawPrice });
       }
     }
 
@@ -234,15 +248,20 @@ module.exports = async function createSale(body) {
       // Costo congelado: sin esto, el reporte de márgenes recalcula la utilidad de esta venta
       // con el costo de reposición del día en que se consulte, no con el que tenía hoy.
       // En un combo el producto no lleva costo propio: es la suma del costo de sus ingredientes.
+      //
+      // El costo también es de la sucursal: el de la ficha si esta tienda ya recibió
+      // mercancía, y si no el del catálogo. Sin esto, el margen de una sucursal se calculaba
+      // con lo que le costó a la otra.
       let unitCost = null;
       if (entry.isCombo) {
         const comboCost = entry.ingredientsData.reduce(
-          (acc, ing) => acc + parseFloat(ing.ingredient.cost_price || 0) * ing.qtyNeeded,
+          (acc, ing) => acc + parseFloat(ing.stockEntry?.cost_price ?? ing.ingredient.cost_price ?? 0) * ing.qtyNeeded,
           0
         );
         unitCost = entry.qty > 0 ? parseFloat((comboCost / entry.qty).toFixed(5)) : null;
-      } else if (entry.product.cost_price != null) {
-        unitCost = parseFloat(entry.product.cost_price);
+      } else {
+        const costo = entry.stockEntry?.cost_price ?? entry.product.cost_price;
+        if (costo != null) unitCost = parseFloat(costo);
       }
 
       await SaleItem.create(
@@ -250,7 +269,9 @@ module.exports = async function createSale(body) {
           sale_id: sale.id,
           product_id: entry.product.id,
           name: entry.product.name,
-          price: entry.product.price,
+          // El precio cobrado, que puede ser el de la sucursal y no el del catálogo. Guardar
+          // aquí `product.price` dejaría la línea sin cuadrar contra el total de la venta.
+          price: entry.unitPrice,
           quantity: entry.qty,
           discount: unitDiscount,
           cost_price: unitCost,

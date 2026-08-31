@@ -64,7 +64,7 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
         <span className="text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
           {banks.length} banco{banks.length !== 1 ? "s" : ""}
         </span>
-        {can("config") && (
+        {can("journals.manage") && (
           <Button onClick={() => { setBankEditId(null); setBankForm(EMPTY_BANK); setShowModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
             + Vincular Banco
           </Button>
@@ -80,7 +80,7 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
         <table className="table-pos min-w-[680px]">
             <thead className="sticky top-0 z-10">
               <tr>
-                {["Nombre del Banco", "Código", "Cuentas / Diarios", "Estado", can("config") && "Acciones"].filter(Boolean).map(h => (
+                {["Nombre del Banco", "Código", "Cuentas / Diarios", "Estado", can("journals.manage") && "Acciones"].filter(Boolean).map(h => (
                   <th key={h} className={h === "Acciones" ? "text-right pr-6" : h === "Cuentas / Diarios" || h === "Estado" ? "text-center" : "text-left"}>
                     {h}
                   </th>
@@ -128,7 +128,7 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
                         {b.active ? "Activo" : "Inactivo"}
                       </span>
                     </td>
-                    {can("config") && (
+                    {can("journals.manage") && (
                       <td className="text-right pr-6">
                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           {isEdit ? (

@@ -374,7 +374,8 @@ export const api = {
   // ── Promociones ───────────────────────────────────────────────
   promotions: {
     getAll:    ()         => request("/promotions"),
-    getActive: ()         => request("/promotions/active"),
+    // Sin warehouse_id solo vienen las que corren en todas las sucursales.
+    getActive: (params={}) => request("/promotions/active?" + new URLSearchParams(params)),
     create:    (body)     => request("/promotions",       { method: "POST",   body: JSON.stringify(body) }),
     update:    (id, body) => request(`/promotions/${id}`, { method: "PUT",    body: JSON.stringify(body) }),
     remove:    (id)       => request(`/promotions/${id}`, { method: "DELETE" }),

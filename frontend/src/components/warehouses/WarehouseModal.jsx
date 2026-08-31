@@ -7,19 +7,18 @@ import CustomSelect from "../ui/CustomSelect";
 // diferencia de peso visual hacía parecer que una opción importaba y la otra no.
 function Toggle({ checked, onChange, title, description, tone = "brand" }) {
     const activo = {
-        brand:   "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20",
+        brand: "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20",
         warning: "bg-warning/5 border-warning/25",
     }[tone];
     const titulo = {
-        brand:   "text-brand-600 dark:text-brand-400",
+        brand: "text-brand-600 dark:text-brand-400",
         warning: "text-warning",
     }[tone];
 
     return (
         <label
-            className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 cursor-pointer ${
-                checked ? activo : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"
-            }`}
+            className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 cursor-pointer ${checked ? activo : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"
+                }`}
         >
             <div className="min-w-0">
                 <div className={`text-xs font-bold ${checked ? titulo : "text-content dark:text-content-dark"}`}>
@@ -31,9 +30,8 @@ function Toggle({ checked, onChange, title, description, tone = "brand" }) {
             </div>
             <div className="relative inline-flex items-center shrink-0">
                 <input type="checkbox" className="sr-only peer" checked={checked} onChange={e => onChange(e.target.checked)} />
-                <div className={`w-9 h-5 bg-border/50 dark:bg-white/10 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white ${
-                    tone === "warning" ? "peer-checked:bg-warning" : "peer-checked:bg-brand-500"
-                }`} />
+                <div className={`w-9 h-5 bg-border/50 dark:bg-white/10 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white ${tone === "warning" ? "peer-checked:bg-warning" : "peer-checked:bg-brand-500"
+                    }`} />
             </div>
         </label>
     );
@@ -69,7 +67,7 @@ export default function WarehouseModal({ open, onClose, form, setForm, editId, l
                 <Toggle
                     tone="warning"
                     checked={form.sells === false}
-                    onChange={v => setForm(p => ({ ...p, sells: !v, ...( v ? {} : { parent_warehouse_id: null }) }))}
+                    onChange={v => setForm(p => ({ ...p, sells: !v, ...(v ? {} : { parent_warehouse_id: null }) }))}
                     title="Solo depósito"
                     description={form.sells === false
                         ? "No aparece en la caja ni emite facturas. Sigue recibiendo compras y transferencias."
@@ -89,11 +87,10 @@ export default function WarehouseModal({ open, onClose, form, setForm, editId, l
                             value={form.parent_warehouse_id ?? ""}
                             onChange={v => setForm(p => ({ ...p, parent_warehouse_id: v ? parseInt(v) : null }))}
                             options={[
-                                { value: "", label: "— Sin asignar —" },
-                                // No puede ser su propio padre.
+                                { value: "", label: "Sin asignar" },
                                 ...parentOptions.filter(w => w.id !== editId).map(w => ({ value: w.id, label: w.name })),
                             ]}
-                            placeholder="— Sin asignar —"
+                            placeholder="Sin asignar"
                             className="w-full"
                         />
                     </div>

@@ -16,6 +16,9 @@ module.exports = (sequelize, DataTypes) => {
     ends_at:      { type: DataTypes.DATE, allowNull: true },
     active:       { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     company_id:   { type: DataTypes.INTEGER, allowNull: true },
+    // Sucursal donde corre. NULL = en todas, que es como nacieron las promociones y sigue
+    // siendo el caso normal.
+    warehouse_id: { type: DataTypes.INTEGER, allowNull: true },
   }, {
     sequelize,
     tableName: 'promotions',

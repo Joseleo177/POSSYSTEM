@@ -69,8 +69,14 @@ export default function ContabilidadPage() {
  } catch (e) { /* sin permiso o sin red: Series simplemente no ofrece la asignación */ }
  }, []);
 
- const canConfig = can("config");
- const canManageUsers = can("admin") || can("employees");
+ // Cada pantalla de configuración responde a su propio permiso: la numeración fiscal a
+ // `series`, y los bancos, diarios y métodos de pago a `journals`. Antes las cuatro se
+ // ofrecían con el viejo `config`, que como permiso suelto lo cumple casi cualquiera.
+ const canSeries   = can("series.view");
+ const canJournals = can("journals.view");
+ const canConfig   = canSeries || canJournals;
+ // Solo para ofrecer la asignación de series a usuarios; no habilita nada más.
+ const canManageUsers = can("employees.view");
 
  useEffect(() => {
  if (!canConfig) return;
@@ -108,7 +114,12 @@ export default function ContabilidadPage() {
    { label: "Movimientos", items: ["Estado de Cuenta", "Ingresos", "Egresos"] },
    { label: "Ventas",      items: ["Facturas", "Notas de Crédito", "Cotizaciones"] },
    { label: "Pagos",       items: null },
-   ...(canConfig ? [{ label: "Configuración", items: ["Series", "Tipos de pago", "Bancos", "Diarios"] }] : []),
+   // Solo se listan las pantallas que el rol puede abrir de verdad: ofrecer "Series" a quien
+   // no tiene el permiso lo llevaba a una pantalla que el servidor le niega.
+   ...(canConfig ? [{ label: "Configuración", items: [
+     ...(canSeries   ? ["Series"] : []),
+     ...(canJournals ? ["Tipos de pago", "Bancos", "Diarios"] : []),
+   ] }] : []),
  ];
 
  const visibleSubPages = NAV_GROUPS.flatMap(g => g.items ?? [g.label]);

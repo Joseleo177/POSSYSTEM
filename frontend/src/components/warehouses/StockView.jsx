@@ -255,8 +255,21 @@ export default function StockView({
                                                 </span>
                                             )}
                                         </td>
+                                        {/* El precio vigente aquí. Si la sucursal fijó el suyo se
+                                            marca, para no confundirlo con el del catálogo. */}
                                         <td className="font-bold text-brand-500 text-xs tabular-nums tracking-tight">
-                                            ${parseFloat(s.price || 0).toFixed(2)}
+                                            <div className="flex items-center gap-1.5">
+                                                <span>${parseFloat(s.price || 0).toFixed(2)}</span>
+                                                {s.price_own && (
+                                                    <span className="px-1.5 py-0.5 bg-brand-500/10 text-brand-500 text-[8px] font-black uppercase tracking-widest rounded" title="Precio propio de esta sucursal">Sucursal</span>
+                                                )}
+                                            </div>
+                                            {s.min_stock > 0 && (
+                                                <span className={`text-[9px] font-bold uppercase tracking-tight ${s.min_stock_own ? "text-brand-500" : "text-content-subtle"}`}
+                                                    title={s.min_stock_own ? "Mínimo propio de esta sucursal" : "Mínimo heredado del catálogo"}>
+                                                    Min: {fmtQty(s.min_stock)}
+                                                </span>
+                                            )}
                                         </td>
                                         <td>
                                             <div className="flex items-center gap-2">

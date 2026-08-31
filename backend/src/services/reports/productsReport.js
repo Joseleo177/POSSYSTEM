@@ -14,6 +14,13 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
   // se perdonó en vez de cobrarse (ver utils/saleBalance).
   const stS = `AND s.status IN (${SETTLED_SQL})`;
 
+  // Valorizar existencias: cada una vale lo que costó donde está, no lo que dice el catálogo.
+  // Se suma fila por fila porque el mismo producto pudo costar distinto en cada sucursal.
+  const valueCost = `(SELECT COALESCE(SUM(qty * COALESCE(cost_price, p.cost_price, 0)), 0)
+                        FROM product_stock WHERE product_id = p.id AND company_id = p.company_id ${wh()})`;
+  const valueSale = `(SELECT COALESCE(SUM(qty * COALESCE(price, p.price)), 0)
+                        FROM product_stock WHERE product_id = p.id AND company_id = p.company_id ${wh()})`;
+
   const [topByRevenue, topByQty, slowMovers, stockValue] = await Promise.all([
     sequelize.query(
       `SELECT si.product_id,
@@ -64,8 +71,8 @@ async function productsReport({ date_from, date_to, limit = 20, company_id, tcS,
     sequelize.query(
       `SELECT
          COUNT(*)::int AS product_count,
-         COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id ${wh()}) * price), 0)::float AS total_value_sale,
-         COALESCE(SUM((SELECT COALESCE(SUM(qty), 0) FROM product_stock WHERE product_id = p.id AND company_id = p.company_id ${wh()}) * COALESCE(cost_price, 0)), 0)::float AS total_value_cost
+         COALESCE(SUM(${valueSale}), 0)::float AS total_value_sale,
+         COALESCE(SUM(${valueCost}), 0)::float AS total_value_cost
        FROM products p
        WHERE is_combo = false AND is_service = false ${tcP}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

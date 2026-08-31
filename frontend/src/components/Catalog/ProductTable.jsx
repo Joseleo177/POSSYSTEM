@@ -2,7 +2,7 @@ import { fmtBase, resolveImageUrl, imgRetryOnError } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 
 export default function ProductTable({
-    products, canManageProducts, openEditProduct, setDeleteProductDialog,
+    products, canEditProducts, canDeleteProducts, openEditProduct, setDeleteProductDialog,
     selectedProducts = [], onToggleSelect, onSelectAll, isSelectionMode = false,
     priceCurrency = "base", localCurrency = null, onToggleVisible
 }) {
@@ -35,7 +35,7 @@ export default function ProductTable({
                     <th className="text-left">Categoría</th>
                     <th className="text-center">Stock</th>
                     <th className="text-right">Precio</th>
-                    {canManageProducts && <th className="text-center w-[90px]">Público</th>}
+                    {canEditProducts && <th className="text-center w-[90px]">Público</th>}
                     <th className="text-right w-[140px] pr-6">Acciones</th>
                 </tr>
             </thead>
@@ -115,7 +115,7 @@ export default function ProductTable({
                         {/* Visibilidad en el catálogo público: interruptor directo en la
                             fila. Repasar qué se publica y qué no es una pasada sobre la
                             lista completa, no una visita al modal de cada producto. */}
-                        {canManageProducts && (
+                        {canEditProducts && (
                             <td className="text-center">
                                 {/* Un insumo no se publica, así que en vez del interruptor
                                     —que el servidor rechazaría— la fila dice por qué. */}
@@ -140,19 +140,22 @@ export default function ProductTable({
                         )}
                         <td className="text-right pr-6">
                             <div className="flex justify-end gap-1">
-                                {canManageProducts && (
-                                    <>
-                                        <button onClick={() => openEditProduct(p)}
-                                            className="p-2 hover:bg-warning/10 rounded-xl transition-all text-content-subtle hover:text-warning active:scale-90"
-                                            title="Editar">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                        </button>
-                                        <button onClick={() => setDeleteProductDialog(p.id)}
-                                            className="p-2 hover:bg-danger/10 rounded-xl transition-all text-content-subtle hover:text-danger active:scale-90"
-                                            title="Eliminar">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                        </button>
-                                    </>
+                                {/* Editar y eliminar son permisos distintos: quitarle a un rol
+                                    la facultad de borrar no debe dejarle el botón a la vista
+                                    para que el servidor se lo rechace después. */}
+                                {canEditProducts && (
+                                    <button onClick={() => openEditProduct(p)}
+                                        className="p-2 hover:bg-warning/10 rounded-xl transition-all text-content-subtle hover:text-warning active:scale-90"
+                                        title="Editar">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                    </button>
+                                )}
+                                {canDeleteProducts && (
+                                    <button onClick={() => setDeleteProductDialog(p.id)}
+                                        className="p-2 hover:bg-danger/10 rounded-xl transition-all text-content-subtle hover:text-danger active:scale-90"
+                                        title="Eliminar">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    </button>
                                 )}
                             </div>
                         </td>

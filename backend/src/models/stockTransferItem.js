@@ -16,6 +16,10 @@ module.exports = (sequelize, DataTypes) => {
     product_name: { type: DataTypes.STRING(200), allowNull: false },
     unit:         DataTypes.STRING(20),
     qty_sent:     { type: DataTypes.DECIMAL(14, 4), allowNull: false },
+    // Costo con que salió del origen, congelado al despachar. Es lo que se acredita en el
+    // destino al recibir: si el origen recibiera una compra más cara mientras la carga va en
+    // camino, lo que llegó no debería revalorizarse por eso.
+    unit_cost:    DataTypes.DECIMAL(14, 4),
     // NULL mientras la mercancía viaja: todavía nadie contó lo que llegó.
     qty_received: DataTypes.DECIMAL(14, 4),
     diff_reason:  DataTypes.STRING(120),

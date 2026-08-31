@@ -1,11 +1,20 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause, localDate, SETTLED_SQL } = require("./shared");
 
-async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep, wh }) {
+async function marginsReport({ date_from, date_to, limit, warehouse_id, company_id, tcS, rep, wh, allowedWarehouses }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dS = dateClause(df, dt, 's');
   const lim = parseInt(limit) || 0;   // 0 = usar defaults de pantalla
+
+  // Margen de una sucursal concreta. Cobra sentido ahora que el costo es por sucursal: la
+  // misma mercancía puede dejar utilidades distintas en cada tienda según a cuánto la compró.
+  // Sin sucursal elegida rige el recorte de siempre: lo que el usuario tiene permitido ver.
+  const wid = warehouse_id ? parseInt(warehouse_id) : null;
+  if (wid && Array.isArray(allowedWarehouses) && !allowedWarehouses.includes(wid)) {
+    const e = new Error("No tienes acceso a este almacén"); e.status = 403; e.isOperational = true; throw e;
+  }
+  const whS = wid ? `AND s.warehouse_id = ${wid}` : wh('s');
 
   // Mismo criterio de "ingreso realizado" que salesReport. Va en una sola constante
   // porque antes solo lo aplicaba la consulta por día: el resumen y los desgloses
@@ -14,11 +23,21 @@ async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep, 
   // cero por el perdón, el margen que muestran es la pérdida real de haberla regalado.
   const stS = `AND s.status IN (${SETTLED_SQL})`;
 
-  // Costo unitario a usar: primero el congelado en la venta, luego el del producto, y para
-  // los combos —que no guardan costo propio— la suma de sus componentes. Sin este último
-  // respaldo, un combo vendido antes de que existiera si.cost_price no mostraba margen nunca.
-  const unitCost = `COALESCE(si.cost_price, p.cost_price, (
-           SELECT SUM(COALESCE(ing.cost_price, 0) * pci.quantity)
+  // Costo unitario a usar: primero el congelado en la venta; si no lo hay —ventas anteriores
+  // a que se congelara—, el de la sucursal donde se vendió, que es la mejor reconstrucción
+  // posible; luego el del catálogo; y para los combos, que no guardan costo propio, la suma
+  // de sus componentes en esa misma sucursal.
+  //
+  // El salto por la sucursal importa: sin él, el margen de una tienda se reconstruía con lo
+  // que la mercancía le costó a la otra.
+  const unitCost = `COALESCE(si.cost_price, (
+           SELECT ps.cost_price FROM product_stock ps
+            WHERE ps.product_id = si.product_id AND ps.warehouse_id = s.warehouse_id
+         ), p.cost_price, (
+           SELECT SUM(COALESCE((
+                    SELECT ps2.cost_price FROM product_stock ps2
+                     WHERE ps2.product_id = ing.id AND ps2.warehouse_id = s.warehouse_id
+                  ), ing.cost_price, 0) * pci.quantity)
              FROM product_combo_items pci
              JOIN products ing ON ing.id = pci.product_id
             WHERE pci.combo_id = p.id
@@ -43,7 +62,7 @@ async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep, 
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
        LEFT JOIN categories c ON p.category_id = c.id
-       WHERE TRUE ${tcS} ${wh('s')} ${dS} ${stS}
+       WHERE TRUE ${tcS} ${whS} ${dS} ${stS}
          AND ${unitCost} > 0
        GROUP BY si.product_id, si.name, c.name
        ORDER BY gross_margin DESC
@@ -65,7 +84,7 @@ async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep, 
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
        LEFT JOIN categories c ON p.category_id = c.id
-       WHERE TRUE ${tcS} ${wh('s')} ${dS} ${stS}
+       WHERE TRUE ${tcS} ${whS} ${dS} ${stS}
        GROUP BY c.name
        ORDER BY gross_margin DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -83,7 +102,7 @@ async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep, 
        FROM sale_items si
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
-       WHERE COALESCE(si.cost_price, p.cost_price) > 0 ${tcS} ${wh('s')} ${dS} ${stS}`,
+       WHERE ${unitCost} > 0 ${tcS} ${whS} ${dS} ${stS}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -99,7 +118,7 @@ async function marginsReport({ date_from, date_to, limit, company_id, tcS, rep, 
        FROM sale_items si
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
-       WHERE TRUE ${tcS} ${wh('s')} ${dS} ${stS}
+       WHERE TRUE ${tcS} ${whS} ${dS} ${stS}
        GROUP BY ${localDate('s.created_at')}
        ORDER BY day ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

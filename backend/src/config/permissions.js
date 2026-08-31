@@ -54,7 +54,10 @@ const MODULES = [
       { key: 'adjust',   label: 'Ajustar stock' },
       { key: 'transfer', label: 'Despachar transferencias' },
       { key: 'receive',  label: 'Recibir transferencias' },
-      { key: 'manage',   label: 'Crear y editar almacenes' },
+      // Crear, editar y borrar almacenes, y asignar usuarios a ellos, NO figuran aquí a
+      // propósito: son de `admin` y nada más. La razón está en la ruta de asignación —quien
+      // reparte los almacenes se los puede repartir a sí mismo—, así que ofrecerlo como
+      // permiso marcable sería tender la trampa en la propia pantalla de Roles.
     ],
   },
   {

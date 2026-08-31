@@ -30,8 +30,52 @@ async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 5
     tcP = `${tcP} ${presence}`;
   }
   const stockJoin  = wid ? `JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = ${wid}` : '';
+
   const catFilter  = cid ? `AND p.category_id = ${cid}` : '';
   const searchFilter = search ? `AND p.name ILIKE '%${search.replace(/'/g, "''")}%'` : '';
+
+  // El mínimo de reposición es de la sucursal: el suyo si lo definió, si no el del producto.
+  const minField = wid ? `COALESCE(ps.min_stock, p.min_stock)` : `p.min_stock`;
+
+  // Valorizar el inventario: cada existencia vale lo que costó DONDE está. Con un almacén
+  // elegido es directo. Sin él no se puede multiplicar el total por un costo único —el mismo
+  // producto pudo costar distinto en cada tienda—, así que la suma se hace por fila.
+  //
+  // El precio de venta queda como respaldo del costo, igual que antes: un producto sin costo
+  // cargado valorizado en 0 hacía ver el depósito más vacío de lo que está.
+  const costExpr = wid ? `COALESCE(ps.cost_price, p.cost_price, p.price)` : null;
+  const valueField = wid
+    ? `${stockField} * ${costExpr}`
+    : `(SELECT COALESCE(SUM(qty * COALESCE(cost_price, p.cost_price, p.price)), 0)
+          FROM product_stock WHERE product_id = p.id AND company_id = p.company_id ${wh()})`;
+  // Y a precio de venta, con el mismo criterio: el de la sucursal manda.
+  const saleValueField = wid
+    ? `${stockField} * COALESCE(ps.price, p.price)`
+    : `(SELECT COALESCE(SUM(qty * COALESCE(price, p.price)), 0)
+          FROM product_stock WHERE product_id = p.id AND company_id = p.company_id ${wh()})`;
+
+  // "Crítico" se mide sucursal por sucursal, no contra el total: un producto con 0 en una
+  // tienda y 30 en otra está en falta aunque la suma alcance. Con un almacén elegido, la fila
+  // ya es la de esa sucursal. Sin almacén elegido el mínimo deja de ser único —cada tienda
+  // puede tener el suyo—, así que la consulta parte de product_stock y devuelve una fila por
+  // sucursal, nombrándola.
+  const psScope = allowedIds
+    ? (allowedIds.length ? `AND ps0.warehouse_id IN (${allowedIds.join(',')})` : 'AND FALSE')
+    : '';
+  const critFrom = wid
+    ? `FROM products p ${stockJoin}`
+    : `FROM product_stock ps0
+       JOIN products p   ON p.id = ps0.product_id
+       JOIN warehouses w ON w.id = ps0.warehouse_id AND w.active = true`;
+  const critMin   = wid ? minField : `COALESCE(ps0.min_stock, p.min_stock)`;
+  const critStock = wid ? `COALESCE(ps.qty, 0)` : `ps0.qty`;
+  const critWhere = `p.is_service = false AND p.is_combo = false AND ${critMin} > 0
+       AND ${critStock} < ${critMin} ${wid ? '' : psScope} ${tcP} ${catFilter} ${searchFilter}`;
+  // La sucursal solo tiene sentido en el listado consolidado; con un almacén elegido, quien
+  // consulta ya sabe cuál es.
+  const critWarehouse = wid
+    ? `NULL::int AS warehouse_id, NULL::text AS warehouse_name`
+    : `w.id AS warehouse_id, w.name AS warehouse_name`;
   // Mismo criterio de "venta realizada" que el resto de los reportes. Sin él, un producto
   // cuyas únicas salidas fueron anuladas contaba como rotando y desaparecía del listado de
   // lento movimiento, que es justo donde hace falta verlo.
@@ -39,27 +83,29 @@ async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 5
   const slowSubquery = `SELECT DISTINCT si.product_id FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE s.created_at >= NOW() - (${d} * INTERVAL '1 day') ${tcS} ${wh('s')} ${stS}`;
 
   const [criticalCount, zeroCount, slowCount, lockedValue] = await Promise.all([
-    sequelize.query(`SELECT COUNT(*)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND p.min_stock > 0 AND ${stockField} < p.min_stock ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(`SELECT COUNT(*)::int AS count ${critFrom} WHERE ${critWhere}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
     sequelize.query(`SELECT COUNT(*)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND (${stockField} IS NULL OR ${stockField} <= 0) ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
     sequelize.query(`SELECT COUNT(p.id)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (${slowSubquery}) ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
-    sequelize.query(`SELECT COALESCE(SUM(${stockField} * COALESCE(p.cost_price, p.price)), 0)::float AS value FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (${slowSubquery}) ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(`SELECT COALESCE(SUM(${valueField}), 0)::float AS value FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (${slowSubquery}) ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
   ]);
 
   const listData = {};
 
   if (view === "all" || view === "critical") {
     listData.critical_stock = await sequelize.query(
-      `SELECT p.id, p.name, ${stockField} AS stock, p.min_stock, p.unit, p.price,
-              COALESCE(c.name,'Sin categoría') AS category_name, (p.min_stock - ${stockField}) AS needed
-       FROM products p LEFT JOIN categories c ON p.category_id = c.id ${stockJoin}
-       WHERE p.is_service = false AND p.is_combo = false AND p.min_stock > 0 AND ${stockField} < p.min_stock ${tcP} ${catFilter} ${searchFilter}
-       ORDER BY (p.min_stock - ${stockField}) DESC LIMIT ${lim} OFFSET ${off}`,
+      `SELECT p.id, p.name, ${critStock} AS stock, ${critMin} AS min_stock, p.unit, p.price,
+              ${critWarehouse},
+              COALESCE(c.name,'Sin categoría') AS category_name, (${critMin} - ${critStock}) AS needed
+       ${critFrom}
+       LEFT JOIN categories c ON p.category_id = c.id
+       WHERE ${critWhere}
+       ORDER BY (${critMin} - ${critStock}) DESC LIMIT ${lim} OFFSET ${off}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     );
   }
   if (view === "all" || view === "zero") {
     listData.zero_stock = await sequelize.query(
-      `SELECT p.id, p.name, ${stockField} AS stock, p.min_stock, p.unit,
+      `SELECT p.id, p.name, ${stockField} AS stock, ${minField} AS min_stock, p.unit,
               COALESCE(c.name,'Sin categoría') AS category_name
        FROM products p LEFT JOIN categories c ON p.category_id = c.id ${stockJoin}
        WHERE p.is_service = false AND p.is_combo = false AND (${stockField} IS NULL OR ${stockField} <= 0) ${tcP} ${catFilter} ${searchFilter}
@@ -84,10 +130,10 @@ async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 5
   }
   if (view === "all" || view === "slow") {
     listData.low_rotation = await sequelize.query(
-      `SELECT p.id, p.name, ${stockField} AS stock, p.price,
-              COALESCE(p.cost_price, 0) AS cost_price,
+      `SELECT p.id, p.name, ${stockField} AS stock, ${wid ? `COALESCE(ps.price, p.price)` : `p.price`} AS price,
+              ${wid ? `COALESCE(ps.cost_price, p.cost_price, 0)` : `COALESCE(p.cost_price, 0)`} AS cost_price,
               COALESCE(c.name,'Sin categoría') AS category_name,
-              ${stockField} * COALESCE(p.cost_price, p.price) AS value_locked
+              ${valueField} AS value_locked
        FROM products p LEFT JOIN categories c ON p.category_id = c.id ${stockJoin}
        WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0
          AND p.id NOT IN (${slowSubquery}) ${tcP} ${catFilter} ${searchFilter}
@@ -100,8 +146,8 @@ async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 5
       `SELECT COALESCE(c.name,'Sin categoría') AS category_name,
               COUNT(p.id)::int AS product_count,
               COALESCE(SUM(${stockField}), 0)::float AS total_units,
-              COALESCE(SUM(${stockField} * COALESCE(p.cost_price, 0)), 0)::float AS value_cost,
-              COALESCE(SUM(${stockField} * p.price), 0)::float AS value_sale
+              COALESCE(SUM(${valueField}), 0)::float AS value_cost,
+              COALESCE(SUM(${saleValueField}), 0)::float AS value_sale
        FROM products p LEFT JOIN categories c ON p.category_id = c.id ${stockJoin}
        WHERE p.is_service = false AND p.is_combo = false ${tcP} ${catFilter} ${searchFilter}
        GROUP BY c.name ORDER BY value_cost DESC`,

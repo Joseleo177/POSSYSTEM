@@ -41,8 +41,18 @@ async function getStock(req) {
 
   const productsRaw = await sequelize.query(`
     SELECT
-      p.id AS product_id, p.name AS product_name, p.price, p.unit, p.image_filename,
-      p.cost_price, p.is_combo, p.is_service, p.barcode,
+      p.id AS product_id, p.name AS product_name, p.unit, p.image_filename,
+      p.is_combo, p.is_service, p.barcode,
+      -- Lo que rige en esta sucursal, más el valor de empresa aparte: la pantalla necesita
+      -- los dos para mostrar el vigente y ofrecer "heredado" como referencia.
+      COALESCE(ps.cost_price, p.cost_price) AS cost_price,
+      (ps.cost_price IS NOT NULL) AS cost_own,
+      COALESCE(ps.price, p.price) AS price,
+      p.price     AS company_price,
+      (ps.price IS NOT NULL) AS price_own,
+      COALESCE(ps.min_stock, p.min_stock) AS min_stock,
+      p.min_stock AS company_min_stock,
+      (ps.min_stock IS NOT NULL) AS min_stock_own,
       c.name AS category_name,
       ps.qty
     FROM product_stock ps
@@ -66,7 +76,9 @@ async function getStock(req) {
         pci.combo_id,
         pci.quantity,
         COALESCE(ps2.qty, 0) AS ingredient_stock,
-        p.cost_price AS ingredient_cost
+        -- El ingrediente vale lo que costó en ESTA sucursal: el costo del combo se arma con
+        -- los costos de aquí, no con los del catálogo.
+        COALESCE(ps2.cost_price, p.cost_price) AS ingredient_cost
       FROM product_combo_items pci
       JOIN products p ON p.id = pci.product_id
       LEFT JOIN product_stock ps2
@@ -105,7 +117,13 @@ async function getStock(req) {
     qty:           p.is_combo ? (ingredientStockMap[p.product_id] ?? 0) : parseFloat(p.qty) || 0,
     unit:          p.unit,
     price:         parseFloat(p.price || 0),
+    company_price: parseFloat(p.company_price || 0),
+    price_own:     p.price_own,
+    min_stock:     parseFloat(p.min_stock || 0),
+    company_min_stock: parseFloat(p.company_min_stock || 0),
+    min_stock_own: p.min_stock_own,
     cost_price:    p.is_combo ? (comboCostMap[p.product_id] ?? 0) : parseFloat(p.cost_price || 0),
+    cost_own:      p.is_combo ? false : p.cost_own,
     category_name: p.category_name,
     image_url:     p.image_filename ? (p.image_filename.startsWith('http') ? p.image_filename : `/uploads/${p.image_filename}`) : null
   }));
@@ -163,8 +181,16 @@ async function getProducts(req) {
 
   const productsRaw = await sequelize.query(`
     SELECT
-      p.id, p.name, p.price, p.unit, p.qty_step, p.image_filename,
-      p.cost_price, p.is_combo, p.is_service, p.min_stock, p.barcode,
+      p.id, p.name, p.unit, p.qty_step, p.image_filename,
+      p.is_combo, p.is_service, p.barcode,
+      COALESCE(ps.cost_price, p.cost_price) AS cost_price,
+      -- Precio y mínimo son los de esta sucursal si los definió. De acá come la caja, así que
+      -- con esto el POS cobra el precio de la tienda sin saber que existe una herencia detrás.
+      -- Los flags "_own" son para la pantalla de stock, que sí distingue propio de heredado.
+      COALESCE(ps.price, p.price) AS price,
+      (ps.price IS NOT NULL) AS price_own,
+      COALESCE(ps.min_stock, p.min_stock) AS min_stock,
+      (ps.min_stock IS NOT NULL) AS min_stock_own,
       c.name AS category_name, c.id AS category_id,
       ps.qty,
       COALESCE(si_agg.total_sold, 0) AS total_sold
@@ -200,7 +226,8 @@ async function getProducts(req) {
         pci.product_id AS ingredient_id,
         pci.quantity,
         COALESCE(ps2.qty, 0) AS ingredient_stock,
-        p.cost_price AS ingredient_cost,
+        -- Mismo criterio que en getStock: el ingrediente vale lo que costó en esta sucursal.
+        COALESCE(ps2.cost_price, p.cost_price) AS ingredient_cost,
         p.is_service AS ingredient_is_service
       FROM product_combo_items pci
       JOIN products p ON p.id = pci.product_id
@@ -243,6 +270,11 @@ async function getProducts(req) {
     id:           p.id,
     name:         p.name,
     price:        parseFloat(p.price),
+    // El vigente en esta sucursal ya viene resuelto por el COALESCE; los flags dicen si es
+    // propio o heredado del producto, que es lo que la pantalla de stock necesita marcar.
+    price_own:    p.price_own,
+    min_stock:    parseFloat(p.min_stock || 0),
+    min_stock_own: p.min_stock_own,
     unit:         p.unit,
     qty_step:     parseFloat(p.qty_step || 1),
     barcode:      p.barcode,

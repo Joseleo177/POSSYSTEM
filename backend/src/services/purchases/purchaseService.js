@@ -167,6 +167,12 @@ async function _applyStockAndPrices(purchase, items, transaction) {
         lock: true
       });
       await stockEntry.increment('qty', { by: total_units, transaction });
+      // El costo es de quien recibió la mercancía. Antes solo existía el del producto, así
+      // que la compra de una sucursal reescribía el margen de todas las demás. Mismo criterio
+      // que abajo: último costo, no promedio.
+      if (unit_cost != null) {
+        await stockEntry.update({ cost_price: unit_cost }, { transaction });
+      }
 
       if (lot_number && expiration_date) {
         const [lotEntry] = await ProductLot.findOrCreate({

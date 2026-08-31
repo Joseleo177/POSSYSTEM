@@ -101,14 +101,28 @@ module.exports = async function updateSale(saleId, body, req) {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
       if (!product) throw bad(`Producto ${item.product_id} no encontrado`, 404);
 
-      const unitPrice = parseFloat(item.price ?? product.price);
+      // Si el carrito no manda precio, el que rige es el de la sucursal de la venta; el del
+      // catálogo queda como último recurso, para servicios y combos que no tienen ficha ahí.
+      // El costo sale de la misma ficha, por lo mismo.
+      let precioBase = product.price;
+      let costoBase  = product.cost_price;
+      if (!product.is_service && !product.is_combo) {
+        const ficha = await ProductStock.findOne({
+          where: { warehouse_id: warehouseId, product_id: product.id },
+          attributes: ["price", "cost_price"],
+          transaction,
+        });
+        if (ficha?.price != null) precioBase = ficha.price;
+        if (ficha?.cost_price != null) costoBase = ficha.cost_price;
+      }
+      const unitPrice = parseFloat(item.price ?? precioBase);
       const qty = parseFloat(item.qty);
       if (qty <= 0) continue;
 
       // Costo congelado: sin esto, el reporte de márgenes recalcula la utilidad de esta
       // venta con el costo de reposición del día en que se consulte. En un combo el
       // producto no lleva costo propio: es la suma del costo de sus ingredientes.
-      let unitCost = product.cost_price != null ? parseFloat(product.cost_price) : null;
+      let unitCost = costoBase != null ? parseFloat(costoBase) : null;
 
       if (product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
@@ -136,8 +150,9 @@ module.exports = async function updateSale(saleId, body, req) {
           ingredientsData.push({ ingredient, qtyNeeded, stockEntry });
         }
 
+        // Cada ingrediente a lo que costó en esta sucursal.
         const comboCost = ingredientsData.reduce(
-          (acc, ing) => acc + parseFloat(ing.ingredient.cost_price || 0) * ing.qtyNeeded,
+          (acc, ing) => acc + parseFloat(ing.stockEntry?.cost_price ?? ing.ingredient.cost_price ?? 0) * ing.qtyNeeded,
           0
         );
         unitCost = qty > 0 ? parseFloat((comboCost / qty).toFixed(5)) : null;

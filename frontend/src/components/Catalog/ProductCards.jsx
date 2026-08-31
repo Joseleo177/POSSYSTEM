@@ -5,7 +5,7 @@ import { useApp } from "../../context/AppContext";
 // (selección múltiple, editar, eliminar) para que cambiar de vista no cambie lo que
 // se puede hacer, solo cómo se ve.
 export default function ProductCards({
-    products, canManageProducts, openEditProduct, setDeleteProductDialog,
+    products, canEditProducts, canDeleteProducts, openEditProduct, setDeleteProductDialog,
     selectedProducts = [], onToggleSelect, isSelectionMode = false,
     priceCurrency = "base", localCurrency = null, onToggleVisible
 }) {
@@ -104,11 +104,11 @@ export default function ProductCards({
                                 donde hay cursor. En un táctil no existe el hover, así que editar,
                                 eliminar y publicar quedaban invisibles para siempre y no había
                                 manera de gestionar un producto desde el teléfono. */}
-                            {canManageProducts && !isSelectionMode && (
+                            {(canEditProducts || canDeleteProducts) && !isSelectionMode && (
                                 <div className="absolute bottom-2 right-2 flex gap-1 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
                                     {/* El ojo no aparece en un insumo: publicarlo es lo único
                                         que ese botón hace, y el servidor lo rechaza. */}
-                                    {p.sellable !== false && (
+                                    {canEditProducts && p.sellable !== false && (
                                     <button onClick={() => onToggleVisible?.(p)}
                                         className={`w-7 h-7 rounded-lg bg-white/90 dark:bg-black/70 backdrop-blur flex items-center justify-center shadow active:scale-90 transition-all ${p.visible_in_catalog ? "text-brand-500" : "text-content-subtle hover:text-brand-500"}`}
                                         title={p.visible_in_catalog ? "Quitar del catálogo público" : "Mostrar en el catálogo público"}>
@@ -119,16 +119,20 @@ export default function ProductCards({
                                         )}
                                     </button>
                                     )}
+                                    {canEditProducts && (
                                     <button onClick={() => openEditProduct(p)}
                                         className="w-7 h-7 rounded-lg bg-white/90 dark:bg-black/70 backdrop-blur flex items-center justify-center text-content-subtle hover:text-warning shadow active:scale-90 transition-all"
                                         title="Editar">
                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                     </button>
+                                    )}
+                                    {canDeleteProducts && (
                                     <button onClick={() => setDeleteProductDialog(p.id)}
                                         className="w-7 h-7 rounded-lg bg-white/90 dark:bg-black/70 backdrop-blur flex items-center justify-center text-content-subtle hover:text-danger shadow active:scale-90 transition-all"
                                         title="Eliminar">
                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                     </button>
+                                    )}
                                 </div>
                             )}
                         </div>

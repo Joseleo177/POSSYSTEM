@@ -279,14 +279,16 @@ export default function DashboardPage() {
                             /* Mismo criterio que "Lo más vendido": la caja no crece, la lista
                                se desplaza dentro. */
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[268px] overflow-y-auto pr-1.5">
+                                {/* El aviso es por sucursal, así que un mismo producto puede
+                                    aparecer dos veces: la clave lleva el almacén. */}
                                 {low_stock.map(p => (
-                                    <div key={p.id} className="flex items-center justify-between bg-surface-2 dark:bg-[#1c1c1c] border border-border/10 rounded-xl px-4 py-3 hover:border-danger/40 transition-all group">
+                                    <div key={`${p.id}-${p.warehouse_id}`} className="flex items-center justify-between bg-surface-2 dark:bg-[#1c1c1c] border border-border/10 rounded-xl px-4 py-3 hover:border-danger/40 transition-all group">
                                         <div className="min-w-0">
                                             <div className="text-[10px] font-black text-content dark:text-white uppercase truncate mb-0.5">{p.name}</div>
-                                            <div className="text-[8px] font-black text-content-subtle uppercase">Min: {fmt(p.min_stock, 0)} {p.unit}</div>
+                                            <div className="text-[8px] font-black text-content-subtle uppercase truncate">{p.warehouse_name} · Min: {fmt(p.min_stock, 0)} {p.unit}</div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="text-danger font-black text-sm tabular-nums leading-none mb-0.5">{fmt(p.total_stock, 0)}</div>
+                                            <div className="text-danger font-black text-sm tabular-nums leading-none mb-0.5">{fmt(p.stock, 0)}</div>
                                             <div className="text-[8px] font-black text-content-subtle uppercase">{p.unit}</div>
                                         </div>
                                     </div>

@@ -28,9 +28,10 @@ async function getDashboard({ company_id, isSuperuser, allowedWarehouses }) {
   const paymentScope = whIds === null
     ? ''
     : (whIds.length ? `AND p.sale_id IN (SELECT id FROM sales WHERE warehouse_id IN (${whIds.join(',')}))` : 'AND FALSE');
-  // El aviso de stock bajo se mide sobre las existencias de las sucursales visibles. Va en
-  // el ON del LEFT JOIN, no en el WHERE: en el WHERE convertiría el join en interno y los
-  // productos sin stock en esas sucursales —justo los que hay que ver— desaparecerían.
+  // El aviso de stock bajo se mide sobre las existencias de las sucursales visibles. Ahora va
+  // en el WHERE: la consulta parte de product_stock —una fila por sucursal— así que recortar
+  // ahí es justo lo que se quiere. Antes, con el producto como tabla base y un LEFT JOIN, tenía
+  // que ir en el ON o el join se volvía interno.
   const stockScope = whIds === null
     ? ''
     : (whIds.length ? `AND ps.warehouse_id IN (${whIds.join(',')})` : 'AND FALSE');
@@ -107,15 +108,26 @@ async function getDashboard({ company_id, isSuperuser, allowedWarehouses }) {
     ${!!company_id ? "AND s.company_id = :company_id" : ""}
   `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 
+  // El aviso es POR SUCURSAL, no por la suma de todas: con mínimo 10 y tiendas en 0 / 4 / 30,
+  // el total daba 34 y nadie se enteraba de que dos estaban secas. Cada fila es un producto en
+  // una sucursal concreta, y el mínimo que rige es el de esa sucursal si lo definió.
+  //
+  // Se parte de product_stock, así que un producto sin ficha en ninguna sucursal ya no aparece.
+  // Es a propósito y es el mismo criterio del reporte de inventario: no es que se acabó, es que
+  // ahí nunca se manejó, y listarlo era ruido.
   const lowStock = await sequelize.query(`
-    SELECT p.id, p.name, p.unit, p.min_stock, COALESCE(SUM(ps.qty), 0) as total_stock
-    FROM products p
-    LEFT JOIN product_stock ps ON ps.product_id = p.id ${stockScope}
-    WHERE p.min_stock > 0
+    SELECT p.id, p.name, p.unit,
+           w.id AS warehouse_id, w.name AS warehouse_name,
+           COALESCE(ps.min_stock, p.min_stock) AS min_stock,
+           ps.qty AS stock
+    FROM product_stock ps
+    JOIN products p   ON p.id = ps.product_id
+    JOIN warehouses w ON w.id = ps.warehouse_id AND w.active = true
+    WHERE COALESCE(ps.min_stock, p.min_stock) > 0
+      AND ps.qty < COALESCE(ps.min_stock, p.min_stock)
+      ${stockScope}
     ${!!company_id ? "AND p.company_id = :company_id" : ""}
-    GROUP BY p.id, p.name, p.unit, p.min_stock
-    HAVING COALESCE(SUM(ps.qty), 0) < p.min_stock
-    ORDER BY total_stock ASC
+    ORDER BY (COALESCE(ps.min_stock, p.min_stock) - ps.qty) DESC
     LIMIT 20
   `, { replacements: { company_id }, type: Sequelize.QueryTypes.SELECT });
 

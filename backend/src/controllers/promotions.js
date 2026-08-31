@@ -16,11 +16,21 @@ const getAll = async (req, res) => {
 const getActive = async (req, res) => {
   try {
     const now = new Date();
+    // La caja pide las de su sucursal: las de esa tienda más las que corren en todas. Sin
+    // sucursal en la consulta solo quedan las generales — mejor mostrar de menos que ofrecer
+    // un descuento que después el servidor no va a aplicar.
+    const wid = parseInt(req.query.warehouse_id, 10) || null;
+    const alcance = wid
+      ? { [Op.or]: [{ warehouse_id: null }, { warehouse_id: wid }] }
+      : { warehouse_id: null };
     const promos = await Promotion.findAll({
       where: {
         active: true,
         starts_at: { [Op.lte]: now },
-        [Op.or]: [{ ends_at: null }, { ends_at: { [Op.gte]: now } }],
+        [Op.and]: [
+          { [Op.or]: [{ ends_at: null }, { ends_at: { [Op.gte]: now } }] },
+          alcance,
+        ],
       },
       include: [{ model: Product, through: { attributes: [] }, attributes: ['id'] }],
     });
@@ -39,7 +49,7 @@ const getActive = async (req, res) => {
 const create = async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    const { name, type, discount_pct, buy_qty, get_qty, starts_at, ends_at, active, product_ids = [] } = req.body;
+    const { name, type, discount_pct, buy_qty, get_qty, starts_at, ends_at, active, product_ids = [], warehouse_id } = req.body;
     if (!name?.trim()) throw new Error("El nombre es requerido");
     if (!['percentage', 'buy_x_get_y'].includes(type)) throw new Error("Tipo inválido");
     if (type === 'percentage' && !discount_pct) throw new Error("El porcentaje es requerido");
@@ -55,6 +65,8 @@ const create = async (req, res) => {
       starts_at,
       ends_at: ends_at || null,
       active: active !== false,
+      // Sin sucursal, corre en todas. Es el caso normal, así que la pantalla manda vacío.
+      warehouse_id: parseInt(warehouse_id, 10) || null,
     }, { transaction: t });
 
     await PromotionProduct.bulkCreate(
@@ -77,7 +89,7 @@ const update = async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { id } = req.params;
-    const { name, type, discount_pct, buy_qty, get_qty, starts_at, ends_at, active, product_ids } = req.body;
+    const { name, type, discount_pct, buy_qty, get_qty, starts_at, ends_at, active, product_ids, warehouse_id } = req.body;
 
     const promo = await Promotion.findByPk(id, { transaction: t });
     if (!promo) { await t.rollback(); return res.status(404).json({ ok: false, message: "Promoción no encontrada" }); }
@@ -91,6 +103,8 @@ const update = async (req, res) => {
       starts_at,
       ends_at: ends_at || null,
       active,
+      // `undefined` deja la sucursal como estaba; vacío o 0 la devuelve a "todas".
+      warehouse_id: warehouse_id === undefined ? promo.warehouse_id : (parseInt(warehouse_id, 10) || null),
     }, { transaction: t });
 
     if (Array.isArray(product_ids)) {

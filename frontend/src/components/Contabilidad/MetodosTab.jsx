@@ -56,7 +56,7 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
         <span className="text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
           {paymentMethods.length} método{paymentMethods.length !== 1 ? "s" : ""}
         </span>
-        {can("config") && (
+        {can("journals.manage") && (
           <Button onClick={() => { setMethodEditId(null); setMethodForm(EMPTY_METHOD); setShowModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
             + Nuevo Método
           </Button>
@@ -73,7 +73,7 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
             <thead className="sticky top-0 z-10">
               <tr>
                 <th className="w-12" />
-                {["Nombre", "Código", "Uso Global", "Estado", can("config") && "Acciones"].filter(Boolean).map(h => (
+                {["Nombre", "Código", "Uso Global", "Estado", can("journals.manage") && "Acciones"].filter(Boolean).map(h => (
                   <th key={h} className={h === "Acciones" ? "text-right pr-6" : h === "Uso Global" || h === "Estado" ? "text-center" : "text-left"}>
                     {h}
                   </th>
@@ -122,7 +122,7 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
                         {m.active ? "Activo" : "Inactivo"}
                       </span>
                     </td>
-                    {can("config") && (
+                    {can("journals.manage") && (
                       <td className="text-right pr-6">
                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           {isEdit ? (

@@ -50,7 +50,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
         <span className="text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
           {journals.length} diario{journals.length !== 1 ? "s" : ""}
         </span>
-        {can("config") && (
+        {can("journals.manage") && (
           <Button onClick={() => { setEditJournal(null); setNewJournal(EMPTY_JOURNAL); setShowModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
             + Nuevo Diario
           </Button>
@@ -67,7 +67,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
             <thead className="sticky top-0 z-10">
               <tr>
                 <th className="w-12" />
-                {["Nombre del Diario", "Método", "Banco / Entidad", "Sucursal", "Moneda", "Estado", can("config") && "Acciones"].filter(Boolean).map(h => (
+                {["Nombre del Diario", "Método", "Banco / Entidad", "Sucursal", "Moneda", "Estado", can("journals.manage") && "Acciones"].filter(Boolean).map(h => (
                   <th key={h} className={h === "Acciones" ? "text-right pr-6" : h === "Moneda" || h === "Estado" ? "text-center" : "text-left"}>
                     {h}
                   </th>
@@ -120,7 +120,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
                         {j.active ? "Activo" : "Inactivo"}
                       </span>
                     </td>
-                    {can("config") && (
+                    {can("journals.manage") && (
                       <td className="text-right pr-6">
                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button

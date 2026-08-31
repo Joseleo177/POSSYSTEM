@@ -236,9 +236,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             submissionForm.price = 0;
             submissionForm.profit_margin = "";
         }
-        if (!isEdit && warehouseId) {
-            submissionForm.warehouse_id = warehouseId;
-        }
+        // Al crear sirve para dar el stock inicial en ese almacén; al editar marca el alcance:
+        // el precio, el costo y el mínimo son de esta sucursal y no de la empresa entera.
+        if (warehouseId) submissionForm.warehouse_id = warehouseId;
         onSave(submissionForm, imageFile, removeImage);
     };
 
@@ -405,7 +405,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             {form.sellable && (
                             <div>
                                 <label className="label flex items-center justify-between">
-                                    Precio de Venta
+                                    {/* Mismo criterio que el stock de abajo: se nombra la sucursal
+                                        en la que se está trabajando, porque es la que se cambia. */}
+                                    {warehouseId && warehouseName ? `Precio en ${warehouseName}` : "Precio de Venta"}
                                     {localCurrency && (
                                         <div className="flex text-[9px] font-black rounded overflow-hidden border border-border/30 dark:border-white/10">
                                             <button type="button" onClick={() => setPriceCurrency("base")}
@@ -643,10 +645,17 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             </div>
 
                             <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
-                                <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">Alerta de Reposición</h3>
+                                <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">
+                                    {warehouseId && warehouseName ? `Alerta de Reposición en ${warehouseName}` : "Alerta de Reposición"}
+                                </h3>
                                 <div className="relative">
                                     <input value={form.min_stock} onChange={e => set("min_stock", e.target.value)} type="number" className="input" placeholder="Min. para notificar..." />
                                 </div>
+                                {/* El aviso se mide sucursal por sucursal, no sobre la suma de
+                                    todas: una tienda en cero tiene que avisar aunque otra esté llena. */}
+                                <p className="mt-2 text-[10px] font-bold text-content-muted leading-tight">
+                                    Avisa cuando esta sucursal baje de aquí.
+                                </p>
                             </div>
                         </div>
                         )}

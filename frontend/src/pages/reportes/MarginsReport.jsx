@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { buildMarginsExcel } from "../../helpers/excel";
 import {
@@ -6,12 +6,28 @@ import {
  useReport, defaultRange, usePagination, Pagination, useExportFull,
  DateRangePicker, KpiCard, SectionHeader, Card, Loading, ExportButton, BarChart,
 } from "./reportes.utils";
+import CustomSelect from "../../components/ui/CustomSelect";
 
 export default function MarginsReport() {
  const [range, setRange] = useState(defaultRange(30));
- const { data, loading, error } = useReport(api.reports.margins, { date_from: range.from, date_to: range.to }, [range]);
- const exportFull = useExportFull(api.reports.margins, { date_from: range.from, date_to: range.to }, (d) => buildMarginsExcel(d, range));
+ // El margen ahora se puede ver por sucursal: cada una compra a su precio, así que el mismo
+ // producto deja utilidades distintas en cada tienda.
+ const [warehouseId, setWarehouseId] = useState("");
+ const [warehouses, setWarehouses] = useState([]);
+ useEffect(() => {
+  api.warehouses.getAll()
+   .then(r => setWarehouses(r.data || []))
+   .catch(e => console.error("[MarginsReport] no se pudieron cargar los almacenes:", e));
+ }, []);
+
+ const params = { date_from: range.from, date_to: range.to, warehouse_id: warehouseId };
+ const { data, loading, error } = useReport(api.reports.margins, params, [range, warehouseId]);
+ const exportFull = useExportFull(api.reports.margins, params, (d) => buildMarginsExcel(d, range));
  const [view, setView] = useState("top");
+
+ // Con una sola sucursal, "todas" promete un alcance que no existe: la API ya devuelve solo
+ // la suya. Mismo criterio que el reporte de inventario.
+ const todasLabel = warehouses.length === 1 ? warehouses[0].name : "TODAS LAS SUCURSALES";
  const s = data?.summary;
 
  const byProductDesc = data?.by_product ?? [];
@@ -27,7 +43,19 @@ export default function MarginsReport() {
  return (
  <div className="h-full flex flex-col space-y-4 overflow-auto">
  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+ <div className="flex flex-col sm:flex-row sm:items-center gap-3">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
+ <CustomSelect
+  value={warehouseId}
+  onChange={setWarehouseId}
+  placeholder={todasLabel}
+  boxClassName="h-10 min-w-[190px]"
+  options={[
+  { value: "", label: todasLabel },
+  ...(warehouses.length > 1 ? warehouses.map(w => ({ value: String(w.id), label: w.name })) : [])
+  ]}
+ />
+ </div>
  {data && <ExportButton onClick={exportFull.run} loading={exportFull.exporting} />}
  </div>
 

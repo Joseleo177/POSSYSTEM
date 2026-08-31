@@ -158,14 +158,17 @@ async function uniqueSlug(base, company_id) {
   return `${base}-${crypto.randomBytes(2).toString("hex")}`;
 }
 
-adminRouter.get("/", auth, permit("config"), async (_req, res) => {
+// Estas tres pedían el `config` viejo, que como permiso suelto lo cumple cualquiera con una
+// acción del mapa de compatibilidad —hasta un cajero con `sales.view`—. Publicar la vitrina
+// de la tienda en internet, o apagarla, es configuración de la empresa y nada más.
+adminRouter.get("/", auth, permit("config.view"), async (_req, res) => {
   res.json({ ok: true, data: await currentAndSuggested() });
 });
 
 // Crea o actualiza el enlace a partir del nombre actual de la tienda. Llamarlo cuando el
 // nombre cambió reemplaza el enlace: el anterior deja de resolver en el acto, porque la
 // búsqueda es por valor exacto.
-adminRouter.post("/", auth, permit("config"), async (req, res) => {
+adminRouter.post("/", auth, permit("config.edit"), async (req, res) => {
   const nameRow = await Setting.findOne({ where: { key: "store_name" } });
   const base = svc.slugify(nameRow?.value);
   if (!svc.isValidSlug(base)) {
@@ -180,7 +183,7 @@ adminRouter.post("/", auth, permit("config"), async (req, res) => {
   res.json({ ok: true, data: { slug, suggested: base } });
 });
 
-adminRouter.delete("/", auth, permit("config"), async (_req, res) => {
+adminRouter.delete("/", auth, permit("config.edit"), async (_req, res) => {
   await Setting.destroy({ where: { key: svc.SLUG_KEY } });
   res.json({ ok: true, message: "Catálogo público desactivado" });
 });

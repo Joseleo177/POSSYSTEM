@@ -43,13 +43,13 @@ export default function CobroPage() {
         employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
         checkout, saveQuotation, loading, receipt, setReceipt,
         heldCarts, holdCart, takeHeldCart, removeHeldCart, releaseHeldCart, loadHeldCarts, acceptWebOrder,
-        activePromos, loadActivePromos, promoLineDiscount, promoDiscount,
+        activePromos, promoLineDiscount, promoDiscount,
     } = useCart();
 
     // ── Carga inicial ──────────────────────────────────────────
-    // Las series las carga el propio contexto al fijarse el almacén activo: son del almacén,
-    // no del usuario suelto.
-    useEffect(() => { loadEmployeeWarehouses(); loadActivePromos(); }, [loadEmployeeWarehouses, loadActivePromos]);
+    // Las series y las promociones las carga el propio contexto al fijarse el almacén activo:
+    // son del almacén, no del usuario suelto.
+    useEffect(() => { loadEmployeeWarehouses(); }, [loadEmployeeWarehouses]);
 
     // ── Estado local ───────────────────────────────────────────
     const [mobileTab, setMobileTab]               = useState("products");
