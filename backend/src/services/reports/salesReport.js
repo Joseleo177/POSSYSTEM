@@ -1,12 +1,26 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause, localDate, TZ, SETTLED_SQL } = require("./shared");
 
-async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tcS, tcS2, rep, wh }) {
+async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tcS, tcS2, tcP, rep, wh, allowedWarehouses }) {
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dS  = dateClause(df, dt, 's');
   const dR  = dateClause(df, dt);
   const dS2 = dateClause(df, dt, 's2');
+  // Los canales de pago se cortan por la fecha del COBRO, no por la de la venta: ver el
+  // comentario de esa consulta más abajo.
+  const dP  = dateClause(df, dt, 'p');
+
+  // Recorte por sucursal para una consulta que sale de payments y no pasa por sales: el
+  // cobro no guarda almacén, lo hereda de su venta. Mismo criterio que paymentJournalsReport,
+  // que resuelve la sucursal con una subconsulta en vez de reintroducir el JOIN.
+  let whPay = '';
+  if (Array.isArray(allowedWarehouses)) {
+    const ids = allowedWarehouses.filter(Number.isInteger);
+    whPay = ids.length
+      ? `AND p.sale_id IN (SELECT id FROM sales WHERE warehouse_id IN (${ids.join(',')}))`
+      : 'AND FALSE';
+  }
 
   const [summary, byMethod, byDay, byEmployee, byHour, bySerie] = await Promise.all([
     sequelize.query(
@@ -30,16 +44,28 @@ async function salesReport({ date_from, date_to, company_id, isSuperuser, tc, tc
        WHERE TRUE ${tc} ${wh()} ${dR}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
+    // Canales de pago: cuánto entró por cada diario en el período.
+    //
+    // Se corta por la fecha del cobro (p.created_at), no por la de la venta. Antes iba por
+    // la venta y eso hacía que el mismo día diera dos cifras distintas según dónde se lo
+    // mirara: una factura del 28 cobrada el 29 sumaba acá pero no en la matriz de cobros por
+    // día ni en Contabilidad → Pagos, que siempre midieron el movimiento de caja. La
+    // diferencia aparecía justo donde más duele, al cuadrar un punto contra el banco.
+    //
+    // Por lo mismo se cuenta COUNT(p.id) —cobros, que es lo que dice la etiqueta "trans."— y
+    // no ventas distintas, y desaparece el JOIN a sales: un cobro pertenece a su diario haya
+    // pasado lo que haya pasado después con la factura. La consecuencia buscada es que esta
+    // lista ya no tiene por qué sumar el ingreso bruto del período: lo pendiente por cobrar
+    // no está acá, y lo cobrado hoy de una venta vieja sí.
     sequelize.query(
       `SELECT
          COALESCE(pj.name, 'Sin diario') AS method_name,
          COALESCE(pj.type, 'otro') AS method_type,
-         COUNT(DISTINCT p.sale_id)::int AS count,
+         COUNT(p.id)::int AS count,
          COALESCE(SUM(p.amount), 0)::float AS total
        FROM payments p
        LEFT JOIN payment_journals pj ON p.payment_journal_id = pj.id
-       JOIN sales s ON p.sale_id = s.id
-       WHERE p.payment_journal_id IS NOT NULL ${tcS} ${wh('s')} ${dS}
+       WHERE p.payment_journal_id IS NOT NULL ${tcP} ${whPay} ${dP}
        GROUP BY pj.id, pj.name, pj.type
        ORDER BY total DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

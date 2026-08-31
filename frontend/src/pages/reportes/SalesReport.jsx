@@ -14,6 +14,11 @@ export default function SalesReport() {
  const [range, setRange] = useState(defaultRange(30));
  const { data, loading, error } = useReport(api.reports.sales, { date_from: range.from, date_to: range.to }, [range]);
  const s = data?.summary;
+ // La distribución de canales se mide contra lo cobrado, no contra el ingreso bruto: son
+ // cortes distintos —una venta a crédito factura sin entrar a caja, y un abono de una factura
+ // vieja entra a caja sin facturar hoy—, así que dividir entre las ventas daba porcentajes
+ // que no sumaban 100.
+ const totalCobrado = (data?.by_method || []).reduce((acc, m) => acc + parseFloat(m.total || 0), 0);
  const { companyInfo, baseCurrency, notify } = useApp();
  const [pdfLoading, setPdfLoading] = useState(false);
 
@@ -84,7 +89,7 @@ export default function SalesReport() {
  </Card>
 
  <Card>
- <SectionHeader title="Canales de Pago" sub="Distribución" />
+ <SectionHeader title="Canales de Pago" sub="Cobrado en el período" />
  <div className="space-y-3 pt-1">
  {data.by_method.length === 0 ? (
  <div className="py-10 text-center text-[11px] font-black uppercase text-content-subtle tracking-wide">Sin Registros</div>
@@ -98,10 +103,10 @@ export default function SalesReport() {
  </div>
  <div className="text-right">
  <div className="text-[11px] font-black text-content dark:text-white tabular-nums">{fmt$(m.total)}</div>
- <div className="text-[10px] font-black text-brand-500">{pct(m.total, s.total_revenue)}%</div>
+ <div className="text-[10px] font-black text-brand-500">{pct(m.total, totalCobrado)}%</div>
  </div>
  </div>
- <ProgressBar value={m.total} max={s.total_revenue} color={METHOD_COLORS[m.method_type] || "bg-brand-500"} />
+ <ProgressBar value={m.total} max={totalCobrado} color={METHOD_COLORS[m.method_type] || "bg-brand-500"} />
  </div>
  ))
  )}
