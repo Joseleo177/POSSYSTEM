@@ -32,6 +32,33 @@ const SETTLED_SQL = SETTLED_STATUSES.map(s => `'${s}'`).join(", ");
 const RECEIVABLE_STATUSES = ["borrador", "pendiente", "parcial"];
 
 /**
+ * Ventas cuya mercancía salió del inventario.
+ *
+ * El stock se descuenta al CREAR la venta (services/sales/createSale.js), sin mirar el estado:
+ * desde ese momento la mercancía ya no está en el depósito, se haya cobrado o no. Por eso los
+ * reportes de lo VENDIDO se cortan por esta lista y no por SETTLED_STATUSES —que es lo
+ * COBRADO—: con el criterio viejo, una venta a crédito o una mesa abierta sacaba producto del
+ * inventario sin aparecer en ningún reporte, y el faltante no se podía explicar contra nada.
+ *
+ * Quedan fuera los tres estados sin mercancía afuera:
+ *  - 'anulado' y 'devuelto' reponen el stock (cancelSale.js, returnService.js).
+ *  - 'pedido' nunca lo descontó (cancelSale.js: `stockWasTaken = sale.status !== 'pedido'`).
+ *
+ * 'borrador' y 'espera' —cuentas abiertas y ventas pausadas— SÍ entran: su producto ya salió,
+ * aunque el documento todavía no esté cerrado.
+ *
+ * Los reportes de DINERO (arqueo, cobranza, canales de pago) no usan ninguna de las dos
+ * listas: suman sobre `payments`, que solo tiene plata real.
+ */
+const DISPATCHED_STATUSES = ["pagado", "exonerado", "pendiente", "parcial", "borrador", "espera"];
+const DISPATCHED_SQL = DISPATCHED_STATUSES.map(s => `'${s}'`).join(", ");
+
+// De lo despachado, lo que todavía no se cobró. Es el complemento exacto de SETTLED dentro de
+// DISPATCHED, así que facturado − cobrado = esto, sin huecos ni solapes.
+const UNPAID_STATUSES = DISPATCHED_STATUSES.filter(s => !SETTLED_STATUSES.includes(s));
+const UNPAID_SQL = UNPAID_STATUSES.map(s => `'${s}'`).join(", ");
+
+/**
  * Estado que le corresponde a una factura según lo cobrado, lo acreditado por devoluciones y
  * lo exonerado.
  *
@@ -60,6 +87,10 @@ module.exports = {
   PAYMENT_TOLERANCE,
   SETTLED_STATUSES,
   SETTLED_SQL,
+  DISPATCHED_STATUSES,
+  DISPATCHED_SQL,
+  UNPAID_STATUSES,
+  UNPAID_SQL,
   RECEIVABLE_STATUSES,
   resolveSaleStatus,
 };

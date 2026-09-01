@@ -122,14 +122,16 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
         <div class="kpi">
             <div class="kpi-label">Ventas</div>
             <div class="kpi-value">${esc(s.total_sales ?? 0)}</div>
-            <div class="kpi-sub">facturas del período</div>
+            <div class="kpi-sub">${parseInt(s.cancelled_count || 0) > 0
+                ? `${esc(s.cancelled_count)} anuladas aparte`
+                : "del período"}</div>
         </div>
         <div class="kpi">
-            <div class="kpi-label">Ingresos brutos</div>
+            <div class="kpi-label">Facturado</div>
             <div class="kpi-value">${fmtP(s.total_revenue)}</div>
             ${parseFloat(s.total_returned || 0) > 0
                 ? `<div class="kpi-sub">devoluciones: ${fmtP(s.total_returned)}</div>`
-                : `<div class="kpi-sub">sin devoluciones</div>`}
+                : `<div class="kpi-sub">cobrado y por cobrar</div>`}
         </div>
         <div class="kpi">
             <div class="kpi-label">Ticket promedio</div>
@@ -139,7 +141,7 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
         <div class="kpi">
             <div class="kpi-label">Por cobrar</div>
             <div class="kpi-value">${fmtP(s.pending_amount)}</div>
-            <div class="kpi-sub">${esc(s.pending_count ?? 0)} facturas</div>
+            <div class="kpi-sub">${esc(s.pending_count ?? 0)} ventas, ya incluidas</div>
         </div>
     </div>
 
@@ -211,7 +213,7 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
                  la diferencia en vez de dejar al lector restando de cabeza. -->
             ${pendiente > 0 ? `
             <div class="row-line pending-line">
-                <span>Pendiente por cobrar <span class="muted">· ${esc(s.pending_count ?? 0)} facturas</span></span>
+                <span>Pendiente por cobrar <span class="muted">· ${esc(s.pending_count ?? 0)} ventas</span></span>
                 <span class="strong">${fmtP(pendiente)}</span>
             </div>` : ""}
             ${exonerado > 0 ? `

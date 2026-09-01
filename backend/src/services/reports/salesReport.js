@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, dateClause, localDate, buildSerieScope, idList, TZ, SETTLED_SQL } = require("./shared");
+const { sanitizeDate, dateClause, localDate, buildSerieScope, idList, TZ, DISPATCHED_SQL, UNPAID_SQL } = require("./shared");
 
 async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperuser, tc, tcS, tcS2, tcP, rep, wh, allowedWarehouses, hours }) {
   const df = sanitizeDate(date_from);
@@ -37,24 +37,34 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
 
   const [summary, byMethod, byDay, byEmployee, byHour, bySerie] = await Promise.all([
     sequelize.query(
+      // Resumen del período, todo sobre lo DESPACHADO: la mercancía salió del inventario, se
+      // haya cobrado o no. El WHERE lo recorta una sola vez para que las siete cifras hablen
+      // del mismo conjunto —antes el conteo iba sin filtro de estado y contaba las anuladas,
+      // así que monto ÷ ventas no daba el ticket promedio que la pantalla mostraba al lado.
       `SELECT
          COUNT(*)::int AS total_sales,
-         (COALESCE(SUM(CASE WHEN status IN (${SETTLED_SQL}) THEN total ELSE 0 END), 0) -
+         (COALESCE(SUM(total), 0) -
           COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id
-                    WHERE r.status <> 'anulado' AND s2.status IN (${SETTLED_SQL}) ${tcS2} ${wh('s2')} ${se('s2')} ${dS2}), 0))::float AS total_revenue,
-         COALESCE(AVG(CASE WHEN status IN (${SETTLED_SQL}) THEN total END), 0)::float AS avg_ticket,
-         COALESCE(MAX(CASE WHEN status IN (${SETTLED_SQL}) THEN total END), 0)::float AS max_sale,
-         COALESCE(MIN(CASE WHEN status IN (${SETTLED_SQL}) THEN total END), 0)::float AS min_sale,
-         COUNT(CASE WHEN status IN ('pendiente','parcial') THEN 1 END)::int AS pending_count,
-         COALESCE(SUM(CASE WHEN status IN ('pendiente','parcial') THEN total ELSE 0 END), 0)::float AS pending_amount,
+                    WHERE r.status <> 'anulado' AND s2.status IN (${DISPATCHED_SQL}) ${tcS2} ${wh('s2')} ${se('s2')} ${dS2}), 0))::float AS total_revenue,
+         COALESCE(AVG(total), 0)::float AS avg_ticket,
+         COALESCE(MAX(total), 0)::float AS max_sale,
+         COALESCE(MIN(total), 0)::float AS min_sale,
+         -- Lo despachado que todavía no se cobró. Es el complemento exacto de lo cobrado
+         -- dentro de este mismo WHERE, así que facturado − cobrado = esto.
+         COUNT(CASE WHEN status IN (${UNPAID_SQL}) THEN 1 END)::int AS pending_count,
+         COALESCE(SUM(CASE WHEN status IN (${UNPAID_SQL}) THEN total ELSE 0 END), 0)::float AS pending_amount,
          COALESCE((SELECT SUM(r.total) FROM returns r JOIN sales s2 ON r.sale_id = s2.id
-                    WHERE r.status <> 'anulado' AND s2.status IN (${SETTLED_SQL}) ${tcS2} ${wh('s2')} ${se('s2')} ${dS2}), 0)::float AS total_returned,
+                    WHERE r.status <> 'anulado' AND s2.status IN (${DISPATCHED_SQL}) ${tcS2} ${wh('s2')} ${se('s2')} ${dS2}), 0)::float AS total_returned,
          -- Cuánto de esa facturación se perdonó en el período. El total_revenue de arriba la
          -- incluye —la venta ocurrió—, así que sin esta cifra no habría cómo distinguir lo
          -- que entró a caja de lo que se dejó de cobrar: la exoneración no genera egreso.
-         COALESCE(SUM(CASE WHEN status IN (${SETTLED_SQL}) THEN forgiven_amount ELSE 0 END), 0)::float AS total_forgiven
+         COALESCE(SUM(forgiven_amount), 0)::float AS total_forgiven,
+         -- Las anuladas no son ventas y por eso quedan fuera de todo lo anterior, pero el
+         -- volumen bajó al dejar de contarlas: se publican aparte para que el cambio de
+         -- cifra tenga dónde explicarse.
+         (SELECT COUNT(*) FROM sales WHERE status = 'anulado' ${tc} ${wh()} ${se()} ${dR})::int AS cancelled_count
        FROM sales
-       WHERE TRUE ${tc} ${wh()} ${se()} ${dR}`,
+       WHERE status IN (${DISPATCHED_SQL}) ${tc} ${wh()} ${se()} ${dR}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     // Canales de pago: cuánto entró por cada diario en el período.
@@ -87,7 +97,7 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
       `SELECT ${diaR} AS day, COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS revenue
        FROM sales
-       WHERE status IN (${SETTLED_SQL}) ${tc} ${wh()} ${se()} ${dR}
+       WHERE status IN (${DISPATCHED_SQL}) ${tc} ${wh()} ${se()} ${dR}
        GROUP BY ${diaR}
        ORDER BY day ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -99,7 +109,7 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
               COALESCE(AVG(s.total), 0)::float AS avg_ticket
        FROM sales s
        LEFT JOIN employees e ON s.employee_id = e.id
-       WHERE s.status IN (${SETTLED_SQL}) ${tcS} ${wh('s')} ${se('s')} ${dS}
+       WHERE s.status IN (${DISPATCHED_SQL}) ${tcS} ${wh('s')} ${se('s')} ${dS}
        GROUP BY e.id, e.full_name
        ORDER BY revenue DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -109,7 +119,7 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
               COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS revenue
        FROM sales
-       WHERE status IN (${SETTLED_SQL}) ${tc} ${wh()} ${se()} ${dR}
+       WHERE status IN (${DISPATCHED_SQL}) ${tc} ${wh()} ${se()} ${dR}
        GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE '${TZ}')
        ORDER BY hour ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -128,7 +138,7 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
               MAX(s.invoice_number) AS last_invoice
        FROM sales s
        LEFT JOIN series se ON s.serie_id = se.id
-       WHERE s.status IN (${SETTLED_SQL}) ${tcS} ${wh('s')} ${se('s')} ${dS}
+       WHERE s.status IN (${DISPATCHED_SQL}) ${tcS} ${wh('s')} ${se('s')} ${dS}
        GROUP BY se.id, se.name, se.prefix
        ORDER BY revenue DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -147,6 +157,7 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
       pending_amount: parseFloat(s.pending_amount || 0),
       total_returned: parseFloat(s.total_returned || 0),
       total_forgiven: parseFloat(s.total_forgiven || 0),
+      cancelled_count: parseInt(s.cancelled_count || 0),
     },
     by_method:   byMethod,
     by_day:      byDay,

@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, dateClause, buildSerieScope, SETTLED_SQL } = require("./shared");
+const { sanitizeDate, dateClause, buildSerieScope, DISPATCHED_SQL } = require("./shared");
 
 async function productsReport({ date_from, date_to, serie_ids, limit = 20, company_id, tcS, tcP, rep, wh, hours }) {
   const df = sanitizeDate(date_from);
@@ -10,12 +10,12 @@ async function productsReport({ date_from, date_to, serie_ids, limit = 20, compa
   const se = buildSerieScope(serie_ids);
   const lim = parseInt(limit);
 
-  // Mismo criterio de "venta realizada" que salesReport y marginsReport: sin esto
-  // las anuladas contaban como ventas y productos que nunca se vendieron aparecían
-  // en el top (y desaparecían del listado de estancados, que es el efecto inverso).
-  // Lo vendido incluye las facturas exoneradas: la mercancía salió igual, solo que el saldo
-  // se perdonó en vez de cobrarse (ver utils/saleBalance).
-  const stS = `AND s.status IN (${SETTLED_SQL})`;
+  // Mismo criterio de "venta realizada" que salesReport y marginsReport: lo que salió del
+  // inventario. Las anuladas quedan fuera —si no, productos que nunca se vendieron aparecían
+  // en el top, y desaparecían del listado de estancados, que es el efecto inverso—, pero lo
+  // vendido a crédito entra: la mercancía se despachó igual, y dejarla afuera hacía que este
+  // listado no explicara la salida de stock (ver utils/saleBalance, DISPATCHED_STATUSES).
+  const stS = `AND s.status IN (${DISPATCHED_SQL})`;
 
   // Valorizar existencias: cada una vale lo que costó donde está, no lo que dice el catálogo.
   // Se suma fila por fila porque el mismo producto pudo costar distinto en cada sucursal.

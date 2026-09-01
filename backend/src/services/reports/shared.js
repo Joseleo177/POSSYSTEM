@@ -142,6 +142,6 @@ function dateClause(date_from, date_to, alias = '', hours = null) {
 // Estados de una factura consumada, listos para intercalar en el SQL crudo de los reportes:
 // `status IN (${SETTLED_SQL})`. Se reexporta desde acá para que los reportes lo tomen de su
 // propio shared —igual que dateClause— y no de una ruta a utils distinta en cada archivo.
-const { SETTLED_SQL } = require("../../utils/saleBalance");
+const { SETTLED_SQL, DISPATCHED_SQL, UNPAID_SQL } = require("../../utils/saleBalance");
 
-module.exports = { sanitizeDate, sanitizeHour, buildHours, buildTenantContext, buildWarehouseScope, buildSerieScope, idList, dateClause, hourClause, localDate, TZ, SETTLED_SQL };
+module.exports = { sanitizeDate, sanitizeHour, buildHours, buildTenantContext, buildWarehouseScope, buildSerieScope, idList, dateClause, hourClause, localDate, TZ, SETTLED_SQL, DISPATCHED_SQL, UNPAID_SQL };

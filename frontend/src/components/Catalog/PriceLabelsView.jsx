@@ -1,5 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useApp } from "../../context/AppContext";
+import { api } from "../../services/api";
+import PriceLabel from "./PriceLabel";
+import LabelDesignerPanel from "./LabelDesignerPanel";
+import { normalizeLayout, DEFAULT_TEMPLATE, LABEL_ELEMENTS } from "./labelTemplate";
 
 // Tamaños de rollo/etiqueta más comunes (ancho × alto en mm)
 const ROLL_PRESETS = [
@@ -10,70 +14,124 @@ const ROLL_PRESETS = [
     { w: 80, h: 40 },
 ];
 
-const mm = (v) => `${v}mm`;
+// La hoja carta lleva 21 etiquetas de 70×38 en rejilla de 3×7
+const SHEET = { w: 70, h: 38, perPage: 21 };
 
 export default function PriceLabelsView({ products, onClose }) {
-    const { currencies, baseCurrency } = useApp();
-    const [selCurrency, setSelCurrency] = useState(baseCurrency || (currencies.length > 0 ? currencies[0] : { symbol: 'Ref.', exchange_rate: 1 }));
+    const { currencies, baseCurrency, settings, loadSettings, companyInfo, notify, can } = useApp();
 
-    // Modo de impresión: 'roll' (térmica de rollo) | 'sheet' (hoja carta 3×7)
-    const [mode, setMode] = useState('roll');
-    // Tamaño de etiqueta del rollo (mm)
-    const [roll, setRoll] = useState({ w: 70, h: 38 });
+    const [layout, setLayout] = useState(() => normalizeLayout(settings?.price_label_template));
+    const [showPanel, setShowPanel] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    const [selCurrency, setSelCurrency] = useState(baseCurrency || currencies[0] || { symbol: "Ref.", exchange_rate: 1 });
+
+    // La plantilla guardada puede llegar después que el componente si los ajustes aún se están
+    // cargando; en cuanto llega se adopta, salvo que el usuario ya haya tocado algo.
+    const [touched, setTouched] = useState(false);
+    useEffect(() => {
+        if (!touched) setLayout(normalizeLayout(settings?.price_label_template));
+    }, [settings?.price_label_template, touched]);
 
     useEffect(() => {
         if (baseCurrency) setSelCurrency(baseCurrency);
     }, [baseCurrency]);
 
-    const getConvertedPrice = (basePrice) => {
-        if (!selCurrency || !baseCurrency) return { int: "0", dec: "00" };
+    const activeCurrencies = useMemo(() => currencies.filter(c => c.active), [currencies]);
+    const altCurrency = useMemo(
+        () => activeCurrencies.find(c => String(c.id) === String(layout.altCurrencyId)) || null,
+        [activeCurrencies, layout.altCurrencyId]
+    );
+
+    // Convierte desde la moneda base a la pedida y parte el número en entero y decimales
+    const convert = useCallback((basePrice, currency) => {
+        if (!currency || !baseCurrency) return { int: "0", dec: "00" };
         const price = parseFloat(basePrice || 0);
-        const converted = (price / baseCurrency.exchange_rate) * selCurrency.exchange_rate;
-        const val = converted.toFixed(2);
-        const [int, dec] = val.split(".");
+        const converted = (price / baseCurrency.exchange_rate) * currency.exchange_rate;
+        const [int, dec] = converted.toFixed(2).split(".");
         return { int, dec };
+    }, [baseCurrency]);
+
+    // ── Edición de la plantilla ─────────────────────────────────────────────
+    const patchLayout = (patch) => { setTouched(true); setLayout(p => ({ ...p, ...patch })); };
+
+    const onElement = (id, patch) => {
+        setTouched(true);
+        setLayout(p => ({ ...p, template: { ...p.template, [id]: { ...p.template[id], ...patch } } }));
     };
 
-    // ── Modo HOJA (carta): 21 etiquetas por hoja, tamaño fijo 70×38 ──────────
-    const getPriceStyles = (intPart) => {
-        const len = intPart.length;
-        if (len <= 2) return { intSize: "text-[105px]", symSize: "text-2xl", decSize: "text-3xl", mt: "mt-4" };
-        if (len === 3) return { intSize: "text-[85px]", symSize: "text-xl", decSize: "text-2xl", mt: "mt-4" };
-        if (len === 4) return { intSize: "text-[65px]", symSize: "text-lg", decSize: "text-xl", mt: "mt-3" };
-        if (len === 5) return { intSize: "text-[52px]", symSize: "text-base", decSize: "text-lg", mt: "mt-2" };
-        if (len === 6) return { intSize: "text-[45px]", symSize: "text-xs", decSize: "text-base", mt: "mt-1" };
-        return { intSize: "text-[38px]", symSize: "text-[10px]", decSize: "text-xs", mt: "mt-1" };
+    // Mover dentro de la zona: se intercambia el orden con el vecino activo, así el elemento
+    // no salta por encima de uno apagado que el usuario no está viendo.
+    const onMove = (id, dir) => {
+        setTouched(true);
+        setLayout(p => {
+            const el = p.template[id];
+            const siblings = LABEL_ELEMENTS
+                .map(d => ({ id: d.id, ...p.template[d.id] }))
+                .filter(e => e.on && e.zone === el.zone)
+                .sort((a, b) => a.order - b.order);
+
+            const idx = siblings.findIndex(e => e.id === id);
+            const target = siblings[idx + dir];
+            if (idx === -1 || !target) return p;
+
+            return {
+                ...p,
+                template: {
+                    ...p.template,
+                    [id]: { ...el, order: target.order },
+                    [target.id]: { ...p.template[target.id], order: el.order },
+                },
+            };
+        });
     };
-    const getNameStyles = (name) => {
-        const len = name.length;
-        if (len <= 20) return "text-[21px] leading-[1.2]";
-        if (len <= 40) return "text-[17px] leading-[1.2]";
-        return "text-[14px] leading-[1.2]";
+
+    const onReset = () => { setTouched(true); setLayout(p => ({ ...p, template: DEFAULT_TEMPLATE })); };
+
+    const onSave = async () => {
+        setSaving(true);
+        try {
+            await api.settings.update({ price_label_template: JSON.stringify(layout) });
+            await loadSettings();
+            setTouched(false);
+            notify("Plantilla de etiqueta guardada", "ok");
+        } catch (err) {
+            notify(err.message || "No se pudo guardar la plantilla", "err");
+        } finally {
+            setSaving(false);
+        }
     };
+
+    const setRoll = (patch) => patchLayout({ roll: { ...layout.roll, ...patch } });
+
     const sheetPages = useMemo(() => {
         const chunks = [];
-        for (let i = 0; i < products.length; i += 21) chunks.push(products.slice(i, i + 21));
+        for (let i = 0; i < products.length; i += SHEET.perPage) chunks.push(products.slice(i, i + SHEET.perPage));
         return chunks;
     }, [products]);
 
-    // ── Modo ROLLO: auto-escalado proporcional al tamaño de la etiqueta ──────
-    const pad = Math.max(1.5, roll.h * 0.08); // margen interno en mm
-    // Tamaño (mm) del entero del precio, limitado por ancho (según nº de dígitos) y por alto
-    const rollPriceSize = (intPart) => {
-        const availW = roll.w - pad * 2;
-        const digits = Math.max(1, intPart.length);
-        const byWidth = availW / (digits * 0.62 + 1.1); // +1.1 reserva símbolo/decimales
-        const byHeight = roll.h * 0.5;
-        return Math.max(3, Math.min(byWidth, byHeight));
-    };
-    const rollNameSize = () => Math.max(2, Math.min(roll.h * 0.14, roll.w * 0.085));
+    const dims = layout.mode === "sheet" ? SHEET : layout.roll;
 
-    const setRollSize = (patch) => setRoll(p => ({ ...p, ...patch }));
+    const labelFor = (p, idx) => (
+        <PriceLabel
+            key={`${p.id}-${idx}`}
+            product={p}
+            template={layout.template}
+            width={dims.w}
+            height={dims.h}
+            border={layout.border}
+            currency={selCurrency}
+            altCurrency={altCurrency}
+            convert={convert}
+            companyInfo={companyInfo}
+            categoryName={p.category_name}
+        />
+    );
 
     return (
-        <div className="fixed inset-0 z-[2000] bg-white text-black overflow-auto print:static print:inset-auto print:bg-white print:overflow-visible">
+        <div className="fixed inset-0 z-[2000] bg-white text-black flex flex-col print:static print:inset-auto print:bg-white print:block">
             {/* ── Controles (ocultos al imprimir) ── */}
-            <div className="print:hidden p-4 bg-surface-2 dark:bg-surface-dark-2 border-b flex flex-wrap items-center gap-4 sticky top-0 z-50">
+            <div className="print:hidden p-4 bg-surface-2 dark:bg-surface-dark-2 border-b border-border/40 dark:border-white/5 flex flex-wrap items-center gap-4 shrink-0">
                 <div className="flex flex-col">
                     <span className="text-xs font-black uppercase text-brand-500">Vista de Impresión</span>
                     <span className="text-[10px] text-content-subtle font-bold">{products.length} producto(s)</span>
@@ -81,36 +139,36 @@ export default function PriceLabelsView({ products, onClose }) {
 
                 {/* Modo */}
                 <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg border border-white/5">
-                    <button onClick={() => setMode('roll')}
-                        className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${mode === 'roll' ? 'bg-brand-500 text-black' : 'hover:bg-white/5 text-content-subtle'}`}>
+                    <button onClick={() => patchLayout({ mode: "roll" })}
+                        className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${layout.mode === "roll" ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle"}`}>
                         Rollo térmico
                     </button>
-                    <button onClick={() => setMode('sheet')}
-                        className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${mode === 'sheet' ? 'bg-brand-500 text-black' : 'hover:bg-white/5 text-content-subtle'}`}>
+                    <button onClick={() => patchLayout({ mode: "sheet" })}
+                        className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${layout.mode === "sheet" ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle"}`}>
                         Hoja carta (3×7)
                     </button>
                 </div>
 
                 {/* Tamaño de rollo (solo en modo rollo) */}
-                {mode === 'roll' && (
+                {layout.mode === "roll" && (
                     <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/5">
                         <span className="text-[10px] font-black uppercase text-content-subtle ml-2">Etiqueta:</span>
                         {ROLL_PRESETS.map(r => {
-                            const active = roll.w === r.w && roll.h === r.h;
+                            const active = layout.roll.w === r.w && layout.roll.h === r.h;
                             return (
                                 <button key={`${r.w}x${r.h}`} onClick={() => setRoll({ w: r.w, h: r.h })}
-                                    className={`px-2.5 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${active ? 'bg-brand-500 text-black' : 'hover:bg-white/5 text-content-subtle'}`}>
+                                    className={`px-2.5 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${active ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle"}`}>
                                     {r.w}×{r.h}
                                 </button>
                             );
                         })}
                         <div className="flex items-center gap-1 ml-1">
-                            <input type="number" min="15" max="82" value={roll.w}
-                                onChange={e => setRollSize({ w: Math.min(82, Math.max(15, parseInt(e.target.value) || 0)) })}
+                            <input type="number" min="15" max="82" value={layout.roll.w}
+                                onChange={e => setRoll({ w: Math.min(82, Math.max(15, parseInt(e.target.value) || 0)) })}
                                 className="w-14 h-7 bg-white/10 rounded-md px-2 text-[11px] font-bold text-center outline-none" />
                             <span className="text-[10px] font-black text-content-subtle">×</span>
-                            <input type="number" min="10" max="300" value={roll.h}
-                                onChange={e => setRollSize({ h: Math.min(300, Math.max(10, parseInt(e.target.value) || 0)) })}
+                            <input type="number" min="10" max="300" value={layout.roll.h}
+                                onChange={e => setRoll({ h: Math.min(300, Math.max(10, parseInt(e.target.value) || 0)) })}
                                 className="w-14 h-7 bg-white/10 rounded-md px-2 text-[11px] font-bold text-center outline-none" />
                             <span className="text-[10px] font-black text-content-subtle">mm</span>
                         </div>
@@ -120,15 +178,24 @@ export default function PriceLabelsView({ products, onClose }) {
                 {/* Moneda */}
                 <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/5">
                     <span className="text-[10px] font-black uppercase text-content-subtle ml-2">Moneda:</span>
-                    {currencies.filter(c => c.active).map(c => (
+                    {activeCurrencies.map(c => (
                         <button key={c.id} onClick={() => setSelCurrency(c)}
-                            className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${selCurrency?.id === c.id ? 'bg-brand-500 text-black' : 'hover:bg-white/5 text-content-subtle'}`}>
+                            className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${selCurrency?.id === c.id ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle"}`}>
                             {c.symbol} {c.code}
                         </button>
                     ))}
                 </div>
 
                 <div className="flex gap-2 ml-auto">
+                    <button onClick={() => setShowPanel(v => !v)}
+                        className={`px-4 py-2 text-[11px] font-black uppercase rounded-lg border transition-all flex items-center gap-2 ${showPanel
+                            ? "bg-brand-500 text-black border-brand-500"
+                            : "bg-surface-3 dark:bg-white/10 border-border/40 dark:border-white/10"}`}>
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-3.5 h-3.5">
+                            <path d="M3 5h14M3 10h9M3 15h5" />
+                        </svg>
+                        Diseño
+                    </button>
                     <button onClick={() => window.print()} className="px-6 py-2 bg-brand-500 text-black text-[11px] font-black uppercase rounded-lg shadow-lg shadow-brand-500/20 active:scale-95 transition-all">
                         Enviar a Impresora
                     </button>
@@ -138,62 +205,52 @@ export default function PriceLabelsView({ products, onClose }) {
                 </div>
             </div>
 
-            {/* ── Contenido imprimible ── */}
-            {mode === 'sheet' ? (
-                // ═══════════ MODO HOJA CARTA (3×7) ═══════════
-                <div className="flex flex-col items-center gap-8 py-8 print:p-0 print:gap-0 bg-gray-100 dark:bg-black/20 min-h-screen print:bg-white page-container">
-                    {sheetPages.map((pageProducts, pageIdx) => (
-                        <div key={pageIdx} className="grid grid-cols-3 grid-rows-7 gap-0 bg-white shadow-2xl print:shadow-none w-[215.9mm] h-[279.4mm] p-[4mm] box-border page-break">
-                            {pageProducts.map((p, idx) => {
-                                const { int, dec } = getConvertedPrice(p.price);
-                                const styles = getPriceStyles(int);
-                                return (
-                                    <div key={`${p.id}-${idx}`} className="w-[70mm] h-[38mm] border border-gray-100 relative overflow-hidden flex flex-col p-3 box-border justify-between">
-                                        <div className={`font-black text-black uppercase break-words tracking-tight line-clamp-2 ${getNameStyles(p.name)}`}>{p.name}</div>
-                                        <div className={`flex items-start justify-center text-center ${styles.mt}`}>
-                                            <span className={`font-black mr-1 py-1 ${styles.symSize}`}>{selCurrency?.symbol}</span>
-                                            <span className={`font-black tracking-tighter leading-[0.7] py-1 ${styles.intSize}`}>{int}</span>
-                                            <div className="flex flex-col ml-1">
-                                                <span className={`font-black leading-none border-b-[3px] border-black pb-0.5 ${styles.decSize}`}>{dec}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+            <div className="flex-1 flex min-h-0 print:block">
+                {/* ── Contenido imprimible ── */}
+                <div className={`flex-1 overflow-auto print:overflow-visible ${layout.mode === "roll" ? "mode-roll" : "mode-sheet"}`}>
+                    {layout.mode === "sheet" ? (
+                        <div className="flex flex-col items-center gap-8 py-8 print:p-0 print:gap-0 bg-gray-100 dark:bg-black/20 min-h-full print:bg-white page-container">
+                            {sheetPages.map((pageProducts, pageIdx) => (
+                                <div key={pageIdx} className="grid grid-cols-3 grid-rows-7 gap-0 bg-white shadow-2xl print:shadow-none w-[215.9mm] h-[279.4mm] p-[4mm] box-border page-break">
+                                    {pageProducts.map(labelFor)}
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
-            ) : (
-                // ═══════════ MODO ROLLO TÉRMICO (una etiqueta por página) ═══════════
-                <div className="flex flex-col items-center gap-3 py-8 print:p-0 print:gap-0 bg-gray-100 dark:bg-black/20 min-h-screen print:bg-white page-container">
-                    {products.map((p, idx) => {
-                        const { int, dec } = getConvertedPrice(p.price);
-                        const ps = rollPriceSize(int);
-                        const ns = rollNameSize();
-                        return (
-                            <div key={`${p.id}-${idx}`}
-                                className="label-roll bg-white shadow-lg print:shadow-none overflow-hidden flex flex-col justify-between box-border"
-                                style={{ width: mm(roll.w), height: mm(roll.h), padding: mm(pad) }}>
-                                <div className="font-black text-black uppercase leading-[1.1] line-clamp-2 tracking-tight"
-                                    style={{ fontSize: mm(ns) }}>
-                                    {p.name}
+                    ) : (
+                        <div className="flex flex-col items-center gap-3 py-8 print:p-0 print:gap-0 bg-gray-100 dark:bg-black/20 min-h-full print:bg-white page-container">
+                            {products.map((p, idx) => (
+                                <div key={`${p.id}-${idx}`} className="shadow-lg print:shadow-none">
+                                    {labelFor(p, idx)}
                                 </div>
-                                <div className="flex items-end justify-center text-center w-full">
-                                    <span className="font-black" style={{ fontSize: mm(ps * 0.42) }}>{selCurrency?.symbol}</span>
-                                    <span className="font-black tracking-tighter leading-[0.8]" style={{ fontSize: mm(ps) }}>{int}</span>
-                                    <span className="font-black leading-none" style={{ fontSize: mm(ps * 0.45) }}>,{dec}</span>
-                                </div>
-                            </div>
-                        );
-                    })}
+                            ))}
+                        </div>
+                    )}
                 </div>
-            )}
+
+                {showPanel && (
+                    <LabelDesignerPanel
+                        template={layout.template}
+                        onElement={onElement}
+                        onMove={onMove}
+                        onReset={onReset}
+                        border={layout.border}
+                        onBorder={v => patchLayout({ border: v })}
+                        altCurrencyId={layout.altCurrencyId}
+                        onAltCurrency={v => patchLayout({ altCurrencyId: v })}
+                        currencies={activeCurrencies}
+                        canSave={can("config.edit")}
+                        saving={saving}
+                        onSave={onSave}
+                        onClose={() => setShowPanel(false)}
+                    />
+                )}
+            </div>
 
             <style dangerouslySetInnerHTML={{ __html: `
                 @media print {
                     @page {
                         margin: 0;
-                        size: ${mode === 'roll' ? `${roll.w}mm ${roll.h}mm` : 'letter'};
+                        size: ${layout.mode === "roll" ? `${layout.roll.w}mm ${layout.roll.h}mm` : "letter"};
                     }
                     html, body {
                         margin: 0 !important;
@@ -237,9 +294,7 @@ export default function PriceLabelsView({ products, onClose }) {
                     }
 
                     /* Rollo térmico: una etiqueta por página */
-                    .label-roll {
-                        width: ${roll.w}mm !important;
-                        height: ${roll.h}mm !important;
+                    .mode-roll .label-unit {
                         margin: 0 !important;
                         box-shadow: none !important;
                         page-break-after: always !important;
@@ -249,10 +304,13 @@ export default function PriceLabelsView({ products, onClose }) {
                         box-sizing: border-box !important;
                         background: white !important;
                     }
-                    .label-roll:last-child {
+                    .mode-roll .page-container > div:last-child .label-unit {
                         page-break-after: avoid !important;
                         break-after: avoid !important;
                     }
+                    .mode-roll .page-container > div { box-shadow: none !important; }
+
+                    .label-unit { break-inside: avoid !important; }
                 }
             ` }} />
         </div>

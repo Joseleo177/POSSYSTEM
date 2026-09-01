@@ -120,15 +120,20 @@ export default function SalesReport() {
  {!loading && !error && data && (
  <div className="flex-1 min-h-0 space-y-3 overflow-auto">
  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
- <KpiCard label="Volumen de Ventas" value={fmtN(s.total_sales)} icon="" color="text-brand-500" />
- <KpiCard label="Ingresos Brutos" value={fmt$(s.total_revenue)} sub={s.total_returned > 0 ? `Devol.: ${fmt$(s.total_returned)}` : null} icon="" color="text-green-500" />
+ {/* Los cuatro miden lo DESPACHADO —la mercancía salió del inventario, se haya cobrado o
+     no—, así que monto ÷ ventas vuelve a dar el ticket promedio de al lado. Las anuladas
+     no son ventas: van como nota al pie del volumen, no sumadas dentro. */}
+ <KpiCard label="Volumen de Ventas" value={fmtN(s.total_sales)} sub={s.cancelled_count > 0 ? `${fmtN(s.cancelled_count)} anuladas aparte` : null} icon="" color="text-brand-500" />
+ <KpiCard label="Facturado" value={fmt$(s.total_revenue)} sub={s.total_returned > 0 ? `Devol.: ${fmt$(s.total_returned)}` : "Cobrado y por cobrar"} icon="" color="text-green-500" />
  <KpiCard label="Ticket Promedio" value={fmt$(s.avg_ticket)} sub={`Máx: ${fmt$(s.max_sale)}`} icon="" color="text-blue-500" />
- <KpiCard label="Cuentas x Cobrar" value={fmt$(s.pending_amount)} sub={`${s.pending_count} facturas`} icon="" color="text-danger" />
+ <KpiCard label="Cuentas x Cobrar" value={fmt$(s.pending_amount)} sub={`${s.pending_count} ventas · ya incluidas arriba`} icon="" color="text-danger" />
  </div>
 
  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
  <Card className="lg:col-span-2">
- <SectionHeader title="Ingresos Cronológicos" sub="Flujo de caja diario" />
+ {/* Ya no es flujo de caja: son las ventas del día, cobradas o no. El dinero que entró
+     por día vive en el reporte de Diarios de Pago, que sí se corta por fecha de cobro. */}
+ <SectionHeader title="Facturación Cronológica" sub="Ventas por día" />
  {data.by_day.length > 0 ? (
  <div className="pt-2">
  <BarChart data={data.by_day} xKey="day" yKey="revenue" color="#FFB800" height={140} />

@@ -1,5 +1,5 @@
 const { sequelize, Sequelize } = require("../../models");
-const { sanitizeDate, dateClause, localDate, SETTLED_SQL } = require("./shared");
+const { sanitizeDate, dateClause, localDate, DISPATCHED_SQL } = require("./shared");
 
 async function marginsReport({ date_from, date_to, limit, warehouse_id, company_id, tcS, rep, wh, allowedWarehouses, hours }) {
   const df = sanitizeDate(date_from);
@@ -23,7 +23,9 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, company_
   // sumaban también las anuladas, así que la pantalla se contradecía a sí misma.
   // Incluye las exoneradas: el costo de esa mercancía se incurrió igual. Con el ingreso en
   // cero por el perdón, el margen que muestran es la pérdida real de haberla regalado.
-  const stS = `AND s.status IN (${SETTLED_SQL})`;
+  // Lo vendido a crédito también entra: su costo se incurrió al despachar la mercancía, y
+  // dejarlo fuera subestimaba el costo del período contra un ingreso que sí lo incluía.
+  const stS = `AND s.status IN (${DISPATCHED_SQL})`;
 
   // Costo unitario a usar: primero el congelado en la venta; si no lo hay —ventas anteriores
   // a que se congelara—, el de la sucursal donde se vendió, que es la mejor reconstrucción
