@@ -23,7 +23,11 @@ const OPCIONES = Array.from({ length: 48 }, (_, i) => {
   return { value: `${h}:${m}`, label: `${h}:${m}` };
 });
 
+// "Jornada" es el día operativo completo de un local que cierra de madrugada: abre a las 5 y
+// cierra a las 4 del día siguiente. Es el atajo que más se usa —cubre el turno entero, no un
+// tramo— y por eso va primero.
 const ATAJOS = [
+  { label: "Jornada", from: "05:00", to: "04:00" },
   { label: "Noche", from: "18:00", to: "04:00" },
   { label: "Tarde", from: "12:00", to: "18:00" },
   { label: "Mañana", from: "06:00", to: "12:00" },
@@ -171,8 +175,9 @@ export default function HourRangePicker({ from, to, onChange, className = "" }) 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
               </svg>
               <p className="text-[9px] font-bold leading-tight text-content-subtle">
-                Jornada nocturna: lo vendido después de medianoche se cuenta en el día en que
-                empezó la noche.
+                La franja cruza medianoche: el calendario elige <strong className="text-brand-500">jornadas</strong>,
+                no días. Para una sola jornada, pon la misma fecha en desde y hasta — la
+                madrugada del día siguiente entra sola.
               </p>
             </div>
           )}

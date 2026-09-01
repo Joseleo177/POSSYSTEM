@@ -47,7 +47,7 @@ export default function MarginsReport() {
  <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
  <HourRangePicker from={hr.hours.from} to={hr.hours.to} onChange={hr.setHours} />
- {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} />}
+ {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} dateFrom={range.from} dateTo={range.to} />}
  <CustomSelect
   value={warehouseId}
   onChange={setWarehouseId}

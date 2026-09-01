@@ -83,17 +83,36 @@ export function HourRangePicker({ from, to, onChange }) {
  return <GlobalHourRangePicker from={from} to={to} onChange={onChange} />;
 }
 
-// Aviso de jornada nocturna para la barra de filtros. Va junto a los selectores porque la
-// pregunta ("¿por qué el sábado incluye la madrugada del domingo?") aparece mirando el
-// filtro, no el pie de la tabla.
-export function NightShiftNotice({ from, to }) {
+// Aviso de jornada nocturna para la barra de filtros.
+//
+// Con una franja que cruza medianoche, el selector de fechas deja de elegir días del
+// calendario y pasa a elegir JORNADAS por su día de apertura: pedir "30/08" trae hasta la
+// madrugada del 31. Decirlo en abstracto no alcanzaba —se pedía 30→31 creyendo que hacía
+// falta abarcar los dos días, y eso trae dos jornadas—, así que el aviso deletrea la ventana
+// exacta que se está consultando, con sus fechas y sus horas.
+const masUnDia = (iso) => {
+ const [y, m, d] = String(iso).split("-").map(Number);
+ if (!y || !m || !d) return iso;
+ return toLocalISO(new Date(y, m - 1, d + 1));
+};
+const diaMes = (iso) => String(iso).split("-").reverse().slice(0, 2).join("/");
+
+export function NightShiftNotice({ from, to, dateFrom, dateTo }) {
+ // Cuántas jornadas abarca el rango. Sin fechas todavía, se cae al aviso genérico.
+ const jornadas = dateFrom && dateTo
+   ? Math.round((new Date(dateTo) - new Date(dateFrom)) / 86400000) + 1
+   : 0;
+ const ventana = dateFrom && dateTo
+   ? `${diaMes(dateFrom)} ${from} → ${diaMes(masUnDia(dateTo))} ${to}`
+   : `${from}–${to}`;
+
  return (
    <div className="flex items-center gap-1.5 px-2.5 h-10 rounded-md border border-brand-500/20 bg-brand-500/5 shrink-0">
      <svg className="w-3 h-3 shrink-0 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
      </svg>
      <span className="text-[10px] font-bold uppercase tracking-tight text-brand-500 whitespace-nowrap">
-       Jornada nocturna {from}–{to} · la madrugada cuenta en el día que abrió
+       {jornadas === 1 ? "Jornada" : `${jornadas} jornadas`}: {ventana}
      </span>
    </div>
  );

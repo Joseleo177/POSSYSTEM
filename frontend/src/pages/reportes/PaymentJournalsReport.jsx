@@ -101,7 +101,7 @@ export default function PaymentJournalsReport() {
                 <div className="flex flex-wrap items-center gap-2">
                     <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
                     <HourRangePicker from={hr.hours.from} to={hr.hours.to} onChange={hr.setHours} />
-                    {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} />}
+                    {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} dateFrom={range.from} dateTo={range.to} />}
 
                     <div className="relative">
                         <button

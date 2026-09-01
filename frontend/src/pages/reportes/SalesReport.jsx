@@ -89,7 +89,7 @@ export default function SalesReport() {
   ]}
  />
  )}
- {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} />}
+ {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} dateFrom={range.from} dateTo={range.to} />}
  </div>
  {data && (
  <div className="flex items-center gap-2">
