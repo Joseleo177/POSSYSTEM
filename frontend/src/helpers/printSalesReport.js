@@ -11,7 +11,9 @@ import { REPORT_CSS, esc, fmtQty, pctOf as pct, reportHeader, openPrintFrame } f
 // papel a propósito: en una hoja impresa lo que sirve es la tabla y los totales.
 //
 // Los importes van en moneda base, igual que el resto de los documentos: un reporte de un mes
-// entero mezclaría tasas distintas si se expresara en bolívares.
+// entero mezclaría tasas distintas si se expresara en bolívares. La excepción son los cobros
+// por método, donde cada diario se muestra además en su propia moneda —cada cobro a la tasa
+// del día en que se hizo—, porque es la cifra contra la que se cuadra el punto o el banco.
 
 /**
  * @param {object} sales     respuesta de /reports/sales (summary, by_method, by_employee…)
@@ -79,11 +81,23 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
             <span class="strong">${fmtP(e.revenue)}</span>
         </div>`).join("");
 
-    const metodosHtml = metodos.map(m => `
+    // Cada diario en SU moneda: es la cifra que el cajero contó y la que trae el estado de
+    // cuenta del banco, así que es contra la que se cuadra. La referencia va debajo en chico
+    // porque es lo único comparable entre diarios, y sin ella el total del pie no se explica.
+    // Un diario que ya está en moneda base no repite el número dos veces.
+    const metodosHtml = metodos.map(m => {
+        const propia = m.is_base === false && m.currency_symbol
+            ? fmtMoney(parseFloat(m.total_journal || 0), m.currency_symbol)
+            : null;
+        return `
         <div class="row-line">
             <span>${esc(m.method_name)} <span class="muted">· ${esc(m.count)} trans.</span></span>
-            <span class="strong">${fmtP(m.total)}</span>
-        </div>`).join("");
+            <span class="strong">
+                ${propia ? esc(propia) : fmtP(m.total)}
+                ${propia ? `<span class="muted sub-amount">${fmtP(m.total)}</span>` : ""}
+            </span>
+        </div>`;
+    }).join("");
 
     // La franja horaria va en el período y no en una nota al pie: sin ella, dos PDF del mismo
     // rango con recortes distintos son indistinguibles, y el de la noche parece mal sumado.
@@ -108,6 +122,9 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
         /* Lo pendiente y lo exonerado no entraron a caja: se despegan del total cobrado
            para que nadie los lea como parte de él. */
         .pending-line { border-bottom: none; color: #a33; padding-top: 2px; }
+        /* El equivalente en moneda base, bajo el monto en la moneda del diario. En bloque
+           para que caiga en su propia línea sin ensanchar la columna. */
+        .sub-amount { display: block; font-weight: normal; font-size: 8.5px; line-height: 1.3; }
     </style>
 </head>
 <body>
@@ -205,7 +222,7 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
             <div class="block-label">Cobros por método</div>
             ${metodosHtml}
             <div class="row-line total-line">
-                <span>Total cobrado</span>
+                <span>Total cobrado <span class="muted">· en ${esc(sym)}</span></span>
                 <span class="strong">${fmtP(totalMetodos)}</span>
             </div>
             <!-- Lo cobrado en el período no tiene por qué igualar lo facturado: una factura a

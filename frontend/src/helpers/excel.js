@@ -86,11 +86,15 @@ export function buildSalesExcel(data, range) {
     {
       name: "Métodos de Pago",
       rows: data.by_method,
+      // Las dos monedas en columnas separadas: la propia es contra la que se cuadra el banco,
+      // la base es la única que se puede sumar entre diarios de distinta moneda.
       headers: [
-        { key: "method_name", label: "Diario / Método" },
-        { key: "method_type", label: "Tipo" },
-        { key: "count",       label: "Cobros" },
-        { key: "total",       label: "Total ($)" },
+        { key: "method_name",     label: "Diario / Método" },
+        { key: "method_type",     label: "Tipo" },
+        { key: "count",           label: "Cobros" },
+        { key: "currency_symbol", label: "Moneda" },
+        { key: "total_journal",   label: "Total en su moneda" },
+        { key: "total",           label: "Total ($)" },
       ],
     },
     {

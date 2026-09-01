@@ -80,16 +80,30 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
     // pasado lo que haya pasado después con la factura. La consecuencia buscada es que esta
     // lista ya no tiene por qué sumar el ingreso bruto del período: lo pendiente por cobrar
     // no está acá, y lo cobrado hoy de una venta vieja sí.
+    //
+    // Cada diario se publica en las DOS monedas, como la matriz de cobros por día: `total`
+    // en base es lo único sumable entre diarios de distinta moneda —de ahí salen el total y
+    // los porcentajes—, pero lo que el cajero contó y lo que dice el estado de cuenta del
+    // banco son los bolívares de `total_journal`. Mostrar solo la referencia obligaba a
+    // multiplicar de cabeza por la tasa para cuadrar un punto de venta.
+    //
+    // amount está en moneda base y exchange_rate es la tasa aplicada en ese cobro, así que el
+    // producto devuelve el monto en la moneda del diario a la tasa del día en que se cobró
+    // —no a la de hoy, que es lo que descuadraba el pie del listado de pagos—.
     sequelize.query(
       `SELECT
          COALESCE(pj.name, 'Sin diario') AS method_name,
          COALESCE(pj.type, 'otro') AS method_type,
+         COALESCE(c.symbol, 'Ref.') AS currency_symbol,
+         COALESCE(c.is_base, true) AS is_base,
          COUNT(p.id)::int AS count,
-         COALESCE(SUM(p.amount), 0)::float AS total
+         COALESCE(SUM(p.amount), 0)::float AS total,
+         COALESCE(SUM(p.amount * COALESCE(p.exchange_rate, 1)), 0)::float AS total_journal
        FROM payments p
        LEFT JOIN payment_journals pj ON p.payment_journal_id = pj.id
+       LEFT JOIN currencies c ON c.id = pj.currency_id
        WHERE p.payment_journal_id IS NOT NULL ${tcP} ${whPay} ${sePay} ${dP}
-       GROUP BY pj.id, pj.name, pj.type
+       GROUP BY pj.id, pj.name, pj.type, c.symbol, c.is_base
        ORDER BY total DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),

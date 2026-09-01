@@ -4,6 +4,7 @@ import CustomSelect from "../../components/ui/CustomSelect";
 import { buildSalesExcel } from "../../helpers/excel";
 import { printSalesReport } from "../../helpers/printSalesReport";
 import { useApp } from "../../context/AppContext";
+import { fmtNumber } from "../../helpers/numbers";
 import {
  fmt$, fmtN, pct, METHOD_COLORS,
  useReport, defaultRange, useHourRange,
@@ -156,8 +157,18 @@ export default function SalesReport() {
  <span className="text-[11px] font-black uppercase tracking-wider text-content dark:text-white">{m.method_name}</span>
  <span className="text-[10px] font-bold text-content-subtle">{m.count} trans.</span>
  </div>
+ {/* El monto en la moneda del diario manda: es lo que el cajero contó y lo que trae
+     el estado de cuenta. La referencia queda debajo porque es lo único comparable
+     entre diarios —y lo que miden el porcentaje y la barra—. */}
  <div className="text-right">
+ {m.is_base === false && m.currency_symbol ? (
+ <>
+ <div className="text-[11px] font-black text-content dark:text-white tabular-nums">{m.currency_symbol} {fmtNumber(m.total_journal, 2)}</div>
+ <div className="text-[10px] font-bold text-content-subtle tabular-nums">{fmt$(m.total)}</div>
+ </>
+ ) : (
  <div className="text-[11px] font-black text-content dark:text-white tabular-nums">{fmt$(m.total)}</div>
+ )}
  <div className="text-[10px] font-black text-brand-500">{pct(m.total, totalCobrado)}%</div>
  </div>
  </div>
