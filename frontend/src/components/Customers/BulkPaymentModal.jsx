@@ -5,6 +5,7 @@ import DatePicker from "../ui/DatePicker";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import { fmtBase, todayISO, saleTotalAtRate } from "../../helpers";
+import RateField, { resolveRate } from "../ui/RateField";
 
 /**
  * Cobro de varias facturas del mismo cliente con un solo monto.
@@ -22,6 +23,9 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   const [form, setForm] = useState({
     amount: "",
     journal_id: "",
+    // Vacío = la tasa del sistema de la moneda del diario. Solo se llena si el cajero la
+    // escribe a mano para este cobro, igual que en el cobro de una factura suelta.
+    rate: "",
     reference_date: todayISO(),
     reference_number: "",
     notes: "",
@@ -44,8 +48,16 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
 
   const journal  = activeJournals.find(j => j.id === form.journal_id);
   const currency = journal?.currency_id ? activeCurrencies.find(c => c.id === parseInt(journal.currency_id)) : null;
-  const rate     = (!currency || currency.is_base) ? 1 : parseFloat(currency.exchange_rate || 1);
-  const sym      = currency?.symbol || baseCurrency?.symbol || "Ref.";
+  // Tasa de configuración de esa moneda, y la que de verdad rige este cobro.
+  //
+  // Faltaba poder escribirla, y hace la misma falta que en el cobro de una factura suelta: el
+  // cliente que trae tres cuentas viejas paga con la tasa del día en que paga, no con la que
+  // estaba cargada cuando se emitieron. Sin esto había que mover la tasa global —a todo el
+  // mundo— para registrar un cobro. Vale solo para este lote: viaja en payments.exchange_rate
+  // y es la que usan el arqueo y los reportes para convertir ESTOS movimientos.
+  const rateConfig = (!currency || currency.is_base) ? 1 : parseFloat(currency.exchange_rate || 1);
+  const rate       = (!currency || currency.is_base) ? 1 : resolveRate(form.rate, rateConfig);
+  const sym        = currency?.symbol || baseCurrency?.symbol || "Ref.";
 
   const amountLocal = parseFloat(String(form.amount).replace(",", ".")) || 0;
   const amountBase  = amountLocal / rate;
@@ -234,6 +246,9 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                 ...p,
                 journal_id: id,
                 amount: j ? deudaEnPagoAt(r).toFixed(2) : "",
+                // La tasa escrita a mano era de la moneda anterior: arrastrarla convertiría
+                // este cobro a un número que no tiene nada que ver.
+                rate: "",
                 // El vuelto se replantea con la moneda nueva: sus montos eran de la anterior.
                 change_parts: [{ journal_id: "", amount: "" }],
               }));
@@ -260,6 +275,26 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
             />
           </Field>
         </div>
+
+        {/* Solo cuando se cobra en otra moneda: en la base no hay nada que convertir. */}
+        {currency && !currency.is_base && (
+          <Field label="TASA DE CAMBIO">
+            <RateField
+              value={form.rate}
+              onChange={v => setForm(p => ({
+                ...p,
+                rate: v,
+                // El monto sigue a la tasa mientras sea la deuda completa: cambiar la tasa sin
+                // recalcularlo dejaba en pantalla una cifra que ya no saldaba lo seleccionado.
+                amount: p.amount === "" || parseFloat(String(p.amount).replace(",", ".")) === round2(deudaEnPagoAt(rate))
+                  ? deudaEnPagoAt(resolveRate(v, rateConfig)).toFixed(2)
+                  : p.amount,
+              }))}
+              configuredRate={rateConfig}
+              currency={currency}
+            />
+          </Field>
+        )}
 
         {rate !== 1 && amountLocal > 0 && (
           <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 tabular-nums -mt-1">
