@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { resolveImageUrl, buildBarcode, barcodeBars } from "../../helpers";
-import { zoneRows } from "./labelTemplate";
+import { zoneRows, LABEL_ELEMENTS } from "./labelTemplate";
 
 const mm = (v) => `${v}mm`;
 
@@ -10,6 +10,7 @@ const mm = (v) => `${v}mm`;
 export default function PriceLabel({
     product,
     template,
+    layoutMode = "zones",
     width,
     height,
     border = false,
@@ -18,7 +19,13 @@ export default function PriceLabel({
     convert,
     companyInfo,
     categoryName,
+    // Solo para el lienzo de edición: permite arrastrar los elementos y marca el seleccionado.
+    editable = false,
+    selectedId = null,
+    onSelect,
+    onDrag,
 }) {
+    const areaRef = useRef(null);
     const pad = Math.max(1.5, height * 0.08);
     const innerW = width - pad * 2;
 
@@ -156,14 +163,68 @@ export default function PriceLabel({
         );
     };
 
+    // ── Modo libre: cada elemento se posiciona en % del área útil ───────────
+    // Se trabaja en porcentaje y no en milímetros para que el diseño sobreviva al cambio de
+    // tamaño de etiqueta: lo que se arrastró en una 70×38 sigue proporcionado en una 40×30.
+    const startDrag = (e, el) => {
+        if (!editable) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onSelect?.(el.id);
+
+        const rect = areaRef.current?.getBoundingClientRect();
+        if (!rect || !onDrag) return;
+
+        const startX = e.clientX, startY = e.clientY;
+        const originX = el.x, originY = el.y;
+
+        const move = (ev) => {
+            const dx = ((ev.clientX - startX) / rect.width) * 100;
+            const dy = ((ev.clientY - startY) / rect.height) * 100;
+            onDrag(el.id, {
+                // El tope de la derecha depende del ancho de la caja, así no se sale por el borde
+                x: Math.round(Math.max(0, Math.min(100 - el.w, originX + dx))),
+                y: Math.round(Math.max(0, Math.min(96, originY + dy))),
+            });
+        };
+        const up = () => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", up);
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+    };
+
+    const freeItems = LABEL_ELEMENTS
+        .map(d => ({ id: d.id, ...template[d.id] }))
+        .filter(e => e.on);
+
     return (
         <div
-            className={`label-unit bg-white text-black overflow-hidden flex flex-col box-border ${border ? "border border-black" : ""}`}
+            className={`label-unit bg-white text-black overflow-hidden box-border ${layoutMode === "free" ? "block" : "flex flex-col"} ${border ? "border border-black" : ""}`}
             style={{ width: mm(width), height: mm(height), padding: mm(pad) }}
+            onPointerDown={editable ? () => onSelect?.(null) : undefined}
         >
-            {renderZone("top", "")}
-            {renderZone("mid", "flex-1 justify-center")}
-            {renderZone("bottom", "")}
+            {layoutMode === "free" ? (
+                <div ref={areaRef} className="relative w-full h-full">
+                    {freeItems.map(el => (
+                        <div
+                            key={el.id}
+                            onPointerDown={e => startDrag(e, el)}
+                            className={`absolute ${alignClass[el.align]} flex flex-col ${editable ? "cursor-move" : ""} ${editable && selectedId === el.id ? "outline outline-1 outline-brand-500" : ""}`}
+                            style={{ left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%` }}
+                        >
+                            {renderElement(el)}
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <>
+                    {renderZone("top", "")}
+                    {renderZone("mid", "flex-1 justify-center")}
+                    {renderZone("bottom", "")}
+                </>
+            )}
         </div>
     );
 }

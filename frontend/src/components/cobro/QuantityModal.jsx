@@ -27,15 +27,19 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
     const handleSave = () => {
         let clean = val.replace(/\s/g, "").replace(",", ".");
         let num = parseFloat(clean);
-        if (!isNaN(num) && num >= 0) {
-            if (isInteger) num = Math.floor(num);
-            const ok = onSave(item.id, parseFloat(num.toFixed(3)));
-            if (ok !== false) {
-                setError(null);
-                onClose();
-            } else {
-                setError("Stock insuficiente o límite alcanzado");
-            }
+        if (isNaN(num)) return setError("Escribe una cantidad");
+        if (isInteger) num = Math.floor(num);
+        // Confirmar en cero dejaba la línea en el carrito sumando nada: no se cobra —el cierre
+        // la descarta— pero se queda ahí ocupando sitio y haciendo dudar de si se cobró o no.
+        // Para sacar un producto está la X de su fila.
+        if (num <= 0) return setError("La cantidad debe ser mayor que cero");
+
+        const ok = onSave(item.id, parseFloat(num.toFixed(3)));
+        if (ok !== false) {
+            setError(null);
+            onClose();
+        } else {
+            setError("Stock insuficiente o límite alcanzado");
         }
     };
 

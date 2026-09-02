@@ -3,7 +3,7 @@ import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import PriceLabel from "./PriceLabel";
 import LabelDesignerPanel from "./LabelDesignerPanel";
-import { normalizeLayout, DEFAULT_TEMPLATE, LABEL_ELEMENTS } from "./labelTemplate";
+import { normalizeLayout, DEFAULT_TEMPLATE, LABEL_ELEMENTS, zonesToFree } from "./labelTemplate";
 
 // Tamaños de rollo/etiqueta más comunes (ancho × alto en mm)
 const ROLL_PRESETS = [
@@ -23,6 +23,7 @@ export default function PriceLabelsView({ products, onClose }) {
     const [layout, setLayout] = useState(() => normalizeLayout(settings?.price_label_template));
     const [showPanel, setShowPanel] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [selectedId, setSelectedId] = useState(null);
 
     const [selCurrency, setSelCurrency] = useState(baseCurrency || currencies[0] || { symbol: "Ref.", exchange_rate: 1 });
 
@@ -42,6 +43,15 @@ export default function PriceLabelsView({ products, onClose }) {
         () => activeCurrencies.find(c => String(c.id) === String(layout.altCurrencyId)) || null,
         [activeCurrencies, layout.altCurrencyId]
     );
+
+    const dims = layout.mode === "sheet" ? SHEET : layout.roll;
+
+    // El lienzo de edición se amplía para poder arrastrar con precisión: una 40×30 en tamaño
+    // real son apenas 150 px de ancho. El zoom no altera el diseño, que se guarda en proporción.
+    const PX_PER_MM = 96 / 25.4;
+    const editing = showPanel && layout.layoutMode === "free" && products.length > 0;
+    const canvasZoom = Math.min(3.5, Math.max(1.2, 460 / (dims.w * PX_PER_MM)));
+    const canvasPx = { w: dims.w * PX_PER_MM * canvasZoom, h: dims.h * PX_PER_MM * canvasZoom };
 
     // Convierte desde la moneda base a la pedida y parte el número en entero y decimales
     const convert = useCallback((basePrice, currency) => {
@@ -86,6 +96,43 @@ export default function PriceLabelsView({ products, onClose }) {
         });
     };
 
+    // Al pasar a libre por primera vez se heredan las posiciones que las zonas venían dibujando,
+    // para que el diseño no salte de golpe y se pueda seguir ajustando desde donde estaba.
+    const onLayoutMode = (value) => {
+        setTouched(true);
+        setLayout(p => (value === "free" && p.layoutMode !== "free"
+            ? { ...p, layoutMode: value, template: zonesToFree(p.template) }
+            : { ...p, layoutMode: value }));
+    };
+
+    // Ajuste fino con el teclado: arrastrar sirve para acomodar, las flechas para rematar.
+    useEffect(() => {
+        if (!editing || !selectedId) return;
+
+        const AXES = { ArrowLeft: ["x", -1], ArrowRight: ["x", 1], ArrowUp: ["y", -1], ArrowDown: ["y", 1] };
+        const onKey = (e) => {
+            const hit = AXES[e.key];
+            // Dentro de un campo numérico las flechas ya significan otra cosa
+            if (!hit || e.target.tagName === "INPUT") return;
+            e.preventDefault();
+
+            const [axis, dir] = hit;
+            const step = dir * (e.shiftKey ? 5 : 1);
+            setTouched(true);
+            setLayout(p => {
+                const el = p.template[selectedId];
+                const max = axis === "x" ? 100 - el.w : 96;
+                return {
+                    ...p,
+                    template: { ...p.template, [selectedId]: { ...el, [axis]: Math.max(0, Math.min(max, el[axis] + step)) } },
+                };
+            });
+        };
+
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [editing, selectedId]);
+
     const onReset = () => { setTouched(true); setLayout(p => ({ ...p, template: DEFAULT_TEMPLATE })); };
 
     const onSave = async () => {
@@ -110,13 +157,13 @@ export default function PriceLabelsView({ products, onClose }) {
         return chunks;
     }, [products]);
 
-    const dims = layout.mode === "sheet" ? SHEET : layout.roll;
 
     const labelFor = (p, idx) => (
         <PriceLabel
             key={`${p.id}-${idx}`}
             product={p}
             template={layout.template}
+            layoutMode={layout.layoutMode}
             width={dims.w}
             height={dims.h}
             border={layout.border}
@@ -208,6 +255,42 @@ export default function PriceLabelsView({ products, onClose }) {
             <div className="flex-1 flex min-h-0 print:block">
                 {/* ── Contenido imprimible ── */}
                 <div className={`flex-1 overflow-auto print:overflow-visible ${layout.mode === "roll" ? "mode-roll" : "mode-sheet"}`}>
+                    {/* Lienzo de edición: solo en pantalla, con el primer producto de muestra.
+                        Se arrastra acá y no sobre el listado para no repetir el gesto en cada
+                        una de las etiquetas de la tirada. */}
+                    {editing && (
+                        <div className="print:hidden bg-surface-1 dark:bg-surface-dark-1 border-b border-border/40 dark:border-white/5 py-6 flex flex-col items-center gap-3">
+                            <div className="text-[10px] font-black uppercase text-content-subtle dark:text-content-dark-muted">
+                                Arrastrá los elementos · muestra con {products[0]?.name}
+                            </div>
+                            <div style={{ width: canvasPx.w, height: canvasPx.h }}>
+                                <div style={{ transform: `scale(${canvasZoom})`, transformOrigin: "top left" }}>
+                                    <div className="shadow-xl ring-1 ring-black/10">
+                                        <PriceLabel
+                                            product={products[0]}
+                                            template={layout.template}
+                                            layoutMode="free"
+                                            width={dims.w}
+                                            height={dims.h}
+                                            border={layout.border}
+                                            currency={selCurrency}
+                                            altCurrency={altCurrency}
+                                            convert={convert}
+                                            companyInfo={companyInfo}
+                                            categoryName={products[0]?.category_name}
+                                            editable
+                                            selectedId={selectedId}
+                                            onSelect={setSelectedId}
+                                            onDrag={onElement}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="text-[9px] font-bold text-content-subtle dark:text-content-dark-muted">
+                                {dims.w} × {dims.h} mm · las posiciones se guardan en proporción
+                            </div>
+                        </div>
+                    )}
                     {layout.mode === "sheet" ? (
                         <div className="flex flex-col items-center gap-8 py-8 print:p-0 print:gap-0 bg-gray-100 dark:bg-black/20 min-h-full print:bg-white page-container">
                             {sheetPages.map((pageProducts, pageIdx) => (
@@ -230,6 +313,10 @@ export default function PriceLabelsView({ products, onClose }) {
                 {showPanel && (
                     <LabelDesignerPanel
                         template={layout.template}
+                        layoutMode={layout.layoutMode}
+                        onLayoutMode={onLayoutMode}
+                        selectedId={selectedId}
+                        onSelect={setSelectedId}
                         onElement={onElement}
                         onMove={onMove}
                         onReset={onReset}

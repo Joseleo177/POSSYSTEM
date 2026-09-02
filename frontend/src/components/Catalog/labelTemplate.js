@@ -38,21 +38,25 @@ export const LABEL_ELEMENTS = [
 
 // Diseño de fábrica: el mismo que la etiqueta tenía antes de que esto fuera configurable,
 // más el código de barras abajo, apagado por defecto para no cambiarle la etiqueta a nadie.
+// x / y / w son PORCENTAJES del área útil de la etiqueta, no milímetros: así el mismo diseño
+// arrastrado sobre una 70×38 se reacomoda solo al imprimirlo en una 40×30. Solo se usan en el
+// modo libre; en el modo por zonas manda zone/order/inline.
 export const DEFAULT_TEMPLATE = {
-    logo:      { on: false, zone: "top",    align: "left",   scale: 1,    inline: false, order: 0 },
-    store:     { on: false, zone: "top",    align: "right",  scale: 0.8,  inline: true,  order: 1 },
-    name:      { on: true,  zone: "top",    align: "left",   scale: 1,    inline: false, order: 2 },
-    category:  { on: false, zone: "top",    align: "left",   scale: 0.75, inline: false, order: 3 },
-    price:     { on: true,  zone: "mid",    align: "center", scale: 1,    inline: false, order: 0 },
-    price_alt: { on: false, zone: "mid",    align: "center", scale: 0.8,  inline: false, order: 1 },
-    unit:      { on: false, zone: "mid",    align: "center", scale: 0.75, inline: true,  order: 2 },
-    barcode:   { on: false, zone: "bottom", align: "center", scale: 1,    inline: false, order: 0 },
-    code:      { on: false, zone: "bottom", align: "center", scale: 0.75, inline: false, order: 1 },
-    date:      { on: false, zone: "bottom", align: "right",  scale: 0.7,  inline: false, order: 2 },
+    logo:      { on: false, zone: "top",    align: "left",   scale: 1,    inline: false, order: 0, x: 0,  y: 0,  w: 30 },
+    store:     { on: false, zone: "top",    align: "right",  scale: 0.8,  inline: true,  order: 1, x: 32, y: 2,  w: 68 },
+    name:      { on: true,  zone: "top",    align: "left",   scale: 1,    inline: false, order: 2, x: 0,  y: 0,  w: 100 },
+    category:  { on: false, zone: "top",    align: "left",   scale: 0.75, inline: false, order: 3, x: 0,  y: 30, w: 55 },
+    price:     { on: true,  zone: "mid",    align: "center", scale: 1,    inline: false, order: 0, x: 0,  y: 42, w: 100 },
+    price_alt: { on: false, zone: "mid",    align: "center", scale: 0.8,  inline: false, order: 1, x: 0,  y: 72, w: 100 },
+    unit:      { on: false, zone: "mid",    align: "center", scale: 0.75, inline: true,  order: 2, x: 60, y: 30, w: 40 },
+    barcode:   { on: false, zone: "bottom", align: "center", scale: 1,    inline: false, order: 0, x: 0,  y: 74, w: 100 },
+    code:      { on: false, zone: "bottom", align: "center", scale: 0.75, inline: false, order: 1, x: 0,  y: 92, w: 55 },
+    date:      { on: false, zone: "bottom", align: "right",  scale: 0.7,  inline: false, order: 2, x: 60, y: 92, w: 40 },
 };
 
 export const DEFAULT_LAYOUT = {
     mode: "roll",
+    layoutMode: "zones",
     roll: { w: 70, h: 38 },
     border: false,
     altCurrencyId: "",
@@ -86,11 +90,15 @@ export const normalizeLayout = (raw) => {
             scale: clamp(got.scale, 0.4, 2.5, def.scale),
             inline: typeof got.inline === "boolean" ? got.inline : def.inline,
             order: clamp(got.order, 0, 99, def.order),
+            x: clamp(got.x, 0, 100, def.x),
+            y: clamp(got.y, 0, 100, def.y),
+            w: clamp(got.w, 5, 100, def.w),
         };
     }
 
     return {
         mode: parsed.mode === "sheet" ? "sheet" : "roll",
+        layoutMode: parsed.layoutMode === "free" ? "free" : "zones",
         roll: {
             w: clamp(parsed.roll?.w, 15, 82, DEFAULT_LAYOUT.roll.w),
             h: clamp(parsed.roll?.h, 10, 300, DEFAULT_LAYOUT.roll.h),
@@ -101,6 +109,37 @@ export const normalizeLayout = (raw) => {
         altCurrencyId: parsed.altCurrencyId != null ? String(parsed.altCurrencyId) : "",
         template,
     };
+};
+
+// Pasar de zonas a libre sin que el diseño dé un salto: se estiman las coordenadas a partir de
+// las filas que las zonas venían dibujando. Es una aproximación —el alto real de cada línea solo
+// lo sabe el navegador— pero deja los elementos donde el usuario los estaba viendo, que es lo
+// que importa para seguir arrastrando desde ahí.
+const ROW_H = 16; // alto estimado de una fila, en % de la etiqueta
+
+export const zonesToFree = (template) => {
+    const next = { ...template };
+
+    for (const zone of ZONE_IDS) {
+        const rows = zoneRows(template, zone);
+        rows.forEach((row, i) => {
+            let y;
+            if (zone === "top") y = i * ROW_H;
+            else if (zone === "bottom") y = 100 - (rows.length - i) * ROW_H;
+            else y = 50 - (rows.length * ROW_H) / 2 + i * ROW_H;
+
+            const width = 100 / row.length;
+            row.forEach((el, j) => {
+                next[el.id] = {
+                    ...template[el.id],
+                    x: Math.round(j * width),
+                    y: Math.max(0, Math.min(96, Math.round(y))),
+                    w: Math.round(width),
+                };
+            });
+        });
+    }
+    return next;
 };
 
 // Elementos activos de una zona, ordenados y agrupados en filas: un elemento marcado `inline`

@@ -13,6 +13,10 @@ const ArrowIcon = ({ up }) => (
 // siguen viviendo en la barra superior porque se cambian en cada tirada, no en el diseño.
 export default function LabelDesignerPanel({
     template,
+    layoutMode,
+    onLayoutMode,
+    selectedId,
+    onSelect,
     onElement,
     onMove,
     onReset,
@@ -43,6 +47,25 @@ export default function LabelDesignerPanel({
                 <div className="bg-surface-2 dark:bg-surface-dark-2 rounded-xl p-3 border border-border/40 dark:border-white/5 space-y-3">
                     <h3 className="text-[10px] font-black uppercase text-content-subtle dark:text-content-dark-muted">Etiqueta</h3>
 
+                    <div>
+                        <div className="text-[10px] font-black uppercase text-content-subtle dark:text-content-dark-muted mb-1.5">Colocación</div>
+                        <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg border border-border/40 dark:border-white/5">
+                            <button onClick={() => onLayoutMode("zones")}
+                                className={`flex-1 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${layoutMode === "zones" ? "bg-brand-500 text-black" : "text-content-subtle hover:bg-white/5"}`}>
+                                Por zonas
+                            </button>
+                            <button onClick={() => onLayoutMode("free")}
+                                className={`flex-1 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${layoutMode === "free" ? "bg-brand-500 text-black" : "text-content-subtle hover:bg-white/5"}`}>
+                                Libre
+                            </button>
+                        </div>
+                        <p className="text-[9px] font-bold text-content-subtle dark:text-content-dark-muted mt-1.5 leading-tight">
+                            {layoutMode === "free"
+                                ? "Arrastrá cada elemento sobre la etiqueta. Las posiciones se guardan en proporción, así el diseño aguanta el cambio de tamaño de rollo."
+                                : "Cada elemento se acomoda solo dentro de su zona. Es lo más seguro cuando se imprime en varios tamaños."}
+                        </p>
+                    </div>
+
                     <div className="flex items-center justify-between gap-3">
                         <div className="text-[11px] font-bold text-content dark:text-content-dark">Marco de corte</div>
                         <label className="relative inline-flex items-center cursor-pointer">
@@ -72,9 +95,12 @@ export default function LabelDesignerPanel({
                         return (
                             <div
                                 key={def.id}
-                                className={`rounded-xl border transition-all ${el.on
-                                    ? "bg-surface-2 dark:bg-surface-dark-2 border-border/40 dark:border-white/10"
-                                    : "bg-surface-2/40 dark:bg-white/[0.02] border-border/30 dark:border-white/5"}`}
+                                onClick={() => el.on && onSelect?.(def.id)}
+                                className={`rounded-xl border transition-all ${selectedId === def.id && el.on
+                                    ? "bg-surface-2 dark:bg-surface-dark-2 border-brand-500/70 ring-1 ring-brand-500/30"
+                                    : el.on
+                                        ? "bg-surface-2 dark:bg-surface-dark-2 border-border/40 dark:border-white/10"
+                                        : "bg-surface-2/40 dark:bg-white/[0.02] border-border/30 dark:border-white/5"}`}
                             >
                                 <div className="flex items-center justify-between gap-2 p-3">
                                     <div className="min-w-0">
@@ -94,17 +120,31 @@ export default function LabelDesignerPanel({
                                 {el.on && (
                                     <div className="px-3 pb-3 space-y-2.5 border-t border-border/30 dark:border-white/5 pt-2.5">
                                         <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <div className="text-[9px] font-black uppercase text-content-subtle dark:text-content-dark-muted mb-1">Zona</div>
-                                                <CustomSelect
-                                                    value={el.zone}
-                                                    onChange={v => onElement(def.id, { zone: v })}
-                                                    options={ZONE_OPTIONS}
-                                                    height="h-8"
-                                                    boxClassName="text-[10px]"
-                                                    className="w-full"
-                                                />
-                                            </div>
+                                            {layoutMode === "zones" ? (
+                                                <div>
+                                                    <div className="text-[9px] font-black uppercase text-content-subtle dark:text-content-dark-muted mb-1">Zona</div>
+                                                    <CustomSelect
+                                                        value={el.zone}
+                                                        onChange={v => onElement(def.id, { zone: v })}
+                                                        options={ZONE_OPTIONS}
+                                                        height="h-8"
+                                                        boxClassName="text-[10px]"
+                                                        className="w-full"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <div className="text-[9px] font-black uppercase text-content-subtle dark:text-content-dark-muted mb-1">Ancho</div>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="number" min="5" max="100" value={Math.round(el.w)}
+                                                            onChange={e => onElement(def.id, { w: Math.min(100, Math.max(5, parseInt(e.target.value) || 5)) })}
+                                                            className="w-full h-8 bg-white/5 border border-border/40 dark:border-white/10 rounded-lg px-2 pr-5 text-[10px] font-bold outline-none focus:border-brand-500/60"
+                                                        />
+                                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black text-content-subtle">%</span>
+                                                    </div>
+                                                </div>
+                                            )}
                                             <div>
                                                 <div className="text-[9px] font-black uppercase text-content-subtle dark:text-content-dark-muted mb-1">Alineación</div>
                                                 <CustomSelect
@@ -130,6 +170,27 @@ export default function LabelDesignerPanel({
                                             />
                                         </div>
 
+                                        {layoutMode === "free" && (
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {["x", "y"].map(axis => (
+                                                    <div key={axis}>
+                                                        <div className="text-[9px] font-black uppercase text-content-subtle dark:text-content-dark-muted mb-1">
+                                                            {axis === "x" ? "Izquierda" : "Arriba"}
+                                                        </div>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="number" min="0" max="100" value={Math.round(el[axis])}
+                                                                onChange={e => onElement(def.id, { [axis]: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
+                                                                className="w-full h-8 bg-white/5 border border-border/40 dark:border-white/10 rounded-lg px-2 pr-5 text-[10px] font-bold outline-none focus:border-brand-500/60"
+                                                            />
+                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black text-content-subtle">%</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {layoutMode === "zones" && (
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={() => onMove(def.id, -1)}
@@ -155,6 +216,7 @@ export default function LabelDesignerPanel({
                                                 Misma línea
                                             </button>
                                         </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

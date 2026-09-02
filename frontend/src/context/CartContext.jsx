@@ -850,6 +850,9 @@ export function CartProvider({ children }) {
     // o por la tecla Enter disparada dos veces antes de que termine la petición.
     if (submittingRef.current) return;
     if (!cart.length) return notify("El carrito está vacío", "err");
+    // Las líneas en cero se descartan al armar el pedido; si no queda ninguna, el servidor
+    // respondería "items es requerido", que no le dice nada a quien está en la caja.
+    if (!cart.some(i => parseFloat(i.qty) > 0)) return notify("Ningún producto tiene cantidad", "err");
     if (!activeWarehouse) return notify("Selecciona un almacén antes de continuar", "err");
     if (!selectedCustomer) return notify("El cliente es requerido", "err");
     if (!selectedSerieId) return notify("La serie es requerida", "err");

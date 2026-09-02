@@ -416,6 +416,13 @@ export default function CartSidebar({
                                         readOnly={window.innerWidth < 1024}
                                         onClick={() => handleQtyModal(i)}
                                         onChange={e => setQtyDirect(i.id, e.target.value)}
+                                        onBlur={() => {
+                                            // Vacío y cero se permiten MIENTRAS se escribe —hacen
+                                            // falta para teclear "0,5"—, pero al salir del campo la
+                                            // línea no puede quedarse en cero: vuelve al mínimo.
+                                            const q = parseFloat(i.qty);
+                                            if (!(q > 0)) setQtyDirect(i.id, String(parseFloat(i.qty_step) || 1), true);
+                                        }}
                                         onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); searchInputRef.current?.focus(); } }}
                                         className="w-10 bg-transparent text-center text-[11px] font-black border-none outline-none dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none cursor-pointer lg:cursor-text"
                                     />
