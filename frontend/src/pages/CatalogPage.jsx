@@ -15,6 +15,7 @@ import PromotionsTab from "../components/Catalog/PromotionsTab";
 import ProductModal from "../components/ProductModal";
 import PublicLinkModal from "../components/Catalog/PublicLinkModal";
 import PriceLabelsView from "../components/Catalog/PriceLabelsView";
+import ImportProductsModal from "../components/Catalog/ImportProductsModal";
 
 const TABS = [
     { id: "products",   label: "Productos" },
@@ -39,6 +40,7 @@ export default function CatalogPage() {
     const [activeTab, setActiveTab] = useState("products");
     const [productModal, setProductModal] = useState(false);
     const [publicLinkModal, setPublicLinkModal] = useState(false);
+    const [importModal, setImportModal] = useState(false);
     // Vista lista/cuadrícula. Se recuerda entre sesiones: es una preferencia de trabajo,
     // no un filtro, y reiniciarla en cada carga resulta molesto.
     const [viewMode, setViewMode] = useState(() => localStorage.getItem("catalog_view") || "list");
@@ -210,6 +212,16 @@ export default function CatalogPage() {
                             title="Enlace de solo lectura para clientes">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m8.156-1.328l1.5-1.5a4 4 0 00-5.656-5.656l-3 3a4 4 0 000 5.656" /></svg>
                             <span className="hidden sm:inline">Compartir</span>
+                        </Button>
+                    )}
+                    {/* Importar crea y además pisa lo existente, así que pide las dos cosas,
+                        igual que la ruta. */}
+                    {can("products.create") && can("products.edit") && selectedProducts.length === 0 && (
+                        <Button onClick={() => setImportModal(true)} variant="ghost"
+                            className="h-8 px-2 sm:px-3 text-[10px] shadow-none border border-border dark:border-white/10 text-content-subtle hover:text-content"
+                            title="Cargar productos desde una plantilla de Excel">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                            <span className="hidden sm:inline">Importar</span>
                         </Button>
                     )}
                     {can("products.create") && selectedProducts.length === 0 && (
@@ -481,11 +493,22 @@ export default function CatalogPage() {
                 loading={loading}
                 warehouseId={warehouseId}
                 warehouseName={selectedWarehouseName}
+                warehouseCount={availableWarehouses.length}
             />
 
             <PublicLinkModal
                 open={publicLinkModal}
                 onClose={() => setPublicLinkModal(false)}
+            />
+
+            <ImportProductsModal
+                open={importModal}
+                onClose={() => setImportModal(false)}
+                warehouseId={warehouseId}
+                warehouseName={selectedWarehouseName}
+                warehouseCount={availableWarehouses.length}
+                notify={notify}
+                onDone={() => loadProducts(1, warehouseId)}
             />
 
             <ConfirmModal

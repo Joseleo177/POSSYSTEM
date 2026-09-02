@@ -128,6 +128,9 @@ export const api = {
     // Publica u oculta varios productos del catálogo público en una sola llamada
     setCatalogVisibility: (ids, visible) =>
       request("/products/catalog-visibility", { method: "PATCH", body: JSON.stringify({ ids, visible }) }),
+    // Carga masiva desde Excel. El archivo se lee en el navegador; aquí solo viajan las
+    // filas ya normalizadas, que el servidor revalida antes de escribir.
+    importar: (body) => request("/products/import", { method: "POST", body: JSON.stringify(body) }),
   },
   categories: {
     getAll:  ()          => request("/categories"),

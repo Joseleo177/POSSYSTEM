@@ -86,7 +86,7 @@ export function usePurchasesModals({
         try {
             // Se envía el formulario completo. Antes se armaba un payload a mano con solo
             // 6 campos y se descartaban en silencio costo, margen, código de barras, mínimo
-            // de stock y embalaje — todo lo que el usuario había llenado en el modal.
+            // de stock y presentación — todo lo que el usuario había llenado en el modal.
             const payload = {
                 ...form,
                 price: +form.price,

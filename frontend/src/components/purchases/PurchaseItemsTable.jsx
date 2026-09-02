@@ -23,9 +23,12 @@ export default function PurchaseItemsTable({
                     <tr className="border-b border-border/20 dark:border-white/[0.06] text-[10px] font-black text-content-subtle dark:text-white/30 uppercase tracking-widest">
                         <th className="px-4 py-3">Producto</th>
                         {showLots && <th className="px-4 py-3">Lote / Vence</th>}
-                        <th className="px-4 py-3 text-center">Cant.</th>
+                        {/* Aquí el rótulo no puede nombrar la presentación —cada línea puede traer
+                            uno distinto—, pero al menos dice de qué es la cantidad y cambia el
+                            "×" por "/", que se lee "por" y no como una multiplicación. */}
+                        <th className="px-4 py-3 text-center">Cant. Pres.</th>
                         <th className="px-4 py-3 text-center w-36">
-                            Costo×Emb.{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70">({invoiceSym})</span> : ""}
+                            Costo/Pres.{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70">({invoiceSym})</span> : ""}
                         </th>
                         <th className="px-4 py-3 text-right">C.Unit</th>
                         <th className="px-4 py-3 text-center">P.Venta</th>

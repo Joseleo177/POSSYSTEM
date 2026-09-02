@@ -221,6 +221,14 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
       if (prod.min_stock_own) prod.min_stock = ficha.min_stock;
       prod.cost_own = ficha.cost_price != null;
       if (prod.cost_own) prod.cost_price = ficha.cost_price;
+
+      // El margen se recalcula sobre el precio y el costo que acaban de quedar, que son los
+      // de esta sucursal. Guardado en el producto es el del precio general, y mostrarlo junto
+      // a cifras de sucursal daba un porcentaje que no se correspondía con ninguno de los dos
+      // números de al lado: 54% sobre un precio y un costo que dan 30%.
+      const margenSucursal = derivarMargen(prod.price, prod.cost_price, "");
+      if (margenSucursal != null) prod.profit_margin = margenSucursal;
+
       delete prod.stocks;
     } else if (warehouse_id) {
       prod.warehouse_stock = 0;

@@ -18,6 +18,18 @@ const normalizePkgUnit = (u) => {
     return PKG_UNITS.find(x => x.toLowerCase() === u.toLowerCase()) || u.toUpperCase();
 };
 
+// Plural de la presentación para los rótulos: CAJA → CAJAS, UNIDAD → UNIDADES, FARDO → FARDOS.
+// Regla del español: si termina en vocal, +S; si termina en consonante, +ES —por eso UNIDAD
+// no puede quedar en "UNIDADS"—, salvo la Y de los extranjerismos ya asentados (DISPLAY →
+// DISPLAYS). Las compuestas como MEDIA CAJA se dejan tal cual: "MEDIAS CAJAS" es correcto
+// pero suena torcido en una etiqueta, y mejor no pluralizar que inventar una forma rara.
+const pluralPkg = (u) => {
+    const s = (u || "").trim().toUpperCase();
+    if (!s || s.endsWith("S") || s.includes(" ")) return s;
+    if (s.endsWith("Z")) return `${s.slice(0, -1)}CES`;
+    return /[AEIOUY]$/.test(s) ? `${s}S` : `${s}ES`;
+};
+
 const EMPTY_FORM = {
     package_unit: "UNIDAD",
     package_size: "1",
@@ -186,6 +198,12 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
 
     const pkgPriceBase = parseFloat(form.package_price) / invoiceRate;
     const calc = selected ? calcPurchaseItem({ ...form, package_price: pkgPriceBase, product: selected }) : null;
+
+    // Cómo se nombra la presentación en los rótulos. "UNIDAD" no es una presentación sino la ausencia
+    // de uno: ahí se compra suelto y los rótulos hablan de unidades, no de cajas.
+    const pkgSingular = normalizePkgUnit(form.package_unit);
+    const pkgPlural   = pluralPkg(pkgSingular);
+    const esSuelto    = pkgSingular === "UNIDAD";
 
     const openProductModal = async () => {
         if (!categories.length) {
@@ -444,10 +462,13 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                         </div>
 
                         <div className="px-5 pt-4 pb-5 space-y-4">
-                            {/* Embalaje (mismo término que en la ficha del producto: "Unidades de Embalaje") */}
+                            {/* Los rótulos nombran la presentación elegida: "Cant. de CAJAS" en vez
+                                de "Cant. a Pedir", que no decía de qué y se leía igual pidiendo
+                                una caja que una unidad. El "×" tampoco ayudaba: se lee como una
+                                multiplicación cuando lo que dice es "cuántas trae cada uno". */}
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Embalaje</label>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Presentación</label>
                                     <CustomSelect
                                         value={form.package_unit}
                                         onChange={val => setF("package_unit", val)}
@@ -461,17 +482,23 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">{selected?.unit || "Unidad"} × Embalaje</label>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
+                                        {/* Comprando suelto no hay envase del que hablar, y el
+                                            campo va deshabilitado en 1: el rótulo lo explica. */}
+                                        {esSuelto ? "Sin presentación" : `${selected?.unit || "Unidad"} por ${pkgSingular}`}
+                                    </label>
                                     <input
                                         type="text" inputMode="decimal"
                                         value={form.package_size}
                                         onChange={e => setQtyField("package_size", e.target.value)}
-                                        disabled={form.package_unit?.toLowerCase() === "unidad"}
-                                        className={`input h-9 text-center font-black tabular-nums ${form.package_unit?.toLowerCase() === "unidad" ? "opacity-30 cursor-not-allowed" : ""}`}
+                                        disabled={esSuelto}
+                                        className={`input h-9 text-center font-black tabular-nums ${esSuelto ? "opacity-30 cursor-not-allowed" : ""}`}
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Cant. a Pedir</label>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
+                                        Cant. de {pkgPlural}
+                                    </label>
                                     <input
                                         type="text" inputMode="decimal"
                                         value={form.package_qty}
@@ -486,7 +513,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                             <div className={selected.sellable === false ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
-                                        Costo × Embalaje{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70 normal-case font-bold">({invoiceSym})</span> : ""}
+                                        Costo por {pkgSingular}{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70 normal-case font-bold">({invoiceSym})</span> : ""}
                                     </label>
                                     <input
                                         type="text" inputMode="decimal"

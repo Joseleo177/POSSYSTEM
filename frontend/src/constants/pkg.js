@@ -10,4 +10,5 @@ export const PKG_UNITS = [
     "MEDIA CAJA",
     "FARDO",
     "SACO",
+    "CESTA",
 ];

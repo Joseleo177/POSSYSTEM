@@ -1,4 +1,5 @@
 const { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility } = require("../services/products");
+const { importProducts } = require("../services/products/importProducts");
 const { broadcast } = require("../services/sseService");
 const { assertWarehouseAccess } = require("../middleware/auth");
 
@@ -37,6 +38,28 @@ module.exports = {
     broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
     return result;
   }),
+  // Va aparte del `wrap` común: cuando el archivo trae filas mal, la respuesta tiene que
+  // llevar el detalle de cuáles y por qué, y el wrap solo devuelve el mensaje.
+  importar: async (req, res) => {
+    try {
+      const wid = parseInt(req.body?.warehouse_id, 10) || null;
+      if (wid) await assertWarehouseAccess(req, wid);
+      const result = await importProducts({
+        rows: req.body?.rows,
+        warehouse_id: wid,
+        company_id: req.employee?.company_id ?? null,
+      });
+      broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      if (!err.isOperational) console.error(err);
+      res.status(err.status || 500).json({
+        ok: false,
+        message: err.message || "No se pudo importar el archivo",
+        ...(err.detalles ? { detalles: err.detalles } : {}),
+      });
+    }
+  },
   setCatalogVisibility: wrap(async req => {
     const result = await setCatalogVisibility({
       ids: req.body.ids,

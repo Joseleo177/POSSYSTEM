@@ -57,7 +57,7 @@ export default function PurchaseForm({ state }) {
                             <thead>
                                 <tr>
                                     <th className="text-left">Producto</th>
-                                    <th className="text-left">Embalaje</th>
+                                    <th className="text-left">Presentación</th>
                                     <th className="text-center">Cant.</th>
                                     <th className="text-center">
                                         Costo×Emb.{inInvoiceCur && <span className="ml-1 text-brand-500/70">({invoiceSym})</span>}

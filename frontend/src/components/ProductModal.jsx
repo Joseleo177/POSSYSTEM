@@ -16,7 +16,7 @@ const EMPTY = {
     visible_in_catalog: false, sellable: true
 };
 
-export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName, initialName = "" }) {
+export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName, warehouseCount = 1, initialName = "" }) {
     const { notify, activeCurrencies } = useApp();
     const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
     const exchangeRate = parseFloat(localCurrency?.exchange_rate || 0);
@@ -27,6 +27,11 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
     const [removeImage, setRemoveImage] = useState(false);
+
+    // Nombrar la sucursal solo tiene sentido para quien maneja varias y necesita saber cuál
+    // está tocando. A quien atiende una sola, "Precio en CENTRO" no le aclara nada: le cuenta
+    // que existen otras tiendas, que es justo lo que el recorte por sucursal evita.
+    const sucursal = warehouseId && warehouseName && warehouseCount > 1 ? warehouseName : null;
 
 
     useEffect(() => {
@@ -407,7 +412,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 <label className="label flex items-center justify-between">
                                     {/* Mismo criterio que el stock de abajo: se nombra la sucursal
                                         en la que se está trabajando, porque es la que se cambia. */}
-                                    {warehouseId && warehouseName ? `Precio en ${warehouseName}` : "Precio de Venta"}
+                                    {sucursal ? `Precio en ${sucursal}` : "Precio de Venta"}
                                     {localCurrency && (
                                         <div className="flex text-[9px] font-black rounded overflow-hidden border border-border/30 dark:border-white/10">
                                             <button type="button" onClick={() => setPriceCurrency("base")}
@@ -437,7 +442,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             {editData?.id && !form.is_combo && !form.is_service && (
                                 <div>
                                     <label className="label">
-                                        {warehouseId && warehouseName ? `Stock en ${warehouseName}` : "Stock Actual"}
+                                        {sucursal ? `Stock en ${sucursal}` : "Stock Actual"}
                                     </label>
                                     <div className="bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border border-border/40 rounded-lg px-3 flex justify-between items-center gap-2 cursor-not-allowed opacity-80 h-10 min-w-0 overflow-hidden" title={`${fmtQtyUnit(form.stock ?? 0, form.unit)} (solo lectura)`}>
                                         <span className="text-sm font-bold truncate min-w-0 tabular-nums">{fmtQtyUnit(form.stock ?? 0, form.unit)}</span>
@@ -541,7 +546,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     También para servicios: un servicio tiene costo (la hora del técnico, el
                     material que consume) y sin cargarlo queda fuera del reporte de márgenes,
                     que solo mide lo que tiene costo conocido. Lo que sí se les oculta es el
-                    embalaje y el stock mínimo, que no aplican. */}
+                    presentación y el stock mínimo, que no aplican. */}
                 {(
                     <div className="space-y-3 animate-in fade-in duration-300 mt-2">
                         {/* ── Rentabilidad ── */}
@@ -620,7 +625,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         {!form.is_combo && !form.is_service && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
-                                <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">Unidades de Embalaje</h3>
+                                <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">Presentación de Compra</h3>
                                 <div className="flex gap-2">
                                     <div className="flex-1">
                                         <CustomSelect
@@ -633,7 +638,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                                     ...(form.package_unit && !PKG_UNITS.includes(form.package_unit.toUpperCase()) ? [form.package_unit.toUpperCase()] : [])
                                                 ])).map(u => ({ value: u, label: u }))
                                             ]}
-                                            placeholder="Unidad de Embalaje"
+                                            placeholder="Presentación"
                                             className="w-full"
                                         />
                                     </div>
@@ -646,7 +651,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
                             <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
                                 <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">
-                                    {warehouseId && warehouseName ? `Alerta de Reposición en ${warehouseName}` : "Alerta de Reposición"}
+                                    {sucursal ? `Alerta de Reposición en ${sucursal}` : "Alerta de Reposición"}
                                 </h3>
                                 <div className="relative">
                                     <input value={form.min_stock} onChange={e => set("min_stock", e.target.value)} type="number" className="input" placeholder="Min. para notificar..." />
