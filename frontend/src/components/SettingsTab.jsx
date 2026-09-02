@@ -8,12 +8,15 @@ import { resolveImageUrl } from "../helpers";
 import { applyBrandColor, clearBrandColor, DEFAULT_BRAND } from "../helpers/brandColor";
 import { useApp } from "../context/AppContext";
 
+// El respaldo es de la base entera, no de una empresa: solo el superusuario. El backend
+// lo exige igual (ver routes/backup.js); esto es para no ofrecer una pestaña que va a
+// responder 403.
 const SECTIONS = [
     ["empresa", "Empresa"],
     ["suscripcion", "Mi Suscripción"],
     ["factura", "Factura"],
     ["currencies", "Monedas"],
-    ["respaldo", "Respaldo"],
+    ["respaldo", "Respaldo", { superuserOnly: true }],
 ];
 
 const FIELDS_EMPRESA = [
@@ -35,7 +38,9 @@ const FIELDS_FACTURA = [
 ];
 
 export default function SettingsTab({ notify }) {
-    const { loadCurrencies, loadSettings } = useApp();
+    const { loadCurrencies, loadSettings, employee } = useApp();
+    const visibleSections = SECTIONS.filter(([, , opts]) =>
+        !opts?.superuserOnly || !!employee?.is_superuser);
     const [settings, setSettings] = useState({});
     const [companyInfo, setCompanyInfo] = useState(null);
     const [currencies, setCurrencies] = useState([]);
@@ -177,7 +182,7 @@ export default function SettingsTab({ notify }) {
 
     const subheader = (
         <div className="flex gap-1 px-4 border-b border-border/20 dark:border-white/5">
-            {SECTIONS.map(([key, label]) => (
+            {visibleSections.map(([key, label]) => (
                 <button
                     key={key}
                     onClick={() => setSection(key)}

@@ -103,6 +103,15 @@ const permit = (...perms) => (req, res, next) => {
   res.status(403).json({ ok: false, message: "Sin permiso para esta acción" });
 };
 
+// Reservado a quien opera la plataforma, no a quien administra una empresa. Va aparte de
+// `permit` a propósito: los permisos granulares se conceden dentro de una empresa y no
+// sirven para proteger lo que cruza empresas — un admin con el permiso seguiría siendo
+// admin de la suya solamente.
+const superuser = (req, res, next) => {
+  if (req.is_superuser) return next();
+  res.status(403).json({ ok: false, message: "Acceso denegado" });
+};
+
 // El admin (permissions.all) y el superusuario no están atados a almacenes concretos.
 const isAdmin = (req) => !!(req.is_superuser || req.employee?.permissions?.all);
 
@@ -171,6 +180,6 @@ const warehouseAccess = (getId = (req) => req.params.id, opts = {}) => async (re
 };
 
 module.exports = {
-  auth, permit, hasPermission, warehouseAccess, assertWarehouseAccess,
+  auth, permit, superuser, hasPermission, warehouseAccess, assertWarehouseAccess,
   visibleWarehouseIds, employeeWarehouseIds, isAdmin,
 };
