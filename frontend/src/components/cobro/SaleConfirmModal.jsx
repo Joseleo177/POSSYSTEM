@@ -26,9 +26,11 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // Entrega a crédito: el backend asigna el correlativo fiscal y deja la venta en
     // 'pendiente'. Sin esto la venta fiada se quedaba en borrador y no aparecía ni en el
     // reporte de ventas pendientes ni en el cierre de caja.
+    // Devuelve si la venta quedó facturada, para que quien la use pueda decidir si cierra.
     const confirmCredit = async () => {
         if (!receipt?.customer_id && !receipt?.customer_name) {
-            return notify("Una venta a crédito requiere un cliente identificado", "err");
+            notify("Una venta a crédito requiere un cliente identificado", "err");
+            return false;
         }
         setCreditLoading(true);
         try {
@@ -41,10 +43,22 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                 amount_paid: paidBase,
                 balance: currentBalance,
             });
+            return true;
         } catch (e) {
             notify(e.message, "err");
+            return false;
+        } finally {
+            setCreditLoading(false);
         }
-        setCreditLoading(false);
+    };
+
+    // Salida del modal cuando la venta sigue sin resolver: se factura a crédito y recién
+    // entonces se cierra. Si el crédito falla —falta el cliente, se cayó la red— el modal se
+    // queda abierto: es preferible que el cajero lo resuelva ahora, con el cliente delante,
+    // a que la venta se pierda en Pendientes sin número y sin a quién cobrarle.
+    const salirComoCredito = async () => {
+        const ok = await confirmCredit();
+        if (ok) onNext();
     };
 
     const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
@@ -188,7 +202,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         if (key === "credit") return creditLoading ? undefined : confirmCredit();
         if (key === "print")  return printDirect();
         if (key === "ticket") return setShowReceiptModal(true);
-        if (key === "next")   return onNext();
+        if (key === "next")   return isUnresolved ? salirComoCredito() : onNext();
     };
 
     useEffect(() => {
@@ -202,7 +216,8 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
             if (e.key === "Escape" || e.key === "Enter") {
                 e.preventDefault();
                 e.stopPropagation();
-                onNext();
+                // Mismo destino que el botón: sin resolver, se sale facturando a crédito.
+                if (isUnresolved) salirComoCredito(); else onNext();
                 return;
             }
             // Los dígitos disparan la acción de esa posición. Se descartan las combinaciones
@@ -220,7 +235,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         // eslint-disable-next-line react-hooks/exhaustive-deps
         // `printing` va en las dependencias: sin él, el handler quedaba capturado con el valor
         // viejo y dos pulsaciones seguidas del atajo lanzaban dos impresiones.
-    }, [onNext, showReceiptModal, showPayModal, actionKeys.join(","), creditLoading, printing]);
+    }, [onNext, showReceiptModal, showPayModal, actionKeys.join(","), creditLoading, printing, isUnresolved]);
     // La insignia describe el ESTADO de la factura, no la acción que se acaba de hacer.
     // "Abono parcial" nombraba el movimiento; lo que importa aquí es que queda saldo.
     const STATUS_LABELS = {
@@ -377,19 +392,27 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                             Ver Ticket
                         </Button>
-                        {/* Si la venta sigue sin resolver, el botón dice a dónde va: sin esto
-                            el cajero salía sin saber que quedaba un borrador sin factura. */}
-                        <Button onClick={onNext} className="flex-1 min-w-0 h-9 shadow-none" title={isUnresolved ? "La venta queda sin cobrar, en Facturas Pendientes" : undefined}>
+                        {/* Una venta ya no puede quedarse en borrador: o se cobra, o sale a
+                            crédito con su factura. Salir de aquí sin resolver la dejaba sin
+                            número, como un documento a medias en Pendientes. Ahora la salida
+                            la factura a crédito, que es lo que de hecho ocurrió: la mercancía
+                            se entregó y queda por cobrar. */}
+                        <Button
+                            onClick={isUnresolved ? salirComoCredito : onNext}
+                            disabled={creditLoading}
+                            className="flex-1 min-w-0 h-9 shadow-none"
+                            title={isUnresolved ? "Emite la factura y la deja por cobrar" : undefined}
+                        >
                             <KeyHint n={numOf("next")} />
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            {isUnresolved ? "Dejar Pendiente" : "Siguiente"}
+                            {isUnresolved ? (creditLoading ? "..." : "Dejar a Crédito") : "Siguiente"}
                         </Button>
                     </div>
 
                     {isUnresolved && (
                         <p className="text-[10px] font-bold text-content-subtle dark:text-white/40 text-center leading-relaxed pt-0.5">
-                            Sin cobrar ni entregar a crédito, queda como borrador
-                            <span className="text-warning"> sin número de factura</span> en Facturas Pendientes.
+                            Al salir se emite la factura
+                            <span className="text-warning"> a crédito</span>, por cobrar a nombre del cliente.
                         </p>
                     )}
 

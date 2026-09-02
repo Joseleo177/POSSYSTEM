@@ -57,7 +57,10 @@ export default function ReceiptInfo({ state }) {
 
                 {/* Proveedor */}
                 <div className="md:col-span-3">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Proveedor</label>
+                    {/* El borrador se guarda sin proveedor —es el papel de trabajo donde se
+                        arma la lista antes de decidir a quién comprarle—, pero confirmar o
+                        recibir sí lo exige, así que se marca desde el principio. */}
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Proveedor <span className="text-danger">*</span></label>
 
                     {selectedSupplier ? (
                         <div className="h-9 flex items-center justify-between gap-3 bg-brand-500/5 border border-brand-500/20 rounded-lg px-3 animate-in zoom-in-95 duration-200">

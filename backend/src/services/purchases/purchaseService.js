@@ -346,6 +346,14 @@ async function confirmOrder(id, req) {
   if (purchase.status !== 'borrador') {
     const e = new Error("Solo se pueden confirmar órdenes en estado borrador"); e.status = 400; throw e;
   }
+  // Una orden confirmada es un compromiso con alguien: de ahí sale la cuenta por pagar y a
+  // quién se le reclama la mercancía. En borrador se admite sin proveedor a propósito —es el
+  // papel de trabajo donde se arma la lista antes de decidir a quién comprarle—, igual que el
+  // almacén de destino, que tampoco se exige hasta recibir.
+  if (!purchase.supplier_id && !purchase.supplier_name) {
+    const e = new Error("Elige el proveedor antes de confirmar la orden");
+    e.status = 400; e.isOperational = true; throw e;
+  }
   await purchase.update({ status: 'pendiente' });
   return getOne(id);
 }
@@ -361,6 +369,13 @@ async function receivePurchase(id, req) {
       const e = new Error("Debe seleccionar un almacén de destino antes de recibir la mercancía");
       e.status = 400;
       throw e;
+    }
+    // Se repite acá y no solo en confirmar: un borrador se puede recibir de una vez, sin pasar
+    // por pendiente, y esa mercancía entra al inventario con un costo que hay que poder
+    // atribuirle a alguien.
+    if (!purchase.supplier_id && !purchase.supplier_name) {
+      const e = new Error("Elige el proveedor antes de recibir la mercancía");
+      e.status = 400; e.isOperational = true; throw e;
     }
 
     const items = await PurchaseItem.findAll({ where: { purchase_id: id }, transaction });

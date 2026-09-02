@@ -276,7 +276,9 @@ export default function PurchaseDetails({ state }) {
 
             {/* Proveedor */}
             <div>
-              <p className={`${LABEL} mb-1.5`}>Proveedor</p>
+              {/* Marcado como requerido: sin él la orden no se puede confirmar ni recibir,
+                  y es mejor decirlo acá que dejar que lo descubra al darle al botón. */}
+              <p className={`${LABEL} mb-1.5`}>Proveedor <span className="text-danger">*</span></p>
               {localSupplier ? (
                 <div className="h-9 flex items-center gap-2 bg-brand-500/5 border border-brand-500/20 rounded-lg px-3">
                   <div className="flex-1 min-w-0">
