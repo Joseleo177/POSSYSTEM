@@ -72,22 +72,18 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                 + <span className="hidden sm:inline">NUEVA ORDEN</span><span className="sm:hidden">NUEVA</span>
             </Button>
         );
-        if (view === "detail" || view === "new") {
-            return (
-                <Button variant="ghost" onClick={() => state.setView("list")} className="h-8 px-2.5 sm:px-3 text-[10px]">
-                    <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                    <span className="hidden sm:inline">VOLVER AL LISTADO</span><span className="sm:hidden">VOLVER</span>
-                </Button>
-            );
-        }
+        // Volver ya no vive aquí: es navegación, no una acción sobre el documento, y va a la
+        // izquierda del título (ver la prop `onBack` de Page).
         return null;
     };
 
     return (
-        <Page 
-            module="MÓDULO DE COMPRAS" 
-            title={getPageTitle()} 
+        <Page
+            module="MÓDULO DE COMPRAS"
+            title={getPageTitle()}
             actions={getPageActions()}
+            onBack={view === "detail" || view === "new" ? () => state.setView("list") : undefined}
+            backLabel="Volver al listado"
         >
             <div className={`flex-1 flex flex-col min-h-0 ${view !== "list" ? "p-4 overflow-auto" : ""}`}>
                 {view === "list" && (

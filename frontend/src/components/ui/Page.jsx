@@ -1,6 +1,9 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
-export default function Page({ module = "Módulo", title, subheader, actions, children }) {
+// onBack: vuelta a la pantalla anterior. Va a la IZQUIERDA, pegada al título, y no entre las
+// acciones de la derecha: volver no es una acción sobre lo que se está viendo sino salir de
+// ello, y es donde se lo busca —el mismo sitio donde estaría el "atrás" del navegador—.
+export default function Page({ module = "Módulo", title, subheader, actions, onBack, backLabel = "Volver", children }) {
     const barRef = useRef(null);
     const [desvanecer, setDesvanecer] = useState(false);
 
@@ -27,6 +30,21 @@ export default function Page({ module = "Módulo", title, subheader, actions, ch
 
             {/* Header */}
             <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 flex items-center justify-between gap-2 sm:gap-3 border-b border-border/30 dark:border-white/5 min-w-0">
+                {onBack && (
+                    <button
+                        onClick={onBack}
+                        title={backLabel}
+                        aria-label={backLabel}
+                        className="shrink-0 h-8 pl-1.5 pr-2 sm:pr-3 flex items-center gap-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:bg-surface-2 dark:hover:bg-white/5 transition-all"
+                    >
+                        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                        </svg>
+                        {/* En móvil solo la flecha: el texto se comería el ancho del título. */}
+                        <span className="hidden sm:inline">{backLabel}</span>
+                    </button>
+                )}
+
                 <div className="min-w-0 shrink-0 max-w-[40%] xs:max-w-none">
                     <div className="text-[9px] sm:text-[10px] font-black text-brand-500 uppercase tracking-widest leading-none mb-0.5 sm:mb-1 truncate">
                         {module}
