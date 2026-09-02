@@ -32,7 +32,6 @@ export const LEGACY_MAP = {
     "series.view", "series.manage",
     "journals.view", "journals.manage",
     "currencies.view", "currencies.manage",
-    "backup.manage",
     "reports.view", "reports.audit",
     "accounting.view", "accounting.income", "accounting.expense", "accounting.void", "accounting.delete",
     "sales.view", "sales.create", "sales.edit", "sales.void", "sales.credit", "sales.cash",

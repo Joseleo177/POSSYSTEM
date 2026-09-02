@@ -6,10 +6,14 @@
 //
 // Formato de la clave: "modulo.accion". En el rol se guardan como { "sales.create": true }.
 //
-// Sobre los módulos sueltos (series, journals, currencies, backup): antes vivían todos
-// dentro de `config`, que terminó siendo un segundo administrador —quien lo tenía tocaba la
+// Sobre los módulos sueltos (series, journals, currencies): antes vivían todos dentro de
+// `config`, que terminó siendo un segundo administrador —quien lo tenía tocaba la
 // numeración fiscal, las cajas, las tasas y los respaldos, además de anular ventas—. Cada
 // uno pasa a ser su propio permiso.
+//
+// Los respaldos no están acá y no es un olvido: el archivo es un pg_dump de la base entera,
+// con los datos de todas las empresas dentro. Eso no es concedible desde una empresa, así
+// que la pantalla la protege el guard `superuser` (ver middleware/auth.js) y no un permiso.
 const MODULES = [
   {
     key: 'sales',
@@ -133,13 +137,6 @@ const MODULES = [
       { key: 'edit', label: 'Editar configuración' },
     ],
   },
-  {
-    key: 'backup',
-    label: 'Respaldos',
-    actions: [
-      { key: 'manage', label: 'Generar y descargar respaldos' },
-    ],
-  },
 ];
 
 // Todas las claves válidas, para validar lo que llega desde la pantalla de Roles.
@@ -206,7 +203,6 @@ const LEGACY_MAP = {
     'series.view', 'series.manage',
     'journals.view', 'journals.manage',
     'currencies.view', 'currencies.manage',
-    'backup.manage',
     'reports.view', 'reports.audit',
     'accounting.view', 'accounting.income', 'accounting.expense', 'accounting.void', 'accounting.delete',
     'sales.view', 'sales.create', 'sales.edit', 'sales.void', 'sales.credit', 'sales.cash',
