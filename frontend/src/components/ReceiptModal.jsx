@@ -226,6 +226,9 @@ export function receiptCurrency(s, displayCurrency, baseCurrency) {
 // impresión del modal, para que ambos caminos den exactamente el mismo comprobante.
 export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 80, baseCurrency = null) {
     const storeName = companyInfo?.name || "MI TIENDA POS";
+    // Mientras no haya homologación esto no es una factura fiscal, y el papel no debe decir
+    // que lo es. Sale de Configuración para que el día que se homologue baste cambiarlo ahí.
+    const docName = companyInfo?.doc_name || "Documento de Venta";
     const s = normalizeSale(sale);
     const { rate, sym } = receiptCurrency(s, displayCurrency, baseCurrency);
     const totals = calcReceiptTotals(s, rate, sym);
@@ -244,7 +247,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
 <html>
 <head>
     <meta charset="utf-8" />
-    <title>Factura ${s.invoice_number || s.id}</title>
+    <title>${docName} ${s.invoice_number || s.id}</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap');
 
@@ -441,9 +444,12 @@ export default function ReceiptModal({ open, onClose, sale }) {
 
     const dateStr = fmtDate(s.created_at);
     const invoiceLabel = s.invoice_number || `#${s.id}`;
+    // Cómo se llama el documento. Sale de Configuración porque hasta que el sistema no esté
+    // homologado lo que se entrega no es una factura fiscal, y el papel no debe afirmarlo.
+    const docLabel = companyInfo?.doc_name || "Documento de Venta";
 
     return (
-        <Modal open={open} onClose={onClose} title={`FACTURA ${invoiceLabel}`} width={380}>
+        <Modal open={open} onClose={onClose} title={`${docLabel.toUpperCase()} ${invoiceLabel}`} width={380}>
             {/* Encabezado empresa */}
             <div className="text-center mb-3 pb-3 border-b border-border/10 dark:border-white/5">
                 {companyInfo?.show_header !== false && (
@@ -469,7 +475,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
             {/* Metadata */}
             <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-3 mb-3 space-y-1">
                 <div className="flex justify-between items-center py-1 text-xs">
-                    <span className="text-content-muted dark:text-content-dark-muted">Factura N°</span>
+                    <span className="text-content-muted dark:text-content-dark-muted">{docLabel} N°</span>
                     <span className="text-content dark:text-content-dark font-black tracking-tight">{invoiceLabel}</span>
                 </div>
                 <div className="flex justify-between items-center py-1 text-xs">

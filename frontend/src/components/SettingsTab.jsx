@@ -32,6 +32,11 @@ const FIELDS_EMPRESA = [
 ];
 
 const FIELDS_FACTURA = [
+    // Cómo se llama el papel que se entrega al cliente. Va primero porque es lo que el cliente
+    // lee: mientras el sistema no esté homologado ante el SENIAT lo que emite no es una
+    // factura fiscal, y decir que lo es en el documento es afirmar algo que no corresponde.
+    // El día de la homologación se cambia acá y queda parejo en el ticket y en el carta.
+    ["sales_doc_name", "Nombre del documento de venta", "text", "Documento de Venta"],
     ["tax_name", "Nombre del impuesto", "text", "Ej: IVA"],
     ["tax_rate", "Tasa de impuesto (%)", "number", "16"],
     ["receipt_footer", "Mensaje pie de factura", "text", "¡Gracias por su compra!"],

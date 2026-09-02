@@ -170,6 +170,11 @@ export function AppProvider({ children }) {
     footer:   settings.receipt_footer || "¡Gracias por su compra!",
     tax_name: settings.tax_name      || "",
     tax_rate: settings.tax_rate      || "",
+    // Cómo se llama el papel que se le entrega al cliente. Mientras el sistema no esté
+    // homologado ante el SENIAT lo que emite NO es una factura fiscal, así que llamarla así
+    // en el documento es decir algo que no es. El día de la homologación esto se cambia acá
+    // —una vez, desde Configuración— y queda bien en todas las impresiones a la vez.
+    doc_name: settings.sales_doc_name || "Documento de Venta",
     show_header: (settings.receipt_show_header || "true") === "true",
   };
 

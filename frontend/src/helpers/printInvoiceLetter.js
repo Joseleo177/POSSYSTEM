@@ -19,6 +19,9 @@ const esc = v => String(v ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&
 export function printInvoiceLetter({ sale, totals, companyInfo }) {
     const s = sale;
     const storeName = companyInfo?.name || "MI TIENDA POS";
+    // El rótulo del documento viene de Configuración: hasta homologarse esto no es una factura
+    // fiscal. Ya decía "Documento de venta" fijo; ahora sigue lo que se haya configurado.
+    const docName = companyInfo?.doc_name || "Documento de Venta";
     const invoiceLabel = s.invoice_number || `#${s.id}`;
     const showHeader = companyInfo?.show_header !== false;
 
@@ -47,7 +50,7 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
     <meta charset="utf-8" />
     <!-- El navegador propone el título como nombre del archivo al "Guardar como PDF", así que
          lleva tienda y número: el cliente recibe "Documento A-0048 - Mi Tienda.pdf". -->
-    <title>Documento ${esc(invoiceLabel)} - ${esc(storeName)}</title>
+    <title>${esc(docName)} ${esc(invoiceLabel)} - ${esc(storeName)}</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
@@ -124,7 +127,7 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
             <!-- Este es el formato carta: un documento de venta que el cliente se lleva o
                  recibe en PDF, no el papel que sale de la impresora de la caja. Llamarlo
                  "ticket" era describir el otro comprobante. -->
-            <div class="doc-title">Documento de venta</div>
+            <div class="doc-title">${esc(docName)}</div>
             <div class="doc-warning">Documento no fiscal</div>
         </div>
         ${showHeader && companyInfo?.logo_url ? `<img src="${resolveImageUrl(companyInfo.logo_url)}" class="logo" />` : ""}
