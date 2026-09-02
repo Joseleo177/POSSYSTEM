@@ -1,5 +1,12 @@
 const BASE = (import.meta.env.VITE_API_URL || "") + "/api";
 
+// El stream mantiene una conexión abierta mientras la caja esté abierta. Eso es gratis
+// contra un servidor propio, pero en serverless cada conexión sostiene una función viva
+// hasta su tope de duración y EventSource reconecta sola, en bucle, todo el turno.
+// Por eso va apagado salvo que el build lo encienda (Docker); sin él, cada consumidor
+// se apoya en su refresco periódico, que ya existía como red de seguridad.
+export const SSE_ENABLED = import.meta.env.VITE_SSE_ENABLED === "true";
+
 let _es = null;
 const _listeners = {};   // event → Set<callback>
 
@@ -8,7 +15,7 @@ function _dispatch(event, data) {
 }
 
 export function initSSE(token) {
-  if (_es) return;
+  if (!SSE_ENABLED || _es) return;
   _es = new EventSource(`${BASE}/events/stream?token=${encodeURIComponent(token)}`);
 
   _es.addEventListener('currencies:updated', (e) => _dispatch('currencies:updated', JSON.parse(e.data)));

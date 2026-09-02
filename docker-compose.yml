@@ -43,6 +43,10 @@ services:
       JWT_SECRET:  ${JWT_SECRET:-supersecretkey_change_in_production}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       LOG_LEVEL:   ${LOG_LEVEL:-info}
+      # ── Tiempo real ────────────────────────────────────────────
+      # Aquí el backend es un proceso permanente, así que sostener el stream no cuesta
+      # nada. En serverless va apagado (ver SSE_ENABLED en config/envValidator.js).
+      SSE_ENABLED: ${SSE_ENABLED:-true}
       # ── Modo NUBE — Supabase (dejar vacío para modo local) ─────
       # Si se proveen SUPABASE_URL y SUPABASE_SERVICE_KEY el
       # backend usará Supabase en lugar del contenedor db.
@@ -79,6 +83,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Vite hornea las VITE_* en el bundle, así que esto va en build, no en environment.
+        VITE_SSE_ENABLED: ${SSE_ENABLED:-true}
     container_name: pos_frontend
     restart: unless-stopped
     ports:

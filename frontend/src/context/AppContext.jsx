@@ -6,6 +6,9 @@ import { applyBrandColor, clearBrandColor, rememberBrandColor, applyRememberedBr
 
 const AppContext = createContext(null);
 
+// La tasa del día cambia una vez al día; un minuto de retraso como mucho sobra de sobra.
+const CURRENCIES_REFRESH_MS = 60_000;
+
 // El color de marca llega con los ajustes, es decir tras una ida al servidor. Pintarlo desde
 // localStorage antes del primer render evita que la interfaz aparezca en teal y cambie de
 // color a medio segundo de haber entrado.
@@ -125,7 +128,18 @@ export function AppProvider({ children }) {
     // Fallback sin costo: refresca solo cuando el usuario vuelve al tab
     const onVisible = () => { if (document.visibilityState === 'visible') loadCurrencies(); };
     document.addEventListener('visibilitychange', onVisible);
-    return () => { unsubSSE(); document.removeEventListener('visibilitychange', onVisible); };
+    // Red de seguridad, igual que la grilla de productos (ver REFRESH_MS en useCobroProducts).
+    // El aviso por visibilitychange no basta: una caja pasa el turno entero en la misma
+    // pantalla sin cambiar de pestaña, y ahí la tasa del día se quedaba vieja cuando el
+    // evento en vivo no llegaba. Un minuto sobra: la tasa se carga una vez al día.
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') loadCurrencies();
+    }, CURRENCIES_REFRESH_MS);
+    return () => {
+      unsubSSE();
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [employee, loadCurrencies, setCurrencies]);
 
   // Cerrar SSE al hacer logout

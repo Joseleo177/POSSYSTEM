@@ -2,12 +2,21 @@
 const router  = require('express').Router();
 const jwt     = require('jsonwebtoken');
 const { addClient } = require('../services/sseService');
+const env     = require('../config/envValidator');
 
 const SECRET = process.env.JWT_SECRET;
 
 // GET /api/events/stream?token=<jwt>
 // EventSource no soporta headers custom → token por query param
 router.get('/stream', (req, res) => {
+  // Con SSE apagado (ver SSE_ENABLED) se corta aquí, antes de abrir nada. El 503 importa:
+  // ante un status distinto de 200 EventSource da la conexión por fallida y NO reintenta,
+  // así que una caja con el bundle viejo cargado pega una sola vez y se rinde. Si en vez
+  // de eso abriéramos el stream y lo cerráramos, reconectaría en bucle cada 3 segundos.
+  if (!env.SSE_ENABLED) {
+    return res.status(503).json({ ok: false, message: 'SSE deshabilitado en este entorno' });
+  }
+
   const token = req.query.token;
   if (!token) return res.status(401).json({ ok: false, message: 'Token requerido' });
 
