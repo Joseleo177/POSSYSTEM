@@ -1,6 +1,13 @@
 import { useEffect, useRef } from "react";
 import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
-import { fmtQtyUnit } from "../../../helpers/unitFormatter";
+import { isIntegerUnit } from "../../../helpers/unitFormatter";
+
+// Solo el número, sin el nombre de la unidad: dentro del botón redondo de agregar (40px)
+// "3 UNIDADES" no cabe en una línea y se parte en dos, ilegible. La unidad ya se explica en
+// el nombre del producto y en el paso a paso del modal — aquí solo hace falta la cantidad.
+const soloNumero = (qty, unit) => isIntegerUnit(unit)
+    ? Math.round(parseFloat(qty) || 0).toLocaleString("es-VE")
+    : (parseFloat(qty) || 0).toLocaleString("es-VE", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
 // Panel "papel sobre la mesa": todo lo de la categoría activa —foto grande, pestañas para
 // cambiar sin volver a los mosaicos, lista de platos— vive dentro de UN panel claro, y no
@@ -84,7 +91,7 @@ function Row({ p, inCart, fmt, baseCur, altCur, canOrder, onOpenAdd }) {
                     ].join(" ")}
                 >
                     {inCart ? (
-                        <span className="text-[12px] font-black tabular-nums">{fmtQtyUnit(inCart.qty, p.unit)}</span>
+                        <span className="text-[13px] font-black tabular-nums">{soloNumero(inCart.qty, p.unit)}</span>
                     ) : (
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
                     )}
