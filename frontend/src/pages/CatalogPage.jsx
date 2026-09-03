@@ -24,7 +24,7 @@ const TABS = [
 ];
 
 export default function CatalogPage() {
-    const { employee, activeCurrencies } = useApp();
+    const { employee, activeCurrencies, company } = useApp();
     const {
         products, setProducts, search, setSearch, loadProducts, can,
         categories, notify, loading,
@@ -166,7 +166,7 @@ export default function CatalogPage() {
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                                 <span className="hidden sm:inline">Imprimir</span> ({selectedProducts.length})
                             </Button>
-                            {can("products.edit") && (
+                            {can("products.edit") && company?.catalog_enabled && (
                                 <>
                                     <Button onClick={() => bulkVisibility(true)} variant="ghost"
                                         className="h-8 px-2 sm:px-3 text-[10px] shadow-none bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black"
@@ -206,7 +206,10 @@ export default function CatalogPage() {
                     {/* Compartir y Nuevo se esconden mientras haya selección: no aplican a lo
                         seleccionado y, sumados a Imprimir, Publicar y Ocultar, dejaban seis
                         botones peleando por la barra. Vuelven al soltar la selección. */}
-                    {can("config.edit") && selectedProducts.length === 0 && (
+                    {/* El extra del catálogo público lo enciende el superusuario por empresa
+                        (ver CompanyModal): sin él, el enlace que este botón arma no responde
+                        nada en público, así que mejor no ofrecerlo. */}
+                    {can("config.edit") && company?.catalog_enabled && selectedProducts.length === 0 && (
                         <Button onClick={() => setPublicLinkModal(true)} variant="ghost"
                             className="h-8 px-2 sm:px-3 text-[10px] shadow-none border border-border dark:border-white/10 text-content-subtle hover:text-brand-500"
                             title="Enlace de solo lectura para clientes">
@@ -351,25 +354,27 @@ export default function CatalogPage() {
                                                 ))}
                                             </div>
                                         </div>
-                                        <div>
-                                            <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mb-1.5">Catálogo público</div>
-                                            <div className="grid grid-cols-3 gap-1">
-                                                {[
-                                                    { value: "",    label: "Todos" },
-                                                    { value: "yes", label: "Público" },
-                                                    { value: "no",  label: "Oculto" },
-                                                ].map(opt => (
-                                                    <button key={opt.value} onClick={() => setFilterVisible(opt.value)}
-                                                        className={`px-2 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                                                            filterVisible === opt.value
-                                                                ? "bg-brand-500 text-black"
-                                                                : "bg-surface-3 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
-                                                        }`}>
-                                                        {opt.label}
-                                                    </button>
-                                                ))}
+                                        {company?.catalog_enabled && (
+                                            <div>
+                                                <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mb-1.5">Catálogo público</div>
+                                                <div className="grid grid-cols-3 gap-1">
+                                                    {[
+                                                        { value: "",    label: "Todos" },
+                                                        { value: "yes", label: "Público" },
+                                                        { value: "no",  label: "Oculto" },
+                                                    ].map(opt => (
+                                                        <button key={opt.value} onClick={() => setFilterVisible(opt.value)}
+                                                            className={`px-2 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                                                filterVisible === opt.value
+                                                                    ? "bg-brand-500 text-black"
+                                                                    : "bg-surface-3 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
+                                                            }`}>
+                                                            {opt.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
                                         {activeFilterCount > 0 && (
                                             <button onClick={() => { clearFilters(); setShowFilters(false); }} className="w-full py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-danger hover:bg-danger/10 transition-all border border-danger/20">
                                                 Limpiar filtros

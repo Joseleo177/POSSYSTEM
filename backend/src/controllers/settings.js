@@ -24,7 +24,7 @@ const getAll = async (req, res) => {
     if (company_id) {
       const { Company, Employee } = require("../models");
       const company = await Company.findByPk(company_id, {
-        attributes: ['id', 'name', 'tax_id', 'plan_name', 'subscription_status', 'expires_at', 'max_users']
+        attributes: ['id', 'name', 'tax_id', 'plan_name', 'subscription_status', 'expires_at', 'max_users', 'catalog_enabled']
       });
       if (company) {
         const userCount = await Employee.count({ where: { company_id, active: true } });

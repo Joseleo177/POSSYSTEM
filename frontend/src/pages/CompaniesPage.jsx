@@ -408,9 +408,16 @@ export default function CompaniesPage() {
                                         </td>
                                         <td>
                                             <div className="flex flex-col gap-1">
-                                                <span className="badge badge-info shadow-none w-fit">
-                                                    {c.plan_name || "Básico"}
-                                                </span>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="badge badge-info shadow-none w-fit">
+                                                        {c.plan_name || "Básico"}
+                                                    </span>
+                                                    {c.catalog_enabled && (
+                                                        <span className="badge shadow-none w-fit bg-violet-500/10 text-violet-500 border border-violet-500/20" title="Tiene el extra de catálogo público">
+                                                            Catálogo
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <span className="text-[10px] font-bold text-content-subtle tabular-nums">
                                                     Vence: {c.expires_at ? new Date(c.expires_at).toLocaleDateString() : "Ilimitado"}
                                                 </span>

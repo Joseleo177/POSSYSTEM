@@ -20,6 +20,11 @@ module.exports = (sequelize, DataTypes) => {
     subscription_status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'Demo' },
     expires_at: { type: DataTypes.DATE, allowNull: true },
     max_users: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 5 },
+    // Extra que solo el superusuario enciende por empresa (ver Gestión de Empresas). No es
+    // un ajuste de la propia empresa: aunque configure tema, banners y slug, el catálogo no
+    // responde en público mientras esto siga en false (ver resolveCompanyId en
+    // publicCatalogService).
+    catalog_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

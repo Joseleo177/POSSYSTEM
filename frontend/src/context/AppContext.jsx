@@ -55,11 +55,16 @@ export function AppProvider({ children }) {
 
   // ── Settings ───────────────────────────────────────────────
   const [settings, setSettings] = useState({});
+  // Fila de `companies`, no ajustes: plan, vencimiento y extras como catalog_enabled. Vive
+  // aparte de `settings` porque no lo edita la propia empresa — lo trae la misma respuesta
+  // de /api/settings (ver controllers/settings.js) para no pagar una petición aparte.
+  const [company, setCompany] = useState(null);
 
   const loadSettings = useCallback(async () => {
     try {
       const r = await api.settings.getAll();
       setSettings(r.data);
+      setCompany(r.company || null);
       // Se aplica aquí y no en la pantalla de Configuración porque el color es de la
       // empresa, no del usuario: todo empleado que entra debe ver la interfaz en su color,
       // aunque no tenga permiso para cambiarlo.
@@ -189,7 +194,7 @@ export function AppProvider({ children }) {
       // Notify
       notification, notify,
       // Settings
-      settings, loadSettings, storeName, companyInfo, printerWidth,
+      settings, loadSettings, storeName, companyInfo, company, printerWidth,
       // Currencies
       currencies, activeCurrencies, baseCurrency, loadCurrencies,
       // Journals

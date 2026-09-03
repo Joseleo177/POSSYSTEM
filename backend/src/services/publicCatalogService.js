@@ -1,4 +1,4 @@
-const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, ProductStock, Warehouse, CatalogBanner, Promotion, BenefitTag, Sequelize, sequelize } = require("../models");
+const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, ProductStock, Warehouse, CatalogBanner, Promotion, BenefitTag, Company, Sequelize, sequelize } = require("../models");
 const { tenantStorage } = require("../utils/tenantStorage");
 const { imageUrl } = require("../utils/imageStorage");
 const { calculateComboStockAndCost } = require("./products/productService");
@@ -96,7 +96,17 @@ async function resolveCompanyId(slug) {
   const clean = String(slug || "").trim().toLowerCase();
   if (!isValidSlug(clean)) return null;
   const row = await Setting.findOne({ where: { key: SLUG_KEY, value: clean } });
-  return row?.company_id ?? null;
+  if (!row?.company_id) return null;
+
+  // El catálogo público es un extra que enciende el superusuario por empresa (ver Gestión
+  // de Empresas), no algo que la propia empresa se active desde su panel. Una tienda puede
+  // tener tema, banners y slug configurados de sobra y aun así no responder en público si
+  // nadie le prendió este interruptor — por eso se revalida acá y no solo al guardar el
+  // slug, que es donde vivía el único control hasta ahora.
+  const company = await Company.findByPk(row.company_id, { attributes: ["catalog_enabled"] });
+  if (!company?.catalog_enabled) return null;
+
+  return row.company_id;
 }
 
 // Datos de cabecera de la tienda. Se exponen solo campos de vitrina: nombre, logo y

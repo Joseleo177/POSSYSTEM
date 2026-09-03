@@ -45,7 +45,7 @@ const create = async (req, res) => {
   try {
     if (!req.is_superuser) return res.status(403).json({ ok: false, message: "Acceso denegado" });
 
-    const { name, tax_id, address, phone, email, plan_name, subscription_status, expires_at, max_users, admin_username, admin_password } = req.body;
+    const { name, tax_id, address, phone, email, plan_name, subscription_status, expires_at, max_users, catalog_enabled, admin_username, admin_password } = req.body;
     if (!name) return res.status(400).json({ ok: false, message: "Nombre es requerido" });
 
     const wantedUser = admin_username?.trim() || null;
@@ -80,7 +80,8 @@ const create = async (req, res) => {
         plan_name: plan_name || 'Básico',
         subscription_status: subscription_status || 'Demo',
         expires_at: expDate,
-        max_users: max_users || 5
+        max_users: max_users || 5,
+        catalog_enabled: !!catalog_enabled
       }, { transaction });
 
       const adminRole = await Role.findOne({ where: { name: 'admin' }, transaction });
@@ -144,14 +145,15 @@ const update = async (req, res) => {
   try {
     if (!req.is_superuser) return res.status(403).json({ ok: false, message: "Acceso denegado" });
     const { id } = req.params;
-    const { name, tax_id, address, phone, email, active, plan_name, subscription_status, expires_at, max_users } = req.body;
+    const { name, tax_id, address, phone, email, active, plan_name, subscription_status, expires_at, max_users, catalog_enabled } = req.body;
 
     const company = await Company.findByPk(id);
     if (!company) return res.status(404).json({ ok: false, message: "Empresa no encontrada" });
 
     await company.update({
       name, tax_id, address, phone, email, active,
-      plan_name, subscription_status, expires_at: normalizeExpiry(expires_at), max_users
+      plan_name, subscription_status, expires_at: normalizeExpiry(expires_at), max_users,
+      catalog_enabled: !!catalog_enabled
     });
     // Suspender o reactivar tiene que notarse ya: sin esto, la caché del middleware seguiría
     // dejando pasar (o bloqueando) a esa empresa hasta que venciera el TTL.

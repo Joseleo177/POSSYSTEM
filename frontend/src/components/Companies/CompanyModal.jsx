@@ -17,7 +17,8 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
         subscription_status: "Demo",
         expires_at: "",
         max_users: 5,
-        active: true
+        active: true,
+        catalog_enabled: false
     });
 
     useEffect(() => {
@@ -40,6 +41,7 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                 expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                 max_users: 5,
                 active: true,
+                catalog_enabled: false,
                 admin_username: "",
                 admin_password: ""
             });
@@ -171,6 +173,28 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                             />
                         </div>
                     </div>
+                </div>
+
+                {/* No es un ajuste que la propia empresa deba poder tocar: es el interruptor
+                    del extra, así que vive aquí y no en su panel de Ajustes. Configurar tema,
+                    banners o el enlace no sirve de nada mientras esto siga apagado — el
+                    catálogo público responde 404 aunque todo lo demás esté listo. */}
+                <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${form.catalog_enabled ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
+                    <div>
+                        <div className="text-xs font-bold text-content dark:text-content-dark">Catálogo público (extra)</div>
+                        <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5">
+                            Permite a esta empresa activar y personalizar su propia vitrina pública.
+                        </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={!!form.catalog_enabled}
+                            onChange={e => setForm({ ...form, catalog_enabled: e.target.checked })}
+                        />
+                        <div className="w-9 h-5 bg-border/50 peer-focus:outline-none dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
+                    </label>
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-border/10 dark:border-white/5">

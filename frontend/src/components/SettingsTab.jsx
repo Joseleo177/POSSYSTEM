@@ -48,10 +48,17 @@ const FIELDS_FACTURA = [
 
 export default function SettingsTab({ notify }) {
     const { loadCurrencies, loadSettings, employee } = useApp();
-    const visibleSections = SECTIONS.filter(([, , opts]) =>
-        !opts?.superuserOnly || !!employee?.is_superuser);
     const [settings, setSettings] = useState({});
     const [companyInfo, setCompanyInfo] = useState(null);
+    // Vitrina es el extra del catálogo público: no viene incluido para todas las empresas,
+    // lo enciende el superusuario por empresa (ver CompanyModal). Mientras no se sepa si
+    // esta empresa lo tiene, la pestaña se queda oculta — mostrarla y ocultarla al llegar
+    // la respuesta se ve peor que un instante sin ella.
+    const visibleSections = SECTIONS.filter(([key, , opts]) => {
+        if (opts?.superuserOnly) return !!employee?.is_superuser;
+        if (key === "vitrina") return !!companyInfo?.catalog_enabled;
+        return true;
+    });
     const [currencies, setCurrencies] = useState([]);
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
