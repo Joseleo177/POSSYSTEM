@@ -87,7 +87,7 @@ export default function CatalogLayout({ catalog, token }) {
                     store={store} showBack onBack={closeProduct}
                     cartCount={cart.length} cartTotal={cartTotal} fmt={fmt} baseCur={baseCur}
                     onOpenCart={() => setCartOpen(true)} ordersEnabled={ordersEnabled}
-                    identity={identity} openOrdersCount={openOrdersCount} onOpenProfile={openProfileModal}
+                    identity={identity} openOrdersCount={openOrdersCount} onOpenProfile={openProfileModal} onLogout={requestLogout}
                     bgColor={store?.bg_color}
                 />
                 <ProductDetail

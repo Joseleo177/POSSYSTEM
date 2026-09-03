@@ -14,7 +14,7 @@ const DEFAULT_BG = "#0A0A0A";
 export default function MenuHeader({
     store, showBack, onBack,
     cartCount, cartTotal, fmt, baseCur, onOpenCart, ordersEnabled,
-    identity, openOrdersCount, onOpenProfile,
+    identity, openOrdersCount, onOpenProfile, onLogout,
     branch, canChangeBranch, onChangeBranch,
     bgColor,
 }) {
@@ -77,6 +77,24 @@ export default function MenuHeader({
                                     {openOrdersCount}
                                 </span>
                             )}
+                        </button>
+                    )}
+
+                    {/* Directo desde la cabecera y no solo dentro de la ficha de perfil: en
+                        una tablet compartida en la mesa, el cliente que termina necesita
+                        salir en un toque, sin que el siguiente vea su pedido o sus datos un
+                        segundo de más. onLogout ya trae su propia confirmación (LogoutConfirm)
+                        cuando hay algo en el carrito, así que un toque accidental no pierde
+                        nada sin avisar. */}
+                    {identity && onLogout && (
+                        <button
+                            type="button"
+                            onClick={onLogout}
+                            aria-label="Cerrar sesión"
+                            title="Cerrar sesión"
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                        >
+                            <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                         </button>
                     )}
 
