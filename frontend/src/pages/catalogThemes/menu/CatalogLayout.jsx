@@ -111,7 +111,7 @@ export default function CatalogLayout({ catalog, token }) {
                 cartCount={cart.length} cartTotal={cartTotal} fmt={fmt} baseCur={baseCur}
                 onOpenCart={() => setCartOpen(true)} ordersEnabled={ordersEnabled}
                 bgColor={store?.bg_color}
-                identity={identity} openOrdersCount={openOrdersCount} onOpenProfile={openProfileModal}
+                identity={identity} openOrdersCount={openOrdersCount} onOpenProfile={openProfileModal} onLogout={requestLogout}
                 branch={branch} canChangeBranch={warehouses.length > 1} onChangeBranch={openBranchGate}
             />
 
