@@ -4,7 +4,7 @@ import { useApp } from "../../context/AppContext";
 export default function ProductTable({
     products, canEditProducts, canDeleteProducts, openEditProduct, setDeleteProductDialog,
     selectedProducts = [], onToggleSelect, onSelectAll, isSelectionMode = false,
-    priceCurrency = "base", localCurrency = null, onToggleVisible
+    priceCurrency = "base", localCurrency = null, onToggleVisible, catalogEnabled = false
 }) {
     const { baseCurrency } = useApp();
     const fmtPrice = (n) => {
@@ -35,7 +35,7 @@ export default function ProductTable({
                     <th className="text-left">Categoría</th>
                     <th className="text-center">Stock</th>
                     <th className="text-right">Precio</th>
-                    {canEditProducts && <th className="text-center w-[90px]">Público</th>}
+                    {canEditProducts && catalogEnabled && <th className="text-center w-[90px]">Público</th>}
                     <th className="text-right w-[140px] pr-6">Acciones</th>
                 </tr>
             </thead>
@@ -115,7 +115,7 @@ export default function ProductTable({
                         {/* Visibilidad en el catálogo público: interruptor directo en la
                             fila. Repasar qué se publica y qué no es una pasada sobre la
                             lista completa, no una visita al modal de cada producto. */}
-                        {canEditProducts && (
+                        {canEditProducts && catalogEnabled && (
                             <td className="text-center">
                                 {/* Un insumo no se publica, así que en vez del interruptor
                                     —que el servidor rechazaría— la fila dice por qué. */}

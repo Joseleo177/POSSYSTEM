@@ -4,8 +4,11 @@ import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
 import { resolveImageUrl } from "../../helpers";
+import { useApp } from "../../context/AppContext";
 
 export default function CategoriesTab({ notify, can, triggerNew }) {
+    const { company } = useApp();
+    const catalogEnabled = !!company?.catalog_enabled;
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [modal, setModal] = useState(false);       // false | "new" | {id, name, color}
@@ -150,6 +153,13 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
                             <span className="text-[11px] font-bold text-content-subtle dark:text-white/30 uppercase tracking-wide">{form.color}</span>
                         </div>
                     </div>
+                    {/* Frase corta y foto no sirven de nada sin el catálogo público (extra
+                        que enciende el superusuario por empresa, ver CompanyModal): la
+                        primera se ve en los mosaicos del tema de menú y la segunda en la
+                        sección de categorías de la vitrina — ninguna de las dos existe si
+                        esta empresa no tiene esa vitrina. */}
+                    {catalogEnabled && (
+                    <>
                     <div>
                         <label className="label">FRASE CORTA (OPCIONAL)</label>
                         <input
@@ -190,6 +200,8 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
                             </div>
                         </div>
                     </div>
+                    </>
+                    )}
                 </div>
                 <div className="flex justify-end gap-2 pt-4 border-t border-border/10 dark:border-white/5 mt-4">
                     <Button variant="ghost" onClick={() => setModal(false)}>Cancelar</Button>

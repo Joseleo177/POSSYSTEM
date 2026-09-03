@@ -450,6 +450,7 @@ export default function CatalogPage() {
                                     priceCurrency={priceCurrency}
                                     localCurrency={localCurrency}
                                     onToggleVisible={(p) => applyVisibility([p.id], !p.visible_in_catalog)}
+                                    catalogEnabled={!!company?.catalog_enabled}
                                 />
                             ) : (
                                 <ProductTable
@@ -465,6 +466,7 @@ export default function CatalogPage() {
                                     priceCurrency={priceCurrency}
                                     localCurrency={localCurrency}
                                     onToggleVisible={(p) => applyVisibility([p.id], !p.visible_in_catalog)}
+                                    catalogEnabled={!!company?.catalog_enabled}
                                 />
                             )}
                         </div>

@@ -7,7 +7,7 @@ import { useApp } from "../../context/AppContext";
 export default function ProductCards({
     products, canEditProducts, canDeleteProducts, openEditProduct, setDeleteProductDialog,
     selectedProducts = [], onToggleSelect, isSelectionMode = false,
-    priceCurrency = "base", localCurrency = null, onToggleVisible
+    priceCurrency = "base", localCurrency = null, onToggleVisible, catalogEnabled = false
 }) {
     const { baseCurrency } = useApp();
     const fmtPrice = (n) => {
@@ -81,7 +81,7 @@ export default function ProductCards({
                             {/* Publicado en el catálogo público: se marca solo cuando lo
                                 está. Un distintivo en cada tarjeta oculta ensuciaría la
                                 grilla, y lo excepcional es lo que conviene señalar. */}
-                            {p.visible_in_catalog && !isSelectionMode && (
+                            {catalogEnabled && p.visible_in_catalog && !isSelectionMode && (
                                 <span className="absolute top-2 left-2 w-5 h-5 rounded-full bg-brand-500 text-black flex items-center justify-center shadow"
                                     title="Visible en el catálogo público">
                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
@@ -108,7 +108,7 @@ export default function ProductCards({
                                 <div className="absolute bottom-2 right-2 flex gap-1 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
                                     {/* El ojo no aparece en un insumo: publicarlo es lo único
                                         que ese botón hace, y el servidor lo rechaza. */}
-                                    {canEditProducts && p.sellable !== false && (
+                                    {canEditProducts && catalogEnabled && p.sellable !== false && (
                                     <button onClick={() => onToggleVisible?.(p)}
                                         className={`w-7 h-7 rounded-lg bg-white/90 dark:bg-black/70 backdrop-blur flex items-center justify-center shadow active:scale-90 transition-all ${p.visible_in_catalog ? "text-brand-500" : "text-content-subtle hover:text-brand-500"}`}
                                         title={p.visible_in_catalog ? "Quitar del catálogo público" : "Mostrar en el catálogo público"}>

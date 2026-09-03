@@ -19,7 +19,8 @@ const EMPTY = {
 };
 
 export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName, warehouseCount = 1, initialName = "" }) {
-    const { notify, activeCurrencies } = useApp();
+    const { notify, activeCurrencies, company } = useApp();
+    const catalogEnabled = !!company?.catalog_enabled;
     const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
     const exchangeRate = parseFloat(localCurrency?.exchange_rate || 0);
 
@@ -479,7 +480,11 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     {[
                         ["general", "General"],
                         ["costos", "Costos"],
-                        ["vitrina", "Vitrina"],
+                        // El extra del catálogo público lo enciende el superusuario por
+                        // empresa (ver CompanyModal): sin él, esta pestaña no tendría nada
+                        // que ofrecer — sus campos son marca, descripción y beneficios de
+                        // cara a una vitrina que esta empresa no tiene.
+                        ...(catalogEnabled ? [["vitrina", "Vitrina"]] : []),
                     ].map(([id, label]) => (
                         <button
                             key={id}
@@ -550,6 +555,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 </div>
 
                 {/* ── Catálogo público ── */}
+                {catalogEnabled && (
                 <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${!form.sellable ? "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5 opacity-50" : form.visible_in_catalog ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
                     <div>
                         <div className="text-xs font-bold text-content dark:text-content-dark">Mostrar en catálogo público</div>
@@ -570,6 +576,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         <div className="w-9 h-5 bg-border/50 peer-focus:outline-none dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
                     </label>
                 </div>
+                )}
                 </div>
 
                 {/* ── Componentes de Combo ── */}
