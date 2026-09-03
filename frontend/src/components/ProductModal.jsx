@@ -471,14 +471,17 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 </div>
 
                 {/* ── Pestañas ──
-                    Vitrina queda fuera si el producto no se vende: sus campos no tendrían
-                    dónde salir, y una pestaña que abre a un aviso de "actívalo primero" es
-                    más clara que una pestaña que desaparece sola en cuanto se apaga el
-                    interruptor que la habilita — eso sí pasaría si el producto está en esa
-                    pestaña cuando alguien la apaga desde General. */}
+                    Vitrina y Receta quedan fuera de la lista solo cuando NADA que mostrar
+                    depende de un ajuste externo (el extra de catálogo, en el caso de
+                    Vitrina). Cuando lo que falta es un interruptor del propio producto
+                    (Producto Compuesto para Receta, visible_in_catalog para Vitrina), la
+                    pestaña se queda visible con un aviso de "actívalo primero" adentro: que
+                    desaparezca sola en cuanto se apaga el interruptor —estando uno parado
+                    en ella— sería más confuso que el aviso. */}
                 <div className="flex items-center gap-1 border-b border-border/40 dark:border-white/10 -mx-1">
                     {[
                         ["general", "General"],
+                        ["receta", "Receta"],
                         ["costos", "Costos"],
                         // El extra del catálogo público lo enciende el superusuario por
                         // empresa (ver CompanyModal): sin él, esta pestaña no tendría nada
@@ -578,17 +581,25 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 </div>
                 )}
                 </div>
-
-                {/* ── Componentes de Combo ── */}
-                {form.is_combo && (
-                    <ComboItemsEditor
-                        comboItems={form.combo_items}
-                        onChange={handleComboItemsChange}
-                        excludeId={editData?.id}
-                        warehouseId={warehouseId}
-                    />
-                )}
                 </>
+                )}
+
+                {tab === "receta" && (
+                    form.is_combo ? (
+                        <ComboItemsEditor
+                            comboItems={form.combo_items}
+                            onChange={handleComboItemsChange}
+                            excludeId={editData?.id}
+                            warehouseId={warehouseId}
+                        />
+                    ) : (
+                        <div className="p-4 rounded-lg border border-border/40 dark:border-white/5 bg-surface-2 dark:bg-white/5 text-center mt-1">
+                            <p className="text-xs font-bold text-content dark:text-content-dark">Este producto no es compuesto</p>
+                            <p className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-1">
+                                Activa "Producto Compuesto" en General para armarlo con otros ítems.
+                            </p>
+                        </div>
+                    )
                 )}
 
                 {tab === "vitrina" && (
