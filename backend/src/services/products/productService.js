@@ -24,7 +24,7 @@ function calculateComboStockAndCost(comboItems) {
     if (item.ingredient.is_service) continue; // services don't limit combo stock
     const stockModel = item.ingredient.stocks?.[0];
     const ingStock = stockModel ? parseFloat(stockModel.qty) : parseFloat(item.ingredient.stock || 0);
-    const possible = Math.floor(ingStock / reqQty);
+    const possible = Number((ingStock / reqQty).toFixed(4));
     if (possible < minStock) minStock = possible;
   }
   // all ingredients are services → unlimited stock (null)

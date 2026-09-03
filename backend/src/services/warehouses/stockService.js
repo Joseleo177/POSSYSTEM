@@ -99,7 +99,7 @@ async function getStock(req) {
       let totalCost = 0;
       for (const r of rows) {
         const ingQty = parseFloat(r.quantity) || 1;
-        const possible = Math.floor(parseFloat(r.ingredient_stock) / ingQty);
+        const possible = Number((parseFloat(r.ingredient_stock) / ingQty).toFixed(4));
         if (possible < min) min = possible;
         totalCost += parseFloat(r.ingredient_cost || 0) * ingQty;
       }

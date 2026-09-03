@@ -22,7 +22,7 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
     if (!isOpen || !item) return null;
 
     const unit = (item.unit || "UNIDAD").toUpperCase();
-    const isInteger = !["KG", "LITRO", "METRO", "L", "M"].includes(unit) || !!item.is_combo || !!item.is_service;
+    const isInteger = !["KG", "LITRO", "METRO", "L", "M"].includes(unit) || !!item.is_service;
 
     const handleSave = () => {
         let clean = val.replace(/\s/g, "").replace(",", ".");
