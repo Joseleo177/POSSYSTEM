@@ -87,7 +87,7 @@ export default function CategoryTiles({ categories, onPick }) {
                             el radio puesto también aquí, el panel se recorta a sí mismo y ya
                             no depende de que el recorte del padre alcance bien la esquina. */}
                         <div className="p-4 bg-white rounded-b-2xl">
-                            <h3 className="text-[20px] font-black uppercase tracking-tight text-content leading-tight">
+                            <h3 className="text-[20px] font-black uppercase tracking-tight text-neutral-900 leading-tight">
                                 {c.name}
                             </h3>
                             {c.short_description && (
