@@ -14,6 +14,23 @@ input[type=number] { -moz-appearance: textfield; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
+/* Entrada del carrito lateral de la vitrina pública.
+   Va escrita a mano porque las clases `animate-in` / `slide-in-from-*` que se usan por todo
+   el proyecto vienen del plugin `tailwindcss-animate`, que NO está instalado: `plugins: []`
+   en tailwind.config.js. Esas clases hoy no generan ningún CSS y no animan nada — no rompen
+   nada tampoco, simplemente se ignoran. Instalar el plugin encendería de golpe animaciones
+   en decenas de pantallas del ERP, así que aquí solo se define lo que este cajón necesita.
+   Un panel que entra de lado sin transición se lee como un salto de página. */
+@keyframes catalog-drawer-in { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes catalog-fade-in   { from { opacity: 0; } to { opacity: 1; } }
+.catalog-drawer-in  { animation: catalog-drawer-in .28s cubic-bezier(.32, .72, 0, 1); }
+.catalog-overlay-in { animation: catalog-fade-in .2s ease-out; }
+
+/* Quien pidió menos movimiento en su sistema no debería recibir un panel deslizándose. */
+@media (prefers-reduced-motion: reduce) {
+  .catalog-drawer-in, .catalog-overlay-in { animation: none; }
+}
+
 @layer base {
   /* Grises de texto por tema.
      En claro, #9ca3af (gray-400) sobre blanco daba 2.5:1 de contraste — por debajo del

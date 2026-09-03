@@ -1,5 +1,6 @@
-const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, ProductStock, Warehouse, Sequelize, sequelize } = require("../models");
+const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, ProductStock, Warehouse, CatalogBanner, Promotion, BenefitTag, Sequelize, sequelize } = require("../models");
 const { tenantStorage } = require("../utils/tenantStorage");
+const { imageUrl } = require("../utils/imageStorage");
 const { calculateComboStockAndCost } = require("./products/productService");
 
 const Op = Sequelize.Op;
@@ -104,8 +105,84 @@ const PUBLIC_SETTING_KEYS = [
   "store_name", "store_slogan", "store_address", "store_city",
   "store_phone", "store_phone2", "logo_filename",
   "catalog_whatsapp", "catalog_orders_enabled",
-  "brand_color",
+  "brand_color", "catalog_brand_color", "catalog_theme", "catalog_panel_color", "catalog_bg_color",
+  // Contenido de vitrina que edita el comercio (ver controllers/catalogBanners.js para el
+  // carrusel, que por llevar archivos vive en su propia tabla).
+  "catalog_announcement_text", "catalog_announcement_link",
+  "catalog_instagram", "catalog_facebook", "catalog_menu", "catalog_highlights",
 ];
+
+// Con qué maquetación se pinta la vitrina. El valor es el nombre de un tema del frontend
+// (ver pages/catalogThemes/index.js), no una ruta ni un archivo: aquí solo se comprueba que
+// tenga forma de nombre, y es el frontend el que decide si lo conoce. Deliberadamente no se
+// valida contra la lista de temas existentes — mantener el mismo catálogo de nombres en los
+// dos lados obligaría a tocar el servidor por cada tema nuevo, y olvidarlo dejaría a una
+// tienda con la vitrina cambiada sin que nadie sepa por qué. Un nombre que el frontend no
+// reconozca cae al tema estándar.
+const themeName = (raw) => {
+  const clean = String(raw || "").trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9-]{0,39}$/.test(clean) ? clean : null;
+};
+
+// Enlaces que se publican en la vitrina: los del anuncio, los de los banners y los de las
+// redes. Solo http(s) o rutas internas — un `javascript:` guardado en un ajuste se
+// ejecutaría en el navegador de cada cliente que lo tocara. Se valida al publicar y no solo
+// al guardar: una fila vieja o tocada a mano nunca pasó por la validación del panel.
+const colorValido = (raw) => {
+  const s = String(raw || "").trim();
+  return /^#?[0-9a-fA-F]{6}$/.test(s) ? s : null;
+};
+
+// La descripción larga, partida en párrafos por línea en blanco. La usan tanto la ficha del
+// producto (getProduct) como el listado (getProducts) — este último se la manda al modal de
+// "personalizar" del tema de menú, que abre directo desde la fila y nunca pasa por getProduct.
+const splitParagraphs = (raw) => String(raw || "").split(/\n{2,}|\r\n{2,}/)
+  .map((t) => t.replace(/\s+/g, " ").trim()).filter(Boolean).slice(0, 12);
+
+const publicLink = (raw) => {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  return (/^https?:\/\//i.test(s) || s.startsWith("/")) ? s.slice(0, 500) : null;
+};
+
+// Menú destacado de la cabecera: qué categorías aparecen y con qué etiqueta ("Nuevo",
+// "Best Seller"). Se guarda como JSON en un ajuste porque no lleva archivos y siempre se lee
+// y escribe entero.
+//
+// Se resuelve contra las categorías que existen HOY: una categoría borrada desaparece del
+// menú sola, en vez de dejar un enlace que no lleva a ningún lado. Un JSON ilegible se
+// ignora y la tienda queda con la cabecera estándar — nunca tumba el catálogo.
+function parseMenu(raw, categories) {
+  let list;
+  try { list = JSON.parse(raw || "[]"); } catch { return []; }
+  if (!Array.isArray(list)) return [];
+
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  return list.slice(0, 10).map((entry) => {
+    const cat = byId.get(parseInt(entry?.category_id, 10));
+    if (!cat) return null;
+    return {
+      category_id: cat.id,
+      // La etiqueta que se muestra puede ser distinta al nombre interno de la categoría
+      // ("KITS POCION" en la tienda, "KITS" en el sistema).
+      label: String(entry?.label || cat.name).trim().slice(0, 30) || cat.name,
+      badge: String(entry?.badge || "").trim().slice(0, 20) || null,
+    };
+  }).filter(Boolean);
+}
+
+// Frases cortas de presentación de la marca ("Fórmulas naturales", "Envío a todo el país"),
+// el bloque que separa el carrusel de la vitrina de la lista de productos. Sin ellas ni
+// eslogan, esa sección no se publica: no hay nada que inventar en su lugar.
+function parseHighlights(raw) {
+  let list;
+  try { list = JSON.parse(raw || "[]"); } catch { return []; }
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((t) => String(t || "").trim().slice(0, 40))
+    .filter(Boolean)
+    .slice(0, 5);
+}
 
 // wa.me solo acepta el número en dígitos, con código de país y sin signos. El comercio
 // suele escribirlo como lo tiene en la agenda ("+58 414-555 00 00"), así que se limpia
@@ -115,7 +192,7 @@ function normalizeWhatsapp(raw) {
   return digits.length >= 8 ? digits : null;
 }
 
-async function getStore(token) {
+async function getStore(token, { warehouse_id } = {}) {
   const company_id = await resolveCompanyId(token);
   if (!company_id) return null;
 
@@ -129,21 +206,62 @@ async function getStore(token) {
       order: [["is_base", "DESC"]],
     });
 
+    // La sucursal, si ya se conoce. Esta ruta se llama dos veces: al entrar al catálogo, sin
+    // sucursal todavía porque el cliente no la ha elegido, y otra vez apenas la elige (ver
+    // usePublicCatalog), para que las categorías se corrijan contra lo que ESA tienda tiene.
+    //
+    // A diferencia de getProducts, un id inválido aquí NO revienta la carga: getStore es lo
+    // primero que se pide al abrir el enlace, y si el cliente llegó con un id de sucursal
+    // viejo en el navegador, la página entera no puede caerse por eso — simplemente se
+    // comporta como si no se hubiera elegido ninguna.
+    const whPedido = parseInt(warehouse_id, 10) || null;
+    const tienda = whPedido
+      ? await Warehouse.findOne({ where: { id: whPedido, active: true, sells: true }, attributes: ["id"] })
+      : null;
+    const whId = tienda ? tienda.id : null;
+
     // Solo las categorías que hoy tienen algo publicado. Un chip que al pulsarlo muestra
     // "no se encontraron productos" hace ver la tienda vacía o rota.
-    const usedCategoryIds = (await Product.findAll({
-      where: { visible_in_catalog: true, sellable: true, category_id: { [Op.ne]: null } },
-      attributes: ["category_id"],
+    //
+    // Con sucursal elegida, "tener algo publicado" es tener algo publicado EN ESA sucursal —
+    // el mismo criterio EXISTS que usa getProducts para decidir qué surtido le corresponde a
+    // cada tienda, copiado literal para que las dos pantallas no puedan discrepar. Sin esto,
+    // una sucursal sin inventario en una categoría la seguía mostrando en "Nuestras
+    // categorías" solo porque OTRA sucursal de la misma empresa sí tenía algo ahí.
+    const whereCategorias = { visible_in_catalog: true, sellable: true, category_id: { [Op.ne]: null } };
+    if (whId) {
+      whereCategorias[Op.and] = [
+        Sequelize.literal(
+          `EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${whId})`
+        ),
+      ];
+    }
+    // Con el conteo en la misma consulta: el tema de menú lo muestra en cada mosaico
+    // ("3 productos"), y separar eso en una segunda consulta solo para tener el número
+    // sería un viaje más a la base por un dato que ya está aquí agrupado.
+    const conteoPorCategoria = await Product.findAll({
+      where: whereCategorias,
+      attributes: ["category_id", [Sequelize.fn("COUNT", Sequelize.col("id")), "count"]],
       group: ["category_id"],
-    })).map((r) => r.category_id);
+    });
+    const countMap = new Map(conteoPorCategoria.map((r) => [r.category_id, parseInt(r.get("count"), 10)]));
+    const usedCategoryIds = [...countMap.keys()];
 
     const categories = usedCategoryIds.length
       ? await Category.findAll({
           where: { id: { [Op.in]: usedCategoryIds } },
-          attributes: ["id", "name"],
+          attributes: ["id", "name", "image_filename", "short_description"],
           order: [["name", "ASC"]],
         })
       : [];
+
+    // Carrusel de portada. Solo lo activo y en el orden que fijó el comercio: un banner
+    // apagado sigue en la base porque las campañas vuelven, pero no sale a la calle.
+    const banners = await CatalogBanner.findAll({
+      where: { active: true },
+      attributes: ["id", "image_filename", "image_mobile_filename", "link_url", "alt_text"],
+      order: [["sort_order", "ASC"], ["id", "ASC"]],
+    });
 
     const whatsapp = normalizeWhatsapp(s.catalog_whatsapp);
     const ordersEnabled = !!whatsapp && s.catalog_orders_enabled === "true";
@@ -162,19 +280,69 @@ async function getStore(token) {
         // que no lleva a ninguna parte.
         whatsapp: ordersEnabled ? whatsapp : null,
         orders_enabled: ordersEnabled,
-        // Se valida el formato aquí: es un valor que va directo a las variables CSS de la
-        // página pública, y no debe poder inyectarse nada más que un color.
-        brand_color: /^#?[0-9a-fA-F]{6}$/.test(String(s.brand_color || "").trim())
-          ? s.brand_color.trim()
+        // Color de la vitrina. Manda el propio del catálogo y, si no lo hay, el de la
+        // empresa — que es como funcionaba antes de que se pudieran separar.
+        //
+        // Se separan porque no son la misma decisión: el del sistema lo eligió alguien para
+        // pasar el día trabajando dentro del ERP, y suele ser un tono sobrio; el de la
+        // vitrina es la cara de la tienda de cara al cliente y puede querer ser mucho más
+        // vivo sin que eso tiña la caja, los reportes y los botones de todo el sistema.
+        //
+        // Se valida el formato: es un valor que va directo a las variables CSS de la página
+        // pública, y no debe poder inyectarse nada más que un color.
+        brand_color: colorValido(s.catalog_brand_color) || colorValido(s.brand_color),
+        // Fondo del panel de contenido del tema de menú (donde viven la foto de categoría,
+        // las pestañas y la lista de platos). Es una decisión de la tienda, no del sistema:
+        // el fondo oscuro de la página sí es fijo (identidad del tema), pero este panel es
+        // "papel sobre la mesa" y cada restaurante lo quiere de un tono distinto. null = el
+        // tema usa un tono neutro por defecto.
+        panel_color: colorValido(s.catalog_panel_color),
+        // Fondo de página y cabecera del tema de menú. Distinto del panel: uno es "la mesa",
+        // el otro es "el mantel" — la tienda los quiere combinar a su gusto, no que el
+        // sistema decida un negro fijo para todas. null = el tema usa su tono por defecto.
+        bg_color: colorValido(s.catalog_bg_color),
+        theme: themeName(s.catalog_theme),
+        // Franja de anuncio sobre la cabecera ("Compra hoy y paga a cuotas"). Sin texto no
+        // hay franja: una barra vacía solo roba alto de pantalla en un teléfono.
+        announcement: String(s.catalog_announcement_text || "").trim()
+          ? {
+              text: String(s.catalog_announcement_text).trim().slice(0, 160),
+              link: publicLink(s.catalog_announcement_link),
+            }
           : null,
+        socials: {
+          instagram: publicLink(s.catalog_instagram),
+          facebook: publicLink(s.catalog_facebook),
+        },
+        highlights: parseHighlights(s.catalog_highlights),
       },
+      // Categorías destacadas en la cabecera, con su etiqueta. Vacío = cabecera estándar.
+      menu: parseMenu(s.catalog_menu, categories),
+      banners: banners.map((b) => ({
+        id: b.id,
+        image_url: imageUrl(b.image_filename),
+        // Sin arte de móvil se reusa el de escritorio: el tema no tiene que saber si la
+        // tienda subió las dos versiones o una sola.
+        image_mobile_url: imageUrl(b.image_mobile_filename) || imageUrl(b.image_filename),
+        link_url: publicLink(b.link_url),
+        alt_text: b.alt_text || null,
+      })),
       currencies: currencies.map((c) => ({
         code: c.code,
         symbol: c.symbol,
         exchange_rate: parseFloat(c.exchange_rate),
         is_base: c.is_base,
       })),
-      categories: categories.map((c) => ({ id: c.id, name: c.name })),
+      categories: categories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        // Para la sección de categorías con foto. null = la vitrina la muestra sin imagen.
+        image_url: imageUrl(c.image_filename),
+        // Ambos son del tema de menú: la frase bajo el nombre y el "N productos" del
+        // mosaico. Los demás temas los reciben igual y simplemente no los usan.
+        short_description: c.short_description || null,
+        product_count: countMap.get(c.id) || 0,
+      })),
       // Las sucursales que atienden público. El cliente elige en cuál compra: el stock y
       // el pedido son de esa tienda, no del negocio en general. Los depósitos quedan
       // fuera —no atienden a nadie— y de cada sucursal solo sale el nombre.
@@ -236,7 +404,64 @@ async function comboAvailability(comboIds, warehouseId) {
   );
 }
 
-async function getProducts(token, { search, category_id, limit = 40, offset = 0, warehouse_id }) {
+// Descuentos vigentes que la vitrina puede publicar, indexados por producto.
+//
+// Solo las promociones de porcentaje. Las de "lleva 3, paga 2" quedan fuera a propósito: no
+// se pueden expresar como un precio tachado y, sobre todo, el pedido web se registra por
+// líneas con su precio —no reparte unidades gratis—, así que anunciarlas aquí prometería al
+// cliente un total que el pedido no va a reflejar. Se siguen aplicando en la caja como
+// siempre.
+//
+// La regla de cuál manda cuando hay varias es la MISMA que la del punto de venta: la primera
+// del listado ordenado por más reciente (ver controllers/promotions.js y promoLineDiscountUsd
+// en CartContext). Si las dos pantallas eligieran distinto, el catálogo anunciaría un precio
+// y la caja cobraría otro.
+async function descuentosVigentes(warehouseId) {
+  const now = new Date();
+  const alcance = warehouseId
+    ? { [Op.or]: [{ warehouse_id: null }, { warehouse_id: warehouseId }] }
+    : { warehouse_id: null };
+
+  const promos = await Promotion.findAll({
+    where: {
+      active: true,
+      type: "percentage",
+      starts_at: { [Op.lte]: now },
+      [Op.and]: [
+        { [Op.or]: [{ ends_at: null }, { ends_at: { [Op.gte]: now } }] },
+        alcance,
+      ],
+    },
+    include: [{ model: Product, through: { attributes: [] }, attributes: ["id"] }],
+    order: [["starts_at", "DESC"], ["id", "DESC"]],
+  });
+
+  // La primera que toque cada producto gana; las siguientes no lo pisan.
+  const porProducto = {};
+  for (const promo of promos) {
+    const pct = parseFloat(promo.discount_pct);
+    if (!(pct > 0) || pct >= 100) continue;
+    for (const prod of promo.Products || []) {
+      if (porProducto[prod.id]) continue;
+      porProducto[prod.id] = { pct, name: promo.name };
+    }
+  }
+  return porProducto;
+}
+
+// Precio final de una línea con su descuento aplicado. Se redondea a 2 decimales, que es la
+// precisión con que se muestra y con que se totaliza el pedido: sin esto el total del carrito
+// del cliente y el de la venta pueden separarse por céntimos.
+function aplicarDescuento(precio, descuento) {
+  if (!descuento) return { price: precio, price_before: null, discount_pct: null };
+  const final = Math.round(precio * (1 - descuento.pct / 100) * 100) / 100;
+  // Un descuento que no baja el precio (un producto de céntimos) se descarta: tachar un
+  // precio para mostrar el mismo número al lado es ruido.
+  if (!(final < precio)) return { price: precio, price_before: null, discount_pct: null };
+  return { price: final, price_before: precio, discount_pct: descuento.pct };
+}
+
+async function getProducts(token, { search, category_id, limit = 40, offset = 0, warehouse_id, featured = false }) {
   const company_id = await resolveCompanyId(token);
   if (!company_id) return null;
 
@@ -285,12 +510,34 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
       where.name = { [Op.iLike]: `%${String(search).trim()}%` };
     }
 
+    // Las promociones vigentes se necesitan antes de la consulta cuando se pide la
+    // sección de destacados (para filtrar por ellas) y después, para el precio de cada
+    // fila — es la misma cuenta, se calcula una sola vez y se reusa para las dos cosas.
+    const descuentos = await descuentosVigentes(whId);
+
+    // "Destacados" = lo que la propia tienda ya decidió resaltar: un combo (siempre es
+    // una oferta armada) o un producto con descuento vigente. No es una nueva bandera que
+    // el comercio tenga que mantener aparte — sale sola de datos que ya existen.
+    if (featured) {
+      const conDescuento = Object.keys(descuentos).map((id) => parseInt(id, 10));
+      where[Op.or] = [
+        { is_combo: true },
+        { id: { [Op.in]: conDescuento.length ? conDescuento : [-1] } },
+      ];
+    }
+
     const { rows, count } = await Product.findAndCountAll({
       where,
       // Se seleccionan solo columnas de vitrina. cost_price, profit_margin, barcode y
       // min_stock quedan fuera a propósito: son datos internos del negocio.
       attributes: [
         "id", "name", "unit", "image_filename", "is_service", "is_combo",
+        // Campos de vitrina: la marca sobre el nombre y la frase de beneficio debajo.
+        // description también: el tema de menú abre su modal de "personalizar" (nota +
+        // cantidad) directo desde esta fila, sin pasar por getProduct, así que si un
+        // producto no tiene frase corta pero sí descripción larga, esta es la única fuente
+        // de la que ese modal la puede tomar.
+        "brand", "short_description", "description",
         // "stock" y "price" pasan a ser los de la sucursal elegida, no los del negocio.
         [Sequelize.literal(stockExpr), "stock"],
         [Sequelize.literal(priceExpr), "price"],
@@ -330,11 +577,21 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
           : j.is_combo
             ? (comboStock[j.id] === null || comboStock[j.id] > 0)
             : parseFloat(j.stock || 0) > 0;
+        const precio = aplicarDescuento(parseFloat(j.price), descuentos[j.id]);
+
         return {
           id: j.id,
           name: j.name,
-          price: parseFloat(j.price),
+          // Con descuento vigente, `price` ya es el rebajado y `price_before` el anterior,
+          // que es el que se tacha. El pedido se registra con esta misma cuenta (ver
+          // createOrder): lo que el cliente ve es lo que se le cobra.
+          price: precio.price,
+          price_before: precio.price_before,
+          discount_pct: precio.discount_pct,
           unit: j.unit,
+          brand: j.brand || null,
+          short_description: j.short_description || null,
+          description_paragraphs: splitParagraphs(j.description),
           category_name: j.Category?.name || null,
           image_url: j.image_filename
             ? (j.image_filename.startsWith("http") ? j.image_filename : `/uploads/${j.image_filename}`)
@@ -343,6 +600,92 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
           available,
         };
       }),
+    };
+  });
+}
+
+// Ficha pública de UN producto: /catalogo/<tienda>/p/<id>. Es el destino de un enlace que
+// viaja por WhatsApp, así que responde null (→ 404) para cualquier cosa que no deba verse:
+// producto de otra empresa (el hook de tenant lo filtra), despublicado o insumo. Un enlace
+// viejo a un producto que la tienda ocultó debe morir en 404, no revelar la ficha.
+async function getProduct(token, productId, { warehouse_id } = {}) {
+  const company_id = await resolveCompanyId(token);
+  if (!company_id) return null;
+
+  return tenantStorage.run({ company_id }, async () => {
+    const id = parseInt(productId, 10);
+    if (!Number.isInteger(id)) return null;
+
+    const p = await Product.findOne({
+      where: { id, visible_in_catalog: true, sellable: true },
+      // Mismo criterio de vitrina que el listado, más los textos largos de la ficha.
+      attributes: [
+        "id", "name", "unit", "image_filename", "is_service", "is_combo",
+        "brand", "short_description", "description",
+        "stock", "price", "category_id",
+      ],
+      include: [
+        { model: Category, attributes: ["id", "name"], required: false },
+        // Los beneficios son la lista reusable (ver BenefitTag), no texto del producto: se
+        // traen por la relación y no de una columna.
+        { model: BenefitTag, attributes: ["name"], through: { attributes: [] }, required: false },
+      ],
+    });
+    if (!p) return null;
+
+    // La misma revalidación de sucursal que el listado: un id inventado no filtra nada.
+    const whPedido = parseInt(warehouse_id, 10) || null;
+    const tienda = whPedido
+      ? await Warehouse.findOne({ where: { id: whPedido, active: true, sells: true }, attributes: ["id"] })
+      : null;
+    if (whPedido && !tienda) {
+      const e = new Error("La tienda seleccionada no está disponible."); e.status = 400; throw e;
+    }
+
+    let stock = parseFloat(p.stock || 0);
+    let basePrice = parseFloat(p.price);
+    if (tienda) {
+      const ficha = await ProductStock.findOne({
+        where: { warehouse_id: tienda.id, product_id: p.id },
+        attributes: ["qty", "price"],
+      });
+      // Sin ficha en esa sucursal, el producto no es de su surtido: el mismo criterio con
+      // que el listado lo excluye. El enlace compartido desde otra sucursal da 404 aquí.
+      if (!ficha && !p.is_service && !p.is_combo) return null;
+      if (ficha) {
+        stock = parseFloat(ficha.qty);
+        if (ficha.price != null) basePrice = parseFloat(ficha.price);
+      }
+    }
+
+    const comboStock = p.is_combo ? (await comboAvailability([p.id], tienda?.id || null))[p.id] : null;
+    const available = p.is_service
+      ? true
+      : p.is_combo
+        ? (comboStock === null || comboStock > 0)
+        : stock > 0;
+
+    const descuentos = await descuentosVigentes(tienda ? tienda.id : null);
+    const precio = aplicarDescuento(basePrice, descuentos[p.id]);
+
+    return {
+      id: p.id,
+      name: p.name,
+      price: precio.price,
+      price_before: precio.price_before,
+      discount_pct: precio.discount_pct,
+      unit: p.unit,
+      brand: p.brand || null,
+      short_description: p.short_description || null,
+      // Los párrafos ya separados: el navegador no tiene por qué saber cómo se guardó.
+      description_paragraphs: splitParagraphs(p.description),
+      benefits: (p.BenefitTags || []).map((t) => t.name),
+      category: p.Category ? { id: p.Category.id, name: p.Category.name } : null,
+      image_url: p.image_filename
+        ? (p.image_filename.startsWith("http") ? p.image_filename : `/uploads/${p.image_filename}`)
+        : null,
+      // El booleano, nunca la cantidad: mismo trato que el listado.
+      available,
     };
   });
 }
@@ -407,7 +750,7 @@ async function getMyOrders(token, document) {
       attributes: ["id", "total", "status", "invoice_number", "created_at"],
       // Se incluye el precio de cada línea: el cliente que abre un pedido viejo quiere ver
       // qué pagó por cada cosa, no solo qué se llevó.
-      include: [{ model: SaleItem, attributes: ["name", "quantity", "price", "subtotal"], required: false }],
+      include: [{ model: SaleItem, attributes: ["name", "quantity", "price", "subtotal", "note"], required: false }],
       order: [["created_at", "DESC"]],
       limit: 15,
     });
@@ -430,6 +773,7 @@ async function getMyOrders(token, document) {
             price: parseFloat(i.price),
             // subtotal es columna generada en la BD; si faltara se recompone aquí.
             subtotal: i.subtotal != null ? parseFloat(i.subtotal) : parseFloat(i.price) * parseFloat(i.quantity),
+            note: i.note || null,
           })),
         };
       }),
@@ -499,6 +843,9 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
       const e = new Error("La tienda seleccionada ya no está disponible."); e.status = 400; throw e;
     }
 
+    // Las promociones vigentes de esa tienda, para cerrar el pedido a precio de vitrina.
+    const descuentos = await descuentosVigentes(tienda ? tienda.id : null);
+
     // Existencias de esa tienda, en dos consultas: una para los productos simples y otra
     // para lo que necesitan los combos. Cada sucursal responde por lo que tiene.
     const stockEnTienda = {};
@@ -533,7 +880,12 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
         const e = new Error(`Cantidad inválida para "${p.name}".`); e.status = 400; throw e;
       }
 
-      const price = precioEnTienda[p.id] ?? parseFloat(p.price);
+      // El mismo precio que vio en la vitrina, descuento incluido: el de su sucursal, y
+      // encima la promoción vigente. Se recalcula aquí en vez de creerle al navegador —una
+      // promoción pudo vencer con la pestaña abierta— pero por la misma cuenta, así que el
+      // total del pedido coincide con el que el cliente tenía en pantalla.
+      const base = precioEnTienda[p.id] ?? parseFloat(p.price);
+      const price = aplicarDescuento(base, descuentos[p.id]).price;
       if (!(price > 0)) { const e = new Error(`"${p.name}" no tiene precio publicado.`); e.status = 400; throw e; }
 
       // Cada sucursal responde por lo suyo: si la tienda elegida no tiene con qué cubrir la
@@ -553,7 +905,12 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
         }
       }
 
-      enriched.push({ product: p, qty, price });
+      // Nota de esta línea ("sin cebolla"), distinta de la nota del pedido entero. Va a la
+      // comanda de cocina, así que se sanea igual que cualquier texto que termina en un papel
+      // térmico: recortado y sin más control que el salto de línea, que ahí no sirve de nada.
+      const lineNote = String(line.note || "").replace(/[\r\n]+/g, " ").trim().slice(0, 200) || null;
+
+      enriched.push({ product: p, qty, price, note: lineNote });
       total += round2(price) * qty;
     }
 
@@ -619,6 +976,7 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
           quantity: e.qty,
           discount: 0,
           cost_price: e.product.cost_price != null ? parseFloat(e.product.cost_price) : null,
+          note: e.note,
         }, { transaction: t });
       }
 
@@ -632,6 +990,6 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
 }
 
 module.exports = {
-  getStore, getProducts, identifyCustomer, getMyOrders, createOrder,
+  getStore, getProducts, getProduct, identifyCustomer, getMyOrders, createOrder,
   SLUG_KEY, LEGACY_TOKEN_KEY, slugify, isValidSlug,
 };

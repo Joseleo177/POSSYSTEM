@@ -1,6 +1,6 @@
 const path = require("path");
 const fs = require("fs");
-const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, Sequelize, ProductComboItem, sequelize } = require("../../models");
+const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, Sequelize, ProductComboItem, BenefitTag, ProductBenefitTag, sequelize } = require("../../models");
 const Op = Sequelize.Op;
 
 const isSupabase = () => !!process.env.SUPABASE_URL;
@@ -29,6 +29,36 @@ function calculateComboStockAndCost(comboItems) {
   }
   // all ingredients are services → unlimited stock (null)
   return { stock: minStock === Infinity ? null : minStock, cost: totalCost };
+}
+
+// Reemplaza los beneficios asignados a un producto por los recibidos. Se filtran contra las
+// etiquetas de la EMPRESA antes de insertar: la tabla puente no lleva company_id (igual que
+// promotion_products), así que sin este filtro un id ajeno colado a mano en la petición
+// enlazaría el producto con la etiqueta de otra tienda, y su nombre se filtraría a la
+// vitrina pública de esta.
+//
+// company_id va explícito y no por el hook de tenant: esta función corre dentro de
+// createProduct/updateProduct, cuyas rutas llevan multer, y el parseo de multipart rompe el
+// AsyncLocalStorage del que depende ese hook (mismo motivo por el que TODO este servicio
+// recibe y pasa company_id a mano — ver la nota larga en controllers/catalogBanners.js).
+async function syncBenefitTags(productId, benefit_tag_ids, company_id, t) {
+  const parsed = typeof benefit_tag_ids === 'string' ? JSON.parse(benefit_tag_ids) : benefit_tag_ids;
+  if (!Array.isArray(parsed)) return;
+
+  await ProductBenefitTag.destroy({ where: { product_id: productId }, transaction: t });
+  if (parsed.length === 0) return;
+
+  const propias = await BenefitTag.findAll({
+    where: { id: parsed.map((v) => parseInt(v, 10)).filter(Number.isInteger), company_id },
+    attributes: ['id'],
+    transaction: t,
+  });
+  if (!propias.length) return;
+
+  await ProductBenefitTag.bulkCreate(
+    propias.map((tag) => ({ product_id: productId, benefit_tag_id: tag.id })),
+    { transaction: t }
+  );
 }
 
 async function handleImageUpload(file) {
@@ -266,7 +296,8 @@ async function getOne(id, company_id) {
         model: ProductComboItem,
         as: 'comboItems',
         include: [{ model: Product, as: 'ingredient', attributes: ['id', 'name', 'unit', 'price', 'cost_price', 'stock', 'is_service'] }]
-      }
+      },
+      { model: BenefitTag, attributes: ['id', 'name'], through: { attributes: [] }, required: false },
     ]
   });
   if (!product) { const e = new Error("Producto no encontrado"); e.status = 404; throw e; }
@@ -274,6 +305,9 @@ async function getOne(id, company_id) {
   const p = product.toJSON();
   p.category_name = p.Category?.name ?? null;
   delete p.Category;
+  // Solo los ids: es lo único que el modal necesita para marcar los chips seleccionados.
+  p.benefit_tag_ids = (p.BenefitTags || []).map((t) => t.id);
+  delete p.BenefitTags;
   p.image_url = imageUrl(p.image_filename);
   if (p.is_combo) {
     const stats = calculateComboStockAndCost(p.comboItems);
@@ -298,7 +332,7 @@ async function createProduct({ body, file, company_id }) {
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
     is_combo, combo_items, is_service, barcode, warehouse_id, bulk_price,
-    visible_in_catalog, sellable } = body;
+    visible_in_catalog, sellable, brand, short_description, description, benefit_tag_ids } = body;
 
   if (!name || price == null) {
     const e = new Error("name y price son requeridos"); e.status = 400; throw e;
@@ -340,6 +374,9 @@ async function createProduct({ body, file, company_id }) {
       is_combo: isComboBool,
       is_service: isServiceBool,
       barcode: barcode || null,
+      brand: brand || null,
+      short_description: short_description || null,
+      description: description || null,
       // Un insumo no se publica nunca: aunque llegue marcado, se guarda apagado.
       sellable: esVendible,
       visible_in_catalog: esVendible && (visible_in_catalog === 'true' || visible_in_catalog === true),
@@ -365,6 +402,10 @@ async function createProduct({ body, file, company_id }) {
       }
     }
 
+    if (benefit_tag_ids) {
+      await syncBenefitTags(product.id, benefit_tag_ids, company_id, t);
+    }
+
     await t.commit();
     return { data: { ...product.toJSON(), image_url: imageUrl(imageValue) } };
   } catch (err) {
@@ -377,7 +418,7 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
     is_combo, combo_items, is_service, barcode, bulk_price,
-    visible_in_catalog, sellable } = body;
+    visible_in_catalog, sellable, brand, short_description, description, benefit_tag_ids } = body;
 
   // Editar el catálogo parado en una sucursal cambia el precio DE ESA SUCURSAL, no el de
   // todas. Un encargado de área maneja su tienda y no debería mover —ni enterarse de— las
@@ -461,6 +502,11 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
       is_combo: isComboBool,
       is_service: isServiceBool,
       barcode: opt(barcode, product.barcode),
+      // Campos de vitrina. Con `opt` para que un guardado que no los mande —una edición
+      // rápida desde otra pantalla— no borre lo que la tienda ya escribió.
+      brand: opt(brand, product.brand),
+      short_description: opt(short_description, product.short_description),
+      description: opt(description, product.description),
       // Sin el campo en el cuerpo se conserva lo que ya tenía: hay flujos que guardan el
       // producto sin pasar por el modal completo y no deben despublicarlo por omisión.
       sellable: esVendible,
@@ -528,6 +574,12 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
       }
     } else if (!isComboBool) {
       await ProductComboItem.destroy({ where: { combo_id: product.id }, transaction: t });
+    }
+
+    // undefined = el guardado no tocó los beneficios (una edición rápida desde otra
+    // pantalla); una lista vacía SÍ es una instrucción válida y los quita todos.
+    if (benefit_tag_ids !== undefined) {
+      await syncBenefitTags(product.id, benefit_tag_ids, company_id, t);
     }
 
     // Actualiza en cascada el precio de venta de los combos que contengan este producto

@@ -77,6 +77,13 @@ export default function OrderDetailModal({ order, onClose, fmt, baseCur, altCur 
                                         <div key={idx} className="grid grid-cols-12 gap-2 px-3 py-2.5 items-center text-xs">
                                             <span className="col-span-6 font-black uppercase tracking-tight text-content dark:text-white truncate">
                                                 {it.name}
+                                                {/* La nota de esta línea ("sin cebolla"), tal como la escribió el
+                                                    cliente al pedir — para que compruebe que llegó como la dejó. */}
+                                                {it.note && (
+                                                    <span className="block font-medium normal-case text-content-muted text-[11px] italic truncate">
+                                                        "{it.note}"
+                                                    </span>
+                                                )}
                                             </span>
                                             <span className="col-span-2 font-bold text-center text-content dark:text-white tabular-nums">
                                                 {fmtQty(it.quantity)}

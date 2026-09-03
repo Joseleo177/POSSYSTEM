@@ -32,10 +32,13 @@ export function printKitchenOrder(order, companyInfo, printerWidth = 80) {
     const totalUnidades = items.reduce((acc, i) => acc + (parseFloat(i.quantity) || 0), 0);
     const ref = order.invoice_number || `#${order.id}`;
 
+    // La nota de la línea va bajo el nombre, dentro de la misma celda: una columna aparte
+    // para "sin cebolla" desperdiciaría un ancho fijo en las líneas que no llevan nota, y en
+    // una térmica de 58mm no sobra ancho para regalar.
     const rows = items.map(i => `
         <tr>
             <td class="qty">${fmtQty(i.quantity)}</td>
-            <td class="name">${esc(i.name)}</td>
+            <td class="name">${esc(i.name)}${i.note ? `<div class="line-note">${esc(i.note)}</div>` : ""}</td>
         </tr>`).join("");
 
     const html = `<!DOCTYPE html>
@@ -76,6 +79,9 @@ export function printKitchenOrder(order, companyInfo, printerWidth = 80) {
            acabe, y "CAFE AMANECER" salía cortado en tres pedazos letra a letra. Así solo se
            parte la palabra que de verdad no cabe entera. */
         td.name { font-weight: 700; text-transform: uppercase; overflow-wrap: break-word; }
+        /* Sin mayúsculas ni negrita: distingue la nota del plato de un vistazo, y en
+           mayúscula "SIN CEBOLLA" se confunde con el nombre del propio plato. */
+        .line-note { font-weight: 500; text-transform: none; font-style: italic; margin-top: 0.5mm; }
 
         .note { margin-top: 2mm; border: 1px solid #000; padding: 1.5mm; font-size: ${w58 ? "9px" : "11px"}; font-weight: 700; overflow-wrap: break-word; }
         .note-label { font-size: ${w58 ? "7px" : "8.5px"}; letter-spacing: 1px; text-transform: uppercase; }

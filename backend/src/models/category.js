@@ -25,6 +25,19 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(20),
       allowNull: true,
       defaultValue: null
+    },
+    // Foto para la sección de categorías de la vitrina pública. Nombre de archivo en modo
+    // local o URL completa en Supabase, igual que Product.image_filename.
+    image_filename: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+      defaultValue: null
+    },
+    // Frase corta para el mosaico de "Tipos de comida" del tema de menú. Opcional.
+    short_description: {
+      type: DataTypes.STRING(160),
+      allowNull: true,
+      defaultValue: null
     }
   }, {
     sequelize,

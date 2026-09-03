@@ -24,6 +24,16 @@ module.exports = (sequelize, DataTypes) => {
     is_service: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     min_stock: { type: DataTypes.DECIMAL(10, 3), allowNull: false, defaultValue: 0 },
     barcode: { type: DataTypes.STRING(50), allowNull: true },
+    // Campos de vitrina: solo los lee el catálogo público (marca sobre el nombre y frase de
+    // beneficio debajo). Opcionales; no intervienen en venta ni inventario.
+    brand: { type: DataTypes.STRING(80), allowNull: true },
+    short_description: { type: DataTypes.STRING(200), allowNull: true },
+    // La ficha pública del producto: texto largo en párrafos. Los beneficios (los sellos
+    // redondos "Repara y fortalece", "Reduce el frizz") NO son texto libre por producto:
+    // son una lista de etiquetas reusable — ver BenefitTag y la tabla puente
+    // ProductBenefitTag — para que la misma redacción y el mismo ícono sirvan en todos los
+    // productos que comparten ese beneficio, en vez de que cada ficha lo reescriba a mano.
+    description: { type: DataTypes.TEXT, allowNull: true },
     visible_in_catalog: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     // false = insumo: entra por compras y se consume en combos, pero no se vende en caja ni
     // se publica. Sigue siendo un producto normal para inventario y transferencias.

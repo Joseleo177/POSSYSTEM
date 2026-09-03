@@ -15,12 +15,16 @@ import { PAGE_SIZE, round3 } from "../components/PublicCatalog/shared";
  * Todo lo que persiste va por token: el mismo navegador puede tener abiertos los catálogos de
  * dos tiendas distintas sin que se pisen el carrito ni la identidad.
  */
-export function usePublicCatalog(token) {
+export function usePublicCatalog(token, initialProductId = null) {
     const { dark, toggle } = useTheme();
     const [store, setStore] = useState(null);
     const [currencies, setCurrencies] = useState([]);
     const [categories, setCategories] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
+    // Contenido de vitrina que edita la tienda desde Ajustes. Solo lo usan los temas que lo
+    // saben pintar; el estándar los ignora y se ve igual que siempre.
+    const [banners, setBanners] = useState([]);
+    const [menu, setMenu] = useState([]);
     const [products, setProducts] = useState([]);
     const [total, setTotal] = useState(0);
     const [search, setSearch] = useState("");
@@ -29,6 +33,51 @@ export function usePublicCatalog(token) {
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState(null);
     const reqRef = useRef(0);
+
+    // ── Ficha de producto ────────────────────────────────────────
+    // Cada producto tiene dirección propia (/catalogo/<tienda>/p/<id>): es lo que la tienda
+    // comparte por WhatsApp. Abrir una ficha empuja una entrada al historial, así el botón
+    // atrás del teléfono cierra la ficha en vez de sacar al cliente del catálogo.
+    const [productId, setProductId] = useState(initialProductId);
+    const [productDetail, setProductDetail] = useState(null);
+    const [productLoading, setProductLoading] = useState(false);
+    const [productError, setProductError] = useState(null);
+    // Si la ficha se abrió navegando dentro del catálogo hay una entrada nuestra en el
+    // historial y cerrar es history.back(); si se llegó por enlace directo NO la hay, y un
+    // back() sacaría al cliente de la tienda — ahí se reescribe la dirección y ya.
+    const openedViaPush = useRef(false);
+
+    const baseUrl = `/catalogo/${token}`;
+
+    const openProduct = (id) => {
+        window.history.pushState({ catalogProduct: id }, "", `${baseUrl}/p/${id}`);
+        openedViaPush.current = true;
+        setProductId(id);
+    };
+
+    const closeProduct = () => {
+        if (openedViaPush.current) {
+            window.history.back(); // el popstate de abajo limpia el estado
+        } else {
+            window.history.replaceState(null, "", baseUrl);
+            setProductId(null);
+        }
+    };
+
+    // Atrás/adelante del navegador: la dirección manda y el estado la sigue.
+    useEffect(() => {
+        const onPop = () => {
+            const m = window.location.pathname.match(/\/p\/(\d+)\/?$/);
+            setProductId(m ? parseInt(m[1], 10) : null);
+            if (!m) openedViaPush.current = false;
+        };
+        window.addEventListener("popstate", onPop);
+        return () => window.removeEventListener("popstate", onPop);
+    }, []);
+
+    // La carga de la ficha depende de `branch`, que todavía no existe en este punto del
+    // hook (se calcula más abajo, a partir de `warehouses` y `branchId`). Ese efecto va
+    // después de esa declaración — buscar "Carga de la ficha de producto" más abajo.
 
     // Carrito: se guarda por token para que cerrar la pestaña sin querer no borre lo
     // que el cliente venía armando.
@@ -215,6 +264,44 @@ export function usePublicCatalog(token) {
     // cambiar de sucursal, porque la elección seguía guardada de la visita anterior.
     const branchGate = !!store && !gated && warehouses.length > 1 && (!branch || switchingBranch);
 
+    // Categorías (y el menú, que se arma a partir de ellas) según la sucursal.
+    //
+    // La carga inicial de la tienda —más arriba, al montar— no puede saberlo: el cliente
+    // todavía no eligió dónde compra. Sin esto, "Nuestras categorías" y el menú mostraban lo
+    // que tuviera publicado CUALQUIER sucursal de la empresa, y una tienda sin ese producto
+    // se veía con categorías que al tocarlas daban "no se encontraron productos" — la vitrina
+    // parecía rota en vez de simplemente vacía ahí.
+    //
+    // Solo se piden de nuevo categorías y menú, no la tienda entera: nombre, logo, moneda y
+    // banners no cambian con la sucursal, y repetirlos sería tráfico de más sin necesidad.
+    useEffect(() => {
+        if (!branch?.id) return;
+        let alive = true;
+        publicApi.getStore(token, { warehouse_id: branch.id })
+            .then((r) => {
+                if (!alive) return;
+                setCategories(r.data.categories || []);
+                setMenu(r.data.menu || []);
+            })
+            .catch(() => { /* si falla, se queda con la lista de la carga inicial */ });
+        return () => { alive = false; };
+    }, [token, branch?.id]);
+
+    // Carga de la ficha de producto. Depende de `branch`: de ella salen el precio y la
+    // disponibilidad, así que cambiar de sucursal con la ficha abierta la vuelve a pedir —
+    // puede pasar de disponible a "no está en esta tienda".
+    useEffect(() => {
+        if (!productId) { setProductDetail(null); setProductError(null); return; }
+        let alive = true;
+        setProductLoading(true);
+        setProductError(null);
+        publicApi.getProduct(token, productId, { warehouse_id: branch?.id || "" })
+            .then((r) => { if (alive) setProductDetail(r.data); })
+            .catch((e) => { if (alive) setProductError(e.status === 404 ? "Este producto ya no está disponible." : (e.message || "No se pudo cargar el producto.")); })
+            .finally(() => alive && setProductLoading(false));
+        return () => { alive = false; };
+    }, [token, productId, branch?.id]);
+
     const chooseBranch = (id) => {
         // Cambiar de tienda cambia el catálogo: lo que estaba en el carrito puede no existir
         // en la otra. Se vacía en vez de dejar que el pedido lo rechace línea por línea.
@@ -239,6 +326,21 @@ export function usePublicCatalog(token) {
                 return prev.map(it => it.id === p.id ? { ...it, qty: round3(currentQty + stepFor(it.unit)) } : it);
             }
             return [...prev, { id: p.id, name: p.name, price: p.price, unit: p.unit, image_url: p.image_url, qty: stepFor(p.unit) }];
+        });
+    };
+
+    // Agregar desde el modal de "personalizar" del tema de menú: cantidad y nota elegidas a
+    // mano, no el paso de a uno de addToCart. La nota es del PRODUCTO —una por línea, no una
+    // por cada vez que se toca "+"—, así que reabrir el modal sobre algo que ya está en el
+    // carrito reemplaza cantidad y nota en vez de sumar una línea aparte: es la misma línea,
+    // solo que el cliente decidió pedir más o cambiar lo que había escrito.
+    const setCartItem = (p, qty, rawNote) => {
+        const note = String(rawNote || "").trim().slice(0, 200) || null;
+        const cantidad = parseFloat(qty);
+        setCart(prev => {
+            const sinEsteProducto = prev.filter(it => it.id !== p.id);
+            if (!(cantidad > 0)) return sinEsteProducto; // 0 = quitarlo del carrito
+            return [...sinEsteProducto, { id: p.id, name: p.name, price: p.price, unit: p.unit, image_url: p.image_url, qty: cantidad, note: note || undefined }];
         });
     };
 
@@ -302,7 +404,7 @@ export function usePublicCatalog(token) {
         setSendError(null);
         try {
             const r = await publicApi.createOrder(token, {
-                items: cart.map(it => ({ product_id: it.id, quantity: it.qty })),
+                items: cart.map(it => ({ product_id: it.id, quantity: it.qty, note: it.note || null })),
                 customer_name: identity.name,
                 customer_phone: identity.phone,
                 customer_document: identity.document,
@@ -351,6 +453,8 @@ export function usePublicCatalog(token) {
                 setCurrencies(r.data.currencies || []);
                 setCategories(r.data.categories || []);
                 setWarehouses(r.data.warehouses || []);
+                setBanners(r.data.banners || []);
+                setMenu(r.data.menu || []);
             })
             .catch(() => alive && setError("Este catálogo no está disponible."));
         return () => { alive = false; };
@@ -399,14 +503,17 @@ export function usePublicCatalog(token) {
         dark, toggle,
         // tienda y catálogo
         store, currencies, categories, products, total, error,
+        banners, menu,
         search, setSearch, category, setCategory,
         loading, loadingMore, loadMore,
         baseCur, altCur, fmt, ordersEnabled, gated,
         // sucursal
         warehouses, branch, branchGate, chooseBranch, openBranchGate: () => setSwitchingBranch(true),
+        // ficha de producto
+        productId, productDetail, productLoading, productError, openProduct, closeProduct,
         // carrito
         cart, cartTotal, cartOpen, setCartOpen,
-        addToCart, changeQty, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,
+        addToCart, setCartItem, changeQty, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,
         showCats, setShowCats, delivery, setDelivery,
         // identidad y perfil
         identity, saveIdentity, forgetIdentity,

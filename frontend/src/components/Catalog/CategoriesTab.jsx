@@ -3,14 +3,19 @@ import { api } from "../../services/api";
 import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
+import { resolveImageUrl } from "../../helpers";
 
 export default function CategoriesTab({ notify, can, triggerNew }) {
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [modal, setModal] = useState(false);       // false | "new" | {id, name, color}
     const [deleteDialog, setDeleteDialog] = useState(null);
-    const [form, setForm] = useState({ name: "", color: "#fabd2f" });
+    const [form, setForm] = useState({ name: "", color: "#fabd2f", short_description: "" });
     const [saving, setSaving] = useState(false);
+    // Foto de la categoría: solo la usa la vitrina pública. `file` es la nueva elegida y
+    // `clearImage` marca que se quitó la que había — no mandar archivo es lo que pasa en
+    // cualquier guardado normal, así que no puede significar "bórrala".
+    const [image, setImage] = useState({ file: null, current: null, clearImage: false });
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -21,7 +26,11 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
 
     useEffect(() => { load(); }, [load]);
 
-    const openNew  = useCallback(() => { setForm({ name: "", color: "#fabd2f" }); setModal("new"); }, []);
+    const openNew  = useCallback(() => {
+        setForm({ name: "", color: "#fabd2f", short_description: "" });
+        setImage({ file: null, current: null, clearImage: false });
+        setModal("new");
+    }, []);
     
     // Solo abre el modal cuando el contador CAMBIA, no cuando ya viene alto.
     // CatalogPage monta esta pestaña únicamente mientras está activa, así que al ir a
@@ -35,17 +44,21 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
         }
     }, [triggerNew, openNew]);
 
-    const openEdit = (cat) => { setForm({ name: cat.name, color: cat.color || "#fabd2f" }); setModal(cat); };
+    const openEdit = (cat) => {
+        setForm({ name: cat.name, color: cat.color || "#fabd2f", short_description: cat.short_description || "" });
+        setImage({ file: null, current: cat.image_url || null, clearImage: false });
+        setModal(cat);
+    };
 
     const save = async () => {
         if (!form.name.trim()) return notify("El nombre es requerido", "err");
         setSaving(true);
         try {
             if (modal === "new") {
-                await api.categories.create(form);
+                await api.categories.create(form, image.file);
                 notify("Categoría creada");
             } else {
-                await api.categories.update(modal.id, form);
+                await api.categories.update(modal.id, form, image.file, image.clearImage);
                 notify("Categoría actualizada");
             }
             setModal(false);
@@ -53,6 +66,10 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
         } catch (e) { notify(e.message, "err"); }
         finally { setSaving(false); }
     };
+
+    // La elegida ahora manda sobre la guardada: así se ve qué se va a reemplazar antes de
+    // guardar, y "Quitar foto" deja el recuadro vacío aunque la categoría todavía tenga una.
+    const imgPreview = image.file ? URL.createObjectURL(image.file) : (image.clearImage ? null : resolveImageUrl(image.current));
 
     const confirmDelete = async () => {
         try {
@@ -131,6 +148,46 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
                         <div className="flex items-center gap-3">
                             <input type="color" value={form.color} onChange={e => setForm(p => ({ ...p, color: e.target.value }))} className="w-10 h-10 rounded-lg border border-border/30 dark:border-white/10 cursor-pointer bg-transparent" />
                             <span className="text-[11px] font-bold text-content-subtle dark:text-white/30 uppercase tracking-wide">{form.color}</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="label">FRASE CORTA (OPCIONAL)</label>
+                        <input
+                            type="text"
+                            value={form.short_description}
+                            onChange={e => setForm(p => ({ ...p, short_description: e.target.value }))}
+                            placeholder="Ej: Shawarmas y pepi shawarmas"
+                            maxLength={160}
+                            className="input"
+                        />
+                        <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1 leading-relaxed">
+                            Se ve bajo el nombre en los mosaicos del tema de menú.
+                        </p>
+                    </div>
+                    <div>
+                        <label className="label">FOTO PARA EL CATÁLOGO PÚBLICO</label>
+                        <div className="flex items-center gap-3">
+                            <label className="cursor-pointer group shrink-0">
+                                <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-dashed border-border/40 dark:border-white/10 bg-surface-2 dark:bg-white/5 flex items-center justify-center group-hover:border-brand-500/50 transition-all">
+                                    {imgPreview
+                                        ? <img src={imgPreview} alt="" className="w-full h-full object-cover" />
+                                        : <svg className="w-5 h-5 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+                                </div>
+                                <input type="file" accept="image/*" className="hidden"
+                                    onChange={e => e.target.files[0] && setImage(p => ({ ...p, file: e.target.files[0], clearImage: false }))} />
+                            </label>
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 leading-relaxed">
+                                    Opcional. Solo se ve en la vitrina pública, en la sección de categorías.
+                                </p>
+                                {imgPreview && (
+                                    <button type="button"
+                                        onClick={() => setImage({ file: null, current: null, clearImage: true })}
+                                        className="text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-danger transition-colors mt-1">
+                                        Quitar foto
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

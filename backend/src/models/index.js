@@ -40,7 +40,7 @@ const tenantModels = [
   'ExpenseCategory', 'Return', 'ReturnItem', 'Setting', 'Currency',
   'ProductStock', 'EmployeeWarehouse', 'UserSerie', 'ProductComboItem', 'CashSessionJournal',
   'Quotation', 'Promotion', 'Income', 'IncomeCategory',
-  'StockSession',
+  'StockSession', 'CatalogBanner', 'BenefitTag',
 ];
 
 const applyTenantFilter = (modelName, options) => {
@@ -119,7 +119,7 @@ tenantModels.forEach(modelName => {
 });
 
 // Centralized associations
-const { Company, Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, StockTransferItem, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment, Setting, Quotation, QuotationItem, Promotion, PromotionProduct } = db;
+const { Company, Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, StockTransferItem, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment, Setting, Quotation, QuotationItem, Promotion, PromotionProduct, BenefitTag, ProductBenefitTag } = db;
 
 // ── Company Associations ────────────────────────────────────────
 if (Company) {
@@ -321,6 +321,11 @@ if (PurchasePayment && Purchase && PaymentJournal && Currency && Employee) {
 if (Promotion && PromotionProduct && Product) {
   Promotion.belongsToMany(Product, { through: PromotionProduct, foreignKey: 'promotion_id', otherKey: 'product_id' });
   Product.belongsToMany(Promotion, { through: PromotionProduct, foreignKey: 'product_id',   otherKey: 'promotion_id' });
+}
+
+if (BenefitTag && ProductBenefitTag && Product) {
+  BenefitTag.belongsToMany(Product, { through: ProductBenefitTag, foreignKey: 'benefit_tag_id', otherKey: 'product_id' });
+  Product.belongsToMany(BenefitTag, { through: ProductBenefitTag, foreignKey: 'product_id',      otherKey: 'benefit_tag_id' });
 }
 
 db.sequelize = sequelize;

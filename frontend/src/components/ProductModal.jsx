@@ -5,6 +5,7 @@ import { useApp } from "../context/AppContext";
 import CustomSelect from "./ui/CustomSelect";
 import { calcSalePrice as calcSalePriceHelper, resolveImageUrl } from "../helpers";
 import ComboItemsEditor from "./ComboItemsEditor";
+import BenefitTagPicker from "./BenefitTagPicker";
 import { PKG_UNITS } from "../constants/pkg";
 import { fmtQtyUnit } from "../helpers/unitFormatter";
 
@@ -13,6 +14,7 @@ const EMPTY = {
     name: "", price: "", stock: "", category_id: "", unit: "UNIDAD", qty_step: "1",
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
     is_combo: false, combo_items: [], is_service: false, barcode: "", bulk_price: "",
+    brand: "", short_description: "", description: "", benefit_tag_ids: [],
     visible_in_catalog: false, sellable: true
 };
 
@@ -27,6 +29,12 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
     const [removeImage, setRemoveImage] = useState(false);
+    // El modal creció campo a campo hasta volverse una sola pantalla larga —tipo, costos,
+    // vitrina, todo apilado—. Se reparte en pestañas para que abrir la ficha no sea siempre
+    // desplazar hasta el fondo a buscar el margen o el texto de la vitrina; el nombre, la
+    // categoría y el precio quedan arriba, fuera de las pestañas, porque son lo que se mira
+    // primero sea cual sea la tarea.
+    const [tab, setTab] = useState("general");
 
     // Nombrar la sucursal solo tiene sentido para quien maneja varias y necesita saber cuál
     // está tocando. A quien atiende una sola, "Precio en CENTRO" no le aclara nada: le cuenta
@@ -36,6 +44,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
     useEffect(() => {
         if (open) {
+            setTab("general");
             if (editData) {
                 let initialBulkPrice = editData.bulk_price || "";
                 if (!initialBulkPrice && editData.cost_price && editData.package_size) {
@@ -64,6 +73,10 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     is_combo: editData.is_combo || false,
                     is_service: editData.is_service || false,
                     barcode: editData.barcode || "",
+                    brand: editData.brand || "",
+                    short_description: editData.short_description || "",
+                    description: editData.description || "",
+                    benefit_tag_ids: editData.benefit_tag_ids || [],
                     visible_in_catalog: editData.visible_in_catalog || false,
                     // Los productos creados antes de que existiera la marca vienen sin el
                     // campo: se asumen vendibles, que es como se comportaban.
@@ -456,6 +469,33 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     </div>
                 </div>
 
+                {/* ── Pestañas ──
+                    Vitrina queda fuera si el producto no se vende: sus campos no tendrían
+                    dónde salir, y una pestaña que abre a un aviso de "actívalo primero" es
+                    más clara que una pestaña que desaparece sola en cuanto se apaga el
+                    interruptor que la habilita — eso sí pasaría si el producto está en esa
+                    pestaña cuando alguien la apaga desde General. */}
+                <div className="flex items-center gap-1 border-b border-border/40 dark:border-white/10 -mx-1">
+                    {[
+                        ["general", "General"],
+                        ["costos", "Costos"],
+                        ["vitrina", "Vitrina"],
+                    ].map(([id, label]) => (
+                        <button
+                            key={id}
+                            type="button"
+                            onClick={() => setTab(id)}
+                            className={`px-3 py-2 text-[11px] font-black uppercase tracking-wide border-b-2 -mb-px transition-colors ${tab === id
+                                ? "border-brand-500 text-content dark:text-white"
+                                : "border-transparent text-content-subtle dark:text-content-dark-muted hover:text-content dark:hover:text-white"}`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+
+                {tab === "general" && (
+                <>
                 {/* ── Toggles de Tipo (Servicio / Combo) ── */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
                     {/* Toggle Servicio */}
@@ -541,13 +581,76 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         warehouseId={warehouseId}
                     />
                 )}
+                </>
+                )}
+
+                {tab === "vitrina" && (
+                    <div className="p-4 rounded-lg border border-border/40 dark:border-white/5 bg-surface-2 dark:bg-white/5 space-y-3 mt-1">
+                        {form.visible_in_catalog && form.sellable ? (
+                            <>
+                                <div>
+                                    <label className="label">MARCA O LÍNEA</label>
+                                    <input
+                                        value={form.brand}
+                                        onChange={e => set("brand", e.target.value)}
+                                        className="input"
+                                        maxLength={80}
+                                        placeholder="Ej. Poción Kids"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">FRASE DE BENEFICIO</label>
+                                    <input
+                                        value={form.short_description}
+                                        onChange={e => set("short_description", e.target.value)}
+                                        className="input"
+                                        maxLength={200}
+                                        placeholder="Ej. Desenreda sin dolor · 450 ml"
+                                    />
+                                    <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-1">
+                                        Una línea corta bajo el nombre. Se ve en el catálogo público, no en la factura.
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="label">DESCRIPCIÓN</label>
+                                    <textarea
+                                        value={form.description}
+                                        onChange={e => set("description", e.target.value)}
+                                        className="input !h-auto py-2 resize-none"
+                                        rows={4}
+                                        placeholder="Texto largo para la ficha del producto. Un párrafo por línea en blanco."
+                                    />
+                                    <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-1">
+                                        Se muestra en la página propia del producto, no en la tarjeta del catálogo.
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="label">BENEFICIOS</label>
+                                    <BenefitTagPicker
+                                        selectedIds={form.benefit_tag_ids}
+                                        onChange={(ids) => set("benefit_tag_ids", ids)}
+                                    />
+                                </div>
+                            </>
+                        ) : (
+                            // No es un aviso de error: es lo esperable con el producto todavía
+                            // sin publicar. Explica qué interruptor prender y en qué pestaña
+                            // está, para no dejar al usuario buscándolo.
+                            <p className="text-[11px] font-bold text-content-subtle dark:text-content-dark-muted text-center py-4">
+                                {form.sellable
+                                    ? 'Activa "Mostrar en catálogo público" en la pestaña General para escribir estos textos.'
+                                    : "Los insumos no se publican, así que no tienen textos de vitrina."}
+                            </p>
+                        )}
+                    </div>
+                )}
 
                 {/* ── Costos y Rentabilidad ──
                     También para servicios: un servicio tiene costo (la hora del técnico, el
                     material que consume) y sin cargarlo queda fuera del reporte de márgenes,
                     que solo mide lo que tiene costo conocido. Lo que sí se les oculta es el
                     presentación y el stock mínimo, que no aplican. */}
-                {(
+                {tab === "costos" && (
                     <div className="space-y-3 animate-in fade-in duration-300 mt-2">
                         {/* ── Rentabilidad ── */}
                         <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">

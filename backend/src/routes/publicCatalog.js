@@ -20,7 +20,7 @@ const publicLimiter = rateLimit({
 // ── Público (sin autenticación) ───────────────────────────────
 router.get("/:slug", publicLimiter, async (req, res) => {
   try {
-    const data = await svc.getStore(req.params.slug);
+    const data = await svc.getStore(req.params.slug, { warehouse_id: req.query.warehouse_id });
     // Mismo 404 para tienda inexistente y para catálogo desactivado: no se distingue
     // "no existe" de "existe pero no publica", que es información del comercio.
     if (!data) return res.status(404).json({ ok: false, message: "Catálogo no disponible" });
@@ -34,8 +34,8 @@ router.get("/:slug", publicLimiter, async (req, res) => {
 router.get("/:slug/products", publicLimiter, async (req, res) => {
   try {
     // warehouse_id: la sucursal que eligió el cliente. Define qué existencias ve.
-    const { search, category_id, limit, offset, warehouse_id } = req.query;
-    const data = await svc.getProducts(req.params.slug, { search, category_id, limit, offset, warehouse_id });
+    const { search, category_id, limit, offset, warehouse_id, featured } = req.query;
+    const data = await svc.getProducts(req.params.slug, { search, category_id, limit, offset, warehouse_id, featured: featured === "true" });
     if (!data) return res.status(404).json({ ok: false, message: "Catálogo no disponible" });
     res.json({ ok: true, data });
   } catch (err) {
@@ -44,6 +44,22 @@ router.get("/:slug/products", publicLimiter, async (req, res) => {
     if (err.status) return res.status(err.status).json({ ok: false, message: err.message });
     console.error("[public-catalog]", err.message);
     res.status(500).json({ ok: false, message: "Error al cargar los productos" });
+  }
+});
+
+// La ficha de un producto: el destino de un enlace compartido por WhatsApp. Mismo 404 para
+// "no existe", "es de otra empresa" y "la tienda lo despublicó" — un enlace viejo no debe
+// contar qué pasó con el producto.
+router.get("/:slug/products/:id", publicLimiter, async (req, res) => {
+  try {
+    const { warehouse_id } = req.query;
+    const data = await svc.getProduct(req.params.slug, req.params.id, { warehouse_id });
+    if (!data) return res.status(404).json({ ok: false, message: "Producto no disponible" });
+    res.json({ ok: true, data });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ ok: false, message: err.message });
+    console.error("[public-catalog]", err.message);
+    res.status(500).json({ ok: false, message: "Error al cargar el producto" });
   }
 });
 

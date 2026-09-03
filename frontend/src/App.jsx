@@ -13,18 +13,22 @@ import PublicCatalogPage from "./pages/PublicCatalogPage";
 // El enlace lleva el nombre de la tienda (/catalogo/el-gran-terminal), así que el guion es
 // parte de la dirección. Se pasa a minúsculas porque un enlace dictado por teléfono se
 // escribe como sea y tiene que llegar igual a la tienda.
-function getPublicCatalogSlug() {
-    const m = window.location.pathname.match(/^\/catalogo\/([A-Za-z0-9-]+)\/?$/);
-    return m ? m[1].toLowerCase() : null;
+// La dirección admite dos formas: la tienda (/catalogo/el-gran-terminal) y la ficha de un
+// producto (/catalogo/el-gran-terminal/p/45), que es el enlace que la tienda comparte por
+// WhatsApp. El id inicial solo se lee aquí una vez; abrir y cerrar fichas navegando dentro
+// del catálogo lo maneja usePublicCatalog con el historial del navegador.
+function getPublicCatalogRoute() {
+    const m = window.location.pathname.match(/^\/catalogo\/([A-Za-z0-9-]+)(?:\/p\/(\d+))?\/?$/);
+    return m ? { slug: m[1].toLowerCase(), productId: m[2] ? parseInt(m[2], 10) : null } : null;
 }
 
 export default function App() {
-    const catalogToken = getPublicCatalogSlug();
+    const catalogRoute = getPublicCatalogRoute();
 
-    if (catalogToken) {
+    if (catalogRoute) {
         return (
             <ErrorBoundary>
-                <PublicCatalogPage token={catalogToken} />
+                <PublicCatalogPage token={catalogRoute.slug} initialProductId={catalogRoute.productId} />
             </ErrorBoundary>
         );
     }

@@ -1,7 +1,6 @@
-import { useState } from "react";
-import { publicApi } from "../../services/api";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers";
 import { useTheme } from "../../hooks/useTheme";
+import { useIdentityGate } from "../../hooks/useIdentityGate";
 import CustomSelect from "../ui/CustomSelect";
 import { DOC_PREFIXES, docMaxLen } from "./shared";
 
@@ -9,45 +8,17 @@ import { DOC_PREFIXES, docMaxLen } from "./shared";
 // dejarlo ver la tienda, para poder asociarle sus pedidos y facturarle sin volver a pedirle
 // los datos. Cuatro pasos: documento, confirmación de la ficha encontrada, teléfono si falta,
 // y alta si es la primera vez.
+//
+// La secuencia de pasos vive en useIdentityGate: el tema boutique pinta la misma lógica con
+// otra cara (ver catalogThemes/boutique/IdentityGate.jsx), y duplicar el flujo entero para
+// eso habría sido arriesgarse a que las dos copias se desincronicen.
 export default function IdentityGate({ token, store, onIdentified }) {
     const { dark, toggle } = useTheme();
-    const [step, setStep] = useState("doc"); // doc | confirm | phone | register
-    const [prefix, setPrefix] = useState("V");
-    const [number, setNumber] = useState("");
-    const [match, setMatch] = useState(null);  // ficha encontrada
-    const [name, setName] = useState("");
-    const [phone, setPhone] = useState("");
-    const [busy, setBusy] = useState(false);
-    const [err, setErr] = useState(null);
-
-    // Nombre explícito: `document` a secas taparía el objeto global del DOM.
-    const fullDocument = `${prefix}-${number}`;
-    const phoneOk = phone.replace(/\D/g, "").length >= 7;
-
-    const lookup = async () => {
-        if (number.length < 6 || busy) return;
-        setBusy(true); setErr(null);
-        try {
-            const r = await publicApi.identify(token, fullDocument);
-            if (r.data.found) {
-                setMatch(r.data);
-                if (r.data.phone) {
-                    onIdentified({ document: fullDocument, name: r.data.name, phone: r.data.phone });
-                } else {
-                    setPhone("");
-                    setStep("phone");
-                }
-            } else {
-                setStep("register");
-            }
-        } catch (e) {
-            setErr(e.message || "No se pudo verificar. Intenta de nuevo.");
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    const restart = () => { setStep("doc"); setMatch(null); setName(""); setPhone(""); setErr(null); };
+    const {
+        step, prefix, setPrefix, number, setNumber, match, name, setName, phone, setPhone,
+        busy, err, fullDocument, phoneOk,
+        lookup, restart, confirmMatch, submitPhone, submitRegister,
+    } = useIdentityGate(token, onIdentified);
 
     return (
         <div className="min-h-screen relative flex flex-col items-center justify-center px-5 py-10 bg-surface-2 dark:bg-surface-dark">
@@ -150,14 +121,7 @@ export default function IdentityGate({ token, store, onIdentified }) {
                                 </p>
                                 <p className="text-[11px] font-bold text-content-muted tabular-nums">{fullDocument}</p>
                             </div>
-                            <GateButton
-                                onClick={() => {
-                                    if (!match?.phone) return setStep("phone");
-                                    onIdentified({ document: fullDocument, name: match.name, phone: match.phone });
-                                }}
-                            >
-                                Sí, soy yo
-                            </GateButton>
+                            <GateButton onClick={confirmMatch}>Sí, soy yo</GateButton>
                             <button onClick={restart} className="w-full text-[10px] font-black uppercase tracking-widest text-content-subtle hover:text-content dark:hover:text-white">
                                 No, corregir cédula
                             </button>
@@ -174,14 +138,8 @@ export default function IdentityGate({ token, store, onIdentified }) {
                                     Es por donde te confirmamos el pedido y te enviamos la factura.
                                 </p>
                             </div>
-                            <GateInput value={phone} onChange={setPhone} type="tel" placeholder="0414 5550000" autoFocus
-                                onEnter={() => phoneOk && onIdentified({ document: fullDocument, name: match.name, phone: phone.trim() })} />
-                            <GateButton
-                                onClick={() => onIdentified({ document: fullDocument, name: match.name, phone: phone.trim() })}
-                                disabled={!phoneOk}
-                            >
-                                Entrar al catálogo
-                            </GateButton>
+                            <GateInput value={phone} onChange={setPhone} type="tel" placeholder="0414 5550000" autoFocus onEnter={submitPhone} />
+                            <GateButton onClick={submitPhone} disabled={!phoneOk}>Entrar al catálogo</GateButton>
                             <button onClick={restart} className="w-full text-[10px] font-black uppercase tracking-widest text-content-subtle hover:text-content dark:hover:text-white">
                                 Volver
                             </button>
@@ -199,12 +157,8 @@ export default function IdentityGate({ token, store, onIdentified }) {
                                 </p>
                             </div>
                             <GateInput value={name} onChange={v => setName(v.toUpperCase())} placeholder="Nombre completo" autoFocus />
-                            <GateInput value={phone} onChange={setPhone} type="tel" placeholder="0414 5550000"
-                                onEnter={() => name.trim().length >= 2 && phoneOk && onIdentified({ document: fullDocument, name: name.trim(), phone: phone.trim() })} />
-                            <GateButton
-                                onClick={() => onIdentified({ document: fullDocument, name: name.trim(), phone: phone.trim() })}
-                                disabled={name.trim().length < 2 || !phoneOk}
-                            >
+                            <GateInput value={phone} onChange={setPhone} type="tel" placeholder="0414 5550000" onEnter={submitRegister} />
+                            <GateButton onClick={submitRegister} disabled={name.trim().length < 2 || !phoneOk}>
                                 Entrar al catálogo
                             </GateButton>
                             <button onClick={restart} className="w-full text-[10px] font-black uppercase tracking-widest text-content-subtle hover:text-content dark:hover:text-white">
@@ -252,16 +206,3 @@ function GateButton({ onClick, disabled, children }) {
         </button>
     );
 }
-
-// Colores del estado. "rechazado" no viene del servidor: lo deduce el navegador cuando un
-// pedido que envió ya no aparece en la lista (ver rejectedIds).
-const STAGE_STYLES = {
-    enviado: "bg-warning/15 text-warning border-warning/30",
-    confirmado: "bg-info/15 text-info border-info/30",
-    facturado: "bg-brand-500/15 text-brand-500 border-brand-500/30",
-    pagado: "bg-success/15 text-success border-success/30",
-    anulado: "bg-danger/15 text-danger border-danger/30",
-    rechazado: "bg-danger/15 text-danger border-danger/30",
-};
-
-// Cantidades: enteras para unidades contables, 3 decimales para peso y volumen. Aquí no

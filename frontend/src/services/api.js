@@ -97,15 +97,51 @@ async function request(path, options = {}) {
   return data;
 }
 
+// Campos de texto que SÍ viajan vacíos. Para el resto, una cadena vacía significa "no lo
+// mandes" y el servidor conserva lo que tenía —así una edición parcial no borra medio
+// producto—, pero en estos dos vaciar la caja es justamente cómo se quita el texto de la
+// vitrina, y sin esto no habría manera de borrarlos desde el modal.
+const CAMPOS_VACIABLES = ["brand", "short_description", "description", "benefits"];
+
 function buildProductForm(body, imageFile, removeImage) {
   const fd = new FormData();
   Object.entries(body).forEach(([k, v]) => {
+    if (v === "" && CAMPOS_VACIABLES.includes(k)) { fd.append(k, ""); return; }
     if (v == null || v === "") return;
     // Los arrays deben ir como JSON para que el backend pueda parsearlos
     fd.append(k, Array.isArray(v) ? JSON.stringify(v) : v);
   });
   if (imageFile) fd.append("image", imageFile);
   if (removeImage) fd.append("remove_image", "true");
+  return fd;
+}
+
+// Una categoría se guarda como JSON salvo que traiga foto: solo entonces hace falta
+// multipart. Así el resto del sistema —donde nadie sube fotos de categoría— sigue mandando
+// exactamente lo que mandaba antes.
+function categoryPayload(body, imageFile, clearImage) {
+  if (!imageFile && !clearImage) return { body: JSON.stringify(body) };
+  const fd = new FormData();
+  Object.entries(body).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    fd.append(k, v);
+  });
+  if (imageFile) fd.append("image", imageFile);
+  if (clearImage) fd.append("clear_image", "true");
+  return { body: fd };
+}
+
+// Datos + archivos de un banner. A diferencia de buildProductForm, aquí SÍ se mandan las
+// cadenas vacías: vaciar el enlace o el título de un banner es una edición válida, y
+// saltárselas dejaría el valor viejo guardado sin forma de borrarlo desde el panel.
+function bannerForm(fields = {}, files = {}) {
+  const fd = new FormData();
+  Object.entries(fields).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    fd.append(k, typeof v === "boolean" ? String(v) : v);
+  });
+  if (files.image) fd.append("image", files.image);
+  if (files.image_mobile) fd.append("image_mobile", files.image_mobile);
   return fd;
 }
 
@@ -132,10 +168,21 @@ export const api = {
     // filas ya normalizadas, que el servidor revalida antes de escribir.
     importar: (body) => request("/products/import", { method: "POST", body: JSON.stringify(body) }),
   },
+  // Etiquetas de beneficio reusables para la ficha pública del producto ("Repara y
+  // fortalece"). JSON simple, sin archivos.
+  benefitTags: {
+    getAll: () => request("/benefit-tags"),
+    create: (name) => request("/benefit-tags", { method: "POST", body: JSON.stringify({ name }) }),
+    update: (id, name) => request(`/benefit-tags/${id}`, { method: "PUT", body: JSON.stringify({ name }) }),
+    remove: (id) => request(`/benefit-tags/${id}`, { method: "DELETE" }),
+  },
   categories: {
     getAll:  ()          => request("/categories"),
-    create:  (body)      => request("/categories",       { method: "POST",   body: JSON.stringify(body) }),
-    update:  (id, body)  => request(`/categories/${id}`, { method: "PUT",    body: JSON.stringify(body) }),
+    // imageFile / clearImage son opcionales y solo los usa la vitrina pública: sin ellos la
+    // llamada sigue siendo el JSON de siempre, que es como la usan el catálogo y el modal
+    // de productos.
+    create:  (body, imageFile)             => request("/categories",       { method: "POST",   ...categoryPayload(body, imageFile) }),
+    update:  (id, body, imageFile, clearImage) => request(`/categories/${id}`, { method: "PUT",    ...categoryPayload(body, imageFile, clearImage) }),
     remove:  (id)        => request(`/categories/${id}`, { method: "DELETE" }),
   },
   customers: {
@@ -232,6 +279,15 @@ export const api = {
     get:    () => request("/catalog-link"),
     create: () => request("/catalog-link", { method: "POST" }),
     revoke: () => request("/catalog-link", { method: "DELETE" }),
+  },
+  // Carrusel de la vitrina pública. Los banners llevan archivos, así que van por multipart:
+  // `fields` son los datos y `files` las imágenes que se hayan cambiado en esta edición.
+  catalogBanners: {
+    getAll: () => request("/catalog-banners"),
+    create: (fields, files) => request("/catalog-banners", { method: "POST", body: bannerForm(fields, files) }),
+    update: (id, fields, files) => request(`/catalog-banners/${id}`, { method: "PUT", body: bannerForm(fields, files) }),
+    remove: (id) => request(`/catalog-banners/${id}`, { method: "DELETE" }),
+    reorder: (ids) => request("/catalog-banners/reorder", { method: "PUT", body: JSON.stringify({ ids }) }),
   },
   backup: {
     list:     ()           => request("/backup"),
@@ -415,9 +471,12 @@ async function publicRequest(path, options) {
 }
 
 export const publicApi = {
-  getStore: (token) => publicRequest(`/public/catalog/${encodeURIComponent(token)}`),
+  getStore: (token, params = {}) =>
+    publicRequest(`/public/catalog/${encodeURIComponent(token)}?` + new URLSearchParams(params)),
   getProducts: (token, params = {}) =>
     publicRequest(`/public/catalog/${encodeURIComponent(token)}/products?` + new URLSearchParams(params)),
+  getProduct: (token, id, params = {}) =>
+    publicRequest(`/public/catalog/${encodeURIComponent(token)}/products/${encodeURIComponent(id)}?` + new URLSearchParams(params)),
   identify: (token, document) =>
     publicRequest(`/public/catalog/${encodeURIComponent(token)}/identify`, {
       method: "POST",

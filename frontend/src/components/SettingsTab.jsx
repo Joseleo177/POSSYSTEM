@@ -7,6 +7,7 @@ import ConfirmModal from "./ui/ConfirmModal";
 import { resolveImageUrl } from "../helpers";
 import { applyBrandColor, clearBrandColor, DEFAULT_BRAND } from "../helpers/brandColor";
 import { useApp } from "../context/AppContext";
+import StorefrontSettings from "./Settings/StorefrontSettings";
 
 // El respaldo es de la base entera, no de una empresa: solo el superusuario. El backend
 // lo exige igual (ver routes/backup.js); esto es para no ofrecer una pestaña que va a
@@ -16,6 +17,9 @@ const SECTIONS = [
     ["suscripcion", "Mi Suscripción"],
     ["factura", "Factura"],
     ["currencies", "Monedas"],
+    // Contenido del catálogo público: banners, anuncio y menú destacado. Va aquí y no en el
+    // módulo Catálogo porque es configuración de la tienda, no gestión de productos.
+    ["vitrina", "Vitrina"],
     ["respaldo", "Respaldo", { superuserOnly: true }],
 ];
 
@@ -662,6 +666,9 @@ export default function SettingsTab({ notify }) {
                         />
                     </div>
                 )}
+                {/* ── Vitrina ── */}
+                {section === "vitrina" && <StorefrontSettings notify={notify} />}
+
                 {/* ── Respaldo ── */}
                 {section === "respaldo" && (
                     <div className="max-w-2xl animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-3">

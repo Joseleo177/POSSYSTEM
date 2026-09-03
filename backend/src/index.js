@@ -119,6 +119,8 @@ app.use("/api/credit-notes",     require("./routes/creditNotes"));       // auth
 app.use("/api/incomes",          require("./routes/incomes"));            // auth dentro
 app.use("/api/backup",           require("./routes/backup"));             // auth+config dentro
 app.use("/api/catalog-link",     require("./routes/publicCatalog").adminRouter); // auth+config dentro
+app.use("/api/catalog-banners",  require("./routes/catalogBanners"));       // auth+config dentro
+app.use("/api/benefit-tags",     require("./routes/benefitTags"));          // auth dentro
 
 app.use("/api/events",           require("./routes/events"));             // SSE stream
 

@@ -33,6 +33,15 @@ const getActive = async (req, res) => {
         ],
       },
       include: [{ model: Product, through: { attributes: [] }, attributes: ['id'] }],
+      // La caja aplica la PRIMERA promoción que encuentra para un producto (ver
+      // promoLineDiscountUsd en CartContext). Sin un orden fijo, cuál gana cuando hay dos
+      // sobre el mismo producto lo decidía la base: podía cambiar entre consultas, y ahora
+      // que la vitrina pública también publica el descuento, esa ambigüedad haría que el
+      // catálogo anuncie un precio y la caja cobre otro.
+      //
+      // Manda la más reciente. Es la regla que espera quien acaba de cargar una promoción
+      // nueva sobre un producto que ya estaba en oferta.
+      order: [['starts_at', 'DESC'], ['id', 'DESC']],
     });
     const data = promos.map(p => {
       const json = p.toJSON();
