@@ -59,32 +59,28 @@ async function toggleBank(id) {
 
 async function getAllMethods() {
   const methods = await PaymentMethod.findAll({
-    attributes: { include: [[Sequelize.fn("COUNT", Sequelize.col("Sales.id")), "sales_count"]] },
-    include: [{ model: Sale, attributes: [] }],
-    group: ["PaymentMethod.id"],
     order: [["sort_order", "ASC"], ["name", "ASC"]],
     raw: true,
   });
-  methods.forEach(m => m.sales_count = parseInt(m.sales_count || 0));
   return { data: methods };
 }
 
-async function createMethod({ name, code, color = "#555555", sort_order = 0 }) {
+async function createMethod({ name, code, color = "#555555", sort_order = 0, allows_outflow = true }) {
   if (!name?.trim()) { const e = new Error("El nombre es requerido"); e.status = 400; throw e; }
   if (!code?.trim()) { const e = new Error("El código es requerido"); e.status = 400; throw e; }
   const normalizedCode = code.trim().toLowerCase().replace(/\s+/g, "_");
   try {
-    const method = await PaymentMethod.create({ name: name.trim(), code: normalizedCode, color, sort_order });
+    const method = await PaymentMethod.create({ name: name.trim(), code: normalizedCode, color, sort_order, allows_outflow });
     return { data: method };
   } catch (err) { wrapUnique(err, "un método"); }
 }
 
-async function updateMethod(id, { name, color, active, sort_order }) {
+async function updateMethod(id, { name, color, active, sort_order, allows_outflow }) {
   if (!name?.trim()) { const e = new Error("El nombre es requerido"); e.status = 400; throw e; }
   const method = await PaymentMethod.findByPk(id);
   if (!method) { const e = new Error("Método de pago no encontrado"); e.status = 404; throw e; }
   try {
-    await method.update({ name: name.trim(), color: color || "#555555", active: active ?? true, sort_order: sort_order ?? 0 });
+    await method.update({ name: name.trim(), color: color || "#555555", active: active ?? true, sort_order: sort_order ?? 0, allows_outflow: allows_outflow ?? true });
     return { data: method };
   } catch (err) { wrapUnique(err, "un método"); }
 }

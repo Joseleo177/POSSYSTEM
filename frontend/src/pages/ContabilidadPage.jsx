@@ -23,7 +23,7 @@ const SUB_PAGES = ["Estado de Cuenta", "Ingresos", "Egresos", "Facturas", "Notas
 export default function ContabilidadPage() {
  const {
  notify, can,
- journals, loadJournals,
+ journals, outflowJournals, loadJournals,
  currencies, baseCurrency,
  banks, loadBanks,
  paymentMethods, loadPaymentMethods,
@@ -147,7 +147,7 @@ export default function ContabilidadPage() {
  notify={notify}
  can={can}
  fmtPrice={fmtPrice}
- journals={journals}
+ journals={outflowJournals}
  />
  );
  case "Facturas":

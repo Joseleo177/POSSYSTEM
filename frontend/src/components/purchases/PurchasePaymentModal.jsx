@@ -26,7 +26,7 @@ const getEmpty = () => ({
  *   onSuccess – fn(res) llamada tras pago exitoso
  */
 export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
-  const { notify, baseCurrency, activeCurrencies, activeJournals } = useApp();
+  const { notify, baseCurrency, activeCurrencies, activeJournals, outflowJournals } = useApp();
   const [form, setForm] = useState(getEmpty);
   const [loading, setLoading] = useState(false);
 
@@ -108,7 +108,7 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
           <CustomSelect
             value={form.payment_journal_id === "" ? "" : String(form.payment_journal_id)}
             placeholder="Seleccionar diario..."
-            options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
+            options={outflowJournals.map(j => ({ value: String(j.id), label: j.name }))}
             onChange={(v) => {
               // El id vuelve a número: el resto del formulario compara con j.id sin convertir.
               const id = parseInt(v, 10);

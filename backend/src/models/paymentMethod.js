@@ -11,6 +11,7 @@ module.exports = (sequelize, DataTypes) => {
     code: { type: DataTypes.STRING(50), allowNull: false },
     color: { type: DataTypes.STRING(7), allowNull: false, defaultValue: '#555555' },
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    allows_outflow: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     sort_order: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

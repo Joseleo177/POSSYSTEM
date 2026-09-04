@@ -4,7 +4,7 @@ import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
 
-const EMPTY_METHOD = { name: "", code: "", color: "#555555" };
+const EMPTY_METHOD = { name: "", code: "", color: "#555555", allows_outflow: true };
 
 export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMethods }) {
   const [methodForm, setMethodForm] = useState(EMPTY_METHOD);
@@ -73,8 +73,8 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
             <thead className="sticky top-0 z-10">
               <tr>
                 <th className="w-12" />
-                {["Nombre", "Código", "Uso Global", "Estado", can("journals.manage") && "Acciones"].filter(Boolean).map(h => (
-                  <th key={h} className={h === "Acciones" ? "text-right pr-6" : h === "Uso Global" || h === "Estado" ? "text-center" : "text-left"}>
+                {["Nombre", "Código", "Estado", can("journals.manage") && "Acciones"].filter(Boolean).map(h => (
+                  <th key={h} className={h === "Acciones" ? "text-right pr-6" : h === "Estado" ? "text-center" : "text-left"}>
                     {h}
                   </th>
                 ))}
@@ -110,12 +110,16 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
                       )}
                     </td>
                     <td>
-                      <span className="badge badge-neutral shadow-none">
-                        {m.code}
-                      </span>
-                    </td>
-                    <td className="text-center">
-                      <span className="text-brand-500 font-black text-[11px]">{m.sales_count ?? 0}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="badge badge-neutral shadow-none">
+                          {m.code}
+                        </span>
+                        {m.allows_outflow === false && (
+                          <span className="badge badge-neutral shadow-none opacity-60" title="No puede usarse para pagar egresos ni compras">
+                            Solo entradas
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="text-center">
                       <span className={`badge shadow-none ${m.active ? "badge-success" : "badge-danger"}`}>
@@ -137,7 +141,7 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
                           ) : (
                             <>
                               <button
-                                onClick={() => { setMethodEditId(m.id); setMethodForm({ name: m.name, code: m.code, color: m.color || "#555555" }); }}
+                                onClick={() => { setMethodEditId(m.id); setMethodForm({ name: m.name, code: m.code, color: m.color || "#555555", allows_outflow: m.allows_outflow ?? true }); }}
                                 className="p-2 rounded-xl transition-all text-content-subtle hover:text-warning hover:bg-warning/10 active:scale-90"
                                 title="Editar"
                               >
@@ -211,6 +215,22 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
               Identifica al método en reportes
             </span>
           </div>
+        </div>
+        <div className="mb-4">
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={methodForm.allows_outflow ?? true}
+              onChange={e => setMethodForm(p => ({ ...p, allows_outflow: e.target.checked }))}
+              className="mt-0.5 w-4 h-4 rounded cursor-pointer accent-brand-500"
+            />
+            <span>
+              <span className="block text-[11px] font-black text-content dark:text-white uppercase tracking-tight">Tiene salidas</span>
+              <span className="block text-[10px] font-bold text-content-subtle mt-0.5">
+                Permite usarlo para pagar egresos o compras. Desactívalo en métodos que solo reciben, como Punto de Venta.
+              </span>
+            </span>
+          </label>
         </div>
         <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
           <Button variant="ghost" onClick={closeForm}>Cancelar</Button>

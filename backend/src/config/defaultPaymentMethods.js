@@ -22,7 +22,7 @@ const DEFAULT_PAYMENT_METHODS = [
   { name: 'Efectivo',      code: CASH_CODE,     color: '#22c55e', sort_order: 1 },
   { name: 'Pago Móvil',    code: 'pago_movil',  color: '#6366f1', sort_order: 2 },
   { name: 'Transferencia', code: 'transferencia', color: '#0ea5e9', sort_order: 3 },
-  { name: 'Punto de Venta', code: 'punto_venta', color: '#f59e0b', sort_order: 4 },
+  { name: 'Punto de Venta', code: 'punto_venta', color: '#f59e0b', sort_order: 4, allows_outflow: false },
   { name: 'Zelle',         code: 'zelle',       color: '#a855f7', sort_order: 5 },
 ];
 

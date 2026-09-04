@@ -158,6 +158,11 @@ export function AppProvider({ children }) {
   const activeJournals   = journals.filter(j => j.active);
   const activeBanks      = banks.filter(b => b.active);
   const activePaymentMethods = paymentMethods.filter(m => m.active);
+  // Diarios usables para dinero que SALE (egresos, pagos a proveedores): excluye los casados
+  // a un método que solo puede recibir, como Punto de Venta (nadie "paga a una persona" con
+  // un terminal de tarjeta).
+  const outflowCodes    = new Set(paymentMethods.filter(m => m.allows_outflow !== false).map(m => m.code));
+  const outflowJournals = activeJournals.filter(j => outflowCodes.has(j.type));
 
   const storeName    = settings.store_name || "MI TIENDA POS";
   const printerWidth = parseInt(settings.printer_width || "80");
@@ -198,7 +203,7 @@ export function AppProvider({ children }) {
       // Currencies
       currencies, activeCurrencies, baseCurrency, loadCurrencies,
       // Journals
-      journals, activeJournals, loadJournals,
+      journals, activeJournals, outflowJournals, loadJournals,
       // Banks
       banks, activeBanks, loadBanks,
       // Payment methods
