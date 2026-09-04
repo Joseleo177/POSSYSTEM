@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { api } from "../../services/api";
 
 const LIMIT = 50;
@@ -26,6 +26,9 @@ export function useTransacciones({ notify }) {
     // Filtro por quién hizo la venta. "" = todos.
     const [employeeId, setEmployeeId] = useState("");
     const [employees, setEmployees] = useState([]);
+    // Sucursal. "" = todas las que el empleado tiene permitidas (o toda la empresa, si es admin).
+    const [warehouseId, setWarehouseId] = useState("");
+    const [warehouses, setWarehouses] = useState([]);
     const [showFilterDrop, setShowFilterDrop] = useState(false);
     const [saleDetail, setSaleDetail] = useState(null);
     const [returnSale, setReturnSale] = useState(null);
@@ -36,7 +39,22 @@ export function useTransacciones({ notify }) {
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-    useEffect(() => { setPage(1); }, [debouncedSearch, histDateFrom, histDateTo, activeFilters, activeSeries, employeeId]);
+    useEffect(() => { setPage(1); }, [debouncedSearch, histDateFrom, histDateTo, activeFilters, activeSeries, employeeId, warehouseId]);
+
+    useEffect(() => {
+        // Un depósito no vende ni factura: no aporta nada a un filtro de ventas.
+        api.warehouses.getAll().then(r => setWarehouses((r.data || []).filter(w => w.sells !== false))).catch(() => {});
+    }, []);
+
+    // Serie y empleado dependen de la sucursal: la serie A no existe en la B, y un empleado
+    // de la B no tiene nada que hacer filtrando ventas de la A. Al cambiar de sucursal, una
+    // marca vieja de cualquiera de los dos ya no tiene sentido.
+    const firstWarehouseRender = useRef(true);
+    useEffect(() => {
+        if (firstWarehouseRender.current) { firstWarehouseRender.current = false; return; }
+        setActiveSeries([]);
+        setEmployeeId("");
+    }, [warehouseId]);
 
     // La lista para el desplegable. Si el empleado no tiene permiso para verla (employees.view)
     // se queda vacía y el filtro simplemente no se ofrece, en vez de saltar un error al abrir
@@ -59,6 +77,7 @@ export function useTransacciones({ notify }) {
             if (activeFilters.length) params.status    = activeFilters[0];
             if (activeSeries.length)  params.serie_id  = activeSeries[0];
             if (employeeId)           params.employee_id = employeeId;
+            if (warehouseId)          params.warehouse_id = warehouseId;
             const r = await api.sales.getAll(params);
             setSales(r.data);
             setTotal(r.total || 0);
@@ -68,7 +87,7 @@ export function useTransacciones({ notify }) {
             setSumForgiven(parseFloat(r.sum_forgiven || 0));
         } catch (e) { notify(e.message, "err"); }
         finally { setLoading(false); }
-    }, [histDateFrom, histDateTo, debouncedSearch, activeFilters, activeSeries, employeeId, page, notify]);
+    }, [histDateFrom, histDateTo, debouncedSearch, activeFilters, activeSeries, employeeId, warehouseId, page, notify]);
 
     useEffect(() => { loadSales(); }, [loadSales]);
 
@@ -79,6 +98,7 @@ export function useTransacciones({ notify }) {
         setActiveFilters([]);
         setActiveSeries([]);
         setEmployeeId("");
+        setWarehouseId("");
         setHistDateFrom("");
         setHistDateTo("");
         setSearchTerm("");
@@ -91,7 +111,7 @@ export function useTransacciones({ notify }) {
     };
 
     const totalPages = Math.ceil(total / LIMIT);
-    const hasFilters = activeFilters.length > 0 || activeSeries.length > 0 || !!employeeId || !!histDateFrom || !!histDateTo;
+    const hasFilters = activeFilters.length > 0 || activeSeries.length > 0 || !!employeeId || !!warehouseId || !!histDateFrom || !!histDateTo;
 
     return {
         sales, total, sumTotal, sumPaid, sumPending, sumForgiven, page, setPage, loading, LIMIT,
@@ -100,6 +120,7 @@ export function useTransacciones({ notify }) {
         searchTerm, setSearchTerm,
         activeFilters, activeSeries,
         employeeId, setEmployeeId, employees,
+        warehouseId, setWarehouseId, warehouses,
         showFilterDrop, setShowFilterDrop,
         saleDetail, setSaleDetail,
         returnSale, setReturnSale,

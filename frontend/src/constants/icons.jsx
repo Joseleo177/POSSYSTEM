@@ -102,6 +102,16 @@ export const TAB_ICONS = {
             />
         </svg>
     ),
+    Monedas: (cls = "w-5 h-5") => (
+        <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.8}
+                d="M3 10h18M7 15h1m4 0h1m-7 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+        </svg>
+    ),
     "Configuración": (cls = "w-5 h-5") => (
         <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

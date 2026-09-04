@@ -16,30 +16,52 @@ export default function SalesReport() {
  const [range, setRange] = useState(defaultRange(30));
  const hr = useHourRange();
 
+ const { companyInfo, baseCurrency, notify } = useApp();
+
+ // Sucursal. Con varias, este dashboard mezclaba todo: era imposible saber cuánto vendió
+ // cada una sin ir sucursal por sucursal a otro reporte.
+ const [warehouseId, setWarehouseId] = useState("");
+ const [warehouses, setWarehouses] = useState([]);
+ useEffect(() => {
+  api.warehouses.getAll()
+   // Un depósito no vende ni factura: no aporta nada a un reporte de ventas.
+   .then(r => setWarehouses((r.data || []).filter(w => w.sells !== false)))
+   .catch(e => console.error("[SalesReport] no se pudieron cargar los almacenes:", e));
+ }, []);
+ const todasLabel = warehouses.length === 1 ? warehouses[0].name : "TODAS LAS SUCURSALES";
+
  // Serie de facturación. Con una serie por sucursal o por caja, es el corte con el que se
  // separa lo que emitió cada punto. Las notas de crédito no facturan: no son un corte válido
- // de un reporte de ventas, mismo criterio que el reporte de diarios de pago.
+ // de un reporte de ventas, mismo criterio que el reporte de diarios de pago. Cada serie es
+ // de UNA sola sucursal, así que con una elegida arriba las de las demás no pueden dar
+ // resultados.
  const [serieId, setSerieId] = useState("");
- const [series, setSeries] = useState([]);
+ const [allSeries, setAllSeries] = useState([]);
  useEffect(() => {
   api.series.getAll()
-   .then(r => setSeries((r.data || []).filter(s => s.type !== "nc")))
+   .then(r => setAllSeries((r.data || []).filter(s => s.type !== "nc")))
    .catch(e => console.error("[SalesReport] no se pudieron cargar las series:", e));
  }, []);
+ const series = allSeries.filter(s => !warehouseId || s.warehouse_id === Number(warehouseId));
+ // Al cambiar de sucursal, una serie marcada que ya no pertenece a ella queda sin sentido.
+ useEffect(() => { setSerieId(""); }, [warehouseId]);
  const serieParams = serieId ? { serie_ids: serieId } : {};
  // Para el encabezado del PDF y el nombre del Excel: un reporte de una sola serie tiene que
  // decir cuál, o es indistinguible del de todas y parece mal sumado.
  const serieNombre = serieId ? (series.find(s => String(s.id) === String(serieId))?.name || "") : "";
 
- const params = { date_from: range.from, date_to: range.to, ...hr.params, ...serieParams };
- const { data, loading, error } = useReport(api.reports.sales, params, [range, hr.key, serieId]);
+ // Igual que serieNombre: el PDF y el Excel tienen que decir de qué sucursal son, o un
+ // reporte acotado es indistinguible del de todas.
+ const warehouseNombre = warehouseId ? (warehouses.find(w => String(w.id) === String(warehouseId))?.name || "") : "";
+
+ const params = { date_from: range.from, date_to: range.to, warehouse_id: warehouseId, ...hr.params, ...serieParams };
+ const { data, loading, error } = useReport(api.reports.sales, params, [range, hr.key, serieId, warehouseId]);
  const s = data?.summary;
  // La distribución de canales se mide contra lo cobrado, no contra el ingreso bruto: son
  // cortes distintos —una venta a crédito factura sin entrar a caja, y un abono de una factura
  // vieja entra a caja sin facturar hoy—, así que dividir entre las ventas daba porcentajes
  // que no sumaban 100.
  const totalCobrado = (data?.by_method || []).reduce((acc, m) => acc + parseFloat(m.total || 0), 0);
- const { companyInfo, baseCurrency, notify } = useApp();
  const [pdfLoading, setPdfLoading] = useState(false);
 
  // El desglose por producto no viene con el reporte de la pantalla —esta vista muestra
@@ -54,7 +76,7 @@ export default function SalesReport() {
      printSalesReport(
        data,
        r.data?.top_by_revenue || r.top_by_revenue || [],
-       { ...range, ...hr.params, serie_name: serieNombre },
+       { ...range, ...hr.params, serie_name: serieNombre, warehouse_name: warehouseNombre },
        companyInfo,
        baseCurrency,
      );
@@ -71,6 +93,20 @@ export default function SalesReport() {
  <div className="flex items-center gap-2 flex-wrap">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
  <HourRangePicker from={hr.hours.from} to={hr.hours.to} onChange={hr.setHours} />
+ {/* Con una sola sucursal no hay nada que elegir: mostrar el selector solo insinuaría que
+     hay más, cuando no las hay. */}
+ {warehouses.length > 1 && (
+ <CustomSelect
+  value={warehouseId}
+  onChange={setWarehouseId}
+  placeholder={todasLabel}
+  boxClassName="h-10 min-w-[190px]"
+  options={[
+   { value: "", label: todasLabel },
+   ...warehouses.map(w => ({ value: String(w.id), label: w.name }))
+  ]}
+ />
+ )}
  {/* Con una sola serie, "todas" promete un alcance que no existe: se muestra su nombre.
      Mismo criterio que el selector de sucursal del reporte de márgenes. */}
  {series.length > 0 && (
@@ -110,7 +146,7 @@ export default function SalesReport() {
  <span className="hidden sm:inline">{pdfLoading ? "Generando..." : "Reporte PDF"}</span>
  <span className="sm:hidden">PDF</span>
  </button>
- <ExportButton onClick={() => buildSalesExcel(data, { ...range, ...hr.params, serie_name: serieNombre })} />
+ <ExportButton onClick={() => buildSalesExcel(data, { ...range, ...hr.params, serie_name: serieNombre, warehouse_name: warehouseNombre })} />
  </div>
  )}
  </div>

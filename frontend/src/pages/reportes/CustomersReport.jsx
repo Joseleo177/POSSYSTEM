@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { buildCustomersExcel } from "../../helpers/excel";
+import CustomSelect from "../../components/ui/CustomSelect";
 import {
  fmt$, fmtN, pct,
  useReport, defaultRange, Pagination, useExportFull,
@@ -16,13 +17,25 @@ export default function CustomersReport() {
  // pide datos nuevos. Al cambiar de pestaña vuelve a la primera.
  const PAGE_SIZE = 25;
  const [page, setPage] = useState(1);
+
+ // Consumo por sucursal: un cliente puede comprar en varias, y mezclarlas hace que el ranking
+ // de una tienda se infle con lo que compró en otra.
+ const [warehouseId, setWarehouseId] = useState("");
+ const [warehouses, setWarehouses] = useState([]);
+ useEffect(() => {
+  api.warehouses.getAll()
+   .then(r => setWarehouses((r.data || []).filter(w => w.sells !== false)))
+   .catch(e => console.error("[CustomersReport] no se pudieron cargar los almacenes:", e));
+ }, []);
+ const todasLabel = warehouses.length === 1 ? warehouses[0].name : "TODAS LAS SUCURSALES";
+
  const params = {
-   date_from: range.from, date_to: range.to, inactive_days: inactiveDays,
+   date_from: range.from, date_to: range.to, inactive_days: inactiveDays, warehouse_id: warehouseId,
    limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
  };
- const { data, loading, error } = useReport(api.reports.customersAnalysis, params, [range, inactiveDays, page]);
+ const { data, loading, error } = useReport(api.reports.customersAnalysis, params, [range, inactiveDays, warehouseId, page]);
  // El export pide el dataset completo aparte, así que va sin limit ni offset.
- const exportFull = useExportFull(api.reports.customersAnalysis, { date_from: range.from, date_to: range.to, inactive_days: inactiveDays }, (d) => buildCustomersExcel(d, range));
+ const exportFull = useExportFull(api.reports.customersAnalysis, { date_from: range.from, date_to: range.to, inactive_days: inactiveDays, warehouse_id: warehouseId }, (d) => buildCustomersExcel(d, range));
  const rr = data?.repeat_rate;
 
  const totalFor = { top: data?.totals?.top ?? 0, inactive: data?.totals?.inactive ?? 0, new: data?.totals?.new ?? 0 };
@@ -37,7 +50,23 @@ export default function CustomersReport() {
  return (
  <div className="h-full flex flex-col space-y-4 overflow-auto">
  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+ <div className="flex items-center gap-2 flex-wrap">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
+ {/* Con una sola sucursal no hay nada que elegir: mostrar el selector solo insinuaría que
+     hay más, cuando no las hay. */}
+ {warehouses.length > 1 && (
+ <CustomSelect
+  value={warehouseId}
+  onChange={setWarehouseId}
+  placeholder={todasLabel}
+  boxClassName="h-10 min-w-[190px]"
+  options={[
+   { value: "", label: todasLabel },
+   ...warehouses.map(w => ({ value: String(w.id), label: w.name }))
+  ]}
+ />
+ )}
+ </div>
  {data && <ExportButton onClick={exportFull.run} loading={exportFull.exporting} />}
  </div>
 

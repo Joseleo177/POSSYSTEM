@@ -1,5 +1,6 @@
 const { Serie, SerieRange, Employee, UserSerie, Warehouse, Sale, Return, sequelize } = require("../models");
 const { Op } = require("sequelize");
+const { visibleWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
 
 // Valida con qué serie se van a numerar las notas de crédito de una serie de facturas.
 //
@@ -40,10 +41,15 @@ const resolveNcSerie = async (ncSerieId, { serieId = null, type, warehouseId }) 
   return id;
 };
 
-// GET /api/series  — todas con rangos y usuarios (admin)
+// GET /api/series  — con rangos y usuarios. Un admin ve las de toda la empresa; un empleado
+// solo las de sus propios almacenes, igual que en reportes: sin esto, cualquiera con
+// series.view (necesario para el filtro de Contabilidad > Ventas) veía y hasta podía
+// gestionar series de una sucursal a la que no tiene acceso.
 const getAll = async (req, res) => {
   try {
+    const allowed = await visibleWarehouseIds(req);
     const series = await Serie.findAll({
+      where: allowed ? { warehouse_id: allowed } : {},
       include: [
         { model: SerieRange, order: [['start_number', 'ASC']] },
         { model: Employee, attributes: ['id', 'full_name'], through: { attributes: [] } },
@@ -93,6 +99,7 @@ const create = async (req, res) => {
     const { name, prefix, padding, type, warehouse_id, nc_serie_id } = req.body;
     if (!name || !prefix) throw new Error("name y prefix son requeridos");
     if (!warehouse_id) throw new Error("Debes indicar el almacén al que pertenece la serie");
+    await assertWarehouseAccess(req, warehouse_id);
     const warehouse = await Warehouse.findByPk(warehouse_id);
     if (!warehouse) throw new Error("Almacén no encontrado");
     const validTypes = ['factura', 'nc'];
@@ -120,6 +127,9 @@ const update = async (req, res) => {
   try {
     const serie = await Serie.findByPk(req.params.id);
     if (!serie) throw new Error("Serie no encontrada");
+    // Sin esto, un empleado con series.manage podía tocar (renombrar, desactivar, mover) la
+    // serie de una sucursal ajena con solo conocer su id.
+    await assertWarehouseAccess(req, serie.warehouse_id);
     const { name, prefix, padding, active, type, warehouse_id, nc_serie_id } = req.body;
     const validTypes = ['factura', 'nc'];
 
@@ -127,6 +137,7 @@ const update = async (req, res) => {
     // emitió, sus correlativos quedaron atados a ese almacén y cambiarlo falsea el histórico.
     let nextWarehouseId = serie.warehouse_id;
     if (warehouse_id && parseInt(warehouse_id) !== serie.warehouse_id) {
+      await assertWarehouseAccess(req, warehouse_id);
       const emitidas = await Sale.count({ where: { serie_id: serie.id } });
       if (emitidas > 0) {
         throw new Error(`No se puede cambiar el almacén: la serie ya tiene ${emitidas} documento(s) emitido(s)`);
@@ -176,6 +187,7 @@ const remove = async (req, res) => {
   try {
     const serie = await Serie.findByPk(req.params.id);
     if (!serie) throw new Error("Serie no encontrada");
+    await assertWarehouseAccess(req, serie.warehouse_id);
 
     // Una serie que ya emitió no se borra nunca: sus correlativos son documentos fiscales y
     // deben poder rastrearse. Borrarla dejaba las ventas con serie_id en NULL —sin forma de
@@ -238,6 +250,7 @@ const addRange = async (req, res) => {
     if (end <= start) throw new Error("end_number debe ser mayor que start_number");
     const serie = await Serie.findByPk(req.params.id);
     if (!serie) throw new Error("Serie no encontrada");
+    await assertWarehouseAccess(req, serie.warehouse_id);
 
     // Validar solapamiento con rangos existentes de la misma serie
     const overlap = await SerieRange.findOne({
@@ -265,6 +278,8 @@ const removeRange = async (req, res) => {
   try {
     const range = await SerieRange.findByPk(req.params.rangeId);
     if (!range) throw new Error("Rango no encontrado");
+    const serie = await Serie.findByPk(range.serie_id);
+    if (serie) await assertWarehouseAccess(req, serie.warehouse_id);
     await range.destroy();
     res.json({ ok: true });
   } catch (err) {
@@ -278,6 +293,7 @@ const assignUsers = async (req, res) => {
     const { user_ids } = req.body;
     const serie = await Serie.findByPk(req.params.id);
     if (!serie) throw new Error("Serie no encontrada");
+    await assertWarehouseAccess(req, serie.warehouse_id);
     await serie.setEmployees(user_ids || []);
     // Recarga con usuarios asignados
     const updated = await Serie.findByPk(serie.id, {

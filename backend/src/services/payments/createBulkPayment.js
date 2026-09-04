@@ -1,9 +1,10 @@
 const { Payment, Sale, Return, Sequelize, sequelize, Op, getSaleBalance } = require("./shared");
 const { PAYMENT_TOLERANCE, RECEIVABLE_STATUSES, resolveSaleStatus } = require("../../utils/saleBalance");
-const { Expense, ExpenseCategory, PaymentJournal, Currency, Customer } = require("../../models");
+const { Expense, ExpenseCategory, PaymentJournal, Currency } = require("../../models");
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
+const { addCreditMovement } = require("../customers/creditLedger");
 
 const err = (message, status = 400) =>
   Object.assign(new Error(message), { status, isOperational: true });
@@ -120,6 +121,14 @@ module.exports = async function createBulkPayment(body, req) {
     // ser un error de selección, y el dinero terminaría imputado a quien no pagó.
     const clientes = new Set(ventas.map(v => v.customer_id ?? null));
     if (clientes.size > 1) throw err("Las facturas seleccionadas no son del mismo cliente");
+
+    // Todas de la misma sucursal: el cobro genera UN solo movimiento de caja (una sola caja,
+    // un solo vuelto), y ese movimiento tiene que poder atribuirse a la sucursal donde de
+    // verdad entró el dinero. Mezclarlas dejaría el arqueo de una tienda con un ingreso que no
+    // le corresponde, o sin uno que sí — y el vuelto de abajo solo se guarda con la sucursal de
+    // la primera factura, así que las demás quedarían mal atribuidas.
+    const sucursales = new Set(ventas.map(v => v.warehouse_id ?? null));
+    if (sucursales.size > 1) throw err("Las facturas seleccionadas no son de la misma sucursal");
 
     const conSaldo = [];
     for (const venta of ventas) {
@@ -310,10 +319,17 @@ module.exports = async function createBulkPayment(body, req) {
       }, { transaction: t });
     }
     if (creditAmt > 0) {
-      await Customer.increment(
-        { credit_balance: creditAmt },
-        { where: { id: conSaldo[0].venta.customer_id }, transaction: t }
-      );
+      // Todas las facturas del lote son de la misma sucursal (ver la validación de arriba),
+      // así que el crédito queda atado a esa.
+      await addCreditMovement({
+        customer_id:  conSaldo[0].venta.customer_id,
+        warehouse_id: conSaldo[0].venta.warehouse_id,
+        amount:       creditAmt,
+        reason:       'sobrante_cobro',
+        sale_id:      conSaldo[0].venta.id,
+        employee_id:  employee_id || null,
+        company_id:   conSaldo[0].venta.company_id || null,
+      }, t);
     }
 
     await t.commit();

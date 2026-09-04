@@ -35,7 +35,7 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
   const saveSerie = async () => {
     if (!canConfig) return notify("No tienes permisos para esta acción", "err");
     if (!form.name || !form.prefix) return notify("Nombre y prefijo son requeridos", "err");
-    if (!form.warehouse_id) return notify("Selecciona el almacén al que pertenece la serie", "err");
+    if (!form.warehouse_id) return notify("Selecciona la sucursal a la que pertenece la serie", "err");
     setSavingSerie(true);
     try {
       if (editSerie) {
@@ -122,7 +122,7 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
                     }
                   </div>
                   <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mt-0.5">
-                    {serie.Warehouse?.name || "Sin almacén"} · {serie.padding} dígitos · {(serie.SerieRanges || []).filter(r => r.active).length} rangos activos
+                    {serie.Warehouse?.name || "Sin sucursal"} · {serie.padding} dígitos · {(serie.SerieRanges || []).filter(r => r.active).length} rangos activos
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -276,18 +276,18 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
           </div>
         </div>
         <div className="mb-3">
-          <div className="label mb-1">Almacén *</div>
+          <div className="label mb-1">Sucursal *</div>
           <CustomSelect
             value={form.warehouse_id ?? ""}
             onChange={val => setForm(p => ({ ...p, warehouse_id: val }))}
             // Un depósito no factura: ofrecerle una serie es prometer una numeración que
             // nunca va a usar.
             options={allWarehouses.filter(w => w.active && w.sells !== false).map(w => ({ value: w.id, label: w.name }))}
-            placeholder="Seleccionar almacén..."
+            placeholder="Seleccionar sucursal..."
             className="w-full"
           />
           <div className="text-[10px] font-bold text-content-subtle mt-1 opacity-60">
-            Cada almacén lleva su propia numeración. No se puede cambiar una vez que la serie emitió documentos.
+            Cada sucursal lleva su propia numeración. No se puede cambiar una vez que la serie emitió documentos.
           </div>
         </div>
         {form.type === "factura" && (
@@ -296,7 +296,7 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
             <CustomSelect
               value={form.nc_serie_id ?? ""}
               onChange={val => setForm(p => ({ ...p, nc_serie_id: val }))}
-              options={[{ value: "", label: "Ninguna (Se usará la primera N/C del almacén)" }, ...allSeries.filter(s => s.type === "nc" && (!form.warehouse_id || s.warehouse_id === form.warehouse_id)).map(s => ({ value: s.id, label: `${s.name} (${s.prefix})` }))]}
+              options={[{ value: "", label: "Ninguna (Se usará la primera N/C de la sucursal)" }, ...allSeries.filter(s => s.type === "nc" && (!form.warehouse_id || s.warehouse_id === form.warehouse_id)).map(s => ({ value: s.id, label: `${s.name} (${s.prefix})` }))]}
               placeholder="Seleccionar serie N/C..."
               className="w-full"
             />

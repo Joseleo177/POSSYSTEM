@@ -63,7 +63,7 @@ const getAuditReport = wrap(
 );
 
 const getExpiryReport = wrap(
-  async req => expiryReport(await buildTenantContext(req)),
+  async req => expiryReport({ ...req.query, ...(await buildTenantContext(req)) }),
   "Error al generar reporte de vencimientos"
 );
 

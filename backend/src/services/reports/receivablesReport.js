@@ -1,6 +1,14 @@
 const { sequelize, Sequelize } = require("../../models");
 
-async function receivablesReport({ company_id, tcS, rep, wh }) {
+async function receivablesReport({ company_id, tcS, rep, wh, allowedWarehouses, warehouse_id }) {
+  // Sucursal concreta: sin ella rige el recorte de siempre (las que el usuario tiene
+  // permitidas). Mismo criterio que márgenes, ventas y productos.
+  const wid = warehouse_id ? parseInt(warehouse_id) : null;
+  if (wid && Array.isArray(allowedWarehouses) && !allowedWarehouses.includes(wid)) {
+    const e = new Error("No tienes acceso a este almacén"); e.status = 403; e.isOperational = true; throw e;
+  }
+  if (wid) wh = (alias = '') => `AND ${alias ? `${alias}.` : ''}warehouse_id = ${wid}`;
+
   const [summary, byCustomer, aging] = await Promise.all([
     sequelize.query(
       `SELECT

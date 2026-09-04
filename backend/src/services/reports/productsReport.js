@@ -1,7 +1,16 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause, buildSerieScope, DISPATCHED_SQL } = require("./shared");
 
-async function productsReport({ date_from, date_to, serie_ids, limit = 20, company_id, tcS, tcP, rep, wh, hours }) {
+async function productsReport({ date_from, date_to, serie_ids, limit = 20, company_id, tcS, tcP, rep, wh, allowedWarehouses, hours, warehouse_id }) {
+  // Sucursal concreta: este reporte alimenta el detalle por producto del PDF de Ventas, que
+  // tiene que cuadrar con los totales de esa pantalla cuando ella misma está acotada a una
+  // sola sucursal. Mismo criterio que salesReport y marginsReport.
+  const wid = warehouse_id ? parseInt(warehouse_id) : null;
+  if (wid && Array.isArray(allowedWarehouses) && !allowedWarehouses.includes(wid)) {
+    const e = new Error("No tienes acceso a este almacén"); e.status = 403; e.isOperational = true; throw e;
+  }
+  if (wid) wh = (alias = '') => `AND ${alias ? `${alias}.` : ''}warehouse_id = ${wid}`;
+
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dS = dateClause(df, dt, 's', hours);

@@ -2,12 +2,25 @@ const { Sequelize, sequelize, Customer, Sale, SaleItem, Purchase, Payment, Curre
 const { assertWarehouseAccess, employeeWarehouseIds, visibleWarehouseIds } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
 const { SETTLED_SQL, SETTLED_STATUSES, RECEIVABLE_STATUSES } = require("../../utils/saleBalance");
+const { creditAvailable, addCreditMovement } = require("./creditLedger");
 
 // Deuda, gasto y cantidad de compras de un contacto, acotados a las sucursales del empleado.
 // El contacto es de la empresa —el mismo cliente compra en varias sucursales— pero sus
 // saldos se leen desde la sucursal que los consulta: si no, un cajero ve una deuda que no
 // se generó en su caja y que no puede explicar ni cobrar.
-async function warehouseFragments(req) {
+//
+// `wid`: la sucursal ACTIVA de quien pregunta, no todas las que tiene asignadas. Un cajero
+// con acceso a dos sucursales que está vendiendo en la A no debería ver la deuda que ese
+// mismo cliente arrastra en la B: no la generó su caja, no la puede cobrar desde ahí, y verla
+// aparecer sin poder hacer nada es puro ruido. Sin `wid` se cae al recorte de siempre (todas
+// las asignadas, o ninguna restricción si es admin) para las pantallas que miran la empresa
+// completa a propósito (el buscador de "deudores" de Contabilidad, por ejemplo).
+async function warehouseFragments(req, wid = null) {
+  if (wid) {
+    await assertWarehouseAccess(req, wid);
+    const id = parseInt(wid);
+    return { whS: `AND s.warehouse_id = ${id}`, whP: `AND p.warehouse_id = ${id}` };
+  }
   const allowed = await visibleWarehouseIds(req);
   if (allowed === null) return { whS: '', whP: '' };          // admin: todas las sucursales
 
@@ -18,9 +31,9 @@ async function warehouseFragments(req) {
   return { whS: `AND s.warehouse_id IN (${list})`, whP: `AND p.warehouse_id IN (${list})` };
 }
 
-async function getAll({ search, type, debtors, limit = 100, offset = 0 }, req) {
+async function getAll({ search, type, debtors, limit = 100, offset = 0, warehouse_id }, req) {
   const company_id  = req.employee?.company_id ?? null;
-  const { whS, whP } = await warehouseFragments(req);
+  const { whS, whP } = await warehouseFragments(req, warehouse_id);
   const where = {};
   if (company_id) where.company_id = company_id;
   if (type && ["cliente", "proveedor"].includes(type)) where.type = type;
@@ -101,8 +114,8 @@ async function getAll({ search, type, debtors, limit = 100, offset = 0 }, req) {
   return { data: customers, total: Array.isArray(count) ? count.length : count };
 }
 
-async function getOne(id, req) {
-  const { whS, whP } = await warehouseFragments(req);
+async function getOne(id, req, { warehouse_id } = {}) {
+  const { whS, whP } = await warehouseFragments(req, warehouse_id);
 
   const customer = await Customer.findOne({
     where: { id },
@@ -150,18 +163,32 @@ async function getOne(id, req) {
   customer.total_purchases = parseInt(customer.total_purchases || 0);
   customer.total_spent     = parseFloat(customer.total_spent   || 0);
   customer.total_debt      = parseFloat(customer.total_debt    || 0);
+  // Con sucursal, lo que de verdad se puede aplicar ahí (compartido + lo propio de esa
+  // sucursal), no el total global: mostrar el total completo dejaría creer que hay más
+  // crédito disponible del que esta caja puede usar. Sin sucursal (una pantalla que mira la
+  // empresa entera) se muestra el total, como siempre.
+  customer.credit_available = warehouse_id
+    ? await creditAvailable(id, warehouse_id)
+    : parseFloat(customer.credit_balance || 0);
 
   return { data: customer };
 }
 
-async function getCustomerPurchases(id, { limit = 50, offset = 0 }, req) {
+async function getCustomerPurchases(id, { limit = 50, offset = 0, warehouse_id }, req) {
   const customer = await Customer.findByPk(id, { attributes: ['id', 'name', 'type'] });
   if (!customer) { const e = new Error("Cliente no encontrado"); e.status = 404; throw e; }
 
   // El detalle de facturas y órdenes del contacto sigue el mismo criterio que sus saldos:
-  // solo las de las sucursales del empleado, para que la lista cuadre con el total.
-  const allowed = await visibleWarehouseIds(req);
-  const scope = Array.isArray(allowed) ? { warehouse_id: { [Sequelize.Op.in]: allowed } } : {};
+  // solo las de las sucursales del empleado (o, con `warehouse_id`, solo las de la sucursal
+  // activa), para que la lista cuadre con el total.
+  let scope = {};
+  if (warehouse_id) {
+    await assertWarehouseAccess(req, warehouse_id);
+    scope = { warehouse_id: parseInt(warehouse_id) };
+  } else {
+    const allowed = await visibleWarehouseIds(req);
+    scope = Array.isArray(allowed) ? { warehouse_id: { [Sequelize.Op.in]: allowed } } : {};
+  }
 
   if (customer.type === 'proveedor') {
     const queryPurchases = (where, opts = {}) => Purchase.findAll({
@@ -328,12 +355,32 @@ async function deleteCustomer(id) {
   return { message: "Registro eliminado exitosamente" };
 }
 
-async function adjustCredit(id, amount) {
-  const customer = await Customer.findByPk(id);
-  if (!customer) { const e = new Error("Cliente no encontrado"); e.status = 404; throw e; }
-  if (isNaN(amount) || amount < 0) { const e = new Error("Monto inválido"); e.status = 400; throw e; }
-  await customer.update({ credit_balance: parseFloat(amount.toFixed(6)) });
-  return { data: customer };
+async function adjustCredit(id, amount, req) {
+  const t = await sequelize.transaction();
+  try {
+    const customer = await Customer.findByPk(id, { transaction: t, lock: true });
+    if (!customer) { const e = new Error("Cliente no encontrado"); e.status = 404; throw e; }
+    if (isNaN(amount) || amount < 0) { const e = new Error("Monto inválido"); e.status = 400; throw e; }
+    // Un ajuste a mano no nace de una venta ni de una sucursal concreta —es una corrección
+    // administrativa—, así que se registra como compartido: se puede usar desde cualquiera,
+    // igual que el saldo que ya existía antes de este ledger.
+    const delta = parseFloat((parseFloat(amount) - parseFloat(customer.credit_balance || 0)).toFixed(6));
+    if (delta) {
+      await addCreditMovement({
+        customer_id: id,
+        warehouse_id: null,
+        amount: delta,
+        reason: 'ajuste_manual',
+        employee_id: req?.employee?.id || null,
+        company_id: customer.company_id || null,
+      }, t);
+    }
+    await t.commit();
+    return { data: await Customer.findByPk(id) };
+  } catch (err) {
+    await t.rollback();
+    throw err;
+  }
 }
 
 async function creditRefund(id, { amount, journal_id, reference_date, notes, employee_id, warehouse_id }, req) {
@@ -362,7 +409,10 @@ async function creditRefund(id, { amount, journal_id, reference_date, notes, emp
     const customer = await Customer.findByPk(id, { transaction: t, lock: true });
     if (!customer) { const e = new Error("Cliente no encontrado"); e.status = 404; throw e; }
 
-    const available = parseFloat(customer.credit_balance || 0);
+    // Solo se devuelve en efectivo lo que esta sucursal puede explicar en su arqueo: lo
+    // compartido más lo que ella misma acreditó. El crédito de otra sucursal no sale de esta
+    // caja.
+    const available = await creditAvailable(id, refundWarehouseId, t);
     if (refundAmt > available + 0.001)
       { const e = new Error(`Crédito insuficiente. Disponible: ${available.toFixed(2)}`); e.status = 400; throw e; }
 
@@ -399,10 +449,14 @@ async function creditRefund(id, { amount, journal_id, reference_date, notes, emp
       status:             'activo',
     }, { transaction: t });
 
-    await Customer.decrement(
-      { credit_balance: refundAmt },
-      { where: { id }, transaction: t }
-    );
+    await addCreditMovement({
+      customer_id:  id,
+      warehouse_id: refundWarehouseId,
+      amount:       -refundAmt,
+      reason:       'reembolso_efectivo',
+      employee_id:  employee_id || null,
+      company_id:   customer.company_id || null,
+    }, t);
 
     await t.commit();
     const updated = await Customer.findByPk(id);

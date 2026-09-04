@@ -21,9 +21,18 @@ const { sanitizeDate, localDate, hourClause, idList } = require("./shared");
 // de modo que amount * exchange_rate devuelve el monto en la moneda del diario. Se publican
 // los dos: el original es el que el cajero contó, el base es el único que se puede sumar
 // entre diarios de distinta moneda. incomes y expenses guardan lo mismo en `amount` y `rate`.
-async function paymentJournalsReport({ date_from, date_to, company_id, allowedWarehouses, employee_ids, serie_ids, hours }) {
+async function paymentJournalsReport({ date_from, date_to, company_id, allowedWarehouses, employee_ids, serie_ids, hours, warehouse_id }) {
   const from = sanitizeDate(date_from);
   const to   = sanitizeDate(date_to);
+
+  // Sucursal concreta. Casi nunca es la misma cuenta bancaria en cada tienda —"Banco de
+  // Venezuela" puede ser dos cuentas reales distintas, una por sucursal— así que el Estado
+  // de Cuenta necesita poder aislar una sola sin tener que sumarlas todas de cabeza. Sin
+  // sucursal elegida rige el recorte de siempre: lo que el usuario tiene permitido ver.
+  const wid = warehouse_id ? parseInt(warehouse_id) : null;
+  if (wid && Array.isArray(allowedWarehouses) && !allowedWarehouses.includes(wid)) {
+    const e = new Error("No tienes acceso a este almacén"); e.status = 403; e.isOperational = true; throw e;
+  }
   // Día al que se imputa cada movimiento. Sin franja horaria es la fecha de Caracas de
   // siempre; con una franja nocturna es la jornada, para que la madrugada del domingo caiga
   // en la fila del sábado en vez de abrir una fila propia con la cola de la noche.
@@ -51,7 +60,9 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
   // Un cobro no guarda sucursal: la hereda de su venta. Se resuelve con una subconsulta para
   // no volver a meter el JOIN a sales que se quitó de la consulta principal.
   let whClause = '';
-  if (Array.isArray(allowedWarehouses)) {
+  if (wid) {
+    whClause = `AND p.sale_id IN (SELECT id FROM sales WHERE warehouse_id = ${wid})`;
+  } else if (Array.isArray(allowedWarehouses)) {
     const ids = allowedWarehouses.filter(Number.isInteger);
     whClause = ids.length
       ? `AND p.sale_id IN (SELECT id FROM sales WHERE warehouse_id IN (${ids.join(',')}))`
@@ -75,6 +86,7 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
   // Ingresos y egresos sí llevan su propia sucursal, así que no hace falta la subconsulta a
   // sales que necesitan los cobros.
   const manualWhClause = (alias) => {
+    if (wid) return `AND ${alias}.warehouse_id = ${wid}`;
     if (!Array.isArray(allowedWarehouses)) return '';
     const ids = allowedWarehouses.filter(Number.isInteger);
     return ids.length ? `AND ${alias}.warehouse_id IN (${ids.join(',')})` : 'AND FALSE';
@@ -150,10 +162,12 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
         `SELECT pj.id, pj.name, pj.color, pj.type,
                 COALESCE(c.symbol, 'Ref.') AS currency_symbol,
                 COALESCE(c.is_base, true)  AS is_base,
-                b.name                     AS bank_name
+                b.name                     AS bank_name,
+                w.name                     AS warehouse_name
            FROM payment_journals pj
            LEFT JOIN currencies c ON c.id = pj.currency_id
            LEFT JOIN banks b      ON b.id = pj.bank_id
+           LEFT JOIN warehouses w ON w.id = pj.warehouse_id
           WHERE pj.id IN (:ids)
           ORDER BY pj.sort_order ASC, pj.id ASC`,
         { replacements: { ids: usedIds }, type: Sequelize.QueryTypes.SELECT }

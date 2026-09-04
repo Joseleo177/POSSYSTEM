@@ -1,29 +1,40 @@
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 
-export default function JournalSummary({ dateFrom, dateTo, onData, onSelectJournal }) {
+export default function JournalSummary({ dateFrom, dateTo, warehouseId, onData, onSelectJournal }) {
     const [data, setData] = useState([]);
 
     useEffect(() => {
         const params = {};
         if (dateFrom) params.date_from = dateFrom;
         if (dateTo)   params.date_to   = dateTo;
+        if (warehouseId) params.warehouse_id = warehouseId;
         api.journals.getSummary(params).then(r => {
             setData(r.data);
             onData?.(r.data);
         }).catch(() => {});
-    }, [dateFrom, dateTo, onData]);
+    }, [dateFrom, dateTo, warehouseId, onData]);
 
-    // ── Agrupar por banco + moneda ─────────────────────────────
+    // ── Agrupar por banco + moneda + sucursal ──────────────────
+    // Casi nunca el mismo banco es la misma cuenta en dos tiendas: "Banco de Venezuela" en la
+    // sucursal A y en la B son dos cuentas reales distintas, y sumarlas de cabeza en una sola
+    // tarjeta mostraba un saldo que no correspondía a ninguna de las dos. Un diario compartido
+    // (warehouse_id null, la cuenta de toda la empresa) sigue agrupándose aparte, como su
+    // propia "sucursal" para efectos de esta tarjeta.
     const bankGroups = {};
     data.forEach(j => {
         // Journals sin banco → card individual por diario
-        const key = j.bank_id ? `bank_${j.bank_id}_${j.currency_code ?? "base"}` : `journal_${j.id}`;
+        const key = j.bank_id
+            ? `bank_${j.bank_id}_${j.currency_code ?? "base"}_${j.warehouse_id ?? "shared"}`
+            : `journal_${j.id}`;
         if (!bankGroups[key]) {
             bankGroups[key] = {
                 key,
-                bank_id:      j.bank_id,
-                display_name: j.bank_id ? (j.bank_name || j.name) : j.name,
+                bank_id:       j.bank_id,
+                warehouse_id:  j.bank_id ? (j.warehouse_id ?? null) : undefined,
+                display_name:  j.bank_id
+                    ? (j.warehouse_name ? `${j.bank_name || j.name} · ${j.warehouse_name}` : (j.bank_name || j.name))
+                    : j.name,
                 journals:     [],
                 total_ingresos: 0,
                 ingresos_hoy:   0,
@@ -59,7 +70,7 @@ export default function JournalSummary({ dateFrom, dateTo, onData, onSelectJourn
                     // Si tiene banco → abrir vista de banco (todos los diarios)
                     // Si no tiene banco → abrir diario individual
                     if (group.bank_id) {
-                        onSelectJournal?.({ bank_id: group.bank_id });
+                        onSelectJournal?.({ bank_id: group.bank_id, warehouse_id: group.warehouse_id });
                     } else {
                         onSelectJournal?.(group.journals[0]);
                     }

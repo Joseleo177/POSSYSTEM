@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "../../services/api";
 import { useDebounce } from "../useDebounce";
 
-export function useCobroCustomer(setSelectedCustomer, notify) {
+export function useCobroCustomer(setSelectedCustomer, notify, activeWarehouse) {
     const [customers, setCustomers] = useState([]);
     const [custSearch, setCustSearch] = useState("");
     const [selectedCustIdx, setSelectedCustIdx] = useState(-1);
@@ -14,10 +14,14 @@ export function useCobroCustomer(setSelectedCustomer, notify) {
 
     useEffect(() => {
         if (!debouncedCustSearch.trim()) { setCustomers([]); return; }
-        api.customers.getAll({ search: debouncedCustSearch })
+        // `total_debt` viene acotado a esta sucursal: la misma persona puede deber en otra
+        // tienda, y esa deuda no es asunto de esta caja ni se puede cobrar desde aquí.
+        const params = { search: debouncedCustSearch };
+        if (activeWarehouse) params.warehouse_id = activeWarehouse.id;
+        api.customers.getAll(params)
             .then(r => setCustomers(r.data.filter(c => c.type !== "proveedor")))
             .catch(() => {});
-    }, [debouncedCustSearch]);
+    }, [debouncedCustSearch, activeWarehouse]);
 
     // Único punto por donde se elige un cliente en la caja (clic, Enter en la lista o F2).
     // El buscador ya devuelve `total_debt`, así que la deuda se conoce sin pedir nada más.

@@ -4,6 +4,7 @@ import { fmtNumber, fmtInt } from "../helpers";
 import { useApp } from "../context/AppContext";
 
 import Page from "../components/ui/Page";
+import CustomSelect from "../components/ui/CustomSelect";
 
 const fmt = (n, d = 2) => fmtNumber(n, d);
 const fmtN = (n) => fmtInt(n);
@@ -112,12 +113,22 @@ export default function DashboardPage() {
     const localSym  = localCur?.symbol     || baseSym;
     const localRate = parseFloat(localCur?.exchange_rate || 1);
 
+    // Sucursal a mirar. "" = todas las que el empleado tiene permitidas (o toda la empresa,
+    // si es admin). Con una sola sucursal, mostrar el selector solo insinuaría que hay más.
+    const [warehouseId, setWarehouseId] = useState("");
+    const [warehouses, setWarehouses] = useState([]);
+    useEffect(() => {
+        // Un depósito no vende: no aporta nada a un tablero de negocio.
+        api.warehouses.getAll().then(r => setWarehouses((r.data || []).filter(w => w.sells !== false))).catch(() => {});
+    }, []);
+    const todasLabel = warehouses.length === 1 ? warehouses[0].name : "TODAS LAS SUCURSALES";
+
     const load = useCallback(async () => {
         setLoading(true);
-        try { const res = await api.dashboard.get(); setData(res.data); }
+        try { const res = await api.dashboard.get(warehouseId ? { warehouse_id: warehouseId } : {}); setData(res.data); }
         catch (e) { setError(e.message); }
         finally { setLoading(false); }
-    }, []);
+    }, [warehouseId]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -148,9 +159,23 @@ export default function DashboardPage() {
                     <div className="h-3 w-3 rounded-full bg-success animate-pulse" />
                      <span className="text-[10px] font-black text-content dark:text-white uppercase tracking-widest">Servidor Activo · {new Date().toLocaleDateString("es-VE", { day: "numeric", month: "long" })}</span>
                  </div>
-                 <button onClick={load} className="h-8 px-4 rounded-lg bg-surface-2 dark:bg-white/5 border border-border/30 dark:border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all">
-                    ↻ Actualizar Métricas
-                 </button>
+                 <div className="flex items-center gap-2">
+                     {warehouses.length > 1 && (
+                         <CustomSelect
+                             value={warehouseId}
+                             onChange={setWarehouseId}
+                             placeholder={todasLabel}
+                             boxClassName="h-8 min-w-[190px]"
+                             options={[
+                                 { value: "", label: todasLabel },
+                                 ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
+                             ]}
+                         />
+                     )}
+                     <button onClick={load} className="h-8 px-4 rounded-lg bg-surface-2 dark:bg-white/5 border border-border/30 dark:border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all">
+                        ↻ Actualizar Métricas
+                     </button>
+                 </div>
             </div>
         }>
             <div className="flex-1 min-h-0 overflow-auto custom-scrollbar p-5 space-y-6">

@@ -265,7 +265,10 @@ export default function CatalogPage() {
                             <input value={search} onChange={e => setSearch(e.target.value)} className="input h-9 pl-9 text-[11px] w-full" placeholder="Buscar producto..." />
                         </div>
 
-                        {/* Selector de almacén */}
+                        {/* Selector de almacén. Con uno solo no hay nada que elegir: mostrarlo
+                            solo insinuaría que hay más, cuando no los hay. `warehouseId` ya
+                            queda fijo en el único disponible desde el estado inicial. */}
+                        {availableWarehouses.length > 1 && (
                         <div className="relative">
                             <button onClick={() => { setShowWarehouse(!showWarehouse); setShowFilters(false); }}
                                 className={`h-9 px-3 flex items-center gap-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${warehouseId ? "bg-brand-500/10 border-brand-500/30 text-brand-500" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/10 text-content-subtle"}`}>
@@ -291,6 +294,7 @@ export default function CatalogPage() {
                                 </>
                             )}
                         </div>
+                        )}
 
                         {/* Filtros */}
                         <div className="relative">

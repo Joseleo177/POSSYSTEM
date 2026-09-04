@@ -1,4 +1,4 @@
-const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Sequelize, Op } = require("./shared");
+const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Warehouse, Sequelize, Op } = require("./shared");
 
 module.exports = async function getAllPayments(query, tenant = {}) {
   const { date_from, date_to, limit = 100, offset = 0, search, warehouse_id } = query;
@@ -98,7 +98,10 @@ module.exports = async function getAllPayments(query, tenant = {}) {
         attributes: ["id", "total", "status", "exchange_rate", "currency_id", "created_at", "invoice_number"],
         required: true,
         ...(Object.keys(saleWhere).length ? { where: saleWhere } : {}),
-        include: [{ model: SaleItem, attributes: ["name", "quantity", "price", "subtotal"] }],
+        include: [
+          { model: SaleItem, attributes: ["name", "quantity", "price", "subtotal"] },
+          { model: Warehouse, attributes: ["name"], required: false },
+        ],
       },
     ],
   }) : [];
@@ -116,8 +119,9 @@ module.exports = async function getAllPayments(query, tenant = {}) {
     item.sale_status = item.Sale?.status ?? null;
     item.sale_items = item.Sale?.SaleItems ?? [];
     item.invoice_number = item.Sale?.invoice_number ?? null;
+    item.warehouse_name = item.Sale?.Warehouse?.name ?? null;
     ["Customer", "Employee", "Currency", "PaymentJournal"].forEach((k) => delete item[k]);
-    if (item.Sale) delete item.Sale.SaleItems;
+    if (item.Sale) { delete item.Sale.SaleItems; delete item.Sale.Warehouse; }
     return item;
   };
 
@@ -159,7 +163,7 @@ module.exports = async function getAllPayments(query, tenant = {}) {
   // Mismo where y mismo join required que el listado, o el total no cuadraría con las filas.
   const [totals] = await Payment.findAll({
     where,
-    include: [{ model: Sale, attributes: [], required: true }],
+    include: [{ model: Sale, attributes: [], required: true, ...(Object.keys(saleWhere).length ? { where: saleWhere } : {}) }],
     attributes: [
       [Sequelize.fn("COALESCE", Sequelize.fn("SUM", Sequelize.col("Payment.amount")), 0), "sum_base"],
       // Bolívares (o la moneda que sea) REALMENTE recibidos: cada cobro a la tasa del día en

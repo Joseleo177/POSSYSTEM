@@ -1,9 +1,10 @@
 const {
-  Sale, SaleItem, Product, ProductStock, Employee, Customer,
+  Sale, SaleItem, Product, ProductStock, Employee,
   Return, ReturnItem, Payment, ProductComboItem, Serie, SerieRange, sequelize, Sequelize,
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { excludeAnnulledReturns } = require("./shared");
+const { addCreditMovement } = require("../customers/creditLedger");
 
 async function createReturn({ saleId, items, reason, employee_id }, req) {
   if (!items?.length) { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
@@ -164,12 +165,20 @@ async function createReturn({ saleId, items, reason, employee_id }, req) {
     }
     if (fullyReturned) await sale.update({ status: 'devuelto' }, { transaction });
 
-    // Acreditar al cliente: suma el total devuelto a su credit_balance
+    // Acreditar al cliente: el crédito queda atado a la sucursal que vendió lo que se
+    // devuelve, la misma que reingresó la mercancía arriba. Solo se puede aplicar en otra
+    // venta de esa misma sucursal (ver creditLedger.js).
     if (sale.customer_id) {
-      await Customer.increment(
-        { credit_balance: parseFloat(returnTotal.toFixed(6)) },
-        { where: { id: sale.customer_id }, transaction }
-      );
+      await addCreditMovement({
+        customer_id:  sale.customer_id,
+        warehouse_id: sale.warehouse_id,
+        amount:       returnTotal,
+        reason:       'devolucion',
+        sale_id:      saleId,
+        return_id:    returnRecord.id,
+        employee_id:  employee_id || null,
+        company_id:   sale.company_id || null,
+      }, transaction);
     }
 
     await transaction.commit();

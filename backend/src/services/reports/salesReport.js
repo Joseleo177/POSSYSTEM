@@ -1,7 +1,17 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause, localDate, buildSerieScope, idList, TZ, DISPATCHED_SQL, UNPAID_SQL } = require("./shared");
 
-async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperuser, tc, tcS, tcS2, tcP, rep, wh, allowedWarehouses, hours }) {
+async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperuser, tc, tcS, tcS2, tcP, rep, wh, allowedWarehouses, hours, warehouse_id }) {
+  // Sucursal concreta, igual que el reporte de márgenes: sin ella rige el recorte de
+  // siempre (todo lo que el usuario tiene permitido ver). Reemplazar `wh` acá alcanza para
+  // que todas las consultas de abajo —ya escritas contra ese cierre— queden acotadas, sin
+  // tener que tocarlas una por una.
+  const wid = warehouse_id ? parseInt(warehouse_id) : null;
+  if (wid && Array.isArray(allowedWarehouses) && !allowedWarehouses.includes(wid)) {
+    const e = new Error("No tienes acceso a este almacén"); e.status = 403; e.isOperational = true; throw e;
+  }
+  if (wid) wh = (alias = '') => `AND ${alias ? `${alias}.` : ''}warehouse_id = ${wid}`;
+
   const df = sanitizeDate(date_from);
   const dt = sanitizeDate(date_to);
   const dS  = dateClause(df, dt, 's', hours);
@@ -19,7 +29,9 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
   // cobro no guarda almacén, lo hereda de su venta. Mismo criterio que paymentJournalsReport,
   // que resuelve la sucursal con una subconsulta en vez de reintroducir el JOIN.
   let whPay = '';
-  if (Array.isArray(allowedWarehouses)) {
+  if (wid) {
+    whPay = `AND p.sale_id IN (SELECT id FROM sales WHERE warehouse_id = ${wid})`;
+  } else if (Array.isArray(allowedWarehouses)) {
     const ids = allowedWarehouses.filter(Number.isInteger);
     whPay = ids.length
       ? `AND p.sale_id IN (SELECT id FROM sales WHERE warehouse_id IN (${ids.join(',')}))`

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { resolveRate } from "../../components/ui/RateField";
 
@@ -66,6 +66,15 @@ export function usePurchases(notify, onProductsUpdated) {
   const [warehouses, setWarehouses] = useState([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
   const [categories, setCategories] = useState([]);
+
+  // Con un solo almacén activo no hay nada que elegir: se asume automáticamente, igual que
+  // el catálogo y el resto de selectores de sucursal. Solo aplica a una compra nueva —si se
+  // está editando un borrador, ese efecto ya trae su propio warehouse_id guardado.
+  useEffect(() => {
+    if (!selectedWarehouseId && warehouses.length === 1) {
+      setSelectedWarehouseId(String(warehouses[0].id));
+    }
+  }, [warehouses, selectedWarehouseId]);
 
   // Búsquedas
   const [productSearch, setProductSearch] = useState("");

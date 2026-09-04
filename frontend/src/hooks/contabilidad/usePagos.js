@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "../../services/api";
 
 const LIMIT = 50;
@@ -24,6 +24,9 @@ export function usePagos({ notify }) {
     // ver empleados llega vacía y el filtro no se ofrece, en vez de reventar la pestaña.
     const [employeeFilter, setEmployeeFilter] = useState("");
     const [employees, setEmployees] = useState([]);
+    // Sucursal. "" = todas las que el empleado tiene permitidas (o toda la empresa, si es admin).
+    const [warehouseFilter, setWarehouseFilter] = useState("");
+    const [warehouses, setWarehouses] = useState([]);
     const [showFilterDrop, setShowFilterDrop] = useState(false);
 
     useEffect(() => {
@@ -34,12 +37,26 @@ export function usePagos({ notify }) {
         return () => { vivo = false; };
     }, []);
 
+    useEffect(() => {
+        // Un depósito no cobra: no aporta nada a un filtro de pagos.
+        api.warehouses.getAll().then(r => setWarehouses((r.data || []).filter(w => w.sells !== false))).catch(() => {});
+    }, []);
+
+    // Un empleado que nunca trabajó en la sucursal elegida no puede haber cobrado nada ahí:
+    // al cambiar de sucursal, una marca vieja ya no tiene sentido. El diario NO se limpia
+    // igual: uno compartido (warehouse_id null) sigue siendo válido en cualquier sucursal.
+    const firstWarehouseRender = useRef(true);
+    useEffect(() => {
+        if (firstWarehouseRender.current) { firstWarehouseRender.current = false; return; }
+        setEmployeeFilter("");
+    }, [warehouseFilter]);
+
     const [payDetail, setPayDetail] = useState(null);
     const [payModal, setPayModal] = useState(null);
     const [deleteDialog, setDeleteDialog] = useState(null);
 
     // Query unificado — cualquier cambio recarga desde página 1
-    const [query, setQuery] = useState({ viewType: "historial", search: "", dateFrom: "", dateTo: "", journalId: "", employeeId: "", page: 1, refresh: 0 });
+    const [query, setQuery] = useState({ viewType: "historial", search: "", dateFrom: "", dateTo: "", journalId: "", employeeId: "", warehouseId: "", page: 1, refresh: 0 });
 
     useEffect(() => {
         const timer = setTimeout(() => setQuery(q => {
@@ -51,10 +68,10 @@ export function usePagos({ notify }) {
 
     useEffect(() => {
         setQuery(q => {
-            if (q.viewType === viewType && q.dateFrom === payDateFrom && q.dateTo === payDateTo && q.journalId === journalFilter && q.employeeId === employeeFilter) return q;
-            return { ...q, viewType, dateFrom: payDateFrom, dateTo: payDateTo, journalId: journalFilter, employeeId: employeeFilter, page: 1 };
+            if (q.viewType === viewType && q.dateFrom === payDateFrom && q.dateTo === payDateTo && q.journalId === journalFilter && q.employeeId === employeeFilter && q.warehouseId === warehouseFilter) return q;
+            return { ...q, viewType, dateFrom: payDateFrom, dateTo: payDateTo, journalId: journalFilter, employeeId: employeeFilter, warehouseId: warehouseFilter, page: 1 };
         });
-    }, [viewType, payDateFrom, payDateTo, journalFilter, employeeFilter]); // eslint-disable-line
+    }, [viewType, payDateFrom, payDateTo, journalFilter, employeeFilter, warehouseFilter]); // eslint-disable-line
 
     useEffect(() => {
         let cancelled = false;
@@ -67,6 +84,7 @@ export function usePagos({ notify }) {
                 if (query.dateTo)   params.date_to   = query.dateTo;
                 if (query.journalId) params.payment_journal_id = query.journalId;
                 if (query.employeeId) params.employee_id = query.employeeId;
+                if (query.warehouseId) params.warehouse_id = query.warehouseId;
                 const res = query.viewType === "pendientes"
                     ? await api.payments.getPending(params)
                     : await api.payments.getAll(params);
@@ -91,6 +109,7 @@ export function usePagos({ notify }) {
         setPayDateTo("");
         setJournalFilter("");
         setEmployeeFilter("");
+        setWarehouseFilter("");
         setShowFilterDrop(false);
     };
 
@@ -114,7 +133,7 @@ export function usePagos({ notify }) {
     };
 
     const totalPages = Math.ceil(total / LIMIT);
-    const filterCount = (viewType !== "historial" ? 1 : 0) + (payDateFrom || payDateTo ? 1 : 0) + (journalFilter ? 1 : 0) + (employeeFilter ? 1 : 0);
+    const filterCount = (viewType !== "historial" ? 1 : 0) + (payDateFrom || payDateTo ? 1 : 0) + (journalFilter ? 1 : 0) + (employeeFilter ? 1 : 0) + (warehouseFilter ? 1 : 0);
     const hasFilters = filterCount > 0;
 
     return {
@@ -125,6 +144,7 @@ export function usePagos({ notify }) {
         payDateTo, setPayDateTo,
         journalFilter, setJournalFilter,
         employeeFilter, setEmployeeFilter, employees,
+        warehouseFilter, setWarehouseFilter, warehouses,
         showFilterDrop, setShowFilterDrop,
         payDetail, setPayDetail,
         payModal, setPayModal,

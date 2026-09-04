@@ -16,5 +16,6 @@ module.exports = {
     company_id:  req.employee?.company_id ?? null,
     isSuperuser: !!req.is_superuser,
     allowedWarehouses: await visibleWarehouseIds(req),
+    warehouse_id: req.query.warehouse_id,
   })),
 };

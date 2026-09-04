@@ -311,20 +311,23 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                     </div>
 
                     {/* Sucursal donde corre. Lo normal es que sea en todas; limitarla es la
-                        excepción, así que esa es la opción por defecto. */}
-                    <div>
-                        <label className="label">SUCURSAL</label>
-                        <CustomSelect
-                            value={String(form.warehouse_id || "")}
-                            onChange={val => setForm(p => ({ ...p, warehouse_id: val }))}
-                            options={[
-                                { value: "", label: "Todas las sucursales" },
-                                ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
-                            ]}
-                            placeholder="Todas las sucursales"
-                            className="w-full"
-                        />
-                    </div>
+                        excepción, así que esa es la opción por defecto. Con una sola sucursal
+                        "todas" y "esa" son lo mismo: el selector no aporta nada. */}
+                    {warehouses.length > 1 && (
+                        <div>
+                            <label className="label">SUCURSAL</label>
+                            <CustomSelect
+                                value={String(form.warehouse_id || "")}
+                                onChange={val => setForm(p => ({ ...p, warehouse_id: val }))}
+                                options={[
+                                    { value: "", label: "Todas las sucursales" },
+                                    ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
+                                ]}
+                                placeholder="Todas las sucursales"
+                                className="w-full"
+                            />
+                        </div>
+                    )}
 
                     {/* Activo */}
                     <div className="flex items-center gap-3">

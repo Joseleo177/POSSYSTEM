@@ -213,7 +213,7 @@ export function CartProvider({ children }) {
   }, []);
 
   const addToCart = useCallback((product, customQty = null, silentError = false) => {
-    if (!activeWarehouse) { if (!silentError) notify("Selecciona un almacén antes de cobrar", "err"); return false; }
+    if (!activeWarehouse) { if (!silentError) notify("Selecciona una sucursal antes de cobrar", "err"); return false; }
     // stock === null significa combo de solo-servicios (sin límite de stock)
     const hasUnlimitedStock = product.is_service || (product.is_combo && product.stock === null);
     if (!hasUnlimitedStock && parseFloat(product.stock) <= 0) { if (!silentError) notify("Sin stock disponible", "err"); return false; }
@@ -312,7 +312,7 @@ export function CartProvider({ children }) {
 
   // Pre-carga el carrito desde una cotización para editar antes de facturar
   const loadFromQuotation = useCallback(async (quot) => {
-    if (!activeWarehouse) { notify("Selecciona un almacén antes de cargar la cotización", "err"); return; }
+    if (!activeWarehouse) { notify("Selecciona una sucursal antes de cargar la cotización", "err"); return; }
     try {
       const wid = quot.warehouse_id || activeWarehouse.id;
       const res = await api.warehouses.getProducts(wid, { limit: 500 });
@@ -522,20 +522,23 @@ export function CartProvider({ children }) {
 
   // ── Cuentas en espera ─────────────────────────────────────
   // Antes vivían en estado local: solo existían en la máquina que las creó y se perdían
-  // al recargar. Ahora son ventas reales con status 'espera', así que cualquier caja de
-  // la empresa las ve y las puede cobrar. No aparecen en Facturas Pendientes porque ese
-  // listado filtra borrador/pendiente/parcial.
+  // al recargar. Ahora son ventas reales con status 'espera'. Se listan por la sucursal
+  // activa: dos sucursales sin nada que ver entre sí no necesitan ver la barra la una de
+  // la otra, y menos poder cobrarla por error. Los pedidos del catálogo público ('pedido')
+  // son la excepción —todavía no tienen sucursal asignada— y el backend los deja pasar
+  // igual (ver getAllSales.js). No aparecen en Facturas Pendientes porque ese listado
+  // filtra borrador/pendiente/parcial.
   const loadHeldCarts = useCallback(async () => {
     if (!employee) return;
     try {
-      const res = await api.sales.getHeld();
+      const res = await api.sales.getHeld(activeWarehouse ? { warehouse_id: activeWarehouse.id } : {});
       // La cuenta que esta caja tiene abierta en el carrito no se lista: sigue en 'espera'
       // en el servidor, pero aquí ya está "en uso".
       setHeldCarts((res.data || []).filter(s => s.id !== heldSaleIdRef.current));
     } catch {
       // Silencioso: es una carga de fondo, no debe interrumpir el cobro en curso.
     }
-  }, [employee]);
+  }, [employee, activeWarehouse]);
 
   // El carrito vive solo en memoria: al recargar la página se pierde, pero el bloqueo que
   // esta caja puso al recuperar una cuenta sigue en el servidor. Sin esto, un F5 dejaba la
@@ -606,7 +609,7 @@ export function CartProvider({ children }) {
   // que cualquier argumento sería el evento del clic, no un callback.
   const holdCart = useCallback(async () => {
     if (cart.length === 0) return notify("No hay productos para poner en espera", "info");
-    if (!activeWarehouse) return notify("Selecciona un almacén antes de continuar", "err");
+    if (!activeWarehouse) return notify("Selecciona una sucursal antes de continuar", "err");
     if (!selectedSerieId) return notify("La serie es requerida", "err");
 
     setLoading(true);
@@ -683,7 +686,7 @@ export function CartProvider({ children }) {
   // el servidor lo descuenta ahora, del almacén activo de esta caja, y el pedido pasa a
   // ser una cuenta en espera normal que se recupera y se cobra como cualquier otra.
   const acceptWebOrder = useCallback(async (saleId) => {
-    if (!activeWarehouse) return notify("Selecciona un almacén antes de aceptar el pedido", "err");
+    if (!activeWarehouse) return notify("Selecciona una sucursal antes de aceptar el pedido", "err");
     // El pedido nace sin serie porque lo creó el cliente desde el catálogo. Se le asigna
     // la de esta caja al aceptarlo; sin ella la venta llegaría a cobrarse sin correlativo.
     if (!selectedSerieId) return notify("La serie es requerida", "err");
@@ -703,7 +706,7 @@ export function CartProvider({ children }) {
   const takeHeldCart = useCallback(async (saleId) => {
     const held = heldCarts.find(h => h.id === saleId);
     if (!held) return;
-    if (!activeWarehouse) return notify("Selecciona un almacén antes de continuar", "err");
+    if (!activeWarehouse) return notify("Selecciona una sucursal antes de continuar", "err");
 
     try {
       // Se reserva en el servidor ANTES de cargar nada: si otra caja se adelantó, el 409
@@ -812,7 +815,7 @@ export function CartProvider({ children }) {
   // ── Guardar cotización ────────────────────────────────────
   const saveQuotation = useCallback(async (onSuccess) => {
     if (!cart.length) return notify("El carrito está vacío", "err");
-    if (!activeWarehouse) return notify("Selecciona un almacén antes de continuar", "err");
+    if (!activeWarehouse) return notify("Selecciona una sucursal antes de continuar", "err");
     // Igual que el cobro: una cotización es un documento nominal que se entrega y luego se
     // busca por cliente. Sin cliente el papel sale sin destinatario y la cotización solo se
     // puede volver a encontrar por su número.
@@ -855,7 +858,7 @@ export function CartProvider({ children }) {
     // Las líneas en cero se descartan al armar el pedido; si no queda ninguna, el servidor
     // respondería "items es requerido", que no le dice nada a quien está en la caja.
     if (!cart.some(i => parseFloat(i.qty) > 0)) return notify("Ningún producto tiene cantidad", "err");
-    if (!activeWarehouse) return notify("Selecciona un almacén antes de continuar", "err");
+    if (!activeWarehouse) return notify("Selecciona una sucursal antes de continuar", "err");
     if (!selectedCustomer) return notify("El cliente es requerido", "err");
     if (!selectedSerieId) return notify("La serie es requerida", "err");
 

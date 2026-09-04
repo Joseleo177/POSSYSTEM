@@ -12,16 +12,33 @@ module.exports = async function getAllSales(query, tenant = {}) {
 
   // allowedWarehouses = null → sin restricción (admin). Un array limita la vista a las
   // sucursales del empleado.
+  // Un pedido del catálogo público nace con warehouse_id null —la define quien lo acepta—,
+  // pero el cliente sí eligió una tienda al armarlo (requested_warehouse_id). El pedido solo
+  // se ve desde esa tienda, no desde cualquiera: dos sucursales sin nada que ver entre sí no
+  // tienen por qué verse los pedidos la una de la otra. Los pedidos viejos, de antes de que
+  // se guardara esa elección, quedan sin dueño (requested_warehouse_id null) y por eso siguen
+  // visibles desde cualquier sucursal — es lo más parecido a lo que ya tenían antes.
+  const pedidoDe = (wid) => ({
+    warehouse_id: null,
+    status: 'pedido',
+    [Op.or]: [
+      { requested_warehouse_id: null },
+      { requested_warehouse_id: Array.isArray(wid) ? { [Op.in]: wid } : wid },
+    ],
+  });
+
   if (warehouse_id) {
-    andClauses.push({ warehouse_id: parseInt(warehouse_id, 10) });
+    andClauses.push({
+      [Op.or]: [
+        { warehouse_id: parseInt(warehouse_id, 10) },
+        pedidoDe(parseInt(warehouse_id, 10)),
+      ],
+    });
   } else if (Array.isArray(allowedWarehouses)) {
     andClauses.push({
       [Op.or]: [
         { warehouse_id: { [Op.in]: allowedWarehouses } },
-        // Un pedido del catálogo público nace sin sucursal —la define quien lo acepta—,
-        // así que tiene que verse desde cualquier caja. Sin esta excepción el recorte por
-        // almacén los dejaba fuera para todos salvo el admin: ninguna caja los recibía.
-        { warehouse_id: null, status: 'pedido' },
+        pedidoDe(allowedWarehouses),
       ],
     });
   }
@@ -76,6 +93,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
       { model: Employee, attributes: ["full_name"], required: false },
       { model: Currency, attributes: ["symbol", "code"], required: false },
       { model: Warehouse, attributes: ["name"], required: false },
+      { model: Warehouse, as: "RequestedWarehouse", attributes: ["name"], required: false },
       { model: Serie, attributes: ["name", "prefix"], required: false },
       { model: SaleItem, required: true },
     ],
@@ -90,6 +108,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
     item.currency_symbol = item.Currency?.symbol ?? null;
     item.currency_code = item.Currency?.code ?? null;
     item.warehouse_name = item.Warehouse?.name ?? null;
+    item.requested_warehouse_name = item.RequestedWarehouse?.name ?? null;
     item.serie_name = item.Serie?.name ?? null;
     item.items = item.SaleItems ?? [];
     item.amount_paid = parseFloat(item.amount_paid || 0);
@@ -104,7 +123,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
     // Igual que en getOneSale: una venta 'pagado' o 'exonerado' no arrastra saldo. Con divisas
     // recibidas a tasa de efectivo la resta deja centavos que el cliente no debe.
     if (item.status === 'pagado' || item.status === 'exonerado' || item.balance < 0) item.balance = 0;
-    ["Customer", "Employee", "Currency", "Warehouse", "Serie", "SaleItems"].forEach((k) => delete item[k]);
+    ["Customer", "Employee", "Currency", "Warehouse", "RequestedWarehouse", "Serie", "SaleItems"].forEach((k) => delete item[k]);
     return item;
   });
 

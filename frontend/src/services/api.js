@@ -187,7 +187,7 @@ export const api = {
   },
   customers: {
     getAll:       (params={}) => request("/customers?" + new URLSearchParams(params)),
-    getOne:       (id)        => request(`/customers/${id}`),
+    getOne:       (id, params={}) => request(`/customers/${id}?` + new URLSearchParams(params)),
     getPurchases: (id, params = {}) => request(`/customers/${id}/purchases?` + new URLSearchParams(params)),
     create:       (body)      => request("/customers",       { method: "POST", body: JSON.stringify(body) }),
     update:       (id, body)   => request(`/customers/${id}`, { method: "PUT",  body: JSON.stringify(body) }),
@@ -216,7 +216,12 @@ export const api = {
     // Cuentas en espera y pedidos del catálogo público: visibles desde cualquier caja.
     // Los 'pedido' todavía no descontaron inventario; se listan juntos porque se
     // atienden en el mismo sitio y se distinguen por su status.
-    getHeld:     ()          => request("/sales?status=espera&status=pedido&limit=100"),
+    getHeld:     (params={}) => {
+      const sp = new URLSearchParams(params);
+      ["espera", "pedido"].forEach(s => sp.append("status", s));
+      sp.set("limit", "100");
+      return request("/sales?" + sp);
+    },
     // Acepta un pedido web: descuenta stock del almacén indicado y lo pasa a 'espera'
     acceptOrder: (id, body)  => request(`/sales/${id}/accept-order`, { method: "POST", body: JSON.stringify(body) }),
     // Toma / suelta una cuenta en espera para que las demás cajas la vean bloqueada.
@@ -369,7 +374,7 @@ export const api = {
 
   // ── Dashboard ────────────────────────────────────────────────
   dashboard: {
-    get: () => request("/dashboard"),
+    get: (params={}) => request("/dashboard?" + new URLSearchParams(params)),
   },
 
   // ── Reportes ─────────────────────────────────────────────────

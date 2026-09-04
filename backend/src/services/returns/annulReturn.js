@@ -4,6 +4,7 @@ const {
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { resolveSaleStatus } = require("../../utils/saleBalance");
+const { addCreditMovement } = require("../customers/creditLedger");
 
 const Op = Sequelize.Op;
 const err = (message, status) => Object.assign(new Error(message), { status, isOperational: true });
@@ -74,7 +75,10 @@ module.exports = async function annulReturn(returnId, { employeeId }, req) {
     let customer = null;
     if (sale.customer_id) {
       customer = await Customer.findByPk(sale.customer_id, { transaction: t, lock: true });
-      const disponible = round6(customer?.credit_balance);
+      // Lo que queda de ESTE origen: lo compartido más lo que esta sucursal acreditó. Si el
+      // cliente gastó ese saldo en otra sucursal a cuenta de lo compartido, el chequeo global
+      // igual habría dejado pasar la anulación aunque este origen ya no tuviera nada.
+      const disponible = round6(await creditAvailable(sale.customer_id, sale.warehouse_id, t));
       // La holgura de un céntimo se mantiene: el crédito pudo consumirse en cobros que
       // redondearon, y por esa diferencia no se bloquea una anulación legítima.
       if (customer && disponible + 0.01 < acreditado) {
@@ -144,7 +148,16 @@ module.exports = async function annulReturn(returnId, { employeeId }, req) {
 
     /* ── 3. Revertir el saldo a favor ── */
     if (customer && acreditado > 0) {
-      await Customer.decrement({ credit_balance: acreditado }, { where: { id: customer.id }, transaction: t });
+      await addCreditMovement({
+        customer_id:  customer.id,
+        warehouse_id: sale.warehouse_id,
+        amount:       -acreditado,
+        reason:       'anulacion_devolucion',
+        sale_id:      sale.id,
+        return_id:    ret.id,
+        employee_id:  employeeId || null,
+        company_id:   sale.company_id || null,
+      }, t);
     }
 
     /* ── 4. Devolver la factura a su estado real ── */

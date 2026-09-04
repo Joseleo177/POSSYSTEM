@@ -32,7 +32,12 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
     const update = () => {
       const r = triggerRef.current?.getBoundingClientRect();
       if (!r) return;
-      const menuH = Math.min(256, options.length * 36 + 16);
+      // Sin opciones el menú no dibuja filas de 36px: dibuja el aviso de "sin resultados",
+      // que mide bastante más que eso. Sin este caso aparte, el cálculo de abajo (pensado
+      // para filas) subestimaba la altura real y el menú terminaba posicionado como si
+      // fuera casi del tamaño de una fila, flotando lejos de donde el contenido caía de
+      // verdad.
+      const menuH = options.length === 0 ? 76 : Math.min(256, options.length * 36 + 16);
       const spaceBelow = window.innerHeight - r.bottom;
       const openUp = spaceBelow < menuH + 16 && r.top > menuH + 16;
       let left = r.left;

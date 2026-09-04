@@ -37,7 +37,24 @@ function tenantFilter(req) {
 // sales; los ingresos y egresos sí tienen almacén propio.
 // Las variantes `*Bare` son para las consultas de saldo, que van contra la tabla sin alias
 // ni join: ahí el almacén del cobro se resuelve con una subconsulta sobre sales.
-async function warehouseFilter(req) {
+// `wid`: sucursal elegida a mano (Estado de Cuenta). Casi nunca el mismo banco es la misma
+// cuenta en dos tiendas, así que hace falta poder aislar una sola sin sumarlas de cabeza.
+// Se valida contra las sucursales del empleado antes de usarla.
+async function warehouseFilter(req, wid = null) {
+  if (wid) {
+    await assertWarehouseAccess(req, wid);
+    const list = String(parseInt(wid));
+    return {
+      whP: `AND s.warehouse_id IN (${list})`,
+      whI: `AND i.warehouse_id IN (${list})`,
+      whE: `AND e.warehouse_id IN (${list})`,
+      whPBare: `AND sale_id IN (SELECT id FROM sales WHERE warehouse_id IN (${list}))`,
+      whPCount: `AND p.sale_id IN (SELECT id FROM sales WHERE warehouse_id IN (${list}))`,
+      whIBare: `AND warehouse_id IN (${list})`,
+      whEBare: `AND warehouse_id IN (${list})`,
+    };
+  }
+
   const allowed = await visibleWarehouseIds(req);
   if (allowed === null) {                                          // admin: sin recorte
     return { whP: '', whI: '', whE: '', whPBare: '', whIBare: '', whEBare: '', whPCount: '' };
@@ -63,7 +80,19 @@ async function warehouseFilter(req) {
 
 // Qué diarios ve un empleado: los de sus sucursales más los compartidos (warehouse_id NULL),
 // que son los que sirven a toda la empresa. El admin los ve todos.
-async function journalScope(req) {
+//
+// `wid`: con una sucursal elegida a mano, la lista se recorta a la suya (más los
+// compartidos) en vez de a todas las asignadas al empleado.
+async function journalScope(req, wid = null) {
+  if (wid) {
+    await assertWarehouseAccess(req, wid);
+    return {
+      [Sequelize.Op.or]: [
+        { warehouse_id: null },
+        { warehouse_id: parseInt(wid) },
+      ],
+    };
+  }
   const allowed = await visibleWarehouseIds(req);
   if (allowed === null) return {};
   return {
@@ -164,9 +193,10 @@ async function deleteJournal(id, req) {
 }
 
 async function getSummary(req) {
-  const { date_from, date_to } = req.query;
+  const { date_from, date_to, warehouse_id } = req.query;
+  const wid = warehouse_id ? parseInt(warehouse_id) : null;
   const { tenantWhere, tc, tce } = tenantFilter(req);
-  const { whP, whI, whE } = await warehouseFilter(req);
+  const { whP, whI, whE } = await warehouseFilter(req, wid);
   const company_id  = req.employee?.company_id ?? null;
   const tci = company_id ? `AND i.company_id = ${parseInt(company_id)}` : '';
 
@@ -195,7 +225,7 @@ async function getSummary(req) {
 
   const journals = await PaymentJournal.findAll({
     attributes: [
-      'id', 'name', 'type', 'bank_id', 'color', 'currency_id',
+      'id', 'name', 'type', 'bank_id', 'color', 'currency_id', 'warehouse_id',
       [Sequelize.literal(`(
         SELECT COUNT(p.id) FROM payments p
         LEFT JOIN sales s ON p.sale_id = s.id
@@ -226,20 +256,22 @@ async function getSummary(req) {
     ],
     include: [
       { model: Currency, attributes: ['code', 'symbol', 'is_base', 'exchange_rate'], required: false },
-      { model: Bank,     attributes: ['name'],                                        required: false }
+      { model: Bank,     attributes: ['name'],                                        required: false },
+      { model: Warehouse, attributes: ['name'],                                       required: false }
     ],
-    where: { active: true, ...tenantWhere, ...(await journalScope(req)) },
+    where: { active: true, ...tenantWhere, ...(await journalScope(req, wid)) },
     order: [['sort_order', 'ASC'], ['id', 'ASC']]
   });
 
   const data = journals.map(j => {
     const jj = j.get({ plain: true });
     jj.bank_name        = jj.Bank?.name             ?? null;
+    jj.warehouse_name    = jj.Warehouse?.name        ?? null;
     jj.currency_code    = jj.Currency?.code         ?? null;
     jj.currency_symbol  = jj.Currency?.symbol       ?? null;
     jj.currency_is_base = jj.Currency?.is_base      ?? true;
     jj.exchange_rate    = jj.Currency?.exchange_rate ?? 1;
-    delete jj.Bank; delete jj.Currency; delete jj.Payments;
+    delete jj.Bank; delete jj.Currency; delete jj.Warehouse; delete jj.Payments;
     return jj;
   });
   return { data };
@@ -465,14 +497,29 @@ async function getMovements(req) {
 
 async function getBankMovements(req) {
   const { bankId } = req.params;
-  const { date_from, date_to, limit = 200, offset = 0 } = req.query;
+  const { date_from, date_to, limit = 200, offset = 0, warehouse_id } = req.query;
   const company_id = req.employee?.company_id ?? null;
   const scoped = !!company_id;
+
+  // El mismo banco puede tener una cuenta real por sucursal: "Banco de Venezuela" en la
+  // tienda A y otra completamente distinta en la B. La tarjeta que el usuario tocó ya sabe
+  // a cuál se refiere —una sucursal concreta, o la caja compartida (warehouse_id null)— y
+  // esa es la única que se abre acá. Sin esta sucursal explícita (llamadas viejas) se cae al
+  // recorte de siempre: todo lo que el empleado tiene permitido ver, sin distinguir cuentas.
+  const hasWid  = warehouse_id !== undefined && warehouse_id !== '';
+  const sharedOnly = hasWid && (warehouse_id === 'null' || warehouse_id === '0');
+  const wid = hasWid && !sharedOnly ? parseInt(warehouse_id) : null;
+  if (wid) await assertWarehouseAccess(req, wid);
+
+  const journalWhere = { bank_id: bankId, active: true, ...(scoped ? { company_id } : {}) };
+  if (sharedOnly) journalWhere.warehouse_id = null;
+  else if (wid) journalWhere.warehouse_id = wid;
+  else Object.assign(journalWhere, await journalScope(req));
 
   // Todos los diarios activos del banco (filtrado por empresa y por sucursal: un banco
   // puede tener cajas de varias tiendas y cada una solo suma las suyas)
   const bankJournals = await PaymentJournal.findAll({
-    where: { bank_id: bankId, active: true, ...(scoped ? { company_id } : {}), ...(await journalScope(req)) },
+    where: journalWhere,
     include: [
       { model: Currency, attributes: ['code', 'symbol', 'is_base', 'exchange_rate'] },
       { model: Bank,     attributes: ['name', 'id'] },
@@ -490,7 +537,7 @@ async function getBankMovements(req) {
   const tc     = scoped ? `AND p.company_id = ${parseInt(company_id)}` : '';
   const tci    = scoped ? `AND i.company_id = ${parseInt(company_id)}` : '';
   const te     = scoped ? `AND e.company_id = ${parseInt(company_id)}` : '';
-  const { whP, whI, whE, whPBare, whIBare, whEBare, whPCount } = await warehouseFilter(req);
+  const { whP, whI, whE, whPBare, whIBare, whEBare, whPCount } = await warehouseFilter(req, wid);
 
   const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;
   const safeFrom = sd(date_from);

@@ -21,13 +21,17 @@ export default function CashSessionsReport() {
  // Filtros
  const [searchTerm, setSearchTerm] = useState("");
  const [filterEmployee, setFilterEmployee] = useState("");
+ const [filterWarehouse, setFilterWarehouse] = useState("");
  const [dateFrom, setDateFrom] = useState("");
  const [dateTo, setDateTo] = useState("");
 
- const employees = [...new Set(sessions.map(s => s.employee?.full_name).filter(Boolean))];
+ const employees  = [...new Set(sessions.map(s => s.employee?.full_name).filter(Boolean))];
+ // Mismo criterio: derivadas de las sesiones ya cargadas, sin pedir nada aparte al servidor.
+ const warehouses = [...new Map(sessions.filter(s => s.warehouse).map(s => [s.warehouse.id, s.warehouse])).values()];
 
  const filtered = sessions.filter(s => {
  if (filterEmployee && s.employee?.full_name !== filterEmployee) return false;
+ if (filterWarehouse && String(s.warehouse?.id) !== filterWarehouse) return false;
  if (dateFrom && new Date(s.closed_at) < new Date(dateFrom + "T00:00:00")) return false;
  if (dateTo && new Date(s.closed_at) > new Date(dateTo + "T23:59:59")) return false;
  if (searchTerm.trim()) {
@@ -41,10 +45,10 @@ export default function CashSessionsReport() {
  const sessionsPag = usePagination(filtered, 20);
 
  // Volver a página 1 al cambiar filtros
- useEffect(() => { sessionsPag.setPage(1); }, [searchTerm, filterEmployee, dateFrom, dateTo]); // eslint-disable-line
+ useEffect(() => { sessionsPag.setPage(1); }, [searchTerm, filterEmployee, filterWarehouse, dateFrom, dateTo]); // eslint-disable-line
 
- const hasFilters = !!(searchTerm || filterEmployee || dateFrom || dateTo);
- const clearFilters = () => { setSearchTerm(""); setFilterEmployee(""); setDateFrom(""); setDateTo(""); };
+ const hasFilters = !!(searchTerm || filterEmployee || filterWarehouse || dateFrom || dateTo);
+ const clearFilters = () => { setSearchTerm(""); setFilterEmployee(""); setFilterWarehouse(""); setDateFrom(""); setDateTo(""); };
 
  const loadSessions = useCallback(async () => {
  setLoading(true);
@@ -84,7 +88,7 @@ export default function CashSessionsReport() {
  </svg>
  <input
  type="text"
- placeholder="Buscar por # cierre, cajero o almacén..."
+ placeholder="Buscar por # cierre, cajero o sucursal..."
  value={searchTerm}
  onChange={e => setSearchTerm(e.target.value)}
  className="w-full h-10 pl-10 pr-4 bg-surface-2 dark:bg-white/[0.03] border border-border/40 dark:border-white/5 rounded-xl text-[11px] font-bold tracking-wide focus:border-brand-500/50 focus:ring-4 focus:ring-brand-500/5 outline-none transition-all placeholder:text-content-subtle/50"
@@ -102,6 +106,20 @@ export default function CashSessionsReport() {
  ...employees.map(name => ({ value: name, label: name })),
  ]}
  />
+
+ {/* Sucursal: con una sola no aporta nada elegir entre ella misma. */}
+ {warehouses.length > 1 && (
+ <CustomSelect
+ value={filterWarehouse}
+ onChange={setFilterWarehouse}
+ placeholder="TODAS LAS SUCURSALES"
+ className="w-48"
+ options={[
+ { value: "", label: "TODAS LAS SUCURSALES" },
+ ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
+ ]}
+ />
+ )}
 
  {/* Rango de fechas: el mismo selector que el resto de los reportes. Antes eran
      dos input[type=date] sueltos, que renderizan el control nativo del navegador
@@ -130,7 +148,7 @@ export default function CashSessionsReport() {
  <table className="w-full text-left border-collapse min-w-[700px]">
  <thead className="sticky top-0 z-10 bg-surface-2 dark:bg-surface-dark-2 border-b border-border dark:border-white/5">
  <tr>
- {["ID / Fecha", "Cajero", "Almacén", "Duración", "Acciones"].map((h, i) => (
+ {["ID / Fecha", "Cajero", "Sucursal", "Duración", "Acciones"].map((h, i) => (
  <th key={h} className={`px-4 py-2.5 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted ${i === 3 ? "text-center" : i === 4 ? "text-right" : ""}`}>{h}</th>
  ))}
  </tr>

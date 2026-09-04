@@ -28,7 +28,7 @@ function StatusBadge({ status }) {
     );
 }
 
-export default function PendingSalesModal({ open, onClose, onSelect, baseCurrency }) {
+export default function PendingSalesModal({ open, onClose, onSelect, baseCurrency, warehouseId }) {
     const [sales, setSales]         = useState([]);
     const [loading, setLoading]     = useState(false);
     const [search, setSearch]       = useState("");
@@ -44,6 +44,9 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
         try {
             const params = { limit: 100 };
             if (search.trim()) params.search = search.trim();
+            // Con la caja de una sucursal abierta, solo sus cuentas: cobrar la pendiente de
+            // otra tienda desde acá sería registrar el ingreso en la caja equivocada.
+            if (warehouseId) params.warehouse_id = warehouseId;
             const r = await api.sales.getPending(params);
             setSales(r.data || []);
         } catch (e) {
@@ -51,7 +54,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
         } finally {
             setLoading(false);
         }
-    }, [search]);
+    }, [search, warehouseId]);
 
     useEffect(() => {
         if (!open) return;
@@ -80,12 +83,16 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
     // demás quedan bloqueadas. Un cobro se aplica a las facturas de una sola persona.
     const seleccionadas = sales.filter(s => checkedIds.includes(s.id));
     const clienteFijado = seleccionadas[0]?.customer_id ?? null;
+    // Mismo criterio: el cobro conjunto genera un solo movimiento de caja, así que las
+    // facturas marcadas también tienen que ser de la misma sucursal.
+    const sucursalFijada = seleccionadas[0]?.warehouse_id ?? null;
     const totalSeleccionado = seleccionadas.reduce((acc, s) => acc + parseFloat(s.balance || 0), 0);
     // Sin cliente identificado no hay a quién agrupar, y una factura sin saldo no se cobra.
     const marcable = (sale) =>
         !!sale.customer_id
         && parseFloat(sale.balance || 0) > 0.10
-        && (clienteFijado === null || sale.customer_id === clienteFijado);
+        && (clienteFijado === null || sale.customer_id === clienteFijado)
+        && (sucursalFijada === null || sale.warehouse_id === sucursalFijada);
     const toggleChecked = (sale) =>
         setCheckedIds(p => p.includes(sale.id) ? p.filter(x => x !== sale.id) : [...p, sale.id]);
 
@@ -242,6 +249,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                                 title={
                                                     !sale.customer_id ? "Sin cliente: no se puede cobrar junto a otras"
                                                     : (clienteFijado !== null && sale.customer_id !== clienteFijado) ? "Es de otro cliente"
+                                                    : (sucursalFijada !== null && sale.warehouse_id !== sucursalFijada) ? "Es de otra sucursal"
                                                     : "Cobrar junto con las demás"
                                                 }
                                                 className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${

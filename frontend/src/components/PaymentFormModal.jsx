@@ -6,6 +6,7 @@ import { saleTotalAtRate, todayISO, PAYMENT_TOLERANCE } from "../helpers";
 import DatePicker from "./ui/DatePicker";
 import CustomSelect from "./ui/CustomSelect";
 import RateField, { resolveRate } from "./ui/RateField";
+import { journalsForWarehouse } from "../helpers";
 
 const getEmpty = () => ({
   amount: "",
@@ -26,7 +27,10 @@ const getEmpty = () => ({
 });
 
 export default function PaymentFormModal({ sale, onClose, onSuccess }) {
-  const { notify, baseCurrency, activeCurrencies, activeJournals, can } = useApp();
+  const { notify, baseCurrency, activeCurrencies, activeJournals: allActiveJournals, can } = useApp();
+  // Solo los diarios de la sucursal de esta venta (más los compartidos): un cajero de la
+  // sucursal A no debe poder cobrar contra la caja de la B.
+  const activeJournals = journalsForWarehouse(allActiveJournals, sale?.warehouse_id);
   const [form, setForm] = useState(getEmpty);
   const [loading, setLoading] = useState(false);
   // Clave de idempotencia del cobro en curso (ver submit).
@@ -41,10 +45,12 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
 
   useEffect(() => {
     if (!sale?.customer_id) { setCustomerCredit(0); setCreditToApply(""); return; }
-    api.customers.getOne(sale.customer_id)
-      .then(r => setCustomerCredit(parseFloat(r.data?.credit_balance || 0)))
+    // Solo lo que esta sucursal puede aplicar: lo compartido más lo que ella misma generó. El
+    // crédito de otra sucursal no cuenta acá (ver creditLedger.js en el backend).
+    api.customers.getOne(sale.customer_id, sale.warehouse_id ? { warehouse_id: sale.warehouse_id } : {})
+      .then(r => setCustomerCredit(parseFloat(r.data?.credit_available ?? r.data?.credit_balance ?? 0)))
       .catch(() => setCustomerCredit(0));
-  }, [sale?.customer_id]);
+  }, [sale?.customer_id, sale?.warehouse_id]);
 
   const displayCur = activeCurrencies.find(c => !c.is_base) || baseCurrency;
   const defaultRate = (!displayCur || displayCur.is_base) ? 1 : parseFloat(displayCur.exchange_rate || 1);

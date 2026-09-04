@@ -35,6 +35,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
         searchTerm, setSearchTerm,
         activeFilters, activeSeries,
         employeeId, setEmployeeId, employees,
+        warehouseId, setWarehouseId, warehouses,
         showFilterDrop, setShowFilterDrop,
         saleDetail, setSaleDetail,
         returnSale, setReturnSale,
@@ -46,7 +47,15 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
 
     // Las notas de crédito viven en su propia pestaña: filtrar facturas por una serie de NC
     // no devolvería nada y solo ensuciaría el desplegable.
-    const invoiceSeries = (allSeries || []).filter(s => s.type !== "nc");
+    // Cada serie es de UNA sucursal (no hay series compartidas, a diferencia de los diarios de
+    // pago): con una sucursal elegida, las de las demás no pueden dar resultados.
+    const invoiceSeries = (allSeries || []).filter(s =>
+        s.type !== "nc" && (!warehouseId || s.warehouse_id === Number(warehouseId)));
+
+    // Igual que la serie: un empleado que nunca trabajó en esta sucursal no puede haber hecho
+    // ninguna venta ahí. `e.warehouses` lo trae `GET /employees` (ver AssignEmployeesModal).
+    const visibleEmployees = (employees || []).filter(e =>
+        !warehouseId || (e.warehouses || []).some(w => w.id === Number(warehouseId)));
 
     const [payModal, setPayModal] = useState(null);
     const [editModal, setEditModal] = useState(null);
@@ -90,7 +99,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                     Filtros
                     {hasFilters && (
                         <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">
-                            {activeFilters.length + activeSeries.length + (employeeId ? 1 : 0) + (histDateFrom || histDateTo ? 1 : 0)}
+                            {activeFilters.length + activeSeries.length + (employeeId ? 1 : 0) + (warehouseId ? 1 : 0) + (histDateFrom || histDateTo ? 1 : 0)}
                         </span>
                     )}
                 </button>
@@ -127,7 +136,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                 la lista crece con la nómina y en una plantilla de diez no
                                 entrarían en el panel. Sin permiso para ver empleados la lista
                                 llega vacía y la sección no se dibuja. */}
-                            {employees.length > 0 && (
+                            {visibleEmployees.length > 0 && (
                                 <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                     <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Empleado</div>
                                     <CustomSelect
@@ -137,7 +146,23 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                         placeholder="Todos"
                                         options={[
                                             { value: "", label: "Todos" },
-                                            ...employees.map(e => ({ value: e.id, label: e.full_name || e.username })),
+                                            ...visibleEmployees.map(e => ({ value: e.id, label: e.full_name || e.username })),
+                                        ]}
+                                    />
+                                </div>
+                            )}
+                            {/* Sucursal: con una sola no aporta nada elegir entre ella misma. */}
+                            {warehouses.length > 1 && (
+                                <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Sucursal</div>
+                                    <CustomSelect
+                                        value={warehouseId}
+                                        onChange={setWarehouseId}
+                                        height="h-8"
+                                        placeholder="Todas"
+                                        options={[
+                                            { value: "", label: "Todas" },
+                                            ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
                                         ]}
                                     />
                                 </div>
@@ -182,6 +207,9 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                     <tr className="group">
                                         <td>
                                             <span className="text-[11px] font-black text-brand-500 tracking-tight">{sale.invoice_number || `#${sale.id}`}</span>
+                                            {warehouses.length > 1 && sale.warehouse_name && (
+                                                <span className="block text-[9px] font-black opacity-30 uppercase">{sale.warehouse_name}</span>
+                                            )}
                                         </td>
                                         <td>
                                             {/* Neutro como respaldo, no rojo: un estado sin mapear

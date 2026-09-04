@@ -499,8 +499,14 @@ export default function PurchaseDetails({ state }) {
           <div className="flex items-center gap-2">
             {isEditable && (
               <button
-                onClick={() => setAddModalOpen(true)}
-                className="h-7 px-3 rounded-lg bg-brand-500/10 text-brand-500 border border-brand-500/20 text-[10px] font-black uppercase tracking-wide flex items-center gap-1.5 hover:bg-brand-500/20 transition-all active:scale-95"
+                onClick={() => localWarehouseId && setAddModalOpen(true)}
+                disabled={!localWarehouseId}
+                title={!localWarehouseId ? "Selecciona primero el almacén destino" : undefined}
+                className={`h-7 px-3 rounded-lg border text-[10px] font-black uppercase tracking-wide flex items-center gap-1.5 transition-all active:scale-95 ${
+                  localWarehouseId
+                    ? "bg-brand-500/10 text-brand-500 border-brand-500/20 hover:bg-brand-500/20"
+                    : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/30 dark:border-white/10 cursor-not-allowed"
+                }`}
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4"/></svg>
                 Agregar

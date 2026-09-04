@@ -41,8 +41,14 @@ export default function PurchaseForm({ state }) {
                         )}
                     </div>
                     <button
-                        onClick={() => setModalOpen(true)}
-                        className="h-8 px-4 rounded-xl bg-brand-500/10 text-brand-500 border border-brand-500/20 text-[11px] font-black uppercase tracking-wide flex items-center gap-2 hover:bg-brand-500/20 transition-all active:scale-95"
+                        onClick={() => selectedWarehouseId && setModalOpen(true)}
+                        disabled={!selectedWarehouseId}
+                        title={!selectedWarehouseId ? "Selecciona primero el almacén destino" : undefined}
+                        className={`h-8 px-4 rounded-xl border text-[11px] font-black uppercase tracking-wide flex items-center gap-2 transition-all active:scale-95 ${
+                            selectedWarehouseId
+                                ? "bg-brand-500/10 text-brand-500 border-brand-500/20 hover:bg-brand-500/20"
+                                : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/30 dark:border-white/10 cursor-not-allowed"
+                        }`}
                     >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />

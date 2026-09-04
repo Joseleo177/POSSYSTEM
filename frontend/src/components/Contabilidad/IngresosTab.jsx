@@ -3,7 +3,7 @@ import { useIngresos } from "../../hooks/contabilidad/useIngresos";
 import FilterPopover from "../ui/FilterPopover";
 import ConfirmModal from "../ui/ConfirmModal";
 import { Button } from "../ui/Button";
-import { fmtDateShort } from "../../helpers";
+import { fmtDateShort, journalsForWarehouse } from "../../helpers";
 import DateRangePicker from "../ui/DateRangePicker";
 import Modal from "../ui/Modal";
 import CustomSelect from "../ui/CustomSelect";
@@ -179,9 +179,9 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                         <div>
                             <label className="label">Monto{currentSymbol ? ` (${currentSymbol})` : ""} *</label>
                             <div className="relative">
-                                {currentSymbol && <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[12px] font-black text-content-subtle dark:text-white/30 pointer-events-none">{currentSymbol}</span>}
+                                {currentSymbol && <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[12px] font-black text-content-subtle dark:text-white/30 pointer-events-none whitespace-nowrap">{currentSymbol}</span>}
                                 <input type="number" step="0.01" min="0" placeholder="0.00"
-                                    className={`input ${currentSymbol ? "pl-8" : ""}`}
+                                    className={`input ${currentSymbol ? "pl-12" : ""}`}
                                     value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
                             </div>
                             {currentRate !== 1 && (
@@ -204,7 +204,7 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                             <label className="label">Diario</label>
                             {/* Al cambiar de diario se limpia la tasa tecleada: pertenecía a la
                                 moneda anterior y aplicarla a otra convertiría mal el monto. */}
-                            <CustomSelect value={form.payment_journal_id} onChange={v => setForm(p => ({ ...p, payment_journal_id: v, rate: "" }))} placeholder="Sin diario" options={[{ value: "", label: "Sin diario" }, ...(journals || []).map(j => ({ value: String(j.id), label: j.name }))]} />
+                            <CustomSelect value={form.payment_journal_id} onChange={v => setForm(p => ({ ...p, payment_journal_id: v, rate: "" }))} placeholder="Sin diario" options={[{ value: "", label: "Sin diario" }, ...journalsForWarehouse(journals || [], form.warehouse_id).map(j => ({ value: String(j.id), label: j.name }))]} />
                         </div>
                     </div>
 
@@ -225,7 +225,7 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                     <div className={warehouses.length > 1 ? "grid grid-cols-2 gap-3" : ""}>
                         {warehouses.length > 1 && (
                             <div>
-                                <label className="label">Almacén *</label>
+                                <label className="label">Sucursal *</label>
                                 <CustomSelect
                                     value={form.warehouse_id}
                                     onChange={v => setForm(p => ({ ...p, warehouse_id: v }))}

@@ -32,11 +32,10 @@ export default function ContabilidadPage() {
 
  const [allSeries, setAllSeries] = useState([]);
  const [allEmployees, setAllEmployees] = useState([]);
- // Cada serie pertenece a un almacén (la sucursal que la factura), así que el alta de
- // series necesita la lista de almacenes.
- const [allWarehouses, setAllWarehouses] = useState([]);
- // Las del propio usuario. Una caja solo se puede casar con una sucursal a la que se tenga
- // acceso: ofrecer las demás sería mostrar opciones que el backend va a rechazar.
+ // Las del propio usuario: un admin las tiene todas, un empleado solo las que tiene
+ // asignadas. También es de dónde sale la sucursal al dar de alta una serie — ofrecer una
+ // ajena sería mostrar una opción que el backend va a rechazar (y antes de este fix, algo
+ // que hasta guardaba: el alta usaba la lista sin recortar de toda la empresa).
  const [myWarehouses, setMyWarehouses] = useState([]);
 
  const loadAllSeries = useCallback(async () => {
@@ -48,12 +47,9 @@ export default function ContabilidadPage() {
 
  const loadAllWarehouses = useCallback(async () => {
  try {
- const [todos, mios] = await Promise.all([
- api.warehouses.getAll({ scope: "all" }),
- api.warehouses.getAll(),
- ]);
- setAllWarehouses(todos.data || []);
- setMyWarehouses(mios.data || []);
+ const r = await api.warehouses.getAll();
+ // Ni una serie ni un diario de caja pueden ser de un depósito: no factura, no cobra.
+ setMyWarehouses((r.data || []).filter(w => w.sells !== false));
  } catch (e) {}
  }, []);
 
@@ -198,7 +194,7 @@ export default function ContabilidadPage() {
  allSeries={allSeries}
  loadAllSeries={loadAllSeries}
  allEmployees={allEmployees}
- allWarehouses={allWarehouses}
+ allWarehouses={myWarehouses}
  />
  );
  case "Diarios":

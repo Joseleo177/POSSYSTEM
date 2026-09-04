@@ -154,8 +154,8 @@ export default function CartSidebar({
                     Línea de ancho completo para que el nombre no se corte. */}
                 <div className="hidden lg:flex items-center gap-1.5 -mt-1 min-w-0">
                     <svg className="w-3 h-3 text-brand-500 opacity-60 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-content-subtle dark:text-white/30 shrink-0">Almacén</span>
-                    <span className="text-[10px] font-black uppercase tracking-wide text-brand-500 truncate">{activeWarehouse?.name || "Sin almacén"}</span>
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-content-subtle dark:text-white/30 shrink-0">Sucursal</span>
+                    <span className="text-[10px] font-black uppercase tracking-wide text-brand-500 truncate">{activeWarehouse?.name || "Sin sucursal"}</span>
                 </div>
 
                 {/* Acciones de sesión en móvil. Antes esta barra solo tenía "en espera" y un
@@ -163,7 +163,7 @@ export default function CartSidebar({
                     y, sobre todo, no había forma de cerrar la caja desde el teléfono —el resto
                     de acciones vive en el bloque hidden lg:flex de arriba—. */}
                 <div className="lg:hidden flex items-center justify-between gap-2 pb-1">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-500 truncate min-w-0" title="Almacén de venta">{activeWarehouse?.name || "Sin almacén"}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-500 truncate min-w-0" title="Sucursal de venta">{activeWarehouse?.name || "Sin sucursal"}</span>
                     <div className="flex items-center gap-1.5 shrink-0">
                         {cashSession ? (
                             <>

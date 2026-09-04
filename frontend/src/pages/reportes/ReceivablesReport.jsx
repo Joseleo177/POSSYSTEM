@@ -1,7 +1,9 @@
+import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { buildReceivablesExcel } from "../../helpers/excel";
 import { printReceivablesReport } from "../../helpers/printReceivablesReport";
 import { useApp } from "../../context/AppContext";
+import CustomSelect from "../../components/ui/CustomSelect";
 import {
     fmt$, fmtN, pct,
     useReport, usePagination, Pagination,
@@ -9,7 +11,20 @@ import {
 } from "./reportes.utils";
 
 export default function ReceivablesReport() {
-    const { data, loading, error } = useReport(api.reports.receivables, {}, []);
+    // Cuánto debe cada cliente es por sucursal: la deuda que arrastra en la A no la puede
+    // cobrar ni explicar la B. Mismo criterio que el resto de los reportes.
+    const [warehouseId, setWarehouseId] = useState("");
+    const [warehouses, setWarehouses] = useState([]);
+    useEffect(() => {
+        api.warehouses.getAll()
+            // Un depósito no vende ni cobra: no arrastra deuda propia.
+            .then(r => setWarehouses((r.data || []).filter(w => w.sells !== false)))
+            .catch(e => console.error("[ReceivablesReport] no se pudieron cargar los almacenes:", e));
+    }, []);
+    const todasLabel = warehouses.length === 1 ? warehouses[0].name : "TODAS LAS SUCURSALES";
+
+    const params = { warehouse_id: warehouseId };
+    const { data, loading, error } = useReport(api.reports.receivables, params, [warehouseId]);
     const { companyInfo, baseCurrency, activeCurrencies } = useApp();
     const s = data?.summary;
     const a = data?.aging;
@@ -17,7 +32,22 @@ export default function ReceivablesReport() {
 
     return (
         <div className="h-full flex flex-col space-y-4 overflow-auto">
-            <div className="flex justify-end shrink-0 gap-2">
+            <div className="flex items-center shrink-0 gap-2 flex-wrap">
+                {/* Con una sola sucursal no hay nada que elegir: mostrar el selector solo
+                    insinuaría que hay más, cuando no las hay. */}
+                {warehouses.length > 1 && (
+                <CustomSelect
+                    value={warehouseId}
+                    onChange={setWarehouseId}
+                    placeholder={todasLabel}
+                    boxClassName="h-10 min-w-[190px]"
+                    options={[
+                        { value: "", label: todasLabel },
+                        ...warehouses.map(w => ({ value: String(w.id), label: w.name }))
+                    ]}
+                />
+                )}
+                <div className="flex items-center gap-2 ml-auto">
                 {data && (
                     <button
                         onClick={() => printReceivablesReport(data, companyInfo, baseCurrency, activeCurrencies)}
@@ -32,6 +62,7 @@ export default function ReceivablesReport() {
                     </button>
                 )}
                 {data && <ExportButton onClick={() => buildReceivablesExcel(data)} />}
+                </div>
             </div>
 
             {loading && <div className="flex-1 flex items-center justify-center"><Loading /></div>}

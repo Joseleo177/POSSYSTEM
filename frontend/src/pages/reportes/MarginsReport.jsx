@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { buildMarginsExcel } from "../../helpers/excel";
+import CustomSelect from "../../components/ui/CustomSelect";
 import {
  fmt$, fmtN,
  useReport, defaultRange, useHourRange, usePagination, Pagination, useExportFull,
  DateRangePicker, HourRangePicker, NightShiftNotice, KpiCard, SectionHeader, Card, Loading, ExportButton, BarChart,
 } from "./reportes.utils";
-import CustomSelect from "../../components/ui/CustomSelect";
 
 export default function MarginsReport() {
  const [range, setRange] = useState(defaultRange(30));
@@ -16,7 +16,7 @@ export default function MarginsReport() {
  const [warehouses, setWarehouses] = useState([]);
  useEffect(() => {
   api.warehouses.getAll()
-   .then(r => setWarehouses(r.data || []))
+   .then(r => setWarehouses((r.data || []).filter(w => w.sells !== false)))
    .catch(e => console.error("[MarginsReport] no se pudieron cargar los almacenes:", e));
  }, []);
 
@@ -48,6 +48,7 @@ export default function MarginsReport() {
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
  <HourRangePicker from={hr.hours.from} to={hr.hours.to} onChange={hr.setHours} />
  {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} dateFrom={range.from} dateTo={range.to} />}
+ {warehouses.length > 1 && (
  <CustomSelect
   value={warehouseId}
   onChange={setWarehouseId}
@@ -55,9 +56,10 @@ export default function MarginsReport() {
   boxClassName="h-10 min-w-[190px]"
   options={[
   { value: "", label: todasLabel },
-  ...(warehouses.length > 1 ? warehouses.map(w => ({ value: String(w.id), label: w.name })) : [])
+  ...warehouses.map(w => ({ value: String(w.id), label: w.name }))
   ]}
  />
+ )}
  </div>
  {data && <ExportButton onClick={exportFull.run} loading={exportFull.exporting} />}
  </div>

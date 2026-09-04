@@ -24,6 +24,11 @@ module.exports = (sequelize, DataTypes) => {
     payment_method_id: { type: DataTypes.INTEGER },
     payment_journal_id: { type: DataTypes.INTEGER },
     warehouse_id: { type: DataTypes.INTEGER },
+    // Sucursal que el cliente eligió en el catálogo público al armar el pedido (status
+    // 'pedido'). No es la que despachó: esa sigue siendo warehouse_id, y se llena recién al
+    // aceptarlo. Esta es la intención original, para poder filtrar los pedidos por sucursal
+    // antes de que alguien los tome.
+    requested_warehouse_id: { type: DataTypes.INTEGER, allowNull: true },
     company_id: { type: DataTypes.INTEGER, allowNull: true },
     status:             { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'pendiente' },
     serie_id:           { type: DataTypes.INTEGER },

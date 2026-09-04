@@ -107,7 +107,7 @@ export default function SaleDetailModal({ saleId, onClose }) {
                                 {[
                                     { label: "Fecha",      value: new Date(sale.created_at).toLocaleDateString("es-VE", { day: "2-digit", month: "long", year: "numeric" }) },
                                     { label: "Empleado",   value: sale.employee_name || "—" },
-                                    { label: "Almacén",    value: sale.warehouse_name || "—" },
+                                    { label: "Sucursal",   value: sale.warehouse_name || "—" },
                                     { label: "Serie",      value: sale.serie_name || "—" },
                                 ].map(({ label, value }) => (
                                     <div key={label} className="bg-surface-2/50 dark:bg-white/[0.03] rounded-xl p-2.5 border border-border/20 dark:border-white/5">

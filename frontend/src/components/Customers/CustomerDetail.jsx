@@ -86,7 +86,18 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
     const cobrables    = esCliente ? pendingSales.filter(s => parseFloat(s.balance || 0) > 0.10) : [];
     const seleccionadas = cobrables.filter(s => checkedIds.includes(s.id));
     const totalSeleccionado = seleccionadas.reduce((acc, s) => acc + parseFloat(s.balance || 0), 0);
-    const toggleChecked = (id) => setCheckedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+    // El cobro conjunto genera un solo movimiento de caja: mezclar facturas de sucursales
+    // distintas dejaría ese movimiento sin una caja a la que pertenecer, y el arqueo del
+    // empleado de cada tienda ya no cuadraría con lo que de verdad entró en la suya.
+    const toggleChecked = (id) => {
+        const sale = cobrables.find(s => s.id === id);
+        if (!checkedIds.includes(id) && sale && seleccionadas.length > 0
+            && seleccionadas[0].warehouse_id !== sale.warehouse_id) {
+            notify("El cobro conjunto solo admite facturas de la misma sucursal", "err");
+            return;
+        }
+        setCheckedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+    };
     const hasPending   = parseFloat(detail.total_debt || 0) > 0;
     const paidTotalPages = Math.ceil((paidTotal || 0) / PAID_LIMIT);
 
@@ -264,20 +275,26 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                 }}>
                                     {/* Casilla del cobro conjunto. Va fuera del área que abre el
                                         detalle: marcar una factura no es querer verla. */}
-                                    {cobrables.length > 1 && (
+                                    {cobrables.length > 1 && (() => {
+                                        const esCobrable = cobrables.some(c => c.id === sale.id);
+                                        // Otra sucursal que la ya marcada: no se puede sumar a este cobro conjunto.
+                                        const otraSucursal = esCobrable && !checkedIds.includes(sale.id)
+                                            && seleccionadas.length > 0 && seleccionadas[0].warehouse_id !== sale.warehouse_id;
+                                        return (
                                         <button
                                             onClick={e => { e.stopPropagation(); toggleChecked(sale.id); }}
-                                            disabled={!cobrables.some(c => c.id === sale.id)}
+                                            disabled={!esCobrable || otraSucursal}
                                             className={`w-5 h-5 rounded-md border shrink-0 flex items-center justify-center transition-all print-hidden ${
                                                 checkedIds.includes(sale.id)
                                                     ? "bg-success border-success text-black"
                                                     : "border-border/40 dark:border-white/20 text-transparent hover:border-success/60"
                                             } disabled:opacity-20 disabled:cursor-not-allowed`}
-                                            title={cobrables.some(c => c.id === sale.id) ? "Incluir en el cobro conjunto" : "Sin saldo por cobrar"}
+                                            title={!esCobrable ? "Sin saldo por cobrar" : otraSucursal ? "El cobro conjunto solo admite facturas de la misma sucursal" : "Incluir en el cobro conjunto"}
                                         >
                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7"/></svg>
                                         </button>
-                                    )}
+                                        );
+                                    })()}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <span className="text-[12px] font-bold text-content dark:text-white">#{sale.id}</span>

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import DatePicker from "./ui/DatePicker";
 import CustomSelect from "./ui/CustomSelect";
 import { api } from "../services/api";
-import { fmtNumber, printNotaCreditoDoc, todayISO } from "../helpers";
+import { fmtNumber, printNotaCreditoDoc, todayISO, journalsForWarehouse } from "../helpers";
 import { fmtQtyUnit } from "../helpers/unitFormatter";
 import ConfirmModal from "./ui/ConfirmModal";
 import PaymentFormModal from "./PaymentFormModal";
@@ -21,7 +21,9 @@ const EMPTY_REFUND = () => ({
 });
 
 export default function ReturnModal({ open, onClose, sale, onReturnSuccess, notify }) {
-    const { companyInfo, baseCurrency, activeCurrencies, activeJournals, printerWidth } = useApp();
+    const { companyInfo, baseCurrency, activeCurrencies, activeJournals: allActiveJournals, printerWidth } = useApp();
+    // El reembolso sale de la caja de la sucursal donde se vendió, no de la de otra tienda.
+    const activeJournals = journalsForWarehouse(allActiveJournals, sale?.warehouse_id);
     const [mode, setMode] = useState("devolucion"); // "devolucion" | "cambio"
     const [returnQtys, setReturnQtys] = useState({});
     const [reason, setReason] = useState("");

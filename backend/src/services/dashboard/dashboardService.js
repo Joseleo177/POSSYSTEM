@@ -11,19 +11,28 @@ const MONTH  = `((NOW() AT TIME ZONE '${TZ}')::date - 30)`;
 const sinceToday = (col) => `${localDate(col)} = ${TODAY}`;
 const sinceMonth = (col) => `${localDate(col)} >= ${MONTH}`;
 
-async function getDashboard({ company_id, isSuperuser, allowedWarehouses }) {
+async function getDashboard({ company_id, isSuperuser, allowedWarehouses, warehouse_id }) {
 
   const tenantWhere  = company_id ? { company_id } : {};
   const tenantClause = company_id ? `AND company_id = :company_id` : "";
 
+  // Sucursal concreta: el selector de la barra superior. Sin ella rige el recorte de
+  // siempre (las sucursales del empleado, o toda la empresa si es admin).
+  const wid = warehouse_id ? parseInt(warehouse_id) : null;
+  if (wid && Array.isArray(allowedWarehouses) && !allowedWarehouses.includes(wid)) {
+    const e = new Error("No tienes acceso a este almacén"); e.status = 403; e.isOperational = true; throw e;
+  }
+
   // Los KPIs se recortan a las sucursales del empleado; el admin ve la empresa entera.
   // `wh` arma el fragmento SQL para el alias de cada consulta, y `whereScope` el equivalente
   // para las consultas que van por el ORM.
-  const wh = buildWarehouseScope(allowedWarehouses ?? null);
-  const whereScope = Array.isArray(allowedWarehouses)
-    ? { warehouse_id: { [Op.in]: allowedWarehouses } }
-    : {};
-  const whIds = Array.isArray(allowedWarehouses) ? allowedWarehouses.filter(Number.isInteger) : null;
+  const wh = wid
+    ? (alias = '') => `AND ${alias ? `${alias}.` : ''}warehouse_id = ${wid}`
+    : buildWarehouseScope(allowedWarehouses ?? null);
+  const whereScope = wid
+    ? { warehouse_id: wid }
+    : (Array.isArray(allowedWarehouses) ? { warehouse_id: { [Op.in]: allowedWarehouses } } : {});
+  const whIds = wid ? [wid] : (Array.isArray(allowedWarehouses) ? allowedWarehouses.filter(Number.isInteger) : null);
   // Los cobros y el efectivo en caja no guardan sucursal: la heredan de la venta.
   const paymentScope = whIds === null
     ? ''

@@ -1,8 +1,9 @@
 const {
-  Sale, SaleItem, Product, ProductStock, Employee, Customer,
+  Sale, SaleItem, Product, ProductStock, Employee,
   Return, ReturnItem, Payment, ProductComboItem, Serie, SerieRange, sequelize, Sequelize,
 } = require("../../models");
 const { excludeAnnulledReturns } = require("./shared");
+const { addCreditMovement } = require("../customers/creditLedger");
 
 module.exports = async function createExchange({ saleId, returnItems, replacementItems, reason, employeeId }) {
   if (!returnItems?.length)      { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
@@ -267,7 +268,16 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
     /* Saldo sobrante va al crédito del cliente */
     const creditRemainder = parseFloat((returnTotal - creditToApply).toFixed(6));
     if (creditRemainder > 0.001 && sale.customer_id) {
-      await Customer.increment({ credit_balance: creditRemainder }, { where: { id: sale.customer_id }, transaction: t });
+      await addCreditMovement({
+        customer_id:  sale.customer_id,
+        warehouse_id: sale.warehouse_id,
+        amount:       creditRemainder,
+        reason:       'devolucion',
+        sale_id:      saleId,
+        return_id:    returnRecord.id,
+        employee_id:  employeeId || null,
+        company_id:   sale.company_id || null,
+      }, t);
     }
 
     const remainingToPay = parseFloat((replacementTotal - creditToApply).toFixed(6));

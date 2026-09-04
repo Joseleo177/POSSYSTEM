@@ -58,6 +58,10 @@ const sufijoFranja = (range) =>
 const sufijoSerie = (range) =>
   range?.serie_name ? `_${String(range.serie_name).replace(/[^A-Za-z0-9]+/g, "-").slice(0, 20)}` : "";
 
+// Sucursal en el nombre del archivo, mismo criterio que la serie.
+const sufijoSucursal = (range) =>
+  range?.warehouse_name ? `_${String(range.warehouse_name).replace(/[^A-Za-z0-9]+/g, "-").slice(0, 20)}` : "";
+
 // ── Exportadores por módulo ──────────────────────────────────
 
 export function buildSalesExcel(data, range) {
@@ -116,7 +120,7 @@ export function buildSalesExcel(data, range) {
         { key: "revenue", label: "Ingresos ($)" },
       ],
     },
-  ]), `Ventas_${range.from}_${range.to}${sufijoFranja(range)}${sufijoSerie(range)}`);
+  ]), `Ventas_${range.from}_${range.to}${sufijoFranja(range)}${sufijoSerie(range)}${sufijoSucursal(range)}`);
 }
 
 export function buildInventoryExcel(data) {

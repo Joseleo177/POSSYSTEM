@@ -4,7 +4,7 @@ import CustomSelect from "../ui/CustomSelect";
 import DatePicker from "../ui/DatePicker";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
-import { fmtBase, todayISO, saleTotalAtRate } from "../../helpers";
+import { fmtBase, todayISO, saleTotalAtRate, journalsForSales } from "../../helpers";
 import RateField, { resolveRate } from "../ui/RateField";
 
 /**
@@ -19,7 +19,7 @@ import RateField, { resolveRate } from "../ui/RateField";
  * y en el cobro de una factura suelta; al servidor viaja en moneda base.
  */
 export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }) {
-  const { notify, baseCurrency, activeJournals, activeCurrencies } = useApp();
+  const { notify, baseCurrency, activeJournals: allActiveJournals, activeCurrencies } = useApp();
   const [form, setForm] = useState({
     amount: "",
     journal_id: "",
@@ -45,6 +45,10 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
     [sales]
   );
   const deudaTotal = ordenadas.reduce((acc, s) => acc + parseFloat(s.balance || 0), 0);
+
+  // Si las facturas son de sucursales distintas, solo caben los diarios compartidos: no hay
+  // una sola sucursal contra la que cobrar.
+  const activeJournals = journalsForSales(allActiveJournals, ordenadas);
 
   const journal  = activeJournals.find(j => j.id === form.journal_id);
   const currency = journal?.currency_id ? activeCurrencies.find(c => c.id === parseInt(journal.currency_id)) : null;

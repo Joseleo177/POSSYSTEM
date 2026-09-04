@@ -1014,6 +1014,10 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
         employee_id: null,
         serie_id: null,
         warehouse_id: null,
+        // La tienda que el cliente eligió en la vitrina. `warehouse_id` sigue en null: quien
+        // acepte el pedido decide de dónde sale de verdad la mercancía (normalmente esta
+        // misma, pero puede cambiar si esa sucursal ya no tiene con qué cubrirlo).
+        requested_warehouse_id: tienda ? tienda.id : null,
         customer_id: customer.id,
         currency_id: baseCurrency?.id || null,
         exchange_rate: 1,

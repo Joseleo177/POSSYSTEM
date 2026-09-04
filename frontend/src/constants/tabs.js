@@ -16,6 +16,9 @@ export const ALL_TABS = [
     // administradores—; acá solo se decide a quién se le muestra el módulo.
     { key: "Empleados",     label: "Empleados",     mobileLabel: "Usuarios",   perm: "employees.view",  color: "from-pink-500 to-pink-700" },
     { key: "Empresas",      label: "Empresas",      mobileLabel: "Empresas",   superuserOnly: true, color: "from-rose-500 to-rose-700" },
+    // Aparte de Configuración a propósito: tocar la tasa del día es tarea de caja/admin, no
+    // de dueño de empresa, y antes exigía el mismo permiso que abre el RIF y la facturación.
+    { key: "Monedas",       label: "Monedas",       mobileLabel: "Monedas",    perm: "currencies.view", color: "from-cyan-500 to-cyan-700" },
     { key: "Configuración", label: "Configuración", mobileLabel: "Config.",    perm: "config.view",     color: "from-slate-500 to-slate-700" },
 ];
 

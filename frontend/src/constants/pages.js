@@ -8,6 +8,7 @@ import InventarioPage from "../pages/InventarioPage";
 import ClientesPage from "../pages/ClientesPage";
 import ContabilidadPage from "../pages/ContabilidadPage";
 import ConfigPage from "../pages/ConfigPage";
+import MonedasPage from "../pages/MonedasPage";
 import ReportesPage from "../pages/ReportesPage";
 import CompaniesPage from "../pages/CompaniesPage";
 
@@ -22,5 +23,6 @@ export const PAGE_COMPONENTS = {
     Reportes: ReportesPage,
     Empleados: EmpleadosPage,
     Empresas: CompaniesPage,
+    Monedas: MonedasPage,
     "Configuración": ConfigPage,
 };

@@ -124,9 +124,18 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         try {
             const params = { is_combo: false, is_service: false, limit: PAGE_SIZE, offset: off };
             if (searchVal.trim()) params.search = searchVal.trim();
+            // Sin esto la lista mostraba el stock global de la empresa: un producto en 0 en
+            // esta sucursal aparecía "con 36 unidades" porque las tenía otra. `for_purchase`
+            // es la otra mitad: comprar es cómo un producto entra por primera vez a un
+            // almacén, así que warehouse_id no puede excluir del listado a los que todavía no
+            // tienen ficha de stock ahí (todo el catálogo aparecería "SIN PRODUCTOS").
+            if (warehouseId) { params.warehouse_id = warehouseId; params.for_purchase = true; }
             const r = await api.products.getAll(params);
             if (myReq !== reqRef.current) return; // resultado obsoleto
-            const data = r.data || r || [];
+            const raw = r.data || r || [];
+            // `warehouse_stock` es lo que hay en ESTA sucursal; `stock` es el global que trae
+            // el producto cuando no se filtra por almacén. El resto del modal ya asume `stock`.
+            const data = raw.map(p => ({ ...p, stock: p.warehouse_stock ?? p.stock }));
             setTotal(r.total ?? data.length);
             offsetRef.current = off + data.length;
             setResults(prev => append ? [...prev, ...data] : data);
@@ -135,7 +144,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         } finally {
             if (myReq === reqRef.current) { if (append) setLoadingMore(false); else setSearching(false); }
         }
-    }, []);
+    }, [warehouseId]);
 
     // Carga inicial + búsqueda debounceada (reinicia desde offset 0)
     useEffect(() => {

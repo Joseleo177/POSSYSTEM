@@ -10,6 +10,7 @@ import DateRangePicker from "../ui/DateRangePicker";
 import CustomSelect from "../ui/CustomSelect";
 import { useApp } from "../../context/AppContext";
 import { readableInk } from "../../helpers/brandColor";
+import { journalsForWarehouse } from "../../helpers";
 
 export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayment, setReceiptSale, journals = [] }) {
     const {
@@ -20,6 +21,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
         payDateTo, setPayDateTo,
         journalFilter, setJournalFilter,
         employeeFilter, setEmployeeFilter, employees,
+        warehouseFilter, setWarehouseFilter, warehouses,
         showFilterDrop, setShowFilterDrop,
         payDetail, setPayDetail,
         payModal, setPayModal,
@@ -35,6 +37,13 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
     const { activeCurrencies } = useApp();
     const filterCurrency = currencyId ? (activeCurrencies || []).find(c => c.id === currencyId) : null;
     const filtrosBtnRef = useRef(null);
+
+    // Con una sucursal elegida, ni un diario de otra ni un empleado que nunca trabajó ahí
+    // pueden dar resultados. Un diario compartido (warehouse_id null) sigue apareciendo:
+    // sirve a cualquier sucursal.
+    const visibleJournals  = journalsForWarehouse(journals, warehouseFilter);
+    const visibleEmployees = (employees || []).filter(e =>
+        !warehouseFilter || (e.warehouses || []).some(w => w.id === Number(warehouseFilter)));
 
     const subheader = (
         <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2">
@@ -61,7 +70,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                             {/* El selector de vista Historial / Por Cobrar se retiró de aquí: las
                                 cuentas por cobrar tienen su propio módulo. La vista "pendientes"
                                 sigue implementada en usePagos y en la tabla por si se reactiva. */}
-                            {journals.length > 0 && (
+                            {visibleJournals.length > 0 && (
                                 <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                     <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Diario de pago</div>
                                     {/* Select y no rejilla de botones: los diarios los crea el usuario y
@@ -75,7 +84,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                         placeholder="Todos los diarios"
                                         options={[
                                             { value: "", label: "Todos los diarios" },
-                                            ...journals.map(j => ({
+                                            ...visibleJournals.map(j => ({
                                                 value: String(j.id),
                                                 label: j.name,
                                                 color: j.color || undefined,
@@ -88,7 +97,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                 puede emitir un cajero y cobrarla otro, así que este filtro no
                                 es el mismo que el de Ventas. Select por lo mismo que el diario:
                                 la lista crece con la nómina. */}
-                            {employees.length > 0 && (
+                            {visibleEmployees.length > 0 && (
                                 <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                     <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Empleado</div>
                                     <CustomSelect
@@ -98,7 +107,24 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                         placeholder="Todos"
                                         options={[
                                             { value: "", label: "Todos" },
-                                            ...employees.map(e => ({ value: String(e.id), label: e.full_name || e.username })),
+                                            ...visibleEmployees.map(e => ({ value: String(e.id), label: e.full_name || e.username })),
+                                        ]}
+                                    />
+                                </div>
+                            )}
+                            {/* Con una sola sucursal no hay nada que elegir: mostrar el selector solo
+                                insinuaría que hay más, cuando no las hay. */}
+                            {warehouses.length > 1 && (
+                                <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Sucursal</div>
+                                    <CustomSelect
+                                        value={warehouseFilter}
+                                        onChange={setWarehouseFilter}
+                                        height="h-9"
+                                        placeholder="Todas"
+                                        options={[
+                                            { value: "", label: "Todas" },
+                                            ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
                                         ]}
                                     />
                                 </div>
@@ -155,6 +181,9 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                             )}
                                             {!isInvoice && item.reference_number && (
                                                 <div className="text-[9px] font-black text-content-subtle uppercase tracking-tighter mt-0.5">Ref: {item.reference_number}</div>
+                                            )}
+                                            {warehouses.length > 1 && item.warehouse_name && (
+                                                <div className="text-[9px] font-black opacity-30 uppercase mt-0.5">{item.warehouse_name}</div>
                                             )}
                                         </td>
                                         <td>

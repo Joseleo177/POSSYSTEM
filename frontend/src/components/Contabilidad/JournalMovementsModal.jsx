@@ -12,7 +12,7 @@ const fmtDate = (d) => {
 };
 
 
-export default function JournalMovementsModal({ journalId, bankId, onClose }) {
+export default function JournalMovementsModal({ journalId, bankId, warehouseId, onClose }) {
     const [movements, setMovements] = useState([]);
     const [journal, setJournal] = useState(null);
     const [total, setTotal] = useState(0);
@@ -37,6 +37,9 @@ export default function JournalMovementsModal({ journalId, bankId, onClose }) {
             const params = { limit: LIMIT, offset: (page - 1) * LIMIT };
             if (dateFrom) params.date_from = dateFrom;
             if (dateTo)   params.date_to   = dateTo;
+            // La misma cuenta (banco) puede repetirse en varias sucursales sin ser la misma
+            // caja real: sin esto, el detalle mezclaba los movimientos de todas.
+            if (bankId && warehouseId !== undefined) params.warehouse_id = warehouseId === null ? "null" : warehouseId;
             const r = bankId
                 ? await api.journals.getBankMovements(bankId, params)
                 : await api.journals.getMovements(journalId, params);
@@ -48,7 +51,7 @@ export default function JournalMovementsModal({ journalId, bankId, onClose }) {
         } finally {
             setLoading(false);
         }
-    }, [journalId, bankId, page, dateFrom, dateTo]);
+    }, [journalId, bankId, warehouseId, page, dateFrom, dateTo]);
 
     useEffect(() => { setPage(1); }, [dateFrom, dateTo]);
     useEffect(() => { load(); }, [load]);

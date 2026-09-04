@@ -43,17 +43,21 @@ export default function ReceiptInfo({ state }) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
-                {/* Bodega/Almacén */}
-                <div className="md:col-span-3">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Almacén Destino</label>
-                    <CustomSelect
-                        value={String(selectedWarehouseId || "")}
-                        onChange={val => setSelectedWarehouseId(val)}
-                        options={warehouses.map(w => ({ value: String(w.id), label: w.name.toUpperCase() }))}
-                        placeholder="Seleccionar Almacén..."
-                        className="w-full"
-                    />
-                </div>
+                {/* Bodega/Almacén. Con uno solo no hay nada que elegir: mostrarlo solo
+                    insinuaría que hay más, cuando no los hay. `selectedWarehouseId` ya
+                    queda fijo en el único disponible desde el hook. */}
+                {warehouses.length > 1 && (
+                    <div className="md:col-span-3">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Almacén Destino</label>
+                        <CustomSelect
+                            value={String(selectedWarehouseId || "")}
+                            onChange={val => setSelectedWarehouseId(val)}
+                            options={warehouses.map(w => ({ value: String(w.id), label: w.name.toUpperCase() }))}
+                            placeholder="Seleccionar Almacén..."
+                            className="w-full"
+                        />
+                    </div>
+                )}
 
                 {/* Proveedor */}
                 <div className="md:col-span-3">

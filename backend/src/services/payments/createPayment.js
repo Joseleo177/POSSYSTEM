@@ -4,6 +4,7 @@ const { Expense, ExpenseCategory, PaymentJournal, Currency, Customer } = require
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
+const { creditAvailable, addCreditMovement } = require("../customers/creditLedger");
 
 // Respuesta de un cobro que ya estaba registrado. Se rearma desde la base para que el
 // reintento reciba exactamente lo mismo que recibió el envío que sí entró: la caja imprime
@@ -110,10 +111,20 @@ module.exports = async function createPayment(body, req) {
       if (!sale.customer_id) { const e = new Error("La venta no tiene cliente asignado"); e.status = 400; throw e; }
       const customer = await Customer.findByPk(sale.customer_id, { transaction: t, lock: true });
       if (!customer) { const e = new Error("Cliente no encontrado"); e.status = 404; throw e; }
-      const available = parseFloat(customer.credit_balance || 0);
+      // Solo cuenta el crédito compartido más el que esta misma sucursal generó: el de otra
+      // sucursal no se puede aplicar acá (ver creditLedger.js).
+      const available = await creditAvailable(customer.id, sale.warehouse_id, t);
       if (creditAmt > available + 0.001) { const e = new Error(`Crédito insuficiente. Disponible: ${available.toFixed(2)}`); e.status = 400; throw e; }
       creditApplied = parseFloat(Math.min(creditAmt, pendingBalance).toFixed(6));
-      await Customer.decrement({ credit_balance: creditApplied }, { where: { id: customer.id }, transaction: t });
+      await addCreditMovement({
+        customer_id:  customer.id,
+        warehouse_id: sale.warehouse_id,
+        amount:       -creditApplied,
+        reason:       'consumo_pago',
+        sale_id,
+        employee_id:  employee_id || null,
+        company_id:   sale.company_id || null,
+      }, t);
       await Sale.increment({ credit_applied: creditApplied }, { where: { id: sale_id }, transaction: t });
     }
 
@@ -236,7 +247,15 @@ module.exports = async function createPayment(body, req) {
     const creditChangeAmt = parseFloat(change_to_credit || 0);
     if (creditChangeAmt > 0) {
       if (!sale.customer_id) throw new Error("La venta no tiene cliente para acreditar el sobrante");
-      await Customer.increment({ credit_balance: creditChangeAmt }, { where: { id: sale.customer_id }, transaction: t });
+      await addCreditMovement({
+        customer_id:  sale.customer_id,
+        warehouse_id: sale.warehouse_id,
+        amount:       creditChangeAmt,
+        reason:       'sobrante_cobro',
+        sale_id,
+        employee_id:  employee_id || null,
+        company_id:   sale.company_id || null,
+      }, t);
     }
 
     // Si el cajero se quedó con el sobrante: sumarlo al mismo cobro

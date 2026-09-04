@@ -184,11 +184,11 @@ export default function InventoryReport() {
                       />
                     </div>
 
+                    {/* Con un solo almacén no hay nada que elegir: mostrar el selector solo
+                        insinuaría que hay más, cuando no los hay. */}
+                    {warehouses.length > 1 && (
                     <div className="space-y-1.5">
                       <label className="text-[9px] font-black uppercase tracking-widest text-content-subtle/60 ml-1">Almacén</label>
-                      {/* "Todos" es engañoso cuando el usuario tiene una sola sucursal: la
-                          API ya le devuelve solo la suya, así que la opción prometía un
-                          alcance que no existe. Con un único almacén se muestra su nombre. */}
                       <CustomSelect
                         value={warehouseId}
                         onChange={handleFilterChange(setWarehouseId)}
@@ -196,10 +196,11 @@ export default function InventoryReport() {
                         className="w-full"
                         options={[
                           { value: "", label: allWarehousesLabel },
-                          ...(warehouses.length > 1 ? warehouses.map(w => ({ value: String(w.id), label: w.name })) : [])
+                          ...warehouses.map(w => ({ value: String(w.id), label: w.name }))
                         ]}
                       />
                     </div>
+                    )}
                   </div>
 
                   <footer className="pt-2 border-t border-border/10 flex gap-2 pt-4">

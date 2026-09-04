@@ -5,7 +5,7 @@ import Modal from "../ui/Modal";
 import CustomSelect from "../ui/CustomSelect";
 import DatePicker from "../ui/DatePicker";
 import RateField, { resolveRate } from "../ui/RateField";
-import { todayISO } from "../../helpers";
+import { todayISO, journalsForWarehouse } from "../../helpers";
 
 const getEmpty = () => ({
   received_amount: "",
@@ -26,7 +26,11 @@ const getEmpty = () => ({
  *   onSuccess – fn(res) llamada tras pago exitoso
  */
 export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
-  const { notify, baseCurrency, activeCurrencies, activeJournals, outflowJournals } = useApp();
+  const { notify, baseCurrency, activeCurrencies, activeJournals: allActiveJournals, outflowJournals: allOutflowJournals } = useApp();
+  // Solo los diarios de la sucursal que recibió la compra (más los compartidos): la cuenta de
+  // otra tienda no es donde salió este pago.
+  const activeJournals  = journalsForWarehouse(allActiveJournals, purchase?.warehouse_id);
+  const outflowJournals = journalsForWarehouse(allOutflowJournals, purchase?.warehouse_id);
   const [form, setForm] = useState(getEmpty);
   const [loading, setLoading] = useState(false);
 

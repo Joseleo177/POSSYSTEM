@@ -52,7 +52,7 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
             setProducts(res.data || []);
             setProductsTotal(res.total ?? (res.data || []).length);
         } catch (e) {
-            notify?.(e.message || "No se pudo cargar el catálogo del almacén", "err");
+            notify?.(e.message || "No se pudo cargar el catálogo de la sucursal", "err");
         } finally {
             setLoadingProducts(false);
         }
@@ -216,12 +216,12 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                         <div className="max-w-[1600px] mx-auto space-y-3">
                             {!activeWarehouse && (
                                 <div className="px-3 py-2.5 rounded-xl bg-warning/10 text-warning text-[9px] font-black uppercase tracking-widest text-center">
-                                    Selecciona un almacén para atender las cuentas desde aquí
+                                    Selecciona una sucursal para atender las cuentas desde aquí
                                 </div>
                             )}
                             {loadingProducts && products.length === 0 && (
                                 <div className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle animate-pulse">
-                                    Cargando el catálogo del almacén...
+                                    Cargando el catálogo de la sucursal...
                                 </div>
                             )}
                             {/* Las mesas en columnas, como la sala. `items-start` es lo que evita
@@ -241,7 +241,7 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                         ? `La está atendiendo ${c.held_by.name}`
                                         : otroAlmacen
                                             ? `Cuenta de ${c.warehouse_name || "otra sucursal"}`
-                                            : "Selecciona un almacén para editarla";
+                                            : "Selecciona una sucursal para editarla";
                                 return (
                                     <HeldCartBarCard
                                         key={c.id}

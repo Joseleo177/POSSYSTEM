@@ -40,7 +40,7 @@ const tenantModels = [
   'ExpenseCategory', 'Return', 'ReturnItem', 'Setting', 'Currency',
   'ProductStock', 'EmployeeWarehouse', 'UserSerie', 'ProductComboItem', 'CashSessionJournal',
   'Quotation', 'Promotion', 'Income', 'IncomeCategory',
-  'StockSession', 'CatalogBanner', 'BenefitTag',
+  'StockSession', 'CatalogBanner', 'BenefitTag', 'CustomerCreditMovement',
 ];
 
 const applyTenantFilter = (modelName, options) => {
@@ -119,7 +119,7 @@ tenantModels.forEach(modelName => {
 });
 
 // Centralized associations
-const { Company, Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, StockTransferItem, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment, Setting, Quotation, QuotationItem, Promotion, PromotionProduct, BenefitTag, ProductBenefitTag } = db;
+const { Company, Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, StockTransferItem, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment, Setting, Quotation, QuotationItem, Promotion, PromotionProduct, BenefitTag, ProductBenefitTag, CustomerCreditMovement } = db;
 
 // ── Company Associations ────────────────────────────────────────
 if (Company) {
@@ -129,7 +129,7 @@ if (Company) {
     CashSession, Expense, ProductLot, PurchasePayment, StockTransfer,
     ExpenseCategory, Return, ReturnItem, Setting, Currency,
     ProductStock, EmployeeWarehouse, UserSerie, ProductComboItem, CashSessionJournal,
-    Quotation, Promotion
+    Quotation, Promotion, CustomerCreditMovement
   ];
   tenantModels.forEach(model => {
     if (model) {
@@ -137,6 +137,15 @@ if (Company) {
       Company.hasMany(model, { foreignKey: 'company_id' });
     }
   });
+}
+
+if (CustomerCreditMovement && Customer && Warehouse) {
+  CustomerCreditMovement.belongsTo(Customer, { foreignKey: 'customer_id' });
+  Customer.hasMany(CustomerCreditMovement, { foreignKey: 'customer_id' });
+  CustomerCreditMovement.belongsTo(Warehouse, { foreignKey: 'warehouse_id' });
+  if (Sale) CustomerCreditMovement.belongsTo(Sale, { foreignKey: 'sale_id' });
+  if (Return) CustomerCreditMovement.belongsTo(Return, { foreignKey: 'return_id' });
+  if (Employee) CustomerCreditMovement.belongsTo(Employee, { foreignKey: 'employee_id' });
 }
 
 if(Return && Sale && Employee && ReturnItem && Product) {
@@ -179,6 +188,7 @@ if(Sale && Customer && Employee && Currency && PaymentJournal && Warehouse && Pa
   Sale.belongsTo(Currency, { foreignKey: 'currency_id' });
   Sale.belongsTo(PaymentJournal, { foreignKey: 'payment_journal_id' });
   Sale.belongsTo(Warehouse, { foreignKey: 'warehouse_id' });
+  Sale.belongsTo(Warehouse, { foreignKey: 'requested_warehouse_id', as: 'RequestedWarehouse' });
   Sale.belongsTo(PaymentMethod, { foreignKey: 'payment_method_id' });
   PaymentMethod.hasMany(Sale, { foreignKey: 'payment_method_id' });
 

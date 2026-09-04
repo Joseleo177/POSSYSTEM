@@ -107,7 +107,10 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
     // Igual que la franja: un PDF de una sola serie tiene que decirlo, o quien lo reciba lo
     // lee como el total del negocio y no cuadra con nada.
     const serie = range?.serie_name ? ` · Serie ${range.serie_name}` : "";
-    const periodo = `${fmtDateShort(range?.from)} — ${fmtDateShort(range?.to)}${franja}${serie}`;
+    // Mismo criterio que la serie: un PDF de una sola sucursal tiene que decirlo, o parece el
+    // total de la empresa.
+    const sucursal = range?.warehouse_name ? ` · ${range.warehouse_name}` : "";
+    const periodo = `${fmtDateShort(range?.from)} — ${fmtDateShort(range?.to)}${franja}${serie}${sucursal}`;
 
     const html = `<!DOCTYPE html>
 <html>

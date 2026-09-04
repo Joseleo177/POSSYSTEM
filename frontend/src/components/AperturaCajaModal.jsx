@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import CustomSelect from "./ui/CustomSelect";
 import { Button } from "./ui/Button";
+import { journalsForWarehouse } from "../helpers";
 
 export default function AperturaCajaModal({ employee, warehouses = [], initialWarehouse, onOpened, onWarehouseChange, onSkip }) {
     const [selectedWarehouseId, setSelectedWarehouseId] = useState(initialWarehouse?.id || "");
-    const [journals, setJournals] = useState([]); // todos los de tipo efectivo
+    const [allJournals, setAllJournals] = useState([]); // todos los de tipo efectivo, de cualquier sucursal
     const [selected, setSelected] = useState({}); // { [journal_id]: { checked, amount } }
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
@@ -16,16 +17,23 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
 
     useEffect(() => {
         api.journals.getAll()
-            .then(r => {
-                const cash = (r.data || []).filter(j => j.type === "efectivo" && j.active !== false);
-                setJournals(cash);
-                // Pre-seleccionar todos
-                const init = {};
-                cash.forEach(j => { init[j.id] = { checked: true, amount: "" }; });
-                setSelected(init);
-            })
+            .then(r => setAllJournals((r.data || []).filter(j => j.type === "efectivo" && j.active !== false)))
             .catch(() => { });
     }, []);
+
+    // Solo las cajas de la sucursal elegida (más las compartidas): abrir turno en Inventario
+    // no puede ofrecer la caja de otra tienda, aunque las dos sean de tipo "efectivo".
+    const journals = journalsForWarehouse(allJournals, selectedWarehouseId);
+
+    // Al cambiar de sucursal la lista cambia, así que la preselección se recalcula: sin esto,
+    // el fondo tecleado para la caja de la sucursal anterior seguía viajando "checked" por
+    // debajo, aunque ya no se viera en pantalla.
+    useEffect(() => {
+        const init = {};
+        journals.forEach(j => { init[j.id] = { checked: true, amount: "" }; });
+        setSelected(init);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedWarehouseId, allJournals]);
 
     const toggle = (id) =>
         setSelected(prev => ({ ...prev, [id]: { ...prev[id], checked: !prev[id]?.checked } }));
@@ -39,7 +47,7 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
             .map(([id, v]) => ({ journal_id: parseInt(id), opening_amount: parseFloat(v.amount) || 0 }));
 
         if (!journalsData.length) return setError("Selecciona al menos un diario de efectivo");
-        if (!selectedWarehouseId) return setError("Selecciona un almacén");
+        if (!selectedWarehouseId) return setError("Selecciona una sucursal");
 
         setError("");
         setSaving(true);
@@ -86,14 +94,14 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
                 </div>
 
                 <div className="p-5 space-y-4">
-                    {/* Cajero + Almacén */}
+                    {/* Cajero + Sucursal */}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="bg-surface-2 dark:bg-white/5 rounded-lg p-3 border border-border/20 dark:border-white/5">
                             <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1">Cajero</div>
                             <div className="text-[13px] font-black text-content dark:text-white truncate">{employee?.full_name || employee?.name}</div>
                         </div>
                         <div className={`bg-surface-2 dark:bg-white/5 rounded-lg p-3 border border-border/20 dark:border-white/5 flex flex-col ${warehouses.length > 1 ? "relative overflow-visible" : ""}`}>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1">Almacén</div>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1">Sucursal</div>
                             {warehouses.length > 1 ? (
                                 <CustomSelect
                                     value={selectedWarehouseId}
@@ -103,12 +111,12 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
                                         if (onWarehouseChange) onWarehouseChange(val);
                                     }}
                                     options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
-                                    placeholder="Selec. Almacén"
+                                    placeholder="Selec. Sucursal"
                                     className="w-full"
                                 />
                             ) : (
                                 <div className="text-[13px] font-black text-content dark:text-white truncate">
-                                    {currentWh?.name || "Sin Almacén"}
+                                    {currentWh?.name || "Sin Sucursal"}
                                 </div>
                             )}
                         </div>

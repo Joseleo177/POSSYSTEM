@@ -84,7 +84,13 @@ async function handleImageDelete(imageValue) {
   }
 }
 
-async function getAll({ search, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, limit = 100, offset = 0, company_id }) {
+async function getAll({ search, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, for_purchase, limit = 100, offset = 0, company_id }) {
+  // Catálogo, POS y promociones usan warehouse_id para acotar a lo que ESA sucursal
+  // vende: un producto que nunca tuvo ficha de stock ahí queda afuera, con razón. Una
+  // compra es justo lo contrario — comprar es cómo un producto entra por primera vez a un
+  // almacén—, así que `for_purchase` deja intacta la anotación de stock (`warehouse_stock`)
+  // pero no lo usa para excluir del listado.
+  const restrictToWarehouse = warehouse_id && !for_purchase;
   const where = {};
   if (company_id) where.company_id = company_id;
   if (category_id) where.category_id = category_id;
@@ -106,11 +112,11 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
     }
   }
 
-  if (warehouse_id || stock_filter) {
+  if (restrictToWarehouse || stock_filter) {
     let associatedIds = [];
     let validPhysicalIds = [];
 
-    if (warehouse_id) {
+    if (restrictToWarehouse) {
       const stocksInWarehouse = await ProductStock.findAll({
         where: { warehouse_id: parseInt(warehouse_id) },
         attributes: ['product_id', 'qty'],
@@ -129,7 +135,7 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
 
     const orConditions = [];
 
-    if (warehouse_id) {
+    if (restrictToWarehouse) {
       // 1. Physical products that match the stock filter for this warehouse
       if (validPhysicalIds.length > 0) {
         orConditions.push({ is_combo: false, is_service: false, id: { [Op.in]: validPhysicalIds } });
