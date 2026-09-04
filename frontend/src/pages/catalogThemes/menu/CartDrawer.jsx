@@ -1,5 +1,6 @@
 import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
 import { isIntegerUnit, fmtQtyUnit } from "../../../helpers/unitFormatter";
+import { freeUnitsFor, lineTotalFor } from "../../../helpers/promo";
 
 // Carrito del tema de menú. Mismo contrato que el de boutique —recibe y devuelve exactamente
 // lo mismo, viene del mismo usePublicCatalog—, pero con la superficie clara del tema: el
@@ -135,6 +136,11 @@ export default function CartDrawer({
                                                         "{it.note}"
                                                     </p>
                                                 )}
+                                                {freeUnitsFor(it) > 0 && (
+                                                    <p className="text-[11px] font-bold text-success mt-0.5">
+                                                        +{freeUnitsFor(it)} gratis por la promo
+                                                    </p>
+                                                )}
 
                                                 <div className="flex items-center justify-between gap-2 mt-2">
                                                     <div className="flex items-center rounded-full border border-black/10 p-0.5">
@@ -165,7 +171,7 @@ export default function CartDrawer({
                                                     </div>
 
                                                     <span className="text-[13px] font-black text-neutral-900 tabular-nums">
-                                                        {fmt(parseFloat(it.price) * (parseFloat(it.qty) || 0), baseCur)}
+                                                        {fmt(lineTotalFor(it), baseCur)}
                                                     </span>
                                                 </div>
                                             </div>

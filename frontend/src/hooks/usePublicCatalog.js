@@ -4,6 +4,7 @@ import { isIntegerUnit } from "../helpers/unitFormatter";
 import { applyBrandColor } from "../helpers/brandColor";
 import { useTheme } from "./useTheme";
 import { PAGE_SIZE, round3 } from "../components/PublicCatalog/shared";
+import { lineTotalFor } from "../helpers/promo";
 
 /**
  * Estado y lógica del catálogo público.
@@ -312,20 +313,41 @@ export function usePublicCatalog(token, initialProductId = null) {
         try { localStorage.setItem(branchKey, String(id)); } catch { /* modo privado */ }
     };
 
-    const cartTotal = cart.reduce((sum, it) => sum + parseFloat(it.price) * (parseFloat(it.qty) || 0), 0);
+    // lineTotalFor ya descuenta las unidades gratis de una promo "compra y lleva" cuando la
+    // cantidad de la línea completa el mínimo — mismo cálculo que hace el servidor al
+    // confirmar el pedido (ver createOrder), para que el total en pantalla no cambie
+    // sorpresivamente al enviar.
+    const cartTotal = cart.reduce((sum, it) => sum + lineTotalFor(it), 0);
 
     // Paso de cantidad: las unidades contables van de uno en uno; peso y volumen admiten
     // medios, que es como se pide en mostrador ("medio kilo").
     const stepFor = (unit) => (isIntegerUnit(unit) ? 1 : 0.5);
 
-    const addToCart = (p) => {
+    // honorPromo: solo la sección "Ofertas y combos" lo pasa en true. Desde cualquier otro
+    // lado —una categoría, el buscador, la ficha del producto— agregar es agregar de a uno,
+    // como siempre: la promo es un anuncio de esa sección, no algo que el producto arrastre
+    // consigo a cualquier lista donde aparezca. El descuento en sí (freeUnitsFor) sigue
+    // aplicándose igual en todos lados en cuanto la cantidad de la línea cruce el mínimo.
+    //
+    // Con honorPromo, CADA toque agrega el grupo completo (12), no solo el primero: la
+    // sección es justo para comprar la promoción, así que "Agregar otro" ahí significa "otra
+    // promoción", no "una lata más" — dos toques arman 24, tres 36. Fuera de esa sección
+    // "Agregar otro" sigue siendo la unidad de siempre.
+    const addToCart = (p, honorPromo = false) => {
+        const grupo = (p.promo_buy_qty && p.promo_get_qty) ? p.promo_buy_qty + p.promo_get_qty : null;
         setCart(prev => {
             const found = prev.find(it => it.id === p.id);
             if (found) {
                 const currentQty = typeof found.qty === "number" ? found.qty : (parseFloat(found.qty) || 0);
-                return prev.map(it => it.id === p.id ? { ...it, qty: round3(currentQty + stepFor(it.unit)) } : it);
+                const paso = (honorPromo && grupo) ? grupo : stepFor(found.unit);
+                return prev.map(it => it.id === p.id ? { ...it, qty: round3(currentQty + paso) } : it);
             }
-            return [...prev, { id: p.id, name: p.name, price: p.price, unit: p.unit, image_url: p.image_url, qty: stepFor(p.unit) }];
+            const qtyInicial = (honorPromo && grupo) ? grupo : stepFor(p.unit);
+            return [...prev, {
+                id: p.id, name: p.name, price: p.price, unit: p.unit, image_url: p.image_url,
+                promo_buy_qty: p.promo_buy_qty ?? null, promo_get_qty: p.promo_get_qty ?? null,
+                qty: qtyInicial,
+            }];
         });
     };
 
@@ -340,7 +362,11 @@ export function usePublicCatalog(token, initialProductId = null) {
         setCart(prev => {
             const sinEsteProducto = prev.filter(it => it.id !== p.id);
             if (!(cantidad > 0)) return sinEsteProducto; // 0 = quitarlo del carrito
-            return [...sinEsteProducto, { id: p.id, name: p.name, price: p.price, unit: p.unit, image_url: p.image_url, qty: cantidad, note: note || undefined }];
+            return [...sinEsteProducto, {
+                id: p.id, name: p.name, price: p.price, unit: p.unit, image_url: p.image_url,
+                promo_buy_qty: p.promo_buy_qty ?? null, promo_get_qty: p.promo_get_qty ?? null,
+                qty: cantidad, note: note || undefined,
+            }];
         });
     };
 

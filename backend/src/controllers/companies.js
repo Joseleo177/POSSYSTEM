@@ -1,10 +1,11 @@
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
-const { Company, Employee, Role, Currency, ExpenseCategory, IncomeCategory, sequelize } = require("../models");
+const { Company, Employee, Role, Currency, ExpenseCategory, IncomeCategory, PaymentMethod, PaymentJournal, sequelize } = require("../models");
 const models = require("../models");
 const { runWithoutTenant } = require("../utils/tenantStorage");
 const { invalidateCompanyStatus } = require("../utils/companyStatusCache");
 const { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } = require("../config/defaultCategories");
+const { DEFAULT_PAYMENT_METHODS, DEFAULT_CASH_JOURNAL } = require("../config/defaultPaymentMethods");
 
 // Longitud mínima de la contraseña que el superusuario fija a mano. Las generadas al azar
 // son de 12 caracteres hex, así que el mínimo solo afecta a las escritas.
@@ -106,6 +107,19 @@ const create = async (req, res) => {
       );
       await IncomeCategory.bulkCreate(
         DEFAULT_INCOME_CATEGORIES.map((name) => ({ name, active: true, company_id: company.id })),
+        { transaction }
+      );
+
+      // Métodos de pago y caja. Sin un diario de tipo 'efectivo' la empresa nace sin poder
+      // abrir turno —openSession lo exige y el modal de apertura solo lista esos—, así que
+      // no podría cobrar ni una venta. El `code` del método viaja al `type` del diario y se
+      // compara como cadena literal, de ahí que se siembren y no se escriban a mano.
+      await PaymentMethod.bulkCreate(
+        DEFAULT_PAYMENT_METHODS.map((m) => ({ ...m, active: true, company_id: company.id })),
+        { transaction }
+      );
+      await PaymentJournal.create(
+        { ...DEFAULT_CASH_JOURNAL, active: true, company_id: company.id },
         { transaction }
       );
 

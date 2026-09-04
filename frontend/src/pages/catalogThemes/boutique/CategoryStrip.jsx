@@ -17,8 +17,8 @@ export default function CategoryStrip({ categories, onPick }) {
         // también lleva su propio pt-8, pero eso separa su título de SU contenido, no de lo
         // que viene antes. Sin este margen, las fotos de categoría terminaban a un dedo del
         // título "Todos los productos" y las dos secciones se leían como una sola.
-        <section className="max-w-6xl mx-auto px-4 pt-8 pb-8">
-            <h2 className="text-[15px] font-black text-content dark:text-white mb-3">Nuestras categorías</h2>
+        <section className="max-w-6xl mx-auto px-4 pt-14 pb-8">
+            <h2 className="text-[20px] font-black text-content dark:text-white mb-4">Nuestras categorías</h2>
 
             <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1 sm:grid sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] sm:overflow-visible">
                 {categories.map((c) => (

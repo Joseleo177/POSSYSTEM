@@ -54,7 +54,7 @@ export default function ProductDetail({
                 útil desde aquí. Con categoría se puede volver directo al filtro correcto. */}
             {/* text-content-muted (7.5:1) y no -subtle (4.8:1): la miga hay que poder leerla,
                 no solo pasar el mínimo de contraste — en 11px se notaba débil. */}
-            <nav className="flex items-center gap-1.5 text-[11px] font-bold text-content-muted mb-5">
+            <nav className="flex items-center gap-1.5 text-[13px] font-bold text-content-muted mb-5">
                 {/* onBack() y no onBack directo: como manejador de clic, React le pasa el
                     evento como primer argumento, y onBack lo toma como el id de categoría —
                     setCategory terminaba con el SyntheticEvent en vez de un id, y la

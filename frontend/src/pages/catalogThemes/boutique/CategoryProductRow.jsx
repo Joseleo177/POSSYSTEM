@@ -70,9 +70,9 @@ export default function CategoryProductRow({
     };
 
     return (
-        <section className="max-w-6xl mx-auto px-4 pt-8">
+        <section className="max-w-6xl mx-auto px-4 pt-14">
             <div className="flex items-baseline justify-between mb-3">
-                <h2 className="text-[16px] font-black text-content dark:text-white">{category.name}</h2>
+                <h2 className="text-[20px] font-black text-content dark:text-white">{category.name}</h2>
                 {total > LIMITE && (
                     <button
                         type="button"

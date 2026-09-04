@@ -14,7 +14,18 @@ import { fmtQtyUnit } from "../../../helpers/unitFormatter";
 // Se exporta para que CategoryProductRow (las filas cortas de la portada) pinte la misma
 // ficha dentro de un carril con scroll horizontal, en vez de reescribirla: la portada y la
 // vista de "toda la categoría" tienen que verse como la misma tienda.
-export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, href, onOpen }) {
+// showPromo: solo lo enciende FeaturedRow ("Ofertas y combos"). Es la sección donde la
+// tienda decidió resaltar sus promos "compra y lleva" — en cualquier otra parte donde este
+// mismo producto aparezca (una categoría, el buscador, un carril de portada) se ve y se
+// agrega como uno más, sin la insignia ni el salto directo a la cantidad completa. El
+// descuento en sí sigue aplicándose en cuanto la cantidad de la línea cruce el mínimo, esté
+// o no la insignia — eso no depende de por dónde se agregó.
+// fadeOnly: solo lo enciende AllProductsSection. Ahí la tarjeta se rehace en el mismo lugar
+// cada vez que se cambia de pestaña (ver la key con la categoría, más abajo) — el
+// deslizamiento desde abajo que usan las demás secciones (pensado para una entrada de página,
+// una sola vez) ahí se veía como que la fila entera daba un salto cada vez que se tocaba una
+// pestaña. Con fadeOnly la tarjeta se queda quieta y solo el contenido aparece.
+export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, href, onOpen, showPromo = false, fadeOnly = false }) {
     const price = parseFloat(p.price);
     const hasPrice = price > 0;
     // price_before solo llega cuando el descuento realmente baja el precio (lo decide el
@@ -42,7 +53,7 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
         // Lo que separa un producto de otro es el aire entre ellos, no una línea.
         <article
             style={{ animationDelay: `${Math.min(index, 11) * 40}ms` }}
-            className="group relative flex flex-col animate-in fade-in slide-in-from-bottom-2 fill-mode-backwards"
+            className={`group relative flex flex-col animate-in fade-in fill-mode-backwards ${fadeOnly ? "" : "slide-in-from-bottom-2"}`}
         >
             {/* El recuadro es SOLO de la foto. Aquí sí hay fondo, porque casi todas las fotos
                 de producto vienen recortadas sobre blanco y sin él flotarían sin apoyo.
@@ -76,6 +87,16 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
                 {enOferta && p.available && (
                     <span className="absolute top-2.5 left-2.5 px-2 py-1 rounded-full bg-brand-500 text-white text-[10px] font-black shadow-sm tabular-nums">
                         −{Math.round(p.discount_pct)}%
+                    </span>
+                )}
+
+                {/* "Compra y lleva" no tiene precio tachado que mostrar —el pedido web se
+                    cobra al precio normal, la unidad gratis se resuelve en caja (ver
+                    descuentosVigentes en publicCatalogService)—, así que aquí solo es un
+                    aviso: mismo lugar que el listón de %, nunca junto con él. */}
+                {showPromo && !enOferta && p.promo_label && p.available && (
+                    <span className="absolute top-2.5 left-2.5 px-2 py-1 rounded-full bg-brand-500 text-white text-[10px] font-black shadow-sm tabular-nums">
+                        {p.promo_label}
                     </span>
                 )}
 
@@ -149,7 +170,7 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
                     del agotado se iba al fondo dejando un boquete en medio. */}
                 {canOrder && (
                     <button
-                        onClick={() => onAdd(p)}
+                        onClick={() => onAdd(p, showPromo)}
                         disabled={!p.available || !hasPrice}
                         className={[
                             "mt-3 h-10 rounded-full text-[10px] font-bold uppercase tracking-widest",

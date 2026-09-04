@@ -15,6 +15,7 @@ import CategoryStrip from "./CategoryStrip";
 import BoutiqueGrid from "./BoutiqueGrid";
 import FeaturedRow from "./FeaturedRow";
 import CategoryProductRow from "./CategoryProductRow";
+import AllProductsSection from "./AllProductsSection";
 import ProductDetail from "./ProductDetail";
 import HowItWorks from "./HowItWorks";
 import StoreFooter from "./StoreFooter";
@@ -135,18 +136,43 @@ export default function CatalogLayout({ catalog, token }) {
                                     otra cosa. Cada carril se pide aparte (ver
                                     CategoryProductRow) y "Ver todos" lleva a la MISMA rejilla
                                     completa de siempre — no se perdió, solo dejó de ser lo
-                                    primero que se ve. */}
-                                {categories.map((c) => (
-                                    <CategoryProductRow
-                                        key={c.id}
-                                        category={c} token={token} warehouseId={branch?.id}
-                                        cart={cart} fmt={fmt} baseCur={baseCur} altCur={altCur}
-                                        ordersEnabled={ordersEnabled} onAdd={addToCart}
-                                        onOpenProduct={openProduct} onSeeAll={setCategory}
-                                    />
-                                ))}
+                                    primero que se ve.
+
+                                    Un carril por CADA categoría de la tienda volvía a caer en
+                                    el mismo problema con 8 o 10 categorías: la portada no
+                                    terminaba nunca de bajar. Ahora solo llevan carril las que
+                                    el comercio marcó como destacadas (Ajustes → Vitrina →
+                                    "Menú destacado" — el mismo que ya arma los accesos
+                                    directos de la cabecera), y el nombre que eligió ahí es el
+                                    que se usa de título. Sin ninguna marcada, se cae a las 3
+                                    primeras para que la portada no se quede sin nada que
+                                    mostrar en cuanto se estrena el tema. El resto de las
+                                    categorías se sigue viendo entera desde "Nuestros
+                                    productos" más abajo, o desde CategoryStrip arriba. */}
+                                {(menu.length ? menu : categories.slice(0, 3).map((c) => ({ category_id: c.id, label: c.name })))
+                                    .map((entry) => {
+                                        const cat = categories.find((c) => c.id === entry.category_id);
+                                        if (!cat) return null;
+                                        return (
+                                            <CategoryProductRow
+                                                key={cat.id}
+                                                category={{ ...cat, name: entry.label || cat.name }}
+                                                token={token} warehouseId={branch?.id}
+                                                cart={cart} fmt={fmt} baseCur={baseCur} altCur={altCur}
+                                                ordersEnabled={ordersEnabled} onAdd={addToCart}
+                                                onOpenProduct={openProduct} onSeeAll={setCategory}
+                                            />
+                                        );
+                                    })}
 
                                 <HowItWorks />
+
+                                <AllProductsSection
+                                    categories={categories} token={token} warehouseId={branch?.id}
+                                    cart={cart} fmt={fmt} baseCur={baseCur} altCur={altCur}
+                                    ordersEnabled={ordersEnabled} onAdd={addToCart}
+                                    onOpenProduct={openProduct} onSeeAll={setCategory}
+                                />
                             </>
                         ) : (
                             <BoutiqueGrid
@@ -164,8 +190,11 @@ export default function CatalogLayout({ catalog, token }) {
 
             <StoreFooter store={store} categories={categories} onPickCategory={setCategory} />
 
-            {/* Hueco para que la barra flotante del pedido no tape el pie */}
-            {ordersEnabled && cart.length > 0 && <div className="h-24" />}
+            {/* Hueco para que la barra flotante del pedido no tape el pie. Con el mismo fondo
+                del pie (bg-surface) y no el de la página (bg-surface-2): sin esto se veía
+                como un bloque gris de más creciendo debajo del pie en cuanto había algo en
+                el carrito, en vez de leerse como parte del mismo pie. */}
+            {ordersEnabled && cart.length > 0 && <div className="h-24 bg-surface dark:bg-surface-dark-2" />}
 
             <CartBar
                 visible={ordersEnabled && cart.length > 0 && !cartOpen}

@@ -414,18 +414,22 @@ async function comboAvailability(comboIds, warehouseId) {
   );
 }
 
-// Descuentos vigentes que la vitrina puede publicar, indexados por producto.
+// Promociones vigentes que la vitrina puede publicar, indexadas por producto y separadas en
+// dos grupos según lo que cada una puede prometer:
 //
-// Solo las promociones de porcentaje. Las de "lleva 3, paga 2" quedan fuera a propósito: no
-// se pueden expresar como un precio tachado y, sobre todo, el pedido web se registra por
-// líneas con su precio —no reparte unidades gratis—, así que anunciarlas aquí prometería al
-// cliente un total que el pedido no va a reflejar. Se siguen aplicando en la caja como
-// siempre.
+//   pct — de porcentaje. Se pueden expresar como un precio tachado, y el pedido web se cobra
+//         exactamente a ese precio: lo que el cliente ve es lo que se le cobra.
 //
-// La regla de cuál manda cuando hay varias es la MISMA que la del punto de venta: la primera
-// del listado ordenado por más reciente (ver controllers/promotions.js y promoLineDiscountUsd
-// en CartContext). Si las dos pantallas eligieran distinto, el catálogo anunciaría un precio
-// y la caja cobraría otro.
+//   bxg — "compra N lleva M gratis". El pedido web se registra por líneas con un precio fijo
+//         y no reparte unidades gratis, así que esta NO cambia ni price ni price_before —
+//         solo se publica como aviso ("10×12") para que el cliente sepa que existe y
+//         confirme con la tienda al pagar. Se sigue aplicando de verdad en la caja, como
+//         siempre.
+//
+// La regla de cuál manda cuando hay varias del mismo tipo sobre un producto es la MISMA que
+// la del punto de venta: la primera del listado ordenado por más reciente (ver
+// controllers/promotions.js y promoLineDiscountUsd en CartContext). Si las dos pantallas
+// eligieran distinto, el catálogo anunciaría un precio y la caja cobraría otro.
 async function descuentosVigentes(warehouseId) {
   const now = new Date();
   const alcance = warehouseId
@@ -435,7 +439,6 @@ async function descuentosVigentes(warehouseId) {
   const promos = await Promotion.findAll({
     where: {
       active: true,
-      type: "percentage",
       starts_at: { [Op.lte]: now },
       [Op.and]: [
         { [Op.or]: [{ ends_at: null }, { ends_at: { [Op.gte]: now } }] },
@@ -446,17 +449,30 @@ async function descuentosVigentes(warehouseId) {
     order: [["starts_at", "DESC"], ["id", "DESC"]],
   });
 
-  // La primera que toque cada producto gana; las siguientes no lo pisan.
-  const porProducto = {};
+  // La primera que toque cada producto gana; las siguientes no lo pisan. Cada tipo lleva su
+  // propio "primera que toca": un producto podría en teoría estar en una de porcentaje y en
+  // una de "compra y lleva" al mismo tiempo, y las dos se publican.
+  const pct = {};
+  const bxg = {};
   for (const promo of promos) {
-    const pct = parseFloat(promo.discount_pct);
-    if (!(pct > 0) || pct >= 100) continue;
-    for (const prod of promo.Products || []) {
-      if (porProducto[prod.id]) continue;
-      porProducto[prod.id] = { pct, name: promo.name };
+    if (promo.type === "percentage") {
+      const p = parseFloat(promo.discount_pct);
+      if (!(p > 0) || p >= 100) continue;
+      for (const prod of promo.Products || []) {
+        if (pct[prod.id]) continue;
+        pct[prod.id] = { pct: p, name: promo.name };
+      }
+    } else if (promo.type === "buy_x_get_y") {
+      const buy = parseInt(promo.buy_qty, 10);
+      const get = parseInt(promo.get_qty, 10);
+      if (!(buy > 0) || !(get > 0)) continue;
+      for (const prod of promo.Products || []) {
+        if (bxg[prod.id]) continue;
+        bxg[prod.id] = { buy_qty: buy, get_qty: get, name: promo.name };
+      }
     }
   }
-  return porProducto;
+  return { pct, bxg };
 }
 
 // Precio final de una línea con su descuento aplicado. Se redondea a 2 decimales, que es la
@@ -526,13 +542,17 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
     const descuentos = await descuentosVigentes(whId);
 
     // "Destacados" = lo que la propia tienda ya decidió resaltar: un combo (siempre es
-    // una oferta armada) o un producto con descuento vigente. No es una nueva bandera que
-    // el comercio tenga que mantener aparte — sale sola de datos que ya existen.
+    // una oferta armada), un producto con descuento de porcentaje, o uno con una promo
+    // "compra y lleva" vigente. No es una nueva bandera que el comercio tenga que mantener
+    // aparte — sale sola de datos que ya existen.
     if (featured) {
-      const conDescuento = Object.keys(descuentos).map((id) => parseInt(id, 10));
+      const conPromo = [
+        ...Object.keys(descuentos.pct).map((id) => parseInt(id, 10)),
+        ...Object.keys(descuentos.bxg).map((id) => parseInt(id, 10)),
+      ];
       where[Op.or] = [
         { is_combo: true },
-        { id: { [Op.in]: conDescuento.length ? conDescuento : [-1] } },
+        { id: { [Op.in]: conPromo.length ? conPromo : [-1] } },
       ];
     }
 
@@ -587,7 +607,10 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
           : j.is_combo
             ? (comboStock[j.id] === null || comboStock[j.id] > 0)
             : parseFloat(j.stock || 0) > 0;
-        const precio = aplicarDescuento(parseFloat(j.price), descuentos[j.id]);
+        const precio = aplicarDescuento(parseFloat(j.price), descuentos.pct[j.id]);
+        // Aviso de "compra y lleva", NUNCA cambia price/price_before: ver la nota en
+        // descuentosVigentes sobre por qué esta promo no se puede tachar como precio.
+        const bxg = descuentos.bxg[j.id];
 
         return {
           id: j.id,
@@ -598,6 +621,15 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
           price: precio.price,
           price_before: precio.price_before,
           discount_pct: precio.discount_pct,
+          // "Llévate N × paga M": el orden que lee la vitrina como oferta ("12×10", 12
+          // llévate por el precio de 10). La caja interna usa el orden contrario
+          // (cobro/ProductGrid.jsx) porque ahí lo lee el cajero, no el cliente — mismos
+          // números, la frase que conviene a cada público es distinta.
+          promo_label: bxg ? `${bxg.buy_qty + bxg.get_qty}×${bxg.buy_qty}` : null,
+          // Los números sueltos, para que el carrito calcule las unidades gratis en vivo
+          // (ver helpers/promo.js) sin tener que parsear el texto de promo_label.
+          promo_buy_qty: bxg?.buy_qty ?? null,
+          promo_get_qty: bxg?.get_qty ?? null,
           unit: j.unit,
           brand: j.brand || null,
           short_description: j.short_description || null,
@@ -676,7 +708,8 @@ async function getProduct(token, productId, { warehouse_id } = {}) {
         : stock > 0;
 
     const descuentos = await descuentosVigentes(tienda ? tienda.id : null);
-    const precio = aplicarDescuento(basePrice, descuentos[p.id]);
+    const precio = aplicarDescuento(basePrice, descuentos.pct[p.id]);
+    const bxg = descuentos.bxg[p.id];
 
     return {
       id: p.id,
@@ -684,6 +717,9 @@ async function getProduct(token, productId, { warehouse_id } = {}) {
       price: precio.price,
       price_before: precio.price_before,
       discount_pct: precio.discount_pct,
+      promo_label: bxg ? `${bxg.buy_qty + bxg.get_qty}×${bxg.buy_qty}` : null,
+      promo_buy_qty: bxg?.buy_qty ?? null,
+      promo_get_qty: bxg?.get_qty ?? null,
       unit: p.unit,
       brand: p.brand || null,
       short_description: p.short_description || null,
@@ -895,8 +931,20 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
       // promoción pudo vencer con la pestaña abierta— pero por la misma cuenta, así que el
       // total del pedido coincide con el que el cliente tenía en pantalla.
       const base = precioEnTienda[p.id] ?? parseFloat(p.price);
-      const price = aplicarDescuento(base, descuentos[p.id]).price;
+      const price = aplicarDescuento(base, descuentos.pct[p.id]).price;
       if (!(price > 0)) { const e = new Error(`"${p.name}" no tiene precio publicado.`); e.status = 400; throw e; }
+
+      // "Compra N lleva M gratis": el cliente pide la cantidad COMPLETA que se va a llevar
+      // (igual que en caja, ver calcLineDiscount en services/sales/createSale.js) y aquí se
+      // calcula cuántas de esas unidades caen gratis — solo las que completan un grupo de
+      // N+M enteros, nunca una fracción. Sin cruzar el mínimo, el descuento es 0 y la línea
+      // se cobra completa.
+      const bxg = descuentos.bxg[p.id];
+      const freeUnits = bxg ? Math.floor(qty / (bxg.buy_qty + bxg.get_qty)) * bxg.get_qty : 0;
+      // discount va POR UNIDAD, igual que SaleItem.discount en el resto del sistema: la BD
+      // calcula subtotal = (price - discount) * quantity, así que el descuento total de la
+      // línea (el valor de las unidades gratis) se prorratea entre toda la cantidad.
+      const lineDiscount = freeUnits > 0 ? parseFloat(((freeUnits * price) / qty).toFixed(5)) : 0;
 
       // Cada sucursal responde por lo suyo: si la tienda elegida no tiene con qué cubrir la
       // línea, se le dice al cliente ahora y no cuando el comercio intenta aceptarlo. Se
@@ -920,8 +968,8 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
       // térmico: recortado y sin más control que el salto de línea, que ahí no sirve de nada.
       const lineNote = String(line.note || "").replace(/[\r\n]+/g, " ").trim().slice(0, 200) || null;
 
-      enriched.push({ product: p, qty, price, note: lineNote });
-      total += round2(price) * qty;
+      enriched.push({ product: p, qty, price, discount: lineDiscount, note: lineNote });
+      total += round2(price - lineDiscount) * qty;
     }
 
     total = parseFloat(total.toFixed(2));
@@ -984,7 +1032,7 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
           name: e.product.name,
           price: e.price,
           quantity: e.qty,
-          discount: 0,
+          discount: e.discount,
           cost_price: e.product.cost_price != null ? parseFloat(e.product.cost_price) : null,
           note: e.note,
         }, { transaction: t });

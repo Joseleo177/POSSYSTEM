@@ -46,11 +46,17 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
         finally { setLoading(false); }
     }, [notify]);
 
-    const loadProducts = useCallback(async () => {
+    // Sin warehouse_id trae el catálogo entero (promo "todas las sucursales"). Con una
+    // sucursal elegida, filtra a lo que ESA sucursal tiene ficha de stock — el mismo
+    // criterio que ya usa el POS y el módulo Catálogo, para no ofrecer un producto que ahí
+    // ni siquiera se vende.
+    const loadProducts = useCallback(async (warehouse_id = "") => {
         try {
-            const r = await api.products.getAll({ limit: 9999 });
-            setAllProducts(r.data?.products || r.data || []);
-        } catch (e) { console.error(e); }
+            const r = await api.products.getAll({ limit: 9999, ...(warehouse_id ? { warehouse_id } : {}) });
+            const list = r.data?.products || r.data || [];
+            setAllProducts(list);
+            return list;
+        } catch (e) { console.error(e); return []; }
     }, []);
 
     const loadWarehouses = useCallback(async () => {
@@ -61,6 +67,24 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
     }, []);
 
     useEffect(() => { load(); loadProducts(); loadWarehouses(); }, [load, loadProducts, loadWarehouses]);
+
+    // Recarga la lista de productos cada vez que se elige o cambia la sucursal DENTRO del
+    // modal (sea al abrir para editar una promo que ya tenía una, o al tocar el selector).
+    // Los ya elegidos que queden fuera de la sucursal nueva se sueltan solos: dejarlos
+    // marcados guardaría una promoción con un producto que esa sucursal ni siquiera vende.
+    useEffect(() => {
+        if (!modal) return;
+        let alive = true;
+        loadProducts(form.warehouse_id).then(list => {
+            if (!alive || !form.warehouse_id) return;
+            const validIds = new Set(list.map(p => p.id));
+            setForm(prev => {
+                const kept = prev.product_ids.filter(id => validIds.has(id));
+                return kept.length === prev.product_ids.length ? prev : { ...prev, product_ids: kept };
+            });
+        });
+        return () => { alive = false; };
+    }, [modal, form.warehouse_id, loadProducts]);
 
     const openNew = useCallback(() => { setForm(EMPTY_FORM); setProductSearch(""); setModal("new"); }, []);
     

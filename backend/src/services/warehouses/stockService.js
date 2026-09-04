@@ -258,7 +258,11 @@ async function getProducts(req) {
         const ingQty = parseFloat(r.quantity) || 1;
         totalCost += parseFloat(r.ingredient_cost || 0) * ingQty;
         if (r.ingredient_is_service) continue;
-        const possible = Math.floor(parseFloat(r.ingredient_stock) / ingQty);
+        // Sin Math.floor: un ingrediente por KG/L/M rinde decimales, no unidades enteras
+        // (ver la misma corrección en calculateComboStockAndCost, productService.js). Esta
+        // es una copia aparte de la misma cuenta —la que usa el POS, vía
+        // /api/warehouses/:id/products— que se había quedado con la versión vieja.
+        const possible = Number((parseFloat(r.ingredient_stock) / ingQty).toFixed(4));
         if (possible < min) min = possible;
       }
       ingredientStockMap[cid] = min === Infinity ? Infinity : min;

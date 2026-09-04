@@ -276,8 +276,10 @@ export function CartProvider({ children }) {
     const newCart = cart.map(i => {
       if (i.id !== id) return i;
       const isIntegerUnit = ["unidad", "uds", "pieza"].includes(i.unit?.toLowerCase());
-      let nq = targetNq;
-      if (isIntegerUnit) nq = Math.floor(nq);
+      // Tecleado a mano y no por el paso a paso (que ya redondea, ver changeQty): sin este
+      // límite el campo aceptaba cualquier cantidad de decimales escritos, y KG/L/M solo
+      // manejan 3.
+      let nq = isIntegerUnit ? Math.floor(targetNq) : Math.round(targetNq * 1000) / 1000;
 
       if (nq === i.qty) return i;
       changeOccurred = true;

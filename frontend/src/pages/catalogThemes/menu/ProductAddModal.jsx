@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
+import { freeUnitsFor, lineTotalFor } from "../../../helpers/promo";
 
 // Ficha de "agregar al pedido" del tema de menú: se abre en CADA toque de "+", no solo
 // cuando el cliente quiere escribir algo. Es la decisión que se tomó al construir esto —en
@@ -26,7 +27,13 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
     // objeto `existing` entero, que es uno nuevo en cada render del carrito.
     useEffect(() => {
         if (!product) return;
-        setQty(existing?.qty || 1);
+        // Sin nada en el carrito todavía y con una promo "compra y lleva" vigente, arranca en
+        // el grupo completo (p.ej. 12): igual que en la vitrina, no tiene sentido pedirle al
+        // cliente que suba el contador a mano hasta el mínimo que activa el descuento.
+        const inicial = product.promo_buy_qty && product.promo_get_qty
+            ? product.promo_buy_qty + product.promo_get_qty
+            : 1;
+        setQty(existing?.qty || inicial);
         setNote(existing?.note || "");
     }, [product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -35,7 +42,8 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
     const price = parseFloat(product.price);
     const hasPrice = price > 0;
     const enOferta = hasPrice && product.price_before != null;
-    const totalLinea = hasPrice ? price * qty : 0;
+    const freeUnits = freeUnitsFor({ ...product, qty });
+    const totalLinea = hasPrice ? lineTotalFor({ ...product, qty }) : 0;
 
     const confirmar = () => {
         onConfirm(product, qty, note);
@@ -137,6 +145,11 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
                                 </button>
                             </div>
                         </div>
+                        {freeUnits > 0 && (
+                            <p className="text-[11px] font-bold text-success text-right -mt-1">
+                                +{freeUnits} gratis por la promo
+                            </p>
+                        )}
                     </div>
                 </div>
 
