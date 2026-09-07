@@ -103,7 +103,7 @@ export default function ProductGrid({
                         <div className="text-[11px] font-black tracking-widest uppercase text-center dark:text-white">No se encontraron productos</div>
                     </div>
                 ) : (
-                    <div data-product-grid className="grid grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1.5 lg:gap-4 pb-10">
+                    <div data-product-grid className="grid grid-cols-3 sm:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-1.5 lg:gap-4 pb-10">
                         {filteredProducts.map((p, idx) => (
                             <div
                                 key={p.id}
