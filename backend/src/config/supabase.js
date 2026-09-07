@@ -22,4 +22,14 @@ async function deleteImage(filename) {
   await supabase.storage.from(BUCKET).remove([filename]);
 }
 
-module.exports = { uploadImage, deleteImage };
+// Copia un archivo ya existente dentro del bucket, sin descargarlo ni volver a subirlo: es una
+// sola llamada del lado de Supabase. Clave en Vercel, donde el tiempo de reloj se factura y
+// bajar+subir cada imagen por la función alargaría la petición hasta el timeout.
+async function copyImage(fromPath, toPath) {
+  const { error } = await supabase.storage.from(BUCKET).copy(fromPath, toPath);
+  if (error) throw error;
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(toPath);
+  return data.publicUrl;
+}
+
+module.exports = { uploadImage, deleteImage, copyImage };

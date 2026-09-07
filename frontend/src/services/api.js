@@ -167,9 +167,11 @@ export const api = {
     // Carga masiva desde Excel. El archivo se lee en el navegador; aquí solo viajan las
     // filas ya normalizadas, que el servidor revalida antes de escribir.
     importar: (body) => request("/products/import", { method: "POST", body: JSON.stringify(body) }),
-    // Hereda en lote la foto de otra tienda para los productos sin imagen (match por código
-    // de barras). Sin cuerpo: actúa sobre todo el catálogo de la empresa.
-    backfillImages: () => request("/products/backfill-images", { method: "POST" }),
+    // Hereda la foto de otra tienda para los productos sin imagen (match por código de
+    // barras). Trabaja por lotes con cursor (`after_id`) porque en Vercel una pasada por todo
+    // el catálogo se pasaría del timeout; el llamador repite mientras `hay_mas`.
+    backfillImages: (after_id = 0) =>
+      request("/products/backfill-images", { method: "POST", body: JSON.stringify({ after_id }) }),
   },
   // Etiquetas de beneficio reusables para la ficha pública del producto ("Repara y
   // fortalece"). JSON simple, sin archivos.

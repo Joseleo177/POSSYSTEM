@@ -84,14 +84,13 @@ async function copyStoredImage(source) {
   if (!source) return null;
 
   if (isSupabase()) {
-    // En la nube el valor guardado es la URL pública del bucket.
+    // En la nube el valor guardado es la URL pública del bucket; los archivos van planos
+    // (product_<ts>.<ext>), igual que en handleImageUpload / handleImageDelete.
     if (!source.startsWith("http")) return null;
-    const res = await fetch(source);
-    if (!res.ok) return null;
-    const buffer = Buffer.from(await res.arrayBuffer());
-    const ext = path.extname(new URL(source).pathname).toLowerCase() || ".jpg";
-    const mimetype = res.headers.get("content-type") || "image/jpeg";
-    return getSupabaseStorage().uploadImage(buffer, `product_${Date.now()}${ext}`, mimetype);
+    const fromPath = decodeURIComponent(new URL(source).pathname.split("/").pop() || "");
+    if (!fromPath) return null;
+    const ext = path.extname(fromPath).toLowerCase() || ".jpg";
+    return getSupabaseStorage().copyImage(fromPath, `product_${Date.now()}${ext}`);
   }
 
   // Disco local: una URL externa no se puede copiar, se referencia tal cual (nadie la borra
@@ -706,35 +705,83 @@ async function deleteProduct(id, company_id) {
 // copia. La herencia normal solo corre al crear o editar cada producto; esto la aplica de
 // una sola vez a todo lo que ya estaba cargado antes de que las otras tiendas subieran sus
 // fotos. Es seguro repetirlo: los que ya tienen imagen quedan fuera del barrido.
-async function backfillImagesByBarcode({ company_id }) {
+//
+// Trabaja por LOTES con cursor (`after_id`): en Vercel el tiempo de reloj se factura y una
+// petición que recorra un catálogo entero copiando imágenes se pasa del timeout. El frontend
+// vuelve a llamar pasando `after_id` mientras `hay_mas` sea true. El cursor va por id y no por
+// "sigue sin foto", para que los productos que ninguna otra tienda tiene con imagen no hagan
+// que el barrido se quede pegado repitiéndolos.
+async function backfillImagesByBarcode({ company_id, limit = 25, after_id = 0 }) {
   if (!company_id) {
     const e = new Error("Se necesita una empresa para sincronizar las imágenes");
     e.status = 400; e.isOperational = true; throw e;
   }
 
+  const lote = Math.min(100, Math.max(1, parseInt(limit, 10) || 25));
+  const cursor = Math.max(0, parseInt(after_id, 10) || 0);
+
+  const sinFotoBase = {
+    company_id,
+    image_filename: { [Op.is]: null },
+    barcode: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: "" }] },
+    is_combo: false,
+  };
+
+  // Total del arranque, solo para que el frontend muestre "de ~N".
+  const totalSinFoto = cursor === 0 ? await Product.count({ where: sinFotoBase }) : null;
+
   const pendientes = await Product.findAll({
-    where: {
-      company_id,
-      image_filename: { [Op.is]: null },
-      barcode: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: "" }] },
-      is_combo: false,
-    },
+    where: { ...sinFotoBase, id: { [Op.gt]: cursor } },
     attributes: ["id", "barcode"],
+    order: [["id", "ASC"]],
+    limit: lote,
   });
 
   let actualizados = 0;
+  let conCandidata = 0;
   for (const p of pendientes) {
+    // Se distingue "no hay otra tienda con ese código + foto" de "sí la hay pero falló la
+    // copia": lo primero es normal, lo segundo hay que verlo en el log.
+    let twinImg = null;
+    try {
+      const twin = await Product.findOne({
+        where: {
+          barcode: (p.barcode || "").trim(),
+          image_filename: { [Op.ne]: null },
+          company_id: { [Op.ne]: company_id },
+        },
+        order: [["updated_at", "DESC"]],
+        attributes: ["image_filename"],
+      });
+      twinImg = twin?.image_filename || null;
+    } catch { /* se cuenta como sin candidata */ }
+
+    if (!twinImg) continue;
+    conCandidata++;
+
     const heredada = await inheritImageByBarcode(p.barcode, company_id);
     if (!heredada) continue;
     await Product.update({ image_filename: heredada }, { where: { id: p.id } });
     actualizados++;
   }
 
+  const lastId = pendientes.length ? pendientes[pendientes.length - 1].id : cursor;
+  const hayMas = pendientes.length === lote;
+
+  logger.info(
+    `backfillImagesByBarcode empresa ${company_id} (cursor ${cursor}): ${pendientes.length} revisados, ` +
+    `${conCandidata} con foto en otra tienda, ${actualizados} copiadas${hayMas ? " — quedan más" : ""}`
+  );
+
   return {
-    data: { revisados: pendientes.length, actualizados },
-    message: actualizados
-      ? `${actualizados} ${actualizados === 1 ? "producto recibió imagen" : "productos recibieron imagen"}`
-      : "No se encontraron imágenes nuevas para heredar",
+    data: {
+      revisados: pendientes.length,
+      con_candidata: conCandidata,
+      actualizados,
+      last_id: lastId,
+      hay_mas: hayMas,
+      ...(totalSinFoto != null ? { total_sin_foto: totalSinFoto } : {}),
+    },
   };
 }
 

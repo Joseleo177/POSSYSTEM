@@ -61,8 +61,12 @@ module.exports = {
     }
   },
   backfillImages: wrap(async req => {
-    const result = await backfillImagesByBarcode({ company_id: req.employee?.company_id ?? null });
-    broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
+    const result = await backfillImagesByBarcode({
+      company_id: req.employee?.company_id ?? null,
+      limit: req.body?.limit,
+      after_id: req.body?.after_id,
+    });
+    if (result.data?.actualizados) broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
     return result;
   }),
   setCatalogVisibility: wrap(async req => {

@@ -119,16 +119,32 @@ export default function CatalogPage() {
     };
 
     // Busca en las otras tiendas una foto para cada producto de este catálogo que no tenga
-    // (match por código de barras) y la copia. Útil después de cargar productos sin imagen:
-    // cuando otra tienda ya vendía ese código con foto, este botón la trae en lote.
+    // (match por código de barras) y la copia. El backend trabaja por lotes con cursor —en
+    // Vercel una pasada por todo el catálogo se pasaría del timeout—, así que acá se llama en
+    // bucle hasta que no queden más.
     const backfillImages = async () => {
         setBackfillingImages(true);
+        let cursor = 0;
+        let total = 0;
+        let vueltas = 0;
         try {
-            const r = await api.products.backfillImages();
-            notify(r.message || "Imágenes sincronizadas");
-            if (r.data?.actualizados) loadProducts(page, warehouseId);
+            // Tope de vueltas por si algo sale mal: 200 lotes = 5000 productos revisados.
+            while (vueltas < 200) {
+                vueltas++;
+                const r = await api.products.backfillImages(cursor);
+                total += r.data?.actualizados || 0;
+                cursor = r.data?.last_id ?? cursor;
+                if (!r.data?.hay_mas) break;
+            }
+            notify(
+                total
+                    ? `${total} ${total === 1 ? "producto recibió imagen" : "productos recibieron imagen"} de otra tienda`
+                    : "Ningún producto sin foto tenía imagen en otra tienda con ese código de barras"
+            );
+            if (total) loadProducts(page, warehouseId);
         } catch (e) {
-            notify(e.message, "err");
+            notify(total ? `${total} imágenes copiadas; se cortó: ${e.message}` : e.message, "err");
+            if (total) loadProducts(page, warehouseId);
         } finally {
             setBackfillingImages(false);
         }
