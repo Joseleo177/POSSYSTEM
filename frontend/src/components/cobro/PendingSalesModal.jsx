@@ -152,7 +152,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                 </div>
 
                 {/* Table */}
-                <div className="flex-1 overflow-auto">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden">
                     {loading ? (
                         <div className="flex items-center justify-center py-16 text-content-subtle dark:text-white/30">
                             <svg className="w-5 h-5 animate-spin mr-2" fill="none" viewBox="0 0 24 24">
@@ -170,9 +170,10 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                         </div>
                     ) : (
                       <>
-                        {/* Móvil: tarjetas. La tabla pide 720px para sus ocho columnas, así que en
-                            un teléfono solo se veían las tres primeras y el saldo, el estado y el
-                            botón de cobrar quedaban tras un scroll horizontal que nadie descubre. */}
+                        {/* Móvil: tarjetas. Con nueve columnas la tabla no cabe en un teléfono y
+                            el saldo, el estado y el botón de cobrar quedaban tras un scroll
+                            horizontal que nadie descubre. En escritorio la tabla es table-fixed
+                            y sus columnas se reparten el ancho del modal sin desbordar. */}
                         <div className="lg:hidden p-3 space-y-2">
                             {filtered.map(sale => (
                                 <div
@@ -225,24 +226,24 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                             ))}
                         </div>
 
-                        <table className="hidden lg:table w-full text-left min-w-[720px]">
+                        <table className="hidden lg:table w-full text-left table-fixed">
                             <thead>
                                 <tr className="border-b border-border/20 dark:border-white/5 text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/25 sticky top-0 bg-white dark:bg-surface-dark-2">
-                                    <th className="pl-5 pr-1 py-3 w-8" />
-                                    <th className="px-3 py-3">Factura</th>
-                                    <th className="px-3 py-3">Cliente</th>
-                                    <th className="px-3 py-3 text-right">Total</th>
-                                    <th className="px-3 py-3 text-right">Pagado</th>
-                                    <th className="px-3 py-3 text-right">Saldo</th>
-                                    <th className="px-3 py-3">Estado</th>
-                                    <th className="px-3 py-3">Fecha</th>
-                                    <th className="px-3 py-3" />
+                                    <th className="pl-4 pr-1 py-3 w-11" />
+                                    <th className="px-2 py-3 w-[92px]">Factura</th>
+                                    <th className="px-2 py-3">Cliente</th>
+                                    <th className="px-2 py-3 text-right w-[76px]">Total</th>
+                                    <th className="px-2 py-3 text-right w-[76px]">Pagado</th>
+                                    <th className="px-2 py-3 text-right w-[76px]">Saldo</th>
+                                    <th className="px-2 py-3 w-[92px]">Estado</th>
+                                    <th className="px-2 py-3 w-[70px]">Fecha</th>
+                                    <th className="px-2 py-3 w-[78px]" />
                                 </tr>
                             </thead>
                             <tbody>
                                 {filtered.map(sale => (
                                     <tr key={sale.id} className={`border-b border-border/20 dark:border-white/5 hover:bg-surface-2 dark:hover:bg-white/[0.03] transition-colors group ${checkedIds.includes(sale.id) ? "bg-success/5" : ""}`}>
-                                        <td className="pl-5 pr-1 py-3">
+                                        <td className="pl-4 pr-1 py-3">
                                             <button
                                                 onClick={() => toggleChecked(sale)}
                                                 disabled={!marcable(sale) && !checkedIds.includes(sale.id)}
@@ -261,45 +262,45 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7"/></svg>
                                             </button>
                                         </td>
-                                        <td className="px-3 py-3">
+                                        <td className="px-2 py-3">
                                             <span className="text-[11px] font-black text-content dark:text-white tabular-nums">
                                                 {sale.invoice_number || `Borrador #${sale.id}`}
                                             </span>
                                             {sale.serie_name && (
-                                                <div className="text-[9px] text-content-subtle dark:text-white/25 font-bold">{sale.serie_name}</div>
+                                                <div className="text-[9px] text-content-subtle dark:text-white/25 font-bold truncate">{sale.serie_name}</div>
                                             )}
                                         </td>
-                                        <td className="px-3 py-3 max-w-[140px]">
+                                        <td className="px-2 py-3">
                                             <span className="text-[11px] text-content-muted dark:text-white/70 font-bold truncate block">
                                                 {sale.customer_name || <span className="text-content-subtle dark:text-white/25 italic">Sin cliente</span>}
                                             </span>
-                                            {sale.customer_rif && <div className="text-[9px] text-content-subtle dark:text-white/25">{sale.customer_rif}</div>}
+                                            {sale.customer_rif && <div className="text-[9px] text-content-subtle dark:text-white/25 truncate">{sale.customer_rif}</div>}
                                         </td>
-                                        <td className="px-3 py-3 text-right tabular-nums">
+                                        <td className="px-2 py-3 text-right tabular-nums">
                                             <span className="text-[11px] font-black text-content dark:text-white/80">{fmt(sale.total)}</span>
                                         </td>
-                                        <td className="px-3 py-3 text-right tabular-nums">
+                                        <td className="px-2 py-3 text-right tabular-nums">
                                             <span className={`text-[11px] font-bold ${sale.amount_paid > 0 ? "text-green-600 dark:text-green-400" : "text-content-subtle dark:text-white/25"}`}>
                                                 {fmt(sale.amount_paid)}
                                             </span>
                                         </td>
-                                        <td className="px-3 py-3 text-right tabular-nums">
+                                        <td className="px-2 py-3 text-right tabular-nums">
                                             <span className={`text-[12px] font-black ${sale.balance > 0 ? "text-warning" : "text-green-600 dark:text-green-400"}`}>
                                                 {fmt(sale.balance)}
                                             </span>
                                         </td>
-                                        <td className="px-3 py-3">
+                                        <td className="px-2 py-3">
                                             <StatusBadge status={sale.status} />
                                         </td>
-                                        <td className="px-3 py-3">
+                                        <td className="px-2 py-3">
                                             <span className="text-[10px] text-content-subtle dark:text-white/30 font-bold tabular-nums">{fmtDate(sale.created_at)}</span>
                                         </td>
-                                        <td className="px-3 py-3">
+                                        <td className="px-2 py-3">
                                             <button
                                                 onClick={() => onSelect(sale)}
                                                 // Siempre visible: en tablet no hay hover que revele
                                                 // el botón, y esta es la acción principal de la fila.
-                                                className="h-7 px-3 bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black rounded-lg text-[10px] font-black uppercase tracking-wide transition-all"
+                                                className="h-7 px-2.5 bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black rounded-lg text-[10px] font-black uppercase tracking-wide transition-all"
                                             >
                                                 Cobrar
                                             </button>
