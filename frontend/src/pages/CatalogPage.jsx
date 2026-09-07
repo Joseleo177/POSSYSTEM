@@ -48,6 +48,7 @@ export default function CatalogPage() {
     const [deleteProductDialog, setDeleteProductDialog] = useState(null);
     const [selectedProducts, setSelectedProducts] = useState([]);
     const [printingLabels, setPrintingLabels] = useState(false);
+    const [backfillingImages, setBackfillingImages] = useState(false);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [showWarehouse, setShowWarehouse] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
@@ -115,6 +116,22 @@ export default function CatalogPage() {
         await applyVisibility(selectedProducts.map(p => p.id), visible);
         setSelectedProducts([]);
         setIsSelectionMode(false);
+    };
+
+    // Busca en las otras tiendas una foto para cada producto de este catálogo que no tenga
+    // (match por código de barras) y la copia. Útil después de cargar productos sin imagen:
+    // cuando otra tienda ya vendía ese código con foto, este botón la trae en lote.
+    const backfillImages = async () => {
+        setBackfillingImages(true);
+        try {
+            const r = await api.products.backfillImages();
+            notify(r.message || "Imágenes sincronizadas");
+            if (r.data?.actualizados) loadProducts(page, warehouseId);
+        } catch (e) {
+            notify(e.message, "err");
+        } finally {
+            setBackfillingImages(false);
+        }
     };
 
     const toggleSelect = (id) => {
@@ -215,6 +232,16 @@ export default function CatalogPage() {
                             title="Enlace de solo lectura para clientes">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m8.156-1.328l1.5-1.5a4 4 0 00-5.656-5.656l-3 3a4 4 0 000 5.656" /></svg>
                             <span className="hidden sm:inline">Compartir</span>
+                        </Button>
+                    )}
+                    {/* Trae en lote las fotos que otras tiendas ya tienen para los productos
+                        sin imagen de este catálogo (match por código de barras). */}
+                    {can("products.edit") && selectedProducts.length === 0 && (
+                        <Button onClick={backfillImages} disabled={backfillingImages} variant="ghost"
+                            className="h-8 px-2 sm:px-3 text-[10px] shadow-none border border-border dark:border-white/10 text-content-subtle hover:text-content disabled:opacity-50"
+                            title="Buscar fotos en otras tiendas para los productos sin imagen (por código de barras)">
+                            <svg className={`w-3.5 h-3.5 ${backfillingImages ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                            <span className="hidden sm:inline">{backfillingImages ? "Buscando…" : "Fotos"}</span>
                         </Button>
                     )}
                     {/* Importar crea y además pisa lo existente, así que pide las dos cosas,

@@ -6,6 +6,8 @@ const { upload } = require("../middleware/upload");
 router.get("/",       auth, permit("products.view"), ctrl.getAll);
 // Antes de "/:id" para que la ruta literal no quede tapada por el parámetro.
 router.patch("/catalog-visibility", auth, permit("products.edit"), ctrl.setCatalogVisibility);
+// Hereda en lote la imagen de otra tienda para los productos sin foto (por código de barras).
+router.post("/backfill-images", auth, permit("products.edit"), ctrl.backfillImages);
 // Importar crea productos y además pisa los que ya existen, así que exige las dos cosas.
 router.post("/import", auth, permit("products.create"), permit("products.edit"), ctrl.importar);
 router.get("/:id",    auth, permit("products.view"), ctrl.getOne);

@@ -1,4 +1,4 @@
-const { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility } = require("../services/products");
+const { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, backfillImagesByBarcode } = require("../services/products");
 const { importProducts } = require("../services/products/importProducts");
 const { broadcast } = require("../services/sseService");
 const { assertWarehouseAccess } = require("../middleware/auth");
@@ -60,6 +60,11 @@ module.exports = {
       });
     }
   },
+  backfillImages: wrap(async req => {
+    const result = await backfillImagesByBarcode({ company_id: req.employee?.company_id ?? null });
+    broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
+    return result;
+  }),
   setCatalogVisibility: wrap(async req => {
     const result = await setCatalogVisibility({
       ids: req.body.ids,

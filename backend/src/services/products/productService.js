@@ -701,6 +701,43 @@ async function deleteProduct(id, company_id) {
   return { message: "Producto eliminado exitosamente" };
 }
 
+// El "hazlo en lote" de la herencia de imágenes: recorre los productos de la empresa que
+// todavía no tienen foto y, si otra tienda ya vende ese código de barras con imagen, se la
+// copia. La herencia normal solo corre al crear o editar cada producto; esto la aplica de
+// una sola vez a todo lo que ya estaba cargado antes de que las otras tiendas subieran sus
+// fotos. Es seguro repetirlo: los que ya tienen imagen quedan fuera del barrido.
+async function backfillImagesByBarcode({ company_id }) {
+  if (!company_id) {
+    const e = new Error("Se necesita una empresa para sincronizar las imágenes");
+    e.status = 400; e.isOperational = true; throw e;
+  }
+
+  const pendientes = await Product.findAll({
+    where: {
+      company_id,
+      image_filename: { [Op.is]: null },
+      barcode: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: "" }] },
+      is_combo: false,
+    },
+    attributes: ["id", "barcode"],
+  });
+
+  let actualizados = 0;
+  for (const p of pendientes) {
+    const heredada = await inheritImageByBarcode(p.barcode, company_id);
+    if (!heredada) continue;
+    await Product.update({ image_filename: heredada }, { where: { id: p.id } });
+    actualizados++;
+  }
+
+  return {
+    data: { revisados: pendientes.length, actualizados },
+    message: actualizados
+      ? `${actualizados} ${actualizados === 1 ? "producto recibió imagen" : "productos recibieron imagen"}`
+      : "No se encontraron imágenes nuevas para heredar",
+  };
+}
+
 // Publica u oculta varios productos de una sola vez. Marcar decenas de productos uno por
 // uno desde el modal no es viable en un inventario real, y es justo lo que hace falta
 // después de la migración, que deja todo oculto.
@@ -777,4 +814,4 @@ async function updateComboPricesForProduct(productId, t, visited = new Set()) {
 
 // calculateComboStockAndCost se exporta para que el catálogo público calcule la
 // disponibilidad de un combo con la misma regla que el POS, en vez de duplicarla.
-module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, calculateComboStockAndCost, inheritImageByBarcode };
+module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, calculateComboStockAndCost, inheritImageByBarcode, backfillImagesByBarcode };
