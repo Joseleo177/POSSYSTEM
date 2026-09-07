@@ -196,6 +196,27 @@ async function importProducts({ rows, warehouse_id, company_id }) {
     const porBarcode = new Map(posibles.filter(p => p.barcode).map(p => [p.barcode, p]));
     const porNombre  = new Map(posibles.map(p => [p.name.trim().toLowerCase(), p]));
 
+    // Códigos del archivo que YA tienen foto en otra empresa. Se resuelve en una sola consulta
+    // para que el lookup+copia por fila (que hace scan por el btrim) solo corra para los pocos
+    // que de verdad van a heredar, y no una vez por cada renglón del Excel.
+    const codigosArchivo = [...new Set(limpias.map(r => r.barcode).filter(Boolean))];
+    let codigosConFoto = new Set();
+    if (codigosArchivo.length) {
+      const conFoto = await Product.findAll({
+        where: {
+          [Op.and]: [
+            Sequelize.where(Sequelize.fn("btrim", Sequelize.col("barcode")), { [Op.in]: codigosArchivo }),
+            { image_filename: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: "" }] } },
+            ...(company_id ? [{ company_id: { [Op.ne]: company_id } }] : []),
+          ],
+        },
+        attributes: ["barcode"],
+        transaction: t,
+      });
+      codigosConFoto = new Set(conFoto.map(p => (p.barcode || "").trim()));
+    }
+    const heredaFoto = (r) => r.barcode && codigosConFoto.has(r.barcode);
+
     let creados = 0, actualizados = 0, conStock = 0;
 
     for (const r of limpias) {
@@ -243,10 +264,17 @@ async function importProducts({ rows, warehouse_id, company_id }) {
         );
         producto = existente;
         actualizados++;
+        // Si sigue sin foto y otra tienda ya vende este código con imagen, se hereda ahora:
+        // volver a subir la plantilla sirve para rellenar las fotos que faltaban, igual que
+        // pasa al crear.
+        if (!existente.image_filename && heredaFoto(r)) {
+          const heredada = await inheritImageByBarcode(r.barcode, company_id);
+          if (heredada) await existente.update({ image_filename: heredada }, { transaction: t });
+        }
       } else {
         const campos = { ...camposGlobales, ...camposPrecio, ...(margen != null ? { profit_margin: margen } : {}) };
         // Si otra tienda ya vende este código de barras y le puso foto, se hereda (se copia).
-        const heredada = r.barcode ? await inheritImageByBarcode(r.barcode, company_id) : null;
+        const heredada = heredaFoto(r) ? await inheritImageByBarcode(r.barcode, company_id) : null;
         producto = await Product.create({
           ...campos,
           stock: 0,
