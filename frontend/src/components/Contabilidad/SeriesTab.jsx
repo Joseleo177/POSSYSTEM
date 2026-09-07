@@ -20,13 +20,18 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
   const canConfig = can("series.manage");
   const [serieForm, setSerieForm] = useState(EMPTY_SERIE);
   const [editSerie, setEditSerie] = useState(null);
-  const [expandSerie, setExpandSerie] = useState(null);
+  // Guardamos el id, no una copia: tras cada loadAllSeries() el modal tiene que
+  // reflejar los rangos nuevos/borrados sin cerrarse.
+  const [manageSerieId, setManageSerieId] = useState(null);
   const [rangeForm, setRangeForm] = useState(EMPTY_RANGE);
   const [savingSerie, setSavingSerie] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const closeModal = () => { setShowModal(false); setEditSerie(null); setSerieForm(EMPTY_SERIE); };
+
+  const manageSerie = manageSerieId ? allSeries.find(s => s.id === manageSerieId) : null;
+  const closeManage = () => { setManageSerieId(null); setRangeForm(EMPTY_RANGE); };
 
   // form unificado para el modal
   const form = editSerie ?? serieForm;
@@ -129,9 +134,9 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
                   <Button
                     variant="ghost"
                     className="h-8 px-3 text-[10px] bg-info/10 text-info border border-info/20 hover:bg-info hover:text-black shadow-none"
-                    onClick={() => setExpandSerie(expandSerie === serie.id ? null : serie.id)}
+                    onClick={() => setManageSerieId(serie.id)}
                   >
-                    {expandSerie === serie.id ? "Cerrar" : "Gestionar"}
+                    Gestionar
                   </Button>
                   {canConfig && (
                     <>
@@ -152,99 +157,106 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
                   )}
                 </div>
               </div>
-
-              {/* Detalle expandido */}
-              {expandSerie === serie.id && (
-                <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Rangos */}
-                  <div>
-                    <div className="text-[10px] font-black tracking-wider uppercase text-content-subtle mb-3 opacity-60">Rangos de Correlativos</div>
-                    <div className="space-y-2">
-                      {(serie.SerieRanges || []).map(r => (
-                        <div key={r.id} className="flex items-center justify-between p-3 bg-surface-2 dark:bg-white/[0.03] rounded-lg border border-border/40">
-                          <div className="flex flex-col">
-                            <div className={`text-[11px] font-black ${r.active ? "text-success" : "text-content-subtle"}`}>
-                              {serie.prefix}-{String(r.start_number).padStart(serie.padding, "0")} → {serie.prefix}-{String(r.end_number).padStart(serie.padding, "0")}
-                            </div>
-                            {r.active && (
-                              <div className="text-[10px] font-bold opacity-40 uppercase tracking-widest mt-0.5">
-                                Actual: {serie.prefix}-{String(r.current_number).padStart(serie.padding, "0")}
-                              </div>
-                            )}
-                          </div>
-                          {canConfig && (
-                            <button
-                              onClick={() => setDeleteConfirm({ type: "range", id: r.id, name: `${serie.prefix}-${String(r.start_number).padStart(serie.padding, "0")} / ${serie.prefix}-${String(r.end_number).padStart(serie.padding, "0")}` })}
-                              className="w-6 h-6 rounded-md bg-danger/10 text-danger hover:bg-danger hover:text-white transition-all flex items-center justify-center"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                      {canConfig && (
-                        <div className="flex gap-2 pt-2">
-                          <input
-                            type="number"
-                            placeholder="Inicio"
-                            value={rangeForm.start_number}
-                            onChange={e => setRangeForm(p => ({ ...p, start_number: e.target.value }))}
-                            className="input h-8 text-[11px]"
-                          />
-                          <input
-                            type="number"
-                            placeholder="Fin"
-                            value={rangeForm.end_number}
-                            onChange={e => setRangeForm(p => ({ ...p, end_number: e.target.value }))}
-                            className="input h-8 text-[11px]"
-                          />
-                          <Button
-                            className="h-8 px-3 text-[10px] bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none shrink-0"
-                            onClick={() => addRange(serie.id)}
-                          >
-                            + Añadir
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Usuarios */}
-                  <div>
-                    <div className="text-[10px] font-black tracking-wider uppercase text-content-subtle mb-3 opacity-60">Usuarios con Acceso</div>
-                    {allEmployees.length === 0 && (
-                      <div className="text-[10px] font-bold text-content-subtle opacity-60 leading-relaxed">
-                        No tienes permiso para gestionar usuarios, así que no se puede asignar
-                        quién factura con esta serie. Pídeselo a un administrador.
-                      </div>
-                    )}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {allEmployees.map(emp => {
-                        const assigned = (serie.Employees || []).some(e => e.id === emp.id);
-                        return (
-                          <div
-                            key={emp.id}
-                            onClick={() => canConfig && toggleUserSerie(serie, emp.id)}
-                            className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${canConfig ? "cursor-pointer" : ""} ${assigned ? "bg-success/5 border-success/30" : "bg-surface-2 dark:bg-white/[0.03] border-border/40"}`}
-                          >
-                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${assigned ? "bg-success border-success" : "border-border/60"}`}>
-                              {assigned && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                            </div>
-                            <span className={`text-[11px] font-black uppercase truncate ${assigned ? "text-content dark:text-white" : "text-content-subtle"}`}>
-                              {emp.full_name}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           ))}
         </div>
       )}
       </div>
+
+      {/* Modal: gestionar rangos y usuarios */}
+      <Modal
+        open={!!manageSerie}
+        onClose={closeManage}
+        title={manageSerie ? `Gestionar numeración · ${manageSerie.name}` : ""}
+        width={640}
+      >
+        {manageSerie && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Rangos */}
+            <div>
+              <div className="text-[10px] font-black tracking-wider uppercase text-content-subtle mb-3 opacity-60">Rangos de Correlativos</div>
+              <div className="space-y-2">
+                {(manageSerie.SerieRanges || []).map(r => (
+                  <div key={r.id} className="flex items-center justify-between p-3 bg-surface-2 dark:bg-white/[0.03] rounded-lg border border-border/40">
+                    <div className="flex flex-col">
+                      <div className={`text-[11px] font-black ${r.active ? "text-success" : "text-content-subtle"}`}>
+                        {manageSerie.prefix}-{String(r.start_number).padStart(manageSerie.padding, "0")} → {manageSerie.prefix}-{String(r.end_number).padStart(manageSerie.padding, "0")}
+                      </div>
+                      {r.active && (
+                        <div className="text-[10px] font-bold opacity-40 uppercase tracking-widest mt-0.5">
+                          Actual: {manageSerie.prefix}-{String(r.current_number).padStart(manageSerie.padding, "0")}
+                        </div>
+                      )}
+                    </div>
+                    {canConfig && (
+                      <button
+                        onClick={() => setDeleteConfirm({ type: "range", id: r.id, name: `${manageSerie.prefix}-${String(r.start_number).padStart(manageSerie.padding, "0")} / ${manageSerie.prefix}-${String(r.end_number).padStart(manageSerie.padding, "0")}` })}
+                        className="w-6 h-6 rounded-md bg-danger/10 text-danger hover:bg-danger hover:text-white transition-all flex items-center justify-center"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {canConfig && (
+                  <div className="flex gap-2 pt-2">
+                    <input
+                      type="number"
+                      placeholder="Inicio"
+                      value={rangeForm.start_number}
+                      onChange={e => setRangeForm(p => ({ ...p, start_number: e.target.value }))}
+                      className="input h-8 text-[11px]"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Fin"
+                      value={rangeForm.end_number}
+                      onChange={e => setRangeForm(p => ({ ...p, end_number: e.target.value }))}
+                      className="input h-8 text-[11px]"
+                    />
+                    <Button
+                      className="h-8 px-3 text-[10px] bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none shrink-0"
+                      onClick={() => addRange(manageSerie.id)}
+                    >
+                      + Añadir
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Usuarios */}
+            <div>
+              <div className="text-[10px] font-black tracking-wider uppercase text-content-subtle mb-3 opacity-60">Usuarios con Acceso</div>
+              {allEmployees.length === 0 && (
+                <div className="text-[10px] font-bold text-content-subtle opacity-60 leading-relaxed">
+                  No tienes permiso para gestionar usuarios, así que no se puede asignar
+                  quién factura con esta serie. Pídeselo a un administrador.
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {allEmployees.map(emp => {
+                  const assigned = (manageSerie.Employees || []).some(e => e.id === emp.id);
+                  return (
+                    <div
+                      key={emp.id}
+                      onClick={() => canConfig && toggleUserSerie(manageSerie, emp.id)}
+                      className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${canConfig ? "cursor-pointer" : ""} ${assigned ? "bg-success/5 border-success/30" : "bg-surface-2 dark:bg-white/[0.03] border-border/40"}`}
+                    >
+                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${assigned ? "bg-success border-success" : "border-border/60"}`}>
+                        {assigned && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                      </div>
+                      <span className={`text-[11px] font-black uppercase truncate ${assigned ? "text-content dark:text-white" : "text-content-subtle"}`}>
+                        {emp.full_name}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Modal: crear / editar */}
       <Modal
