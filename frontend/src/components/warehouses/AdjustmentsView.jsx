@@ -26,7 +26,11 @@ const REASONS_IN = [
 // se elige en esta pantalla: lo pone el backend cuando el ajuste entra desde la grilla de
 // Stock (edición del valor absoluto) en vez de por este formulario.
 const REASON_LABELS = Object.fromEntries(
-    [...REASONS_OUT, ...REASONS_IN, { value: "ajuste_directo", label: "Ajuste directo" }].map(r => [r.value, r.label])
+    [
+        ...REASONS_OUT, ...REASONS_IN,
+        { value: "ajuste_directo",  label: "Ajuste directo" },
+        { value: "compra_anulada",  label: "Compra anulada" },
+    ].map(r => [r.value, r.label])
 );
 const reasonLabel = (r) => REASON_LABELS[r] || r;
 

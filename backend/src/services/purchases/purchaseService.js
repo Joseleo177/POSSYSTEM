@@ -1,9 +1,10 @@
 const {
   Purchase, PurchaseItem, ProductLot, Employee, Warehouse, Customer,
-  Product, ProductStock, ProductComboItem, PurchasePayment, Sequelize, sequelize
+  Product, ProductStock, ProductComboItem, PurchasePayment, StockSessionLine, Sequelize, sequelize
 } = require("../../models");
 const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
 const { toLocalDate, endOfLocalDay } = require("../../utils/localDate");
+const { ensureOpenSession } = require("../warehouses/sessionService");
 const { Op } = Sequelize;
 
 async function getAll({ limit = 50, offset = 0, search, status, order_status, date_from, date_to, warehouse_id }, req) {
@@ -142,12 +143,29 @@ async function getOne(id, req) {
 
 // Applies stock increments, lot tracking, price/cost updates and combo creation.
 // Called only when a purchase reaches status='recibido'.
-async function _applyStockAndPrices(purchase, items, transaction) {
+// `ctx` = { employeeId } de quien recibe: la entrada de mercancía queda además como líneas
+// de la sesión de ajustes abierta del almacén (se abre una si no hay), para que el arqueo
+// vea en un solo lugar todo lo que movió el inventario.
+async function _applyStockAndPrices(purchase, items, transaction, ctx = {}) {
   if (!purchase.warehouse_id) {
     const e = new Error("Debe seleccionar un almacén de destino antes de recibir la mercancía");
     e.status = 400;
     throw e;
   }
+
+  let _session = null;
+  const sessionForLine = async () => {
+    if (!_session) {
+      _session = await ensureOpenSession({
+        warehouseId: purchase.warehouse_id,
+        employeeId:  ctx.employeeId ?? purchase.employee_id ?? null,
+        companyId:   purchase.company_id ?? null,
+      }, transaction);
+    }
+    return _session;
+  };
+  const purchaseRef = purchase.invoice_number ? `Compra ${purchase.invoice_number}` : `Compra #${purchase.id}`;
+
   for (const item of items) {
     const {
       product_id, total_units, unit_cost, profit_margin, sale_price,
@@ -166,7 +184,25 @@ async function _applyStockAndPrices(purchase, items, transaction) {
         transaction,
         lock: true
       });
+      const qtyBefore = parseFloat(stockEntry.qty || 0);
+      const qtyIn     = parseFloat(parseFloat(total_units || 0).toFixed(4));
       await stockEntry.increment('qty', { by: total_units, transaction });
+
+      if (qtyIn > 0) {
+        const s = await sessionForLine();
+        await StockSessionLine.create({
+          session_id:   s.id,
+          warehouse_id: purchase.warehouse_id,
+          product_id,
+          product_name: product.name,
+          qty_before:   qtyBefore,
+          qty_adjusted: qtyIn,
+          qty_after:    parseFloat((qtyBefore + qtyIn).toFixed(4)),
+          type:         'in',
+          reason:       'compra',
+          notes:        purchaseRef,
+        }, { transaction });
+      }
       // El costo es de quien recibió la mercancía. Antes solo existía el del producto, así
       // que la compra de una sucursal reescribía el margen de todas las demás. Mismo criterio
       // que abajo: último costo, no promedio.
@@ -313,7 +349,7 @@ async function createPurchase({ body, employee_id }) {
     await purchase.update({ total: grandTotal }, { transaction });
 
     if (initialStatus === 'recibido') {
-      await _applyStockAndPrices(purchase, createdItems.map(i => i.toJSON()), transaction);
+      await _applyStockAndPrices(purchase, createdItems.map(i => i.toJSON()), transaction, { employeeId: employee_id || null });
     }
 
     await transaction.commit();
@@ -379,7 +415,7 @@ async function receivePurchase(id, req) {
     }
 
     const items = await PurchaseItem.findAll({ where: { purchase_id: id }, transaction });
-    await _applyStockAndPrices(purchase, items.map(i => i.toJSON()), transaction);
+    await _applyStockAndPrices(purchase, items.map(i => i.toJSON()), transaction, { employeeId: req.employee?.id ?? null });
     await purchase.update({ status: 'recibido' }, { transaction });
 
     await transaction.commit();
@@ -402,6 +438,19 @@ async function deletePurchase(id, req) {
     if (purchase.status === 'recibido') {
       const items = await PurchaseItem.findAll({ where: { purchase_id: purchase.id }, transaction });
 
+      let _session = null;
+      const sessionForLine = async () => {
+        if (!_session) {
+          _session = await ensureOpenSession({
+            warehouseId: purchase.warehouse_id,
+            employeeId:  req.employee?.id ?? purchase.employee_id ?? null,
+            companyId:   purchase.company_id ?? null,
+          }, transaction);
+        }
+        return _session;
+      };
+      const purchaseRef = purchase.invoice_number ? `Compra ${purchase.invoice_number} anulada` : `Compra #${purchase.id} anulada`;
+
       for (const item of items) {
         if (!item.product_id) continue;
         const fullProd = await Product.findByPk(item.product_id, { transaction });
@@ -417,6 +466,22 @@ async function deletePurchase(id, req) {
             if (currentQty < qtyToSubtract)
               throw new Error(`No se puede anular la compra: el producto "${item.product_name}" ya ha sido vendido o movido. Stock disponible: ${currentQty}, Requerido para anular: ${qtyToSubtract}`);
             await stockEntry.decrement('qty', { by: qtyToSubtract, transaction });
+
+            if (qtyToSubtract > 0) {
+              const s = await sessionForLine();
+              await StockSessionLine.create({
+                session_id:   s.id,
+                warehouse_id: purchase.warehouse_id,
+                product_id:   item.product_id,
+                product_name: item.product_name || fullProd.name,
+                qty_before:   currentQty,
+                qty_adjusted: -parseFloat(qtyToSubtract.toFixed(4)),
+                qty_after:    parseFloat((currentQty - qtyToSubtract).toFixed(4)),
+                type:         'out',
+                reason:       'compra_anulada',
+                notes:        purchaseRef,
+              }, { transaction });
+            }
           }
           const totalStock = await ProductStock.sum('qty', { where: { product_id: item.product_id }, transaction });
           await Product.update({ stock: totalStock || 0 }, { where: { id: item.product_id }, transaction });

@@ -126,6 +126,28 @@ async function closeSession(warehouseId, sessionId, { notes } = {}, req) {
   return { data: _sessionData(full) };
 }
 
+// Sesión abierta del almacén/empleado, creándola si no existe. La usan las entradas
+// automáticas —hoy, la recepción de una compra— que deben quedar registradas en la sesión
+// pero no pueden exigir que alguien la haya abierto antes. Recibe la transacción del proceso
+// que las genera para que todo caiga o se revierta junto.
+async function ensureOpenSession({ warehouseId, employeeId, companyId }, transaction) {
+  const where = { warehouse_id: parseInt(warehouseId), status: 'open' };
+  if (companyId)  where.company_id  = companyId;
+  if (employeeId) where.employee_id = employeeId;
+
+  let session = await StockSession.findOne({ where, order: [['opened_at', 'DESC']], transaction });
+  if (!session) {
+    session = await StockSession.create({
+      warehouse_id: parseInt(warehouseId),
+      employee_id:  employeeId || null,
+      company_id:   companyId  || null,
+      status:       'open',
+      opened_at:    new Date(),
+    }, { transaction });
+  }
+  return session;
+}
+
 async function getSessions(warehouseId, { limit = 30, offset = 0 } = {}, req) {
   const companyId = req.employee?.company_id ?? null;
   const where = { warehouse_id: parseInt(warehouseId) };
@@ -142,4 +164,4 @@ async function getSessions(warehouseId, { limit = 30, offset = 0 } = {}, req) {
   return { data: rows.map(_sessionData) };
 }
 
-module.exports = { getActiveSession, openSession, addLine, closeSession, getSessions };
+module.exports = { getActiveSession, openSession, addLine, closeSession, getSessions, ensureOpenSession };
