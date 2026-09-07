@@ -149,11 +149,25 @@ async function inheritImageByBarcode(barcode, company_id) {
   }
 }
 
-async function handleImageDelete(imageValue) {
+// `exceptProductId` es el producto que se está borrando o cuya foto se está reemplazando:
+// su fila todavía apunta al archivo (o ya no importa), así que no cuenta como "otro que lo usa".
+async function handleImageDelete(imageValue, exceptProductId = null) {
   if (!imageValue) return;
   if (isSupabase()) {
     const filename = imageValue.startsWith("http") ? imageValue.split("/").pop() : null;
-    if (filename) await getSupabaseStorage().deleteImage(filename);
+    if (!filename) return;
+    // Los productos heredados por código de barras de versiones viejas guardaban la MISMA
+    // URL en vez de copiar el archivo. Borrar la foto de uno dejaba a los demás —a veces de
+    // otra empresa— con la imagen rota. Si algún otro producto sigue apuntando al mismo
+    // valor, el archivo se queda.
+    const stillUsed = await Product.count({
+      where: {
+        image_filename: imageValue,
+        ...(exceptProductId ? { id: { [Op.ne]: exceptProductId } } : {}),
+      },
+    });
+    if (stillUsed > 0) return;
+    await getSupabaseStorage().deleteImage(filename);
   }
 }
 
@@ -531,10 +545,10 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
 
     let currentImageValue = product.image_filename;
     if (file) {
-      await handleImageDelete(currentImageValue);
+      await handleImageDelete(currentImageValue, product.id);
       currentImageValue = await handleImageUpload(file);
     } else if (body.remove_image === "true") {
-      await handleImageDelete(currentImageValue);
+      await handleImageDelete(currentImageValue, product.id);
       currentImageValue = null;
     }
 
@@ -712,7 +726,7 @@ async function deleteProduct(id, company_id) {
     const e = new Error("No se puede eliminar: tiene historial de transferencias"); e.status = 400; throw e;
   }
 
-  await handleImageDelete(product.image_filename);
+  await handleImageDelete(product.image_filename, product.id);
   await ProductStock.destroy({ where: { product_id: id } });
   await product.destroy();
   return { message: "Producto eliminado exitosamente" };

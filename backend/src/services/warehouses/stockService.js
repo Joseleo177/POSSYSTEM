@@ -132,7 +132,7 @@ async function getStock(req) {
 }
 
 async function getProducts(req) {
-  const { search, category, category_id, simple_only, sellable_only, limit = 30, offset = 0 } = req.query;
+  const { search, category, category_id, simple_only, sellable_only, ids, limit = 30, offset = 0 } = req.query;
   const warehouseId = parseInt(req.params.id);
   const tcp = buildTcp(req);
 
@@ -160,6 +160,15 @@ async function getProducts(req) {
   // insumo se cuenta, se corrige y se mueve entre almacenes como cualquier producto.
   if (sellable_only === 'true') {
     filters.push(`p.sellable = true`);
+  }
+  // La caja pide un puñado de ids al recuperar una cuenta en espera: filtro directo, sin
+  // paginar ni traer el catálogo entero para rehidratar tres líneas.
+  if (ids) {
+    const idList = String(ids).split(',').map(n => parseInt(n, 10)).filter(Number.isInteger);
+    if (idList.length) {
+      filters.push(`p.id IN (:ids)`);
+      replacements.ids = idList;
+    }
   }
   const whereExtra = filters.length ? `AND ` + filters.join(' AND ') : '';
   const countJoin = filters.length ? `LEFT JOIN categories c ON c.id = p.category_id` : '';

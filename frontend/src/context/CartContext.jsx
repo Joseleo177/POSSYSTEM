@@ -659,10 +659,12 @@ export function CartProvider({ children }) {
       }
       setHeldSale(null);
       clearCart();
-      await loadHeldCarts();
       notify(recreated
         ? "Otra caja eliminó esa cuenta. Se guardó como una cuenta en espera nueva."
         : "Cuenta puesta en espera");
+      // El listado se refresca en segundo plano: el cajero ya puede seguir vendiendo sin
+      // aguardar un segundo viaje a la red. El intervalo de 25s lo actualiza igual.
+      loadHeldCarts();
     } catch (e) {
       notify(e.message || "No se pudo poner la cuenta en espera", "err");
     } finally {
@@ -709,16 +711,20 @@ export function CartProvider({ children }) {
     if (!activeWarehouse) return notify("Selecciona una sucursal antes de continuar", "err");
 
     try {
-      // Se reserva en el servidor ANTES de cargar nada: si otra caja se adelantó, el 409
-      // llega aquí y el cajero se entera antes de ponerse a trabajar sobre una cuenta que
-      // no va a poder cobrar. Antes esto se resolvía ocultándola solo en esta pantalla, y
-      // las dos cajas creían tenerla.
-      await api.sales.claim(saleId);
-
       // Las líneas guardadas solo traen product_id/precio/cantidad; hay que rehidratarlas
-      // con los datos del producto (unidad, imagen, stock) que el carrito necesita.
+      // con los datos del producto (unidad, imagen, stock) que el carrito necesita. Se
+      // piden SOLO los productos de esta cuenta: antes se traía el catálogo entero (hasta
+      // 500 fichas, con su agregado de ventas) para rehidratar tres líneas.
       const wid = held.warehouse_id || activeWarehouse.id;
-      const res = await api.warehouses.getProducts(wid, { limit: 500 });
+      const ids = [...new Set((held.items || []).map(i => i.product_id))];
+
+      // El claim reserva la cuenta en el servidor: si otra caja se adelantó, el 409 llega
+      // aquí y el cajero se entera antes de ponerse a trabajar sobre algo que no podrá
+      // cobrar. No depende de la carga de productos, así que van en paralelo.
+      const [, res] = await Promise.all([
+        api.sales.claim(saleId),
+        api.warehouses.getProducts(wid, { ids: ids.join(','), limit: ids.length || 1 }),
+      ]);
       const productMap = Object.fromEntries((res.data || []).map(p => [p.id, p]));
 
       // El stock que devuelve el almacén ya tiene descontado lo que ESTA cuenta apartó al
