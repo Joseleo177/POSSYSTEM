@@ -125,14 +125,14 @@ export default function JournalMovementsModal({ journalId, bankId, warehouseId, 
 
                     {/* ── Tabla de movimientos ── */}
                     <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
-                        <table className="w-full text-left border-collapse min-w-[820px]">
+                        <table className="w-full text-left border-collapse min-w-[680px]">
                             <thead className="sticky top-0 z-10 bg-surface-2 dark:bg-surface-dark-2">
                                 <tr>
-                                    {["Fecha", "Tipo", "Referencia", "Concepto", "Debe (Egreso)", "Haber (Ingreso)", "Saldo"].map((h) => (
+                                    {["Fecha", "Tipo", "Referencia", "Concepto", "Monto", "Saldo"].map((h) => (
                                         <th
                                             key={h}
                                             className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 border-b border-border/40 dark:border-white/5 ${
-                                                ["Debe (Egreso)", "Haber (Ingreso)", "Saldo"].includes(h) ? "text-right" : ""
+                                                ["Monto", "Saldo"].includes(h) ? "text-right" : ""
                                             }`}
                                         >
                                             {h}
@@ -143,13 +143,13 @@ export default function JournalMovementsModal({ journalId, bankId, warehouseId, 
                             <tbody className="divide-y divide-border/10 dark:divide-white/5">
                                 {loading ? (
                                     <tr>
-                                        <td colSpan={8} className="px-6 py-16 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">
+                                        <td colSpan={6} className="px-6 py-16 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">
                                             Cargando movimientos...
                                         </td>
                                     </tr>
                                 ) : movements.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="px-6 py-16 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic">
+                                        <td colSpan={6} className="px-6 py-16 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic">
                                             Sin movimientos registrados
                                         </td>
                                     </tr>
@@ -220,35 +220,18 @@ export default function JournalMovementsModal({ journalId, bankId, warehouseId, 
                                                     )}
                                                 </td>
 
-                                                {/* Debe (Egreso) */}
+                                                {/* Monto — el Tipo ya dice si suma o resta; el signo y el color lo confirman */}
                                                 <td className="px-4 py-2.5 text-right">
-                                                    {!isIngreso && (
-                                                        <>
-                                                            <span className={`text-[11px] font-black tabular-nums ${isVoided ? "text-content-subtle line-through" : "text-danger"}`}>
-                                                                -{fmtLocal(m.amount_local)}
-                                                            </span>
-                                                            {hasRate(m) && (
-                                                                <div className="text-[9px] font-bold text-content-subtle dark:text-white/25 tabular-nums mt-0.5">
-                                                                    {fmtBaseEq(m.amount_base)} · {Number(m.rate).toFixed(4)}
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                </td>
-
-                                                {/* Haber (Ingreso) */}
-                                                <td className="px-4 py-2.5 text-right">
-                                                    {isIngreso && (
-                                                        <>
-                                                            <span className="text-[11px] font-black tabular-nums text-success">
-                                                                +{fmtLocal(m.amount_local)}
-                                                            </span>
-                                                            {hasRate(m) && (
-                                                                <div className="text-[9px] font-bold text-content-subtle dark:text-white/25 tabular-nums mt-0.5">
-                                                                    {fmtBaseEq(m.amount_base)} · {Number(m.rate).toFixed(4)}
-                                                                </div>
-                                                            )}
-                                                        </>
+                                                    <span className={`text-[11px] font-black tabular-nums ${
+                                                        isVoided ? "text-content-subtle line-through"
+                                                            : isIngreso ? "text-success" : "text-danger"
+                                                    }`}>
+                                                        {isIngreso ? "+" : "-"}{fmtLocal(m.amount_local)}
+                                                    </span>
+                                                    {hasRate(m) && (
+                                                        <div className="text-[9px] font-bold text-content-subtle dark:text-white/25 tabular-nums mt-0.5">
+                                                            {fmtBaseEq(m.amount_base)} · {Number(m.rate).toFixed(4)}
+                                                        </div>
                                                     )}
                                                 </td>
 
