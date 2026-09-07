@@ -119,15 +119,24 @@ async function copyStoredImage(source) {
 // primera tienda le pone imagen y las demás la reciben sola. Solo se lee `image_filename` del
 // producto ajeno —nada de precio ni costo— y la copia falla en silencio: heredar la foto no
 // es parte del alta, si no se puede el producto se crea igual sin imagen.
+// Compara el código de barras ignorando espacios sobrantes a ambos lados: los catálogos
+// importados de Excel suelen traer un espacio al final ("75919191 "), y si una tienda lo tiene
+// y otra no, un `barcode = barcode` a secas no las cruza. `btrim` sobre la columna resuelve el
+// caso común (lo ideal igual es limpiar el dato: el escáner del POS también falla con eso).
+const barcodeMatches = (code) =>
+  Sequelize.where(Sequelize.fn("btrim", Sequelize.col("barcode")), code);
+
 async function inheritImageByBarcode(barcode, company_id) {
   const code = (barcode || "").trim();
   if (!code) return null;
   try {
     const twin = await Product.findOne({
       where: {
-        barcode: code,
-        image_filename: NOT_BLANK,
-        ...(company_id ? { company_id: { [Op.ne]: company_id } } : {}),
+        [Op.and]: [
+          barcodeMatches(code),
+          { image_filename: NOT_BLANK },
+          ...(company_id ? [{ company_id: { [Op.ne]: company_id } }] : []),
+        ],
       },
       order: [["updated_at", "DESC"]],
       attributes: ["image_filename"],
@@ -755,9 +764,11 @@ async function backfillImagesByBarcode({ company_id, limit = 25, after_id = 0 })
     try {
       const twin = await Product.findOne({
         where: {
-          barcode: (p.barcode || "").trim(),
-          image_filename: NOT_BLANK,
-          company_id: { [Op.ne]: company_id },
+          [Op.and]: [
+            barcodeMatches((p.barcode || "").trim()),
+            { image_filename: NOT_BLANK },
+            { company_id: { [Op.ne]: company_id } },
+          ],
         },
         order: [["updated_at", "DESC"]],
         attributes: ["image_filename"],
