@@ -1,6 +1,7 @@
 'use strict';
 
 const { Product, Category, ProductStock, sequelize, Sequelize } = require("../../models");
+const { inheritImageByBarcode } = require("./productService");
 const Op = Sequelize.Op;
 
 // Unidades que maneja el sistema. Las contables no admiten decimales, así que el paso de
@@ -244,12 +245,15 @@ async function importProducts({ rows, warehouse_id, company_id }) {
         actualizados++;
       } else {
         const campos = { ...camposGlobales, ...camposPrecio, ...(margen != null ? { profit_margin: margen } : {}) };
+        // Si otra tienda ya vende este código de barras y le puso foto, se hereda (se copia).
+        const heredada = r.barcode ? await inheritImageByBarcode(r.barcode, company_id) : null;
         producto = await Product.create({
           ...campos,
           stock: 0,
           company_id,
           category_id: categoryId || null,
           barcode: r.barcode || null,
+          image_filename: heredada,
           cost_price: r.cost_price ?? null,
           min_stock: r.min_stock ?? 0,
           sellable: true,

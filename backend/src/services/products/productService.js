@@ -1,5 +1,6 @@
 const path = require("path");
 const fs = require("fs");
+const logger = require("../../middleware/logger");
 const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, Sequelize, ProductComboItem, BenefitTag, ProductBenefitTag, sequelize } = require("../../models");
 const Op = Sequelize.Op;
 
@@ -74,6 +75,61 @@ async function handleImageUpload(file) {
   const filename = `product_${Date.now()}${ext}`;
   fs.writeFileSync(path.join(uploadsDir, filename), file.buffer);
   return filename;
+}
+
+// Duplica una imagen ya guardada y devuelve el nombre/URL de la COPIA. Se copia el archivo,
+// no se referencia el original: si la tienda de la que se hereda cambia o borra su foto más
+// tarde (handleImageDelete la elimina de disco / del bucket), la copia sigue en pie.
+async function copyStoredImage(source) {
+  if (!source) return null;
+
+  if (isSupabase()) {
+    // En la nube el valor guardado es la URL pública del bucket.
+    if (!source.startsWith("http")) return null;
+    const res = await fetch(source);
+    if (!res.ok) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const ext = path.extname(new URL(source).pathname).toLowerCase() || ".jpg";
+    const mimetype = res.headers.get("content-type") || "image/jpeg";
+    return getSupabaseStorage().uploadImage(buffer, `product_${Date.now()}${ext}`, mimetype);
+  }
+
+  // Disco local: una URL externa no se puede copiar, se referencia tal cual (nadie la borra
+  // desde acá). Lo normal es un nombre de archivo dentro de uploads/.
+  if (source.startsWith("http")) return source;
+  const uploadsDir = path.join(__dirname, "../../../uploads");
+  const src = path.join(uploadsDir, source);
+  if (!fs.existsSync(src)) return null;
+  const ext = path.extname(source).toLowerCase();
+  const filename = `product_${Date.now()}${ext}`;
+  fs.copyFileSync(src, path.join(uploadsDir, filename));
+  return filename;
+}
+
+// Al crear un producto sin foto pero con código de barras, se hereda la de otra tienda que ya
+// venda ese mismo artículo. Comodidad para las cadenas que trabajan el mismo surtido: la
+// primera tienda le pone imagen y las demás la reciben sola. Solo se lee `image_filename` del
+// producto ajeno —nada de precio ni costo— y la copia falla en silencio: heredar la foto no
+// es parte del alta, si no se puede el producto se crea igual sin imagen.
+async function inheritImageByBarcode(barcode, company_id) {
+  const code = (barcode || "").trim();
+  if (!code) return null;
+  try {
+    const twin = await Product.findOne({
+      where: {
+        barcode: code,
+        image_filename: { [Op.ne]: null },
+        ...(company_id ? { company_id: { [Op.ne]: company_id } } : {}),
+      },
+      order: [["updated_at", "DESC"]],
+      attributes: ["image_filename"],
+    });
+    if (!twin?.image_filename) return null;
+    return await copyStoredImage(twin.image_filename);
+  } catch (err) {
+    logger.warn(`No se pudo heredar la imagen para el código ${code}: ${err.message}`);
+    return null;
+  }
 }
 
 async function handleImageDelete(imageValue) {
@@ -358,9 +414,13 @@ async function createProduct({ body, file, company_id }) {
     }
   }
 
-  const imageValue = await handleImageUpload(file);
   const isComboBool = is_combo === 'true' || is_combo === true;
   const isServiceBool = is_service === 'true' || is_service === true;
+
+  // La foto subida manda; si no vino ninguna, se hereda de otra tienda que ya venda este
+  // código de barras (los combos no llevan foto de artículo, así que quedan fuera).
+  const imageValue = await handleImageUpload(file)
+    || (isComboBool ? null : await inheritImageByBarcode(barcode, company_id));
 
   const t = await sequelize.transaction();
   try {
@@ -710,4 +770,4 @@ async function updateComboPricesForProduct(productId, t, visited = new Set()) {
 
 // calculateComboStockAndCost se exporta para que el catálogo público calcule la
 // disponibilidad de un combo con la misma regla que el POS, en vez de duplicarla.
-module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, calculateComboStockAndCost };
+module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, calculateComboStockAndCost, inheritImageByBarcode };
