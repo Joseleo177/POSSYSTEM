@@ -29,7 +29,7 @@ export default function InventoryReport() {
   const [categories, setCategories] = useState([]);
   const [view, setView] = useState("critical");
   const [page, setPage] = useState(1);
-  
+
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showFilterDrop, setShowFilterDrop] = useState(false);
@@ -146,8 +146,8 @@ export default function InventoryReport() {
             ref={filtrosBtnRef}
             onClick={() => setShowFilterDrop(!showFilterDrop)}
             className={`h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border flex items-center gap-2.5 transition-all
-              ${hasActiveFilters 
-                ? "bg-brand-500 text-black border-brand-500 shadow-lg shadow-brand-500/20" 
+              ${hasActiveFilters
+                ? "bg-brand-500 text-black border-brand-500 shadow-lg shadow-brand-500/20"
                 : "bg-surface-2 dark:bg-white/5 border-border/30 text-content-subtle hover:text-content hover:border-content/20"
               }`}
           >
@@ -163,30 +163,30 @@ export default function InventoryReport() {
           </button>
 
           <FilterPopover open={showFilterDrop} onClose={() => setShowFilterDrop(false)} anchorRef={filtrosBtnRef}>
-              <div className="p-5">
-                <div className="space-y-5">
-                  <header className="flex items-center justify-between border-b border-border/10 pb-3 mb-1">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Opciones de filtrado</span>
-                  </header>
+            <div className="p-5">
+              <div className="space-y-5">
+                <header className="flex items-center justify-between border-b border-border/10 pb-3 mb-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Opciones de filtrado</span>
+                </header>
 
-                  <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] font-black uppercase tracking-widest text-content-subtle/60 ml-1">Categoría</label>
-                      <CustomSelect
-                        value={categoryId}
-                        onChange={handleFilterChange(setCategoryId)}
-                        placeholder="TODAS LAS CATEGORÍAS"
-                        className="w-full"
-                        options={[
-                          { value: "", label: "TODAS LAS CATEGORÍAS" },
-                          ...categories.map(c => ({ value: String(c.id), label: c.name }))
-                        ]}
-                      />
-                    </div>
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-content-subtle/60 ml-1">Categoría</label>
+                    <CustomSelect
+                      value={categoryId}
+                      onChange={handleFilterChange(setCategoryId)}
+                      placeholder="TODAS LAS CATEGORÍAS"
+                      className="w-full"
+                      options={[
+                        { value: "", label: "TODAS LAS CATEGORÍAS" },
+                        ...categories.map(c => ({ value: String(c.id), label: c.name }))
+                      ]}
+                    />
+                  </div>
 
-                    {/* Con un solo almacén no hay nada que elegir: mostrar el selector solo
+                  {/* Con un solo almacén no hay nada que elegir: mostrar el selector solo
                         insinuaría que hay más, cuando no los hay. */}
-                    {warehouses.length > 1 && (
+                  {warehouses.length > 1 && (
                     <div className="space-y-1.5">
                       <label className="text-[9px] font-black uppercase tracking-widest text-content-subtle/60 ml-1">Almacén</label>
                       <CustomSelect
@@ -200,25 +200,25 @@ export default function InventoryReport() {
                         ]}
                       />
                     </div>
-                    )}
-                  </div>
-
-                  <footer className="pt-2 border-t border-border/10 flex gap-2 pt-4">
-                    <button
-                      onClick={() => { setCategoryId(""); setWarehouseId(""); setShowFilterDrop(false); }}
-                      className="flex-1 py-2.5 text-[9px] font-black uppercase tracking-tighter text-danger hover:bg-danger/5 rounded-xl border border-danger/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                    >
-                      Limpiar Todo
-                    </button>
-                    <button
-                      onClick={() => setShowFilterDrop(false)}
-                      className="flex-2 px-6 py-2.5 bg-surface-3 dark:bg-white/10 text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-surface-4 dark:hover:bg-white/20 transition-all"
-                    >
-                      Cerrar
-                    </button>
-                  </footer>
+                  )}
                 </div>
+
+                <footer className="pt-2 border-t border-border/10 flex gap-2 pt-4">
+                  <button
+                    onClick={() => { setCategoryId(""); setWarehouseId(""); setShowFilterDrop(false); }}
+                    className="flex-1 py-2.5 text-[9px] font-black uppercase tracking-tighter text-danger hover:bg-danger/5 rounded-xl border border-danger/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    Limpiar Todo
+                  </button>
+                  <button
+                    onClick={() => setShowFilterDrop(false)}
+                    className="flex-2 px-6 py-2.5 bg-surface-3 dark:bg-white/10 text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-surface-4 dark:hover:bg-white/20 transition-all"
+                  >
+                    Cerrar
+                  </button>
+                </footer>
               </div>
+            </div>
           </FilterPopover>
         </div>
 
@@ -238,7 +238,7 @@ export default function InventoryReport() {
               <KpiCard label="Capital en Stock (Costo)" value={fmt$(s.stock_cost_value)} color="text-brand-500" />
               <KpiCard label="Valor a Precio de Venta" value={fmt$(s.stock_sale_value)} color="text-success" />
               <KpiCard label="Utilidad Potencial" value={fmt$((s.stock_sale_value || 0) - (s.stock_cost_value || 0))} color="text-emerald-500" />
-              <KpiCard label="Unidades / SKU" value={`${fmtInt(s.stock_units)} / ${fmtN(s.stock_skus)}`} color="text-content dark:text-white" />
+              <KpiCard label="Unidades / Producto" value={`${fmtInt(s.stock_units)} / ${fmtN(s.stock_skus)}`} color="text-content dark:text-white" />
             </div>
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -271,16 +271,16 @@ export default function InventoryReport() {
               <SectionHeader
                 title={
                   view === "valuation" ? "Valorización de Existencias" :
-                  view === "critical"  ? "Reposición Urgente" :
-                  view === "zero"      ? "Inventario Agotado" :
-                  view === "top"       ? "Productos de Alta Rotación" :
-                  view === "slow"      ? "Capital Inmovilizado / Sin Movimiento" :
-                                         "Valorización por Categoría"
+                    view === "critical" ? "Reposición Urgente" :
+                      view === "zero" ? "Inventario Agotado" :
+                        view === "top" ? "Productos de Alta Rotación" :
+                          view === "slow" ? "Capital Inmovilizado / Sin Movimiento" :
+                            "Valorización por Categoría"
                 }
                 sub="Análisis operacional de existencia"
               />
             </div>
-            
+
             <div className="overflow-auto flex-1 bg-surface-1 dark:bg-surface-dark-1 border-x">
               <table className="w-full text-left border-collapse min-w-[600px]">
                 <thead className="bg-surface-2 dark:bg-surface-dark-2/50 sticky top-0 z-10">
@@ -339,7 +339,7 @@ export default function InventoryReport() {
 
                 <tbody className="divide-y divide-border/20 dark:divide-white/5">
                   {(loading && !data) ? (
-                     <tr><td colSpan={10} className="py-20 text-center"><Loading /></td></tr>
+                    <tr><td colSpan={10} className="py-20 text-center"><Loading /></td></tr>
                   ) : (
                     <>
                       {view === "valuation" && ((data.valuation || []).length === 0
@@ -394,7 +394,7 @@ export default function InventoryReport() {
                           <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black text-content-subtle w-5 text-right">{(page-1)*LIMIT + i + 1}</span>
+                                <span className="text-[10px] font-black text-content-subtle w-5 text-right">{(page - 1) * LIMIT + i + 1}</span>
                                 <span className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.name}</span>
                               </div>
                             </td>

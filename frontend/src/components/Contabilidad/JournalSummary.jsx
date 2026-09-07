@@ -21,6 +21,12 @@ export default function JournalSummary({ dateFrom, dateTo, warehouseId, onData, 
     // tarjeta mostraba un saldo que no correspondía a ninguna de las dos. Un diario compartido
     // (warehouse_id null, la cuenta de toda la empresa) sigue agrupándose aparte, como su
     // propia "sucursal" para efectos de esta tarjeta.
+    // El sufijo " · Sucursal" solo desambigua cuando de verdad hay varias: con una sola
+    // tienda es ruido que además rompe el nombre en la tarjeta.
+    const multiWarehouse = new Set(
+        data.filter(j => j.warehouse_id != null).map(j => j.warehouse_id)
+    ).size > 1;
+
     const bankGroups = {};
     data.forEach(j => {
         // Journals sin banco → card individual por diario
@@ -33,7 +39,7 @@ export default function JournalSummary({ dateFrom, dateTo, warehouseId, onData, 
                 bank_id:       j.bank_id,
                 warehouse_id:  j.bank_id ? (j.warehouse_id ?? null) : undefined,
                 display_name:  j.bank_id
-                    ? (j.warehouse_name ? `${j.bank_name || j.name} · ${j.warehouse_name}` : (j.bank_name || j.name))
+                    ? (multiWarehouse && j.warehouse_name ? `${j.bank_name || j.name} · ${j.warehouse_name}` : (j.bank_name || j.name))
                     : j.name,
                 journals:     [],
                 total_ingresos: 0,
@@ -90,10 +96,10 @@ export default function JournalSummary({ dateFrom, dateTo, warehouseId, onData, 
                             className="p-5 cursor-pointer select-none"
                         >
                             {/* Encabezado */}
-                            <div className="flex items-center justify-between mb-5">
-                                <div className="flex items-center gap-3">
+                            <div className="flex items-start justify-between gap-2 mb-5">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
                                     <div
-                                        className="w-8 h-8 rounded-xl flex items-center justify-center border border-border/40 dark:border-white/10 bg-surface-2 dark:bg-white/5 shadow-inner group-hover:bg-brand-500/10 transition-colors"
+                                        className="w-8 h-8 shrink-0 rounded-xl flex items-center justify-center border border-border/40 dark:border-white/10 bg-surface-2 dark:bg-white/5 shadow-inner group-hover:bg-brand-500/10 transition-colors"
                                         style={{ color }}
                                     >
                                         {/* Ícono banco */}
@@ -102,22 +108,22 @@ export default function JournalSummary({ dateFrom, dateTo, warehouseId, onData, 
                                         </svg>
                                     </div>
                                     <div className="min-w-0">
-                                        <h4 className="text-[11px] font-black text-content dark:text-white uppercase tracking-widest truncate max-w-[140px]">
+                                        <h4 className="text-[11px] font-black text-content dark:text-white uppercase tracking-wide leading-tight line-clamp-2">
                                             {group.display_name}
                                         </h4>
                                         {group.journals.length > 1 ? (
-                                            <div className="text-[9px] font-bold text-content-subtle uppercase tracking-widest opacity-60">
+                                            <div className="text-[9px] font-bold text-content-subtle uppercase tracking-widest opacity-60 mt-0.5">
                                                 {group.journals.length} diarios
                                             </div>
                                         ) : group.bank_id && group.journals[0]?.name !== group.display_name ? (
-                                            <div className="text-[9px] font-bold text-content-subtle uppercase tracking-widest opacity-60 truncate max-w-[140px]">
+                                            <div className="text-[9px] font-bold text-content-subtle uppercase tracking-widest opacity-60 truncate mt-0.5">
                                                 {group.journals[0].name}
                                             </div>
                                         ) : null}
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 shrink-0">
                                     {group.currency_code && (
                                         <span className="text-[9px] font-black text-content-subtle bg-surface-2 dark:bg-white/5 px-2 py-0.5 rounded-lg border border-border/40 dark:border-white/5 uppercase tracking-tighter">
                                             {group.currency_code}
