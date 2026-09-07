@@ -7,6 +7,15 @@ const Op = Sequelize.Op;
 const isSupabase = () => !!process.env.SUPABASE_URL;
 const getSupabaseStorage = () => require("../../config/supabase");
 
+// Un texto "vacío" en la base puede ser NULL o cadena vacía. El alta y la edición juzgan la
+// falta de foto con `!image_filename` (que también agarra ""), así que las consultas del
+// barrido en lote tienen que mirar lo mismo: si solo filtraran por NULL se saltearían los
+// productos con `image_filename = ''` y el botón "no haría nada" con productos que editándolos
+// uno por uno sí heredan la imagen. Mismo criterio para exigir que el código de barras no esté
+// en blanco.
+const BLANK = { [Op.or]: [{ [Op.is]: null }, { [Op.eq]: "" }] };
+const NOT_BLANK = { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: "" }] };
+
 function imageUrl(filename) {
   if (!filename) return null;
   if (filename.startsWith("http")) return filename;
@@ -117,7 +126,7 @@ async function inheritImageByBarcode(barcode, company_id) {
     const twin = await Product.findOne({
       where: {
         barcode: code,
-        image_filename: { [Op.ne]: null },
+        image_filename: NOT_BLANK,
         ...(company_id ? { company_id: { [Op.ne]: company_id } } : {}),
       },
       order: [["updated_at", "DESC"]],
@@ -722,8 +731,8 @@ async function backfillImagesByBarcode({ company_id, limit = 25, after_id = 0 })
 
   const sinFotoBase = {
     company_id,
-    image_filename: { [Op.is]: null },
-    barcode: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: "" }] },
+    image_filename: BLANK,
+    barcode: NOT_BLANK,
     is_combo: false,
   };
 
@@ -747,7 +756,7 @@ async function backfillImagesByBarcode({ company_id, limit = 25, after_id = 0 })
       const twin = await Product.findOne({
         where: {
           barcode: (p.barcode || "").trim(),
-          image_filename: { [Op.ne]: null },
+          image_filename: NOT_BLANK,
           company_id: { [Op.ne]: company_id },
         },
         order: [["updated_at", "DESC"]],

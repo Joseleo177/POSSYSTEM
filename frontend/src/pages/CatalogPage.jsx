@@ -126,6 +126,8 @@ export default function CatalogPage() {
         setBackfillingImages(true);
         let cursor = 0;
         let total = 0;
+        let revisados = 0;
+        let sinFoto = null;
         let vueltas = 0;
         try {
             // Tope de vueltas por si algo sale mal: 200 lotes = 5000 productos revisados.
@@ -133,13 +135,17 @@ export default function CatalogPage() {
                 vueltas++;
                 const r = await api.products.backfillImages(cursor);
                 total += r.data?.actualizados || 0;
+                revisados += r.data?.revisados || 0;
+                if (r.data?.total_sin_foto != null) sinFoto = r.data.total_sin_foto;
                 cursor = r.data?.last_id ?? cursor;
                 if (!r.data?.hay_mas) break;
             }
             notify(
                 total
                     ? `${total} ${total === 1 ? "producto recibió imagen" : "productos recibieron imagen"} de otra tienda`
-                    : "Ningún producto sin foto tenía imagen en otra tienda con ese código de barras"
+                    : sinFoto === 0
+                        ? "Todos los productos con código de barras ya tienen imagen"
+                        : `Revisé ${revisados} sin foto; ninguna otra tienda tiene esos códigos de barras con imagen`
             );
             if (total) loadProducts(page, warehouseId);
         } catch (e) {
