@@ -82,11 +82,20 @@ async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 5
   const stS = `AND s.status = 'pagado'`;
   const slowSubquery = `SELECT DISTINCT si.product_id FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE s.created_at >= NOW() - (${d} * INTERVAL '1 day') ${tcS} ${wh('s')} ${stS}`;
 
-  const [criticalCount, zeroCount, slowCount, lockedValue] = await Promise.all([
+  // Valorización total del inventario: todo lo que hay en existencia, no solo lo sin
+  // movimiento. Al costo y a precio de venta, con los mismos criterios de arriba.
+  const inStockWhere = `p.is_service = false AND p.is_combo = false AND ${stockField} > 0 ${tcP} ${catFilter} ${searchFilter}`;
+
+  const [criticalCount, zeroCount, slowCount, lockedValue, stockTotals] = await Promise.all([
     sequelize.query(`SELECT COUNT(*)::int AS count ${critFrom} WHERE ${critWhere}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
     sequelize.query(`SELECT COUNT(*)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND (${stockField} IS NULL OR ${stockField} <= 0) ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
     sequelize.query(`SELECT COUNT(p.id)::int AS count FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (${slowSubquery}) ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
     sequelize.query(`SELECT COALESCE(SUM(${valueField}), 0)::float AS value FROM products p ${stockJoin} WHERE p.is_service = false AND p.is_combo = false AND ${stockField} > 0 AND p.id NOT IN (${slowSubquery}) ${tcP} ${catFilter} ${searchFilter}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
+    sequelize.query(`SELECT COALESCE(SUM(${valueField}), 0)::float AS cost_value,
+                            COALESCE(SUM(${saleValueField}), 0)::float AS sale_value,
+                            COALESCE(SUM(${stockField}), 0)::float AS units,
+                            COUNT(*)::int AS skus
+                     FROM products p ${stockJoin} WHERE ${inStockWhere}`, { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
   ]);
 
   const listData = {};
@@ -141,6 +150,25 @@ async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 5
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     );
   }
+  if (view === "all" || view === "valuation") {
+    // Costo unitario: directo con un almacén elegido; consolidado es el promedio ponderado
+    // (capital / unidades), porque el mismo producto pudo costar distinto en cada tienda.
+    const unitCost = wid
+      ? costExpr
+      : `CASE WHEN ${stockField} > 0 THEN (${valueField}) / NULLIF(${stockField}, 0) ELSE 0 END`;
+    listData.valuation = await sequelize.query(
+      `SELECT p.id, p.name, p.unit,
+              COALESCE(c.name,'Sin categoría') AS category_name,
+              ${stockField} AS stock,
+              ${unitCost} AS cost_price,
+              ${valueField} AS value_cost,
+              ${saleValueField} AS value_sale
+       FROM products p LEFT JOIN categories c ON p.category_id = c.id ${stockJoin}
+       WHERE ${inStockWhere}
+       ORDER BY value_cost DESC LIMIT ${lim} OFFSET ${off}`,
+      { replacements: rep, type: Sequelize.QueryTypes.SELECT }
+    );
+  }
   if (view === "all" || view === "category") {
     listData.by_category = await sequelize.query(
       `SELECT COALESCE(c.name,'Sin categoría') AS category_name,
@@ -156,9 +184,10 @@ async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 5
   }
 
   const total = view === 'critical' ? parseInt(criticalCount[0]?.count || 0)
-    : view === 'zero'     ? parseInt(zeroCount[0]?.count  || 0)
-    : view === 'slow'     ? parseInt(slowCount[0]?.count  || 0)
-    : view === 'top'      ? 50
+    : view === 'zero'      ? parseInt(zeroCount[0]?.count  || 0)
+    : view === 'slow'      ? parseInt(slowCount[0]?.count  || 0)
+    : view === 'valuation' ? parseInt(stockTotals[0]?.skus || 0)
+    : view === 'top'       ? 50
     : 0;
 
   return {
@@ -168,6 +197,11 @@ async function inventoryReport({ days = 30, warehouse_id, category_id, limit = 5
       zero_count:         parseInt(zeroCount[0]?.count      || 0),
       low_rotation_count: parseInt(slowCount[0]?.count      || 0),
       total_locked_value: parseFloat(lockedValue[0]?.value  || 0),
+      // Valorización de todo lo que hay en existencia (respeta los filtros activos).
+      stock_cost_value:   parseFloat(stockTotals[0]?.cost_value || 0),
+      stock_sale_value:   parseFloat(stockTotals[0]?.sale_value || 0),
+      stock_units:        parseFloat(stockTotals[0]?.units      || 0),
+      stock_skus:         parseInt(stockTotals[0]?.skus         || 0),
     },
     total,
   };

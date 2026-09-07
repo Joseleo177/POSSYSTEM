@@ -126,6 +126,19 @@ export function buildSalesExcel(data, range) {
 export function buildInventoryExcel(data) {
   download(buildWb([
     {
+      name: "Valorización",
+      rows: data.valuation,
+      headers: [
+        { key: "name",          label: "Producto" },
+        { key: "category_name", label: "Categoría" },
+        { key: "stock",         label: "Stock" },
+        { key: "unit",          label: "Unidad" },
+        { key: "cost_price",    label: "Costo Unitario ($)" },
+        { key: "value_cost",    label: "Capital al Costo ($)" },
+        { key: "value_sale",    label: "Valor a Precio Venta ($)" },
+      ],
+    },
+    {
       name: "Stock Crítico",
       rows: data.critical_stock,
       headers: [

@@ -233,15 +233,25 @@ export default function InventoryReport() {
 
       {data && (
         <div className={`flex-1 min-h-0 flex flex-col space-y-3 ${loading ? "opacity-50 pointer-events-none" : ""}`}>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <KpiCard label="Nivel Crítico" value={fmtN(s.critical_count)} color="text-danger" />
-            <KpiCard label="Quiebre de Stock" value={fmtN(s.zero_count)} color="text-danger" />
-            <KpiCard label="Baja Rotación" value={fmtN(s.low_rotation_count)} color="text-brand-500" />
-            <KpiCard label="Capital Inmovilizado" value={fmt$(s.total_locked_value)} color="text-orange-500" />
-          </div>
+          {view === "valuation" ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <KpiCard label="Capital en Stock (Costo)" value={fmt$(s.stock_cost_value)} color="text-brand-500" />
+              <KpiCard label="Valor a Precio de Venta" value={fmt$(s.stock_sale_value)} color="text-success" />
+              <KpiCard label="Utilidad Potencial" value={fmt$((s.stock_sale_value || 0) - (s.stock_cost_value || 0))} color="text-emerald-500" />
+              <KpiCard label="Unidades / SKU" value={`${fmtInt(s.stock_units)} / ${fmtN(s.stock_skus)}`} color="text-content dark:text-white" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <KpiCard label="Nivel Crítico" value={fmtN(s.critical_count)} color="text-danger" />
+              <KpiCard label="Quiebre de Stock" value={fmtN(s.zero_count)} color="text-danger" />
+              <KpiCard label="Baja Rotación" value={fmtN(s.low_rotation_count)} color="text-brand-500" />
+              <KpiCard label="Capital Inmovilizado" value={fmt$(s.total_locked_value)} color="text-orange-500" />
+            </div>
+          )}
 
           <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide shrink-0">
             {[
+              ["valuation", "Valorización"],
               ["critical", "Crítico"],
               ["zero", "Agotado"],
               ["top", "Alta Rotación"],
@@ -260,11 +270,12 @@ export default function InventoryReport() {
             <div className="p-4 pb-3 border-b border-border dark:border-white/5 bg-surface-1 dark:bg-surface-dark-1 rounded-t-xl border-x">
               <SectionHeader
                 title={
-                  view === "critical" ? "Reposición Urgente" :
-                  view === "zero"     ? "Inventario Agotado" :
-                  view === "top"      ? "Productos de Alta Rotación" :
-                  view === "slow"     ? "Capital Inmovilizado / Sin Movimiento" :
-                                        "Valorización por Categoría"
+                  view === "valuation" ? "Valorización de Existencias" :
+                  view === "critical"  ? "Reposición Urgente" :
+                  view === "zero"      ? "Inventario Agotado" :
+                  view === "top"       ? "Productos de Alta Rotación" :
+                  view === "slow"      ? "Capital Inmovilizado / Sin Movimiento" :
+                                         "Valorización por Categoría"
                 }
                 sub="Análisis operacional de existencia"
               />
@@ -273,6 +284,16 @@ export default function InventoryReport() {
             <div className="overflow-auto flex-1 bg-surface-1 dark:bg-surface-dark-1 border-x">
               <table className="w-full text-left border-collapse min-w-[600px]">
                 <thead className="bg-surface-2 dark:bg-surface-dark-2/50 sticky top-0 z-10">
+                  {view === "valuation" && (
+                    <tr className="border-b border-border/40 dark:border-white/5">
+                      <TH>Producto</TH>
+                      <TH>Categoría</TH>
+                      <TH right>Stock</TH>
+                      <TH right>Costo Unit.</TH>
+                      <TH right>Capital (Costo)</TH>
+                      <TH right>Valor Venta</TH>
+                    </tr>
+                  )}
                   {view === "critical" && (
                     <tr className="border-b border-border/40 dark:border-white/5">
                       <TH>Producto</TH>
@@ -321,6 +342,20 @@ export default function InventoryReport() {
                      <tr><td colSpan={10} className="py-20 text-center"><Loading /></td></tr>
                   ) : (
                     <>
+                      {view === "valuation" && ((data.valuation || []).length === 0
+                        ? <EMPTY msg="Sin productos con existencia" />
+                        : data.valuation.map((p, i) => (
+                          <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
+                            <td className="px-4 py-3 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.name}</td>
+                            <td className="px-4 py-3 text-[11px] text-content-subtle">{p.category_name}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-[11px] text-content-subtle">{fmtNumber(p.stock, 2)} {p.unit}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-[11px] text-content-subtle">{fmt$(p.cost_price)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums font-black text-brand-500 text-[11px]">{fmt$(p.value_cost)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-[11px] text-success">{fmt$(p.value_sale)}</td>
+                          </tr>
+                        ))
+                      )}
+
                       {view === "critical" && ((data.critical_stock || []).length === 0
                         ? <EMPTY msg="Sin productos bajo nivel crítico" />
                         : data.critical_stock.map((p, i) => (
