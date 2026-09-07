@@ -58,6 +58,9 @@ export const DEFAULT_LAYOUT = {
     mode: "roll",
     layoutMode: "zones",
     roll: { w: 70, h: 38 },
+    // Modo "thermal": tira continua sobre la misma térmica de tickets (58/80 mm). El ancho lo
+    // fija `settings.printer_width`; acá solo se guarda el alto reservado a cada etiqueta.
+    thermal: { h: 32 },
     border: false,
     altCurrencyId: "",
     template: DEFAULT_TEMPLATE,
@@ -97,11 +100,14 @@ export const normalizeLayout = (raw) => {
     }
 
     return {
-        mode: parsed.mode === "sheet" ? "sheet" : "roll",
+        mode: ["sheet", "thermal"].includes(parsed.mode) ? parsed.mode : "roll",
         layoutMode: parsed.layoutMode === "free" ? "free" : "zones",
         roll: {
             w: clamp(parsed.roll?.w, 15, 82, DEFAULT_LAYOUT.roll.w),
             h: clamp(parsed.roll?.h, 10, 300, DEFAULT_LAYOUT.roll.h),
+        },
+        thermal: {
+            h: clamp(parsed.thermal?.h, 15, 200, DEFAULT_LAYOUT.thermal.h),
         },
         border: parsed.border === true,
         // Se guarda como texto porque es lo que devuelve el desplegable; si la moneda dejó de

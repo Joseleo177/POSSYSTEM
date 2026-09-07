@@ -17,8 +17,17 @@ const ROLL_PRESETS = [
 // La hoja carta lleva 21 etiquetas de 70×38 en rejilla de 3×7
 const SHEET = { w: 70, h: 38, perPage: 21 };
 
+// Alturas típicas para la tira continua sobre la térmica de tickets.
+const THERMAL_HEIGHTS = [25, 32, 40, 50];
+
 export default function PriceLabelsView({ products, onClose }) {
-    const { currencies, baseCurrency, settings, loadSettings, companyInfo, notify, can } = useApp();
+    const { currencies, baseCurrency, settings, loadSettings, companyInfo, notify, can, printerWidth } = useApp();
+
+    // Modo "thermal": se reutiliza la misma térmica de tickets configurada en Ajustes. El ancho
+    // útil imita al del ticket (deja un margen sobre el papel de 58/80 mm); el alto lo elige el
+    // usuario porque el papel es continuo y no trae troquel.
+    const thermalPage = printerWidth === 58 ? 58 : 80;
+    const thermalW = printerWidth === 58 ? 48 : 72;
 
     const [layout, setLayout] = useState(() => normalizeLayout(settings?.price_label_template));
     const [showPanel, setShowPanel] = useState(false);
@@ -44,7 +53,9 @@ export default function PriceLabelsView({ products, onClose }) {
         [activeCurrencies, layout.altCurrencyId]
     );
 
-    const dims = layout.mode === "sheet" ? SHEET : layout.roll;
+    const dims = layout.mode === "sheet" ? SHEET
+        : layout.mode === "thermal" ? { w: thermalW, h: layout.thermal.h }
+        : layout.roll;
 
     // El lienzo de edición se amplía para poder arrastrar con precisión: una 40×30 en tamaño
     // real son apenas 150 px de ancho. El zoom no altera el diseño, que se guarda en proporción.
@@ -150,6 +161,7 @@ export default function PriceLabelsView({ products, onClose }) {
     };
 
     const setRoll = (patch) => patchLayout({ roll: { ...layout.roll, ...patch } });
+    const setThermal = (patch) => patchLayout({ thermal: { ...layout.thermal, ...patch } });
 
     const sheetPages = useMemo(() => {
         const chunks = [];
@@ -186,15 +198,40 @@ export default function PriceLabelsView({ products, onClose }) {
 
                 {/* Modo */}
                 <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg border border-white/5">
+                    <button onClick={() => patchLayout({ mode: "thermal" })}
+                        className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${layout.mode === "thermal" ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle"}`}
+                        title="Tira continua en la misma impresora térmica del ticket">
+                        Térmica {thermalPage}mm
+                    </button>
                     <button onClick={() => patchLayout({ mode: "roll" })}
-                        className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${layout.mode === "roll" ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle"}`}>
-                        Rollo térmico
+                        className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${layout.mode === "roll" ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle"}`}
+                        title="Impresora dedicada de etiquetas: una etiqueta por página con corte">
+                        Rollo de etiquetas
                     </button>
                     <button onClick={() => patchLayout({ mode: "sheet" })}
                         className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${layout.mode === "sheet" ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle"}`}>
                         Hoja carta (3×7)
                     </button>
                 </div>
+
+                {/* Alto de etiqueta en la tira térmica (el ancho lo fija la impresora del ticket) */}
+                {layout.mode === "thermal" && (
+                    <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/5">
+                        <span className="text-[10px] font-black uppercase text-content-subtle ml-2">Alto:</span>
+                        {THERMAL_HEIGHTS.map(h => (
+                            <button key={h} onClick={() => setThermal({ h })}
+                                className={`px-2.5 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${layout.thermal.h === h ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle"}`}>
+                                {h}
+                            </button>
+                        ))}
+                        <input type="number" min="15" max="200" value={layout.thermal.h}
+                            onChange={e => setThermal({ h: Math.min(200, Math.max(15, parseInt(e.target.value) || 0)) })}
+                            className="w-14 h-7 bg-white/10 rounded-md px-2 text-[11px] font-bold text-center outline-none" />
+                        <span className="text-[10px] font-black text-content-subtle mr-2">
+                            mm · ancho {thermalW} mm (impresora {thermalPage} mm)
+                        </span>
+                    </div>
+                )}
 
                 {/* Tamaño de rollo (solo en modo rollo) */}
                 {layout.mode === "roll" && (
@@ -254,7 +291,7 @@ export default function PriceLabelsView({ products, onClose }) {
 
             <div className="flex-1 flex min-h-0 print:block">
                 {/* ── Contenido imprimible ── */}
-                <div className={`flex-1 overflow-auto print:overflow-visible ${layout.mode === "roll" ? "mode-roll" : "mode-sheet"}`}>
+                <div className={`flex-1 overflow-auto print:overflow-visible mode-${layout.mode}`}>
                     {/* Lienzo de edición: solo en pantalla, con el primer producto de muestra.
                         Se arrastra acá y no sobre el listado para no repetir el gesto en cada
                         una de las etiquetas de la tirada. */}
@@ -299,6 +336,27 @@ export default function PriceLabelsView({ products, onClose }) {
                                 </div>
                             ))}
                         </div>
+                    ) : layout.mode === "thermal" ? (
+                        // Una sola tira continua: las etiquetas van pegadas y cada corte se marca
+                        // con línea de tijera, porque el papel del ticket no trae troquel.
+                        <div className="flex flex-col items-center py-8 print:p-0 bg-gray-100 dark:bg-black/20 min-h-full print:bg-white page-container">
+                            <div className="thermal-strip bg-white shadow-lg print:shadow-none" style={{ width: `${thermalW}mm` }}>
+                                {products.map((p, idx) => (
+                                    <div key={`${p.id}-${idx}`}>
+                                        {idx > 0 && (
+                                            <div className="cut-line flex items-center justify-center h-4 border-t border-dashed border-black/50" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+                                                    <circle cx="6" cy="6" r="3" />
+                                                    <circle cx="6" cy="18" r="3" />
+                                                    <path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12" />
+                                                </svg>
+                                            </div>
+                                        )}
+                                        {labelFor(p, idx)}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     ) : (
                         <div className="flex flex-col items-center gap-3 py-8 print:p-0 print:gap-0 bg-gray-100 dark:bg-black/20 min-h-full print:bg-white page-container">
                             {products.map((p, idx) => (
@@ -337,7 +395,11 @@ export default function PriceLabelsView({ products, onClose }) {
                 @media print {
                     @page {
                         margin: 0;
-                        size: ${layout.mode === "roll" ? `${layout.roll.w}mm ${layout.roll.h}mm` : "letter"};
+                        size: ${
+                            layout.mode === "roll" ? `${layout.roll.w}mm ${layout.roll.h}mm`
+                            : layout.mode === "thermal" ? `${thermalPage}mm auto`
+                            : "letter"
+                        };
                     }
                     html, body {
                         margin: 0 !important;
@@ -396,6 +458,30 @@ export default function PriceLabelsView({ products, onClose }) {
                         break-after: avoid !important;
                     }
                     .mode-roll .page-container > div { box-shadow: none !important; }
+
+                    /* Térmica de tickets: tira continua, sin salto de página entre etiquetas.
+                       El corte lo hace el usuario (o la guillotina) siguiendo la línea de tijera. */
+                    .mode-thermal .thermal-strip {
+                        width: ${thermalW}mm !important;
+                        margin: 0 !important;
+                        box-shadow: none !important;
+                        background: white !important;
+                    }
+                    .mode-thermal .label-unit {
+                        margin: 0 !important;
+                        box-shadow: none !important;
+                        overflow: hidden !important;
+                        box-sizing: border-box !important;
+                        background: white !important;
+                    }
+                    .mode-thermal .cut-line {
+                        border-top: 1px dashed #000 !important;
+                        height: 4mm !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                    }
+                    .mode-thermal .cut-line svg { width: 3mm !important; height: 3mm !important; }
 
                     .label-unit { break-inside: avoid !important; }
                 }
