@@ -535,6 +535,13 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
       return valor === "" || valor === null ? vacio : valor;
     };
 
+    // Este producto sigue sin foto propia y el guardado no está subiendo ni quitando ninguna:
+    // si otra tienda ya le puso una a este código de barras, se hereda ahora. Cubre el caso de
+    // haberlo creado antes de que la otra tienda cargara la imagen.
+    if (!currentImageValue && !file && body.remove_image !== "true" && !isComboBool) {
+      currentImageValue = await inheritImageByBarcode(opt(barcode, product.barcode), company_id);
+    }
+
     const precioFinal = opt(price, product.price, product.price);
     const costoFinal  = isComboBool ? null : opt(cost_price, product.cost_price);
     // El margen manda solo si viene escrito; si no, se recalcula. Conservar el anterior
