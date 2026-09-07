@@ -1,12 +1,14 @@
 const {
   Sale, SaleItem, Product, ProductStock, Employee,
-  Return, ReturnItem, Payment, ProductComboItem, Serie, SerieRange, sequelize, Sequelize,
+  Return, ReturnItem, Payment, ProductComboItem, Serie, SerieRange,
+  Expense, ExpenseCategory, PaymentJournal, Currency, sequelize, Sequelize,
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { excludeAnnulledReturns } = require("./shared");
 const { addCreditMovement } = require("../customers/creditLedger");
+const { toLocalDate } = require("../../utils/localDate");
 
-async function createReturn({ saleId, items, reason, employee_id }, req) {
+async function createReturn({ saleId, items, reason, employee_id, refund }, req) {
   if (!items?.length) { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
 
   const transaction = await sequelize.transaction();
@@ -181,10 +183,60 @@ async function createReturn({ saleId, items, reason, employee_id }, req) {
       }, transaction);
     }
 
+    // Reembolso en efectivo/transferencia al cliente. Se registra como egreso DENTRO de esta
+    // misma transacción: si falla, la devolución tampoco se emite (antes se creaba aparte y
+    // podía quedar la NC sin el egreso, o el egreso en una categoría cualquiera).
+    let refundExpenseId = null;
+    if (refund && refund.enabled !== false && refund.journal_id) {
+      const rawAmount = parseFloat(String(refund.amount ?? "").replace(",", "."));
+      if (isNaN(rawAmount) || rawAmount <= 0) {
+        const e = new Error("El monto del reembolso debe ser mayor a 0"); e.status = 400; throw e;
+      }
+
+      const journal = await PaymentJournal.findByPk(refund.journal_id, {
+        include: [{ model: Currency, attributes: ["id", "exchange_rate"], required: false }],
+        transaction,
+      });
+      if (!journal) { const e = new Error("Método de reembolso no encontrado"); e.status = 400; throw e; }
+      if (journal.type !== "efectivo" && !String(refund.reference || "").trim()) {
+        const e = new Error("El número de referencia es obligatorio para este método de reembolso"); e.status = 400; throw e;
+      }
+
+      // El monto se teclea en la moneda del diario; se guarda en la base con 6 decimales,
+      // igual que los cobros y el reembolso desde la ficha del cliente. Redondear a 4 (o a 2)
+      // hacía que al reconstruir el bolívar diera 1.200,02 en vez de 1.200,00.
+      const rate       = parseFloat(journal.Currency?.exchange_rate || 1) || 1;
+      const baseAmount = parseFloat((rawAmount / rate).toFixed(6));
+
+      // Categoría propia y estable, la misma que usa el reembolso desde la ficha del cliente.
+      const [cat] = await ExpenseCategory.findOrCreate({
+        where:    { name: "Devolución de Crédito" },
+        defaults: { name: "Devolución de Crédito", active: true },
+        transaction,
+      });
+
+      const refundExpense = await Expense.create({
+        description:        `Reembolso ${nc_number} / ${sale.invoice_number || "#" + sale.id}`,
+        amount:             baseAmount,
+        rate,
+        category_id:        cat.id,
+        payment_journal_id: parseInt(refund.journal_id),
+        currency_id:        journal.currency_id || null,
+        reference:          String(refund.reference || "").trim() || null,
+        notes:              String(refund.notes || "").trim() || null,
+        employee_id:        employee_id || null,
+        warehouse_id:       sale.warehouse_id,
+        company_id:         sale.company_id || null,
+        status:             "activo",
+        date:               refund.date ? toLocalDate(refund.date) : new Date(),
+      }, { transaction });
+      refundExpenseId = refundExpense.id;
+    }
+
     await transaction.commit();
     return {
       message: `Devolución registrada exitosamente. Total: ${returnTotal.toFixed(2)}`,
-      data:    { return_id: returnRecord.id, nc_number, total: returnTotal, items: returnLines },
+      data:    { return_id: returnRecord.id, nc_number, total: returnTotal, items: returnLines, refund_expense_id: refundExpenseId },
     };
   } catch (err) {
     await transaction.rollback();

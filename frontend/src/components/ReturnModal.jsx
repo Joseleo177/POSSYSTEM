@@ -31,7 +31,6 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     const [confirmShow, setConfirmShow] = useState(false);
     const [returnResult, setReturnResult] = useState(null);
     const [refund, setRefund] = useState(EMPTY_REFUND());
-    const [categories, setCategories] = useState([]);
     const [refundCreated, setRefundCreated] = useState(false);
 
     // Modo cambio
@@ -163,12 +162,6 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
             setRefund(prev => ({ ...prev, enabled: false }));
         } else {
             // Reactivar reembolso
-            if (!categories.length) {
-                try {
-                    const res = await api.expenses.getCategories();
-                    setCategories(res.data || []);
-                } catch {}
-            }
             const amt = refund.journal_id ? calcRefundAmount(refund.journal_id) : totalReturn.toFixed(2);
             setRefund(p => ({ ...p, enabled: true, amount: amt }));
         }
@@ -199,40 +192,20 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
         setConfirmShow(false);
         setLoading(true);
         try {
-            const res = await api.sales.createReturn(sale.id, { items: returnItems, reason });
+            // El reembolso viaja junto con la devolución: el backend lo registra como egreso
+            // dentro de la misma transacción, con categoría propia y precisión de 6 decimales.
+            const refundPayload = (refund.enabled && refund.journal_id) ? {
+                enabled: true,
+                journal_id: parseInt(refund.journal_id),
+                amount: String(refund.amount || '').replace(',', '.'),
+                date: refund.date,
+                reference: refund.reference?.trim() || null,
+                notes: refund.notes?.trim() || null,
+            } : undefined;
 
-            let refundOk = false;
-            if (refund.enabled && refund.journal_id) {
-                try {
-                    let catList = categories;
-                    if (!catList.length) {
-                        const r = await api.expenses.getCategories().catch(() => ({ data: [] }));
-                        catList = r.data || [];
-                    }
-                    const cat = catList.find(c => /reembolso|devoluci/i.test(c.name)) || catList[0];
-                    if (cat) {
-                        const baseAmount = parseFloat((refundAmountNum / refundRate).toFixed(4));
-                        await api.expenses.create({
-                            description: `Reembolso NC-${res.data.return_id} / ${sale.invoice_number || '#' + sale.id}`,
-                            amount: baseAmount,
-                            category_id: cat.id,
-                            payment_journal_id: parseInt(refund.journal_id),
-                            reference: refund.reference?.trim() || null,
-                            notes: refund.notes?.trim() || null,
-                            currency_id: refundCurrency?.id || null,
-                            rate: refundRate,
-                            warehouse_id: sale.warehouse_id,
-                        });
-                        refundOk = true;
-                    } else {
-                        notify("Devolución creada, pero no hay categorías de egreso para registrar el reembolso", "err");
-                    }
-                } catch (refundErr) {
-                    notify(`Devolución creada, pero error al registrar reembolso: ${refundErr.message}`, "err");
-                }
-            }
+            const res = await api.sales.createReturn(sale.id, { items: returnItems, reason, refund: refundPayload });
 
-            setRefundCreated(refundOk);
+            setRefundCreated(!!res.data.refund_expense_id);
             onReturnSuccess();
             setReturnResult({ ...res.data, reason });
         } catch (e) {

@@ -154,6 +154,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
             {subTab === "stock" && (
                 <StockView
                     selectedWarehouse={selectedWarehouse}
+                    notify={notify}
                     stockSearch={stockSearch}
                     setStockSearch={setStockSearch}
                     loadingStock={loadingStock}

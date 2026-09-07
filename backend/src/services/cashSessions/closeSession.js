@@ -1,4 +1,5 @@
 const { CashSession, sequelize, Sequelize, SESSION_INCLUDE } = require("./shared");
+const { StockSession } = require("../../models");
 
 module.exports = async function closeSession(id, body) {
   const t = await sequelize.transaction();
@@ -113,6 +114,22 @@ module.exports = async function closeSession(id, body) {
     }
 
     await session.update({ status: "closed", notes: notes || null, closed_at: closedAt }, { transaction: t });
+
+    // Cierre en cadena: la sesión de ajustes de inventario de este empleado en esta caja se
+    // cierra con el arqueo. Si quedara abierta, sus líneas seguirían acumulándose en el turno
+    // siguiente y nadie sabría de qué jornada son.
+    const openStockSessions = await StockSession.findAll({
+      where: { warehouse_id: session.warehouse_id, employee_id: session.employee_id, status: "open" },
+      transaction: t,
+    });
+    for (const ss of openStockSessions) {
+      await ss.update({
+        status: "closed",
+        closed_at: closedAt,
+        notes: [ss.notes, "Cerrada automáticamente con el arqueo de caja"].filter(Boolean).join(" · "),
+      }, { transaction: t });
+    }
+
     await t.commit();
     return CashSession.findByPk(session.id, { include: SESSION_INCLUDE });
   } catch (err) {

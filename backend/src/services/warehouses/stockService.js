@@ -1,4 +1,4 @@
-const { Product, ProductStock, Sequelize, sequelize } = require("../../models");
+const { Product, ProductStock, StockSession, StockSessionLine, Sequelize, sequelize } = require("../../models");
 
 function buildTcp(req) {
   const company_id = req.employee?.company_id ?? null;
@@ -352,8 +352,25 @@ async function setStock(req) {
     const e = new Error("La cantidad es inválida"); e.status = 400; throw e;
   }
 
+  const companyId  = req.employee?.company_id ?? null;
+  const employeeId = req.employee?.id ?? null;
+
   const transaction = await sequelize.transaction();
   try {
+    // El ajuste directo también deja rastro: exige una sesión de ajustes abierta (la misma
+    // que Movimiento Manual) y se registra como una línea más, con su antes/después. Sin
+    // esto, editar el stock desde la grilla no dejaba motivo, ni autor, ni traza.
+    const sessionWhere = { warehouse_id: warehouseId, status: 'open' };
+    if (companyId)  sessionWhere.company_id  = companyId;
+    if (employeeId) sessionWhere.employee_id = employeeId;
+    const stockSession = await StockSession.findOne({
+      where: sessionWhere, order: [['opened_at', 'DESC']], transaction,
+    });
+    if (!stockSession) {
+      const e = new Error("Abre una sesión de ajustes en Movimiento Manual antes de editar el stock");
+      e.status = 409; throw e;
+    }
+
     const product = await Product.findByPk(productId, { transaction, lock: true });
     if (!product) { const e = new Error("Producto no encontrado"); e.status = 404; throw e; }
     if (product.is_combo) { const e = new Error("No se puede editar directamente el stock de un combo (es calculado)."); e.status = 400; throw e; }
@@ -361,13 +378,32 @@ async function setStock(req) {
     const stockEntry = await ProductStock.findOne({ where: { warehouse_id: warehouseId, product_id: productId }, transaction, lock: true });
     if (!stockEntry) { const e = new Error("El producto no está asignado a este almacén"); e.status = 404; throw e; }
 
-    await stockEntry.update({ qty: parsedQty }, { transaction });
+    const qtyBefore   = parseFloat(stockEntry.qty || 0);
+    const qtyAfter    = parseFloat(parsedQty.toFixed(4));
+    const qtyAdjusted = parseFloat((qtyAfter - qtyBefore).toFixed(4));
+
+    await stockEntry.update({ qty: qtyAfter }, { transaction });
 
     const totalStock = await ProductStock.sum('qty', { where: { product_id: productId }, transaction });
     await product.update({ stock: totalStock || 0 }, { transaction });
 
+    if (qtyAdjusted !== 0) {
+      await StockSessionLine.create({
+        session_id:   stockSession.id,
+        warehouse_id: warehouseId,
+        product_id:   productId,
+        product_name: product.name,
+        qty_before:   qtyBefore,
+        qty_adjusted: qtyAdjusted,
+        qty_after:    qtyAfter,
+        type:         qtyAdjusted > 0 ? 'in' : 'out',
+        reason:       'ajuste_directo',
+        notes:        null,
+      }, { transaction });
+    }
+
     await transaction.commit();
-    return { message: `Stock actualizado a ${parsedQty}` };
+    return { message: `Stock actualizado a ${qtyAfter}`, session_id: stockSession.id, adjusted: qtyAdjusted };
   } catch (err) {
     await transaction.rollback();
     throw err;

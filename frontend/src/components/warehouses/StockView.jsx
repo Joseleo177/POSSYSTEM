@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { fmtQty, resolveImageUrl, imgRetryOnError } from "../../helpers";
 import { api } from "../../services/api";
 import Pagination from "../ui/Pagination";
@@ -7,9 +7,50 @@ export default function StockView({
     selectedWarehouse, stockSearch, setStockSearch, loadingStock, filteredStock,
     handleEditStock, handleDeleteStock, openAddStock,
     loadStock, page, totalItems, limit,
-    stockCategory, setStockCategory
+    stockCategory, setStockCategory, notify,
 }) {
     const [categories, setCategories] = useState([]);
+
+    // Editar el stock directo exige una sesión de ajustes abierta: cada cambio se registra
+    // como una línea de esa sesión (mismo rastro que Movimiento Manual). Se consulta acá para
+    // poder abrirla sin salir de esta pantalla y para no dejar pulsar "Ajustar" sin ella.
+    const [session, setSession] = useState(null);
+    const [loadingSession, setLoadingSession] = useState(true);
+    const [openingSession, setOpeningSession] = useState(false);
+
+    const loadSession = useCallback(async () => {
+        if (!selectedWarehouse) return;
+        setLoadingSession(true);
+        try {
+            const r = await api.warehouses.sessions.getActive(selectedWarehouse.id);
+            setSession(r.data);
+        } catch { setSession(null); }
+        finally { setLoadingSession(false); }
+    }, [selectedWarehouse?.id]);
+
+    useEffect(() => { loadSession(); }, [loadSession]);
+
+    // Al cerrar la caja (arqueo) el backend cierra también esta sesión; refrescar al volver de
+    // guardar mantiene el banner al día sin recargar la pantalla.
+    useEffect(() => {
+        if (!loadingStock) loadSession();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loadingStock]);
+
+    const handleOpenSession = async () => {
+        setOpeningSession(true);
+        try {
+            const r = await api.warehouses.sessions.open(selectedWarehouse.id);
+            setSession(r.data);
+            notify?.("Sesión de ajustes abierta");
+        } catch (e) { notify?.(e.message, "err"); }
+        finally { setOpeningSession(false); }
+    };
+
+    const guardEdit = (s) => {
+        if (!session) return notify?.("Abre una sesión de ajustes antes de editar el stock", "warning");
+        handleEditStock(s);
+    };
     // Se recuerda entre sesiones: al hacer inventario físico se entra y sale de esta
     // pantalla muchas veces, y reiniciar la vista en cada visita es incómodo.
     const [viewMode, setViewMode] = useState(() => localStorage.getItem("stock_view") || "list");
@@ -134,6 +175,32 @@ export default function StockView({
                 </div>
             </div>
 
+            {/* Estado de la sesión de ajustes: sin ella no se puede editar el stock. */}
+            {!loadingSession && (
+                session ? (
+                    <div className="shrink-0 mx-4 mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-success">
+                        <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                        Sesión de ajustes abierta · {session.line_count || session.lines?.length || 0} mov.
+                    </div>
+                ) : (
+                    <div className="shrink-0 mx-4 mb-2 rounded-xl border border-warning/20 bg-warning/5 px-4 py-3 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded-lg bg-warning/10 text-warning flex items-center justify-center shrink-0">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-[11px] font-black text-content dark:text-white">Sesión de ajustes requerida</p>
+                                <p className="text-[10px] text-content-subtle/60">Para editar existencias necesitas una sesión abierta; cada cambio queda registrado en ella</p>
+                            </div>
+                        </div>
+                        <button onClick={handleOpenSession} disabled={openingSession}
+                            className="h-8 px-4 rounded-xl bg-warning text-black text-[10px] font-black uppercase tracking-widest hover:brightness-105 transition-all active:scale-95 disabled:opacity-50 shrink-0">
+                            {openingSession ? "Abriendo..." : "Abrir Sesión"}
+                        </button>
+                    </div>
+                )
+            )}
+
             {/* La tabla se mantiene siempre montada (no se desmonta al buscar → el foco no se pierde) */}
             <>
                     {viewMode === "grid" ? (
@@ -188,9 +255,10 @@ export default function StockView({
                                                     {s.product_name}
                                                 </h3>
                                                 <div className="mt-auto pt-1.5 flex items-center gap-1">
-                                                    <button onClick={() => handleEditStock(s)}
-                                                        className="flex-1 h-7 rounded-lg bg-info/10 text-info border border-info/20 hover:bg-info hover:text-black transition-all text-[9px] font-black uppercase tracking-wide"
-                                                        title="Ajustar existencias">
+                                                    <button onClick={() => guardEdit(s)}
+                                                        disabled={!session}
+                                                        className="flex-1 h-7 rounded-lg bg-info/10 text-info border border-info/20 hover:bg-info hover:text-black transition-all text-[9px] font-black uppercase tracking-wide disabled:opacity-40 disabled:hover:bg-info/10 disabled:hover:text-info"
+                                                        title={session ? "Ajustar existencias" : "Abre una sesión de ajustes primero"}>
                                                         Ajustar
                                                     </button>
                                                     <button onClick={() => handleDeleteStock(s)}
@@ -274,9 +342,10 @@ export default function StockView({
                                         <td>
                                             <div className="flex items-center gap-2">
                                                 <button
-                                                    onClick={() => handleEditStock(s)}
-                                                    className="w-8 h-8 rounded-lg bg-info/10 text-info border border-info/20 hover:bg-info hover:text-black transition-all flex items-center justify-center"
-                                                    title="Ajustar"
+                                                    onClick={() => guardEdit(s)}
+                                                    disabled={!session}
+                                                    className="w-8 h-8 rounded-lg bg-info/10 text-info border border-info/20 hover:bg-info hover:text-black transition-all flex items-center justify-center disabled:opacity-40 disabled:hover:bg-info/10 disabled:hover:text-info"
+                                                    title={session ? "Ajustar" : "Abre una sesión de ajustes primero"}
                                                 >
                                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                                 </button>

@@ -22,6 +22,14 @@ const REASONS_IN = [
     { value: "conteo",        label: "Ajuste de Conteo Físico" },
 ];
 
+// Etiquetas para mostrar el motivo guardado en la línea. Incluye 'ajuste_directo', que no
+// se elige en esta pantalla: lo pone el backend cuando el ajuste entra desde la grilla de
+// Stock (edición del valor absoluto) en vez de por este formulario.
+const REASON_LABELS = Object.fromEntries(
+    [...REASONS_OUT, ...REASONS_IN, { value: "ajuste_directo", label: "Ajuste directo" }].map(r => [r.value, r.label])
+);
+const reasonLabel = (r) => REASON_LABELS[r] || r;
+
 function stockColor(qty) {
     const n = parseFloat(qty) || 0;
     if (n <= 0)  return "text-danger";
@@ -669,7 +677,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                             <div key={line.id} className="px-5 py-2.5 flex items-center justify-between gap-3">
                                                 <div className="min-w-0 flex-1">
                                                     <p className="text-[11px] font-black text-content dark:text-white truncate">{line.product_name}</p>
-                                                    <p className="text-[9px] text-content-subtle/50 uppercase">{line.reason}</p>
+                                                    <p className="text-[9px] text-content-subtle/50 uppercase">{reasonLabel(line.reason)}</p>
                                                 </div>
                                                 <div className="text-right shrink-0">
                                                     <p className={`text-[11px] font-black tabular-nums ${line.type === "in" ? "text-success" : "text-danger"}`}>
@@ -717,6 +725,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                                 </span>
                                             </div>
                                             <p className="text-[9px] text-content-subtle/50 mt-0.5">{fmtDate(s.opened_at)}{s.closed_at ? ` → ${fmtDate(s.closed_at)}` : ""}</p>
+                                            {s.notes && <p className="text-[9px] text-content-subtle/40 italic mt-0.5 truncate">{s.notes}</p>}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0">
@@ -730,7 +739,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                             <div key={line.id} className="px-5 py-2.5 flex items-center justify-between gap-3 bg-surface-1/30 dark:bg-white/[0.01]">
                                                 <div className="min-w-0 flex-1">
                                                     <p className="text-[11px] font-bold text-content dark:text-white truncate">{line.product_name}</p>
-                                                    <p className="text-[9px] text-content-subtle/50 uppercase">{line.reason} {line.notes ? `· ${line.notes}` : ""}</p>
+                                                    <p className="text-[9px] text-content-subtle/50 uppercase">{reasonLabel(line.reason)} {line.notes ? `· ${line.notes}` : ""}</p>
                                                 </div>
                                                 <div className="text-right shrink-0">
                                                     <p className={`text-[11px] font-black tabular-nums ${line.type === "in" ? "text-success" : "text-danger"}`}>
