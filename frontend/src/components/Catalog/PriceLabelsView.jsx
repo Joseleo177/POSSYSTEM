@@ -53,8 +53,14 @@ export default function PriceLabelsView({ products, onClose }) {
         [activeCurrencies, layout.altCurrencyId]
     );
 
+    // "De lado": la etiqueta se gira 90° sobre el rollo. El diseño se dibuja apaisado —a lo
+    // largo del papel, que es continuo— y solo el ancho de la impresora lo limita a lo ancho;
+    // así el precio sale mucho más grande. Con esto, `thermal.h` pasa a ser el LARGO.
+    const thermalRotate = layout.mode === "thermal" && layout.thermal.rotate === true;
+
     const dims = layout.mode === "sheet" ? SHEET
-        : layout.mode === "thermal" ? { w: thermalW, h: layout.thermal.h }
+        : layout.mode === "thermal"
+            ? (thermalRotate ? { w: layout.thermal.h, h: thermalW } : { w: thermalW, h: layout.thermal.h })
         : layout.roll;
 
     // El lienzo de edición se amplía para poder arrastrar con precisión: una 40×30 en tamaño
@@ -217,7 +223,9 @@ export default function PriceLabelsView({ products, onClose }) {
                 {/* Alto de etiqueta en la tira térmica (el ancho lo fija la impresora del ticket) */}
                 {layout.mode === "thermal" && (
                     <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/5">
-                        <span className="text-[10px] font-black uppercase text-content-subtle ml-2">Alto:</span>
+                        <span className="text-[10px] font-black uppercase text-content-subtle ml-2">
+                            {thermalRotate ? "Largo:" : "Alto:"}
+                        </span>
                         {THERMAL_HEIGHTS.map(h => (
                             <button key={h} onClick={() => setThermal({ h })}
                                 className={`px-2.5 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${layout.thermal.h === h ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle"}`}>
@@ -227,9 +235,14 @@ export default function PriceLabelsView({ products, onClose }) {
                         <input type="number" min="15" max="200" value={layout.thermal.h}
                             onChange={e => setThermal({ h: Math.min(200, Math.max(15, parseInt(e.target.value) || 0)) })}
                             className="w-14 h-7 bg-white/10 rounded-md px-2 text-[11px] font-bold text-center outline-none" />
-                        <span className="text-[10px] font-black text-content-subtle mr-2">
-                            mm · ancho {thermalW} mm (impresora {thermalPage} mm)
+                        <span className="text-[10px] font-black text-content-subtle mr-1">
+                            mm · {thermalRotate ? "alto" : "ancho"} {thermalW} mm (impresora {thermalPage} mm)
                         </span>
+                        <button onClick={() => setThermal({ rotate: !layout.thermal.rotate })}
+                            className={`px-2.5 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${thermalRotate ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle"}`}
+                            title="Gira la etiqueta 90° sobre el rollo: el precio sale mucho más grande y se lee de lado">
+                            De lado
+                        </button>
                     </div>
                 )}
 
@@ -352,7 +365,16 @@ export default function PriceLabelsView({ products, onClose }) {
                                                 </svg>
                                             </div>
                                         )}
-                                        {labelFor(p, idx)}
+                                        {thermalRotate ? (
+                                            // La etiqueta se dibuja apaisada (dims.w = largo, dims.h = ancho de
+                                            // impresora) y se gira 90°. La caja externa reserva el hueco real
+                                            // sobre el rollo: ancho de impresora × largo elegido.
+                                            <div style={{ width: `${thermalW}mm`, height: `${dims.w}mm`, position: "relative", overflow: "hidden" }}>
+                                                <div style={{ position: "absolute", top: 0, left: 0, transformOrigin: "top left", transform: "rotate(90deg) translateY(-100%)" }}>
+                                                    {labelFor(p, idx)}
+                                                </div>
+                                            </div>
+                                        ) : labelFor(p, idx)}
                                     </div>
                                 ))}
                             </div>

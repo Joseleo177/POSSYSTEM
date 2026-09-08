@@ -60,7 +60,10 @@ export const DEFAULT_LAYOUT = {
     roll: { w: 70, h: 38 },
     // Modo "thermal": tira continua sobre la misma térmica de tickets (58/80 mm). El ancho lo
     // fija `settings.printer_width`; acá solo se guarda el alto reservado a cada etiqueta.
-    thermal: { h: 32 },
+    // `rotate`: gira la etiqueta 90° sobre el rollo. El diseño pasa a ocupar a lo largo del
+    // papel (continuo) y solo el ancho de la impresora a lo ancho, así el precio sale mucho
+    // más grande y se lee de lado. Con `rotate`, `h` es el LARGO de la etiqueta, no el alto.
+    thermal: { h: 32, rotate: false },
     border: false,
     altCurrencyId: "",
     template: DEFAULT_TEMPLATE,
@@ -108,6 +111,7 @@ export const normalizeLayout = (raw) => {
         },
         thermal: {
             h: clamp(parsed.thermal?.h, 15, 200, DEFAULT_LAYOUT.thermal.h),
+            rotate: parsed.thermal?.rotate === true,
         },
         border: parsed.border === true,
         // Se guarda como texto porque es lo que devuelve el desplegable; si la moneda dejó de
