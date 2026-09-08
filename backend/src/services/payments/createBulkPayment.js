@@ -165,7 +165,10 @@ module.exports = async function createBulkPayment(body, req) {
         `Recibiste ${(sobrante).toFixed(2)} de más sobre la deuda de ${deudaTotal.toFixed(2)}: indica si se devuelve, se queda en caja o va al crédito del cliente`
       );
     }
-    if (destinado > sobrante + PAYMENT_TOLERANCE) {
+    // Con pago parcial `sobrante` es negativo (el cliente entregó menos que la deuda): sin el
+    // Math.max, cualquier `destinado` —incluido 0— superaba ese negativo y el cobro se rechazaba
+    // aunque no hubiera vuelto que declarar.
+    if (destinado > Math.max(0, sobrante) + PAYMENT_TOLERANCE) {
       throw err(`El vuelto y el sobrante suman más de lo que se recibió por encima de la deuda`);
     }
     if (creditAmt > 0 && !conSaldo[0].venta.customer_id) {
