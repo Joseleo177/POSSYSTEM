@@ -325,7 +325,7 @@ export default function CobroPage() {
                     saveQuotation(q => setSavedQuotation(q));
                 }}
             />
-            {session.showApertura && (
+            {session.showApertura && !session.checkingSession && (
                 <AperturaCajaModal
                     employee={employee}
                     warehouses={employeeWarehouses}
