@@ -19,6 +19,7 @@ const SHEET = { w: 70, h: 38, perPage: 21 };
 
 // Alturas típicas para la tira continua sobre la térmica de tickets.
 const THERMAL_HEIGHTS = [25, 32, 40, 50];
+const DEFAULT_THERMAL_H = 32;
 
 export default function PriceLabelsView({ products, onClose }) {
     const { currencies, baseCurrency, settings, loadSettings, companyInfo, notify, can, printerWidth } = useApp();
@@ -35,6 +36,12 @@ export default function PriceLabelsView({ products, onClose }) {
     const [selectedId, setSelectedId] = useState(null);
 
     const [selCurrency, setSelCurrency] = useState(baseCurrency || currencies[0] || { symbol: "Ref.", exchange_rate: 1 });
+
+    // El campo de alto/largo de la tira térmica se edita como texto para poder teclear libre
+    // (borrar, escribir "70"). El valor real se acota al confirmar (blur / Enter); mientras
+    // tanto solo vive acá. Se resincroniza cuando el layout cambia por otra vía (presets, carga).
+    const [thermalHDraft, setThermalHDraft] = useState(String(DEFAULT_THERMAL_H));
+    useEffect(() => { setThermalHDraft(String(layout.thermal.h)); }, [layout.thermal.h]);
 
     // La plantilla guardada puede llegar después que el componente si los ajustes aún se están
     // cargando; en cuanto llega se adopta, salvo que el usuario ya haya tocado algo.
@@ -168,6 +175,11 @@ export default function PriceLabelsView({ products, onClose }) {
 
     const setRoll = (patch) => patchLayout({ roll: { ...layout.roll, ...patch } });
     const setThermal = (patch) => patchLayout({ thermal: { ...layout.thermal, ...patch } });
+    const commitThermalH = () => {
+        const n = Math.min(200, Math.max(15, parseInt(thermalHDraft, 10) || DEFAULT_THERMAL_H));
+        setThermal({ h: n });
+        setThermalHDraft(String(n));
+    };
 
     const sheetPages = useMemo(() => {
         const chunks = [];
@@ -232,9 +244,19 @@ export default function PriceLabelsView({ products, onClose }) {
                                 {h}
                             </button>
                         ))}
-                        <input type="number" min="15" max="200" value={layout.thermal.h}
-                            onChange={e => setThermal({ h: Math.min(200, Math.max(15, parseInt(e.target.value) || 0)) })}
-                            className="w-14 h-7 bg-white/10 rounded-md px-2 text-[11px] font-bold text-center outline-none" />
+                        <input
+                            type="number" min="15" max="200" inputMode="numeric"
+                            value={thermalHDraft}
+                            onChange={e => setThermalHDraft(e.target.value)}
+                            onBlur={commitThermalH}
+                            onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                            title="Escribí una medida propia en mm"
+                            className={`w-16 h-7 rounded-md px-2 text-[11px] font-bold text-center outline-none border transition-all ${
+                                THERMAL_HEIGHTS.includes(layout.thermal.h)
+                                    ? "bg-white/10 border-white/20 focus:border-brand-500"
+                                    : "bg-brand-500 text-black border-brand-500"
+                            }`}
+                        />
                         <span className="text-[10px] font-black text-content-subtle mr-1">
                             mm · {thermalRotate ? "alto" : "ancho"} {thermalW} mm (impresora {thermalPage} mm)
                         </span>
