@@ -18,7 +18,7 @@ module.exports = (sequelize, DataTypes) => {
     profit_margin: { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     sale_price: { type: DataTypes.DECIMAL(14, 5), allowNull: false },
     total_units: { type: DataTypes.DECIMAL(10, 3), allowNull: false },
-    subtotal: { type: DataTypes.DECIMAL(14, 5), allowNull: false },
+    subtotal: { type: DataTypes.DECIMAL(14, 6), allowNull: false },
     lot_number: { type: DataTypes.STRING(100), allowNull: true },
     expiration_date: { type: DataTypes.DATEONLY, allowNull: true },
     update_price: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true }
