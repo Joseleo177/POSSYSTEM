@@ -210,28 +210,61 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
     setLoading(false);
   };
 
-  return (
-    <Modal open={!!sales?.length} onClose={onClose} title="COBRAR VARIAS FACTURAS" width={520}>
-
-      {/* Resumen */}
-      <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 mb-4 space-y-1.5">
-        <Row label="Cliente" value={customer?.name || "—"} />
-        <Row label="Facturas" value={String(ordenadas.length)} />
-        <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
-          <Row
-            label="Deuda seleccionada"
-            value={rate > 1 ? `${sym}${deudaEnPago.toFixed(2)}` : fmtP(deudaTotal)}
-            valueClass="text-danger font-black"
-          />
-          {/* Con la caja en bolívares, el equivalente en la moneda base va debajo: el importe
-              que se cobra es el de arriba, calculado línea por línea como en el resto del POS. */}
-          {rate > 1 && (
-            <Row label="Equivalente" value={fmtP(deudaTotal)} valueClass="text-content-subtle dark:text-white/40" />
-          )}
-        </div>
+  // Resumen: al lateral en escritorio, arriba del todo en móvil.
+  const resumenBulk = (
+    <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 space-y-1.5">
+      <Row label="Cliente" value={customer?.name || "—"} />
+      <Row label="Facturas" value={String(ordenadas.length)} />
+      <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
+        <Row
+          label="Deuda seleccionada"
+          value={rate > 1 ? `${sym}${deudaEnPago.toFixed(2)}` : fmtP(deudaTotal)}
+          valueClass="text-danger font-black"
+        />
+        {rate > 1 && (
+          <Row label="Equivalente" value={fmtP(deudaTotal)} valueClass="text-content-subtle dark:text-white/40" />
+        )}
       </div>
+    </div>
+  );
 
-      <div className="space-y-4">
+  // Reparto: qué se salda y qué queda debiendo (contexto de solo lectura → lateral).
+  const repartoBulk = (
+    <div>
+      <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">
+        Cómo se aplica · de la más antigua a la más reciente
+      </p>
+      <div className="rounded-xl border border-border/20 dark:border-white/[0.08] divide-y divide-border/10 dark:divide-white/5 max-h-48 overflow-y-auto">
+        {reparto.map(({ sale, saldo, aplica, queda, salda }) => (
+          <div key={sale.id} className="px-3.5 py-2.5 flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px] font-bold text-content dark:text-white truncate">
+                {sale.invoice_number || `#${sale.id}`}
+              </div>
+              <div className="text-[10px] font-bold text-content-subtle dark:text-white/30">
+                {new Date(sale.created_at).toLocaleDateString("es-VE")} · debe {fmtPago(saldo)}
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <div className={`text-[12px] font-black tabular-nums ${aplica > 0 ? "text-success" : "text-content-subtle dark:text-white/20"}`}>
+                {aplica > 0 ? fmtPago(aplica) : "—"}
+              </div>
+              <div className={`text-[9px] font-black uppercase tracking-wide ${salda ? "text-success" : queda > 0 ? "text-warning" : "text-content-subtle dark:text-white/20"}`}>
+                {salda ? "Salda" : aplica > 0 ? `Queda ${fmtPago(queda)}` : "Sin cubrir"}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <Modal open={!!sales?.length} onClose={onClose} title="COBRAR VARIAS FACTURAS" width={860}>
+      <div className="flex flex-col lg:flex-row lg:gap-6">
+
+        {/* ── Columna principal: lo que se teclea ── */}
+        <div className="flex-1 min-w-0 space-y-4">
 
         <Field label="MÉTODO DE PAGO *">
           <JournalPickerButton
@@ -316,35 +349,6 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
             />
           </Field>
         )}
-
-        {/* Reparto: qué se salda y qué queda debiendo */}
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">
-            Cómo se aplica · de la más antigua a la más reciente
-          </p>
-          <div className="rounded-xl border border-border/20 dark:border-white/[0.08] divide-y divide-border/10 dark:divide-white/5 max-h-48 overflow-y-auto">
-            {reparto.map(({ sale, saldo, aplica, queda, salda }) => (
-              <div key={sale.id} className="px-3.5 py-2.5 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[12px] font-bold text-content dark:text-white truncate">
-                    {sale.invoice_number || `#${sale.id}`}
-                  </div>
-                  <div className="text-[10px] font-bold text-content-subtle dark:text-white/30">
-                    {new Date(sale.created_at).toLocaleDateString("es-VE")} · debe {fmtPago(saldo)}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className={`text-[12px] font-black tabular-nums ${aplica > 0 ? "text-success" : "text-content-subtle dark:text-white/20"}`}>
-                    {aplica > 0 ? fmtPago(aplica) : "—"}
-                  </div>
-                  <div className={`text-[9px] font-black uppercase tracking-wide ${salda ? "text-success" : queda > 0 ? "text-warning" : "text-content-subtle dark:text-white/20"}`}>
-                    {salda ? "Salda" : aplica > 0 ? `Queda ${fmtPago(queda)}` : "Sin cubrir"}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
 
         {/* Sobrante: el cliente entregó de más y hay que decir qué se hace con eso. */}
         {haySobrante && (
@@ -472,15 +476,23 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
           </div>
         )}
 
-        <Field label="NOTAS">
-          <input
-            type="text"
-            value={form.notes}
-            onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-            placeholder="Observaciones..."
-            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
-          />
-        </Field>
+        </div>
+        {/* ── fin columna principal ── */}
+
+        {/* ── Columna lateral: contexto de solo lectura ── */}
+        <aside className="lg:w-[300px] shrink-0 space-y-4 mt-5 lg:mt-0 lg:border-l lg:border-border/20 dark:lg:border-white/5 lg:pl-6">
+          {resumenBulk}
+          {repartoBulk}
+          <Field label="NOTAS">
+            <input
+              type="text"
+              value={form.notes}
+              onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+              placeholder="Observaciones..."
+              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+            />
+          </Field>
+        </aside>
       </div>
 
       <div className="flex gap-2.5 mt-6 pt-4 border-t border-border/20 dark:border-white/5">
