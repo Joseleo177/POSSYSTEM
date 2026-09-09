@@ -5,6 +5,7 @@ const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
 const { creditAvailable, addCreditMovement } = require("../customers/creditLedger");
+const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
 
 // Respuesta de un cobro que ya estaba registrado. Se rearma desde la base para que el
 // reintento reciba exactamente lo mismo que recibió el envío que sí entró: la caja imprime
@@ -100,6 +101,14 @@ module.exports = async function createPayment(body, req) {
     if (changeAmt > 0 && partesVuelto.some(p => !p.journal_id)) {
       throw new Error("Debes seleccionar el diario del que saldrá el cambio");
     }
+
+    // El diario del cobro y los del vuelto tienen que ser de la sucursal de la factura (o
+    // compartidos): un cobro no puede entrar en la caja de otra tienda.
+    await assertJournalsInWarehouse(
+      [payment_journal_id, ...partesVuelto.map(p => p.journal_id)],
+      sale.warehouse_id,
+      t,
+    );
 
     const saleTotal   = parseFloat(sale.total);
     const alreadyPaid = await getSaleBalance(sale_id, t);

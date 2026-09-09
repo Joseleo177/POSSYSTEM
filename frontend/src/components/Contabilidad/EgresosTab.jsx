@@ -211,6 +211,28 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                         <label className="label">Descripción *</label>
                         <input className="input" placeholder="Ej: Pago de electricidad" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
                     </div>
+                    {/* Sucursal primero: el diario se elige de la lista ya filtrada por ella. */}
+                    <div className={warehouses.length > 1 ? "grid grid-cols-2 gap-3" : ""}>
+                        {warehouses.length > 1 && (
+                            <div>
+                                <label className="label">Sucursal *</label>
+                                <CustomSelect
+                                    value={form.warehouse_id}
+                                    onChange={v => setForm(p => {
+                                        const j = (journals || []).find(x => String(x.id) === String(p.payment_journal_id));
+                                        const sigueValido = j && (!j.warehouse_id || String(j.warehouse_id) === String(v));
+                                        return { ...p, warehouse_id: v, payment_journal_id: sigueValido ? p.payment_journal_id : "", rate: sigueValido ? p.rate : "" };
+                                    })}
+                                    placeholder="Seleccionar..."
+                                    options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
+                                />
+                            </div>
+                        )}
+                        <div>
+                            <label className="label">Fecha del Movimiento</label>
+                            <input type="date" className="input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
+                        </div>
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="label">Monto{currentSymbol ? ` (${currentSymbol})` : ""} *</label>
@@ -246,9 +268,10 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                                 value={form.payment_journal_id}
                                 journals={journalsForWarehouse(journals || [], form.warehouse_id)}
                                 outflowOnly
+                                disabled={warehouses.length > 1 && !form.warehouse_id}
                                 onSelect={j => setForm(p => ({ ...p, payment_journal_id: String(j.id), rate: "" }))}
                                 onClear={() => setForm(p => ({ ...p, payment_journal_id: "", rate: "" }))}
-                                placeholder="Sin diario"
+                                placeholder={warehouses.length > 1 && !form.warehouse_id ? "Elige la sucursal primero" : "Sin diario"}
                                 methodPrompt={{ tag: "Egreso", title: "¿De qué caja sale?" }}
                             />
                         </div>
@@ -266,26 +289,6 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                             />
                         </div>
                     )}
-                    {/* El almacén solo se pregunta cuando hay algo que elegir: con una sola
-                        sucursal asignada, el hook ya la fija y un desplegable de una opción
-                        es un paso de más en una pantalla que se usa a diario. */}
-                    <div className={warehouses.length > 1 ? "grid grid-cols-2 gap-3" : ""}>
-                        {warehouses.length > 1 && (
-                            <div>
-                                <label className="label">Sucursal *</label>
-                                <CustomSelect
-                                    value={form.warehouse_id}
-                                    onChange={v => setForm(p => ({ ...p, warehouse_id: v }))}
-                                    placeholder="Seleccionar..."
-                                    options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
-                                />
-                            </div>
-                        )}
-                        <div>
-                            <label className="label">Fecha del Movimiento</label>
-                            <input type="date" className="input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
-                        </div>
-                    </div>
                     <div>
                         <label className="label">Notas</label>
                         <textarea className="input resize-none" rows={1} placeholder="Observaciones..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />

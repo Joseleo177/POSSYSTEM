@@ -7,6 +7,7 @@ const { assertWarehouseAccess } = require("../../middleware/auth");
 const { excludeAnnulledReturns } = require("./shared");
 const { addCreditMovement } = require("../customers/creditLedger");
 const { toLocalDate } = require("../../utils/localDate");
+const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
 
 async function createReturn({ saleId, items, reason, employee_id, refund }, req) {
   if (!items?.length) { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
@@ -195,6 +196,9 @@ async function createReturn({ saleId, items, reason, employee_id, refund }, req)
       const parts = (Array.isArray(refund.parts) && refund.parts.length)
         ? refund.parts
         : (refund.journal_id ? [{ journal_id: refund.journal_id, amount: refund.amount, reference: refund.reference }] : []);
+
+      // Cada tramo del reembolso sale de una caja de la sucursal de la venta (o compartida).
+      await assertJournalsInWarehouse(parts.map(p => p.journal_id), sale.warehouse_id, transaction);
 
       // Categoría propia y estable, la misma que usa el reembolso desde la ficha del cliente.
       const [cat] = parts.length

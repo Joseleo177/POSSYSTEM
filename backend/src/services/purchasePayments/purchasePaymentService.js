@@ -1,6 +1,7 @@
 const { PurchasePayment, Purchase, PaymentJournal, Currency, Employee, Expense, ExpenseCategory, sequelize } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
+const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
 
 async function getPurchaseAmountPaid(purchase_id, t) {
   // Solo cuenta pagos cuyo Expense vinculado sigue activo (o no tiene Expense)
@@ -71,6 +72,8 @@ async function createPayment(purchaseId, body, employeeId, companyId, req) {
     if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
     // Pagar a proveedor mueve dinero por cuenta de una sucursal concreta.
     await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
+    // El diario del pago tiene que ser compartido o de esa sucursal.
+    if (payment_journal_id) await assertJournalsInWarehouse(payment_journal_id, purchase.warehouse_id, t);
     if (purchase.payment_status === "pagado") { const e = new Error("Esta compra ya fue pagada completamente"); e.status = 400; throw e; }
 
     const alreadyPaid    = await getPurchaseAmountPaid(purchase.id, t);

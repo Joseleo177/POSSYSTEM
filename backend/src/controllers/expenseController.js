@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const { recalcPurchaseStatus } = require('../services/purchasePayments/purchasePaymentService');
 const { toLocalDate, endOfLocalDay } = require('../utils/localDate');
 const { visibleWarehouseIds, assertWarehouseAccess } = require('../middleware/auth');
+const { assertJournalsInWarehouse } = require('../utils/journalWarehouse');
 
 // ── Listar egresos (paginado + filtros) ──────────────────────
 exports.getAll = async (req, res, next) => {
@@ -116,6 +117,8 @@ exports.create = async (req, res, next) => {
     if (almacenMov && almacenMov.sells === false) {
       return res.status(400).json({ ok: false, message: `${almacenMov.name} es un depósito: los movimientos se registran en un punto de venta` });
     }
+    // El diario elegido tiene que ser compartido o de esa misma sucursal.
+    if (payment_journal_id) await assertJournalsInWarehouse(payment_journal_id, warehouse_id);
 
     const expense = await Expense.create({
       description,

@@ -3,6 +3,7 @@ const { assertWarehouseAccess, employeeWarehouseIds, visibleWarehouseIds } = req
 const { toLocalDate } = require("../../utils/localDate");
 const { SETTLED_SQL, SETTLED_STATUSES, RECEIVABLE_STATUSES } = require("../../utils/saleBalance");
 const { creditAvailable, addCreditMovement } = require("./creditLedger");
+const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
 
 // Deuda, gasto y cantidad de compras de un contacto, acotados a las sucursales del empleado.
 // El contacto es de la empresa —el mismo cliente compra en varias sucursales— pero sus
@@ -403,6 +404,9 @@ async function creditRefund(id, { amount, journal_id, reference_date, notes, emp
     const propios = await employeeWarehouseIds(employee_id);
     refundWarehouseId = propios[0] ?? null;
   }
+  // El diario tiene que ser compartido o de esa sucursal: si no, el efectivo sale de una
+  // caja que no es la suya.
+  await assertJournalsInWarehouse(journal_id, refundWarehouseId);
 
   const t = await sequelize.transaction();
   try {

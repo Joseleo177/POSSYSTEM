@@ -5,6 +5,7 @@ const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
 const { addCreditMovement } = require("../customers/creditLedger");
+const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
 
 const err = (message, status = 400) =>
   Object.assign(new Error(message), { status, isOperational: true });
@@ -129,6 +130,13 @@ module.exports = async function createBulkPayment(body, req) {
     // la primera factura, así que las demás quedarían mal atribuidas.
     const sucursales = new Set(ventas.map(v => v.warehouse_id ?? null));
     if (sucursales.size > 1) throw err("Las facturas seleccionadas no son de la misma sucursal");
+
+    // El diario del cobro y los del vuelto tienen que ser de esa sucursal (o compartidos).
+    await assertJournalsInWarehouse(
+      [payment_journal_id, ...partesVuelto.map(p => p.journal_id)],
+      ventas[0].warehouse_id,
+      t,
+    );
 
     const conSaldo = [];
     for (const venta of ventas) {
