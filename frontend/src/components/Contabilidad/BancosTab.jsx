@@ -1,22 +1,29 @@
 import { useState } from "react";
 import { api } from "../../services/api";
+import { resolveImageUrl } from "../../helpers";
 import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
+import MethodBankLogo from "../cobro/MethodBankLogo";
 
 const EMPTY_BANK = { name: "", code: "" };
+const EMPTY_IMAGE = { file: null, current: null, clearImage: false };
 
 export default function BancosTab({ notify, can, banks, loadBanks }) {
   const [bankForm, setBankForm] = useState(EMPTY_BANK);
+  const [image, setImage] = useState(EMPTY_IMAGE);
   const [bankEditId, setBankEditId] = useState(null);
   const [bankSaving, setBankSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
+  const imgPreview = image.file ? URL.createObjectURL(image.file) : (image.clearImage ? null : resolveImageUrl(image.current));
+
   const closeForm = () => {
     setShowModal(false);
     setBankEditId(null);
     setBankForm(EMPTY_BANK);
+    setImage(EMPTY_IMAGE);
   };
 
   const saveBank = async () => {
@@ -24,10 +31,10 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
     setBankSaving(true);
     try {
       if (bankEditId) {
-        await api.banks.update(bankEditId, bankForm);
+        await api.banks.update(bankEditId, bankForm, image.file, image.clearImage);
         notify("Banco actualizado");
       } else {
-        await api.banks.create(bankForm);
+        await api.banks.create(bankForm, image.file);
         notify("Banco creado");
       }
       closeForm();
@@ -65,7 +72,7 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
           {banks.length} banco{banks.length !== 1 ? "s" : ""}
         </span>
         {can("journals.manage") && (
-          <Button onClick={() => { setBankEditId(null); setBankForm(EMPTY_BANK); setShowModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
+          <Button onClick={() => { setBankEditId(null); setBankForm(EMPTY_BANK); setImage(EMPTY_IMAGE); setShowModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
             + Vincular Banco
           </Button>
         )}
@@ -80,6 +87,7 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
         <table className="table-pos min-w-[680px]">
             <thead className="sticky top-0 z-10">
               <tr>
+                <th className="w-12" />
                 {["Nombre del Banco", "Código", "Cuentas / Diarios", "Estado", can("journals.manage") && "Acciones"].filter(Boolean).map(h => (
                   <th key={h} className={h === "Acciones" ? "text-right pr-6" : h === "Cuentas / Diarios" || h === "Estado" ? "text-center" : "text-left"}>
                     {h}
@@ -92,6 +100,9 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
                 const isEdit = bankEditId === b.id;
                 return (
                   <tr key={b.id} className="group">
+                    <td>
+                      <MethodBankLogo src={b.image_url} size={30} />
+                    </td>
                     <td>
                       {isEdit ? (
                         <input
@@ -143,7 +154,7 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
                           ) : (
                             <>
                               <button
-                                onClick={() => { setBankEditId(b.id); setBankForm({ name: b.name, code: b.code || "" }); }}
+                                onClick={() => { setBankEditId(b.id); setBankForm({ name: b.name, code: b.code || "" }); setImage({ file: null, current: b.image_url || null, clearImage: false }); setShowModal(true); }}
                                 className="p-2 rounded-xl transition-all text-content-subtle hover:text-warning hover:bg-warning/10 active:scale-90"
                                 title="Editar"
                               >
@@ -176,8 +187,8 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
       )}
       </div>
 
-      {/* Modal: Vincular banco */}
-      <Modal open={showModal} onClose={closeForm} title="Vincular Banco" width={420}>
+      {/* Modal: Vincular / editar banco */}
+      <Modal open={showModal} onClose={closeForm} title={bankEditId ? "Editar Banco" : "Vincular Banco"} width={420}>
         <div className="mb-3">
           <div className="label mb-1">Nombre de la institución *</div>
           <input
@@ -199,10 +210,36 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
             onKeyDown={e => e.key === "Enter" && saveBank()}
           />
         </div>
+        <div className="mb-4">
+          <div className="label mb-1">Logo (opcional)</div>
+          <div className="flex items-center gap-3">
+            <label className="cursor-pointer group shrink-0">
+              <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-dashed border-border/40 dark:border-white/10 bg-surface-2 dark:bg-white/5 flex items-center justify-center group-hover:border-brand-500/50 transition-all">
+                {imgPreview
+                  ? <img src={imgPreview} alt="" className="w-full h-full object-contain p-1" />
+                  : <svg className="w-5 h-5 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+              </div>
+              <input type="file" accept="image/*" className="hidden"
+                onChange={e => e.target.files[0] && setImage(p => ({ ...p, file: e.target.files[0], clearImage: false }))} />
+            </label>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 leading-relaxed">
+                Se ve en la botonera de "Pago Inmediato". PNG con fondo transparente queda mejor.
+              </p>
+              {imgPreview && (
+                <button type="button"
+                  onClick={() => setImage({ file: null, current: null, clearImage: true })}
+                  className="text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-danger transition-colors mt-1">
+                  Quitar logo
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
         <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
           <Button variant="ghost" onClick={closeForm}>Cancelar</Button>
           <Button variant="primary" onClick={saveBank} disabled={bankSaving}>
-            {bankSaving ? "Guardando..." : "Registrar banco"}
+            {bankSaving ? "Guardando..." : bankEditId ? "Guardar cambios" : "Registrar banco"}
           </Button>
         </div>
       </Modal>

@@ -1,6 +1,7 @@
 import { Button } from "../ui/Button";
 import ReceiptModal, { printReceipt } from "../ReceiptModal";
 import PaymentFormModal from "../PaymentFormModal";
+import ImmediatePayPicker from "./ImmediatePayPicker";
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { saleTotalAtRate } from "../../helpers";
@@ -20,6 +21,11 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     const { notify, activeCurrencies, activeJournals, companyInfo, printerWidth } = useApp();
     const [showReceiptModal, setShowReceiptModal] = useState(false);
     const [showPayModal, setShowPayModal] = useState(false);
+    // Cobro inmediato en dos toques: primero la botonera de método/diario (showPicker), y
+    // recién con el diario elegido se abre "Registrar pago" con ese diario fijado y sin el
+    // desplegable de método.
+    const [showPicker, setShowPicker] = useState(false);
+    const [lockedJournalId, setLockedJournalId] = useState(null);
     const [creditLoading, setCreditLoading] = useState(false);
     const [printing, setPrinting] = useState(false);
 
@@ -198,7 +204,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     };
 
     const runAction = (key) => {
-        if (key === "pay")    return setShowPayModal(true);
+        if (key === "pay")    return setShowPicker(true);
         if (key === "credit") return creditLoading ? undefined : confirmCredit();
         if (key === "print")  return printDirect();
         if (key === "ticket") return setShowReceiptModal(true);
@@ -206,7 +212,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     };
 
     useEffect(() => {
-        if (showReceiptModal || showPayModal) return; // los sub-modales manejan su propio Escape
+        if (showReceiptModal || showPayModal || showPicker) return; // los sub-modales manejan su propio Escape
         const handler = (e) => {
             // Nunca robar teclas a un campo de texto: si alguien escribe una nota, el "2" es
             // parte de lo que teclea, no un atajo.
@@ -235,7 +241,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         // eslint-disable-next-line react-hooks/exhaustive-deps
         // `printing` va en las dependencias: sin él, el handler quedaba capturado con el valor
         // viejo y dos pulsaciones seguidas del atajo lanzaban dos impresiones.
-    }, [onNext, showReceiptModal, showPayModal, actionKeys.join(","), creditLoading, printing, isUnresolved]);
+    }, [onNext, showReceiptModal, showPayModal, showPicker, actionKeys.join(","), creditLoading, printing, isUnresolved]);
     // La insignia describe el ESTADO de la factura, no la acción que se acaba de hacer.
     // "Abono parcial" nombraba el movimiento; lo que importa aquí es que queda saldo.
     const STATUS_LABELS = {
@@ -350,7 +356,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     {canSettle && (
                         <div className="flex flex-col sm:flex-row gap-2">
                             <Button
-                                onClick={() => setShowPayModal(true)}
+                                onClick={() => setShowPicker(true)}
                                 className="flex-1 min-w-0 h-9 bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none"
                             >
                                 <KeyHint n={numOf("pay")} />
@@ -443,11 +449,25 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                 }}
             />
 
+            {showPicker && (
+                <ImmediatePayPicker
+                    warehouseId={receipt?.warehouse_id}
+                    onClose={() => setShowPicker(false)}
+                    onPick={(journal) => {
+                        setLockedJournalId(journal?.id ?? null);
+                        setShowPicker(false);
+                        setShowPayModal(true);
+                    }}
+                />
+            )}
+
             {showPayModal && (
                 <PaymentFormModal
                     sale={{ ...receipt, balance: currentBalance, amount_paid: paidBase }}
-                    onClose={() => setShowPayModal(false)}
-                    onSuccess={(res) => { onPay(res); setShowPayModal(false); }}
+                    lockedJournalId={lockedJournalId}
+                    onChangeMethod={() => { setShowPayModal(false); setLockedJournalId(null); setShowPicker(true); }}
+                    onClose={() => { setShowPayModal(false); setLockedJournalId(null); }}
+                    onSuccess={(res) => { onPay(res); setShowPayModal(false); setLockedJournalId(null); }}
                 />
             )}
         </div>

@@ -13,6 +13,8 @@ module.exports = (sequelize, DataTypes) => {
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     allows_outflow: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     sort_order: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    // Nombre de archivo local o URL de Supabase; null = sin logo (ver utils/imageStorage.js).
+    image_filename: { type: DataTypes.STRING(500), allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

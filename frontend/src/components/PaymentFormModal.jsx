@@ -26,7 +26,7 @@ const getEmpty = () => ({
   credit_change: false,
 });
 
-export default function PaymentFormModal({ sale, onClose, onSuccess }) {
+export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJournalId = null, onChangeMethod = null }) {
   const { notify, baseCurrency, activeCurrencies, activeJournals: allActiveJournals, can } = useApp();
   // Solo los diarios de la sucursal de esta venta (más los compartidos): un cajero de la
   // sucursal A no debe poder cobrar contra la caja de la B.
@@ -230,6 +230,54 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
 
   const creditCoversAll = creditApplied >= balanceUsd - 0.001;
 
+  // Elegir método/diario: fija el diario, su moneda y prellena el monto con el saldo (línea
+  // por línea en Bs, saldo oficial en divisas). Lo usan tanto el desplegable "MÉTODO DE PAGO"
+  // como el flujo de "Pago Inmediato", que llega con el diario ya escogido en la botonera y
+  // sin desplegable a la vista.
+  const selectJournal = (id) => {
+    const j = activeJournals.find(x => x.id === id);
+    if (!j) return;
+    const newCurId = j.currency_id || baseCurrency?.id;
+    const newCur = activeCurrencies.find(c => c.id === parseInt(newCurId));
+    const isNonBase = newCur && !newCur.is_base;
+    const newRate = isNonBase ? parseFloat(newCur.exchange_rate || 1) : 1;
+    const newAmt = isNonBase ? pendingBsAt(newRate).toFixed(2) : pendingAfterCredit.toFixed(2);
+    setForm(p => ({
+      ...p,
+      payment_journal_id: id,
+      pay_currency_id: newCurId || p.pay_currency_id,
+      amount: newAmt,
+      received_amount: newAmt,
+      rate: "",
+      change_parts: [{ journal_id: "", amount: "" }],
+    }));
+  };
+
+  // Cobro inmediato: el diario ya viene elegido de la botonera. Se aplica una sola vez, al
+  // abrir; el campo "MÉTODO DE PAGO" no se muestra (ver más abajo).
+  const lockedRef = useRef(false);
+  useEffect(() => {
+    if (lockedRef.current || !lockedJournalId) return;
+    if (!activeJournals.some(j => j.id === lockedJournalId)) return;
+    lockedRef.current = true;
+    selectJournal(lockedJournalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockedJournalId, activeJournals]);
+  const methodLocked = !!lockedJournalId && form.payment_journal_id === lockedJournalId;
+
+  // Con el diario ya fijado, el cajero solo tiene que teclear lo que recibió: se le lleva el
+  // foco a ese campo. Doble rAF para pasar por detrás del auto-foco de Modal, que apuntaría
+  // al primer interactivo (el botón "Cambiar").
+  const receivedRef = useRef(null);
+  useEffect(() => {
+    if (!methodLocked) return;
+    let r2;
+    const r1 = requestAnimationFrame(() => {
+      r2 = requestAnimationFrame(() => receivedRef.current?.focus());
+    });
+    return () => { cancelAnimationFrame(r1); if (r2) cancelAnimationFrame(r2); };
+  }, [methodLocked]);
+
   const submit = async () => {
     if (!form.reference_date) return notify("La fecha de referencia es requerida", "err");
     if (!creditCoversAll) {
@@ -379,28 +427,37 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
     </Modal>
   );
 
-  return (
-    <Modal open={!!sale} onClose={onClose} title="REGISTRAR PAGO" width={460}>
-
-      {/* Resumen de la factura */}
-      <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 mb-5 space-y-1.5">
-        <Row label="Factura" value={sale.invoice_number || `#${sale.id}`} />
-        {sale.customer_name && <Row label="Cliente" value={sale.customer_name} />}
-        <Row label="Total" value={hasBsRate ? `${defaultSym}${totalPreciseBs.toFixed(2)}` : fmt(sale.total)} />
-        {sale.amount_paid > 0 && (
-          <Row label="Ya pagado" value={fmt(sale.amount_paid)} valueClass="text-success" />
-        )}
-        {creditApplied > 0 && (
-          <Row label="Crédito aplicado" value={`−${fmt(creditApplied)}`} valueClass="text-brand-500 font-black" />
-        )}
-        <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
-          <Row label="Saldo pendiente"
-            value={hasBsRate ? `${defaultSym}${pendingPreciseBs.toFixed(2)}` : fmt(pendingAfterCredit)}
-            valueClass="text-danger font-black" />
-        </div>
+  // Resumen de la factura: en el lateral en escritorio, arriba del todo en móvil. Es
+  // contexto de solo lectura —qué se cobra y cómo queda—, así que se separa de los campos
+  // que el cajero teclea para que no se pierda "entre tanta información".
+  const resumenFactura = (
+    <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 space-y-1.5">
+      <Row label="Factura" value={sale.invoice_number || `#${sale.id}`} />
+      {sale.customer_name && <Row label="Cliente" value={sale.customer_name} />}
+      <Row label="Total" value={hasBsRate ? `${defaultSym}${totalPreciseBs.toFixed(2)}` : fmt(sale.total)} />
+      {sale.amount_paid > 0 && (
+        <Row label="Ya pagado" value={fmt(sale.amount_paid)} valueClass="text-success" />
+      )}
+      {creditApplied > 0 && (
+        <Row label="Crédito aplicado" value={`−${fmt(creditApplied)}`} valueClass="text-brand-500 font-black" />
+      )}
+      <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
+        <Row label="Saldo pendiente"
+          value={hasBsRate ? `${defaultSym}${pendingPreciseBs.toFixed(2)}` : fmt(pendingAfterCredit)}
+          valueClass="text-danger font-black" />
       </div>
+    </div>
+  );
 
-      <div className="space-y-4">
+  return (
+    <Modal open={!!sale} onClose={onClose} title="REGISTRAR PAGO" width={880}>
+      {/* Dos columnas en escritorio: a la izquierda lo que se teclea, a la derecha el
+          contexto. En móvil se apila en el mismo orden: primero lo que el cajero teclea
+          (método, monto recibido…), después el contexto (resumen, proyección, notas). */}
+      <div className="flex flex-col lg:flex-row lg:gap-6">
+
+        {/* ── Columna principal: lo que el cajero teclea ── */}
+        <div className="flex-1 min-w-0 space-y-4">
 
         {/* Crédito de cliente */}
         {customerCredit > 0.001 && (
@@ -441,42 +498,39 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
         {/* Campos de pago — ocultos si el crédito cubre todo */}
         {!creditCoversAll && (<>
 
-        {/* Un desplegable en vez de una botonera: con siete u ocho diarios los chips se
-            desbordaban en cuatro filas y en móvil empujaban el resto del formulario fuera
-            de la vista. El desplegable ocupa una línea sin importar cuántos haya. */}
-        <Field label="MÉTODO DE PAGO *">
-          <CustomSelect
-            value={form.payment_journal_id === "" ? "" : String(form.payment_journal_id)}
-            placeholder="Seleccionar método..."
-            options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
-            onChange={(v) => {
-              // El id vuelve a número: el resto del formulario compara con j.id sin convertir.
-              const id = parseInt(v, 10);
-              const j = activeJournals.find(x => x.id === id);
-              if (!j) return;
-              const newCurId = j.currency_id || baseCurrency?.id;
-              const newCur = activeCurrencies.find(c => c.id === parseInt(newCurId));
-              const isNonBase = newCur && !newCur.is_base;
-              // Cambiar de método cambia de moneda: se recalcula con la tasa del sistema de la
-              // moneda nueva, que es la única que se usa para valorar la factura.
-              const newRate = isNonBase ? parseFloat(newCur.exchange_rate || 1) : 1;
-              // En Bs → saldo calculado línea por línea (Bs.9000). En $ → saldo oficial (12.21).
-              const newAmt = isNonBase ? pendingBsAt(newRate).toFixed(2) : pendingAfterCredit.toFixed(2);
-              setForm(p => ({
-                ...p,
-                payment_journal_id: id,
-                pay_currency_id: newCurId || p.pay_currency_id,
-                amount: newAmt,
-                received_amount: newAmt,
-                // La tasa escrita a mano era de la moneda anterior: se vuelve a la del sistema
-                // de la nueva, que es con la que se acaba de recalcular el monto de arriba.
-                rate: "",
-                // El vuelto se replantea con la moneda nueva: sus montos eran de la anterior.
-                change_parts: [{ journal_id: "", amount: "" }],
-              }));
-            }}
-          />
-        </Field>
+        {/* Con "Pago Inmediato" el diario ya se eligió en la botonera: aquí solo se confirma,
+            con opción a cambiarlo si el cajero se equivocó de botón. */}
+        {methodLocked ? (
+          <Field label="MÉTODO DE PAGO">
+            <div className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 flex items-center justify-between">
+              <span className="text-[13px] font-black text-content dark:text-white truncate">
+                {selectedJournal?.name || "—"}
+              </span>
+              <button
+                type="button"
+                onClick={onChangeMethod || (() => setForm(p => ({ ...p, payment_journal_id: "" })))}
+                className="shrink-0 text-[10px] font-black uppercase tracking-wide text-brand-500 hover:brightness-110 transition-all"
+              >
+                Cambiar
+              </button>
+            </div>
+          </Field>
+        ) : (
+          /* Un desplegable en vez de una botonera: con siete u ocho diarios los chips se
+             desbordaban en cuatro filas y en móvil empujaban el resto del formulario fuera
+             de la vista. El desplegable ocupa una línea sin importar cuántos haya. */
+          <Field label="MÉTODO DE PAGO *">
+            <CustomSelect
+              value={form.payment_journal_id === "" ? "" : String(form.payment_journal_id)}
+              placeholder="Seleccionar método..."
+              options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
+              onChange={(v) => {
+                // El id vuelve a número: el resto del formulario compara con j.id sin convertir.
+                selectJournal(parseInt(v, 10));
+              }}
+            />
+          </Field>
+        )}
 
         {/* Arranca en la del sistema y se puede escribir a mano para este cobro: la deuda se
             pacta en divisas y el cliente paga a la tasa del día en que paga —una factura vieja
@@ -506,6 +560,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
 
         <Field label="MONTO RECIBIDO DEL CLIENTE *">
           <input
+            ref={receivedRef}
             type="text"
             inputMode="decimal"
             value={form.received_amount}
@@ -519,6 +574,14 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
               setForm(p => ({ ...p, received_amount: val, amount: abono }));
             }}
             placeholder={`${paySym}0.00`}
+            onKeyDown={e => {
+              // Cobro inmediato: con el diario ya elegido y el monto prellenado, Enter cierra
+              // la venta sin tener que buscar el botón. Solo si no hay vuelto que resolver.
+              if (e.key === "Enter" && methodLocked && canSubmit && changeBase <= 0) {
+                e.preventDefault();
+                submit();
+              }
+            }}
             className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
           />
         </Field>
@@ -681,48 +744,6 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
           </div>
         )}
 
-        {/* Monto / Abono (readonly) */}
-        {/* La etiqueta usa el mismo criterio que el servidor: entregar 5,00 por una factura de
-            5,10 la cierra, así que llamarlo "abono parcial" sería anunciar algo que no va a pasar. */}
-        <Field label={settlesInvoice ? "PAGO COMPLETO A FACTURA" : "ABONO PARCIAL A FACTURA"}>
-          <div className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 flex items-center text-[13px] font-black text-content dark:text-white tabular-nums">
-            {paySym}{(payCur && !payCur.is_base ? amountNum : amountBase * payRate).toFixed(2)}
-          </div>
-          {payCur && !payCur.is_base && amountBase > 0 && (
-            <p className="text-[10px] font-bold text-success mt-1">
-              ≈ {baseCurrency?.symbol}{amountBase.toFixed(2)} {baseCurrency?.code} · tasa {payRate}
-            </p>
-          )}
-        </Field>
-
-        {/* Cómo queda la factura con este pago, para no tener que calcularlo de cabeza. */}
-        {amountBase > 0 && (
-          <div className={`rounded-xl border p-3.5 space-y-1.5 ${settlesInvoice
-            ? "border-success/30 bg-success/5"
-            : "border-warning/30 bg-warning/5"}`}>
-            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/40">
-              Después de este pago
-            </div>
-            {/* En la moneda con la que se está cobrando, no siempre en bolívares.
-                Cobrando en divisas, convertir a Bs lo aplicado (5,10 → Bs.4.001,78) mostraba
-                un "total pagado" por encima del total de la factura (Bs.4.000,00): el mismo
-                desfase de redondeo de siempre, pero puesto donde el cajero lo lee como que
-                cobró de más. En divisas el número es el que él tiene en la mano. */}
-            <Row
-              label="Total pagado"
-              value={isNonBasePay ? `${defaultSym}${paidTotalBs.toFixed(2)}` : fmtBase(paidTotalBase)}
-              valueClass="text-success font-black"
-            />
-            <div className="border-t border-border/20 dark:border-white/5 pt-1.5">
-              <Row
-                label={settlesInvoice ? "Factura saldada" : "Saldo restante"}
-                value={isNonBasePay ? `${defaultSym}${remainingShown.toFixed(2)}` : fmtBase(settlesInvoice ? 0 : remainingBase)}
-                valueClass={`font-black ${settlesInvoice ? "text-success" : "text-warning"}`}
-              />
-            </div>
-          </div>
-        )}
-
         <Field label="FECHA DE REFERENCIA *">
           <DatePicker
             value={form.reference_date}
@@ -744,17 +765,69 @@ export default function PaymentFormModal({ sale, onClose, onSuccess }) {
           </Field>
         )}
         </>)}
+        </div>
+        {/* ── fin columna principal ── */}
 
-        {/* Notas */}
-        <Field label="NOTAS">
-          <input
-            type="text"
-            value={form.notes}
-            onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-            placeholder="Observaciones..."
-            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
-          />
-        </Field>
+        {/* ── Columna lateral: contexto de solo lectura ── */}
+        <aside className="lg:w-[300px] shrink-0 space-y-4 mt-5 lg:mt-0 lg:border-l lg:border-border/20 dark:lg:border-white/5 lg:pl-6">
+
+          {resumenFactura}
+
+          {!creditCoversAll && (<>
+            {/* Monto / Abono (readonly). La etiqueta usa el mismo criterio que el servidor:
+                entregar 5,00 por una factura de 5,10 la cierra, así que llamarlo "abono
+                parcial" sería anunciar algo que no va a pasar. */}
+            <Field label={settlesInvoice ? "PAGO COMPLETO A FACTURA" : "ABONO PARCIAL A FACTURA"}>
+              <div className="w-full h-11 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 flex items-center text-[15px] font-black text-content dark:text-white tabular-nums">
+                {paySym}{(payCur && !payCur.is_base ? amountNum : amountBase * payRate).toFixed(2)}
+              </div>
+              {payCur && !payCur.is_base && amountBase > 0 && (
+                <p className="text-[10px] font-bold text-success mt-1">
+                  ≈ {baseCurrency?.symbol}{amountBase.toFixed(2)} {baseCurrency?.code} · tasa {payRate}
+                </p>
+              )}
+            </Field>
+
+            {/* Cómo queda la factura con este pago, para no tener que calcularlo de cabeza. */}
+            {amountBase > 0 && (
+              <div className={`rounded-xl border p-3.5 space-y-1.5 ${settlesInvoice
+                ? "border-success/30 bg-success/5"
+                : "border-warning/30 bg-warning/5"}`}>
+                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/40">
+                  Después de este pago
+                </div>
+                {/* En la moneda con la que se está cobrando, no siempre en bolívares.
+                    Cobrando en divisas, convertir a Bs lo aplicado (5,10 → Bs.4.001,78) mostraba
+                    un "total pagado" por encima del total de la factura (Bs.4.000,00): el mismo
+                    desfase de redondeo de siempre, pero puesto donde el cajero lo lee como que
+                    cobró de más. En divisas el número es el que él tiene en la mano. */}
+                <Row
+                  label="Total pagado"
+                  value={isNonBasePay ? `${defaultSym}${paidTotalBs.toFixed(2)}` : fmtBase(paidTotalBase)}
+                  valueClass="text-success font-black"
+                />
+                <div className="border-t border-border/20 dark:border-white/5 pt-1.5">
+                  <Row
+                    label={settlesInvoice ? "Factura saldada" : "Saldo restante"}
+                    value={isNonBasePay ? `${defaultSym}${remainingShown.toFixed(2)}` : fmtBase(settlesInvoice ? 0 : remainingBase)}
+                    valueClass={`font-black ${settlesInvoice ? "text-success" : "text-warning"}`}
+                  />
+                </div>
+              </div>
+            )}
+          </>)}
+
+          {/* Notas */}
+          <Field label="NOTAS">
+            <input
+              type="text"
+              value={form.notes}
+              onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+              placeholder="Observaciones..."
+              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+            />
+          </Field>
+        </aside>
       </div>
 
       {/* Acciones */}

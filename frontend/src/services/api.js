@@ -131,6 +131,20 @@ function categoryPayload(body, imageFile, clearImage) {
   return { body: fd };
 }
 
+// Un banco o método de pago se guarda como JSON salvo que traiga logo: solo entonces hace
+// falta multipart, igual que categoryPayload.
+function bankMethodPayload(body, imageFile, clearImage) {
+  if (!imageFile && !clearImage) return { body: JSON.stringify(body) };
+  const fd = new FormData();
+  Object.entries(body).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    fd.append(k, typeof v === "boolean" ? String(v) : v);
+  });
+  if (imageFile) fd.append("image", imageFile);
+  if (clearImage) fd.append("clear_image", "true");
+  return { body: fd };
+}
+
 // Datos + archivos de un banner. A diferencia de buildProductForm, aquí SÍ se mandan las
 // cadenas vacías: vaciar el enlace o el título de un banner es una edición válida, y
 // saltárselas dejaría el valor viejo guardado sin forma de borrarlo desde el panel.
@@ -336,8 +350,9 @@ export const api = {
   // ── Bancos ──────────────────────────────────────────────────
   banks: {
     getAll:  ()          => request("/banks"),
-    create:  (body)      => request("/banks",       { method: "POST",   body: JSON.stringify(body) }),
-    update:  (id, body)  => request(`/banks/${id}`, { method: "PUT",    body: JSON.stringify(body) }),
+    // imageFile / clearImage son opcionales: sin ellos se manda el JSON de siempre.
+    create:  (body, imageFile)             => request("/banks",       { method: "POST", ...bankMethodPayload(body, imageFile) }),
+    update:  (id, body, imageFile, clearImage) => request(`/banks/${id}`, { method: "PUT",  ...bankMethodPayload(body, imageFile, clearImage) }),
     toggle:  (id)        => request(`/banks/${id}/toggle`, { method: "PUT" }),
     remove:  (id)        => request(`/banks/${id}`, { method: "DELETE" }),
   },
@@ -371,8 +386,8 @@ export const api = {
   // ── Métodos de pago ─────────────────────────────────────────
   paymentMethods: {
     getAll:  ()          => request("/banks/methods"),
-    create:  (body)      => request("/banks/methods",       { method: "POST",   body: JSON.stringify(body) }),
-    update:  (id, body)  => request(`/banks/methods/${id}`, { method: "PUT",    body: JSON.stringify(body) }),
+    create:  (body, imageFile)             => request("/banks/methods",       { method: "POST", ...bankMethodPayload(body, imageFile) }),
+    update:  (id, body, imageFile, clearImage) => request(`/banks/methods/${id}`, { method: "PUT",  ...bankMethodPayload(body, imageFile, clearImage) }),
     toggle:  (id)        => request(`/banks/methods/${id}/toggle`, { method: "PUT" }),
     remove:  (id)        => request(`/banks/methods/${id}`, { method: "DELETE" }),
   },

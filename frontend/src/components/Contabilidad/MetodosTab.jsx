@@ -1,22 +1,29 @@
 import { useState } from "react";
 import { api } from "../../services/api";
+import { resolveImageUrl } from "../../helpers";
 import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
+import MethodBankLogo from "../cobro/MethodBankLogo";
 
 const EMPTY_METHOD = { name: "", code: "", color: "#555555", allows_outflow: true };
+const EMPTY_IMAGE = { file: null, current: null, clearImage: false };
 
 export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMethods }) {
   const [methodForm, setMethodForm] = useState(EMPTY_METHOD);
+  const [image, setImage] = useState(EMPTY_IMAGE);
   const [methodEditId, setMethodEditId] = useState(null);
   const [methodSaving, setMethodSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
+  const imgPreview = image.file ? URL.createObjectURL(image.file) : (image.clearImage ? null : resolveImageUrl(image.current));
+
   const closeForm = () => {
     setShowModal(false);
     setMethodEditId(null);
     setMethodForm(EMPTY_METHOD);
+    setImage(EMPTY_IMAGE);
   };
 
   const saveMethod = async () => {
@@ -25,10 +32,10 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
     setMethodSaving(true);
     try {
       if (methodEditId) {
-        await api.paymentMethods.update(methodEditId, methodForm);
+        await api.paymentMethods.update(methodEditId, methodForm, image.file, image.clearImage);
         notify("Método actualizado");
       } else {
-        await api.paymentMethods.create(methodForm);
+        await api.paymentMethods.create(methodForm, image.file);
         notify("Método creado");
       }
       closeForm();
@@ -57,7 +64,7 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
           {paymentMethods.length} método{paymentMethods.length !== 1 ? "s" : ""}
         </span>
         {can("journals.manage") && (
-          <Button onClick={() => { setMethodEditId(null); setMethodForm(EMPTY_METHOD); setShowModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
+          <Button onClick={() => { setMethodEditId(null); setMethodForm(EMPTY_METHOD); setImage(EMPTY_IMAGE); setShowModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
             + Nuevo Método
           </Button>
         )}
@@ -86,16 +93,7 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
                 return (
                   <tr key={m.id} className="group">
                     <td>
-                      {isEdit ? (
-                        <input
-                          type="color"
-                          value={methodForm.color}
-                          onChange={e => setMethodForm(p => ({ ...p, color: e.target.value }))}
-                          className="w-10 h-7 p-1 bg-white border border-border/40 rounded-lg cursor-pointer"
-                        />
-                      ) : (
-                        <div className="w-4 h-4 rounded-full shadow-sm" style={{ background: m.color || "#555" }} />
-                      )}
+                      <MethodBankLogo src={m.image_url} size={30} />
                     </td>
                     <td>
                       {isEdit ? (
@@ -141,7 +139,7 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
                           ) : (
                             <>
                               <button
-                                onClick={() => { setMethodEditId(m.id); setMethodForm({ name: m.name, code: m.code, color: m.color || "#555555", allows_outflow: m.allows_outflow ?? true }); }}
+                                onClick={() => { setMethodEditId(m.id); setMethodForm({ name: m.name, code: m.code, color: m.color || "#555555", allows_outflow: m.allows_outflow ?? true }); setImage({ file: null, current: m.image_url || null, clearImage: false }); }}
                                 className="p-2 rounded-xl transition-all text-content-subtle hover:text-warning hover:bg-warning/10 active:scale-90"
                                 title="Editar"
                               >
@@ -202,6 +200,32 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
             />
           </div>
         )}
+        <div className="mb-4">
+          <div className="label mb-1">Logo (opcional)</div>
+          <div className="flex items-center gap-3">
+            <label className="cursor-pointer group shrink-0">
+              <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-dashed border-border/40 dark:border-white/10 bg-surface-2 dark:bg-white/5 flex items-center justify-center group-hover:border-brand-500/50 transition-all">
+                {imgPreview
+                  ? <img src={imgPreview} alt="" className="w-full h-full object-contain p-1" />
+                  : <svg className="w-5 h-5 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+              </div>
+              <input type="file" accept="image/*" className="hidden"
+                onChange={e => e.target.files[0] && setImage(p => ({ ...p, file: e.target.files[0], clearImage: false }))} />
+            </label>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 leading-relaxed">
+                Se ve en la botonera de "Pago Inmediato". PNG con fondo transparente queda mejor.
+              </p>
+              {imgPreview && (
+                <button type="button"
+                  onClick={() => setImage({ file: null, current: null, clearImage: true })}
+                  className="text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-danger transition-colors mt-1">
+                  Quitar logo
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
         <div className="mb-4">
           <div className="label mb-1">Color de marca</div>
           <div className="flex items-center gap-3">
