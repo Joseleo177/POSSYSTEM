@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../../services/api";
+import { hasTopOverlay } from "../../helpers/overlayGuard";
 import BulkPaymentModal from "../Customers/BulkPaymentModal";
 
 const STATUS_TABS = [
@@ -62,18 +63,27 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
         return () => clearTimeout(t);
     }, [open, load, search]);
 
+    // `showBulk` también se reinicia: si no, al volver a abrir el listado la primera factura
+    // que se marcara disparaba sola el cobro conjunto (la condición de render vuelve a ser
+    // cierta en cuanto hay una seleccionada).
     useEffect(() => {
-        if (!open) { setSearch(""); setStatusTab("all"); setCheckedIds([]); }
+        if (!open) { setSearch(""); setStatusTab("all"); setCheckedIds([]); setShowBulk(false); }
     }, [open]);
 
     useEffect(() => {
         if (!open) return;
         const handler = (e) => {
-            if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+            if (e.key !== "Escape") return;
+            // Escape es de la capa de encima, no de este listado: con el cobro conjunto abierto
+            // lo cierra su propio Modal, y con la botonera de cajas encima ella retrocede un
+            // paso. Sin esto una sola tecla tumbaba las tres pantallas de golpe.
+            if (showBulk || hasTopOverlay()) return;
+            e.stopPropagation();
+            onClose();
         };
         window.addEventListener("keydown", handler, true);
         return () => window.removeEventListener("keydown", handler, true);
-    }, [open, onClose]);
+    }, [open, onClose, showBulk]);
 
     if (!open) return null;
 
