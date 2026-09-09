@@ -1,4 +1,4 @@
-const { Payment, Sale, SaleItem, sequelize, getSaleBalance } = require("./shared");
+const { Payment, Sale, SaleItem, sequelize, getSaleBalance, Op } = require("./shared");
 const { PAYMENT_TOLERANCE } = require("../../utils/saleBalance");
 const { Expense, ExpenseCategory, PaymentJournal, Currency, Customer } = require("../../models");
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
@@ -26,17 +26,11 @@ async function existingPaymentResult(payment) {
   };
 }
 
-module.exports = async function createPayment(body, req) {
-  // Cobro repetido: mismo `idempotency_key` que un pago ya guardado. Pasa cuando la
-  // respuesta se pierde por red y la caja reintenta; sin esto el abono se registraba dos
-  // veces (el guardia de estado solo frena la venta ya pagada, no un abono parcial).
-  if (body?.idempotency_key) {
-    const previo = await Payment.findOne({ where: { idempotency_key: body.idempotency_key } });
-    if (previo) return await existingPaymentResult(previo);
-  }
-
-  const t = await sequelize.transaction();
-  try {
+// Un tramo de cobro contra una factura: un diario, un monto, su vuelto/crédito/sobrante.
+// El pago combinado (varias formas de pago en un cobro) llama a esto una vez por forma,
+// dentro de la misma transacción, así que cada tramo ve el saldo ya reducido por los
+// anteriores. La transacción y el commit los maneja `createPayment`.
+async function applyOnePayment(body, req, t) {
     const {
       sale_id,
       amount,
@@ -160,7 +154,11 @@ module.exports = async function createPayment(body, req) {
     const alreadyPaidBs = isBsPay ? round2(alreadyPaid * payRate) : alreadyPaid;
     const pendingBalanceBs = Math.max(0, saleTotalBs - alreadyPaidBs);
     const payAmtInCur = isBsPay ? round2(payAmt * payRate) : payAmt;
-    const isBsFullPay = isBsPay && (payAmtInCur >= pendingBalanceBs - 1.00);
+    // En un pago combinado, los tramos que NO son el último nunca "saldan" la factura por
+    // tolerancia: el que cierra la cuenta (y lleva el vuelto) es el último. Sin esto un tramo
+    // en Bs a menos de Bs.1 del saldo la daba por pagada y el siguiente tramo sobrepagaba.
+    const noSettle = body._noSettle === true;
+    const isBsFullPay = isBsPay && !noSettle && (payAmtInCur >= pendingBalanceBs - 1.00);
 
     // Ya no existe la tasa de efectivo: una factura se valora siempre a la tasa del sistema,
     // que es el dato con validez legal. Cobrar divisas por encima de la tasa oficial hacía que
@@ -187,7 +185,9 @@ module.exports = async function createPayment(body, req) {
         {
           sale_id,
           customer_id: sale.customer_id,
-          amount: payAmt,
+          // Tramo intermedio de un combinado: nunca lleva vuelto, así que su `amount` no puede
+          // pasar del saldo (si no, getSaleBalance lo cuenta de más).
+          amount: noSettle ? Math.min(payAmt, pendingAfterCredit) : payAmt,
           currency_id: currency_id || sale.currency_id || null,
           exchange_rate: parseFloat(exchange_rate) || sale.exchange_rate || 1,
           payment_journal_id: payment_journal_id || sale.payment_journal_id || null,
@@ -328,7 +328,6 @@ module.exports = async function createPayment(body, req) {
     const isFullPayment = isBsFullPay || totalPaidNow >= saleTotal - PAYMENT_TOLERANCE;
     const newStatus = isFullPayment ? "pagado" : "parcial";
     await sale.update({ status: newStatus }, { transaction: t });
-    await t.commit();
 
     const rawBalance = parseFloat((saleTotal - totalPaidNow).toFixed(6));
     const balance = (rawBalance <= PAYMENT_TOLERANCE || isFullPayment) ? 0 : rawBalance;
@@ -340,13 +339,74 @@ module.exports = async function createPayment(body, req) {
       change_given: changeAmt > 0 ? changeAmt : 0,
       invoice_number: sale.invoice_number || null,
     };
+}
+
+// Cobro contra una factura. Simple (un diario) o COMBINADO: `pay_parts` con varias formas de
+// pago, cada una con su caja/monto/moneda/referencia. El vuelto y el sobrante se calculan
+// sobre el total y se cuelgan del último tramo; el crédito de cliente, del primero.
+module.exports = async function createPayment(body, req) {
+  const parts = (Array.isArray(body.pay_parts) && body.pay_parts.length > 1) ? body.pay_parts : null;
+
+  // Cobro repetido: mismo `idempotency_key` que un pago ya guardado (la respuesta se perdió
+  // por red y la caja reintenta). En el combinado la clave lleva sufijo `-0`, `-1`…
+  const idemWhere = () => parts
+    ? { idempotency_key: { [Op.like]: `${body.idempotency_key}-%` } }
+    : { idempotency_key: body.idempotency_key };
+  if (body?.idempotency_key) {
+    const previo = await Payment.findOne({ where: idemWhere() });
+    if (previo) return await existingPaymentResult(previo);
+  }
+
+  const t = await sequelize.transaction();
+  try {
+    let result;
+    if (!parts) {
+      result = await applyOnePayment(body, req, t);
+    } else {
+      // Cada tramo necesita su caja y un monto real. Se valida acá también, no solo en la
+      // pantalla, para que la regla valga si el cobro llega por API.
+      for (const p of parts) {
+        if (!p?.journal_id) { const e = new Error("El diario de cada forma de pago es requerido"); e.status = 400; e.isOperational = true; throw e; }
+        if (!(parseFloat(p.amount) > 0)) { const e = new Error("El monto de cada forma de pago debe ser mayor a 0"); e.status = 400; e.isOperational = true; throw e; }
+      }
+      const creados = [];
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        const primero = i === 0;
+        const ultimo  = i === parts.length - 1;
+        result = await applyOnePayment({
+          sale_id:            body.sale_id,
+          reference_date:     body.reference_date,
+          notes:             body.notes,
+          employee_id:       body.employee_id,
+          amount:            p.amount,
+          currency_id:       p.currency_id ?? null,
+          exchange_rate:     p.exchange_rate ?? null,
+          payment_journal_id: p.journal_id,
+          reference_number:  p.reference_number ?? null,
+          _noSettle:         !ultimo,
+          credit_amount:     primero ? body.credit_amount     : undefined,
+          received_amount:   ultimo  ? body.received_amount   : undefined,
+          change_given:      ultimo  ? body.change_given      : undefined,
+          change_journal_id: ultimo  ? body.change_journal_id : undefined,
+          change_parts:      ultimo  ? body.change_parts      : undefined,
+          surplus_kept:      ultimo  ? body.surplus_kept      : undefined,
+          change_to_credit:  ultimo  ? body.change_to_credit  : undefined,
+          idempotency_key:   body.idempotency_key ? `${body.idempotency_key}-${i}` : null,
+        }, req, t);
+        if (result.payment) creados.push(result.payment);
+      }
+      result = { ...result, payments: creados };
+    }
+    await t.commit();
+    return result;
   } catch (err) {
     await t.rollback();
     // Dos envíos del mismo cobro que cruzaron: la comprobación de arriba no los vio porque
     // corrían a la vez, y el índice único decide. El que pierde devuelve el pago que sí
     // quedó guardado en vez de un error que llevaría al cajero a cobrar otra vez.
     if (body?.idempotency_key && err?.name === "SequelizeUniqueConstraintError") {
-      const previo = await Payment.findOne({ where: { idempotency_key: body.idempotency_key } });
+      const previo = await Payment.findOne({ where: idemWhere() });
       if (previo) return await existingPaymentResult(previo);
     }
     throw err;

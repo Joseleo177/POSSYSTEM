@@ -33,6 +33,9 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
     surplus_mode: "devolver",   // devolver | caja | credito
     // Salidas del vuelto: una por caja. Empieza con una y se agregan las que hagan falta.
     change_parts: [{ journal_id: "", amount: "" }],
+    // Pago combinado: >=2 formas de pago para el lote, cada una con su caja/monto (en la
+    // moneda de esa caja) /referencia. El sobrante se descuenta del último tramo.
+    pay_parts: [],
   });
   const [loading, setLoading] = useState(false);
   // Una clave por lote: si la respuesta se pierde y el cajero reintenta, el servidor reconoce
@@ -63,8 +66,30 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   const rate       = (!currency || currency.is_base) ? 1 : resolveRate(form.rate, rateConfig);
   const sym        = currency?.symbol || baseCurrency?.symbol || "Ref.";
 
-  const amountLocal = parseFloat(String(form.amount).replace(",", ".")) || 0;
-  const amountBase  = amountLocal / rate;
+  // ── Pago combinado ──────────────────────────────────────────────────────────
+  const combinado = (form.pay_parts?.length || 0) >= 2;
+  const round6 = (n) => Math.round((parseFloat(n) || 0) * 1e6) / 1e6;
+  const partesComb = (form.pay_parts || []).map(p => {
+    const j = activeJournals.find(x => x.id === p.journal_id);
+    const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
+    const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
+    const n = parseFloat(String(p.amount).replace(",", "."));
+    return {
+      ...p, j, cur, rate: r,
+      sym: cur?.symbol || baseCurrency?.symbol || "Ref.",
+      isCash: j?.type === "efectivo",
+      num: n,
+      base: !isNaN(n) && n > 0 ? (r === 1 ? Math.round(n * 100) / 100 : round6(n / r)) : 0,
+    };
+  });
+  const recibidoComb = round6(partesComb.reduce((a, s) => a + s.base, 0));
+  const noUltimoComb = round6(partesComb.slice(0, -1).reduce((a, s) => a + s.base, 0));
+  const combParteFalta = partesComb.some(s => !s.journal_id || !(s.base > 0));
+  // La referencia de cada tramo es OPCIONAL, igual que en el cobro simple.
+  const combNoUltimoExcede = noUltimoComb > deudaTotal + 0.10;
+
+  const amountLocal = combinado ? recibidoComb : (parseFloat(String(form.amount).replace(",", ".")) || 0);
+  const amountBase  = combinado ? recibidoComb : (amountLocal / rate);
 
   const fmtP = (n) => fmtBase(n, baseCurrency);
   // Montos en la moneda con la que se está cobrando: es la que el cajero cuenta.
@@ -159,8 +184,11 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   // gaveta concreta, y sin eso el arqueo de esa caja no cuadra.
   const faltaDiarioCambio = haySobrante && form.surplus_mode === "devolver"
     && (faltaCajaEnSalida || vueltoBase <= 0);
-  const canSubmit = !loading && form.journal_id && form.reference_date && amountBase > 0
-    && !faltaDiarioCambio && !vueltoExcedido;
+  const canSubmit = !loading && form.reference_date && amountBase > 0
+    && !faltaDiarioCambio && !vueltoExcedido
+    && (combinado
+      ? (!combParteFalta && !combNoUltimoExcede)
+      : !!form.journal_id);
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -172,12 +200,23 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
       const res = await api.payments.createBulk({
         idempotency_key:    keyRef.current,
         sale_ids:           ordenadas.map(s => s.id),
-        amount:             parseFloat(amountBase.toFixed(6)),
-        currency_id:        currency?.id || null,
-        exchange_rate:      rate,
-        payment_journal_id: form.journal_id,
+        // Simple: monto único en base + su diario. Combinado: un tramo por forma de pago.
+        ...(combinado ? {
+          pay_parts: partesComb.map(s => ({
+            journal_id:       s.journal_id,
+            amount:           s.base,
+            currency_id:      s.cur?.id || null,
+            exchange_rate:    s.rate,
+            reference_number: s.reference?.trim() || null,
+          })),
+        } : {
+          amount:             parseFloat(amountBase.toFixed(6)),
+          currency_id:        currency?.id || null,
+          exchange_rate:      rate,
+          payment_journal_id: form.journal_id,
+        }),
         reference_date:     form.reference_date,
-        reference_number:   form.reference_number || null,
+        reference_number:   combinado ? null : (form.reference_number || null),
         notes:              form.notes || null,
         // El sobrante viaja con su destino declarado; el servidor rechaza el cobro si sobra
         // dinero sin decir a dónde va.
@@ -266,6 +305,115 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
         {/* ── Columna principal: lo que se teclea ── */}
         <div className="flex-1 min-w-0 space-y-4">
 
+        {/* ── Pago combinado: varias formas de pago para el lote ── */}
+        {combinado && (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Formas de pago *</p>
+              <button type="button" onClick={() => setForm(p => ({ ...p, pay_parts: [] }))}
+                className="text-[10px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-danger transition-colors">
+                Pago simple
+              </button>
+            </div>
+            <div className="space-y-2.5">
+              {partesComb.map((s, idx) => (
+                <div key={idx} className="space-y-1.5">
+                  <div className="flex gap-2 items-start">
+                    <div className="flex-1 min-w-0">
+                      <JournalPickerButton
+                        value={s.journal_id || ""}
+                        journals={activeJournals}
+                        placeholder="Forma de pago…"
+                        methodPrompt={{ tag: "Cobro conjunto", title: "¿Cómo paga esta parte?" }}
+                        onSelect={(j) => setForm(p => {
+                          const parts = [...p.pay_parts];
+                          const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
+                          const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
+                          const yaBase = parts.reduce((a, q, i) => {
+                            if (i === idx) return a;
+                            const jj = activeJournals.find(x => x.id === q.journal_id);
+                            const cc = jj?.currency_id ? activeCurrencies.find(c => c.id === parseInt(jj.currency_id)) : baseCurrency;
+                            const rr = (!cc || cc.is_base) ? 1 : parseFloat(cc.exchange_rate || 1);
+                            const nn = parseFloat(String(q.amount).replace(",", "."));
+                            return a + (isNaN(nn) ? 0 : nn / rr);
+                          }, 0);
+                          const faltaBase = Math.max(0, deudaTotal - yaBase);
+                          parts[idx] = { ...parts[idx], journal_id: j.id, amount: (Math.round(faltaBase * r * 100) / 100).toFixed(2) };
+                          return { ...p, pay_parts: parts };
+                        })}
+                      />
+                    </div>
+                    <div className="w-28 shrink-0">
+                      <input
+                        type="text" inputMode="decimal"
+                        value={s.amount}
+                        placeholder={s.sym}
+                        onChange={e => setForm(p => {
+                          const parts = [...p.pay_parts];
+                          parts[idx] = { ...parts[idx], amount: e.target.value.replace(/[^\d.,]/g, "") };
+                          return { ...p, pay_parts: parts };
+                        })}
+                        className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all tabular-nums"
+                      />
+                    </div>
+                    {partesComb.length >= 2 && (
+                      <button type="button"
+                        onClick={() => setForm(p => {
+                          const rest = p.pay_parts.filter((_, i) => i !== idx);
+                          if (rest.length >= 2) return { ...p, pay_parts: rest };
+                          const only = rest[0] || { journal_id: "", amount: "", reference: "" };
+                          return {
+                            ...p,
+                            pay_parts: [],
+                            journal_id: only.journal_id || "",
+                            amount: only.amount || "",
+                            reference_number: only.reference || "",
+                            rate: "",
+                            change_parts: [{ journal_id: "", amount: "" }],
+                          };
+                        })}
+                        className="w-10 h-10 shrink-0 rounded-xl border border-border/30 dark:border-white/10 text-content-subtle hover:text-danger hover:border-danger/40 transition-all flex items-center justify-center"
+                        title="Quitar esta forma de pago">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    )}
+                  </div>
+                  {s.cur && !s.cur.is_base && s.base > 0 && (
+                    <p className="text-[10px] font-bold text-success">≈ {fmtP(s.base)} {baseCurrency?.code} · tasa {s.rate}</p>
+                  )}
+                  {s.journal_id && !s.isCash && (
+                    <input
+                      type="text"
+                      value={s.reference || ""}
+                      onChange={e => setForm(p => {
+                        const parts = [...p.pay_parts];
+                        parts[idx] = { ...parts[idx], reference: e.target.value };
+                        return { ...p, pay_parts: parts };
+                      })}
+                      placeholder="N° de referencia (opcional)"
+                      className="w-full h-9 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[12px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            {combNoUltimoExcede && (
+              <p className="text-[10px] font-black text-danger mt-1.5">Solo la última forma de pago puede exceder la deuda</p>
+            )}
+            <button type="button"
+              onClick={() => setForm(p => ({ ...p, pay_parts: [...p.pay_parts, { journal_id: "", amount: "", reference: "" }] }))}
+              className="w-full h-9 mt-2.5 rounded-xl border border-dashed border-border/40 dark:border-white/15 text-content-subtle dark:text-white/40 text-[10px] font-black uppercase tracking-widest hover:border-brand-500/50 hover:text-brand-500 transition-all">
+              Otra forma de pago
+            </button>
+            <div className="flex items-center justify-between gap-2 mt-2.5 pt-2.5 border-t border-border/20 dark:border-white/5">
+              <span className="text-[10px] font-black uppercase tracking-widest tabular-nums text-content-subtle dark:text-white/40">
+                Recibido {fmtP(recibidoComb)} de {fmtP(deudaTotal)}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {!combinado && (<>
         <Field label="MÉTODO DE PAGO *">
           <JournalPickerButton
             value={form.journal_id}
@@ -346,6 +494,39 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
               onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
               placeholder="Ej: 000123456"
               className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+            />
+          </Field>
+        )}
+
+        {/* Pasar a pago combinado: el tramo 1 hereda el método elegido. */}
+        {form.journal_id && (
+          <button
+            type="button"
+            onClick={() => setForm(p => {
+              const j = activeJournals.find(x => x.id === p.journal_id);
+              const isCashJ = j?.type === "efectivo";
+              return {
+                ...p,
+                journal_id: "", amount: "", rate: "",
+                pay_parts: [
+                  { journal_id: p.journal_id, amount: p.amount || "", reference: isCashJ ? "" : (p.reference_number || "") },
+                  { journal_id: "", amount: "", reference: "" },
+                ],
+              };
+            })}
+            className="w-full h-9 -mt-1 rounded-xl border border-dashed border-brand-500/40 text-brand-500 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500/10 transition-all"
+          >
+            Combinar con otra forma de pago
+          </button>
+        )}
+        </>)}
+
+        {combinado && (
+          <Field label="FECHA DE REFERENCIA *">
+            <DatePicker
+              value={form.reference_date}
+              onChange={v => setForm(p => ({ ...p, reference_date: v }))}
+              className="w-full"
             />
           </Field>
         )}

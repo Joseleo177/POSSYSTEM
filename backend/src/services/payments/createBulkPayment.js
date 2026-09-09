@@ -48,14 +48,36 @@ module.exports = async function createBulkPayment(body, req) {
     change_parts,
     surplus_kept,       // sobrante que se queda en la caja
     change_to_credit,   // sobrante que va al crédito del cliente
+    // Pago combinado: varias formas de pago para el lote, cada una con su caja/monto (ya en
+    // base, lo convierte el frontend) /moneda/referencia. El sobrante se descuenta del ÚLTIMO
+    // tramo. >1 = combinado.
+    pay_parts,
   } = body;
 
   const ids = [...new Set((sale_ids || []).map(n => parseInt(n, 10)).filter(Number.isInteger))];
   if (!ids.length) throw err("Debes seleccionar al menos una factura");
   if (!reference_date) throw err("La fecha de referencia es requerida");
-  if (!payment_journal_id) throw err("Debes seleccionar el método de pago");
 
-  const totalPay = parseFloat(amount || 0);
+  const parts = (Array.isArray(pay_parts) && pay_parts.length > 1) ? pay_parts : null;
+  const partsNorm = parts ? pay_parts.map(p => ({
+    journal_id: parseInt(p?.journal_id, 10),
+    base: parseFloat(p?.amount) || 0,
+    currency_id: p?.currency_id ?? null,
+    exchange_rate: parseFloat(p?.exchange_rate) || 1,
+    reference_number: p?.reference_number?.trim() || null,
+  })) : null;
+  if (parts) {
+    for (const p of partsNorm) {
+      if (!Number.isInteger(p.journal_id)) throw err("El diario de cada forma de pago es requerido");
+      if (!(p.base > 0)) throw err("El monto de cada forma de pago debe ser mayor a 0");
+    }
+  } else if (!payment_journal_id) {
+    throw err("Debes seleccionar el método de pago");
+  }
+
+  const totalPay = parts
+    ? parseFloat(partsNorm.reduce((a, p) => a + p.base, 0).toFixed(6))
+    : parseFloat(amount || 0);
   if (!(totalPay > 0)) throw err("El monto es requerido");
 
   // Un vuelto de una sola caja se expresa igual que uno repartido: una parte.
@@ -79,8 +101,9 @@ module.exports = async function createBulkPayment(body, req) {
   // que sondear solo su clave daba "no registrado" y el reintento volvía a cobrar.
   const loteYaRegistrado = async () => {
     if (!idempotency_key) return null;
-    const claves = ids.map(id => `${idempotency_key}-${id}`);
-    const pagos = await Payment.findAll({ where: { idempotency_key: { [Op.in]: claves } } });
+    // Simple: una clave por factura (`clave-<id>`). Combinado: además por tramo
+    // (`clave-<id>-<m>`). Un LIKE cubre las dos formas.
+    const pagos = await Payment.findAll({ where: { idempotency_key: { [Op.like]: `${idempotency_key}-%` } } });
     if (!pagos.length) return null;
 
     const ventas = await Sale.findAll({ where: { id: { [Op.in]: pagos.map(p => p.sale_id) } } });
@@ -131,9 +154,13 @@ module.exports = async function createBulkPayment(body, req) {
     const sucursales = new Set(ventas.map(v => v.warehouse_id ?? null));
     if (sucursales.size > 1) throw err("Las facturas seleccionadas no son de la misma sucursal");
 
-    // El diario del cobro y los del vuelto tienen que ser de esa sucursal (o compartidos).
+    // El diario del cobro (o los de los tramos) y los del vuelto tienen que ser de esa
+    // sucursal (o compartidos).
     await assertJournalsInWarehouse(
-      [payment_journal_id, ...partesVuelto.map(p => p.journal_id)],
+      [
+        ...(parts ? partsNorm.map(p => p.journal_id) : [payment_journal_id]),
+        ...partesVuelto.map(p => p.journal_id),
+      ],
       ventas[0].warehouse_id,
       t,
     );
@@ -190,56 +217,99 @@ module.exports = async function createBulkPayment(body, req) {
     // factura suelta, y el céntimo de diferencia lo absorbe la última factura del reparto.
     const aImputar = parseFloat((totalPay - destinado).toFixed(6));
 
-    // Plan de reparto, calculado antes de tocar la base para poder cerrar el redondeo al final.
-    const plan = [];
-    let restante = aImputar;
-    for (const item of conSaldo) {
-      if (restante <= 0.000001) break;
-      const aplicar = parseFloat(Math.min(restante, item.saldo).toFixed(6));
-      plan.push({ ...item, aplicar });
-      restante = parseFloat((restante - aplicar).toFixed(6));
+    // ── Plan de reparto ──────────────────────────────────────────────────────
+    // Un "chunk" es (una factura, una forma de pago, un monto). En pago simple hay uno por
+    // factura. En combinado, cada tramo cubre facturas de la más vieja a la más nueva, con un
+    // cursor global; el sobrante (destinado) se descuenta del ÚLTIMO tramo.
+    const chunks = [];
+    let leftover = 0;
+
+    if (!parts) {
+      let restante = aImputar;
+      for (const item of conSaldo) {
+        if (restante <= 0.000001) break;
+        const aplicar = parseFloat(Math.min(restante, item.saldo).toFixed(6));
+        chunks.push({ item, aplicar, journal_id: payment_journal_id, currency_id: currency_id || null, exchange_rate: parseFloat(exchange_rate) || null, reference_number: reference_number?.trim() || null, mIdx: 0 });
+        restante = parseFloat((restante - aplicar).toFixed(6));
+      }
+      // El resto por debajo de la tolerancia (redondeo al billete) se lo lleva el último chunk.
+      if (restante > 0.000001 && chunks.length) {
+        chunks[chunks.length - 1].aplicar = parseFloat((chunks[chunks.length - 1].aplicar + restante).toFixed(6));
+        restante = 0;
+      }
+      leftover = restante;
+    } else {
+      const porImputarRaw = partsNorm.map((p, i) => i === partsNorm.length - 1
+        ? parseFloat((p.base - destinado).toFixed(6))
+        : p.base);
+      if (porImputarRaw.some(v => v < -PAYMENT_TOLERANCE)) throw err("La última forma de pago no alcanza para cubrir el vuelto/sobrante");
+      // Un pequeño negativo por redondeo se lleva a 0: ese tramo va entero al sobrante y el
+      // ajuste (`seQueda` / vuelto) lo recupera abajo.
+      const porImputar = porImputarRaw.map(v => Math.max(0, parseFloat(v.toFixed(6))));
+      const restPorFactura = conSaldo.map(x => ({ item: x, rest: x.saldo }));
+      partsNorm.forEach((p, mIdx) => {
+        let restanteM = porImputar[mIdx];
+        for (const rf of restPorFactura) {
+          if (restanteM <= 0.000001) break;
+          if (rf.rest <= 0.000001) continue;
+          const aplicar = parseFloat(Math.min(restanteM, rf.rest).toFixed(6));
+          chunks.push({ item: rf.item, aplicar, journal_id: p.journal_id, currency_id: p.currency_id, exchange_rate: p.exchange_rate, reference_number: p.reference_number, mIdx });
+          rf.rest = parseFloat((rf.rest - aplicar).toFixed(6));
+          restanteM = parseFloat((restanteM - aplicar).toFixed(6));
+        }
+        leftover = parseFloat((leftover + Math.max(0, restanteM)).toFixed(6));
+      });
+      if (leftover > 0.000001 && chunks.length) {
+        chunks[chunks.length - 1].aplicar = parseFloat((chunks[chunks.length - 1].aplicar + leftover).toFixed(6));
+        leftover = 0;
+      }
     }
-    // Sobra un resto por debajo de la tolerancia (los céntimos del redondeo al billete): se lo
-    // lleva la última factura cubierta, para que la suma de los cobros dé exactamente el
-    // dinero que entró. Un excedente mayor no llega hasta acá: lo frena la validación de arriba.
-    if (restante > 0.000001 && plan.length) {
-      const ultima = plan[plan.length - 1];
-      ultima.aplicar = parseFloat((ultima.aplicar + restante).toFixed(6));
-      restante = 0;
+
+    // ── Crear los pagos, agrupados por factura para fijar su estado una sola vez ──
+    const porVenta = new Map();
+    for (const c of chunks) {
+      const id = c.item.venta.id;
+      if (!porVenta.has(id)) porVenta.set(id, []);
+      porVenta.get(id).push(c);
     }
 
     const applied = [];
+    let ultimoPagoId = null;          // último pago creado (fallback para el sobrante)
+    let pagoUltimoMetodoId = null;    // un pago de la ÚLTIMA forma de pago: ahí va el sobrante
+    const ultimoMetodoIdx = parts ? partsNorm.length - 1 : -1;
 
-    for (const { venta, saldo, cobrado, devuelto, aplicar } of plan) {
-      // Dentro de la tolerancia se salda completa: cobrando en bolívares el saldo en dólares
-      // queda a unos céntimos, y esos céntimos no son deuda (mismo criterio que createPayment).
-      const salda = (saldo - aplicar) <= PAYMENT_TOLERANCE;
-
-      // Una cuenta que todavía no era factura recibe su correlativo al primer cobro.
+    for (const cs of porVenta.values()) {
+      const { venta, saldo, cobrado, devuelto } = cs[0].item;
       if (["borrador", "espera"].includes(venta.status)) {
         await assignInvoiceNumber(venta, t);
       }
+      const aplicadoVenta = parseFloat(cs.reduce((a, c) => a + c.aplicar, 0).toFixed(6));
+      const paymentIds = [];
 
-      const pago = await Payment.create({
-        sale_id: venta.id,
-        customer_id: venta.customer_id,
-        amount: aplicar,
-        currency_id: currency_id || venta.currency_id || null,
-        exchange_rate: parseFloat(exchange_rate) || venta.exchange_rate || 1,
-        payment_journal_id,
-        employee_id: employee_id || null,
-        reference_date,
-        reference_number: reference_number?.trim() || null,
-        // Deja rastro de que el dinero entró en un solo acto: sin esto, ver tres cobros
-        // idénticos el mismo día en tres facturas parece un error de la caja.
-        notes: [notes?.trim(), `Cobro conjunto de ${conSaldo.length} facturas`].filter(Boolean).join(" · "),
-        idempotency_key: idempotency_key ? `${idempotency_key}-${venta.id}` : null,
-        batch_id: batchId,
-      }, { transaction: t });
+      for (const c of cs) {
+        const pago = await Payment.create({
+          sale_id: venta.id,
+          customer_id: venta.customer_id,
+          amount: c.aplicar,
+          currency_id: c.currency_id || venta.currency_id || null,
+          exchange_rate: c.exchange_rate || venta.exchange_rate || 1,
+          payment_journal_id: c.journal_id,
+          employee_id: employee_id || null,
+          reference_date,
+          reference_number: c.reference_number,
+          notes: [notes?.trim(), `Cobro conjunto de ${conSaldo.length} facturas`].filter(Boolean).join(" · "),
+          idempotency_key: idempotency_key ? `${idempotency_key}-${venta.id}${parts ? `-${c.mIdx}` : ""}` : null,
+          batch_id: batchId,
+        }, { transaction: t });
+        paymentIds.push(pago.id);
+        ultimoPagoId = pago.id;
+        if (c.mIdx === ultimoMetodoIdx) pagoUltimoMetodoId = pago.id;
+      }
 
+      const salda = (saldo - aplicadoVenta) <= PAYMENT_TOLERANCE;
       const nuevoEstado = resolveSaleStatus({
         saleTotal: venta.total,
-        paid: cobrado + aplicar,
+        paid: cobrado + aplicadoVenta,
         returned: devuelto,
         forgiven: venta.forgiven_amount,
         hasInvoice: !!venta.invoice_number,
@@ -249,32 +319,42 @@ module.exports = async function createBulkPayment(body, req) {
       applied.push({
         sale_id: venta.id,
         invoice_number: venta.invoice_number || null,
-        payment_id: pago.id,
-        amount: aplicar,
-        balance: salda ? 0 : parseFloat((saldo - aplicar).toFixed(6)),
+        payment_id: paymentIds[0],
+        payment_ids: paymentIds,
+        amount: aplicadoVenta,
+        balance: salda ? 0 : parseFloat((saldo - aplicadoVenta).toFixed(6)),
         sale_status: nuevoEstado,
       });
     }
 
     // ── Sobrante ──────────────────────────────────────────────────────────────
-    // Todo lo que el cliente entregó por encima de la deuda se cuelga del primer cobro del
-    // lote, que es el que representa el billete que entró. Va ahí y no repartido entre las
-    // facturas a propósito: ese dinero no es de ninguna, y sumárselo las dejaría cobradas de
-    // más. Mismo criterio que el cobro de una factura suelta (ver createPayment).
-    const primerPago = applied[0];
+    // Todo lo que el cliente entregó por encima de la deuda se cuelga de UN cobro del lote —el
+    // que representa el billete que entró—, no repartido entre las facturas: ese dinero no es
+    // de ninguna y sumárselo las dejaría cobradas de más. En pago simple es el primer cobro;
+    // en combinado, el último (el sobrante se descontó del último tramo). Mismo criterio que
+    // el cobro de una factura suelta (ver createPayment).
+    if (parts && !pagoUltimoMetodoId && (changeAmt + surplusAmt + creditAmt) > PAYMENT_TOLERANCE) {
+      throw err("La última forma de pago debe aplicarse a la deuda, no ser solo vuelto/sobrante");
+    }
+    const pagoSobranteId = parts
+      ? (pagoUltimoMetodoId || ultimoPagoId)
+      : (applied[0] && applied[0].payment_id);
+    const pagoSobrante = pagoSobranteId
+      ? await Payment.findByPk(pagoSobranteId, { transaction: t })
+      : null;
 
-    if (changeAmt > 0 && primerPago) {
+    if (changeAmt > 0 && pagoSobrante) {
       // El billete entró completo y el vuelto salió: se registran los dos movimientos, para
       // que la gaveta cuadre contra lo que realmente pasó por ella. getSaleBalance descuenta
       // change_given, así que la factura sigue acreditada solo por lo suyo.
-      await Payment.update(
-        { amount: parseFloat((primerPago.amount + changeAmt).toFixed(6)),
+      await pagoSobrante.update(
+        { amount: parseFloat((parseFloat(pagoSobrante.amount) + changeAmt).toFixed(6)),
           change_given: changeAmt,
           // Con el vuelto repartido, el pago apunta a la primera caja: es el marcador que hace
           // que el saldo de la factura descuente el vuelto. El detalle de por dónde salió cada
           // tramo vive en los egresos, uno por caja.
           change_journal_id: partesVuelto[0].journal_id },
-        { where: { id: primerPago.payment_id }, transaction: t }
+        { transaction: t }
       );
 
       const [catCambio] = await ExpenseCategory.findOrCreate({
@@ -318,8 +398,9 @@ module.exports = async function createBulkPayment(body, req) {
     // dinero SÍ está en la gaveta, así que entra al cobro; lo que cambia es si el cliente
     // conserva un saldo a favor por él.
     const seQueda = parseFloat((surplusAmt + creditAmt).toFixed(6));
-    if (seQueda > 0 && primerPago) {
-      const pago = await Payment.findByPk(primerPago.payment_id, { transaction: t });
+    if (seQueda > 0 && pagoSobrante) {
+      // Se relee: pudo haber cambiado su `amount` arriba con el vuelto.
+      const pago = await Payment.findByPk(pagoSobranteId, { transaction: t });
       const detalle = [
         surplusAmt > 0 ? `sobrante en caja ${surplusAmt.toFixed(2)}` : null,
         creditAmt  > 0 ? `${creditAmt.toFixed(2)} al crédito del cliente` : null,
@@ -349,7 +430,7 @@ module.exports = async function createBulkPayment(body, req) {
       total_applied: parseFloat(applied.reduce((acc, a) => acc + a.amount, 0).toFixed(6)),
       // Lo que no alcanzó a cubrir ninguna factura: solo pasa si el monto recibido se quedó
       // corto y ya no quedaban facturas seleccionadas con saldo.
-      leftover: restante > 0.000001 ? restante : 0,
+      leftover: leftover > 0.000001 ? leftover : 0,
       settled_count: applied.filter(a => a.balance === 0).length,
       change_given: changeAmt > 0 ? changeAmt : 0,
       surplus_kept: surplusAmt > 0 ? surplusAmt : 0,
