@@ -195,7 +195,10 @@ module.exports = async function createBulkPayment(body, req) {
     // lo explique, y el arqueo del turno cerraría con un sobrante que nadie sabe de dónde salió.
     const sobrante = parseFloat((totalPay - deudaTotal).toFixed(6));
     const destinado = parseFloat((changeAmt + surplusAmt + creditAmt).toFixed(6));
-    if (sobrante > PAYMENT_TOLERANCE && destinado < sobrante - 0.001) {
+    // El destino tiene que cubrir el sobrante SALVO por el desfase de redondeo: el frontend
+    // muestra y manda el sobrante a 2 decimales mientras que acá se calcula con la deuda
+    // exacta, y esos milésimos no son dinero sin declarar.
+    if (sobrante > PAYMENT_TOLERANCE && destinado < sobrante - PAYMENT_TOLERANCE) {
       throw err(
         `Recibiste ${(sobrante).toFixed(2)} de más sobre la deuda de ${deudaTotal.toFixed(2)}: indica si se devuelve, se queda en caja o va al crédito del cliente`
       );

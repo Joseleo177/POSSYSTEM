@@ -133,8 +133,13 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   // y el servidor se los aplica a la última factura del reparto.
   // La resta se hace en la moneda del cobro, que es donde el cajero cuenta el dinero: pasar
   // primero a Ref y restar allá vuelve a meter el error de redondeo que se acaba de evitar.
-  const sobrantePago = Math.max(0, round2(amountLocal - deudaEnPago));
-  const sobrante     = parseFloat((sobrantePago / rate).toFixed(6));
+  // En combinado se resta la deuda EXACTA en base (la misma que usa el servidor), sin
+  // redondear factura por factura: si no, el `surplus_kept` que se manda no coincide con el
+  // sobrante que el servidor calcula y rechaza el cobro por unos milésimos.
+  const sobrantePago = combinado
+    ? Math.max(0, round6(recibidoComb - deudaTotal))
+    : Math.max(0, round2(amountLocal - deudaEnPago));
+  const sobrante     = combinado ? sobrantePago : parseFloat((sobrantePago / rate).toFixed(6));
   const haySobrante  = sobrante > 0.10;
 
   // Tasa y símbolo de la caja de una salida de vuelto: cada tramo se escribe en la moneda de
