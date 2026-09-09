@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import Modal from "../ui/Modal";
-import CustomSelect from "../ui/CustomSelect";
 import DatePicker from "../ui/DatePicker";
+import JournalPickerButton from "../cobro/JournalPickerButton";
 import RateField, { resolveRate } from "../ui/RateField";
 import { todayISO, journalsForWarehouse } from "../../helpers";
 
@@ -86,45 +86,49 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
   const infoSym  = form.pay_currency_id ? paySym  : (baseCurrency?.symbol || "Ref.");
   const fmt = (usd) => `${infoSym}${(Number(usd || 0) * infoRate).toFixed(2)}`;
 
-  return (
-    <Modal open={!!purchase} onClose={onClose} title="PAGAR A PROVEEDOR" width={440}>
+  // Cómo queda la compra tras este pago.
+  const paidBeforeBase = parseFloat(purchase?.amount_paid || 0);
+  const paidTotalBase  = paidBeforeBase + amountBase;
+  const remainingBase  = Math.max(0, balanceUsd - amountBase);
+  const settles        = amountBase > 0 && remainingBase <= 0.01;
 
-      {/* Resumen de la compra */}
-      <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 mb-5 space-y-1.5">
-        {purchase.supplier_name && (
-          <Row label="Proveedor" value={purchase.supplier_name} />
-        )}
-        <Row label="Compra" value={`#${purchase.id}`} />
-        <Row label="Total compra" value={fmt(purchase.total)} />
-        {purchase.amount_paid > 0 && (
-          <Row label="Ya pagado" value={fmt(purchase.amount_paid)} valueClass="text-success" />
-        )}
-        <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
-          <Row label="Saldo pendiente" value={fmt(balanceUsd)} valueClass="text-danger font-black" />
-        </div>
+  // Resumen de la compra: al lateral en escritorio, arriba del todo en móvil.
+  const resumenCompra = (
+    <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 space-y-1.5">
+      {purchase.supplier_name && <Row label="Proveedor" value={purchase.supplier_name} />}
+      <Row label="Compra" value={`#${purchase.id}`} />
+      <Row label="Total compra" value={fmt(purchase.total)} />
+      {purchase.amount_paid > 0 && (
+        <Row label="Ya pagado" value={fmt(purchase.amount_paid)} valueClass="text-success" />
+      )}
+      <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
+        <Row label="Saldo pendiente" value={fmt(balanceUsd)} valueClass="text-danger font-black" />
       </div>
+    </div>
+  );
 
-      <div className="space-y-4">
+  return (
+    <Modal open={!!purchase} onClose={onClose} title="PAGAR A PROVEEDOR" width={820}>
+      <div className="flex flex-col lg:flex-row lg:gap-6">
 
-        {/* Diario de pago. Desplegable y no botones: con varios diarios cargados la fila se
-            desbordaba y empujaba el resto del formulario fuera de la vista. */}
+        {/* ── Columna principal: lo que se teclea ── */}
+        <div className="flex-1 min-w-0 space-y-4">
+
+        {/* Botonera método → banco → caja, filtrada a diarios con salidas: al proveedor no se
+            le paga por un Punto de Venta. */}
         <Field label="DIARIO DE PAGO *">
-          <CustomSelect
-            value={form.payment_journal_id === "" ? "" : String(form.payment_journal_id)}
-            placeholder="Seleccionar diario..."
-            options={outflowJournals.map(j => ({ value: String(j.id), label: j.name }))}
-            onChange={(v) => {
-              // El id vuelve a número: el resto del formulario compara con j.id sin convertir.
-              const id = parseInt(v, 10);
-              const j = activeJournals.find(x => x.id === id);
-              if (!j) return;
+          <JournalPickerButton
+            value={form.payment_journal_id}
+            journals={outflowJournals}
+            methodPrompt={{ tag: "Pago a proveedor", title: "¿De qué caja sale el pago?" }}
+            onSelect={(j) => {
               const newCurId = j.currency_id || baseCurrency?.id;
               const newCur   = activeCurrencies.find(c => c.id === parseInt(newCurId));
               const newRate  = (!newCur || newCur.is_base) ? 1 : parseFloat(newCur.exchange_rate || 1);
               const newAmt   = (balanceUsd * newRate).toFixed(2);
               setForm(p => ({
                 ...p,
-                payment_journal_id: id,
+                payment_journal_id: j.id,
                 pay_currency_id:    newCurId || p.pay_currency_id,
                 // Otra moneda, otra tasa: la escrita para la anterior no aplica.
                 exchange_rate:      "",
@@ -203,17 +207,41 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
             />
           </Field>
         )}
+        </div>
+        {/* ── fin columna principal ── */}
 
-        {/* Notas */}
-        <Field label="NOTAS">
-          <input
-            type="text"
-            value={form.notes}
-            onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-            placeholder="Observaciones..."
-            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
-          />
-        </Field>
+        {/* ── Columna lateral: contexto de solo lectura ── */}
+        <aside className="lg:w-[290px] shrink-0 space-y-4 mt-5 lg:mt-0 lg:border-l lg:border-border/20 dark:lg:border-white/5 lg:pl-6">
+
+          {resumenCompra}
+
+          {amountBase > 0 && (
+            <div className={`rounded-xl border p-3.5 space-y-1.5 ${settles ? "border-success/30 bg-success/5" : "border-warning/30 bg-warning/5"}`}>
+              <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/40">
+                Después de este pago
+              </div>
+              <Row label="Total pagado" value={fmt(paidTotalBase)} valueClass="text-success font-black" />
+              <div className="border-t border-border/20 dark:border-white/5 pt-1.5">
+                <Row
+                  label={settles ? "Compra saldada" : "Saldo restante"}
+                  value={fmt(settles ? 0 : remainingBase)}
+                  valueClass={`font-black ${settles ? "text-success" : "text-warning"}`}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Notas */}
+          <Field label="NOTAS">
+            <input
+              type="text"
+              value={form.notes}
+              onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+              placeholder="Observaciones..."
+              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+            />
+          </Field>
+        </aside>
       </div>
 
       {/* Acciones */}

@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useApp } from "../../context/AppContext";
 import { journalsForWarehouse } from "../../helpers";
+import { enterTopOverlay } from "../../helpers/overlayGuard";
 import MethodBankLogo from "./MethodBankLogo";
 
-// Botonera de cobro rápido para "Pago Inmediato". Dos o tres toques, botones grandes y
+// Botonera para elegir una caja/diario en tres toques como mucho. Botones grandes y
 // numerados como el autopago del banco, para operar con el teclado sin buscar el ratón:
 //
 //   1. Método de pago  (Efectivo, Punto de venta, Pago móvil, Transferencia…)
 //   2. Banco           — o moneda, cuando el método no lleva banco (Efectivo)
 //   3. Caja            — solo si el banco/moneda tiene más de una caja para ese método
 //
-// Al llegar a una sola caja se cierra y se abre "Registrar pago" con ella ya fijada.
+// Al llegar a una sola caja se cierra y devuelve el diario por `onPick`. Se usa en el cobro
+// ("Pago Inmediato" y el vuelto), y en ingresos, egresos, devoluciones, cobro conjunto y
+// pagos a proveedores (a través de JournalPickerButton).
+//
+// `journals`: lista ya filtrada por el que abre (sucursal, compartidos…). Si no viene, se
+// arma con `warehouseId`. `outflowOnly` recorta a métodos que permiten sacar dinero.
 
 function ordenar(a, b) {
     return (a.sort_order ?? 0) - (b.sort_order ?? 0) || String(a.name).localeCompare(String(b.name));
@@ -38,11 +45,15 @@ function BotonGrande({ n, name, image, onClick }) {
 // vuelto, así que quien lo abre puede cambiar el encabezado.
 const PROMPT_COBRO = { tag: "Cobro inmediato", title: "¿Cómo paga el cliente?" };
 
-export default function ImmediatePayPicker({ warehouseId, onPick, onClose, outflowOnly = false, methodPrompt = PROMPT_COBRO }) {
+export default function ImmediatePayPicker({ journals: journalsProp, warehouseId, onPick, onClose, outflowOnly = false, methodPrompt = PROMPT_COBRO }) {
     const { activePaymentMethods, activeJournals, activeBanks, activeCurrencies, baseCurrency } = useApp();
 
-    // Métodos que permiten sacar dinero (efectivo, transferencia…). Para el vuelto no tiene
-    // sentido ofrecer un Punto de Venta.
+    // Mientras está abierto, los Modal de detrás no se cierran con Escape: este overlay
+    // maneja su propio Escape (retrocede un paso o cierra).
+    useEffect(() => enterTopOverlay(), []);
+
+    // Métodos que permiten sacar dinero (efectivo, transferencia…). Para egresos, vuelto o
+    // pagos a proveedores no tiene sentido ofrecer un Punto de Venta.
     const outflowCodes = useMemo(
         () => new Set((activePaymentMethods || []).filter(m => m.allows_outflow !== false).map(m => m.code)),
         [activePaymentMethods],
@@ -50,10 +61,10 @@ export default function ImmediatePayPicker({ warehouseId, onPick, onClose, outfl
 
     const journals = useMemo(
         () => {
-            const js = journalsForWarehouse(activeJournals, warehouseId);
+            const js = journalsProp || journalsForWarehouse(activeJournals, warehouseId);
             return outflowOnly ? js.filter(j => outflowCodes.has(j.type)) : js;
         },
-        [activeJournals, warehouseId, outflowOnly, outflowCodes],
+        [journalsProp, activeJournals, warehouseId, outflowOnly, outflowCodes],
     );
 
     const journalsOfMethod = (code) => journals.filter(j => j.type === code).sort(ordenar);
@@ -178,7 +189,9 @@ export default function ImmediatePayPicker({ warehouseId, onPick, onClose, outfl
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [step, items.length, sel.method, sel.group]);
 
-    return (
+    // Portal a body: dentro de un <Modal> (overflow/backdrop-filter) un `fixed` anidado se
+    // recortaba o quedaba detrás. Mismo motivo por el que CustomSelect portea su menú.
+    return createPortal(
         <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150" onKeyDown={e => e.stopPropagation()}>
             <div className="w-full max-w-md bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out">
 
@@ -221,6 +234,7 @@ export default function ImmediatePayPicker({ warehouseId, onPick, onClose, outfl
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

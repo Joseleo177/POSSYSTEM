@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from "react";
 import Modal from "../ui/Modal";
-import CustomSelect from "../ui/CustomSelect";
 import DatePicker from "../ui/DatePicker";
+import JournalPickerButton from "../cobro/JournalPickerButton";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import { fmtBase, todayISO, saleTotalAtRate, journalsForSales } from "../../helpers";
@@ -234,13 +234,12 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
       <div className="space-y-4">
 
         <Field label="MÉTODO DE PAGO *">
-          <CustomSelect
-            value={form.journal_id === "" ? "" : String(form.journal_id)}
+          <JournalPickerButton
+            value={form.journal_id}
+            journals={activeJournals}
             placeholder="Seleccionar método..."
-            options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
-            onChange={(v) => {
-              const id = v === "" ? "" : parseInt(v, 10);
-              const j = activeJournals.find(x => x.id === id);
+            methodPrompt={{ tag: "Cobro conjunto", title: "¿Cómo paga el cliente?" }}
+            onSelect={(j) => {
               const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
               const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
               // Elegir el método deja el monto listo, igual que en el cobro de una factura:
@@ -248,8 +247,8 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
               // moneda, así que la cifra se recalcula con la tasa de la moneda nueva.
               setForm(p => ({
                 ...p,
-                journal_id: id,
-                amount: j ? deudaEnPagoAt(r).toFixed(2) : "",
+                journal_id: j.id,
+                amount: deudaEnPagoAt(r).toFixed(2),
                 // La tasa escrita a mano era de la moneda anterior: arrastrarla convertiría
                 // este cobro a un número que no tiene nada que ver.
                 rate: "",
@@ -385,13 +384,15 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                 {salidas.map((salida, idx) => (
                   <div key={idx} className="flex gap-2 items-start">
                     <div className="flex-1 min-w-0">
-                      <CustomSelect
-                        value={salida.journal_id === "" ? "" : String(salida.journal_id)}
+                      <JournalPickerButton
+                        value={salida.journal_id}
+                        journals={activeJournals}
+                        outflowOnly
                         placeholder="Caja del vuelto..."
-                        options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
-                        onChange={(v) => setForm(p => {
+                        methodPrompt={{ tag: "Dar cambio", title: "¿De qué caja sale el vuelto?" }}
+                        onSelect={(j) => setForm(p => {
                           const partes = [...p.change_parts];
-                          const id = v === "" ? "" : parseInt(v, 10);
+                          const id = j.id;
                           const { rate: r } = datosCaja(id);
                           // Al elegir la caja se sugiere lo que falta por devolver, convertido
                           // a su moneda: en la primera es el sobrante entero, en la siguiente
@@ -403,7 +404,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                             return acc + (Number.isFinite(n) ? n / rr : 0);
                           }, 0);
                           const falta = Math.max(0, sobrante - yaAsignado);
-                          partes[idx] = { journal_id: id, amount: id === "" ? "" : round2(falta * r).toFixed(2) };
+                          partes[idx] = { journal_id: id, amount: round2(falta * r).toFixed(2) };
                           return { ...p, change_parts: partes };
                         })}
                       />

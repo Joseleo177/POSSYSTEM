@@ -4,10 +4,10 @@ import { api } from "../services/api";
 import Modal from "./ui/Modal";
 import { saleTotalAtRate, todayISO, PAYMENT_TOLERANCE } from "../helpers";
 import DatePicker from "./ui/DatePicker";
-import CustomSelect from "./ui/CustomSelect";
 import RateField, { resolveRate } from "./ui/RateField";
 import { journalsForWarehouse } from "../helpers";
 import ImmediatePayPicker from "./cobro/ImmediatePayPicker";
+import JournalPickerButton from "./cobro/JournalPickerButton";
 
 const getEmpty = () => ({
   amount: "",
@@ -27,7 +27,7 @@ const getEmpty = () => ({
   credit_change: false,
 });
 
-export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJournalId = null, onChangeMethod = null }) {
+export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJournalId = null }) {
   const { notify, baseCurrency, activeCurrencies, activeJournals: allActiveJournals, can } = useApp();
   // Solo los diarios de la sucursal de esta venta (más los compartidos): un cajero de la
   // sucursal A no debe poder cobrar contra la caja de la B.
@@ -287,9 +287,9 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   }, [lockedJournalId, activeJournals]);
   const methodLocked = !!lockedJournalId && form.payment_journal_id === lockedJournalId;
 
-  // Con el diario ya fijado, el cajero solo tiene que teclear lo que recibió: se le lleva el
-  // foco a ese campo. Doble rAF para pasar por detrás del auto-foco de Modal, que apuntaría
-  // al primer interactivo (el botón "Cambiar").
+  // Con el diario ya fijado ("Pago Inmediato"), el cajero solo tiene que teclear lo que
+  // recibió: se le lleva el foco a ese campo. Doble rAF para pasar por detrás del auto-foco
+  // de Modal, que apuntaría al primer interactivo (el botón del método).
   const receivedRef = useRef(null);
   useEffect(() => {
     if (!methodLocked) return;
@@ -472,13 +472,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   );
 
   return (
-    <Modal
-      open={!!sale}
-      // Con la botonera del vuelto abierta, Escape / clic-fuera la cierran a ella, no al cobro.
-      onClose={changePickerIdx !== null ? () => setChangePickerIdx(null) : onClose}
-      title="REGISTRAR PAGO"
-      width={880}
-    >
+    <Modal open={!!sale} onClose={onClose} title="REGISTRAR PAGO" width={880}>
       {/* Dos columnas en escritorio: a la izquierda lo que se teclea, a la derecha el
           contexto. En móvil se apila en el mismo orden: primero lo que el cajero teclea
           (método, monto recibido…), después el contexto (resumen, proyección, notas). */}
@@ -526,39 +520,17 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
         {/* Campos de pago — ocultos si el crédito cubre todo */}
         {!creditCoversAll && (<>
 
-        {/* Con "Pago Inmediato" el diario ya se eligió en la botonera: aquí solo se confirma,
-            con opción a cambiarlo si el cajero se equivocó de botón. */}
-        {methodLocked ? (
-          <Field label="MÉTODO DE PAGO">
-            <div className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 flex items-center justify-between">
-              <span className="text-[13px] font-black text-content dark:text-white truncate">
-                {selectedJournal?.name || "—"}
-              </span>
-              <button
-                type="button"
-                onClick={onChangeMethod || (() => setForm(p => ({ ...p, payment_journal_id: "" })))}
-                className="shrink-0 text-[10px] font-black uppercase tracking-wide text-brand-500 hover:brightness-110 transition-all"
-              >
-                Cambiar
-              </button>
-            </div>
-          </Field>
-        ) : (
-          /* Un desplegable en vez de una botonera: con siete u ocho diarios los chips se
-             desbordaban en cuatro filas y en móvil empujaban el resto del formulario fuera
-             de la vista. El desplegable ocupa una línea sin importar cuántos haya. */
-          <Field label="MÉTODO DE PAGO *">
-            <CustomSelect
-              value={form.payment_journal_id === "" ? "" : String(form.payment_journal_id)}
-              placeholder="Seleccionar método..."
-              options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
-              onChange={(v) => {
-                // El id vuelve a número: el resto del formulario compara con j.id sin convertir.
-                selectJournal(parseInt(v, 10));
-              }}
-            />
-          </Field>
-        )}
+        {/* Botonera método → banco → caja, la misma en todo el sistema. Con "Pago Inmediato"
+            llega ya elegida (lockedJournalId); desde Clientes / Facturas se elige acá. */}
+        <Field label="MÉTODO DE PAGO *">
+          <JournalPickerButton
+            value={form.payment_journal_id}
+            journals={activeJournals}
+            onSelect={(j) => selectJournal(j.id)}
+            placeholder="Seleccionar método..."
+            methodPrompt={{ tag: "Cobro", title: "¿Cómo paga el cliente?" }}
+          />
+        </Field>
 
         {/* Arranca en la del sistema y se puede escribir a mano para este cobro: la deuda se
             pacta en divisas y el cliente paga a la tasa del día en que paga —una factura vieja

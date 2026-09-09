@@ -15,6 +15,19 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
 
   const closeModal = () => { setShowModal(false); setEditJournal(null); setNewJournal(EMPTY_JOURNAL); };
 
+  // Diarios que comparten método + banco + moneda + sucursal: son la misma caja repetida.
+  // El backend ya no deja crear nuevos; esto marca los que quedaron de antes para depurarlos.
+  const dupKey = (j) => `${j.type || ""}|${j.bank_id || ""}|${j.currency_id || ""}|${j.warehouse_id || ""}`;
+  const dupIds = (() => {
+    const byKey = {};
+    (journals || []).forEach(j => {
+      const k = dupKey(j);
+      if (!byKey[k]) byKey[k] = [];
+      byKey[k].push(j.id);
+    });
+    return new Set(Object.values(byKey).filter(ids => ids.length > 1).flat());
+  })();
+
   // form y setter unificados para el modal
   const form = editJournal ?? newJournal;
   const setForm = (updater) => editJournal ? setEditJournal(updater) : setNewJournal(updater);
@@ -91,7 +104,14 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
                           className="input"
                         />
                       ) : (
-                        <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{j.name}</span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{j.name}</span>
+                          {dupIds.has(j.id) && (
+                            <span className="badge badge-danger shadow-none text-[8px]" title="Otro diario tiene el mismo método, banco y moneda. Desactívalo o elimínalo.">
+                              Duplicado
+                            </span>
+                          )}
+                        </span>
                       )}
                     </td>
                     <td>

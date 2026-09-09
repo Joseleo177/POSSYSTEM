@@ -465,7 +465,6 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                 <PaymentFormModal
                     sale={{ ...receipt, balance: currentBalance, amount_paid: paidBase }}
                     lockedJournalId={lockedJournalId}
-                    onChangeMethod={() => { setShowPayModal(false); setLockedJournalId(null); setShowPicker(true); }}
                     onClose={() => { setShowPayModal(false); setLockedJournalId(null); }}
                     onSuccess={(res) => { onPay(res); setShowPayModal(false); setLockedJournalId(null); }}
                 />

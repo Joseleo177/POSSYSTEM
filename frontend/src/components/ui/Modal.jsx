@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { hasTopOverlay } from "../../helpers/overlayGuard";
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -39,6 +40,9 @@ export default function Modal({ open, onClose, title, children, width = 560 }) {
 
     const handleKey = (e) => {
       if (e.key === "Escape") {
+        // Con una botonera de cobro (u otro overlay) por encima, es ella la que maneja
+        // Escape: retrocede un paso o se cierra, sin tumbar este Modal.
+        if (hasTopOverlay()) return;
         e.stopPropagation();
         onClose();
         return;

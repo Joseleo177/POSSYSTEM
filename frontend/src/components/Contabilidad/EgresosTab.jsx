@@ -11,6 +11,7 @@ import Pagination from "../ui/Pagination";
 import RateField from "../ui/RateField";
 import { useApp } from "../../context/AppContext";
 import MovementDetailModal from "./MovementDetailModal";
+import JournalPickerButton from "../cobro/JournalPickerButton";
 
 const STATUS_BADGE = {
     activo:  "badge-success",
@@ -241,7 +242,15 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                             <label className="label">Diario de Pago</label>
                             {/* Al cambiar de diario se limpia la tasa tecleada: pertenecía a la
                                 moneda anterior y aplicarla a otra convertiría mal el monto. */}
-                            <CustomSelect value={form.payment_journal_id} onChange={v => setForm(p => ({ ...p, payment_journal_id: v, rate: "" }))} placeholder="Sin diario" options={[{ value: "", label: "Sin diario" }, ...journalsForWarehouse(journals || [], form.warehouse_id).map(j => ({ value: String(j.id), label: j.name }))]} />
+                            <JournalPickerButton
+                                value={form.payment_journal_id}
+                                journals={journalsForWarehouse(journals || [], form.warehouse_id)}
+                                outflowOnly
+                                onSelect={j => setForm(p => ({ ...p, payment_journal_id: String(j.id), rate: "" }))}
+                                onClear={() => setForm(p => ({ ...p, payment_journal_id: "", rate: "" }))}
+                                placeholder="Sin diario"
+                                methodPrompt={{ tag: "Egreso", title: "¿De qué caja sale?" }}
+                            />
                         </div>
                     </div>
 

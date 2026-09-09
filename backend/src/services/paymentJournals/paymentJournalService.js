@@ -148,9 +148,30 @@ async function getAll(req) {
   return { data: journals.map(flattenJournal) };
 }
 
+// Dos diarios con el mismo método + banco + moneda + sucursal son la misma caja: en la
+// botonera de cobro salen como dos opciones idénticas y obligan a un paso de más para elegir
+// entre cosas que no se distinguen. El modelo no tiene "número de cuenta", así que esa
+// combinación identifica al diario de forma única. Los NULL cuentan como valor (efectivo sin
+// banco, moneda base).
+async function assertNoDuplicate({ type, bank_id, currency_id, warehouse_id }, excludeId = null) {
+  const where = {
+    type:         type || null,
+    bank_id:      bank_id || null,
+    currency_id:  currency_id || null,
+    warehouse_id: warehouse_id ?? null,
+  };
+  if (excludeId) where.id = { [Sequelize.Op.ne]: excludeId };
+  const dup = await PaymentJournal.findOne({ where });
+  if (dup) {
+    const e = new Error(`Ya existe el diario "${dup.name}" con el mismo método, banco y moneda${dup.active ? "" : " (está inactivo: actívalo)"}. Usa ese en vez de crear otro.`);
+    e.status = 409; e.isOperational = true; throw e;
+  }
+}
+
 async function createJournal({ name, type, bank_id, color, sort_order, currency_id, warehouse_id }, req) {
   if (!name) { const e = new Error("El nombre es requerido"); e.status = 400; throw e; }
   const wid = await assertJournalWarehouse(req, warehouse_id);
+  await assertNoDuplicate({ type, bank_id, currency_id, warehouse_id: wid });
   const journal = await PaymentJournal.create({
     name,
     warehouse_id: wid,
@@ -169,6 +190,20 @@ async function updateJournal(id, { name, type, bank_id, color, active, sort_orde
   // No se edita un diario de otra sucursal; los compartidos son del admin.
   await assertWarehouseAccess(req, journal.warehouse_id, { optional: true });
   const wid = warehouse_id !== undefined ? await assertJournalWarehouse(req, warehouse_id) : journal.warehouse_id;
+  // Solo se valida si la edición TOCA la identidad del diario (método/banco/moneda/sucursal).
+  // Así un duplicado que ya existía todavía se puede renombrar, recolorear o desactivar —que
+  // es justamente cómo se resuelve—, pero no se puede crear uno nuevo editando.
+  const nextType = type !== undefined ? (type || null) : journal.type;
+  const nextBank = bank_id !== undefined ? (bank_id || null) : journal.bank_id;
+  const nextCur  = currency_id !== undefined ? (currency_id || null) : journal.currency_id;
+  const identidadCambia =
+    nextType !== journal.type ||
+    nextBank !== journal.bank_id ||
+    nextCur !== journal.currency_id ||
+    (wid ?? null) !== (journal.warehouse_id ?? null);
+  if (identidadCambia) {
+    await assertNoDuplicate({ type: nextType, bank_id: nextBank, currency_id: nextCur, warehouse_id: wid }, journal.id);
+  }
   await journal.update({
     name,
     warehouse_id: wid,
