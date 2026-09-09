@@ -1,4 +1,4 @@
-const { PaymentJournal, Currency, Bank, Sale, Warehouse, Sequelize, sequelize } = require("../../models");
+const { PaymentJournal, PaymentJournalWarehouse, Currency, Bank, Sale, Warehouse, Sequelize, sequelize } = require("../../models");
 const { localDate, TZ } = require("../reports/shared");
 const { visibleWarehouseIds, isAdmin, assertWarehouseAccess } = require("../../middleware/auth");
 
@@ -13,8 +13,25 @@ function flattenJournal(j) {
   jj.exchange_rate    = jj.Currency?.exchange_rate ?? 1;
   jj.bank_name        = jj.Bank?.name         ?? null;
   jj.warehouse_name   = jj.Warehouse?.name    ?? null;
-  delete jj.Currency; delete jj.Bank; delete jj.Warehouse;
+  // Fuente de verdad de a qué sucursales atiende. Array vacío = todas (compartido).
+  jj.warehouse_ids    = Array.isArray(jj.Sucursales) ? jj.Sucursales.map(w => w.id) : [];
+  jj.warehouse_names  = Array.isArray(jj.Sucursales) ? jj.Sucursales.map(w => w.name) : [];
+  delete jj.Currency; delete jj.Bank; delete jj.Warehouse; delete jj.Sucursales;
   return jj;
+}
+
+// Condición SQL sobre "PaymentJournal": el diario atiende a alguna de estas sucursales, o a
+// todas si no tiene ninguna asignada (compartido). `arg`: un id, una lista de ids, o "shared".
+function journalServes(arg) {
+  if (arg === "shared") {
+    return Sequelize.literal(`NOT EXISTS (SELECT 1 FROM payment_journal_warehouses pjw WHERE pjw.journal_id = "PaymentJournal".id)`);
+  }
+  const ids = (Array.isArray(arg) ? arg : [arg]).map(n => parseInt(n, 10)).filter(Number.isInteger);
+  const inClause = ids.length ? ids.join(",") : "NULL";
+  return Sequelize.literal(`(
+    NOT EXISTS (SELECT 1 FROM payment_journal_warehouses pjw WHERE pjw.journal_id = "PaymentJournal".id)
+    OR EXISTS (SELECT 1 FROM payment_journal_warehouses pjw WHERE pjw.journal_id = "PaymentJournal".id AND pjw.warehouse_id IN (${inClause}))
+  )`);
 }
 
 function tenantFilter(req) {
@@ -86,21 +103,13 @@ async function warehouseFilter(req, wid = null) {
 async function journalScope(req, wid = null) {
   if (wid) {
     await assertWarehouseAccess(req, wid);
-    return {
-      [Sequelize.Op.or]: [
-        { warehouse_id: null },
-        { warehouse_id: parseInt(wid) },
-      ],
-    };
+    return { [Sequelize.Op.and]: [journalServes(parseInt(wid))] };
   }
   const allowed = await visibleWarehouseIds(req);
-  if (allowed === null) return {};
-  return {
-    [Sequelize.Op.or]: [
-      { warehouse_id: null },
-      { warehouse_id: { [Sequelize.Op.in]: allowed } },
-    ],
-  };
+  if (allowed === null) return {};                    // admin: sin recorte
+  const list = allowed.filter(Number.isInteger);
+  if (!list.length) return {};
+  return { [Sequelize.Op.and]: [journalServes(list)] };
 }
 
 // Un diario solo se puede crear o editar sobre una sucursal propia. `null` (compartido) es
@@ -117,21 +126,29 @@ async function assertNoEsDeposito(warehouseId) {
   }
 }
 
-async function assertJournalWarehouse(req, warehouseId) {
-  await assertNoEsDeposito(warehouseId);
-  if (isAdmin(req)) return warehouseId ? parseInt(warehouseId) : null;
+// Un diario puede atender a varias sucursales. Devuelve la lista normalizada (ints, sin
+// repetidos). Vacía = compartido (todas): eso alcanza a sucursales que un encargado no
+// administra, así que solo el admin lo puede dejar así.
+async function resolveJournalWarehouses(req, warehouseIds) {
+  const list = [...new Set((warehouseIds || []).map(n => parseInt(n, 10)).filter(Number.isInteger))];
 
-  const allowed = await visibleWarehouseIds(req);
-  if (!warehouseId) {
-    // Sin sucursal elegida se cae en la del propio empleado; si tiene varias, hay que decidir.
-    if (allowed.length === 1) return allowed[0];
-    const e = new Error("Indica la sucursal a la que pertenece el diario"); e.status = 400; e.isOperational = true; throw e;
+  const admin = isAdmin(req);
+  const allowed = admin ? null : await visibleWarehouseIds(req);
+
+  if (!list.length) {
+    if (admin) return [];
+    // Un encargado sin elegir sucursal: si tiene una sola, se asume esa; si tiene varias, decide.
+    if (allowed.length === 1) return [allowed[0]];
+    const e = new Error("Indica a qué sucursales pertenece el diario"); e.status = 400; e.isOperational = true; throw e;
   }
-  const wid = parseInt(warehouseId);
-  if (!allowed.includes(wid)) {
-    const e = new Error("No tienes acceso a esa sucursal"); e.status = 403; e.isOperational = true; throw e;
+
+  for (const wid of list) {
+    await assertNoEsDeposito(wid);
+    if (!admin && !allowed.includes(wid)) {
+      const e = new Error("No tienes acceso a una de esas sucursales"); e.status = 403; e.isOperational = true; throw e;
+    }
   }
-  return wid;
+  return list;
 }
 
 async function getAll(req) {
@@ -141,58 +158,78 @@ async function getAll(req) {
     include: [
       { model: Currency, attributes: ['code', 'symbol', 'is_base', 'exchange_rate'], required: false },
       { model: Bank,     attributes: ['name'],                                        required: false },
-      { model: Warehouse, attributes: ['id', 'name'],                                 required: false }
+      { model: Warehouse, attributes: ['id', 'name'],                                 required: false },
+      { model: Warehouse, as: 'Sucursales', attributes: ['id', 'name'], through: { attributes: [] }, required: false },
     ],
     order: [['sort_order', 'ASC'], ['id', 'ASC']]
   });
   return { data: journals.map(flattenJournal) };
 }
 
-// Dos diarios con el mismo método + banco + moneda + sucursal son la misma caja: en la
-// botonera de cobro salen como dos opciones idénticas y obligan a un paso de más para elegir
-// entre cosas que no se distinguen. El modelo no tiene "número de cuenta", así que esa
-// combinación identifica al diario de forma única. Los NULL cuentan como valor (efectivo sin
-// banco, moneda base).
-async function assertNoDuplicate({ type, bank_id, currency_id, warehouse_id }, excludeId = null) {
+// Dos diarios con el mismo método + banco + moneda + MISMO juego de sucursales son la misma
+// caja: en la botonera salen como dos opciones idénticas. El modelo no tiene "número de
+// cuenta", así que esa combinación lo identifica de forma única. Los NULL cuentan como valor.
+const widKey = (ids) => [...new Set((ids || []).map(Number))].sort((a, b) => a - b).join(",");
+
+async function assertNoDuplicate({ type, bank_id, currency_id, warehouse_ids }, excludeId = null) {
   const where = {
-    type:         type || null,
-    bank_id:      bank_id || null,
-    currency_id:  currency_id || null,
-    warehouse_id: warehouse_id ?? null,
+    type:        type || null,
+    bank_id:     bank_id || null,
+    currency_id: currency_id || null,
   };
   if (excludeId) where.id = { [Sequelize.Op.ne]: excludeId };
-  const dup = await PaymentJournal.findOne({ where });
+  const candidatos = await PaymentJournal.findAll({
+    where,
+    include: [{ model: Warehouse, as: 'Sucursales', attributes: ['id'], through: { attributes: [] }, required: false }],
+  });
+  const mine = widKey(warehouse_ids);
+  const dup = candidatos.find(c => widKey((c.Sucursales || []).map(w => w.id)) === mine);
   if (dup) {
-    const e = new Error(`Ya existe el diario "${dup.name}" con el mismo método, banco y moneda${dup.active ? "" : " (está inactivo: actívalo)"}. Usa ese en vez de crear otro.`);
+    const e = new Error(`Ya existe el diario "${dup.name}" con el mismo método, banco, moneda y sucursales${dup.active ? "" : " (está inactivo: actívalo)"}. Usa ese en vez de crear otro.`);
     e.status = 409; e.isOperational = true; throw e;
   }
 }
 
-async function createJournal({ name, type, bank_id, color, sort_order, currency_id, warehouse_id }, req) {
+// Acepta `warehouse_ids` (array, forma nueva) o `warehouse_id` (un id/NULL, compat).
+function readWarehouseInput(body) {
+  if (Array.isArray(body.warehouse_ids)) return { given: true, ids: body.warehouse_ids };
+  if (body.warehouse_id !== undefined)   return { given: true, ids: body.warehouse_id ? [body.warehouse_id] : [] };
+  return { given: false, ids: [] };
+}
+
+async function createJournal(body, req) {
+  const { name, type, bank_id, color, sort_order, currency_id } = body;
   if (!name) { const e = new Error("El nombre es requerido"); e.status = 400; throw e; }
-  const wid = await assertJournalWarehouse(req, warehouse_id);
-  await assertNoDuplicate({ type, bank_id, currency_id, warehouse_id: wid });
+  const widList = await resolveJournalWarehouses(req, readWarehouseInput(body).ids);
+  await assertNoDuplicate({ type, bank_id, currency_id, warehouse_ids: widList });
   const journal = await PaymentJournal.create({
     name,
-    warehouse_id: wid,
+    warehouse_id: widList[0] ?? null,   // cache denormalizada
     type:        type        || null,
     bank_id:     bank_id     || null,
     color:       color       || "#555555",
     sort_order:  sort_order  ?? 0,
     currency_id: currency_id || null
   });
+  await journal.setSucursales(widList);
   return { data: journal };
 }
 
-async function updateJournal(id, { name, type, bank_id, color, active, sort_order, currency_id, warehouse_id }, req) {
-  const journal = await PaymentJournal.findByPk(id);
+async function updateJournal(id, body, req) {
+  const { name, type, bank_id, color, active, sort_order, currency_id } = body;
+  const journal = await PaymentJournal.findByPk(id, {
+    include: [{ model: Warehouse, as: 'Sucursales', attributes: ['id'], through: { attributes: [] }, required: false }],
+  });
   if (!journal) { const e = new Error("Diario no encontrado"); e.status = 404; throw e; }
-  // No se edita un diario de otra sucursal; los compartidos son del admin.
-  await assertWarehouseAccess(req, journal.warehouse_id, { optional: true });
-  const wid = warehouse_id !== undefined ? await assertJournalWarehouse(req, warehouse_id) : journal.warehouse_id;
-  // Solo se valida si la edición TOCA la identidad del diario (método/banco/moneda/sucursal).
-  // Así un duplicado que ya existía todavía se puede renombrar, recolorear o desactivar —que
-  // es justamente cómo se resuelve—, pero no se puede crear uno nuevo editando.
+  // No se edita un diario de sucursales ajenas; los compartidos son del admin.
+  const actuales = (journal.Sucursales || []).map(w => w.id);
+  for (const wid of actuales) await assertWarehouseAccess(req, wid, { optional: true });
+
+  const wInput = readWarehouseInput(body);
+  const widList = wInput.given ? await resolveJournalWarehouses(req, wInput.ids) : actuales;
+
+  // Solo se valida el duplicado si la edición TOCA la identidad (método/banco/moneda/sucursales):
+  // así un duplicado que ya existía se puede renombrar/recolorear/desactivar, pero no crear uno.
   const nextType = type !== undefined ? (type || null) : journal.type;
   const nextBank = bank_id !== undefined ? (bank_id || null) : journal.bank_id;
   const nextCur  = currency_id !== undefined ? (currency_id || null) : journal.currency_id;
@@ -200,13 +237,13 @@ async function updateJournal(id, { name, type, bank_id, color, active, sort_orde
     nextType !== journal.type ||
     nextBank !== journal.bank_id ||
     nextCur !== journal.currency_id ||
-    (wid ?? null) !== (journal.warehouse_id ?? null);
+    widKey(widList) !== widKey(actuales);
   if (identidadCambia) {
-    await assertNoDuplicate({ type: nextType, bank_id: nextBank, currency_id: nextCur, warehouse_id: wid }, journal.id);
+    await assertNoDuplicate({ type: nextType, bank_id: nextBank, currency_id: nextCur, warehouse_ids: widList }, journal.id);
   }
   await journal.update({
     name,
-    warehouse_id: wid,
+    warehouse_id: widList[0] ?? null,
     type:        type        || null,
     bank_id:     bank_id     || null,
     color:       color       || "#555555",
@@ -214,6 +251,7 @@ async function updateJournal(id, { name, type, bank_id, color, active, sort_orde
     sort_order:  sort_order  ?? 0,
     currency_id: currency_id || null
   });
+  if (wInput.given) await journal.setSucursales(widList);
   return { data: journal };
 }
 
@@ -223,6 +261,7 @@ async function deleteJournal(id, req) {
   const journal = await PaymentJournal.findByPk(id);
   if (!journal) { const e = new Error("Diario no encontrado"); e.status = 404; throw e; }
   await assertWarehouseAccess(req, journal.warehouse_id, { optional: true });
+  await PaymentJournalWarehouse.destroy({ where: { journal_id: id } });
   await journal.destroy();
   return { message: "Diario eliminado" };
 }
@@ -547,8 +586,8 @@ async function getBankMovements(req) {
   if (wid) await assertWarehouseAccess(req, wid);
 
   const journalWhere = { bank_id: bankId, active: true, ...(scoped ? { company_id } : {}) };
-  if (sharedOnly) journalWhere.warehouse_id = null;
-  else if (wid) journalWhere.warehouse_id = wid;
+  if (sharedOnly)   journalWhere[Sequelize.Op.and] = [journalServes("shared")];
+  else if (wid)     journalWhere[Sequelize.Op.and] = [journalServes(wid)];
   else Object.assign(journalWhere, await journalScope(req));
 
   // Todos los diarios activos del banco (filtrado por empresa y por sucursal: un banco

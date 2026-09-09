@@ -5,7 +5,7 @@ import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
 import CustomSelect from "../ui/CustomSelect";
 
-const EMPTY_JOURNAL = { name: "", type: "", color: "#6366f1", active: true, bank_id: null, currency_id: null, warehouse_id: null };
+const EMPTY_JOURNAL = { name: "", type: "", color: "#6366f1", active: true, bank_id: null, currency_id: null, warehouse_ids: [] };
 
 export default function DiariosTab({ notify, can, journals, loadJournals, activeMethods, methodByCode, activeBanks, currencies, warehouses = [] }) {
   const [newJournal, setNewJournal] = useState(EMPTY_JOURNAL);
@@ -15,9 +15,9 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
 
   const closeModal = () => { setShowModal(false); setEditJournal(null); setNewJournal(EMPTY_JOURNAL); };
 
-  // Diarios que comparten método + banco + moneda + sucursal: son la misma caja repetida.
-  // El backend ya no deja crear nuevos; esto marca los que quedaron de antes para depurarlos.
-  const dupKey = (j) => `${j.type || ""}|${j.bank_id || ""}|${j.currency_id || ""}|${j.warehouse_id || ""}`;
+  // Diarios que comparten método + banco + moneda + el MISMO juego de sucursales: son la
+  // misma caja repetida. El backend ya no deja crear nuevos; esto marca los viejos.
+  const dupKey = (j) => `${j.type || ""}|${j.bank_id || ""}|${j.currency_id || ""}|${[...(j.warehouse_ids || [])].sort((a, b) => a - b).join(",")}`;
   const dupIds = (() => {
     const byKey = {};
     (journals || []).forEach(j => {
@@ -34,12 +34,21 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
 
   const submitJournal = async () => {
     if (!form.name.trim()) return notify("El nombre es requerido", "err");
+    // Sin selector de sucursales visible (un solo local, sin permiso admin) no se manda el
+    // campo: el backend conserva lo que el diario ya tenía y, al crear, usa el local propio.
+    const puedeElegirSedes = warehouses.length > 1 || can("admin");
+    const clean = (obj) => {
+      const c = { ...obj };
+      if (!puedeElegirSedes) delete c.warehouse_ids;
+      delete c.warehouse_id; delete c.warehouse_name; delete c.warehouse_names;
+      return c;
+    };
     try {
       if (editJournal) {
-        await api.journals.update(editJournal.id, editJournal);
+        await api.journals.update(editJournal.id, clean(editJournal));
         notify("Diario actualizado");
       } else {
-        await api.journals.create(newJournal);
+        await api.journals.create(clean(newJournal));
         notify("Diario creado");
       }
       closeModal();
@@ -124,9 +133,11 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
                       <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest">{j.bank_name || j.bank || "—"}</span>
                     </td>
                     <td>
-                      {j.warehouse_name
-                        ? <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest">{j.warehouse_name}</span>
-                        : <span className="badge badge-neutral shadow-none">Compartido</span>}
+                      {(j.warehouse_ids?.length ?? 0) === 0
+                        ? <span className="badge badge-neutral shadow-none">Todas</span>
+                        : (j.warehouse_ids.length === 1
+                            ? <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest">{j.warehouse_names?.[0] || j.warehouse_name}</span>
+                            : <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest" title={(j.warehouse_names || []).join(", ")}>{j.warehouse_ids.length} sucursales</span>)}
                     </td>
                     <td className="text-center">
                       {j.currency_code ? (
@@ -144,7 +155,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
                       <td className="text-right pr-6">
                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
-                            onClick={() => { setEditJournal({ ...j }); setShowModal(true); }}
+                            onClick={() => { setEditJournal({ ...j, warehouse_ids: [...(j.warehouse_ids || [])] }); setShowModal(true); }}
                             className="p-2 rounded-xl transition-all text-content-subtle hover:text-warning hover:bg-warning/10 active:scale-90"
                             title="Editar"
                           >
@@ -220,31 +231,41 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
             />
           </div>
         </div>
-        {/* Sucursal dueña de la caja. "Compartido" es lo correcto para una cuenta bancaria
-            de la empresa donde entran cobros de todas las tiendas; una caja de efectivo, en
-            cambio, es de una sola. Solo se pregunta si hay más de una sucursal. */}
-        {(warehouses.length > 1 || can("admin")) && (
-          <div className="mb-3">
-            <div className="label mb-1">Sucursal</div>
-            <CustomSelect
-              value={form.warehouse_id ? String(form.warehouse_id) : ""}
-              onChange={v => setForm(p => ({ ...p, warehouse_id: v || null }))}
-              options={[
-                // Compartido alcanza a sucursales que un encargado no administra: el backend
-                // se lo rechaza, así que tampoco se le ofrece.
-                ...(can("admin") ? [{ value: "", label: "Compartido (todas las sucursales)" }] : []),
-                // Un depósito no cobra, así que no tiene caja: ofrecerlo acá sería crear
-                // un diario donde nunca va a entrar dinero.
-                ...warehouses.filter(w => w.sells !== false).map(w => ({ value: String(w.id), label: w.name })),
-              ]}
-              placeholder="Seleccionar sucursal..."
-              className="w-full"
-            />
-            <div className="text-[10px] font-bold text-content-subtle mt-1 opacity-60">
-              Con una sucursal elegida, esta caja solo aparece y suma en ella.
+        {/* Sucursales que atienden esta caja. Ninguna marcada = todas (compartido), lo
+            correcto para una cuenta bancaria de la empresa. Un depósito no cobra, así que no
+            se ofrece. Solo se pregunta si hay más de una sucursal. */}
+        {(warehouses.length > 1 || can("admin")) && (() => {
+          const sedes = warehouses.filter(w => w.sells !== false);
+          const marcadas = form.warehouse_ids || [];
+          const toggle = (id) => setForm(p => {
+            const cur = p.warehouse_ids || [];
+            return { ...p, warehouse_ids: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] };
+          });
+          return (
+            <div className="mb-3">
+              <div className="label mb-1">Sucursales de la caja</div>
+              <div className="flex flex-wrap gap-1.5">
+                <button type="button"
+                  onClick={() => setForm(p => ({ ...p, warehouse_ids: [] }))}
+                  className={`px-2.5 h-7 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all ${marcadas.length === 0 ? "bg-brand-500 text-black border-transparent" : "border-border/40 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-500/40"}`}>
+                  Todas
+                </button>
+                {sedes.map(w => (
+                  <button key={w.id} type="button"
+                    onClick={() => toggle(w.id)}
+                    className={`px-2.5 h-7 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all ${marcadas.includes(w.id) ? "bg-brand-500 text-black border-transparent" : "border-border/40 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-500/40"}`}>
+                    {w.name}
+                  </button>
+                ))}
+              </div>
+              <div className="text-[10px] font-bold text-content-subtle mt-1 opacity-60">
+                {marcadas.length === 0
+                  ? "Aparece y suma en todas las sucursales."
+                  : `Solo aparece y suma en ${marcadas.length === 1 ? "esa sucursal" : `esas ${marcadas.length} sucursales`}.`}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         <div className="mb-3">
           <div className="label mb-1">Banco asociado</div>

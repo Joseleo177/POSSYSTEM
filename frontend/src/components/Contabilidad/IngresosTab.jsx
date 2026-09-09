@@ -188,7 +188,7 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                                         // Si el diario elegido no sirve para la sucursal nueva (ni es
                                         // compartido ni es de ella), se limpia.
                                         const j = (journals || []).find(x => String(x.id) === String(p.payment_journal_id));
-                                        const sigueValido = j && (!j.warehouse_id || String(j.warehouse_id) === String(v));
+                                        const sigueValido = j && (!(j.warehouse_ids?.length) || j.warehouse_ids.includes(Number(v)));
                                         return { ...p, warehouse_id: v, payment_journal_id: sigueValido ? p.payment_journal_id : "", rate: sigueValido ? p.rate : "" };
                                     })}
                                     placeholder="Seleccionar..."

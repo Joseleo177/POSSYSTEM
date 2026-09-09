@@ -1,13 +1,13 @@
-const { PaymentJournal } = require("../models");
+const { PaymentJournal, PaymentJournalWarehouse } = require("../models");
 
-// Un diario pertenece a una sucursal concreta o es compartido (warehouse_id NULL = cuenta de
-// toda la empresa). Un cobro, pago o reembolso solo puede usar un diario compartido o el de
-// SU sucursal: si no, el dinero entra o sale de una caja que no es la de esa tienda y el
-// arqueo de esa sucursal deja de cuadrar. El filtro de la interfaz ya lo evita, pero esto lo
-// hace cumplir aunque la petición venga de un frontend viejo o armada a mano.
+// Un diario atiende a una o varias sucursales, o a todas (sin filas en
+// payment_journal_warehouses = compartido). Un cobro, pago o reembolso solo puede usar un
+// diario que atienda a SU sucursal: si no, el dinero entra o sale de una caja que no es la
+// de esa tienda y el arqueo de esa sucursal deja de cuadrar. El filtro de la interfaz ya lo
+// evita, pero esto lo hace cumplir aunque la petición venga de un frontend viejo.
 //
 // `journalIds` acepta un id suelto o una lista (con nulls/repetidos: vuelto sin caja, varios
-// tramos); se ignoran los vacíos y se consulta una sola vez. `transaction` opcional.
+// tramos); se ignoran los vacíos. `transaction` opcional.
 async function assertJournalsInWarehouse(journalIds, warehouseId, transaction = null) {
   const ids = [...new Set(
     (Array.isArray(journalIds) ? journalIds : [journalIds])
@@ -21,20 +21,34 @@ async function assertJournalsInWarehouse(journalIds, warehouseId, transaction = 
   const wid = parseInt(warehouseId, 10);
   if (!Number.isInteger(wid)) return;
 
-  const journals = await PaymentJournal.findAll({
-    where: { id: ids },
-    attributes: ["id", "name", "warehouse_id"],
-    ...(transaction ? { transaction } : {}),
-  });
+  const opts = transaction ? { transaction } : {};
 
-  for (const j of journals) {
-    if (j.warehouse_id != null && j.warehouse_id !== wid) {
-      const e = new Error(`El diario "${j.name}" es de otra sucursal`);
-      e.status = 400;
-      e.isOperational = true;
-      throw e;
-    }
+  // Sucursales asignadas a cada diario elegido.
+  const rows = await PaymentJournalWarehouse.findAll({
+    where: { journal_id: ids },
+    attributes: ["journal_id", "warehouse_id"],
+    ...opts,
+  });
+  const asignadas = new Map();               // journal_id -> Set(warehouse_id)
+  for (const r of rows) {
+    if (!asignadas.has(r.journal_id)) asignadas.set(r.journal_id, new Set());
+    asignadas.get(r.journal_id).add(r.warehouse_id);
   }
+
+  // Solo los que tienen sucursales asignadas Y no incluyen la nuestra son un problema.
+  const malos = ids.filter(id => asignadas.has(id) && !asignadas.get(id).has(wid));
+  if (!malos.length) return;
+
+  const journals = await PaymentJournal.findAll({
+    where: { id: malos },
+    attributes: ["id", "name"],
+    ...opts,
+  });
+  const nombre = journals[0]?.name || "seleccionado";
+  const e = new Error(`El diario "${nombre}" no atiende a esa sucursal`);
+  e.status = 400;
+  e.isOperational = true;
+  throw e;
 }
 
 module.exports = { assertJournalsInWarehouse };

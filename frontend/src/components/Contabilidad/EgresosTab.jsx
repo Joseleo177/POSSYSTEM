@@ -220,7 +220,7 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                                     value={form.warehouse_id}
                                     onChange={v => setForm(p => {
                                         const j = (journals || []).find(x => String(x.id) === String(p.payment_journal_id));
-                                        const sigueValido = j && (!j.warehouse_id || String(j.warehouse_id) === String(v));
+                                        const sigueValido = j && (!(j.warehouse_ids?.length) || j.warehouse_ids.includes(Number(v)));
                                         return { ...p, warehouse_id: v, payment_journal_id: sigueValido ? p.payment_journal_id : "", rate: sigueValido ? p.rate : "" };
                                     })}
                                     placeholder="Seleccionar..."

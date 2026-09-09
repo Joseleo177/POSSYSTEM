@@ -40,7 +40,7 @@ const tenantModels = [
   'ExpenseCategory', 'Return', 'ReturnItem', 'Setting', 'Currency',
   'ProductStock', 'EmployeeWarehouse', 'UserSerie', 'ProductComboItem', 'CashSessionJournal',
   'Quotation', 'Promotion', 'Income', 'IncomeCategory',
-  'StockSession', 'CatalogBanner', 'BenefitTag', 'CustomerCreditMovement',
+  'StockSession', 'CatalogBanner', 'BenefitTag', 'CustomerCreditMovement', 'PaymentJournalWarehouse',
 ];
 
 const applyTenantFilter = (modelName, options) => {
@@ -119,7 +119,7 @@ tenantModels.forEach(modelName => {
 });
 
 // Centralized associations
-const { Company, Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, StockTransferItem, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment, Setting, Quotation, QuotationItem, Promotion, PromotionProduct, BenefitTag, ProductBenefitTag, CustomerCreditMovement } = db;
+const { Company, Role, Employee, Category, Product, Bank, PaymentMethod, Currency, PaymentJournal, Warehouse, Customer, Sale, SaleItem, Purchase, PurchaseItem, ProductStock, StockTransfer, StockTransferItem, EmployeeWarehouse, Payment, Serie, SerieRange, UserSerie, ProductComboItem, CashSession, CashSessionJournal, Return, ReturnItem, ProductLot, Expense, ExpenseCategory, PurchasePayment, Setting, Quotation, QuotationItem, Promotion, PromotionProduct, BenefitTag, ProductBenefitTag, CustomerCreditMovement, PaymentJournalWarehouse } = db;
 
 // ── Company Associations ────────────────────────────────────────
 if (Company) {
@@ -129,7 +129,7 @@ if (Company) {
     CashSession, Expense, ProductLot, PurchasePayment, StockTransfer,
     ExpenseCategory, Return, ReturnItem, Setting, Currency,
     ProductStock, EmployeeWarehouse, UserSerie, ProductComboItem, CashSessionJournal,
-    Quotation, Promotion, CustomerCreditMovement
+    Quotation, Promotion, CustomerCreditMovement, PaymentJournalWarehouse
   ];
   tenantModels.forEach(model => {
     if (model) {
@@ -278,8 +278,16 @@ if (Serie && Warehouse) {
 }
 
 if (PaymentJournal && Warehouse) {
+  // Cache denormalizada: la primera sucursal asignada (o NULL = todas).
   PaymentJournal.belongsTo(Warehouse, { foreignKey: 'warehouse_id' });
   Warehouse.hasMany(PaymentJournal,   { foreignKey: 'warehouse_id' });
+}
+if (PaymentJournal && Warehouse && PaymentJournalWarehouse) {
+  // Fuente de verdad: a qué sucursales atiende el diario. Sin filas = todas (compartido).
+  PaymentJournal.belongsToMany(Warehouse, { through: PaymentJournalWarehouse, as: 'Sucursales', foreignKey: 'journal_id', otherKey: 'warehouse_id' });
+  Warehouse.belongsToMany(PaymentJournal, { through: PaymentJournalWarehouse, as: 'DiariosAsignados', foreignKey: 'warehouse_id', otherKey: 'journal_id' });
+  PaymentJournal.hasMany(PaymentJournalWarehouse, { foreignKey: 'journal_id' });
+  PaymentJournalWarehouse.belongsTo(PaymentJournal, { foreignKey: 'journal_id' });
 }
 
 // ── Relación padre-hijo entre almacenes ─────────────────────────────────
