@@ -62,22 +62,36 @@ module.exports = async function getAllPayments(query, tenant = {}) {
   // todos sus datos. Agrupar después de paginar partiría lotes entre dos páginas.
   const unidadesRaw = await Payment.findAll({
     where,
-    attributes: ["id", "batch_id", "created_at"],
+    attributes: ["id", "batch_id", "payment_journal_id", "created_at"],
     order: [["created_at", "DESC"]],
     include: [{ model: Sale, attributes: [], required: true, ...(Object.keys(saleWhere).length ? { where: saleWhere } : {}) }],
     raw: true,
     subQuery: false,
   });
 
+  // La unidad de este listado es UN MOVIMIENTO DE DINERO: un lote + una caja. Un cobro
+  // conjunto con una sola forma de pago sigue siendo una fila (un billete, varias facturas);
+  // uno combinado son tantas filas como cajas tocó, porque por cada una entró plata de verdad
+  // y cada arqueo tiene que poder verla. El desglose por factura vive en el detalle.
   const unidades = [];
-  const porLote = new Map();
+  const porLoteCaja = new Map();
+  const cajasPorLote = new Map();   // lote -> cuántas cajas distintas tocó
   for (const p of unidadesRaw) {
     if (!p.batch_id) { unidades.push({ ids: [p.id] }); continue; }
-    const yaVista = porLote.get(p.batch_id);
+    if (!cajasPorLote.has(p.batch_id)) cajasPorLote.set(p.batch_id, new Set());
+    cajasPorLote.get(p.batch_id).add(p.payment_journal_id ?? null);
+
+    const clave = `${p.batch_id}|${p.payment_journal_id ?? "null"}`;
+    const yaVista = porLoteCaja.get(clave);
     if (yaVista) { yaVista.ids.push(p.id); continue; }
     const nueva = { ids: [p.id], batch_id: p.batch_id };
-    porLote.set(p.batch_id, nueva);
+    porLoteCaja.set(clave, nueva);
     unidades.push(nueva);
+  }
+  // Cuántas formas de pago tuvo el lote entero: sirve para avisar que borrar esta fila
+  // deshace también las otras.
+  for (const u of unidades) {
+    if (u.batch_id) u.batch_journal_count = cajasPorLote.get(u.batch_id)?.size || 1;
   }
 
   const count = unidades.length;
@@ -133,23 +147,35 @@ module.exports = async function getAllPayments(query, tenant = {}) {
     // Cobro corriente: una factura, un pago. Se devuelve tal cual.
     if (partes.length === 1 && !unidad.batch_id) return partes[0];
 
-    // Cobro conjunto: los datos del acto (diario, cliente, fecha, referencia, tasa) son
-    // comunes a todas sus partes, así que se toman de la primera; lo único que se suma es
-    // el dinero. `items` lleva el desglose para el detalle.
+    // Movimiento de una caja dentro de un lote: todas sus partes comparten diario, moneda,
+    // cliente, fecha y referencia (se toman de la primera); lo único que se suma es el dinero
+    // que esa caja recibió. "N facturas" cuenta ventas distintas que este movimiento cubrió.
     const primera = partes[0];
+    const facturas = [...new Set(partes.map(p => p.sale_id))];
+
     return {
       ...primera,
       amount: partes.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0),
       change_given: partes.reduce((acc, p) => acc + parseFloat(p.change_given || 0), 0) || null,
-      group_count: partes.length,
-      // Lo que se ve en la columna Referencia: las facturas que cubrió este único cobro.
-      invoice_number: partes.map(p => p.invoice_number || `#${p.sale_id}`).join(" · "),
+      group_count: facturas.length,
+      part_count: partes.length,
+      is_batch: true,
+      // Cuántas formas de pago tuvo el cobro completo: si son varias, esta fila es una parte
+      // y borrarla deshace el cobro entero.
+      batch_journal_count: unidad.batch_journal_count || 1,
+      invoice_number: facturas.map(id => {
+        const p = partes.find(x => x.sale_id === id);
+        return p.invoice_number || `#${id}`;
+      }).join(" · "),
       items: partes.map(p => ({
         payment_id: p.id,
         sale_id: p.sale_id,
         invoice_number: p.invoice_number,
         amount: parseFloat(p.amount || 0),
         sale_status: p.sale_status,
+        journal_name: p.journal_name,
+        currency_symbol: p.currency_symbol,
+        exchange_rate: parseFloat(p.exchange_rate || 1),
       })),
       // Los ítems de UNA de las facturas no representan al cobro conjunto: se omiten para
       // que el detalle no muestre productos de una sola venta como si fueran de todas.

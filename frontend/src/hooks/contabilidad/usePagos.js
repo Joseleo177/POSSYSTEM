@@ -120,7 +120,7 @@ export function usePagos({ notify }) {
         // y la caja con un ingreso a medias.
         const objetivo = typeof deleteDialog === "object" ? deleteDialog : { id: deleteDialog };
         try {
-            if (objetivo.batch_id && objetivo.group_count > 1) {
+            if (objetivo.batch_id) {
                 const r = await api.payments.removeBatch(objetivo.batch_id);
                 notify(r.message || "Cobro eliminado");
             } else {

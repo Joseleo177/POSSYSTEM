@@ -51,6 +51,7 @@ async function applyOnePayment(body, req, t) {
       // Crédito de cliente
       credit_amount,      // monto a descontar del credit_balance del cliente
       idempotency_key,    // la genera la caja, una por cobro; se repite en los reintentos
+      batch_id,           // marca del acto: ata entre sí los tramos de un pago combinado
     } = body;
 
     if (!sale_id) throw new Error("sale_id es requerido");
@@ -200,6 +201,7 @@ async function applyOnePayment(body, req, t) {
           // que getSaleBalance descuente el vuelto. El detalle por caja vive en los egresos.
           change_journal_id: changeAmt > 0 ? partesVuelto[0].journal_id : null,
           idempotency_key: idempotency_key || null,
+          batch_id: batch_id || null,
         },
         { transaction: t }
       );
@@ -296,6 +298,7 @@ async function applyOnePayment(body, req, t) {
             notes: `Sobrante — Factura ${sale.invoice_number || "#" + sale_id}`,
             change_given: null,
             change_journal_id: null,
+            batch_id: batch_id || null,
           },
           { transaction: t }
         );
@@ -357,6 +360,14 @@ module.exports = async function createPayment(body, req) {
     if (previo) return await existingPaymentResult(previo);
   }
 
+  // Marca del acto: ata entre sí los tramos de un pago combinado. Con ella el historial los
+  // muestra como movimientos de un mismo cobro (uno por caja) y eliminarlo lo deshace entero,
+  // igual que el cobro conjunto. Se deriva de la clave de idempotencia para que un reintento
+  // no invente un lote distinto.
+  const batchId = parts
+    ? (body.idempotency_key || `pay-${Date.now()}-${Math.random().toString(36).slice(2)}`).slice(0, 64)
+    : null;
+
   const t = await sequelize.transaction();
   try {
     let result;
@@ -385,6 +396,7 @@ module.exports = async function createPayment(body, req) {
           payment_journal_id: p.journal_id,
           reference_number:  p.reference_number ?? null,
           _noSettle:         !ultimo,
+          batch_id:          batchId,
           credit_amount:     primero ? body.credit_amount     : undefined,
           received_amount:   ultimo  ? body.received_amount   : undefined,
           change_given:      ultimo  ? body.change_given      : undefined,

@@ -173,10 +173,17 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                                 {item.invoice_number || (isInvoice ? `Factura #${item.id}` : `Cobro #${item.id}`)}
                                             </span>
                                             {/* Un solo movimiento de dinero que saldó varias facturas: la
-                                                fila es el cobro, no cada factura. */}
+                                                fila es el movimiento, no cada factura. */}
                                             {item.group_count > 1 && (
                                                 <div className="text-[9px] font-black text-content-subtle uppercase tracking-tighter mt-0.5">
                                                     Cobro conjunto · {item.group_count} facturas
+                                                </div>
+                                            )}
+                                            {/* Pago combinado: cada caja es su propia fila (su propio
+                                                movimiento), pero el cobro fue uno solo. */}
+                                            {item.batch_journal_count > 1 && (
+                                                <div className="text-[9px] font-black text-warning uppercase tracking-tighter mt-0.5">
+                                                    Pago combinado · {item.batch_journal_count} formas
                                                 </div>
                                             )}
                                             {!isInvoice && item.reference_number && (
@@ -328,20 +335,28 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                     </div>
                                 )}
                             </div>
-                            {/* Desglose del cobro conjunto: el monto de arriba es lo que entró,
-                                y esto dice cuánto se aplicó a cada factura. */}
-                            {p.group_count > 1 && (
+                            {/* Esta fila es UN movimiento de caja; si el cobro se hizo con varias
+                                formas de pago, las otras son sus propias filas y se borran juntas. */}
+                            {p.batch_journal_count > 1 && (
+                                <div className="rounded-xl border border-warning/30 bg-warning/5 px-3.5 py-2.5">
+                                    <p className="text-[10px] font-bold text-content-subtle dark:text-white/50 leading-relaxed">
+                                        Parte de un <span className="font-black text-warning">pago combinado</span> de {p.batch_journal_count} formas
+                                        de pago. Cada una es su propio movimiento de caja; eliminar cualquiera deshace el cobro completo.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Desglose del cobro conjunto: cuánto se aplicó a cada factura. */}
+                            {(p.items?.length > 1) && (
                                 <div>
                                     <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-1.5">
-                                        Aplicado a {p.group_count} facturas
+                                        Aplicado a {p.group_count} {p.group_count === 1 ? "factura" : "facturas"}
                                     </div>
                                     <div className="rounded-xl border border-border/20 dark:border-white/5 divide-y divide-border/10 dark:divide-white/5">
                                         {(p.items || []).map(it => (
                                             <div key={it.payment_id} className="px-3 py-2 flex items-center justify-between gap-3">
-                                                <span className="text-[11px] font-black text-brand-500 truncate">
-                                                    {it.invoice_number || `#${it.sale_id}`}
-                                                </span>
-                                                <span className="text-[11px] font-black tabular-nums text-success">{fmtP(it.amount)}</span>
+                                                <span className="text-[11px] font-black text-brand-500 truncate">{it.invoice_number || `#${it.sale_id}`}</span>
+                                                <span className="text-[11px] font-black tabular-nums text-success shrink-0">{fmtP(it.amount)}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -377,9 +392,13 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
             <ConfirmModal
                 isOpen={!!deleteDialog}
                 title="¿Eliminar cobro?"
-                message={deleteDialog?.group_count > 1
-                    ? `Este cobro cubrió ${deleteDialog.group_count} facturas y se revierte completo: todas vuelven a quedar con su saldo pendiente.`
-                    : "Esta acción revertirá el cobro. El saldo de la factura se actualizará automáticamente."}
+                message={
+                    deleteDialog?.batch_journal_count > 1
+                        ? `Este movimiento es una de las ${deleteDialog.batch_journal_count} formas de pago de un mismo cobro: se revierte el cobro COMPLETO, incluidas las otras cajas${deleteDialog.group_count > 1 ? ` y las ${deleteDialog.group_count} facturas que cubrió` : ""}.`
+                    : deleteDialog?.group_count > 1
+                        ? `Este cobro cubrió ${deleteDialog.group_count} facturas y se revierte completo: todas vuelven a quedar con su saldo pendiente.`
+                        : "Esta acción revertirá el cobro. El saldo de la factura se actualizará automáticamente."
+                }
                 onConfirm={confirmRemovePayment}
                 onCancel={() => setDeleteDialog(null)}
                 type="danger"
