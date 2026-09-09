@@ -7,6 +7,7 @@ import DatePicker from "./ui/DatePicker";
 import CustomSelect from "./ui/CustomSelect";
 import RateField, { resolveRate } from "./ui/RateField";
 import { journalsForWarehouse } from "../helpers";
+import ImmediatePayPicker from "./cobro/ImmediatePayPicker";
 
 const getEmpty = () => ({
   amount: "",
@@ -227,6 +228,27 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // Lo que el cliente no se llevó porque no había sencillo: se queda en la caja. No se aplica
   // a la factura —el abono ya está topado al saldo— pero el dinero está ahí y hay que decirlo.
   const sobranteRetenido = Math.max(0, parseFloat((changeBase - actualChangeBase).toFixed(6)));
+
+  // Qué tramo del vuelto está eligiendo caja (abre la misma botonera que "Pago Inmediato",
+  // filtrada a cajas con salidas). null = cerrada.
+  const [changePickerIdx, setChangePickerIdx] = useState(null);
+
+  // Asigna la caja elegida a un tramo del vuelto y le sugiere el monto que falta por
+  // devolver, ya convertido a la moneda de esa caja: en el primer tramo el vuelto entero,
+  // en los siguientes solo el resto.
+  const asignarCajaCambio = (idx, id) => setForm(p => {
+    const partes = [...p.change_parts];
+    const { rate: r } = datosCaja(id);
+    const yaAsignado = partes.reduce((acc, q, i) => {
+      if (i === idx) return acc;
+      const { rate: rr } = datosCaja(q.journal_id);
+      const n = parseFloat(String(q.amount).replace(",", "."));
+      return acc + (isNaN(n) ? 0 : n / rr);
+    }, 0);
+    const falta = Math.max(0, changeBase - yaAsignado);
+    partes[idx] = { journal_id: id, amount: (Math.round(falta * r * 100) / 100).toFixed(2) };
+    return { ...p, change_parts: partes };
+  });
 
   const creditCoversAll = creditApplied >= balanceUsd - 0.001;
 
@@ -450,7 +472,13 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   );
 
   return (
-    <Modal open={!!sale} onClose={onClose} title="REGISTRAR PAGO" width={880}>
+    <Modal
+      open={!!sale}
+      // Con la botonera del vuelto abierta, Escape / clic-fuera la cierran a ella, no al cobro.
+      onClose={changePickerIdx !== null ? () => setChangePickerIdx(null) : onClose}
+      title="REGISTRAR PAGO"
+      width={880}
+    >
       {/* Dos columnas en escritorio: a la izquierda lo que se teclea, a la derecha el
           contexto. En móvil se apila en el mismo orden: primero lo que el cajero teclea
           (método, monto recibido…), después el contexto (resumen, proyección, notas). */}
@@ -654,34 +682,24 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
             {!form.keep_change && !form.credit_change && (
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-warning/80 mb-1.5">DAR CAMBIO DESDE *</p>
-                {/* Mismo desplegable que el método de pago: son la misma lista de diarios y
-                    tenerlos con dos formas distintas en un solo formulario confunde. */}
+                {/* Misma botonera que "Pago Inmediato" (método → caja), filtrada a cajas con
+                    salidas: dar vuelto por un Punto de Venta no tiene sentido. */}
                 <div className="space-y-2">
                   {salidasCambio.map((salida, idx) => (
                     <div key={idx} className="flex gap-2 items-start">
                       <div className="flex-1 min-w-0">
-                        <CustomSelect
-                          value={salida.journal_id === "" ? "" : String(salida.journal_id)}
-                          placeholder="Seleccionar diario..."
-                          options={activeJournals.map(j => ({ value: String(j.id), label: j.name }))}
-                          onChange={(v) => setForm(p => {
-                            const partes = [...p.change_parts];
-                            const id = v === "" ? "" : parseInt(v, 10);
-                            const { rate: r } = datosCaja(id);
-                            // Al elegir la caja se sugiere lo que falta por devolver, ya
-                            // convertido a su moneda: en la primera el vuelto entero, en la
-                            // siguiente solo el resto.
-                            const yaAsignado = partes.reduce((acc, q, i) => {
-                              if (i === idx) return acc;
-                              const { rate: rr } = datosCaja(q.journal_id);
-                              const n = parseFloat(String(q.amount).replace(",", "."));
-                              return acc + (isNaN(n) ? 0 : n / rr);
-                            }, 0);
-                            const falta = Math.max(0, changeBase - yaAsignado);
-                            partes[idx] = { journal_id: id, amount: id === "" ? "" : (Math.round(falta * r * 100) / 100).toFixed(2) };
-                            return { ...p, change_parts: partes };
-                          })}
-                        />
+                        <button
+                          type="button"
+                          onClick={() => setChangePickerIdx(idx)}
+                          className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-warning/40 rounded-xl px-3 flex items-center justify-between gap-2 text-[13px] font-bold outline-none focus:border-warning/70 transition-all"
+                        >
+                          <span className={`truncate ${salida.journal_id ? "text-content dark:text-white" : "text-content-subtle/60 dark:text-white/25"}`}>
+                            {salida.journal_id
+                              ? (activeJournals.find(j => j.id === salida.journal_id)?.name || "Caja")
+                              : "Elegir caja…"}
+                          </span>
+                          <svg className="w-4 h-4 shrink-0 text-content-subtle dark:text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                        </button>
                       </div>
                       <div className="w-28 shrink-0">
                         <input
@@ -710,6 +728,16 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                     </div>
                   ))}
                 </div>
+
+                {changePickerIdx !== null && (
+                  <ImmediatePayPicker
+                    warehouseId={sale?.warehouse_id}
+                    outflowOnly
+                    methodPrompt={{ tag: "Dar cambio", title: "¿De qué caja sale el vuelto?" }}
+                    onClose={() => setChangePickerIdx(null)}
+                    onPick={(journal) => { asignarCajaCambio(changePickerIdx, journal.id); setChangePickerIdx(null); }}
+                  />
+                )}
 
                 {faltaCajaEnCambio && (
                   <p className="text-[10px] font-black text-danger mt-1.5">Selecciona de dónde saldrá el cambio</p>

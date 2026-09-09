@@ -34,12 +34,26 @@ function BotonGrande({ n, name, image, onClick }) {
     );
 }
 
-export default function ImmediatePayPicker({ warehouseId, onPick, onClose }) {
+// Copy por defecto del primer paso. El mismo selector sirve para cobrar y para dar el
+// vuelto, así que quien lo abre puede cambiar el encabezado.
+const PROMPT_COBRO = { tag: "Cobro inmediato", title: "¿Cómo paga el cliente?" };
+
+export default function ImmediatePayPicker({ warehouseId, onPick, onClose, outflowOnly = false, methodPrompt = PROMPT_COBRO }) {
     const { activePaymentMethods, activeJournals, activeBanks, activeCurrencies, baseCurrency } = useApp();
 
+    // Métodos que permiten sacar dinero (efectivo, transferencia…). Para el vuelto no tiene
+    // sentido ofrecer un Punto de Venta.
+    const outflowCodes = useMemo(
+        () => new Set((activePaymentMethods || []).filter(m => m.allows_outflow !== false).map(m => m.code)),
+        [activePaymentMethods],
+    );
+
     const journals = useMemo(
-        () => journalsForWarehouse(activeJournals, warehouseId),
-        [activeJournals, warehouseId],
+        () => {
+            const js = journalsForWarehouse(activeJournals, warehouseId);
+            return outflowOnly ? js.filter(j => outflowCodes.has(j.type)) : js;
+        },
+        [activeJournals, warehouseId, outflowOnly, outflowCodes],
     );
 
     const journalsOfMethod = (code) => journals.filter(j => j.type === code).sort(ordenar);
@@ -135,7 +149,7 @@ export default function ImmediatePayPicker({ warehouseId, onPick, onClose }) {
     };
 
     const header = step === "method"
-        ? { tag: "Cobro inmediato", title: "¿Cómo paga el cliente?" }
+        ? methodPrompt
         : step === "group"
             ? { tag: groups[0]?.kind === "bank" ? "Elige el banco" : "Elige la moneda", title: method?.name || "" }
             : { tag: "Elige la caja", title: group?.name || "" };
@@ -165,7 +179,7 @@ export default function ImmediatePayPicker({ warehouseId, onPick, onClose }) {
     }, [step, items.length, sel.method, sel.group]);
 
     return (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150" onKeyDown={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150" onKeyDown={e => e.stopPropagation()}>
             <div className="w-full max-w-md bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out">
 
                 <div className="px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3">
@@ -190,7 +204,7 @@ export default function ImmediatePayPicker({ warehouseId, onPick, onClose }) {
                 <div className="px-5 py-5">
                     {items.length === 0 ? (
                         <p className="text-[12px] font-bold text-content-subtle dark:text-white/40 text-center py-6">
-                            No hay cajas de cobro configuradas para esta sucursal.
+                            No hay cajas disponibles para esta sucursal.
                         </p>
                     ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
