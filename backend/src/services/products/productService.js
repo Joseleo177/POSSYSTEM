@@ -292,9 +292,9 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
       as: 'stocks',
       where: { warehouse_id: parseInt(warehouse_id) },
       required: false,
-      // price, min_stock y cost_price salen de la misma fila: viendo un almacén, lo que vale
-      // es lo que esa sucursal tenga definido.
-      attributes: ['qty', 'price', 'min_stock', 'cost_price']
+      // price, min_stock, cost_price y profit_margin salen de la misma fila: viendo un
+      // almacén, lo que vale es lo que esa sucursal tenga definido.
+      attributes: ['qty', 'price', 'min_stock', 'cost_price', 'profit_margin']
     });
   }
 
@@ -356,13 +356,18 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
       // tecleó 5 y al reabrir la ficha leía 4,83 creía que el sistema le había cambiado el
       // margen a sus espaldas. Si el precio es el que sale de aplicar el margen guardado
       // (dentro de ese medio centavo de redondeo), se respeta el número que puso el usuario.
+      // Primero, el margen propio de la ficha: es el que el usuario tecleó parado en esta
+      // sucursal, y le gana a cualquier cosa que se pueda despejar.
+      prod.margin_own = ficha.profit_margin != null;
+      if (prod.margin_own) prod.profit_margin = parseFloat(ficha.profit_margin);
+
       const guardado  = parseFloat(prod.profit_margin);
       const costoNum  = parseFloat(prod.cost_price);
       const precioNum = parseFloat(prod.price);
       const explicaElPrecio = !isNaN(guardado) && costoNum > 0 && precioNum > 0
         && Math.abs(costoNum * (1 + guardado / 100) - precioNum) <= 0.005 + 1e-9;
 
-      if (!explicaElPrecio) {
+      if (!prod.margin_own && !explicaElPrecio) {
         const margenSucursal = derivarMargen(prod.price, prod.cost_price, "");
         if (margenSucursal != null) prod.profit_margin = margenSucursal;
       }
@@ -598,6 +603,58 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
       ? parseFloat(profit_margin)
       : derivarMargen(precioFinal, costoFinal, "");
 
+    // ── Qué le toca a la ficha de la sucursal ───────────────────────────────────────
+    // Se calcula ANTES de escribir el producto porque de esto depende una decisión del
+    // producto: si la sucursal se queda con precio propio, el margen tecleado es suyo y va
+    // a la ficha; si el precio se hereda, ese margen describe el precio general y tiene que
+    // guardarse en el producto. Sin esta distinción el margen no se guardaba en ninguna
+    // parte y al releer se despejaba del precio ya redondeado (5% → 4,83%).
+    let ficha = null;
+    const cambios = {};
+    let precioSeraPropio = false;
+
+    if (warehouse_id) {
+      ficha = await ProductStock.findOne({
+        where: { warehouse_id, product_id: product.id },
+        transaction: t,
+        lock: true,
+      });
+
+      // Solo se escribe lo que de verdad cambió. Sin esta comparación, guardar el producto
+      // para corregirle el nombre convertía en propio un precio que venía heredado, y esa
+      // sucursal dejaba de enterarse de los cambios generales sin que nadie lo pidiera.
+      const cambio = (nuevo, vigente) => {
+        if (nuevo === undefined) return false;
+        if (nuevo === "" || nuevo === null) return vigente != null;   // vaciar = volver a heredar
+        return Math.abs(parseFloat(nuevo) - parseFloat(vigente ?? NaN)) > 1e-9 || vigente == null;
+      };
+      // Un valor propio idéntico al general no es un valor propio: es el general escrito a
+      // mano. Se guarda NULL para que la sucursal siga heredando; si no, quedaría anclada a
+      // ese número y el próximo cambio general la dejaría atrás sin que nadie lo note.
+      const valor = (v, general) => {
+        if (v === "" || v === null) return null;
+        const n = parseFloat(v);
+        return Math.abs(n - parseFloat(general ?? NaN)) < 1e-9 ? null : n;
+      };
+
+      if (cambio(price,      ficha?.price      ?? product.price))      cambios.price      = valor(price,      product.price);
+      if (cambio(cost_price, ficha?.cost_price ?? product.cost_price)) cambios.cost_price = valor(cost_price, product.cost_price);
+      if (cambio(min_stock,  ficha?.min_stock  ?? product.min_stock))  cambios.min_stock  = valor(min_stock,  product.min_stock);
+
+      precioSeraPropio = (cambios.price !== undefined ? cambios.price : (ficha?.price ?? null)) != null;
+
+      // El margen viaja con el precio: si la sucursal tiene precio propio, el porcentaje con
+      // que se llegó a él también es suyo. Campo ausente = no se toca, igual que el resto:
+      // un guardado parcial desde otra pantalla no debe borrarlo.
+      if (profit_margin !== undefined) {
+        const margenPropio = (precioSeraPropio && margenExplicito) ? parseFloat(profit_margin) : null;
+        const vigente = ficha?.profit_margin == null ? null : parseFloat(ficha.profit_margin);
+        const distinto = (margenPropio == null) !== (vigente == null)
+          || (margenPropio != null && Math.abs(margenPropio - vigente) > 1e-9);
+        if (distinto) cambios.profit_margin = margenPropio;
+      }
+    }
+
     // Con alcance de sucursal, los tres valores que tienen ficha propia —precio, costo y
     // mínimo— no se tocan en el producto: se escriben más abajo en `product_stock`. Lo demás
     // (nombre, categoría, unidad, código de barras, combo) es del producto y sigue siendo
@@ -611,7 +668,11 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
       qty_step: opt(qty_step, product.qty_step, 1),
       stock: (isComboBool || isServiceBool) ? 0 : product.stock,
       cost_price: alcanceSucursal ? product.cost_price : costoFinal,
-      profit_margin: alcanceSucursal ? product.profit_margin : margenFinal,
+      // El margen sigue al precio: si la sucursal se queda con precio propio, su margen vive
+      // en la ficha y este no se toca. Pero si el precio se hereda del producto, el
+      // porcentaje que se acaba de teclear describe justamente ese precio general, y aquí es
+      // donde tiene que quedar — antes se descartaba y la ficha releía un margen despejado.
+      profit_margin: (alcanceSucursal && precioSeraPropio) ? product.profit_margin : margenFinal,
       package_size: opt(package_size, product.package_size),
       package_unit: opt(package_unit, product.package_unit),
       bulk_price: opt(bulk_price, product.bulk_price),
@@ -636,49 +697,18 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
     }, { transaction: t });
 
     // ── Lo que es de la sucursal, a la ficha de la sucursal ──────────────────────────
-    if (warehouse_id) {
-      const ficha = await ProductStock.findOne({
-        where: { warehouse_id, product_id: product.id },
-        transaction: t,
-        lock: true,
-      });
-
-      {
-        // Solo se escribe lo que de verdad cambió. Sin esta comparación, guardar el producto
-        // para corregirle el nombre convertía en propio un precio que venía heredado, y esa
-        // sucursal dejaba de enterarse de los cambios generales sin que nadie lo pidiera.
-        const cambio = (nuevo, vigente) => {
-          if (nuevo === undefined) return false;
-          if (nuevo === "" || nuevo === null) return vigente != null;   // vaciar = volver a heredar
-          return Math.abs(parseFloat(nuevo) - parseFloat(vigente ?? NaN)) > 1e-9 || vigente == null;
-        };
-        // Un valor propio idéntico al general no es un valor propio: es el general escrito a
-        // mano. Se guarda NULL para que la sucursal siga heredando; si no, quedaría anclada a
-        // ese número y el próximo cambio general la dejaría atrás sin que nadie lo note.
-        const valor = (v, general) => {
-          if (v === "" || v === null) return null;
-          const n = parseFloat(v);
-          return Math.abs(n - parseFloat(general ?? NaN)) < 1e-9 ? null : n;
-        };
-
-        const cambios = {};
-        if (cambio(price,      ficha?.price      ?? product.price))      cambios.price      = valor(price,      product.price);
-        if (cambio(cost_price, ficha?.cost_price ?? product.cost_price)) cambios.cost_price = valor(cost_price, product.cost_price);
-        if (cambio(min_stock,  ficha?.min_stock  ?? product.min_stock))  cambios.min_stock  = valor(min_stock,  product.min_stock);
-
-        if (Object.keys(cambios).length) {
-          if (ficha) {
-            await ficha.update(cambios, { transaction: t });
-          } else if (!isComboBool && !isServiceBool) {
-            // La sucursal no manejaba este producto y le acaban de poner precio propio: pasa
-            // a formar parte de su surtido, en cero hasta que entre mercancía. Combos y
-            // servicios no llevan ficha de existencias.
-            await ProductStock.create(
-              { warehouse_id, product_id: product.id, qty: 0, company_id, ...cambios },
-              { transaction: t }
-            );
-          }
-        }
+    // `cambios` se calculó más arriba, antes de escribir el producto.
+    if (warehouse_id && Object.keys(cambios).length) {
+      if (ficha) {
+        await ficha.update(cambios, { transaction: t });
+      } else if (!isComboBool && !isServiceBool) {
+        // La sucursal no manejaba este producto y le acaban de poner precio propio: pasa
+        // a formar parte de su surtido, en cero hasta que entre mercancía. Combos y
+        // servicios no llevan ficha de existencias.
+        await ProductStock.create(
+          { warehouse_id, product_id: product.id, qty: 0, company_id, ...cambios },
+          { transaction: t }
+        );
       }
     }
 

@@ -42,6 +42,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DECIMAL(14, 4),
       allowNull: true
     },
+    // El margen que el usuario tecleó para llegar a ese precio. Se guarda porque no se puede
+    // reconstruir: el precio sugerido se redondea a 2 decimales, así que despejarlo de vuelta
+    // devuelve un porcentaje ligeramente distinto del que se escribió (5% → 4,83%) y parecía
+    // que el sistema lo cambiaba solo. NULL = hereda el del producto, o se despeja.
+    profit_margin: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true
+    },
     company_id: {
       type: DataTypes.INTEGER,
       allowNull: true
