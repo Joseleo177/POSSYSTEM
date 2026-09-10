@@ -28,6 +28,7 @@ export function usePurchasesList({
     notes,
     invoiceCurrencyId,
     invoiceRate,
+    receivingMode,
     resetForm,
 }) {
     // Moneda y tasa con que se cargó la factura: viajan juntas porque una tasa sin moneda no
@@ -125,6 +126,10 @@ export function usePurchasesList({
 
     const _buildItemsPayload = (items) =>
         items.map(i => ({
+            // El id de la línea guardada, para que el backend la actualice en vez de borrarla
+            // y recrearla: si se recrea, pierde cuántas unidades ya entraron al inventario y
+            // el modo recepción las metería de nuevo. Las líneas nuevas no lo traen.
+            ...(i.id ? { id: i.id } : {}),
             product_id: i.product.id,
             package_unit: i.package_unit,
             package_size: parseFloat(i.package_size),
@@ -149,12 +154,16 @@ export function usePurchasesList({
                     notes: notes || undefined,
                     warehouse_id: selectedWarehouseId ? parseInt(selectedWarehouseId) : undefined,
                     status: "borrador",
+                    receiving_mode: !!receivingMode,
                     items: _buildItemsPayload(items),
                     ...invoicePayload(),
                 });
-                notify("Borrador guardado ✓");
+                notify(receivingMode ? "Guardado y cargado al stock ✓" : "Borrador guardado ✓");
                 resetForm?.();
                 loadPurchases();
+                // Con el modo prendido el guardado movió inventario: la grilla de productos
+                // tiene que enterarse, o seguiría mostrando el cero del estante.
+                if (receivingMode) onProductsUpdated?.();
                 const newId = r?.data?.id ?? r?.id;
                 if (newId) {
                     const detail = await api.purchases.getOne(newId);
@@ -169,7 +178,7 @@ export function usePurchasesList({
                 setLoading(false);
             }
         },
-        [items, selectedWarehouseId, selectedSupplier, notes, invoiceCurrencyId, invoiceRate, notify, loadPurchases, resetForm, setLoading, setView, setDetail]
+        [items, selectedWarehouseId, selectedSupplier, notes, invoiceCurrencyId, invoiceRate, receivingMode, notify, loadPurchases, onProductsUpdated, resetForm, setLoading, setView, setDetail]
     );
 
     const updateDraft = useCallback(
@@ -184,12 +193,16 @@ export function usePurchasesList({
                     supplier_name: selectedSupplier?.name,
                     notes: notes || undefined,
                     warehouse_id: selectedWarehouseId ? parseInt(selectedWarehouseId) : undefined,
+                    receiving_mode: !!receivingMode,
                     items: _buildItemsPayload(items),
                     ...invoicePayload(),
                 });
-                notify("Borrador actualizado ✓");
+                notify(receivingMode ? "Guardado y cargado al stock ✓" : "Borrador actualizado ✓");
                 resetForm?.();
                 loadPurchases();
+                // Con el modo prendido el guardado movió inventario: la grilla de productos
+                // tiene que enterarse, o seguiría mostrando el cero del estante.
+                if (receivingMode) onProductsUpdated?.();
                 const detail = await api.purchases.getOne(draftId);
                 setDetail(detail.data);
                 setView("detail");
@@ -199,7 +212,7 @@ export function usePurchasesList({
                 setLoading(false);
             }
         },
-        [items, selectedWarehouseId, selectedSupplier, notes, invoiceCurrencyId, invoiceRate, notify, loadPurchases, resetForm, setLoading, setView, setDetail]
+        [items, selectedWarehouseId, selectedSupplier, notes, invoiceCurrencyId, invoiceRate, receivingMode, notify, loadPurchases, onProductsUpdated, resetForm, setLoading, setView, setDetail]
     );
 
     return {

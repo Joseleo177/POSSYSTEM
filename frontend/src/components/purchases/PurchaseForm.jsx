@@ -7,7 +7,8 @@ import { useApp } from "../../context/AppContext";
 const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function PurchaseForm({ state }) {
-    const { items, removeItem, updateItem, grandTotal, savePurchase, loading, editingDraftId, selectedWarehouseId } = state;
+    const { items, removeItem, updateItem, grandTotal, savePurchase, loading, editingDraftId, selectedWarehouseId,
+            receivingMode, setReceivingMode } = state;
     const { baseCurrency } = useApp();
     const [modalOpen, setModalOpen] = useState(false);
 
@@ -161,6 +162,41 @@ export default function PurchaseForm({ state }) {
                     </div>
                 )}
 
+                {/* Modo recepción. Va pegado al botón de guardar porque cambia lo que ese
+                    botón hace: con el interruptor puesto, guardar mete la mercancía al
+                    inventario en vez de solo anotarla. Para cuando el producto está en cero
+                    en el estante y no hay tiempo de teclear la factura completa. */}
+                {items.length > 0 && (
+                    <div className={`px-5 py-3 border-t transition-colors ${receivingMode
+                        ? "border-brand-500/20 bg-brand-500/[0.06]"
+                        : "border-border/20 dark:border-white/5 bg-surface-2/30 dark:bg-white/[0.02]"}`}>
+                        <button
+                            type="button"
+                            onClick={() => setReceivingMode?.(!receivingMode)}
+                            className="w-full flex items-start gap-3 text-left group"
+                        >
+                            <span className={`mt-0.5 w-9 h-5 shrink-0 rounded-full p-0.5 transition-colors ${receivingMode ? "bg-brand-500" : "bg-content-subtle/30 dark:bg-white/15"}`}>
+                                <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${receivingMode ? "translate-x-4" : ""}`} />
+                            </span>
+                            <span className="min-w-0">
+                                <span className={`block text-[11px] font-black uppercase tracking-wide ${receivingMode ? "text-brand-500" : "text-content-subtle dark:text-white/40 group-hover:text-content dark:group-hover:text-white/70"}`}>
+                                    Ir recibiendo
+                                </span>
+                                <span className="block text-[10px] font-bold text-content-subtle dark:text-white/35 mt-0.5 leading-snug">
+                                    {receivingMode
+                                        ? "Al guardar, cada producto entra al stock de una vez. La orden queda abierta para seguir cargándola."
+                                        : "La mercancía entra al stock solo cuando le des a “Recibir mercancía”."}
+                                </span>
+                            </span>
+                        </button>
+                        {receivingMode && !selectedWarehouseId && (
+                            <p className="text-[10px] font-black uppercase tracking-wide text-danger mt-2 pl-12">
+                                Elige el almacén de destino y el proveedor: sin eso la mercancía no puede entrar.
+                            </p>
+                        )}
+                    </div>
+                )}
+
                 {/* Footer con total y guardar */}
                 {items.length > 0 && (
                     <div className="px-5 py-4 border-t border-border/20 dark:border-white/5 bg-surface-2/30 dark:bg-white/[0.02] flex items-center justify-between gap-4">
@@ -192,7 +228,11 @@ export default function PurchaseForm({ state }) {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                                 </svg>
                             )}
-                            {loading ? "Guardando…" : editingDraftId ? "Actualizar Borrador" : "Guardar Borrador"}
+                            {loading
+                                ? "Guardando…"
+                                : receivingMode
+                                    ? "Guardar y cargar al stock"
+                                    : editingDraftId ? "Actualizar Borrador" : "Guardar Borrador"}
                         </button>
                     </div>
                 )}

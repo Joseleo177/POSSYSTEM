@@ -174,6 +174,12 @@ async function _applyStockAndPrices(purchase, items, transaction, ctx = {}) {
     } = item;
 
     if (!product_id) continue;
+
+    // Cuántas unidades entran AHORA. En una recepción normal es la línea completa; con el
+    // modo recepción prendido es solo lo que falta contra lo ya recibido, para que cargar la
+    // factura en varias tandas no duplique el inventario.
+    const entran = parseFloat(parseFloat(item.qty_in ?? total_units ?? 0).toFixed(4));
+
     const product = await Product.findByPk(product_id, { transaction, lock: true });
     if (!product) continue;
 
@@ -185,8 +191,8 @@ async function _applyStockAndPrices(purchase, items, transaction, ctx = {}) {
         lock: true
       });
       const qtyBefore = parseFloat(stockEntry.qty || 0);
-      const qtyIn     = parseFloat(parseFloat(total_units || 0).toFixed(4));
-      await stockEntry.increment('qty', { by: total_units, transaction });
+      const qtyIn     = entran;
+      if (qtyIn !== 0) await stockEntry.increment('qty', { by: qtyIn, transaction });
 
       if (qtyIn > 0) {
         const s = await sessionForLine();
@@ -210,14 +216,14 @@ async function _applyStockAndPrices(purchase, items, transaction, ctx = {}) {
         await stockEntry.update({ cost_price: unit_cost }, { transaction });
       }
 
-      if (lot_number && expiration_date) {
+      if (lot_number && expiration_date && entran !== 0) {
         const [lotEntry] = await ProductLot.findOrCreate({
           where: { warehouse_id: purchase.warehouse_id, product_id, lot_number: String(lot_number), expiration_date },
           defaults: { qty: 0 },
           transaction,
           lock: true
         });
-        await lotEntry.increment('qty', { by: total_units, transaction });
+        await lotEntry.increment('qty', { by: entran, transaction });
       }
     }
 
@@ -257,7 +263,8 @@ function normalizeInvoiceRate(currency_id, exchange_rate) {
 }
 
 async function createPurchase({ body, employee_id }) {
-  const { supplier_id, supplier_name, notes, items, warehouse_id, currency_id, exchange_rate, status: requestedStatus = 'borrador' } = body;
+  const { supplier_id, supplier_name, notes, items, warehouse_id, currency_id, exchange_rate, receiving_mode, status: requestedStatus = 'borrador' } = body;
+  const modoRecepcion = receiving_mode === true || receiving_mode === 'true';
   const invoiceCur = normalizeInvoiceRate(currency_id, exchange_rate);
 
   if (!items?.length)  { const e = new Error("Debe incluir al menos un producto"); e.status = 400; throw e; }
@@ -287,7 +294,8 @@ async function createPurchase({ body, employee_id }) {
       employee_id: employee_id || null,
       warehouse_id: warehouse_id || null,
       currency_id: invoiceCur.currency_id,
-      exchange_rate: invoiceCur.exchange_rate
+      exchange_rate: invoiceCur.exchange_rate,
+      receiving_mode: modoRecepcion,
     }, { transaction });
 
     let grandTotal = 0;
@@ -350,6 +358,16 @@ async function createPurchase({ body, employee_id }) {
 
     if (initialStatus === 'recibido') {
       await _applyStockAndPrices(purchase, createdItems.map(i => i.toJSON()), transaction, { employeeId: employee_id || null });
+      // Queda constancia de que estas unidades entraron: es lo que se devuelve si después
+      // se anula la orden.
+      for (const linea of createdItems) {
+        await linea.update({ received_units: linea.total_units }, { transaction });
+      }
+    } else if (modoRecepcion) {
+      // Orden nacida con el interruptor puesto: lo que ya se cargó entra al inventario de
+      // una vez y queda abierta para seguir sumándole líneas.
+      const movidas = await _receivePending(purchase, transaction, employee_id || null);
+      if (movidas > 0) await purchase.update({ status: 'parcial' }, { transaction });
     }
 
     await transaction.commit();
@@ -394,6 +412,55 @@ async function confirmOrder(id, req) {
   return getOne(id);
 }
 
+// Mete al inventario lo que a esta orden le falta por recibir y deja cada línea marcada con
+// lo que ya entró. Es el motor común de las dos formas de recibir: el botón de siempre
+// ("recibir mercancía", que además cierra la orden) y el modo recepción, que la llama en
+// cada guardado y deja la orden abierta.
+//
+// Devuelve cuántas líneas movió: cero significa que no había nada pendiente, y entonces
+// quien llama no debe anunciar una recepción que no ocurrió.
+//
+// Exige proveedor y almacén igual que la recepción completa: la mercancía entra con un costo
+// que hay que poder atribuirle a alguien, y a una caja que hay que poder arquear.
+async function _receivePending(purchase, transaction, employeeId) {
+  if (!purchase.warehouse_id) {
+    const e = new Error("Debe seleccionar un almacén de destino antes de recibir la mercancía");
+    e.status = 400; e.isOperational = true; throw e;
+  }
+  if (!purchase.supplier_id && !purchase.supplier_name) {
+    const e = new Error("Elige el proveedor antes de recibir la mercancía");
+    e.status = 400; e.isOperational = true; throw e;
+  }
+
+  const items = await PurchaseItem.findAll({
+    where: { purchase_id: purchase.id }, transaction, lock: true,
+  });
+
+  const pendientes = items
+    .map(i => {
+      const linea = i.toJSON();
+      linea.qty_in = parseFloat(
+        (parseFloat(linea.total_units || 0) - parseFloat(linea.received_units || 0)).toFixed(4)
+      );
+      return linea;
+    })
+    // Solo lo que falta. Una línea con qty_in negativo (le bajaron la cantidad por debajo de
+    // lo ya recibido) no se toca acá: eso lo bloquea updateDraft antes de llegar.
+    .filter(l => l.qty_in > 0);
+
+  if (!pendientes.length) return 0;
+
+  await _applyStockAndPrices(purchase, pendientes, transaction, { employeeId });
+
+  for (const l of pendientes) {
+    await PurchaseItem.update(
+      { received_units: l.total_units },
+      { where: { id: l.id }, transaction }
+    );
+  }
+  return pendientes.length;
+}
+
 async function receivePurchase(id, req) {
   const transaction = await sequelize.transaction();
   try {
@@ -414,9 +481,11 @@ async function receivePurchase(id, req) {
       e.status = 400; e.isOperational = true; throw e;
     }
 
-    const items = await PurchaseItem.findAll({ where: { purchase_id: id }, transaction });
-    await _applyStockAndPrices(purchase, items.map(i => i.toJSON()), transaction, { employeeId: req.employee?.id ?? null });
-    await purchase.update({ status: 'recibido' }, { transaction });
+    // Solo lo pendiente: si la orden venía en 'parcial' porque el modo recepción ya metió
+    // parte de la mercancía, volver a aplicar las líneas completas duplicaría el inventario.
+    await _receivePending(purchase, transaction, req.employee?.id ?? null);
+    // Cerrar la orden apaga el modo: ya no hay nada que ir recibiendo.
+    await purchase.update({ status: 'recibido', receiving_mode: false }, { transaction });
 
     await transaction.commit();
     return getOne(id);
@@ -434,9 +503,13 @@ async function deletePurchase(id, req) {
     // Borrar una orden recibida devuelve stock: solo sobre almacenes propios.
     await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
 
-    // Only revert stock if goods were actually received
-    if (purchase.status === 'recibido') {
-      const items = await PurchaseItem.findAll({ where: { purchase_id: purchase.id }, transaction });
+    // Se devuelve lo que REALMENTE entró, no la orden entera: una orden en 'parcial' tiene
+    // líneas que nunca movieron inventario, y descontarlas dejaría el stock en negativo por
+    // mercancía que jamás llegó. Por eso el disparador es `received_units`, no el estado.
+    const items = await PurchaseItem.findAll({ where: { purchase_id: purchase.id }, transaction });
+    const seRecibioAlgo = items.some(i => parseFloat(i.received_units || 0) > 0);
+
+    if (seRecibioAlgo) {
 
       let _session = null;
       const sessionForLine = async () => {
@@ -453,6 +526,7 @@ async function deletePurchase(id, req) {
 
       for (const item of items) {
         if (!item.product_id) continue;
+        if (parseFloat(item.received_units || 0) <= 0) continue;   // nunca entró: nada que sacar
         const fullProd = await Product.findByPk(item.product_id, { transaction });
         if (fullProd && !fullProd.is_service) {
           const stockEntry = await ProductStock.findOne({
@@ -462,7 +536,7 @@ async function deletePurchase(id, req) {
           });
           if (stockEntry) {
             const currentQty    = parseFloat(stockEntry.qty || 0);
-            const qtyToSubtract = parseFloat(item.total_units || 0);
+            const qtyToSubtract = parseFloat(item.received_units || 0);
             if (currentQty < qtyToSubtract)
               throw new Error(`No se puede anular la compra: el producto "${item.product_name}" ya ha sido vendido o movido. Stock disponible: ${currentQty}, Requerido para anular: ${qtyToSubtract}`);
             await stockEntry.decrement('qty', { by: qtyToSubtract, transaction });
@@ -491,21 +565,23 @@ async function deletePurchase(id, req) {
 
     await purchase.destroy({ transaction });
     await transaction.commit();
-    return { message: purchase.status === 'recibido' ? "Compra anulada y stock revertido" : "Orden eliminada" };
+    return { message: seRecibioAlgo ? "Compra anulada y stock revertido" : "Orden eliminada" };
   } catch (err) {
     await transaction.rollback();
     throw err;
   }
 }
 
-async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes, items, currency_id, exchange_rate }, req) {
+async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes, items, currency_id, exchange_rate, receiving_mode }, req) {
   const purchase = await Purchase.findByPk(id);
   if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
   // El destino nuevo lo valida la ruta; acá se valida el que ya tenía, para que nadie edite
   // una orden dirigida a un almacén ajeno.
   await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
-  if (!['borrador', 'pendiente'].includes(purchase.status)) {
-    const e = new Error("Solo se pueden editar órdenes en estado borrador o pendiente"); e.status = 400; throw e;
+  // 'parcial' también se edita: es justamente una orden abierta que se sigue cargando
+  // mientras la mercancía entra.
+  if (!['borrador', 'pendiente', 'parcial'].includes(purchase.status)) {
+    const e = new Error("Solo se pueden editar órdenes en estado borrador, pendiente o parcial"); e.status = 400; throw e;
   }
 
   const transaction = await sequelize.transaction();
@@ -517,7 +593,13 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
       if (sup) resolvedSupplierName = sup.tax_name || sup.name;
     }
 
-    await PurchaseItem.destroy({ where: { purchase_id: id }, transaction });
+    // Las líneas ya NO se borran y se recrean en cada guardado: una que ya metió mercancía
+    // al inventario tiene que conservar cuánto entró, o el modo recepción volvería a meter
+    // todo desde cero en el siguiente guardado. Se emparejan por el id que el formulario
+    // devuelve tal como lo recibió; las que no traen id son nuevas.
+    const existentes = await PurchaseItem.findAll({ where: { purchase_id: id }, transaction, lock: true });
+    const porId  = new Map(existentes.map(i => [i.id, i]));
+    const vistos = new Set();
 
     let grandTotal = 0;
     if (items?.length) {
@@ -544,8 +626,19 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
         const product = await Product.findByPk(product_id, { transaction });
         if (!product) throw new Error(`Producto ID ${product_id} no encontrado`);
 
-        await PurchaseItem.create({
-          purchase_id: id,
+        const idLinea = item.id ? parseInt(item.id) : null;
+        const previa  = idLinea ? porId.get(idLinea) : null;
+        const yaEntro = previa ? parseFloat(previa.received_units || 0) : 0;
+
+        // Bajar la cantidad por debajo de lo que ya entró al inventario dejaría un stock que
+        // ninguna línea explica y una anulación que descontaría de menos. Se corrige al revés:
+        // se ajusta el inventario a mano, o se anula la orden completa y se rehace.
+        if (total_units < yaEntro - 1e-6) {
+          const e = new Error(`No puedes bajar "${product.name}" a ${total_units} unidades: ya entraron ${yaEntro} al inventario con esta orden`);
+          e.status = 400; e.isOperational = true; throw e;
+        }
+
+        const datos = {
           product_id,
           product_name: product.name,
           package_unit: package_unit || "unidad",
@@ -560,8 +653,31 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
           lot_number: lot_number || null,
           expiration_date: expiration_date || null,
           update_price: hasMargin && product.sellable !== false && update_price !== false && update_price !== 'false'
-        }, { transaction });
+        };
+
+        if (previa) {
+          // `received_units` no va en `datos`: es del inventario, no del formulario.
+          await previa.update(datos, { transaction });
+          vistos.add(previa.id);
+        } else {
+          const creada = await PurchaseItem.create(
+            { purchase_id: id, received_units: 0, ...datos },
+            { transaction }
+          );
+          vistos.add(creada.id);
+        }
       }
+    }
+
+    // Lo que el formulario ya no trae, se borra. Salvo que haya metido mercancía: esa línea
+    // es la única constancia de un movimiento de inventario que sí ocurrió.
+    for (const previa of existentes) {
+      if (vistos.has(previa.id)) continue;
+      if (parseFloat(previa.received_units || 0) > 0) {
+        const e = new Error(`No puedes quitar "${previa.product_name}": ya entraron ${parseFloat(previa.received_units)} unidades al inventario con esta orden`);
+        e.status = 400; e.isOperational = true; throw e;
+      }
+      await previa.destroy({ transaction });
     }
 
     const updateData = {
@@ -577,10 +693,35 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
       updateData.currency_id   = invoiceCur.currency_id;
       updateData.exchange_rate = invoiceCur.exchange_rate;
     }
-    if (warehouse_id) updateData.warehouse_id = parseInt(warehouse_id);
-    else updateData.warehouse_id = null;
+    // El destino no se puede mover una vez que entró mercancía: el stock quedó en el almacén
+    // viejo y la orden pasaría a apuntar a otro, dejando ambos inventarios mintiendo.
+    const destinoNuevo = warehouse_id ? parseInt(warehouse_id) : null;
+    const yaRecibioAlgo = existentes.some(i => parseFloat(i.received_units || 0) > 0);
+    if (yaRecibioAlgo && destinoNuevo !== purchase.warehouse_id) {
+      const e = new Error("No puedes cambiar el almacén de destino: esta orden ya metió mercancía en el actual");
+      e.status = 400; e.isOperational = true; throw e;
+    }
+    updateData.warehouse_id = destinoNuevo;
+
+    // Campo ausente = el interruptor queda como estaba.
+    const modoRecepcion = receiving_mode === undefined
+      ? !!purchase.receiving_mode
+      : (receiving_mode === true || receiving_mode === 'true');
+    updateData.receiving_mode = modoRecepcion;
 
     await purchase.update(updateData, { transaction });
+
+    // Con el modo prendido, guardar es recibir: entra al stock lo que falte de cada línea y
+    // la orden queda abierta en 'parcial' para seguir cargándola. Se hace DENTRO de la misma
+    // transacción que el guardado, así que si la recepción falla —sin proveedor, sin
+    // almacén— no queda una orden guardada a medias con stock movido.
+    if (modoRecepcion) {
+      const movidas = await _receivePending(purchase, transaction, req.employee?.id ?? null);
+      if (movidas > 0 && purchase.status !== 'recibido') {
+        await purchase.update({ status: 'parcial' }, { transaction });
+      }
+    }
+
     await transaction.commit();
     return getOne(id);
   } catch (err) {

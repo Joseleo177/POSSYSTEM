@@ -21,6 +21,9 @@ const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-su
 const ORDER_STATUS = {
   borrador:  { label: "Borrador",  color: "text-content-subtle dark:text-white/40", dot: "bg-content-subtle/40 dark:bg-white/20", bg: "bg-surface-2/60 dark:bg-white/[0.03]" },
   pendiente: { label: "Pendiente", color: "text-warning",                           dot: "bg-warning",                            bg: "bg-warning/5"  },
+  // Orden abierta que ya metió mercancía al inventario: se llega acá con el modo recepción,
+  // cargando la factura mientras el camión se descarga.
+  parcial:   { label: "Recibiendo", color: "text-brand-500",                         dot: "bg-brand-500",                          bg: "bg-brand-500/5" },
   recibido:  { label: "Recibido",  color: "text-success",                           dot: "bg-success",                            bg: "bg-success/5"  },
 };
 
@@ -99,7 +102,9 @@ export default function PurchaseDetails({ state }) {
 
   const orderStatus = detail.status || "recibido";
   const isBorrador  = orderStatus === "borrador";
-  const isEditable  = isBorrador || orderStatus === "pendiente";
+  // 'parcial' se sigue editando: es una orden abierta a la que se le van sumando líneas
+  // mientras la mercancía ya entró.
+  const isEditable  = isBorrador || orderStatus === "pendiente" || orderStatus === "parcial";
   const os          = ORDER_STATUS[orderStatus] || ORDER_STATUS.recibido;
 
   const payStatus  = detail.payment_status || "pendiente";

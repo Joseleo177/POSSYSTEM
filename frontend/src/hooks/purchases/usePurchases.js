@@ -15,6 +15,10 @@ import { usePurchasesList } from "./usePurchasesList";
 // ───────────────────────────────────────────────
 const toFormItem = (i) => ({
   key: i.id,
+  // `id` viaja de vuelta al guardar para que la línea se actualice en su sitio y conserve
+  // `received_units`. `key` no sirve: las líneas nuevas lo generan con Date.now().
+  id: i.id,
+  received_units: parseFloat(i.received_units || 0),
   product: { id: i.product_id, name: i.product_name },
   package_unit: i.package_unit || "unidad",
   package_size: String(i.package_size ?? ""),
@@ -100,6 +104,12 @@ export function usePurchases(notify, onProductsUpdated) {
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState([]);
   const [itemForm, setItemForm] = useState(EMPTY_ITEM);
+
+  // Modo recepción: con esto prendido, cada guardado mete al inventario lo que falte de cada
+  // línea, sin esperar a que la factura esté completa. Para cuando el producto está en cero
+  // en el estante, el camión ya llegó y no hay tiempo de teclear toda la factura antes de
+  // poder vender. Viaja con la orden, así que sobrevive a recargar o a que la retome otro.
+  const [receivingMode, setReceivingMode] = useState(false);
 
   // Moneda y tasa de la factura del proveedor. Quedan guardadas con la orden: los costos se
   // convierten a base para almacenarlos, así que sin este par no había forma de saber después
@@ -223,6 +233,7 @@ export function usePurchases(notify, onProductsUpdated) {
     notes,
     invoiceCurrencyId,
     invoiceRate,
+    receivingMode,
     resetForm: form.resetForm,
   });
 
@@ -247,6 +258,10 @@ export function usePurchases(notify, onProductsUpdated) {
 
   const openNew = () => {
     form.resetForm();
+    // El modo no se hereda de la orden anterior: meter mercancía al inventario sin querer,
+    // porque el interruptor quedó puesto de la compra pasada, es exactamente lo que no debe
+    // poder pasar.
+    setReceivingMode(false);
     setInvoiceCurrencyId("");
     setInvoiceRateInput("");
     // Orden nueva: no arrastra la tasa histórica del borrador anterior.
@@ -265,6 +280,7 @@ export function usePurchases(notify, onProductsUpdated) {
           : null
       );
       setNotes(detail.notes || "");
+      setReceivingMode(!!detail.receiving_mode);
       // La tasa vuelve tal como se guardó, no como esté hoy en configuración: es el dato que
       // dice a cuánto se compró. Por eso se carga en el input y no se deja vacío.
       const savedRate = parseFloat(detail.exchange_rate);
@@ -307,6 +323,10 @@ export function usePurchases(notify, onProductsUpdated) {
     selectedWarehouseId,
     setSelectedWarehouseId,
     categories,
+
+    // modo recepción (cada guardado mete lo pendiente al stock)
+    receivingMode,
+    setReceivingMode,
 
     // paginación + filtros de lista
     purchasesTotal,

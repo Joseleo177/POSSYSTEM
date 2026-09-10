@@ -18,7 +18,12 @@ module.exports = (sequelize, DataTypes) => {
     exchange_rate: { type: DataTypes.DECIMAL(12, 6), allowNull: false, defaultValue: 1.0 },
     employee_id:     { type: DataTypes.INTEGER },
     warehouse_id:    { type: DataTypes.INTEGER },
+    // borrador · pendiente · parcial · recibido. 'parcial' es una orden abierta que ya metió
+    // mercancía al inventario: se llega ahí con el modo recepción, cargando la factura
+    // mientras el camión se descarga.
     status:          { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'borrador' },
+    // Con el interruptor prendido, cada línea que se guarda entra al stock en el acto.
+    receiving_mode:  { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     payment_status:  { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'pendiente' },
     created_at:      { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
