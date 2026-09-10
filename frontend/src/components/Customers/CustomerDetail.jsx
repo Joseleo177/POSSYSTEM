@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "../ui/Button";
 import { exportToCSV } from "../../utils/exportUtils";
-import { fmtBase, fmtSale as fmtSaleHelper, todayISO } from "../../helpers";
+import { fmtBase, fmtSale as fmtSaleHelper, todayISO, journalsForWarehouse } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import SaleDetailModal from "./SaleDetailModal";
 import BulkPaymentModal from "./BulkPaymentModal";
+import JournalPickerButton from "../cobro/JournalPickerButton";
+import CustomSelect from "../ui/CustomSelect";
 import Modal from "../ui/Modal";
 import Pagination from "../ui/Pagination";
 import { api } from "../../services/api";
@@ -24,7 +26,7 @@ const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-su
 const SCROLL_LIST = "flex-1 min-h-0 overflow-y-auto print:min-h-0 print:overflow-visible";
 
 export default function CustomerDetail({ detail, pending, paid, paidTotal, paidPage, onPaidPageChange, onClose, onPay, onRefresh }) {
-    const { baseCurrency, notify, activeJournals, activeCurrencies, triggerAction } = useApp();
+    const { baseCurrency, notify, activeJournals, activeCurrencies, triggerAction, employee } = useApp();
     const [selectedSaleId, setSelectedSaleId] = useState(null);
     // Cobro conjunto: el cliente arrastra cuentas viejas, compra hoy y paga todo de una vez.
     // Se marcan las facturas y se cobran con un solo monto (ver BulkPaymentModal).
@@ -33,20 +35,54 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
     const [clearingCredit, setClearingCredit] = useState(false);
     const [confirmClear, setConfirmClear] = useState(false);
     const [showRefund, setShowRefund] = useState(false);
-    const [refundForm, setRefundForm] = useState({ amount: "", journal_id: "", reference_date: todayISO(), notes: "" });
+    const [refundForm, setRefundForm] = useState({ amount: "", journal_id: "", reference_date: todayISO(), notes: "", warehouse_id: "" });
     const [refunding, setRefunding] = useState(false);
+
+    // La devolución genera un egreso, y un egreso es de una sucursal: de ella salen los
+    // billetes y en su arqueo tienen que aparecer. Con una sola sucursal se preselecciona y
+    // el campo ni se muestra. Un depósito no maneja dinero.
+    //
+    // Se piden las sucursales DEL EMPLEADO, no las de la empresa: solo se puede devolver
+    // desde una caja propia, y además el listado general exige `inventory.view`, que un
+    // cajero con permiso de crédito no tiene por qué tener.
+    const [warehouses, setWarehouses] = useState([]);
+    useEffect(() => {
+        if (!showRefund || warehouses.length || !employee?.id) return;
+        api.warehouses.getByEmployee(employee.id)
+            .then(r => {
+                const list = (r.data || []).filter(w => w.sells !== false);
+                setWarehouses(list);
+                if (list.length === 1) setRefundForm(p => p.warehouse_id ? p : { ...p, warehouse_id: String(list[0].id) });
+            })
+            .catch(() => {});
+    }, [showRefund, employee?.id]); // eslint-disable-line
 
     const fmtPrice = (n) => fmtBase(n, baseCurrency);
     const fmtSale  = (sale, amount) => fmtSaleHelper(sale, amount, baseCurrency);
 
     // Moneda/tasa del diario seleccionado para la devolución
-    const refundJournal  = activeJournals.find(j => j.id === refundForm.journal_id);
+    const refundJournal  = activeJournals.find(j => String(j.id) === String(refundForm.journal_id));
     const refundCurrency = refundJournal?.currency_id ? activeCurrencies.find(c => c.id === parseInt(refundJournal.currency_id)) : null;
     const refundRate     = (!refundCurrency || refundCurrency.is_base) ? 1 : parseFloat(refundCurrency.exchange_rate || 1);
     const refundSym      = refundCurrency?.symbol || baseCurrency?.symbol || "Ref.";
 
     // amount en el form está en moneda LOCAL del diario; se envía al backend en base dividiendo por rate
     const refundAmountBase = parseFloat(String(refundForm.amount).replace(",", ".") || 0) / refundRate;
+
+    // Cuánto se puede devolver DESDE la sucursal elegida: lo compartido (movimientos sin
+    // sucursal) más lo que esa sucursal acreditó. El backend valida exactamente esto, así que
+    // mostrar el total global hacía creer que había plata devolvible en una caja donde no la
+    // hay. Si el backend es viejo y no manda el desglose, se cae al total de siempre.
+    const creditByWh   = detail.credit_by_warehouse;
+    const hayDesglose  = Array.isArray(creditByWh);
+    const bucket       = (wid) => (creditByWh || []).find(x => (wid === null ? x.warehouse_id == null : String(x.warehouse_id) === String(wid)))?.amount || 0;
+    const refundAvailable = !hayDesglose
+        ? parseFloat(detail.credit_balance || 0)
+        : refundForm.warehouse_id
+            ? bucket(null) + bucket(refundForm.warehouse_id)
+            : parseFloat(detail.credit_balance || 0);
+    // Con sucursal elegida y sin crédito ahí, no hay nada que devolver desde esa caja.
+    const sinCreditoAqui = !!refundForm.warehouse_id && hayDesglose && refundAvailable <= 0.001;
 
     const handleRefund = async () => {
         setRefunding(true);
@@ -56,10 +92,13 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                 journal_id:     refundForm.journal_id,
                 reference_date: refundForm.reference_date,
                 notes:          refundForm.notes || null,
+                // Sin esto el backend caía en el primer almacén del empleado, que no tiene por
+                // qué ser la caja de la que realmente sale el dinero.
+                warehouse_id:   refundForm.warehouse_id || undefined,
             });
             notify("Devolución registrada correctamente");
             setShowRefund(false);
-            setRefundForm({ amount: "", journal_id: "", reference_date: todayISO(), notes: "" });
+            setRefundForm({ amount: "", journal_id: "", reference_date: todayISO(), notes: "", warehouse_id: warehouses.length === 1 ? String(warehouses[0].id) : "" });
             onRefresh?.();
         } catch (e) { notify(e.message, "err"); }
         setRefunding(false);
@@ -424,10 +463,71 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
             width={440}
         >
             <div className="space-y-4">
-                {/* Crédito disponible */}
-                <div className="rounded-xl bg-brand-500/5 border border-brand-500/20 px-4 py-3 flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-500">Crédito disponible</span>
-                    <span className="text-[15px] font-black text-brand-500 tabular-nums">{fmtPrice(detail.credit_balance)}</span>
+                {/* Crédito disponible EN LA SUCURSAL elegida, no el global: es el número contra
+                    el que valida el backend. En rojo cuando esa caja no tiene nada que devolver. */}
+                <div className={`rounded-xl px-4 py-3 flex items-center justify-between border ${sinCreditoAqui ? "bg-danger/5 border-danger/20" : "bg-brand-500/5 border-brand-500/20"}`}>
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${sinCreditoAqui ? "text-danger" : "text-brand-500"}`}>
+                        Crédito disponible{refundForm.warehouse_id && warehouses.length > 1 ? " aquí" : ""}
+                    </span>
+                    <span className={`text-[15px] font-black tabular-nums ${sinCreditoAqui ? "text-danger" : "text-brand-500"}`}>
+                        {fmtPrice(refundAvailable)}
+                    </span>
+                </div>
+                {sinCreditoAqui && (
+                    <p className="text-[10px] font-bold text-danger -mt-2">
+                        Este cliente tiene {fmtPrice(detail.credit_balance)} de crédito, pero se generó en otra sucursal:
+                        de esta caja no puede salir. Devuélveselo desde donde lo acreditó.
+                    </p>
+                )}
+
+                {/* Sucursal primero: de ella sale el efectivo, y filtra las cajas que se
+                    ofrecen abajo. Solo aparece si el usuario atiende más de una. */}
+                {warehouses.length > 1 && (
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Sucursal *</p>
+                        <CustomSelect
+                            value={refundForm.warehouse_id}
+                            onChange={v => setRefundForm(p => {
+                                // Si la caja elegida no atiende a la sucursal nueva, se limpia:
+                                // el dinero saldría de una caja ajena.
+                                const j = activeJournals.find(x => String(x.id) === String(p.journal_id));
+                                const sigueValida = j && (!(j.warehouse_ids?.length) || j.warehouse_ids.includes(Number(v)));
+                                // El monto se limpia siempre: se había propuesto contra el
+                                // crédito disponible de la sucursal anterior.
+                                return { ...p, warehouse_id: v, journal_id: sigueValida ? p.journal_id : "", amount: "" };
+                            })}
+                            placeholder="Seleccionar..."
+                            options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
+                        />
+                    </div>
+                )}
+
+                {/* Caja de salida: la misma botonera (método → banco → caja) que el resto del
+                    sistema de dinero, en vez de la parrilla de chips con todos los diarios
+                    sueltos. `outflowOnly` deja fuera los métodos por los que no se saca
+                    efectivo, como un punto de venta. Va ANTES del monto porque es la caja la
+                    que decide en qué moneda se teclea. */}
+                <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">De qué caja sale *</p>
+                    <JournalPickerButton
+                        value={refundForm.journal_id}
+                        journals={journalsForWarehouse(activeJournals, refundForm.warehouse_id)}
+                        outflowOnly
+                        disabled={warehouses.length > 1 && !refundForm.warehouse_id}
+                        placeholder={warehouses.length > 1 && !refundForm.warehouse_id ? "Elige la sucursal primero" : "Seleccionar caja..."}
+                        methodPrompt={{ tag: "Devolución de crédito", title: "¿Cómo se le devuelve?" }}
+                        onSelect={j => {
+                            // El monto se propone en la moneda de esa caja: el crédito vive en
+                            // base, así que se multiplica por su tasa. El cajero puede pisarlo
+                            // si devuelve solo una parte.
+                            const jCur  = j.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
+                            const jRate = (!jCur || jCur.is_base) ? 1 : parseFloat(jCur.exchange_rate || 1);
+                            setRefundForm(p => ({ ...p, journal_id: String(j.id), amount: (refundAvailable * jRate).toFixed(2) }));
+                        }}
+                        onClear={() => setRefundForm(p => ({ ...p, journal_id: "", amount: "" }))}
+                        height="h-11"
+                        boxClassName="rounded-xl"
+                    />
                 </div>
 
                 {/* Monto + fecha */}
@@ -439,7 +539,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                         <input
                             type="text" inputMode="decimal"
                             value={refundForm.amount}
-                            placeholder={refundForm.journal_id ? (parseFloat(detail.credit_balance || 0) * refundRate).toFixed(2) : "0.00"}
+                            placeholder={refundForm.journal_id ? (refundAvailable * refundRate).toFixed(2) : "0.00"}
                             onChange={e => setRefundForm(p => ({ ...p, amount: e.target.value.replace(/[^\d.,]/g, "") }))}
                             className="w-full h-10 bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
                         />
@@ -457,34 +557,6 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             onChange={e => setRefundForm(p => ({ ...p, reference_date: e.target.value }))}
                             className="w-full h-10 bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
                         />
-                    </div>
-                </div>
-
-                {/* Diario */}
-                <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Diario de salida *</p>
-                    <div className="flex flex-wrap gap-1.5">
-                        {activeJournals.map(j => {
-                            const jCur  = j.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
-                            const jRate = (!jCur || jCur.is_base) ? 1 : parseFloat(jCur.exchange_rate || 1);
-                            const autoAmt = (parseFloat(detail.credit_balance || 0) * jRate).toFixed(2);
-                            return (
-                                <button key={j.id} type="button"
-                                    onClick={() => setRefundForm(p => ({ ...p, journal_id: j.id, amount: autoAmt }))}
-                                    style={refundForm.journal_id === j.id && j.color ? { borderColor: j.color, backgroundColor: j.color, color: "#000" } : undefined}
-                                    className={[
-                                        "px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide border-2 transition-all",
-                                        refundForm.journal_id === j.id && !j.color
-                                            ? "border-brand-500 bg-brand-500 text-black"
-                                            : refundForm.journal_id !== j.id
-                                            ? "border-border/40 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-400 dark:hover:border-brand-400/50"
-                                            : ""
-                                    ].join(" ")}
-                                >
-                                    {j.name}
-                                </button>
-                            );
-                        })}
                     </div>
                 </div>
 
@@ -508,7 +580,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                     </button>
                     <button
                         onClick={handleRefund}
-                        disabled={refunding || !refundForm.amount || !refundForm.journal_id || !refundForm.reference_date}
+                        disabled={refunding || sinCreditoAqui || !refundForm.amount || !refundForm.journal_id || !refundForm.reference_date || (warehouses.length > 1 && !refundForm.warehouse_id)}
                         className="flex-[2] h-10 rounded-xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-wide hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
                         {refunding ? "Registrando…" : "Confirmar devolución"}
                     </button>

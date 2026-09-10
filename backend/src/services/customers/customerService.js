@@ -1,4 +1,4 @@
-const { Sequelize, sequelize, Customer, Sale, SaleItem, Purchase, Payment, Currency, Expense, ExpenseCategory, PaymentJournal } = require("../../models");
+const { Sequelize, sequelize, Customer, Sale, SaleItem, Purchase, Payment, Currency, Expense, ExpenseCategory, PaymentJournal, CustomerCreditMovement } = require("../../models");
 const { assertWarehouseAccess, employeeWarehouseIds, visibleWarehouseIds } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
 const { SETTLED_SQL, SETTLED_STATUSES, RECEIVABLE_STATUSES } = require("../../utils/saleBalance");
@@ -171,6 +171,24 @@ async function getOne(id, req, { warehouse_id } = {}) {
   customer.credit_available = warehouse_id
     ? await creditAvailable(id, warehouse_id)
     : parseFloat(customer.credit_balance || 0);
+
+  // Desglose del ledger por sucursal, para las pantallas que dejan ELEGIR de qué caja sale el
+  // dinero (la devolución en efectivo). Ahí el disponible cambia con cada sucursal que se
+  // marca y no se puede resolver con un solo número: lo que una sucursal puede devolver es lo
+  // compartido (`warehouse_id: null`) más lo que ella misma acreditó. Se manda el desglose
+  // completo y la pantalla lo suma sola, en vez de ir al servidor por cada clic.
+  const porSucursal = CustomerCreditMovement
+    ? await CustomerCreditMovement.findAll({
+        where: { customer_id: id },
+        attributes: ["warehouse_id", [Sequelize.fn("SUM", Sequelize.col("amount")), "amount"]],
+        group: ["warehouse_id"],
+        raw: true,
+      })
+    : [];
+  customer.credit_by_warehouse = porSucursal.map(r => ({
+    warehouse_id: r.warehouse_id ?? null,
+    amount: parseFloat(r.amount || 0),
+  }));
 
   return { data: customer };
 }

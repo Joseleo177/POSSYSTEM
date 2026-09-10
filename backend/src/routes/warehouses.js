@@ -22,7 +22,11 @@ router.get  ("/:id/stock", permit("inventory.view"),           ownWarehouse, wh.
 router.post ("/:id/stock",           permit("inventory.adjust"), ownWarehouse, wh.addStock);
 router.put  ("/:id/stock/:productId",permit("inventory.adjust"), ownWarehouse, wh.setStock);
 router.delete("/:id/stock/:productId",permit("inventory.adjust"),             ownWarehouse, wh.removeStock);
-router.get  ("/:id/products", permit("inventory.view"),        ownWarehouse, wh.getProducts);
+// Esta es la grilla del POS, no una pantalla de inventario: es de donde la caja saca qué
+// productos hay, a qué precio y cuántos quedan. Un cajero no administra existencias —no
+// ajusta, no transfiere— pero no puede vender a ciegas, así que `sales.create` alcanza.
+// Pedir solo `inventory.view` dejaba al cajero con la grilla vacía y un 403 en consola.
+router.get  ("/:id/products", permit("inventory.view", "sales.create"), ownWarehouse, wh.getProducts);
 
 // ── Empleados por almacén ─────────────────────────────────────
 // Esta ruta reparte visibilidad: `employee_warehouses` es lo que decide qué sucursales ve
