@@ -605,6 +605,7 @@ export default function PurchaseDetails({ state }) {
           onEdit={openEditItem}
           invoiceRate={invoiceRate}
           invoiceSym={invoiceSym}
+          forceLots={localReceiving}
         />
 
         {/* Modo recepción. Está acá además de en el alta porque esta es la pantalla donde se
@@ -779,7 +780,10 @@ export default function PurchaseDetails({ state }) {
         </div>
       )}
 
-      {/* Modales */}
+      {/* Modales.
+          `showLotFields`: el lote se teclea cuando la mercancía está entrando de verdad —al
+          confirmar la orden, o con el modo recepción prendido—, que es cuando el bulto está
+          en la mano y se puede leer el lote impreso. */}
       {(addModalOpen || !!editingItem) && (
         <ProductSelectorModal
           open={addModalOpen || !!editingItem}
@@ -790,7 +794,7 @@ export default function PurchaseDetails({ state }) {
           invoiceRate={invoiceRate}
           invoiceSym={invoiceSym}
           warehouseId={localWarehouseId || detail?.warehouse_id || null}
-          showLotFields={orderStatus === "pendiente"}
+          showLotFields={orderStatus === "pendiente" || orderStatus === "parcial" || localReceiving}
         />
       )}
 

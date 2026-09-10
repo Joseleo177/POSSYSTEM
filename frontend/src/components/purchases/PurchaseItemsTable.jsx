@@ -11,11 +11,14 @@ export default function PurchaseItemsTable({
     onEdit,
     invoiceRate = 1,
     invoiceSym = "Ref.",
+    // Con el modo recepción prendido la orden puede seguir en borrador y aun así estar
+    // metiendo mercancía: ahí el lote sí se está cargando y la columna tiene que verse.
+    forceLots = false,
 }) {
     // 'parcial' es una orden abierta con mercancía ya adentro: se sigue editando, con el
     // límite de que una línea no puede bajar de lo que ya entró (lo valida el backend).
     const isEditing = ["borrador", "pendiente", "parcial"].includes(orderStatus);
-    const showLots = orderStatus !== "borrador";
+    const showLots = orderStatus !== "borrador" || forceLots;
     const showActions = isEditing;
     // Con el modo recepción una línea puede estar a medio entrar. Solo se muestra la columna
     // cuando de verdad hay algo recibido: en una compra normal sería ruido.

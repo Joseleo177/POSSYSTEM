@@ -667,6 +667,30 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
           update_price: hasMargin && product.sellable !== false && update_price !== false && update_price !== 'false'
         };
 
+        // Lote tecleado DESPUÉS de que la mercancía entró. Pasa con el modo recepción: se
+        // recibe con el bulto en la mano y el lote se carga al rato. Esas unidades ya
+        // sumaron al stock pero no quedaron atadas a ningún lote, así que se atan ahora — si
+        // no, el vencimiento no existiría para mercancía que sí está en el estante.
+        //
+        // Solo cubre el caso de pasar de "sin lote" a "con lote": cambiar un lote por otro
+        // sería mover existencias entre lotes, y eso es un ajuste de inventario, no una
+        // edición de la orden.
+        if (previa && yaEntro > 0 && lot_number && expiration_date
+            && purchase.warehouse_id && (!previa.lot_number || !previa.expiration_date)) {
+          const [lote] = await ProductLot.findOrCreate({
+            where: {
+              warehouse_id: purchase.warehouse_id,
+              product_id,
+              lot_number: String(lot_number),
+              expiration_date,
+            },
+            defaults: { qty: 0 },
+            transaction,
+            lock: true,
+          });
+          await lote.increment('qty', { by: yaEntro, transaction });
+        }
+
         if (previa) {
           // `received_units` no va en `datos`: es del inventario, no del formulario.
           await previa.update(datos, { transaction });
