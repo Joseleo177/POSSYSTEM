@@ -66,7 +66,13 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     unit: editData.unit || "unidad",
                     qty_step: editData.qty_step || "1",
                     package_unit: editData.package_unit ? editData.package_unit.toUpperCase() : "",
-                    package_size: editData.package_size != null && editData.package_size !== "" ? parseFloat(editData.package_size) : "",
+                    // Una presentación "UNIDAD" contiene una unidad. Los productos guardados
+                    // antes de que el campo se bloqueara pueden traer otra cosa (UNIDAD × 4,
+                    // que además infla las órdenes de compra): se corrige al abrir la ficha,
+                    // y guardar deja el dato sano.
+                    package_size: (editData.package_unit || "").toUpperCase() === "UNIDAD"
+                        ? 1
+                        : (editData.package_size != null && editData.package_size !== "" ? parseFloat(editData.package_size) : ""),
                     bulk_price: initialBulkPrice,
                     cost_price: editData.cost_price || "",
                     profit_margin: editData.profit_margin || "",
@@ -214,6 +220,34 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             }
         }
         setForm(prev => ({ ...prev, ...updates }));
+    };
+
+    // Cuántas unidades trae cada presentación, cuando el nombre ya lo dice. Se propone al
+    // elegirla; el usuario la puede pisar (hay "docenas" de 10 en la vida real).
+    const PKG_SIZE_SUGERIDO = { UNIDAD: "1", DOCENA: "12" };
+
+    // La presentación manda sobre el contenido. "UNIDAD" es la presentación suelta: contiene
+    // exactamente una unidad, y dejar teclear otra cosa producía fichas que se contradicen
+    // ("UNIDAD × 4 unidad") y, peor, compras infladas: la orden multiplica cantidad por
+    // contenido, así que 3 "UNIDAD" de contenido 4 metían 12 al inventario.
+    const handlePackageUnitChange = (val) => {
+        setForm(prev => {
+            const next = { ...prev, package_unit: val };
+            if (!val) {                       // NINGUNO: no se compra por bulto
+                next.package_size = "";
+                next.bulk_price   = "";
+                return next;
+            }
+            const sugerido = PKG_SIZE_SUGERIDO[val];
+            // Solo se pisa lo tecleado cuando la presentación no admite otro contenido
+            // (UNIDAD). Para el resto es una propuesta, y solo si el campo está vacío.
+            if (val === "UNIDAD") next.package_size = "1";
+            else if (sugerido && !String(prev.package_size ?? "").trim()) next.package_size = sugerido;
+
+            const size = parseFloat(next.package_size);
+            if (next.cost_price && size > 0) next.bulk_price = (parseFloat(next.cost_price) * size).toFixed(2);
+            return next;
+        });
     };
 
     const handlePackageSizeChange = (val) => {
@@ -751,7 +785,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                     <div className="flex-1">
                                         <CustomSelect
                                             value={form.package_unit}
-                                            onChange={val => set("package_unit", val)}
+                                            onChange={handlePackageUnitChange}
                                             options={[
                                                 { value: "", label: "NINGUNO" },
                                                 ...Array.from(new Set([
@@ -763,11 +797,29 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                             className="w-full"
                                         />
                                     </div>
+                                    {/* El contenido solo se teclea cuando la presentación es un
+                                        bulto de verdad. Sin presentación no hay nada que contar,
+                                        y una "UNIDAD" contiene una unidad por definición. */}
                                     <div className="w-24 relative">
-                                        <input value={form.package_size} onChange={e => handlePackageSizeChange(e.target.value)} type="number" placeholder="Cant." className="input text-center !pr-9" />
-                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-content-subtle font-bold uppercase">{form.unit || "uds"}</span>
+                                        <input
+                                            value={form.package_size}
+                                            onChange={e => handlePackageSizeChange(e.target.value)}
+                                            type="number" min="1" step="1"
+                                            disabled={!form.package_unit || form.package_unit === "UNIDAD"}
+                                            placeholder={form.package_unit ? "Cant." : "—"}
+                                            title={form.package_unit === "UNIDAD" ? "Una unidad contiene una unidad" : undefined}
+                                            className="input text-center !pr-9 disabled:opacity-45 disabled:cursor-not-allowed"
+                                        />
+                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-content-subtle font-bold uppercase pointer-events-none">{form.unit || "uds"}</span>
                                     </div>
                                 </div>
+                                <p className="mt-2 text-[10px] font-bold text-content-muted leading-tight">
+                                    {!form.package_unit
+                                        ? "Este producto se compra suelto, sin bulto."
+                                        : form.package_unit === "UNIDAD"
+                                            ? "Se compra por unidad suelta."
+                                            : `Cuántas ${(form.unit || "uds").toLowerCase()} trae cada ${form.package_unit.toLowerCase()}. Es lo que multiplica la orden de compra.`}
+                                </p>
                             </div>
 
                             <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">

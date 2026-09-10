@@ -626,8 +626,20 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
         const product = await Product.findByPk(product_id, { transaction });
         if (!product) throw new Error(`Producto ID ${product_id} no encontrado`);
 
+        // Emparejar por id es lo preciso. Pero si la línea llega sin id —un bundle viejo en
+        // caché, una integración— se busca una existente del mismo producto y lote que
+        // todavía no se haya usado: sin esta red, esa línea se crearía duplicada y la
+        // original se daría por quitada, que en una orden con mercancía adentro es un error
+        // duro. Antes daba igual, porque las líneas se borraban y recreaban en cada guardado.
         const idLinea = item.id ? parseInt(item.id) : null;
-        const previa  = idLinea ? porId.get(idLinea) : null;
+        const previa  = idLinea
+          ? porId.get(idLinea)
+          : existentes.find(e =>
+              !vistos.has(e.id)
+              && e.product_id === parseInt(product_id)
+              && (e.lot_number || null) === (lot_number || null)
+              && String(e.expiration_date || "") === String(expiration_date || "")
+            ) || null;
         const yaEntro = previa ? parseFloat(previa.received_units || 0) : 0;
 
         // Bajar la cantidad por debajo de lo que ya entró al inventario dejaría un stock que

@@ -78,6 +78,18 @@ export default function PurchaseDetails({ state }) {
     setSupHits([]);
   }, [detail?.id]);
 
+  // El efecto de arriba solo corre al ABRIR otra orden. Pero `detail` se recarga del servidor
+  // cada vez que se guarda, se recibe o se paga, y es ahí donde las líneas recién agregadas
+  // reciben su id definitivo. Sin re-sincronizar, `localItems` se queda con `id: undefined`
+  // en esas líneas y el siguiente guardado las manda sin id: el servidor las toma por líneas
+  // nuevas y da por quitadas las originales (que ya movieron inventario). Se salta cuando hay
+  // cambios sin guardar, para no pisar lo que el usuario está tecleando.
+  useEffect(() => {
+    if (!detail?.items || isDirty) return;
+    setLocalItems(detail.items);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail?.items]);
+
   // Supplier search
   useEffect(() => {
     if (!["borrador", "pendiente"].includes(detail?.status) || !supQuery.trim()) { setSupHits([]); return; }
@@ -197,7 +209,7 @@ export default function PurchaseDetails({ state }) {
   const saveDraftChanges = async () => {
     setSavingChanges(true);
     try {
-      await api.purchases.update(detail.id, {
+      const guardado = await api.purchases.update(detail.id, {
         warehouse_id:  localWarehouseId || null,
         supplier_id:   localSupplier?.id   || null,
         supplier_name: localSupplier?.name || null,
@@ -221,8 +233,12 @@ export default function PurchaseDetails({ state }) {
         })),
       });
       notify(localReceiving ? "Guardado y cargado al stock" : "Borrador actualizado", "success");
-      await refreshDetail?.(detail.id);
+      // Las líneas vuelven del servidor con su id y con cuántas unidades ya entraron. Se
+      // adoptan de una vez —sin esperar al refresco— porque el próximo guardado necesita
+      // esos ids para actualizar las líneas en su sitio en vez de recrearlas.
+      if (guardado?.data?.items) setLocalItems(guardado.data.items);
       setIsDirty(false);
+      await refreshDetail?.(detail.id);
       // Con el modo prendido el guardado movió inventario: la grilla de productos tiene que
       // enterarse, o seguiría mostrando el cero del estante.
       if (localReceiving) onProductsUpdated?.();
