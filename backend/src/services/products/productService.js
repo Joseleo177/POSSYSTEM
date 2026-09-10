@@ -349,8 +349,23 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
       // de esta sucursal. Guardado en el producto es el del precio general, y mostrarlo junto
       // a cifras de sucursal daba un porcentaje que no se correspondía con ninguno de los dos
       // números de al lado: 54% sobre un precio y un costo que dan 30%.
-      const margenSucursal = derivarMargen(prod.price, prod.cost_price, "");
-      if (margenSucursal != null) prod.profit_margin = margenSucursal;
+      //
+      // Pero solo se pisa cuando de verdad NO explica el precio de esta sucursal. El precio
+      // sugerido se redondea a 2 decimales, así que un margen del 5% sobre un costo de 2,2417
+      // da 2,353785 → 2,35, y volver a despejar el porcentaje desde ahí devuelve 4,83%. Quien
+      // tecleó 5 y al reabrir la ficha leía 4,83 creía que el sistema le había cambiado el
+      // margen a sus espaldas. Si el precio es el que sale de aplicar el margen guardado
+      // (dentro de ese medio centavo de redondeo), se respeta el número que puso el usuario.
+      const guardado  = parseFloat(prod.profit_margin);
+      const costoNum  = parseFloat(prod.cost_price);
+      const precioNum = parseFloat(prod.price);
+      const explicaElPrecio = !isNaN(guardado) && costoNum > 0 && precioNum > 0
+        && Math.abs(costoNum * (1 + guardado / 100) - precioNum) <= 0.005 + 1e-9;
+
+      if (!explicaElPrecio) {
+        const margenSucursal = derivarMargen(prod.price, prod.cost_price, "");
+        if (margenSucursal != null) prod.profit_margin = margenSucursal;
+      }
 
       delete prod.stocks;
     } else if (warehouse_id) {
