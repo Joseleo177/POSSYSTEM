@@ -216,6 +216,22 @@ async function _applyStockAndPrices(purchase, items, transaction, ctx = {}) {
         await stockEntry.update({ cost_price: unit_cost }, { transaction });
       }
 
+      // El precio de venta también. Solo se escribía en el producto, y una sucursal con
+      // precio PROPIO nunca lo mira —el suyo le gana—, así que recibir la compra le
+      // actualizaba el costo y la dejaba vendiendo al precio viejo. Se veía como si el PVP
+      // de la compra se hubiera guardado recortado, cuando en realidad ni había llegado.
+      //
+      // Si la sucursal HEREDA (price null) no se le pone uno propio: el del producto se
+      // actualiza abajo y le llega solo. Anclarla acá la desengancharía de los cambios
+      // generales sin que nadie lo haya pedido.
+      const aplicaPrecio = update_price !== false && product.sellable !== false;
+      if (aplicaPrecio && stockEntry.price != null) {
+        await stockEntry.update({
+          price: sale_price,
+          profit_margin: profit_margin ?? null,
+        }, { transaction });
+      }
+
       if (lot_number && expiration_date && entran !== 0) {
         const [lotEntry] = await ProductLot.findOrCreate({
           where: { warehouse_id: purchase.warehouse_id, product_id, lot_number: String(lot_number), expiration_date },
@@ -242,6 +258,7 @@ async function _applyStockAndPrices(purchase, items, transaction, ctx = {}) {
       productChanges.price = sale_price;
       productChanges.profit_margin = profit_margin;
     }
+
     await product.update(productChanges, { transaction });
 
 
