@@ -28,7 +28,7 @@ const ORDER_STATUS = {
 };
 
 export default function PurchaseDetails({ state }) {
-  const { detail, refreshDetail, confirmOrder, receivePurchase, loading, warehouses = [] } = state;
+  const { detail, refreshDetail, confirmOrder, receivePurchase, loading, warehouses = [], onProductsUpdated } = state;
   const { notify, baseCurrency, activeCurrencies, companyInfo, printerWidth } = useApp();
 
   // ── Payments ──
@@ -49,6 +49,10 @@ export default function PurchaseDetails({ state }) {
   const [editingItem, setEditingItem]           = useState(null);
   const [invoiceCurrency, setInvoiceCurrency]   = useState(null);
   const [invoiceRateInput, setInvoiceRateInput] = useState("");
+  // Modo recepción: con esto prendido, guardar mete al stock lo que falte de cada línea y la
+  // orden queda abierta. Vive también acá —no solo en el alta— porque después de guardar el
+  // borrador esta es la pantalla donde se le siguen agregando productos.
+  const [localReceiving, setLocalReceiving]     = useState(false);
 
   // Supplier search
   const [supQuery, setSupQuery] = useState("");
@@ -63,6 +67,7 @@ export default function PurchaseDetails({ state }) {
     );
     setLocalWarehouseId(detail.warehouse_id ? String(detail.warehouse_id) : "");
     setLocalNotes(detail.notes || "");
+    setLocalReceiving(!!detail.receiving_mode);
     // Moneda y tasa con que se compró: se recuperan de la orden, no de la configuración
     // vigente. Es el dato que dice a cuánto se cerró esa compra ese día.
     const savedRate = parseFloat(detail.exchange_rate);
@@ -139,6 +144,14 @@ export default function PurchaseDetails({ state }) {
   };
 
   const deleteLocalItem = (uid) => {
+    // Una línea que ya metió mercancía es la única constancia de ese movimiento: quitarla
+    // dejaría stock que nada explica, y la anulación de la orden no lo devolvería. El
+    // backend lo rechaza igual; acá se avisa antes de que el usuario pierda el guardado.
+    const linea = localItems.find(i => (i.id ?? i.key) === uid);
+    if (parseFloat(linea?.received_units || 0) > 0) {
+      notify(`"${linea.product_name}" ya entró al inventario con esta orden: no se puede quitar. Anula la orden completa si te equivocaste.`, "err");
+      return;
+    }
     setLocalItems(prev => prev.filter(i => (i.id ?? i.key) !== uid));
     setIsDirty(true);
   };
@@ -191,7 +204,11 @@ export default function PurchaseDetails({ state }) {
         notes:         localNotes || null,
         currency_id:   invoiceCurrency?.id || null,
         exchange_rate: invoiceCurrency ? invoiceRate : 1,
+        receiving_mode: localReceiving,
         items: localItems.map(i => ({
+          // El id de la línea guardada: sin él el backend la borra y la recrea, y con eso se
+          // pierde cuántas unidades ya entraron al inventario.
+          ...(i.id ? { id: i.id } : {}),
           product_id:      i.product_id,
           package_unit:    i.package_unit,
           package_size:    i.package_size,
@@ -203,9 +220,12 @@ export default function PurchaseDetails({ state }) {
           update_price:    i.update_price !== false,
         })),
       });
-      notify("Borrador actualizado", "success");
+      notify(localReceiving ? "Guardado y cargado al stock" : "Borrador actualizado", "success");
       await refreshDetail?.(detail.id);
       setIsDirty(false);
+      // Con el modo prendido el guardado movió inventario: la grilla de productos tiene que
+      // enterarse, o seguiría mostrando el cero del estante.
+      if (localReceiving) onProductsUpdated?.();
     } catch (e) {
       notify(e.message, "err");
     } finally {
@@ -484,7 +504,7 @@ export default function PurchaseDetails({ state }) {
                 ? <div className="w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />
                 : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
               }
-              Guardar
+              {localReceiving ? "Guardar y cargar" : "Guardar"}
             </button>
           </div>
         )}
@@ -517,11 +537,11 @@ export default function PurchaseDetails({ state }) {
                 Agregar
               </button>
             )}
-            {(isBorrador ? localItems : (detail.items || [])).length > 0 && (
+            {(isEditable ? localItems : (detail.items || [])).length > 0 && (
               <button
                 onClick={() => printPurchaseOrderDoc(
                   detail,
-                  isBorrador ? localItems : (detail.items || []),
+                  isEditable ? localItems : (detail.items || []),
                   companyInfo,
                   printerWidth
                 )}
@@ -537,11 +557,11 @@ export default function PurchaseDetails({ state }) {
             {/* La hoja carta es la otra mitad: el comprobante que se archiva y con el que se
                 cuadra con el proveedor, con costos, total y saldo. Mismo par que en las notas
                 de traslado (térmica + carta). */}
-            {(isBorrador ? localItems : (detail.items || [])).length > 0 && (
+            {(isEditable ? localItems : (detail.items || [])).length > 0 && (
               <button
                 onClick={() => printPurchaseLetter(
                   detail,
-                  isBorrador ? localItems : (detail.items || []),
+                  isEditable ? localItems : (detail.items || []),
                   companyInfo,
                   baseCurrency,
                   activeCurrencies
@@ -570,6 +590,40 @@ export default function PurchaseDetails({ state }) {
           invoiceRate={invoiceRate}
           invoiceSym={invoiceSym}
         />
+
+        {/* Modo recepción. Está acá además de en el alta porque esta es la pantalla donde se
+            le siguen agregando productos a una orden ya guardada, que es justo el caso: la
+            mercancía llegó, hay que venderla ya, y la factura se termina de cargar después. */}
+        {isEditable && (
+          <div className={`px-5 py-3 border-t transition-colors ${localReceiving
+            ? "border-brand-500/20 bg-brand-500/[0.06]"
+            : "border-border/10 dark:border-white/[0.06]"}`}>
+            <button
+              type="button"
+              onClick={() => { setLocalReceiving(v => !v); setIsDirty(true); }}
+              className="w-full flex items-start gap-3 text-left group"
+            >
+              <span className={`mt-0.5 w-9 h-5 shrink-0 rounded-full p-0.5 transition-colors ${localReceiving ? "bg-brand-500" : "bg-content-subtle/30 dark:bg-white/15"}`}>
+                <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${localReceiving ? "translate-x-4" : ""}`} />
+              </span>
+              <span className="min-w-0">
+                <span className={`block text-[11px] font-black uppercase tracking-wide ${localReceiving ? "text-brand-500" : "text-content-subtle dark:text-white/40 group-hover:text-content dark:group-hover:text-white/70"}`}>
+                  Ir recibiendo
+                </span>
+                <span className="block text-[10px] font-bold text-content-subtle dark:text-white/35 mt-0.5 leading-snug">
+                  {localReceiving
+                    ? "Al guardar, cada producto entra al stock de una vez. La orden queda abierta para seguir cargándola."
+                    : "La mercancía entra al stock solo cuando le des a “Recibir mercancía”."}
+                </span>
+              </span>
+            </button>
+            {localReceiving && (!localWarehouseId || !localSupplier) && (
+              <p className="text-[10px] font-black uppercase tracking-wide text-danger mt-2 pl-12">
+                Falta {!localWarehouseId ? "el almacén de destino" : "el proveedor"}: sin eso la mercancía no puede entrar.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Footer editable: total */}
         {isEditable && localItems.length > 0 && (

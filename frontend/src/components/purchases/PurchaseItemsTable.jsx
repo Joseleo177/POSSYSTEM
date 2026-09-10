@@ -12,9 +12,14 @@ export default function PurchaseItemsTable({
     invoiceRate = 1,
     invoiceSym = "Ref.",
 }) {
-    const isEditing = orderStatus === "borrador" || orderStatus === "pendiente";
+    // 'parcial' es una orden abierta con mercancía ya adentro: se sigue editando, con el
+    // límite de que una línea no puede bajar de lo que ya entró (lo valida el backend).
+    const isEditing = ["borrador", "pendiente", "parcial"].includes(orderStatus);
     const showLots = orderStatus !== "borrador";
     const showActions = isEditing;
+    // Con el modo recepción una línea puede estar a medio entrar. Solo se muestra la columna
+    // cuando de verdad hay algo recibido: en una compra normal sería ruido.
+    const showRecibido = items.some(i => parseFloat(i.received_units || 0) > 0);
 
     return (
         <div className="overflow-x-auto">
@@ -27,6 +32,7 @@ export default function PurchaseItemsTable({
                             uno distinto—, pero al menos dice de qué es la cantidad y cambia el
                             "×" por "/", que se lee "por" y no como una multiplicación. */}
                         <th className="px-4 py-3 text-center">Cant. Pres.</th>
+                        {showRecibido && <th className="px-4 py-3 text-center">En stock</th>}
                         <th className="px-4 py-3 text-center w-36">
                             Costo/Pres.{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70">({invoiceSym})</span> : ""}
                         </th>
@@ -77,6 +83,28 @@ export default function PurchaseItemsTable({
                                     <span className="text-xs font-bold tabular-nums">{fmtQty(item.package_qty)}</span>
                                 )}
                             </td>
+
+                            {/* Cuánto de esta línea ya entró al inventario. Se compara contra el
+                                total de unidades, no contra las presentaciones: es lo que de
+                                verdad se sumó al stock. */}
+                            {showRecibido && (() => {
+                                const entraron = parseFloat(item.received_units || 0);
+                                const pedidas  = parseFloat(item.total_units || 0);
+                                const completa = entraron >= pedidas - 1e-6 && pedidas > 0;
+                                return (
+                                    <td className="px-4 py-3 text-center whitespace-nowrap">
+                                        {entraron > 0 ? (
+                                            <span className={`text-[10px] font-black uppercase tracking-wide tabular-nums px-2 py-1 rounded-md ${completa
+                                                ? "text-success bg-success/10"
+                                                : "text-brand-500 bg-brand-500/10"}`}>
+                                                {completa ? "Completa" : `${fmtQty(entraron)} / ${fmtQty(pedidas)}`}
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] font-black uppercase tracking-wide text-content-subtle/50 dark:text-white/20">Sin recibir</span>
+                                        )}
+                                    </td>
+                                );
+                            })()}
 
                             {/* Costo × Empaque */}
                             <td className="px-4 py-3 text-center">

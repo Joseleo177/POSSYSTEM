@@ -327,6 +327,8 @@ export function usePurchases(notify, onProductsUpdated) {
     // modo recepción (cada guardado mete lo pendiente al stock)
     receivingMode,
     setReceivingMode,
+    // para que la pantalla de detalle avise que el stock se movió
+    onProductsUpdated,
 
     // paginación + filtros de lista
     purchasesTotal,
