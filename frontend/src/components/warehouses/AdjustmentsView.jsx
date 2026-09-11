@@ -393,6 +393,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                         </svg>
                                         <input type="text" placeholder="Buscar producto..."
                                             value={search} onChange={e => setSearch(e.target.value)}
+                                            autoComplete="off" spellCheck={false}
                                             className="input h-9 pl-9 text-sm" />
                                         {search && (
                                             <button onClick={() => setSearch("")}

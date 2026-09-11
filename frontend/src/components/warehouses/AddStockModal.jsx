@@ -101,6 +101,8 @@ export default function AddStockModal({
                             onChange={e => setSearch(e.target.value)}
                             placeholder="Buscar producto..."
                             className="input"
+                            autoComplete="off"
+                            spellCheck={false}
                         />
                         
                         <div 

@@ -79,6 +79,10 @@ export default function ProductGrid({
                         onKeyDown={onSearchKeyDown}
                         placeholder="Buscar producto... (F1)"
                         className="input !pl-10 w-full"
+                        // Sin esto el navegador despliega su historial de formularios encima
+                        // de la grilla y tapa los productos.
+                        autoComplete="off"
+                        spellCheck={false}
                     />
                 </div>
                 {/* Ancho fijo: con min-w el recuadro se estiraba y encogía según el largo

@@ -690,6 +690,8 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                             onChange={e => setProductSearch(e.target.value)}
                                             placeholder="Buscar producto del catálogo..."
                                             className="w-full h-10 bg-surface-2/50 dark:bg-white/[0.03] border border-border/20 dark:border-white/5 rounded-xl px-3.5 text-[12px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle dark:placeholder:text-white/20"
+                                            autoComplete="off"
+                                            spellCheck={false}
                                         />
                                         {searchLoading && <div className="absolute right-3 top-3 text-[10px] text-content-subtle">...</div>}
                                     </div>

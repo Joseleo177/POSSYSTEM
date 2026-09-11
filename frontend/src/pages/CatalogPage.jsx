@@ -262,7 +262,7 @@ export default function CatalogPage() {
                             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
-                            <input value={search} onChange={e => setSearch(e.target.value)} className="input h-9 pl-9 text-[11px] w-full" placeholder="Buscar producto..." />
+                            <input value={search} onChange={e => setSearch(e.target.value)} className="input h-9 pl-9 text-[11px] w-full" placeholder="Buscar producto..." autoComplete="off" spellCheck={false} />
                         </div>
 
                         {/* Selector de almacén. Con uno solo no hay nada que elegir: mostrarlo

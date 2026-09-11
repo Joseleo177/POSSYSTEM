@@ -142,6 +142,8 @@ export default function StoreHeader({
                         onChange={e => setSearch(e.target.value)}
                         placeholder="Buscar producto..."
                         className="w-full h-11 pl-10 pr-3 rounded-full bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-[13px] font-medium text-content dark:text-white outline-none focus:border-brand-500/60 focus:bg-surface dark:focus:bg-white/[0.07] transition-all placeholder:text-content-subtle"
+                        autoComplete="off"
+                        spellCheck={false}
                     />
                 </div>
 

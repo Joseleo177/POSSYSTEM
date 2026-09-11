@@ -349,6 +349,8 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                             onChange={e => setProductSearch(e.target.value)}
                             placeholder="Buscar producto..."
                             className="input mb-2"
+                            autoComplete="off"
+                            spellCheck={false}
                         />
                         <div className="max-h-48 overflow-y-auto border border-border/20 dark:border-white/5 rounded-xl divide-y divide-border/10 dark:divide-white/5">
                             {filteredProducts.length === 0 ? (
