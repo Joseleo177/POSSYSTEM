@@ -2,6 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const logger = require("../../middleware/logger");
 const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, Sequelize, ProductComboItem, BenefitTag, ProductBenefitTag, sequelize } = require("../../models");
+const { runWithoutTenant } = require("../../utils/tenantStorage");
 const Op = Sequelize.Op;
 
 const isSupabase = () => !!process.env.SUPABASE_URL;
@@ -71,17 +72,23 @@ async function syncBenefitTags(productId, benefit_tag_ids, company_id, t) {
   );
 }
 
+// El nombre lleva azar además de la marca de tiempo. Con solo `Date.now()` dos guardados del
+// mismo milisegundo —una importación, dos cajas subiendo a la vez— producen el MISMO nombre, y
+// como la subida a Supabase va con `upsert: true` el segundo archivo pisa al primero: dos
+// productos distintos terminan apuntando a la misma URL, que es justo lo que hay que evitar.
+function nuevoNombre(ext) {
+  return `product_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`;
+}
+
 async function handleImageUpload(file) {
   if (!file) return null;
+  const ext = path.extname(file.originalname).toLowerCase();
+  const filename = nuevoNombre(ext);
   if (isSupabase()) {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const filename = `product_${Date.now()}${ext}`;
     return getSupabaseStorage().uploadImage(file.buffer, filename, file.mimetype);
   }
   const uploadsDir = path.join(__dirname, "../../../uploads");
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-  const ext = path.extname(file.originalname).toLowerCase();
-  const filename = `product_${Date.now()}${ext}`;
   fs.writeFileSync(path.join(uploadsDir, filename), file.buffer);
   return filename;
 }
@@ -99,7 +106,7 @@ async function copyStoredImage(source) {
     const fromPath = decodeURIComponent(new URL(source).pathname.split("/").pop() || "");
     if (!fromPath) return null;
     const ext = path.extname(fromPath).toLowerCase() || ".jpg";
-    return getSupabaseStorage().copyImage(fromPath, `product_${Date.now()}${ext}`);
+    return getSupabaseStorage().copyImage(fromPath, nuevoNombre(ext));
   }
 
   // Disco local: una URL externa no se puede copiar, se referencia tal cual (nadie la borra
@@ -109,7 +116,7 @@ async function copyStoredImage(source) {
   const src = path.join(uploadsDir, source);
   if (!fs.existsSync(src)) return null;
   const ext = path.extname(source).toLowerCase();
-  const filename = `product_${Date.now()}${ext}`;
+  const filename = nuevoNombre(ext);
   fs.copyFileSync(src, path.join(uploadsDir, filename));
   return filename;
 }
@@ -160,12 +167,29 @@ async function handleImageDelete(imageValue, exceptProductId = null) {
     // URL en vez de copiar el archivo. Borrar la foto de uno dejaba a los demás —a veces de
     // otra empresa— con la imagen rota. Si algún otro producto sigue apuntando al mismo
     // valor, el archivo se queda.
-    const stillUsed = await Product.count({
-      where: {
-        image_filename: imageValue,
-        ...(exceptProductId ? { id: { [Op.ne]: exceptProductId } } : {}),
-      },
-    });
+    //
+    // El conteo cruza empresas a propósito, y por eso va sin el filtro de tenant: los que
+    // comparten archivo son SIEMPRE de empresas distintas (la herencia exige company_id
+    // distinto), así que con el filtro puesto este count nunca veía al otro dueño, daba 0 y
+    // borraba igual el archivo del bucket. No se leen datos ajenos: solo se pregunta si
+    // alguien más apunta a esta URL, para decidir si el archivo puede irse.
+    //
+    // Ante la duda, el archivo se queda. Si el conteo falla no hay forma de saber si alguien
+    // más lo está usando, y las dos equivocaciones no cuestan lo mismo: un archivo de más es
+    // un poco de espacio en el bucket; uno de menos es la foto rota de otro comercio, sin
+    // manera de recuperarla.
+    let stillUsed = 1;
+    try {
+      stillUsed = await runWithoutTenant(() => Product.count({
+        where: {
+          image_filename: imageValue,
+          ...(exceptProductId ? { id: { [Op.ne]: exceptProductId } } : {}),
+        },
+      }));
+    } catch (err) {
+      logger.warn(`No se pudo comprobar quién usa ${filename}; el archivo se conserva: ${err.message}`);
+      return;
+    }
     if (stillUsed > 0) return;
     await getSupabaseStorage().deleteImage(filename);
   }
