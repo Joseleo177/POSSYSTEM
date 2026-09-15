@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
 import { api } from "../services/api";
+import { onSSE } from "../services/sse";
 import { useApp } from "./AppContext";
 
 const CartContext = createContext(null);
@@ -159,6 +160,28 @@ export function CartProvider({ children }) {
   // Y el juego de promociones, por lo mismo: una promo de la otra tienda no debe seguir
   // descontando en el carrito después de cambiar de sucursal.
   useEffect(() => { loadActivePromos(activeWarehouse?.id); }, [activeWarehouse?.id, loadActivePromos]);
+
+  // Las promociones también caducan solas. Cargarlas únicamente al cambiar de sucursal dejaba
+  // a una caja abierta todo el día descontando con una promo ya vencida —o sin aplicar una que
+  // acababa de empezar—, mientras el servidor, que las revalida al facturar, cobraba otra cosa:
+  // el carrito mostraba un total y la factura salía con otro. Se refrescan con el mismo ritmo
+  // que los productos: aviso en vivo, al volver a la pestaña y cada minuto como red de
+  // seguridad (el vencimiento no dispara ningún aviso).
+  useEffect(() => {
+    if (!activeWarehouse?.id) return;
+    const refrescar = () => loadActivePromos(activeWarehouse.id);
+    const unsubSSE = onSSE('products:updated', refrescar);
+    const onVisible = () => { if (document.visibilityState === 'visible') refrescar(); };
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') refrescar();
+    }, 60_000);
+    return () => {
+      unsubSSE();
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [activeWarehouse?.id, loadActivePromos]);
 
   // ── Conversión de moneda ───────────────────────────────────
   // El precio del producto se guarda con precisión completa (5 decimales, ej. costo × margen =
@@ -350,7 +373,13 @@ export function CartProvider({ children }) {
     if (!activeWarehouse) { notify("Selecciona una sucursal antes de cargar la cotización", "err"); return; }
     try {
       const wid = quot.warehouse_id || activeWarehouse.id;
-      const res = await api.warehouses.getProducts(wid, { limit: 500 });
+      // Solo los productos de la cotización, por id: pedir "las primeras 500" del almacén
+      // dejaba fuera —sin decir nada— cualquier línea que cayera más abajo en un catálogo
+      // grande, y la cotización se cargaba incompleta.
+      const ids = [...new Set((quot.items || []).map(i => i.product_id).filter(Boolean))];
+      const res = ids.length
+        ? await api.warehouses.getProducts(wid, { ids: ids.join(','), limit: ids.length })
+        : { data: [] };
       const warehouseProducts = res.data || [];
       const productMap = Object.fromEntries(warehouseProducts.map(p => [p.id, p]));
 
@@ -804,6 +833,20 @@ export function CartProvider({ children }) {
         setSelectedCustomer({ id: held.customer_id, name: held.customer_name, rif: held.customer_rif });
       }
       if (held.serie_id) setSelectedSerieId(held.serie_id);
+
+      // El descuento vuelve con la cuenta, por lo mismo que el recargo: se guardó como monto
+      // en base y el carrito lo repone como monto en la moneda de pantalla. Sin esto, una
+      // cuenta pausada con descuento reaparecía por el total completo —el listado de cuentas
+      // sí mostraba el rebajado— y al cobrarla el carrito enviaba 0 y lo borraba.
+      const heldDiscount = parseFloat(held.discount_amount || 0);
+      if (heldDiscount > 0) {
+        setDiscountEnabled(true);
+        setDiscountMode("amount");
+        setDiscountPct(String(round2(isVesPrimary && vesRate ? heldDiscount * vesRate : heldDiscount)));
+      } else {
+        setDiscountEnabled(false);
+        setDiscountPct("");
+      }
 
       // El recargo vuelve con la cuenta. Sin esto, reabrir una mesa que ya tenía servicio
       // cargado lo borraba en silencio al cobrarla: el carrito enviaría 0 y pisaría el monto

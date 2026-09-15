@@ -12,11 +12,10 @@ const {
   ProductComboItem,
   Sequelize,
   sequelize,
-  Op,
   PAYMENT_METHODS,
 } = require("./shared");
-const { Quotation } = require("../../models");
-const { Promotion } = require("../../models");
+const { Quotation, QuotationItem } = require("../../models");
+const { cargarPromosActivas, calcLineDiscount } = require("./promoDiscounts");
 
 // Devuelve la venta con todas sus relaciones, en el formato plano que
 // espera el frontend. Reutilizado por la respuesta normal y la idempotente.
@@ -93,23 +92,9 @@ module.exports = async function createSale(body) {
     const chargeLabel = chargeAmt > 0 ? (service_charge_label?.trim().slice(0, 40) || "Servicio") : null;
     const rate = parseFloat(exchange_rate) || 1;
 
-    // Cargar promociones activas para esta venta: las de la sucursal donde se factura, más
-    // las que corren en todas. El filtro tiene que estar acá y no solo en la caja — el
-    // descuento se recalcula en el servidor, así que sin esto una promoción de otra tienda se
-    // seguiría aplicando aunque el carrito no la haya mostrado nunca.
-    const now = new Date();
-    const activePromos = await Promotion.findAll({
-      where: {
-        active: true,
-        starts_at: { [Op.lte]: now },
-        [Op.and]: [
-          { [Op.or]: [{ ends_at: null }, { ends_at: { [Op.gte]: now } }] },
-          { [Op.or]: [{ warehouse_id: null }, { warehouse_id }] },
-        ],
-      },
-      include: [{ model: Product, through: { attributes: [] }, attributes: ['id'] }],
-      transaction,
-    });
+    // Promociones vigentes de esta sucursal (ver promoDiscounts.js: lo comparte updateSale,
+    // que factura las cuentas en espera con el mismo criterio).
+    const activePromos = await cargarPromosActivas(warehouse_id, transaction);
 
     // Dos pistas de cálculo en paralelo:
     // - $ (sale.total): round2 POR LÍNEA → sum(round2(price) × qty) → 3 × 4.07 = 12.21
@@ -120,18 +105,21 @@ module.exports = async function createSale(body) {
     // redondeo dual y se gestiona en PaymentFormModal con la tolerancia de 0.02 USD.
     const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
 
-    const calcLineDiscount = (productId, unitPrice, qty, promos) => {
-      for (const promo of promos) {
-        if (!promo.Products.some(p => p.id === productId)) continue;
-        if (promo.type === 'percentage')
-          return parseFloat((unitPrice * qty * parseFloat(promo.discount_pct) / 100).toFixed(5));
-        if (promo.type === 'buy_x_get_y') {
-          const freeUnits = Math.floor(qty / (promo.buy_qty + promo.get_qty)) * promo.get_qty;
-          return parseFloat((freeUnits * unitPrice).toFixed(5));
+    // Precio pactado en una cotización. Se cobra lo que se le ofreció al cliente, que es lo
+    // que la caja tiene en pantalla al recuperarla: sin esto la línea se refacturaba al precio
+    // del día y el ticket no coincidía con el presupuesto firmado. Los precios salen de la
+    // cotización guardada, nunca del cuerpo de la petición: el cliente no elige cuánto paga.
+    // Es el mismo criterio con que la convierte quotations/convertToSale.
+    const precioPactado = new Map();
+    if (quotation_id) {
+      const cotizacion = await Quotation.findByPk(quotation_id, { transaction });
+      if (cotizacion && cotizacion.status === 'pendiente') {
+        const lineas = await QuotationItem.findAll({ where: { quotation_id }, transaction });
+        for (const l of lineas) {
+          if (l.product_id != null) precioPactado.set(parseInt(l.product_id), parseFloat(l.price));
         }
       }
-      return 0;
-    };
+    }
 
     let total = 0;
     const enrichedItems = [];
@@ -162,7 +150,10 @@ module.exports = async function createSale(body) {
         ...(descuentaStock ? { lock: true } : {}),
       });
 
-      const rawPrice     = parseFloat(fichaSucursal?.price ?? product.price);
+      // Orden: lo pactado en la cotización, si no el precio de esta sucursal, si no el general.
+      const rawPrice     = precioPactado.has(product.id)
+        ? precioPactado.get(product.id)
+        : parseFloat(fichaSucursal?.price ?? product.price);
       const roundedPrice = round2(rawPrice);
       // lineDiscountUsd: usa roundedPrice (pista $, para sale.total)
       // lineDiscountBs:  usa rawPrice    (pista Bs, para SaleItem.discount y subtotal generado)

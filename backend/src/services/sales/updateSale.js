@@ -8,6 +8,7 @@ const {
   sequelize,
 } = require("./shared");
 const getOneSale = require("./getOneSale");
+const { cargarPromosActivas, calcLineDiscount } = require("./promoDiscounts");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 
 const bad = (msg, status = 400, code = null) => Object.assign(new Error(msg), { status, code });
@@ -96,6 +97,13 @@ module.exports = async function updateSale(saleId, body, req) {
     // (cant×precio mostrado = total mostrado); SaleItem.price guarda precisión completa
     // (base para sale_items.subtotal, usado en la conversión a Bs).
     const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+
+    // Las promociones también valen en una cuenta en espera. Antes esta ruta las ignoraba: el
+    // carrito mostraba el descuento —lo calcula igual para cualquier venta— y la factura de la
+    // mesa salía por el total sin rebajar. Se resuelven contra las vigentes AHORA, que es lo
+    // que la caja tiene en pantalla al cobrar, no las de cuando se abrió la cuenta.
+    const activePromos = await cargarPromosActivas(warehouseId, transaction);
+
     let total = 0;
     for (const item of items) {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
@@ -118,6 +126,14 @@ module.exports = async function updateSale(saleId, body, req) {
       const unitPrice = parseFloat(item.price ?? precioBase);
       const qty = parseFloat(item.qty);
       if (qty <= 0) continue;
+
+      // Dos pistas de redondeo, igual que en createSale.js: el total en $ va con el precio
+      // redondeado a 2 decimales (lo que el cajero ve por línea) y el descuento que se guarda
+      // en la línea con el precio completo, que es la base del subtotal en Bs.
+      const lineDiscountUsd = calcLineDiscount(product.id, round2(unitPrice), qty, activePromos);
+      const lineDiscountBs  = calcLineDiscount(product.id, unitPrice,         qty, activePromos);
+      // `discount` se guarda POR UNIDAD: la BD calcula subtotal = (price - discount) * quantity.
+      const unitDiscount = qty > 0 ? parseFloat((lineDiscountBs / qty).toFixed(5)) : 0;
 
       // Costo congelado: sin esto, el reporte de márgenes recalcula la utilidad de esta
       // venta con el costo de reposición del día en que se consulte. En un combo el
@@ -182,13 +198,13 @@ module.exports = async function updateSale(saleId, body, req) {
           name: product.name,
           price: unitPrice,
           quantity: qty,
-          discount: 0,
+          discount: unitDiscount,
           cost_price: unitCost,
         },
         { transaction }
       );
 
-      total += round2(unitPrice) * qty;
+      total += round2(unitPrice) * qty - lineDiscountUsd;
     }
 
     // Datos de cabecera que la caja puede cambiar sobre una cuenta ya abierta. El caso típico

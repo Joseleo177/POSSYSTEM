@@ -1,5 +1,11 @@
 const { Promotion, Product, PromotionProduct, sequelize } = require("../models");
 const { Op } = require("sequelize");
+const { broadcast } = require("../services/sseService");
+
+// Una promoción cambia lo que la caja descuenta, y el servidor la revalida al facturar: si el
+// carrito no se entera, muestra un total y la factura sale con otro. Se reutiliza el aviso de
+// productos, que es el que la caja ya escucha para refrescar precios y promociones.
+const avisarCajas = (req) => broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
 
 const getAll = async (req, res) => {
   try {
@@ -87,6 +93,7 @@ const create = async (req, res) => {
     const full = await Promotion.findByPk(promo.id, {
       include: [{ model: Product, through: { attributes: [] }, attributes: ['id', 'name'] }],
     });
+    avisarCajas(req);
     res.status(201).json({ ok: true, data: full });
   } catch (err) {
     await t.rollback();
@@ -130,6 +137,7 @@ const update = async (req, res) => {
     const full = await Promotion.findByPk(id, {
       include: [{ model: Product, through: { attributes: [] }, attributes: ['id', 'name'] }],
     });
+    avisarCajas(req);
     res.json({ ok: true, data: full });
   } catch (err) {
     await t.rollback();
@@ -142,6 +150,7 @@ const remove = async (req, res) => {
     const promo = await Promotion.findByPk(req.params.id);
     if (!promo) return res.status(404).json({ ok: false, message: "Promoción no encontrada" });
     await promo.destroy();
+    avisarCajas(req);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ ok: false, message: err.message });

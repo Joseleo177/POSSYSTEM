@@ -35,9 +35,15 @@ export default function EditSaleModal({ open, onClose, sale, notify, onSaved }) 
         debounceRef.current = setTimeout(async () => {
             setSearching(true);
             try {
-                // sellable: agregar líneas a una factura es vender, así que aquí tampoco
+                // Los precios tienen que ser los de la sucursal que emitió la factura: este
+                // buscador iba contra el catálogo general, así que una línea agregada acá se
+                // cobraba al precio de referencia y no al que cobra esa tienda.
+                //
+                // sellable_only: agregar líneas a una factura es vender, así que aquí tampoco
                 // tienen que aparecer los insumos —la venta los rechazaría al guardar—.
-                const res = await api.products.getAll({ search: search.trim(), limit: 8, active: true, sellable: true });
+                const res = sale?.warehouse_id
+                    ? await api.warehouses.getProducts(sale.warehouse_id, { search: search.trim(), limit: 8, sellable_only: true })
+                    : await api.products.getAll({ search: search.trim(), limit: 8, active: true, sellable: true });
                 setResults(res.data?.products || res.data || []);
             } catch { setResults([]); }
             setSearching(false);

@@ -63,7 +63,12 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
         const timer = setTimeout(async () => {
             setSearchLoading(true);
             try {
-                const res = await api.products.getAll({ search: productSearch.trim(), limit: 8 });
+                // El reemplazo se cobra al precio de la sucursal donde se hizo la venta, no al
+                // del catálogo general: si esa tienda tiene precio propio, el cambio se estaba
+                // valorando con otro número del que el servidor iba a grabar.
+                const res = sale?.warehouse_id
+                    ? await api.warehouses.getProducts(sale.warehouse_id, { search: productSearch.trim(), limit: 8, sellable_only: true })
+                    : await api.products.getAll({ search: productSearch.trim(), limit: 8 });
                 setProductResults(res.data || []);
             } catch { setProductResults([]); }
             setSearchLoading(false);

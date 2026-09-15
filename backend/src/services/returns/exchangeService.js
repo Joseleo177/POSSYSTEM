@@ -130,14 +130,28 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
     const replacementLines = [];
 
     for (const item of replacementItems) {
-      const { product_id, name, qty, price } = item;
+      const { product_id, name, qty } = item;
       const parsedQty   = parseFloat(qty);
-      const parsedPrice = parseFloat(price);
-      if (!product_id || isNaN(parsedQty) || parsedQty <= 0 || isNaN(parsedPrice) || parsedPrice < 0) {
+      if (!product_id || isNaN(parsedQty) || parsedQty <= 0) {
         const e = new Error(`Datos inválidos para producto de reemplazo: ${name}`); e.status = 400; throw e;
       }
       const product = await Product.findByPk(product_id, { transaction: t });
       if (!product) { const e = new Error(`Producto ${product_id} no existe`); e.status = 404; throw e; }
+
+      // Mercancía nueva: vale lo que vale hoy en la sucursal que hizo la venta, igual que si
+      // el cliente la comprara en caja. El precio lo resuelve el servidor y no se le cree al
+      // que envía el formulario — venía del catálogo general y una tienda con precio propio
+      // valoraba mal el cambio, a favor o en contra del cliente. Combos y servicios incluidos:
+      // no llevan existencias, pero sí pueden tener precio propio (ver createSale.js).
+      const fichaReemplazo = await ProductStock.findOne({
+        where: { warehouse_id: sale.warehouse_id, product_id: product.id },
+        attributes: ["price"],
+        transaction: t,
+      });
+      const parsedPrice = parseFloat(fichaReemplazo?.price ?? product.price);
+      if (isNaN(parsedPrice) || parsedPrice < 0) {
+        const e = new Error(`"${product.name}" no tiene precio de venta definido`); e.status = 400; throw e;
+      }
 
       let ingredientsData = [];
       let mainStockEntry = null;
