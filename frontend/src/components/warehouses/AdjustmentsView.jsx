@@ -75,6 +75,11 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
     const [loadingMore, setLoadingMore]         = useState(false);
     
     const [selectedProduct, setSelectedProduct] = useState(null);
+    // En un teléfono el formulario no cabe debajo de la lista: a la lista le quedaban unos
+    // pocos píxeles y recorrer el inventario era imposible. Ahí el panel sube como hoja
+    // inferior —al tocar un producto, o con el chip de la sesión— y la lista se queda con
+    // toda la pantalla. En escritorio no cambia nada: sigue siendo la columna de la derecha.
+    const [showLinesMobile, setShowLinesMobile]  = useState(false);
     const [form, setForm]                       = useState({ quantity: "", type: "out", reason: "merma", notes: "" });
     const [saving, setSaving]                   = useState(false);
     const LIMIT = 50;
@@ -358,14 +363,16 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
 
                     {/* Banner para abrir sesión */}
                     {!loadingSession && !session && (
-                        <div className="shrink-0 mx-4 mt-4 rounded-xl border border-warning/20 bg-warning/5 px-4 py-3 flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-warning/10 text-warning flex items-center justify-center shrink-0">
+                        <div className="shrink-0 mx-3 lg:mx-4 mt-3 lg:mt-4 rounded-xl border border-warning/20 bg-warning/5 px-3 lg:px-4 py-2 lg:py-3 flex items-center justify-between gap-3 lg:gap-4">
+                            <div className="flex items-center gap-2.5 lg:gap-3 min-w-0">
+                                <div className="w-8 h-8 rounded-lg bg-warning/10 text-warning items-center justify-center shrink-0 hidden lg:flex">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                                 </div>
-                                <div>
-                                    <p className="text-[11px] font-black text-content dark:text-white">Iniciar sesión de ajustes</p>
-                                    <p className="text-[10px] text-content-subtle/60">Todos los movimientos quedarán registrados bajo esta sesión</p>
+                                <div className="min-w-0">
+                                    <p className="text-[11px] font-black text-content dark:text-white truncate">Iniciar sesión de ajustes</p>
+                                    {/* El párrafo se queda para escritorio: en un teléfono costaba
+                                        dos renglones de lista y el botón ya dice lo que hay que hacer. */}
+                                    <p className="hidden lg:block text-[10px] text-content-subtle/60">Todos los movimientos quedarán registrados bajo esta sesión</p>
                                 </div>
                             </div>
                             <button
@@ -417,7 +424,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                         />
                                     </div>
                                 </div>
-                                <div className="flex items-center justify-between gap-2 mt-1.5">
+                                <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5">
                                     <p className="text-[9px] font-bold text-content-subtle/40 uppercase tracking-widest truncate">
                                         {loadingList ? "Cargando..." : `${allProducts.length} producto${allProducts.length !== 1 ? "s" : ""}`}
                                         {/* Avance de la sesión: cuenta productos distintos, no movimientos,
@@ -426,6 +433,18 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                             <span className="text-success ml-1.5">· {adjustedCount.size} ajustado{adjustedCount.size !== 1 ? "s" : ""}</span>
                                         )}
                                     </p>
+                                    {/* En móvil las líneas registradas viven en la hoja inferior:
+                                        este es el acceso, porque la columna donde se ven en
+                                        escritorio no está. */}
+                                    {session?.lines?.length > 0 && (
+                                        <button
+                                            onClick={() => setShowLinesMobile(true)}
+                                            className="lg:hidden h-7 px-2.5 shrink-0 rounded-lg bg-success/10 border border-success/25 text-[9px] font-black uppercase tracking-wide text-success flex items-center gap-1.5 active:scale-95 transition-all">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                            Sesión ({session.lines.length})
+                                        </button>
+                                    )}
+
                                     {/* La planilla para contar en el depósito. Va acá porque es
                                         el paso previo a este mismo formulario: se imprime, se
                                         cuenta a mano y se vuelve a cargar los números aquí. */}
@@ -596,11 +615,40 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                             </div>
                         </div>
 
-                        {/* Columna derecha: formulario + líneas de sesión */}
-                        <div className="flex flex-col min-h-0 overflow-y-auto">
+                        {/* Velo de la hoja móvil. Tocar fuera cierra, como en cualquier hoja del
+                            teléfono; en escritorio no existe. */}
+                        {(selectedProduct || showLinesMobile) && (
+                            <div
+                                onClick={() => { setSelectedProduct(null); setShowLinesMobile(false); }}
+                                className="lg:hidden fixed inset-0 z-[790] bg-black/50 catalog-overlay-in"
+                            />
+                        )}
+
+                        {/* Columna derecha en escritorio; hoja inferior en móvil. Es el mismo
+                            formulario: lo que cambia es dónde se apoya. Al quedar fijo, sale del
+                            flujo del grid y la lista de productos se queda con todo el alto. */}
+                        <div className={`flex-col min-h-0 overflow-y-auto lg:flex lg:static lg:z-auto lg:max-h-none lg:rounded-none lg:border-0 lg:shadow-none lg:bg-transparent ${
+                            (selectedProduct || showLinesMobile)
+                                ? "flex fixed inset-x-0 bottom-0 z-[800] max-h-[85vh] rounded-t-3xl border-t border-border/20 dark:border-white/10 bg-white dark:bg-surface-dark-2 shadow-[0_-8px_30px_rgba(0,0,0,0.3)] sheet-up safe-area-bottom"
+                                : "hidden"
+                        }`}>
+
+                            {/* Asa y cierre de la hoja. Solo en móvil: en escritorio esta columna
+                                está siempre a la vista y no hay nada que cerrar. */}
+                            <div className="lg:hidden sticky top-0 z-10 bg-white dark:bg-surface-dark-2 pt-2.5 pb-1 px-5 flex items-center justify-between border-b border-border/10 dark:border-white/[0.06]">
+                                <div className="absolute left-1/2 -translate-x-1/2 top-2 w-10 h-1 rounded-full bg-border dark:bg-white/20" />
+                                <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle mt-2">
+                                    {selectedProduct ? "Registrar movimiento" : `Movimientos de la sesión`}
+                                </p>
+                                <button
+                                    onClick={() => { setSelectedProduct(null); setShowLinesMobile(false); }}
+                                    className="mt-2 w-7 h-7 rounded-lg flex items-center justify-center text-content-subtle active:scale-95 transition-all">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
 
                             {/* Formulario */}
-                            <div className={`shrink-0 p-5 space-y-4 transition-all duration-200 ${!selectedProduct ? "opacity-40 pointer-events-none" : ""}`}>
+                            <div className={`shrink-0 p-5 space-y-4 transition-all duration-200 ${!selectedProduct ? "hidden lg:block opacity-40 pointer-events-none" : ""}`}>
                                 {/* Producto seleccionado */}
                                 <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all ${selectedProduct ? "border-brand-500 bg-brand-500/5" : "border-border/20 dark:border-white/[0.06]"}`}>
                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${selectedProduct ? "bg-brand-500" : "bg-surface-3 dark:bg-white/5"}`}>

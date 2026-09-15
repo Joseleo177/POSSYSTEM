@@ -26,9 +26,17 @@ input[type=number] { -moz-appearance: textfield; }
 .catalog-drawer-in  { animation: catalog-drawer-in .28s cubic-bezier(.32, .72, 0, 1); }
 .catalog-overlay-in { animation: catalog-fade-in .2s ease-out; }
 
+/* Hoja inferior del móvil (hoy: Inventario → Movimiento manual). Mismo motivo que el cajón de
+   arriba: sin transición, el panel aparece de golpe tapando media pantalla y se lee como que
+   la página cambió sola. */
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+@media (max-width: 1023.98px) {
+  .sheet-up { animation: sheet-up .24s cubic-bezier(.32, .72, 0, 1); }
+}
+
 /* Quien pidió menos movimiento en su sistema no debería recibir un panel deslizándose. */
 @media (prefers-reduced-motion: reduce) {
-  .catalog-drawer-in, .catalog-overlay-in { animation: none; }
+  .catalog-drawer-in, .catalog-overlay-in, .sheet-up { animation: none; }
 }
 
 @layer base {
