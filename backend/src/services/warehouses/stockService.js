@@ -1,4 +1,5 @@
 const { Product, ProductStock, StockSession, StockSessionLine, Sequelize, sequelize } = require("../../models");
+const { floorToUnit } = require("../../utils/units");
 
 function buildTcp(req) {
   const company_id = req.employee?.company_id ?? null;
@@ -114,7 +115,8 @@ async function getStock(req) {
     is_combo:      p.is_combo,
     is_service:    p.is_service,
     barcode:       p.barcode,
-    qty:           p.is_combo ? (ingredientStockMap[p.product_id] ?? 0) : parseFloat(p.qty) || 0,
+    // Lo que se puede armar, truncado a la unidad en que se vende el combo (utils/units.js).
+    qty:           p.is_combo ? floorToUnit(ingredientStockMap[p.product_id] ?? 0, p.unit) : parseFloat(p.qty) || 0,
     unit:          p.unit,
     price:         parseFloat(p.price || 0),
     company_price: parseFloat(p.company_price || 0),
@@ -293,7 +295,12 @@ async function getProducts(req) {
     barcode:      p.barcode,
     image_filename: p.image_filename,
     cost_price:   p.is_combo ? (comboCostMap[p.id] ?? 0) : parseFloat(p.cost_price || 0),
-    stock:        p.is_combo ? (ingredientStockMap[p.id] === Infinity ? null : (ingredientStockMap[p.id] ?? 0)) : (parseFloat(p.qty) || 0),
+    // Combo: lo que alcanza para armar, truncado a su unidad de venta — 3 papeles sueltos no
+    // son "1 paquete" de 4 (la caja lo anunciaba y después lo rechazaba). null = sin límite
+    // (combo de puros servicios).
+    stock:        p.is_combo
+      ? (ingredientStockMap[p.id] === Infinity ? null : floorToUnit(ingredientStockMap[p.id] ?? 0, p.unit))
+      : (parseFloat(p.qty) || 0),
     sales:        parseFloat(p.total_sold),
     category_name: p.category_name,
     category_id:  p.category_id,

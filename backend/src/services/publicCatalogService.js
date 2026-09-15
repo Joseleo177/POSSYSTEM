@@ -407,10 +407,18 @@ async function comboAvailability(comboIds, warehouseId) {
     (grouped[l.combo_id] ||= []).push({ quantity: l.quantity, ingredient: byId[l.product_id] });
   }
 
+  // La unidad del combo, para truncar con ella: la vitrina publicaba "0,75 UNIDAD" de un
+  // paquete de 4 cuando quedaban 3 sueltos, y ese paquete no se puede armar.
+  const combos = await Product.findAll({
+    where: { id: { [Op.in]: comboIds } },
+    attributes: ["id", "unit"],
+  });
+  const unitById = Object.fromEntries(combos.map((c) => [c.id, c.unit]));
+
   // Un combo sin ingredientes configurados queda en 0: createSale lo rechaza igual, así que
   // publicarlo como disponible solo genera un pedido que nadie puede cumplir.
   return Object.fromEntries(
-    comboIds.map((id) => [id, grouped[id] ? calculateComboStockAndCost(grouped[id]).stock : 0])
+    comboIds.map((id) => [id, grouped[id] ? calculateComboStockAndCost(grouped[id], unitById[id]).stock : 0])
   );
 }
 

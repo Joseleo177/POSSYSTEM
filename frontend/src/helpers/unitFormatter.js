@@ -33,8 +33,11 @@ export const fmtQtyUnit = (qty, unit) => {
         }) + " " + u;
     }
 
-    // Unidades contables (estrictamente enteros)
-    return n.toLocaleString("es-VE", {
+    // Unidades contables (estrictamente enteros). Se TRUNCA, no se redondea: con 0,75 paquetes
+    // disponibles —3 papeles sueltos de un paquete de 4— el redondeo anunciaba "1 UNIDADES" y
+    // después la caja rechazaba el producto por falta de existencias. Lo que no alcanza para
+    // una unidad entera es cero (hacia cero, para no exagerar tampoco un faltante).
+    return Math.trunc(n).toLocaleString("es-VE", {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
     }) + " " + u;

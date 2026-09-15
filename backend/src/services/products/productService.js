@@ -3,6 +3,7 @@ const fs = require("fs");
 const logger = require("../../middleware/logger");
 const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, Sequelize, ProductComboItem, BenefitTag, ProductBenefitTag, sequelize } = require("../../models");
 const { runWithoutTenant } = require("../../utils/tenantStorage");
+const { floorToUnit } = require("../../utils/units");
 const Op = Sequelize.Op;
 
 const isSupabase = () => !!process.env.SUPABASE_URL;
@@ -23,7 +24,9 @@ function imageUrl(filename) {
   return `/uploads/${filename}`;
 }
 
-function calculateComboStockAndCost(comboItems) {
+// `comboUnit` es la unidad EN QUE SE VENDE EL COMBO: con ella se trunca lo que de verdad se
+// puede armar (ver utils/units.js). Sin unidad se devuelve el crudo, como antes.
+function calculateComboStockAndCost(comboItems, comboUnit) {
   if (!comboItems?.length) return { stock: 0, cost: 0 };
   let minStock = Infinity;
   let totalCost = 0;
@@ -39,7 +42,10 @@ function calculateComboStockAndCost(comboItems) {
     if (possible < minStock) minStock = possible;
   }
   // all ingredients are services → unlimited stock (null)
-  return { stock: minStock === Infinity ? null : minStock, cost: totalCost };
+  return {
+    stock: minStock === Infinity ? null : (comboUnit ? floorToUnit(minStock, comboUnit) : minStock),
+    cost: totalCost,
+  };
 }
 
 // Reemplaza los beneficios asignados a un producto por los recibidos. Se filtran contra las
@@ -404,7 +410,7 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
       prod.cost_own = false;
     }
     if (prod.is_combo) {
-      const stats = calculateComboStockAndCost(prod.comboItems);
+      const stats = calculateComboStockAndCost(prod.comboItems, prod.unit);
       prod.stock = stats.stock;
       prod.cost_price = stats.cost;
       if (warehouse_id !== undefined) prod.warehouse_stock = stats.stock;
@@ -447,7 +453,7 @@ async function getOne(id, company_id) {
   delete p.BenefitTags;
   p.image_url = imageUrl(p.image_filename);
   if (p.is_combo) {
-    const stats = calculateComboStockAndCost(p.comboItems);
+    const stats = calculateComboStockAndCost(p.comboItems, p.unit);
     p.stock = stats.stock;
     p.cost_price = stats.cost;
   }
