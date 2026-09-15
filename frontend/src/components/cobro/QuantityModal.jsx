@@ -26,10 +26,10 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
             suggestedRef.current = texto;
             setPristine(true);
             setError(null);
-            requestAnimationFrame(() => {
-                inputRef.current?.focus();
-                inputRef.current?.select();
-            });
+            // El foco lo pone el Modal sobre el campo marcado con data-autofocus, y el select()
+            // va en su onFocus. Pedirlo también desde aquí daba dos focus() por apertura y en el
+            // iPhone, a la segunda, el teclado ya no subía: el campo quedaba activo pero sin
+            // teclado, o el foco se iba al buscador de detrás.
         }
     }, [isOpen, item]);
 
@@ -188,6 +188,7 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
                         <div className="flex-1 relative group">
                             <input
                                 ref={inputRef}
+                                data-autofocus
                                 type="text"
                                 inputMode="decimal"
                                 value={val}

@@ -78,11 +78,16 @@ export default function CobroPage() {
     const currSym = currentCurrency?.symbol || baseCurrency?.symbol || "Ref.";
 
     // ── Foco automático en el buscador ─────────────────────────
+    // Solo con teclado físico: en una caja de escritorio el cajero escanea uno tras otro y el
+    // cursor tiene que estar siempre listo. En un teléfono ese foco automático sube el teclado
+    // sin que nadie lo pida, tapa media pantalla y se pelea con el modal que se acaba de abrir
+    // —al segundo producto el teclado ya no subía donde debía—.
+    const conTecladoFisico = () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
     // Al montar la página
-    useEffect(() => { requestAnimationFrame(() => searchInputRef.current?.focus()); }, []);
+    useEffect(() => { if (conTecladoFisico()) requestAnimationFrame(() => searchInputRef.current?.focus()); }, []);
     // Al cerrar el modal de cantidad
     useEffect(() => {
-        if (!qtyModalItem) requestAnimationFrame(() => searchInputRef.current?.focus());
+        if (!qtyModalItem && conTecladoFisico()) requestAnimationFrame(() => searchInputRef.current?.focus());
     }, [qtyModalItem]);
 
     // ── Auto-apertura: coincidencia exacta de barcode o Enter pendiente del scanner ──

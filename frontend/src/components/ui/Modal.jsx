@@ -3,6 +3,12 @@ import { hasTopOverlay } from "../../helpers/overlayGuard";
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+// Escritorio: hay teclado físico, el foco automático ahorra un clic y el Tab tiene sentido.
+// Teléfono: un focus() de más sube o baja el teclado sin que nadie lo pida y desplaza el modal,
+// así que ahí solo se enfoca el campo que el modal marque expresamente (data-autofocus).
+const conTecladoFisico = () =>
+  typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+
 export default function Modal({ open, onClose, title, children, width = 560 }) {
   const modalRef = useRef(null);
   const previousFocus = useRef(null);
@@ -13,11 +19,21 @@ export default function Modal({ open, onClose, title, children, width = 560 }) {
 
     previousFocus.current = document.activeElement;
 
-    // Auto-focus: respetar autoFocus explícito, si no el primer interactivo
+    // Auto-focus: respetar el elegido por el modal, si no el primer interactivo.
+    //
+    // `data-autofocus` y no `autoFocus`: React no refleja esa prop como atributo en el DOM al
+    // renderizar en el cliente, así que un querySelector('[autofocus]') nunca la encuentra.
+    // Sin ella, el primer interactivo es la X de cerrar, y un modal que quiere el foco en su
+    // campo terminaba con DOS focus() seguidos —la X y luego el campo—. En el Safari del
+    // iPhone ese ida y vuelta cierra el teclado y vuelve a pedirlo, y a la segunda apertura
+    // Safari ya no lo abre: el campo queda enfocado pero sin teclado.
     const frame = requestAnimationFrame(() => {
       if (!modalRef.current) return;
-      const auto = modalRef.current.querySelector('[autofocus]');
-      const first = auto || modalRef.current.querySelector(FOCUSABLE);
+      const auto = modalRef.current.querySelector('[data-autofocus],[autofocus]');
+      // En el teléfono, si el modal no dice qué enfocar, no se enfoca nada: el primer
+      // interactivo suele ser la X de cerrar, y enfocarla solo sirve para bajar el teclado
+      // que el modal anterior había dejado abierto.
+      const first = auto || (conTecladoFisico() ? modalRef.current.querySelector(FOCUSABLE) : null);
       if (first) first.focus();
     });
 
@@ -31,7 +47,10 @@ export default function Modal({ open, onClose, title, children, width = 560 }) {
       // render del padre; sin esta guarda, robaba el foco de otros inputs de la página.)
       if (wasOpen.current) {
         wasOpen.current = false;
-        previousFocus.current?.focus();
+        // Devolver el foco es cortesía para quien navega con teclado. En un teléfono es lo
+        // contrario: reenfoca el buscador que había detrás, sube el teclado solo y deja al
+        // siguiente modal peleando contra él.
+        if (conTecladoFisico()) previousFocus.current?.focus();
         previousFocus.current = null;
       }
       return;
