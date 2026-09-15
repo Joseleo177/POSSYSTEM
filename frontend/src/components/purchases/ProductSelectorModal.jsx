@@ -240,9 +240,16 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         setSavingNew(false);
     };
 
+    // Una línea vale si tiene cuántos empaques entran y cuánto costó cada uno. Sin costo, la
+    // mercancía entra al inventario valorizada en cero: el costo del producto se pisa con 0, el
+    // margen sale disparatado y, con el interruptor de precio encendido, el PVP calculado
+    // también es 0 — el producto queda a la venta regalado.
+    const lineaValida = !!selected
+        && parseFloat(form.package_qty) > 0
+        && parseFloat(form.package_price) > 0;
+
     const handleAdd = () => {
-        if (!selected) return;
-        if (!form.package_qty || parseFloat(form.package_qty) <= 0) return;
+        if (!lineaValida) return;
         const result = { ...form, package_price: String(pkgPriceBase), product: selected, ...calc, key: Date.now() };
         // El margen del formulario arrastra su valor por defecto aunque el campo no se vea.
         // Sin limpiarlo, la línea de un insumo entraba a la orden prometiendo 30% y un precio
@@ -632,10 +639,11 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                     {step === 2 && (
                         <button
                             onClick={handleAdd}
-                            disabled={!form.package_qty || parseFloat(form.package_qty) <= 0}
+                            disabled={!lineaValida}
+                            title={!lineaValida ? "Falta la cantidad de empaques o el costo" : undefined}
                             className={[
                                 "flex-[2] h-9 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center justify-center gap-2",
-                                !form.package_qty || parseFloat(form.package_qty) <= 0
+                                !lineaValida
                                     ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed"
                                     : "bg-brand-500 text-white hover:brightness-105 active:scale-[0.99] shadow-lg shadow-brand-500/20"
                             ].join(" ")}

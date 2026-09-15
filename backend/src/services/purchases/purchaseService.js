@@ -346,6 +346,13 @@ async function createPurchase({ body, employee_id }) {
       const product = await Product.findByPk(product_id, { transaction });
       if (!product) throw new Error(`Producto ID ${product_id} no encontrado`);
 
+      // Sin costo no se recibe mercancía: entraría al inventario valorizada en cero, pisaría el
+      // costo del producto y dejaría el margen —y el reporte de utilidad— inventados. Con el
+      // interruptor de precio encendido, además, el PVP que se calcula es 0 y el producto sale
+      // a la venta regalado.
+      if (!(pkgPrice > 0))
+        throw new Error(`"${product.name}": falta el costo del empaque`);
+
       const purchaseItem = await PurchaseItem.create({
         purchase_id: purchase.id,
         product_id,
@@ -642,6 +649,10 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
 
         const product = await Product.findByPk(product_id, { transaction });
         if (!product) throw new Error(`Producto ID ${product_id} no encontrado`);
+
+        // Mismo criterio que al crear: una línea sin costo no puede quedar guardada.
+        if (!(pkgPrice > 0))
+          throw new Error(`"${product.name}": falta el costo del empaque`);
 
         // Emparejar por id es lo preciso. Pero si la línea llega sin id —un bundle viejo en
         // caché, una integración— se busca una existente del mismo producto y lote que
