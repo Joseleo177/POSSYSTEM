@@ -14,7 +14,7 @@ module.exports = (sequelize, DataTypes) => {
     warehouse_id:      { type: DataTypes.INTEGER, allowNull: true },
     currency_id:       { type: DataTypes.INTEGER, allowNull: true },
     exchange_rate:     { type: DataTypes.DECIMAL(14, 6), defaultValue: 1 },
-    discount_amount:   { type: DataTypes.DECIMAL(14, 2), defaultValue: 0 },
+    discount_amount:   { type: DataTypes.DECIMAL(14, 5), defaultValue: 0 },
     subtotal:          { type: DataTypes.DECIMAL(14, 2), allowNull: false },
     total:             { type: DataTypes.DECIMAL(14, 2), allowNull: false },
     status:            { type: DataTypes.STRING(20), defaultValue: 'pendiente' },

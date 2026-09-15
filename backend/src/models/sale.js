@@ -14,7 +14,7 @@ module.exports = (sequelize, DataTypes) => {
     employee_id: { type: DataTypes.INTEGER },
     currency_id: { type: DataTypes.INTEGER },
     exchange_rate: { type: DataTypes.DECIMAL(12, 6), allowNull: false, defaultValue: 1.0 },
-    discount_amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+    discount_amount: { type: DataTypes.DECIMAL(14, 5), allowNull: false, defaultValue: 0 },
     // Recargo de cabecera (propina, servicio, delivery) en moneda base. Suma al total, al
     // revés que discount_amount. No es una línea del carrito: no mueve inventario ni entra
     // en el reporte de productos vendidos.
