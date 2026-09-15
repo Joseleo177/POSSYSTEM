@@ -35,6 +35,13 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
 
     if (!isOpen || !item) return null;
 
+    // El foco al abrir —y con él el teclado— solo con teclado físico. En el teléfono el teclado
+    // subía al instante, tapaba el subtotal y los botones, y al encadenar productos se quedaba
+    // a medias entre un modal y el siguiente. Con la cantidad ya sugerida, lo normal ahí es
+    // confirmar o tocar +; quien vaya a escribir toca el campo y entonces sí sube el teclado,
+    // con el valor seleccionado.
+    const enfocarAlAbrir = typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+
     const unit = (item.unit || "UNIDAD").toUpperCase();
     const isInteger = !["KG", "LITRO", "METRO", "L", "M"].includes(unit) || !!item.is_service;
 
@@ -188,7 +195,7 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
                         <div className="flex-1 relative group">
                             <input
                                 ref={inputRef}
-                                data-autofocus
+                                {...(enfocarAlAbrir ? { "data-autofocus": true } : {})}
                                 type="text"
                                 inputMode="decimal"
                                 value={val}
