@@ -7,10 +7,24 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
     const [val, setVal] = useState("");
     const [error, setError] = useState(null);
     const inputRef = useRef(null);
+    // Si el campo sigue con la cantidad sugerida, sin que el cajero lo haya tocado.
+    const [pristine, setPristine] = useState(true);
+    const suggestedRef = useRef("");
 
     useEffect(() => {
         if (isOpen && item) {
-            setVal(String(item.qty || "").replace(".", ","));
+            // Un producto abierto desde la grilla todavía no tiene cantidad: se sugiere su paso
+            // de venta (1 en lo contable), que es lo que agrega addToCart al tocarlo. Antes el
+            // campo abría vacío, el resumen decía "0 UNIDADES × Bs.100 = Bs.0,00" y confirmar
+            // ahí daba "la cantidad debe ser mayor que cero". Desde el carrito sigue abriendo
+            // con la cantidad que ya tiene la línea.
+            const inicial = parseFloat(item.qty) > 0
+                ? parseFloat(item.qty)
+                : (parseFloat(item.qty_step) || 1);
+            const texto = String(parseFloat(inicial.toFixed(3))).replace(".", ",");
+            setVal(texto);
+            suggestedRef.current = texto;
+            setPristine(true);
             setError(null);
             requestAnimationFrame(() => {
                 inputRef.current?.focus();
@@ -44,6 +58,7 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
     };
 
     const adjust = (amount) => {
+        setPristine(false);
         const current = parseFloat(val.replace(",", ".")) || 0;
         let next = Math.max(0, current + amount);
         if (isInteger) next = Math.floor(next);
@@ -53,6 +68,16 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
 
     const handleInputChange = (raw) => {
         let v = raw.replace(/[^0-9.,]/g, "");
+        // El primer número tecleado REEMPLAZA la cantidad sugerida, no se le pega detrás. El
+        // select() del foco no siempre prende en el Safari del iPhone, y ahí tocar "3" sobre el
+        // 1 sugerido dejaba 13. Se detecta porque lo que llega es la sugerencia con el dígito
+        // nuevo al final; si el navegador sí seleccionó, llega solo el dígito y no hay nada que
+        // recortar.
+        if (pristine) {
+            const sug = suggestedRef.current;
+            if (sug && v.length > sug.length && v.startsWith(sug)) v = v.slice(sug.length);
+            setPristine(false);
+        }
         if (isInteger) {
             v = v.replace(/[.,]/g, "");
         } else {
