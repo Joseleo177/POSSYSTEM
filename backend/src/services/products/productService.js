@@ -636,6 +636,13 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
     let ficha = null;
     const cambios = {};
     let precioSeraPropio = false;
+    // Un combo o un servicio que no tiene ficha en NINGUNA sucursal se muestra en todas por
+    // herencia (ver la consulta de warehouses/:id/products). Ahí el precio que se teclea es el
+    // general, aunque se esté editando parado en una tienda: guardarlo como precio de sucursal
+    // obligaría a abrirle ficha, y con eso el combo desaparecería de las demás. Antes no se
+    // guardaba en ninguna parte —ni en el producto, por el alcance de sucursal, ni en una ficha
+    // que no existe— y el precio nuevo se perdía en silencio.
+    let esGlobalSinFicha = false;
 
     if (warehouse_id) {
       ficha = await ProductStock.findOne({
@@ -643,6 +650,10 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
         transaction: t,
         lock: true,
       });
+
+      if (!ficha && (isComboBool || isServiceBool)) {
+        esGlobalSinFicha = (await ProductStock.count({ where: { product_id: product.id }, transaction: t })) === 0;
+      }
 
       // Solo se escribe lo que de verdad cambió. Sin esta comparación, guardar el producto
       // para corregirle el nombre convertía en propio un precio que venía heredado, y esa
@@ -685,18 +696,18 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
     // igual para todas las sucursales, porque no tendría sentido de otro modo.
     await product.update({
       name: opt(name, product.name, product.name),
-      price: alcanceSucursal ? product.price : precioFinal,
+      price: (alcanceSucursal && !esGlobalSinFicha) ? product.price : precioFinal,
       category_id: opt(category_id, product.category_id),
       image_filename: currentImageValue,
       unit: opt(unit, product.unit, "unidad"),
       qty_step: opt(qty_step, product.qty_step, 1),
       stock: (isComboBool || isServiceBool) ? 0 : product.stock,
-      cost_price: alcanceSucursal ? product.cost_price : costoFinal,
+      cost_price: (alcanceSucursal && !esGlobalSinFicha) ? product.cost_price : costoFinal,
       // El margen sigue al precio: si la sucursal se queda con precio propio, su margen vive
       // en la ficha y este no se toca. Pero si el precio se hereda del producto, el
       // porcentaje que se acaba de teclear describe justamente ese precio general, y aquí es
       // donde tiene que quedar — antes se descartaba y la ficha releía un margen despejado.
-      profit_margin: (alcanceSucursal && precioSeraPropio) ? product.profit_margin : margenFinal,
+      profit_margin: (alcanceSucursal && !esGlobalSinFicha && precioSeraPropio) ? product.profit_margin : margenFinal,
       package_size: opt(package_size, product.package_size),
       package_unit: opt(package_unit, product.package_unit),
       bulk_price: opt(bulk_price, product.bulk_price),
@@ -722,13 +733,14 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
 
     // ── Lo que es de la sucursal, a la ficha de la sucursal ──────────────────────────
     // `cambios` se calculó más arriba, antes de escribir el producto.
-    if (warehouse_id && Object.keys(cambios).length) {
+    if (warehouse_id && Object.keys(cambios).length && !esGlobalSinFicha) {
       if (ficha) {
         await ficha.update(cambios, { transaction: t });
-      } else if (!isComboBool && !isServiceBool) {
+      } else {
         // La sucursal no manejaba este producto y le acaban de poner precio propio: pasa
-        // a formar parte de su surtido, en cero hasta que entre mercancía. Combos y
-        // servicios no llevan ficha de existencias.
+        // a formar parte de su surtido, en cero hasta que entre mercancía. Un combo o un
+        // servicio no lleva existencias, pero su ficha es donde vive el precio de esta
+        // tienda, y ya tiene ficha en otra: abrirle una acá no le cambia la visibilidad.
         await ProductStock.create(
           { warehouse_id, product_id: product.id, qty: 0, company_id, ...cambios },
           { transaction: t }

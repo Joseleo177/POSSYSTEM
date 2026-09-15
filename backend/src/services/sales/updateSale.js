@@ -102,19 +102,19 @@ module.exports = async function updateSale(saleId, body, req) {
       if (!product) throw bad(`Producto ${item.product_id} no encontrado`, 404);
 
       // Si el carrito no manda precio, el que rige es el de la sucursal de la venta; el del
-      // catálogo queda como último recurso, para servicios y combos que no tienen ficha ahí.
-      // El costo sale de la misma ficha, por lo mismo.
+      // catálogo queda como último recurso, para lo que no tiene ficha ahí. El costo sale de
+      // la misma ficha, por lo mismo. Servicios y combos también la consultan: no descuentan
+      // existencias, pero la sucursal puede haberles fijado precio propio y es el que la caja
+      // muestra al armar el carrito — mismo criterio que createSale.js.
       let precioBase = product.price;
       let costoBase  = product.cost_price;
-      if (!product.is_service && !product.is_combo) {
-        const ficha = await ProductStock.findOne({
-          where: { warehouse_id: warehouseId, product_id: product.id },
-          attributes: ["price", "cost_price"],
-          transaction,
-        });
-        if (ficha?.price != null) precioBase = ficha.price;
-        if (ficha?.cost_price != null) costoBase = ficha.cost_price;
-      }
+      const ficha = await ProductStock.findOne({
+        where: { warehouse_id: warehouseId, product_id: product.id },
+        attributes: ["price", "cost_price"],
+        transaction,
+      });
+      if (ficha?.price != null) precioBase = ficha.price;
+      if (ficha?.cost_price != null) costoBase = ficha.cost_price;
       const unitPrice = parseFloat(item.price ?? precioBase);
       const qty = parseFloat(item.qty);
       if (qty <= 0) continue;

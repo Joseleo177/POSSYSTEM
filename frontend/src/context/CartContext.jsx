@@ -9,6 +9,11 @@ export function CartProvider({ children }) {
 
   // ── Carrito ────────────────────────────────────────────────
   const [cart, setCart] = useState([]);
+  // Espejo del carrito para quien lo lee fuera del render. Se refresca acá y no en un efecto
+  // porque los efectos de los hijos corren antes que los del provider: CobroPage sincroniza
+  // precios en uno de ellos y leería el carrito de hace un render.
+  const cartRef = useRef(cart);
+  cartRef.current = cart;
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(false);
   const submittingRef = useRef(false);
@@ -238,6 +243,36 @@ export function CartProvider({ children }) {
     return true;
   }, [activeWarehouse, notify, validateCartStock, cart]);
 
+  // El carrito guarda una copia del producto tal como estaba al agregarlo, así que un cambio
+  // de precio hecho mientras la línea ya estaba cargada —desde el catálogo, desde stock o
+  // desde otra caja— no llegaba a ella: el cajero seguía viendo el precio viejo y la factura
+  // salía con el vigente, porque el servidor recalcula cada línea al facturar. Cada vez que la
+  // caja recarga su lista de productos (aviso en vivo o refresco periódico) se reponen aquí
+  // los precios de lo que ya está en el carrito.
+  //
+  // Las líneas con precio pactado (`price_locked`) no se tocan: vienen de una cuenta en espera
+  // o de una cotización, donde el precio acordado manda.
+  const syncCartPrices = useCallback((warehouseProducts) => {
+    if (!warehouseProducts?.length) return;
+    const byId = new Map(warehouseProducts.map(p => [p.id, p]));
+    let cambiados = 0;
+    const next = cartRef.current.map(i => {
+      if (i.price_locked) return i;
+      const p = byId.get(i.id);
+      if (!p || p.price == null) return i;
+      const nuevo = parseFloat(p.price);
+      if (!isFinite(nuevo) || Math.abs(nuevo - parseFloat(i.price)) < 1e-9) return i;
+      cambiados++;
+      return { ...i, price: nuevo };
+    });
+    if (!cambiados) return;
+    setCart(next);
+    // El cajero tiene que enterarse: el total que estaba leyendo acaba de cambiar.
+    notify(cambiados === 1
+      ? "Se actualizó el precio de un producto del carrito"
+      : `Se actualizaron los precios de ${cambiados} productos del carrito`);
+  }, [notify]);
+
   const removeFromCart = useCallback((id) => {
     setCart(prev => prev.filter(i => i.id !== id));
   }, []);
@@ -328,7 +363,8 @@ export function CartProvider({ children }) {
         if (existing) {
           return acc.map(i => i.id === prod.id ? { ...i, qty: i.qty + qty } : i);
         }
-        return [...acc, { ...prod, price: parseFloat(item.price), qty }];
+        // Precio pactado en la cotización: no lo pisa el refresco de precios del carrito.
+        return [...acc, { ...prod, price: parseFloat(item.price), price_locked: true, qty }];
       }, []);
 
       setCart(newCart);
@@ -757,7 +793,9 @@ export function CartProvider({ children }) {
         const prod = productMap[item.product_id];
         if (!prod) return acc;
         const qty = parseFloat(item.quantity) || 1;
-        return [...acc, { ...withOwnStock(prod, qty), price: parseFloat(item.price), qty }];
+        // El precio con que se abrió la cuenta manda: es el que updateSale vuelve a grabar
+        // al cobrarla, así que el refresco de precios no debe cambiarlo por debajo.
+        return [...acc, { ...withOwnStock(prod, qty), price: parseFloat(item.price), price_locked: true, qty }];
       }, []);
 
       setCart(newCart);
@@ -958,7 +996,7 @@ export function CartProvider({ children }) {
   return (
     <CartContext.Provider value={{
       // Carrito
-      cart, addToCart, removeFromCart, changeQty, setQtyDirect, clearCart,
+      cart, addToCart, removeFromCart, changeQty, setQtyDirect, clearCart, syncCartPrices,
       // Totales
       subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
       discountPct, setDiscountPct, discountMode, setDiscountMode,

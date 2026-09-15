@@ -29,7 +29,7 @@ export default function CobroPage() {
     const { notify, employee, baseCurrency, activeCurrencies, categories, can } = useApp();
 
     const {
-        cart, addToCart, removeFromCart, changeQty, setQtyDirect,
+        cart, addToCart, removeFromCart, changeQty, setQtyDirect, syncCartPrices,
         subtotalBase, discountAmount, discountEnabled, setDiscountEnabled,
         discountPct, setDiscountPct, discountMode, setDiscountMode,
         totalDisplay, totalSecondary,
@@ -69,6 +69,11 @@ export default function CobroPage() {
     const products = useCobroProducts(activeWarehouse, notify);
     const customer = useCobroCustomer(setSelectedCustomer, notify, activeWarehouse);
     const session  = useCobroSession(employee, activeWarehouse);
+
+    // Cada vez que la caja recibe productos frescos (aviso en vivo, refresco periódico o una
+    // búsqueda nueva), las líneas que ya están en el carrito se ponen al día. Sin esto el
+    // cajero cobraba leyendo un precio que el servidor ya había dejado atrás.
+    useEffect(() => { syncCartPrices(products.products); }, [products.products, syncCartPrices]);
 
     const currSym = currentCurrency?.symbol || baseCurrency?.symbol || "Ref.";
 

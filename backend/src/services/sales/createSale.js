@@ -148,14 +148,19 @@ module.exports = async function createSale(body) {
 
       // El precio que rige es el de la sucursal, si lo fijó. Sale de la misma fila que más
       // abajo descuenta las existencias —con lock—, así que no cuesta una consulta extra.
-      // Servicios y combos no tienen ficha de almacén: siguen con el precio del producto.
-      const fichaSucursal = (product.is_service || product.is_combo)
-        ? null
-        : await ProductStock.findOne({
-            where: { warehouse_id, product_id: product.id },
-            transaction,
-            lock: true,
-          });
+      //
+      // Un servicio o un combo no descuenta existencias propias, pero sí puede tener ficha en
+      // la sucursal con precio (y costo) propios: es lo que la caja lee al armar el carrito
+      // —warehouses/:id/products devuelve COALESCE(ps.price, p.price) para cualquier tipo de
+      // producto—, así que es lo que hay que facturar. Saltarse la ficha para ellos cobraba el
+      // precio del catálogo: el cajero veía un monto en el carrito y el ticket salía con otro.
+      // El lock es para poder descontar; leer un precio no necesita bloquear la fila.
+      const descuentaStock = !product.is_service && !product.is_combo;
+      const fichaSucursal = await ProductStock.findOne({
+        where: { warehouse_id, product_id: product.id },
+        transaction,
+        ...(descuentaStock ? { lock: true } : {}),
+      });
 
       const rawPrice     = parseFloat(fichaSucursal?.price ?? product.price);
       const roundedPrice = round2(rawPrice);
@@ -166,7 +171,9 @@ module.exports = async function createSale(body) {
 
       if (product.is_service) {
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, lineDiscountBs, unitPrice: rawPrice });
+        // stockEntry va solo para congelar el costo de esta sucursal (el servicio no mueve
+        // existencias): mismo criterio que el precio, y que el COALESCE que ve la caja.
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, stockEntry: fichaSucursal, lineDiscountBs, unitPrice: rawPrice });
       } else if (product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
         if (!comboItems || comboItems.length === 0) {
