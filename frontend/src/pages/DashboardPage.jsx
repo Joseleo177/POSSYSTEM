@@ -142,7 +142,7 @@ export default function DashboardPage() {
     if (error) return (
         <div className="h-full flex items-center justify-center p-6 text-center">
             <div className="max-w-md">
-                <div className="text-danger text-4xl mb-4">⚠️</div>
+                <svg className="w-10 h-10 mx-auto mb-4 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                 <div className="text-sm font-black text-content dark:text-white uppercase mb-2">Error de Sincronización</div>
                 <p className="text-xs text-content-subtle mb-6">{error}</p>
                 <button onClick={load} className="btn-primary px-6 h-10 rounded-xl">Reintentar Conexión</button>
@@ -154,26 +154,28 @@ export default function DashboardPage() {
 
     return (
         <Page module="ORDEN DE CONTROL" title="Inteligencia de Negocio" subheader={
-            <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex items-center justify-between bg-surface-1/50 dark:bg-white/[0.01]">
-                 <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-success animate-pulse" />
-                     <span className="text-[10px] font-black text-content dark:text-white uppercase tracking-widest">Servidor Activo · {new Date().toLocaleDateString("es-VE", { day: "numeric", month: "long" })}</span>
+            <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-surface-1/50 dark:bg-white/[0.01]">
+                 <div className="flex items-center gap-2 min-w-0">
+                    <div className="h-3 w-3 shrink-0 rounded-full bg-success animate-pulse" />
+                     <span className="text-[10px] font-black text-content dark:text-white uppercase tracking-widest truncate">Servidor Activo · {new Date().toLocaleDateString("es-VE", { day: "numeric", month: "long" })}</span>
                  </div>
-                 <div className="flex items-center gap-2">
+                 <div className="flex items-center gap-2 shrink-0">
                      {warehouses.length > 1 && (
                          <CustomSelect
                              value={warehouseId}
                              onChange={setWarehouseId}
                              placeholder={todasLabel}
-                             boxClassName="h-8 min-w-[190px]"
+                             className="flex-1 min-w-0 sm:flex-none"
+                             boxClassName="h-8 w-full sm:min-w-[190px]"
                              options={[
                                  { value: "", label: todasLabel },
                                  ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
                              ]}
                          />
                      )}
-                     <button onClick={load} className="h-8 px-4 rounded-lg bg-surface-2 dark:bg-white/5 border border-border/30 dark:border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all">
-                        ↻ Actualizar Métricas
+                     <button onClick={load} title="Actualizar métricas" className="h-8 px-3 sm:px-4 shrink-0 flex items-center gap-1.5 rounded-lg bg-surface-2 dark:bg-white/5 border border-border/30 dark:border-white/10 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-brand-500 hover:text-black transition-all">
+                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        <span>Actualizar Métricas</span>
                      </button>
                  </div>
             </div>
