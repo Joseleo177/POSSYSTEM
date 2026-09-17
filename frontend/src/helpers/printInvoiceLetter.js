@@ -1,4 +1,5 @@
 import { fmtDate, resolveImageUrl } from ".";
+import { printHtml } from "./printDocument";
 
 // Segunda maqueta del ticket, en tamaño carta. La de caja (printReceipt, en ReceiptModal)
 // está hecha para rollo térmico — @page de 58/80mm y alto automático — y al guardarla como
@@ -179,22 +180,5 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
 </body>
 </html>`;
 
-    // Mismo iframe oculto que usa el ticket: no abre pestaña nueva y no lo frenan los
-    // bloqueadores de popup. 816px es exactamente el ancho de la hoja carta a 96dpi, así
-    // que el layout se calcula igual que en el papel antes de abrir el diálogo.
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:816px;height:1056px;border:0;";
-    document.body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-    iframe.onload = () => {
-        // La fuente y el logo llegan por red; sin esta espera el diálogo puede abrirse
-        // con el layout a medio armar y el PDF sale con la tipografía de respaldo.
-        setTimeout(() => {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            setTimeout(() => document.body.removeChild(iframe), 2000);
-        }, 350);
-    };
+    printHtml(html);
 }

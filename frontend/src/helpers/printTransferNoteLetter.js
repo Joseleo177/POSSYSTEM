@@ -1,5 +1,6 @@
 import { fmtDate, resolveImageUrl } from ".";
 import { fmtQtyUnit } from "./unitFormatter";
+import { printHtml } from "./printDocument";
 
 // Nota de despacho en tamaño carta, hermana de printTransferNote. La maqueta térmica está
 // hecha para el rollo que viaja grapado al bulto; esta es la que se archiva y se envía: el
@@ -226,21 +227,5 @@ export function printTransferNoteLetter(transfer, companyInfo) {
 </body>
 </html>`;
 
-    // Mismo iframe oculto que los demás documentos carta: sin pestaña nueva y sin depender de
-    // que el navegador permita emergentes. 816px es el ancho exacto de la hoja carta a 96dpi.
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:816px;height:1056px;border:0;";
-    document.body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-    iframe.onload = () => {
-        // La fuente y el logo llegan por red: sin la espera el diálogo puede abrirse con el
-        // layout a medio armar y el PDF sale con la tipografía de respaldo.
-        setTimeout(() => {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            setTimeout(() => document.body.removeChild(iframe), 2000);
-        }, 350);
-    };
+    printHtml(html);
 }

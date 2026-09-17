@@ -1,4 +1,5 @@
 import { resolveImageUrl } from ".";
+import { printHtml } from "./printDocument";
 
 // Base común de los reportes en tamaño carta (ventas, cuentas por cobrar…).
 //
@@ -121,23 +122,9 @@ export function reportHeader({ title, subtitle, companyInfo }) {
 }
 
 /**
- * Manda el HTML a la impresora del navegador desde un iframe oculto: sin pestaña nueva y sin
- * bloqueadores de popup. 816px es el ancho de la hoja carta a 96dpi.
+ * Manda el reporte a la impresora. Se conserva como nombre propio de los reportes; el cómo
+ * —iframe oculto en escritorio, documento montado en la página en iOS— vive en printDocument.
  */
 export function openPrintFrame(html) {
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:816px;height:1056px;border:0;";
-    document.body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-    iframe.onload = () => {
-        // La fuente y el logo llegan por red: sin la espera el diálogo puede abrirse con el
-        // layout a medio armar y el PDF sale con la tipografía de respaldo.
-        setTimeout(() => {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            setTimeout(() => document.body.removeChild(iframe), 2000);
-        }, 350);
-    };
+    printHtml(html);
 }

@@ -7,6 +7,7 @@ export * from "./image";
 export * from "./barcode";
 export * from "./printQuotation";
 export * from "./printNotaCredito";
+export * from "./printDocument";
 export * from "./printInvoiceLetter";
 export * from "./printKitchenOrder";
 export * from "./printQuotationLetter";

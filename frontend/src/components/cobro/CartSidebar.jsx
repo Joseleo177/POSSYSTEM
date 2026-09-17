@@ -374,7 +374,9 @@ export default function CartSidebar({
                                     onClick={() => handleQtyModal(i)}
                                 >
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                        <div className="text-[11px] font-black truncate dark:text-white uppercase tracking-wide leading-tight">{i.name}</div>
+                                        {/* El nombre se lee entero: truncado, "SARDINA INCOSA T..." no
+                                            distingue una presentación de otra en pleno cobro. */}
+                                        <div className="text-[11px] font-black dark:text-white uppercase tracking-wide leading-tight break-words min-w-0 flex-1">{i.name}</div>
                                         {activePromos.find(p => p.product_ids?.includes(i.id)) && (() => {
                                             const promo = activePromos.find(p => p.product_ids?.includes(i.id));
                                             return (
@@ -589,10 +591,12 @@ export default function CartSidebar({
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={holdCart} disabled={cart.length === 0} className="w-12 h-12 rounded-xl bg-surface-2 dark:bg-white/5 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all disabled:opacity-30 shrink-0">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2m9-.828l-1.414-1.414M3.707 18.293V21h2.707l14.586-14.586a2 2 0 10-2.828-2.828L3.707 18.293z" /></svg>
+                        {/* En espera es un botón que se usa tanto como finalizar: con 48px de
+                            ancho quedaba como un accesorio del otro y en tablet se fallaba el toque. */}
+                        <button onClick={holdCart} disabled={cart.length === 0} className="w-[4.5rem] h-12 rounded-xl bg-surface-2 dark:bg-white/5 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all disabled:opacity-30 shrink-0">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2m9-.828l-1.414-1.414M3.707 18.293V21h2.707l14.586-14.586a2 2 0 10-2.828-2.828L3.707 18.293z" /></svg>
                         </button>
-                        <button onClick={() => setShowConfirmCheckout(true)} disabled={loading || cart.length === 0} className="flex-1 bg-brand-500 text-brand-900 py-3 rounded-xl font-black uppercase tracking-wide shadow-xl shadow-brand-500/20 active:scale-95 transition-all text-xs lg:text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button onClick={() => setShowConfirmCheckout(true)} disabled={loading || cart.length === 0} className="flex-1 bg-brand-500 text-brand-900 py-2.5 rounded-xl font-black uppercase tracking-wide shadow-xl shadow-brand-500/20 active:scale-95 transition-all text-[11px] lg:text-xs disabled:opacity-50 disabled:cursor-not-allowed">
                             {loading ? "..." : "FINALIZAR VENTA"}
                         </button>
                     </div>

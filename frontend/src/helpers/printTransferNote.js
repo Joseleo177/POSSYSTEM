@@ -1,5 +1,6 @@
 import { resolveImageUrl } from ".";
 import { fmtQtyUnit } from "./unitFormatter";
+import { printHtml } from "./printDocument";
 
 const fmtDate = d => d ? new Date(d).toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
@@ -137,19 +138,5 @@ export function printTransferNote(transfer, companyInfo, printerWidth = 80) {
 </body>
 </html>`;
 
-    // Iframe oculto en vez de window.open: no depende de que el navegador permita emergentes
-    // ni deja una pestaña abierta si se cancela el diálogo de impresión.
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:400px;height:1200px;border:0;";
-    document.body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-    iframe.onload = () => {
-        setTimeout(() => {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            setTimeout(() => document.body.removeChild(iframe), 2000);
-        }, 350);
-    };
+    printHtml(html, { width: 400, height: 1200 });
 }

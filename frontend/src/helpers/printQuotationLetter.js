@@ -1,4 +1,5 @@
 import { fmtMoney, fmtDate, resolveImageUrl } from ".";
+import { printHtml } from "./printDocument";
 
 // Cotización en tamaño carta, hermana de printInvoiceLetter. La maqueta térmica
 // (printQuotationDoc) está hecha para rollo de 58/80mm: guardada como PDF sale una tira
@@ -185,21 +186,5 @@ export function printQuotationLetter(quot, companyInfo, baseCurrency, activeCurr
 </body>
 </html>`;
 
-    // Mismo iframe oculto que el PDF de factura: sin pestaña nueva y sin bloqueadores de
-    // popup. 816px es el ancho exacto de la hoja carta a 96dpi.
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:816px;height:1056px;border:0;";
-    document.body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-    iframe.onload = () => {
-        // La fuente y el logo llegan por red: sin la espera el diálogo puede abrirse con el
-        // layout a medio armar y el PDF sale con la tipografía de respaldo.
-        setTimeout(() => {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            setTimeout(() => document.body.removeChild(iframe), 2000);
-        }, 350);
-    };
+    printHtml(html);
 }

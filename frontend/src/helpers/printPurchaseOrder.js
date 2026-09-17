@@ -1,4 +1,5 @@
 import { resolveImageUrl, fmtQty } from ".";
+import { printHtml } from "./printDocument";
 
 const fmtDate = d => d ? new Date(d).toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
@@ -130,20 +131,5 @@ export function printPurchaseOrderDoc(detail, items, companyInfo, printerWidth =
 </body>
 </html>`;
 
-    // Iframe oculto en vez de window.open: ya no hace falta pedirle al usuario que permita
-    // emergentes —era el bloqueador lo que dejaba el botón sin hacer nada— ni queda una
-    // pestaña abierta cuando se cancela el diálogo de impresión.
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:400px;height:1200px;border:0;";
-    document.body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-    iframe.onload = () => {
-        setTimeout(() => {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            setTimeout(() => document.body.removeChild(iframe), 2000);
-        }, 350);
-    };
+    printHtml(html, { width: 400, height: 1200 });
 }

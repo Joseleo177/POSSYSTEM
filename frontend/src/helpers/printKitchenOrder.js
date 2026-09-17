@@ -1,4 +1,5 @@
 import { fmtDate } from ".";
+import { printHtml } from "./printDocument";
 
 // Texto que viene de fuera (nombre y nota que teclea el cliente en el catálogo público)
 // se pega dentro del HTML del ticket: sin escapar, un "<" en una nota rompe la comanda.
@@ -112,17 +113,5 @@ export function printKitchenOrder(order, companyInfo, printerWidth = 80) {
 </body>
 </html>`;
 
-    // Iframe oculto en vez de window.open: la caja suele tener bloqueador de ventanas y una
-    // pestaña nueva por comanda deja al cajero cerrando ventanas en plena hora pico.
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:300px;height:1200px;border:0;";
-    document.body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-    iframe.onload = () => {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-        setTimeout(() => document.body.removeChild(iframe), 2000);
-    };
+    printHtml(html, { width: 300, height: 1200 });
 }

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import Modal from "./ui/Modal";
 import { api } from "../services/api";
 import { useApp } from "../context/AppContext";
-import { fmtMoney, fmtDate, resolveImageUrl, printInvoiceLetter } from "../helpers";
+import { fmtMoney, fmtDate, resolveImageUrl, printInvoiceLetter, printHtml } from "../helpers";
 
 const fmt = fmtMoney;
 
@@ -380,52 +380,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
 </body>
 </html>`;
 
-    const iframe = document.createElement("iframe");
-    iframe.setAttribute("aria-hidden", "true");
-    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:300px;height:1200px;border:0;";
-
-    // Quitar el iframe una sola vez y sin dar por hecho que sigue colgando del body: el
-    // removeChild pelado reventaba con NotFoundError si ya se había ido, y esa excepción se
-    // llevaba por delante el resto del flujo.
-    let limpio = false;
-    const limpiar = () => {
-        if (limpio) return;
-        limpio = true;
-        iframe.remove();
-        // Devolver el foco a la ventana principal NO es opcional: para imprimir hay que
-        // enfocar el iframe, y mientras el foco vive ahí dentro el teclado se lo entrega a él.
-        // Los atajos del POS cuelgan de un keydown sobre `window`, así que con el foco
-        // atrapado en el iframe dejaban de responder Enter, Esc y los dígitos —en el modal de
-        // venta y en toda la pantalla de cobro— hasta recargar la página.
-        try { window.focus(); } catch { /* sin foco disponible no hay nada que recuperar */ }
-    };
-
-    // El handler se asigna ANTES de montar el iframe. Al revés —como estaba— el load ya se
-    // había disparado cuando se asignaba `onload`: no se imprimía nada y el iframe quedaba
-    // pegado al DOM, uno más por cada intento de impresión.
-    iframe.onload = () => {
-        try {
-            iframe.contentWindow.focus();
-            // Cerrar el diálogo de impresión devuelve el control aquí. El timeout de 2s que
-            // había antes borraba el iframe mientras el cajero todavía tenía la vista previa
-            // abierta, y la impresión salía en blanco.
-            iframe.contentWindow.onafterprint = limpiar;
-            iframe.contentWindow.print();
-        } catch {
-            limpiar();
-        }
-    };
-
-    // srcdoc en vez de document.write: así el evento load llega recién cuando el documento
-    // terminó de cargar sus recursos. Con write() se imprimía sin esperar al logo y el ticket
-    // salía con el hueco en blanco.
-    iframe.srcdoc = html;
-    document.body.appendChild(iframe);
-
-    // Red de seguridad, y va FUERA del onload a propósito: el caso que dejaba el POS trabado
-    // es justamente aquel en que el handler no llega a ejecutarse. Si la limpieza vive dentro,
-    // en ese escenario no se limpia nada y el foco se queda en el iframe para siempre.
-    setTimeout(limpiar, 60000);
+    printHtml(html, { width: 300, height: 1200 });
 }
 
 export default function ReceiptModal({ open, onClose, sale }) {

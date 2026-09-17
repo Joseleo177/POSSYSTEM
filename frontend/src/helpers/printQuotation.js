@@ -1,4 +1,5 @@
 import { fmtMoney, fmtDate, resolveImageUrl } from ".";
+import { printHtml } from "./printDocument";
 
 // printerWidth viene de la configuración de la tienda (58 u 80 mm). Sin él, el documento
 // se maquetaba siempre a 80mm y en una impresora de 58 salía cortado por el lado derecho.
@@ -147,22 +148,5 @@ export function printQuotationDoc(quot, companyInfo, baseCurrency, activeCurrenc
 </body>
 </html>`;
 
-    // Iframe oculto en vez de window.open, igual que el ticket de caja: la pestaña nueva se
-    // queda abierta si el cajero cancela el diálogo, y en la caja suele haber bloqueador de
-    // emergentes, que dejaba el botón de imprimir sin hacer nada.
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:400px;height:1200px;border:0;";
-    document.body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-    iframe.onload = () => {
-        // La fuente y el logo llegan por red: sin la espera el diálogo se abre con el layout
-        // a medio armar.
-        setTimeout(() => {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            setTimeout(() => document.body.removeChild(iframe), 2000);
-        }, 350);
-    };
+    printHtml(html, { width: 400, height: 1200 });
 }
