@@ -169,12 +169,21 @@ export default function CobroPage() {
                 // Los pagos se ACUMULAN: cobrar parte en divisas y el resto por punto de venta
                 // son dos llamadas, y el ticket debe listar ambos canales. Quedarse con el
                 // último haría desaparecer del comprobante la mitad del dinero recibido.
-                // El endpoint devuelve el pago en `data`, no en `payment`.
+                //
+                // `payments` trae TODOS los cobros de ese envío —un pago combinado son varios
+                // tramos en una sola llamada—; `data` es solo el que lo cierra, y quedarse con
+                // él imprimía una sola forma de pago de las dos que se cobraron.
                 setSaleBalance(prev => ({
                     amount_paid: res.amount_paid,
                     balance: res.balance,
                     status: res.sale_status,
-                    payments: [...(prev?.payments || []), res.data].filter(Boolean),
+                    payments: [
+                        ...(prev?.payments || []),
+                        ...(res.payments?.length ? res.payments : [res.data]),
+                    ].filter(Boolean),
+                    // Saldo a favor consumido. No es un pago —no entra dinero a ninguna caja—
+                    // pero sí es con lo que se saldó la factura, y el ticket lo dice.
+                    credit_applied: (prev?.credit_applied || 0) + parseFloat(res.credit_applied || 0),
                 }));
                 if (res.invoice_number) setReceipt(prev => ({ ...prev, invoice_number: res.invoice_number }));
             }}

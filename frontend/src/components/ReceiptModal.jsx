@@ -38,6 +38,10 @@ function normalizeSale(sale) {
         // distinguía de uno pagado: ambos terminaban en el total y el "gracias por su compra".
         amount_paid: parseFloat(sale.amount_paid ?? sale.paid ?? 0),
         balance: parseFloat(sale.balance ?? 0),
+        // Saldo a favor del cliente consumido por esta venta. No es un cobro —no entra dinero
+        // a ninguna caja, así que no hay Payment que listar— pero sí es con lo que se pagó, y
+        // sin nombrarlo el ticket decía PAGADO con la forma de pago en blanco.
+        credit_applied: parseFloat(sale.credit_applied || 0),
         // Cobros de la venta. getOneSale los devuelve en `Payments`; el flujo de caja los va
         // acumulando en `payments` a medida que se registran. Una venta puede cobrarse por
         // varios canales —parte en divisas, parte en punto de venta— y el ticket tiene que
@@ -63,13 +67,21 @@ function paymentSummary(s) {
 
     // Un cobro por canal. Se agrupan por diario: pagar dos veces por la misma caja es una
     // sola forma de pago con el monto sumado, no dos líneas repetidas en el papel.
+    //
+    // Un cobro al que no le llegó el nombre de su caja NO se descarta: se imprime como
+    // "Cobro". Saltárselo era peor que un nombre genérico — dejaba el renglón de forma de
+    // pago vacío sobre una venta marcada PAGADO, y el dinero de ese canal desaparecía del
+    // comprobante que se lleva el cliente.
     const porDiario = [];
     for (const p of s.payments || []) {
-        if (!p.journal_name) continue;
-        const found = porDiario.find(x => x.journal_name === p.journal_name);
+        if (!(p.amount > 0)) continue;
+        const nombre = p.journal_name || "Cobro";
+        const found = porDiario.find(x => x.journal_name === nombre);
         if (found) found.amount += p.amount;
-        else porDiario.push({ journal_name: p.journal_name, amount: p.amount });
+        else porDiario.push({ journal_name: nombre, amount: p.amount });
     }
+    // El saldo a favor no es un cobro pero sí una forma de pago: es lo que saldó la factura.
+    if (s.credit_applied > 0) porDiario.push({ journal_name: "Saldo a favor", amount: s.credit_applied });
     // Respaldo para el ticket que se imprime justo tras cobrar, cuando aún no hay lista de
     // pagos pero sí se sabe por dónde entró.
     if (!porDiario.length && s.journal_name) porDiario.push({ journal_name: s.journal_name, amount: s.amount_paid });
@@ -395,7 +407,11 @@ export default function ReceiptModal({ open, onClose, sale }) {
     // Por eso el id de la venta se toma de sale_id cuando existe, y se completa con getOneSale
     // —la única consulta que devuelve ítems y cobros juntos— salvo que ya venga todo.
     const saleId = sale?.sale_id ?? sale?.id ?? null;
-    const yaCompleto = (sale?.Payments || sale?.payments || []).length > 0
+    // Un cobro sin nombre de caja deja el comprobante sin forma de pago, así que la venta no
+    // está "completa" mientras le falte: se consulta igual, que es de donde sale el nombre.
+    const pagosRecibidos = sale?.Payments || sale?.payments || [];
+    const yaCompleto = pagosRecibidos.length > 0
+        && pagosRecibidos.every(p => p?.journal_name)
         && Array.isArray(sale?.items) && sale.items.length > 0;
 
     const [fetched, setFetched] = useState(null);

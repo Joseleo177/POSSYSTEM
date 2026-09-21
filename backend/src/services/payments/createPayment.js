@@ -7,20 +7,47 @@ const { toLocalDate } = require("../../utils/localDate");
 const { creditAvailable, addCreditMovement } = require("../customers/creditLedger");
 const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
 
+// Los cobros recién registrados, con el nombre de su caja ya resuelto.
+//
+// El ticket de caja lo necesita para decir la forma de pago, y antes lo buscaba en el
+// frontend contra la lista de diarios que se carga al iniciar sesión: si ese diario no
+// estaba ahí —se creó o se reactivó después, la carga inicial falló, el cobro entró por una
+// caja compartida de otra sucursal— el papel salía "FORMA DE PAGO —" sobre una venta que
+// decía PAGADO. El nombre lo pone quien lo sabe con certeza: la base.
+async function withJournalNames(payments) {
+  const list = (Array.isArray(payments) ? payments : [payments]).filter(Boolean);
+  if (!list.length) return [];
+  const plain = list.map(p => (typeof p.toJSON === "function" ? p.toJSON() : { ...p }));
+  const ids = [...new Set(plain.map(p => p.payment_journal_id).filter(Boolean))];
+  const rows = ids.length
+    ? await PaymentJournal.findAll({ where: { id: ids }, attributes: ["id", "name"] })
+    : [];
+  const names = Object.fromEntries(rows.map(j => [j.id, j.name]));
+  return plain.map(p => ({ ...p, journal_name: names[p.payment_journal_id] || null }));
+}
+
 // Respuesta de un cobro que ya estaba registrado. Se rearma desde la base para que el
 // reintento reciba exactamente lo mismo que recibió el envío que sí entró: la caja imprime
 // su ticket y sigue, sin saber que hubo un duplicado.
-async function existingPaymentResult(payment) {
-  const sale = await Sale.findByPk(payment.sale_id);
+//
+// Recibe TODOS los pagos de esa clave: un cobro combinado reintentado son varios tramos, y
+// devolver solo el primero dejaba el ticket del reintento con la mitad del dinero.
+async function existingPaymentResult(previos) {
+  const list = Array.isArray(previos) ? previos : [previos];
+  const ultimo = list[list.length - 1];
+  const sale = await Sale.findByPk(ultimo.sale_id);
   const saleTotal = parseFloat(sale?.total || 0);
-  const alreadyPaid = await getSaleBalance(payment.sale_id);
+  const alreadyPaid = await getSaleBalance(ultimo.sale_id);
   const balance = parseFloat((saleTotal - alreadyPaid).toFixed(6));
+  const payments = await withJournalNames(list);
   return {
-    payment,
+    payment: payments[payments.length - 1] || ultimo,
+    payments,
     sale_status: sale?.status || null,
     amount_paid: alreadyPaid,
     balance: balance <= 0.10 ? 0 : balance,
-    change_given: parseFloat(payment.change_given || 0),
+    change_given: list.reduce((acc, p) => acc + parseFloat(p.change_given || 0), 0),
+    credit_applied: parseFloat(sale?.credit_applied || 0),
     invoice_number: sale?.invoice_number || null,
     duplicated: true,
   };
@@ -337,6 +364,10 @@ async function applyOnePayment(body, req, t) {
       amount_paid: isFullPayment ? saleTotal : totalPaidNow,
       balance: balance < 0 ? 0 : balance,
       change_given: changeAmt > 0 ? changeAmt : 0,
+      // Crédito del cliente consumido en este tramo. Salda factura sin generar un Payment,
+      // así que sin devolverlo el ticket de una venta cubierta con saldo a favor quedaba
+      // "PAGADO" y sin forma de pago: no había cobro que nombrar.
+      credit_applied: creditApplied,
       invoice_number: sale.invoice_number || null,
     };
 }
@@ -353,8 +384,8 @@ module.exports = async function createPayment(body, req) {
     ? { idempotency_key: { [Op.like]: `${body.idempotency_key}-%` } }
     : { idempotency_key: body.idempotency_key };
   if (body?.idempotency_key) {
-    const previo = await Payment.findOne({ where: idemWhere() });
-    if (previo) return await existingPaymentResult(previo);
+    const previos = await Payment.findAll({ where: idemWhere(), order: [["id", "ASC"]] });
+    if (previos.length) return await existingPaymentResult(previos);
   }
 
   // Los tramos de un pago combinado NO llevan `batch_id` a propósito: cada uno es un
@@ -374,6 +405,7 @@ module.exports = async function createPayment(body, req) {
         if (!(parseFloat(p.amount) > 0)) { const e = new Error("El monto de cada forma de pago debe ser mayor a 0"); e.status = 400; e.isOperational = true; throw e; }
       }
       const creados = [];
+      let creditoTotal = 0;
       for (let i = 0; i < parts.length; i++) {
         const p = parts[i];
         const primero = i === 0;
@@ -399,19 +431,33 @@ module.exports = async function createPayment(body, req) {
           idempotency_key:   body.idempotency_key ? `${body.idempotency_key}-${i}` : null,
         }, req, t);
         if (result.payment) creados.push(result.payment);
+        creditoTotal += parseFloat(result.credit_applied || 0);
       }
-      result = { ...result, payments: creados };
+      // El crédito de cliente se aplica en el primer tramo, pero el `result` que sobrevive al
+      // bucle es el del último: sin acumularlo, el cobro combinado lo perdía de la respuesta.
+      result = { ...result, payments: creados, credit_applied: creditoTotal };
     }
     await t.commit();
-    return result;
+
+    // Todos los cobros de este envío, con el nombre de su caja. `payment` sigue siendo el
+    // último tramo (es el que lleva el vuelto), pero ya no es lo único que ve la caja: un
+    // combinado devolvía solo esa forma de pago y el ticket imprimía un solo canal —y, si
+    // ese último tramo entró en divisas, el papel entero salía en divisas aunque el grueso
+    // se hubiera cobrado en bolívares.
+    const enriquecidos = await withJournalNames(result.payments || [result.payment]);
+    return {
+      ...result,
+      payments: enriquecidos,
+      payment: enriquecidos[enriquecidos.length - 1] || result.payment,
+    };
   } catch (err) {
     await t.rollback();
     // Dos envíos del mismo cobro que cruzaron: la comprobación de arriba no los vio porque
     // corrían a la vez, y el índice único decide. El que pierde devuelve el pago que sí
     // quedó guardado en vez de un error que llevaría al cajero a cobrar otra vez.
     if (body?.idempotency_key && err?.name === "SequelizeUniqueConstraintError") {
-      const previo = await Payment.findOne({ where: idemWhere() });
-      if (previo) return await existingPaymentResult(previo);
+      const previos = await Payment.findAll({ where: idemWhere(), order: [["id", "ASC"]] });
+      if (previos.length) return await existingPaymentResult(previos);
     }
     throw err;
   }

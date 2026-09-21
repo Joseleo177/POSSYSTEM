@@ -56,11 +56,20 @@ const create = async (req, res) => {
     const result = await paymentsService.createPayment({ ...req.body, employee_id: req.employee?.id || null }, req);
     res.status(201).json({
       ok: true,
+      // `data` es el cobro que cierra el envío (el que lleva el vuelto); `payments` son
+      // TODOS los que entraron con él. Un cobro combinado son varios, y el ticket tiene que
+      // listarlos completos: con solo el último, el papel perdía la mitad del dinero y —si
+      // ese tramo fue en divisas— se imprimía entero en divisas.
       data: result.payment,
+      payments: result.payments || (result.payment ? [result.payment] : []),
+      // Saldo a favor del cliente consumido en este cobro: salda sin generar un pago, y el
+      // ticket lo nombra como forma de pago en vez de dejar el renglón vacío.
+      credit_applied: result.credit_applied || 0,
       sale_status: result.sale_status,
       amount_paid: result.amount_paid,
       balance: result.balance,
       invoice_number: result.invoice_number,
+      duplicated: result.duplicated || false,
     });
   } catch (err) {
     const status = /requerido|no encontrada|ya fue|anulada|excede|mayor/i.test(err.message) ? 400 : 500;

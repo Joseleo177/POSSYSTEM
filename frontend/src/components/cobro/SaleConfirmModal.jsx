@@ -118,13 +118,21 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // el saldo viene en el propio recibo, y recién si no hay ninguno se asume el total.
     const currentBalance = saleBalance?.balance ?? parseFloat(receipt?.balance ?? receipt?.total ?? 0);
     const currentStatus  = saleBalance?.status  ?? receipt?.status ?? "pendiente";
+    // Saldo a favor del cliente aplicado a esta venta: no genera cobro, pero es con lo que se
+    // pagó. Sin él, una factura cubierta con crédito salía "PAGADO" y sin forma de pago.
+    const currentCredit  = parseFloat(saleBalance?.credit_applied ?? receipt?.credit_applied ?? 0);
 
-    // Cobros de esta venta, con el nombre del diario resuelto: el backend devuelve cada pago
-    // con su payment_journal_id pero no con el nombre. Van todos, no solo el último — una
-    // venta puede cobrarse parte en divisas y parte por punto de venta, y el ticket debe
-    // decir cuánto entró por cada canal.
+    // Cobros de esta venta. Van todos, no solo el último — una venta puede cobrarse parte en
+    // divisas y parte por punto de venta, y el ticket debe decir cuánto entró por cada canal.
+    //
+    // El nombre de la caja lo trae el propio cobro; la lista de diarios es solo el respaldo
+    // para una respuesta vieja. Al revés fallaba: esa lista se carga al iniciar sesión, y un
+    // diario que no estuviera en ella dejaba el pago sin nombre, que es como el ticket
+    // terminaba diciendo PAGADO con la forma de pago en blanco.
     const receiptPayments = (saleBalance?.payments || []).map(p => ({
-        journal_name: (activeJournals || []).find(j => j.id === p?.payment_journal_id)?.name || null,
+        journal_name: p?.journal_name
+            || (activeJournals || []).find(j => j.id === p?.payment_journal_id)?.name
+            || null,
         amount: parseFloat(p?.amount || 0),
         exchange_rate: parseFloat(p?.exchange_rate || 1),
         // El vuelto viaja al ticket para que el papel diga cuánto entregó el cliente y cuánto
@@ -163,7 +171,11 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         if (printing) return;
         setPrinting(true);
         try {
-            const yaCompleto = receiptPayments.length > 0
+            // Un cobro sin nombre de caja NO cuenta como completo: es justo el dato que falta
+            // para que el papel diga la forma de pago, y consultarlo cuesta menos que sacar
+            // un ticket que dice PAGADO sin decir con qué.
+            const pagosSinCaja = receiptPayments.some(p => !p.journal_name);
+            const yaCompleto = receiptPayments.length > 0 && !pagosSinCaja
                 && Array.isArray(receipt?.items) && receipt.items.length > 0;
 
             let full = receipt;
@@ -173,11 +185,14 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                 } catch { /* si la consulta falla se imprime con lo que haya: mejor un ticket parcial que ninguno */ }
             }
 
-            // Los cobros de esta pantalla mandan cuando existen (son los más frescos); si no,
-            // valen los que trajo la consulta.
-            const payments = receiptPayments.length
+            // Los cobros de esta pantalla mandan cuando están completos (son los más frescos);
+            // si les falta la caja, valen los de la consulta, que la traen resuelta desde la
+            // base. Y si la consulta no devolvió ninguno, se vuelve a los de pantalla antes
+            // que imprimir sin forma de pago.
+            const delServidor = full?.Payments ?? full?.payments ?? [];
+            const payments = (receiptPayments.length && !pagosSinCaja)
                 ? receiptPayments
-                : (full?.payments ?? full?.Payments ?? []);
+                : (delServidor.length ? delServidor : receiptPayments);
 
             printReceipt(
                 {
@@ -188,6 +203,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     status:        currentStatus,
                     amount_paid:   paidBase,
                     balance:       currentBalance,
+                    credit_applied: Math.max(currentCredit, parseFloat(full?.credit_applied || 0)),
                     payments,
                 },
                 companyInfo,
@@ -445,6 +461,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     status: currentStatus,
                     amount_paid: paidBase,
                     balance: currentBalance,
+                    credit_applied: currentCredit,
                     payments: receiptPayments,
                 }}
             />
