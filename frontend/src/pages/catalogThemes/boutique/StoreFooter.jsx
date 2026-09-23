@@ -1,4 +1,4 @@
-import { resolveImageUrl } from "../../../helpers";
+import StoreLogo from "./StoreLogo";
 import { getSocialLinks } from "./socialLinks";
 
 // Pie de tienda: identidad, contacto, categorías y redes. Es la última pantalla que ve quien
@@ -16,7 +16,7 @@ export default function StoreFooter({ store, categories, onPickCategory }) {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
                     <div>
                         {store?.logo_url ? (
-                            <img src={resolveImageUrl(store.logo_url)} alt={store.name} className="h-10 w-auto object-contain mb-3" />
+                            <div className="mb-3"><StoreLogo store={store} className="h-12 w-auto max-w-[220px]" /></div>
                         ) : (
                             <div className="text-[16px] font-black text-content dark:text-white mb-2">{store?.name}</div>
                         )}

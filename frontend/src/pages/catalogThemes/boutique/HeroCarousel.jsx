@@ -59,15 +59,46 @@ export default function HeroCarousel({ banners }) {
                 >
                     {/* Dos artes, una por tamaño: recortar el apaisado en un teléfono deja los
                         textos del diseño fuera de cuadro. */}
-                    <picture>
-                        <source media="(min-width: 768px)" srcSet={resolveImageUrl(b.image_url)} />
-                        <img
-                            src={resolveImageUrl(b.image_mobile_url || b.image_url)}
-                            alt={b.alt_text || ""}
-                            className="w-full h-auto block"
-                            loading={idx === 0 ? "eager" : "lazy"}
-                        />
-                    </picture>
+                    {b.image_mobile_url ? (
+                        <picture>
+                            <source media="(min-width: 768px)" srcSet={resolveImageUrl(b.image_url)} />
+                            <img
+                                src={resolveImageUrl(b.image_mobile_url)}
+                                alt={b.alt_text || ""}
+                                className="w-full h-auto block"
+                                loading={idx === 0 ? "eager" : "lazy"}
+                            />
+                        </picture>
+                    ) : (
+                        <>
+                            <img
+                                src={resolveImageUrl(b.image_url)}
+                                alt={b.alt_text || ""}
+                                className="hidden md:block w-full h-auto"
+                                loading={idx === 0 ? "eager" : "lazy"}
+                            />
+                            {/* Sin arte móvil, el apaisado de escritorio a lo ancho de un
+                                teléfono quedaba como una tira baja pegada al menú. Recortarlo
+                                para llenar más alto saca de cuadro los textos del diseño, así
+                                que va entero y centrado en una caja más alta, con el propio
+                                arte desenfocado de fondo rellenando lo que sobra. */}
+                            <div className="md:hidden relative aspect-[16/10] overflow-hidden">
+                                <img
+                                    src={resolveImageUrl(b.image_url)}
+                                    alt=""
+                                    aria-hidden="true"
+                                    className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl opacity-80"
+                                    loading={idx === 0 ? "eager" : "lazy"}
+                                />
+                                <img
+                                    src={resolveImageUrl(b.image_url)}
+                                    alt={b.alt_text || ""}
+                                    className="absolute inset-0 w-full h-full object-contain drop-shadow-xl"
+                                    loading={idx === 0 ? "eager" : "lazy"}
+                                />
+                            </div>
+                        </>
+                    )}
                 </a>
             ))}
 

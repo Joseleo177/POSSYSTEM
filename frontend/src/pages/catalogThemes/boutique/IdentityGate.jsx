@@ -1,4 +1,4 @@
-import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
+import StoreLogo from "./StoreLogo";
 import { useTheme } from "../../../hooks/useTheme";
 import { useIdentityGate } from "../../../hooks/useIdentityGate";
 import CustomSelect from "../../../components/ui/CustomSelect";
@@ -36,12 +36,7 @@ export default function IdentityGate({ token, store, onIdentified }) {
             <div className="w-full max-w-sm">
                 <div className="text-center mb-6">
                     {store?.logo_url ? (
-                        <img
-                            src={resolveImageUrl(store.logo_url)}
-                            alt={store.name}
-                            onError={imgRetryOnError}
-                            className="w-40 h-40 sm:w-48 sm:h-48 object-contain mx-auto"
-                        />
+                        <StoreLogo store={store} className="w-40 h-40 sm:w-48 sm:h-48 mx-auto" />
                     ) : (
                         <div className="w-24 h-24 rounded-full mx-auto bg-brand-500/10 flex items-center justify-center text-4xl font-black text-brand-500">
                             {(store?.name || "C").charAt(0)}

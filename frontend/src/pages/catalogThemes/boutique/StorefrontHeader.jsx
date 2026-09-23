@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { resolveImageUrl } from "../../../helpers";
 import { getSocialLinks } from "./socialLinks";
+import StoreLogo from "./StoreLogo";
 
 // Cabecera de tienda de marca: franja de anuncio, logo centrado, iconos de cliente y una
 // barra de menú con las categorías que la tienda destacó.
@@ -116,13 +116,11 @@ export default function StorefrontHeader({
                             tienda: limpia búsqueda y categoría, y si había una ficha de
                             producto abierta, la cierra — lo mismo que hace la miga "Tienda"
                             de esa página. Antes no tenía ningún comportamiento. */}
-                        <button type="button" onClick={onGoHome} className="shrink-0">
+                        {/* El tope de ancho deja sitio a los iconos de la derecha en un
+                            teléfono estrecho: un logo apaisado a esta altura puede pasar de 200px. */}
+                        <button type="button" onClick={onGoHome} className="shrink-0 max-w-[48vw] md:max-w-none">
                             {store?.logo_url ? (
-                                <img
-                                    src={resolveImageUrl(store.logo_url)}
-                                    alt={store.name}
-                                    className="h-9 md:h-11 w-auto object-contain"
-                                />
+                                <StoreLogo store={store} className="h-11 md:h-12 w-auto max-w-full" />
                             ) : (
                                 <span className="text-[15px] md:text-[18px] font-black text-content dark:text-white tracking-tight">
                                     {store?.name}
