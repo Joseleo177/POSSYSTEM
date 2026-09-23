@@ -67,7 +67,7 @@ export default function AllProductsSection({
     };
 
     return (
-        <section className="max-w-6xl mx-auto px-4 pt-14 pb-4">
+        <section className="max-w-6xl mx-auto px-4 pt-8 md:pt-14 pb-4">
             <div className="flex items-center justify-between gap-4 mb-4">
                 <h2 className="text-[20px] font-black text-content dark:text-white shrink-0">Nuestros productos</h2>
 

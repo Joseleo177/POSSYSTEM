@@ -50,23 +50,32 @@ export default function ProductDetail({
 
     return (
         <main className="max-w-5xl mx-auto px-4 py-6 md:py-8">
-            {/* Migas: sin "Inicio /" a solas, que en la referencia no lleva a ningún lado
-                útil desde aquí. Con categoría se puede volver directo al filtro correcto. */}
-            {/* text-content-muted (7.5:1) y no -subtle (4.8:1): la miga hay que poder leerla,
-                no solo pasar el mínimo de contraste — en 11px se notaba débil. */}
-            <nav className="flex items-center gap-1.5 text-[13px] font-bold text-content-muted mb-5">
+            {/* Antes era una miga "Tienda / CATEGORÍA": en un teléfono no se leía como algo
+                que se toca, y nadie la asociaba con volver. Ahora es un botón de volver con
+                su flecha —regresa a donde estaba el cliente, portada o categoría filtrada— y,
+                aparte, un enlace explícito a ver el resto de la categoría del producto. */}
+            <nav className="flex items-center justify-between gap-3 mb-5">
                 {/* onBack() y no onBack directo: como manejador de clic, React le pasa el
                     evento como primer argumento, y onBack lo toma como el id de categoría —
                     setCategory terminaba con el SyntheticEvent en vez de un id, y la
                     siguiente consulta de productos reventaba. */}
-                <button onClick={() => onBack()} className="hover:text-brand-500 transition-colors">Tienda</button>
+                <button
+                    type="button"
+                    onClick={() => onBack()}
+                    className="shrink-0 inline-flex items-center gap-1.5 h-10 pl-2.5 pr-4 rounded-full bg-surface-2 dark:bg-white/[0.06] border border-border/60 dark:border-white/10 text-[13px] font-bold text-content dark:text-white hover:border-brand-500/50 hover:text-brand-500 transition-colors active:scale-95"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                    Volver
+                </button>
                 {p.category && (
-                    <>
-                        <span>/</span>
-                        <button onClick={() => onBack(String(p.category.id))} className="hover:text-brand-500 transition-colors">
-                            {p.category.name}
-                        </button>
-                    </>
+                    <button
+                        type="button"
+                        onClick={() => onBack(String(p.category.id))}
+                        className="min-w-0 inline-flex items-center gap-1 text-[12px] font-bold text-brand-500 hover:underline"
+                    >
+                        <span className="truncate">Ver más de {p.category.name}</span>
+                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                    </button>
                 )}
             </nav>
 

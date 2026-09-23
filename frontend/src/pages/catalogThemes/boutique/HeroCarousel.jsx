@@ -34,8 +34,11 @@ export default function HeroCarousel({ banners }) {
     const ir = (n) => { setI((n + total) % total); setPausado(true); };
 
     return (
+        // En el teléfono va como tarjeta, con aire y esquinas redondeadas: a sangre quedaba
+        // pegado a la barra de categorías y se leía como parte de la cabecera. En escritorio
+        // sigue a todo el ancho, que es lo que se espera de un carrusel de portada.
         <section
-            className="relative bg-surface-2 dark:bg-white/[0.03] overflow-hidden"
+            className="relative mx-3 mt-3 rounded-2xl md:mx-0 md:mt-0 md:rounded-none bg-surface-2 dark:bg-white/[0.03] overflow-hidden"
             onMouseEnter={() => setPausado(true)}
             onMouseLeave={() => setPausado(false)}
             onTouchStart={(e) => { tactoX.current = e.touches[0].clientX; setPausado(true); }}

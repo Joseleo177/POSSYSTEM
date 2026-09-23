@@ -12,7 +12,7 @@ export default function BrandStatement({ slogan, highlights }) {
     if (!slogan && frases.length === 0) return null;
 
     return (
-        <section className="max-w-4xl mx-auto px-4 pt-10 pb-2 text-center">
+        <section className="max-w-4xl mx-auto px-4 pt-8 md:pt-10 pb-2 text-center">
             {slogan && (
                 <p className="text-[20px] sm:text-[24px] font-bold text-content dark:text-white leading-snug">
                     {slogan}
