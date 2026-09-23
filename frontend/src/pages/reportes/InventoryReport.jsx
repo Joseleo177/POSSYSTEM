@@ -21,6 +21,31 @@ const EMPTY = ({ msg = "Sin registros en este período" }) => (
 
 const LIMIT = 50;
 
+// Fila de la vista móvil: el nombre ocupa todo el ancho y las cifras van debajo con su
+// etiqueta, en lugar de una tabla de 600px que obligaba a desplazarse en horizontal.
+const MobileRow = ({ lead, title, titleClass = "text-content dark:text-white", sub, badge, metrics }) => (
+  <div className="px-4 py-3">
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0 flex items-start gap-2">
+        {lead}
+        <div className="min-w-0">
+          <div className={`text-[12px] font-black uppercase tracking-wide leading-snug break-words ${titleClass}`}>{title}</div>
+          {sub && <div className="text-[10px] font-bold text-content-subtle uppercase mt-0.5 break-words">{sub}</div>}
+        </div>
+      </div>
+      {badge && <div className="shrink-0">{badge}</div>}
+    </div>
+    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5">
+      {metrics.map(m => (
+        <div key={m.label} className="min-w-0">
+          <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle/70">{m.label}</div>
+          <div className={`text-[12px] tabular-nums font-black ${m.className || "text-content dark:text-white"}`}>{m.value}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
 export default function InventoryReport() {
   const [days, setDays] = useState(30);
   const [warehouseId, setWarehouseId] = useState("");
@@ -83,6 +108,14 @@ export default function InventoryReport() {
 
   useEffect(() => { loadReport(); }, [loadReport]);
 
+  // En móvil los botones de página quedan al final de la lista: sin esto la página nueva
+  // se veía desde abajo.
+  const listTopRef = useRef(null);
+  const goPage = (p) => {
+    setPage(p);
+    listTopRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+
   const handleFilterChange = (setter) => (val) => {
     setter(val);
     setPage(1);
@@ -119,8 +152,75 @@ export default function InventoryReport() {
     ? warehouses[0].name.toUpperCase()
     : "TODOS MIS ALMACENES";
 
+  const mobileList = !data ? { rows: [], empty: "" } :
+    view === "valuation" ? {
+      empty: "Sin productos con existencia",
+      rows: (data.valuation || []).map((p, i) => (
+        <MobileRow key={i} title={p.name} sub={p.category_name} metrics={[
+          { label: "Stock", value: `${fmtNumber(p.stock, 2)} ${p.unit || ""}` },
+          { label: "Costo Unit.", value: fmt$(p.cost_price) },
+          { label: "Capital (Costo)", value: fmt$(p.value_cost), className: "text-brand-500" },
+          { label: "Valor Venta", value: fmt$(p.value_sale), className: "text-success" },
+        ]} />
+      )),
+    } :
+    view === "critical" ? {
+      empty: "Sin productos bajo nivel crítico",
+      rows: (data.critical_stock || []).map((p, i) => (
+        <MobileRow key={i} title={p.name}
+          sub={p.warehouse_name ? `${p.warehouse_name} · ${p.category_name}` : p.category_name}
+          badge={<StockBadge qty={p.stock} min={p.min_stock} />}
+          metrics={[
+            { label: "Stock", value: fmtNumber(p.stock, 2), className: "text-danger" },
+            { label: "Mínimo", value: fmtNumber(p.min_stock, 2) },
+            { label: "Faltante", value: `+${fmtNumber(p.needed, 2)}`, className: "text-brand-500" },
+          ]} />
+      )),
+    } :
+    view === "zero" ? {
+      empty: "Sin productos agotados",
+      rows: (data.zero_stock || []).map((p, i) => (
+        <MobileRow key={i} title={p.name} sub={p.category_name}
+          badge={<StockBadge qty={0} min={1} />}
+          metrics={[{ label: "Stock", value: fmtNumber(p.stock, 2), className: "text-danger" }]} />
+      )),
+    } :
+    view === "top" ? {
+      empty: "Sin ventas en este período",
+      rows: (data.top_rotation || []).map((p, i) => (
+        <MobileRow key={i} title={p.name}
+          lead={<span className="text-[11px] font-black text-content-subtle tabular-nums pt-px">{(page - 1) * LIMIT + i + 1}</span>}
+          metrics={[
+            { label: "Vendidas", value: fmtNumber(p.units_sold, 2), className: "text-success" },
+            { label: "Ingresos", value: fmt$(p.revenue), className: "text-brand-500" },
+            { label: "Stock Actual", value: fmtNumber(p.stock, 2) },
+          ]} />
+      )),
+    } :
+    view === "slow" ? {
+      empty: "Sin productos inmovilizados en este período",
+      rows: (data.low_rotation || []).map((p, i) => (
+        <MobileRow key={i} title={p.name} sub={p.category_name} metrics={[
+          { label: "Stock", value: fmtNumber(p.stock, 2) },
+          { label: "Capital Inmovilizado", value: fmt$(p.value_locked), className: "text-orange-500" },
+        ]} />
+      )),
+    } : {
+      empty: "Sin categorías con stock",
+      rows: (data.by_category || []).map((c, i) => (
+        <MobileRow key={i} title={c.category_name} titleClass="text-brand-500" metrics={[
+          { label: "Surtido", value: `${c.product_count} SKU` },
+          { label: "Unidades", value: fmtInt(c.total_units) },
+          { label: "Costo Total", value: fmt$(c.value_cost), className: "text-danger" },
+        ]} />
+      )),
+    };
+
   return (
-    <div className="h-full flex flex-col space-y-4 overflow-hidden">
+    // En escritorio el reporte se ajusta a la pantalla y solo la tabla se desplaza. En el
+    // teléfono eso dejaba la lista en una franja de tres filas con su propio scroll, atrapada
+    // bajo los KPIs: ahí la página crece y se desplaza entera.
+    <div className="lg:h-full flex flex-col space-y-4 lg:overflow-hidden">
       {/* TOOLBAR PREMIUM ESTILO CONTABILIDAD */}
       {/* En tablet los tres controles no caben en una fila: el buscador cedía todo su ancho y
           quedaba reducido a la lupa. Hasta 1024px ocupa su propia fila completa y debajo van
@@ -133,6 +233,7 @@ export default function InventoryReport() {
           </svg>
           <input
             type="text"
+            autoComplete="off"
             placeholder="Buscar por nombre de producto o SKU..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
@@ -232,7 +333,7 @@ export default function InventoryReport() {
       {error && <div className="flex-1 flex items-center justify-center p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-black uppercase tracking-wide">{error}</div>}
 
       {data && (
-        <div className={`flex-1 min-h-0 flex flex-col space-y-3 ${loading ? "opacity-50 pointer-events-none" : ""}`}>
+        <div className={`lg:flex-1 lg:min-h-0 flex flex-col space-y-3 ${loading ? "opacity-50 pointer-events-none" : ""}`}>
           {view === "valuation" ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <KpiCard label="Capital en Stock (Costo)" value={fmt$(s.stock_cost_value)} color="text-brand-500" />
@@ -266,8 +367,8 @@ export default function InventoryReport() {
             ))}
           </div>
 
-          <Card className="!p-0 overflow-hidden flex-1 flex flex-col min-h-0 bg-transparent border-none shadow-none">
-            <div className="p-4 pb-3 border-b border-border dark:border-white/5 bg-surface-1 dark:bg-surface-dark-1 rounded-t-xl border-x">
+          <Card className="!p-0 overflow-hidden lg:flex-1 flex flex-col lg:min-h-0 bg-transparent border-none shadow-none">
+            <div ref={listTopRef} className="scroll-mt-3 p-4 pb-3 border-b border-border dark:border-white/5 bg-surface-1 dark:bg-surface-dark-1 rounded-t-xl border-x">
               <SectionHeader
                 title={
                   view === "valuation" ? "Valorización de Existencias" :
@@ -281,7 +382,13 @@ export default function InventoryReport() {
               />
             </div>
 
-            <div className="overflow-auto flex-1 bg-surface-1 dark:bg-surface-dark-1 border-x">
+            <div className="lg:hidden bg-surface-1 dark:bg-surface-dark-1 border-x divide-y divide-border/20 dark:divide-white/5">
+              {mobileList.rows.length === 0
+                ? <div className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">{mobileList.empty}</div>
+                : mobileList.rows}
+            </div>
+
+            <div className="hidden lg:block overflow-auto flex-1 bg-surface-1 dark:bg-surface-dark-1 border-x">
               <table className="w-full text-left border-collapse min-w-[600px]">
                 <thead className="bg-surface-2 dark:bg-surface-dark-2/50 sticky top-0 z-10">
                   {view === "valuation" && (
@@ -436,16 +543,16 @@ export default function InventoryReport() {
 
             {/* BARRA DE PAGINACIÓN */}
             {totalPages > 1 && (
-              <div className="shrink-0 px-4 py-2 border-t border-border dark:border-white/5 bg-surface-2/50 dark:bg-white/[0.02] flex items-center justify-between rounded-b-xl border-x border-b">
-                <div className="text-[10px] font-black text-content-subtle uppercase tracking-widest leading-none">
+              <div className="shrink-0 px-4 py-2 border-t border-border dark:border-white/5 bg-surface-2/50 dark:bg-white/[0.02] flex flex-wrap items-center justify-between gap-2 rounded-b-xl border-x border-b">
+                <div className="text-[10px] font-black text-content-subtle uppercase tracking-widest leading-none whitespace-nowrap">
                   Total items: <span className="text-content dark:text-white">{totalItems}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <button disabled={page === 1} onClick={() => setPage(1)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">«</button>
-                  <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">Ant.</button>
-                  <div className="px-3 h-7 flex items-center justify-center text-[10px] font-black text-brand-500 bg-brand-500/10 rounded-lg border border-brand-500/20">Pág {page}/{totalPages}</div>
-                  <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)} className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">Sig.</button>
-                  <button disabled={page === totalPages} onClick={() => setPage(totalPages)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">»</button>
+                  <button disabled={page === 1} onClick={() => goPage(1)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">«</button>
+                  <button disabled={page === 1} onClick={() => goPage(page - 1)} className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">Ant.</button>
+                  <div className="px-3 h-7 flex items-center justify-center text-[10px] font-black text-brand-500 bg-brand-500/10 rounded-lg border border-brand-500/20 whitespace-nowrap">Pág {page}/{totalPages}</div>
+                  <button disabled={page === totalPages} onClick={() => goPage(page + 1)} className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">Sig.</button>
+                  <button disabled={page === totalPages} onClick={() => goPage(totalPages)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">»</button>
                 </div>
               </div>
             )}
