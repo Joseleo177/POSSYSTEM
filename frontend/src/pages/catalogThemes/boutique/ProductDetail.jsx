@@ -128,7 +128,11 @@ export default function ProductDetail({
                         )}
                         {p.includes?.length > 0 && (
                             <span className="px-2.5 py-1 rounded-full bg-brand-500/10 text-[10px] font-black uppercase tracking-[0.14em] text-brand-500">
-                                Kit · {p.includes.length} {p.includes.length === 1 ? "producto" : "productos"}
+                                {/* Un combo de una sola pieza es una caja o paquete (12 latas),
+                                    no un kit: "Kit · 1 producto" no decía nada útil. */}
+                                {p.includes.length === 1
+                                    ? `Contiene ${fmtQtyUnit(p.includes[0].quantity, p.includes[0].unit)}`
+                                    : `Kit · ${p.includes.length} productos`}
                             </span>
                         )}
                     </div>
@@ -206,7 +210,9 @@ export default function ProductDetail({
                                         onClick={() => onAdd(p)}
                                         disabled={!p.available || !hasPrice}
                                         className={[
-                                            "flex-1 h-12 px-6 rounded-full",
+                                            // flex-1 solo en fila (sm): en la columna del
+                                            // teléfono reparte el ALTO y aplastaba el botón.
+                                            "w-full sm:w-auto sm:flex-1 shrink-0 h-12 px-6 rounded-full",
                                             "text-[12px] font-black uppercase tracking-widest",
                                             "flex items-center justify-center gap-2",
                                             "transition-all duration-200 enabled:active:scale-[0.98]",
@@ -230,7 +236,7 @@ export default function ProductDetail({
                                         href={waHref}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className={`${canOrder ? "sm:flex-none" : "flex-1"} h-12 px-5 rounded-full border border-border dark:border-white/15 text-[12px] font-black uppercase tracking-widest text-content dark:text-white flex items-center justify-center gap-2 hover:border-brand-500 hover:text-brand-500 transition-colors`}
+                                        className={`${canOrder ? "sm:flex-none" : "sm:flex-1"} w-full sm:w-auto shrink-0 h-12 px-5 rounded-full border border-border dark:border-white/15 text-[12px] font-black uppercase tracking-widest text-content dark:text-white flex items-center justify-center gap-2 hover:border-brand-500 hover:text-brand-500 transition-colors`}
                                     >
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                                         Preguntar
