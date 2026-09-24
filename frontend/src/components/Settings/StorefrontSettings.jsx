@@ -32,7 +32,9 @@ const Card = ({ title, hint, children }) => (
     </div>
 );
 
-const BANNER_VACIO = { title: "", alt_text: "", link_url: "", active: true };
+// placement: 'hero' = carrusel de portada; 'feature' = destacados con texto al pie de la
+// portada (ver migración 20260924100000-catalog-banner-placement).
+const BANNER_VACIO = { title: "", alt_text: "", link_url: "", heading: "", body: "", active: true, placement: "hero" };
 
 // Colores sugeridos para la vitrina. No son una paleta cerrada —debajo hay un selector
 // libre— sino un punto de partida: son tonos con suficiente fuerza para una tienda y que
@@ -133,17 +135,26 @@ export default function StorefrontSettings({ notify }) {
     };
 
     // ── Banners ──────────────────────────────────────────────────
-    const abrirNuevo = () => { setEditing({ ...BANNER_VACIO }); setFiles({}); };
+    const heroes = banners.filter(b => b.placement !== "feature");
+    const destacados = banners.filter(b => b.placement === "feature");
+
+    const abrirNuevo = (placement = "hero") => { setEditing({ ...BANNER_VACIO, placement }); setFiles({}); };
     const abrirEdicion = (b) => { setEditing({ ...b }); setFiles({}); };
 
     const guardarBanner = async () => {
-        if (!editing.id && !files.image) return notify("Falta la imagen del banner", "err");
+        const esDestacado = editing.placement === "feature";
+        if (!editing.id && !files.image) return notify("Falta la imagen", "err");
+        if (esDestacado && !(editing.heading || "").trim() && !(editing.body || "").trim()) {
+            return notify("Escribe al menos el título o el texto", "err");
+        }
         try {
             const campos = {
                 title: editing.title || "",
                 alt_text: editing.alt_text || "",
                 link_url: editing.link_url || "",
                 active: editing.active,
+                ...(editing.id ? {} : { placement: editing.placement }),
+                ...(esDestacado ? { heading: editing.heading || "", body: editing.body || "" } : {}),
                 ...(editing.clear_mobile ? { clear_mobile: "true" } : {}),
             };
             if (editing.id) await api.catalogBanners.update(editing.id, campos, files);
@@ -151,7 +162,7 @@ export default function StorefrontSettings({ notify }) {
             setEditing(null);
             setFiles({});
             await load();
-            notify("Banner guardado correctamente");
+            notify(esDestacado ? "Destacado guardado correctamente" : "Banner guardado correctamente");
         } catch (e) { notify(e.message, "err"); }
     };
 
@@ -166,12 +177,14 @@ export default function StorefrontSettings({ notify }) {
 
     // Subir y bajar en vez de arrastrar: la vitrina se configura tanto desde una tablet como
     // desde el escritorio, y arrastrar con el dedo pelea con el desplazamiento de la página.
-    const mover = async (index, delta) => {
+    // Cada carrusel se ordena por su cuenta: `lista` es solo el de la tarjeta donde se tocó.
+    const mover = async (lista, index, delta) => {
         const destino = index + delta;
-        if (destino < 0 || destino >= banners.length) return;
-        const next = [...banners];
+        if (destino < 0 || destino >= lista.length) return;
+        const next = [...lista];
         [next[index], next[destino]] = [next[destino], next[index]];
-        setBanners(next);
+        const ids = new Set(next.map(b => b.id));
+        setBanners([...banners.filter(b => !ids.has(b.id)), ...next]);
         try {
             await api.catalogBanners.reorder(next.map(b => b.id));
         } catch (e) {
@@ -202,75 +215,41 @@ export default function StorefrontSettings({ notify }) {
     return (
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="space-y-3">
-                {/* ── Carrusel ── */}
-                <div className="bg-white dark:bg-surface-dark-3 rounded-xl p-4 border border-border/40 dark:border-white/10 shadow-sm">
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest opacity-60">Carrusel de portada</span>
-                        <Button onClick={abrirNuevo} className="h-7 px-3 text-[10px]">Agregar banner</Button>
-                    </div>
-                    <p className="text-[9px] font-bold text-content-subtle dark:text-white/20 mb-3 leading-relaxed">
-                        Las imágenes grandes de la portada. El texto de la promoción va dentro de la
-                        imagen: el sistema no escribe nada encima.
-                    </p>
-
-                    {banners.length === 0 ? (
-                        <div className="py-8 text-center border-2 border-dashed border-border/40 dark:border-white/10 rounded-xl">
-                            <p className="text-[11px] font-black text-content dark:text-white">Sin banners</p>
-                            <p className="text-[9px] font-bold text-content-subtle uppercase tracking-widest mt-1">
-                                La vitrina abre directo en los productos
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            {banners.map((b, i) => (
-                                <div key={b.id} className="flex items-center gap-3 p-2 rounded-xl border border-border/40 dark:border-white/10">
-                                    <div className="w-24 h-14 shrink-0 rounded-lg overflow-hidden bg-surface-2 dark:bg-white/5">
-                                        <img src={resolveImageUrl(b.image_url)} alt="" className="w-full h-full object-cover" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-[11px] font-black text-content dark:text-white truncate">
-                                            {b.title || "Sin nombre"}
-                                        </p>
-                                        <p className="text-[9px] font-bold text-content-subtle truncate">
-                                            {b.link_url || "Sin enlace"}
-                                        </p>
-                                        {!b.image_mobile_url && (
-                                            <p className="text-[9px] font-bold text-warning">Sin arte de móvil</p>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        <button type="button" onClick={() => mover(i, -1)} disabled={i === 0}
-                                            className="w-7 h-7 rounded-lg border border-border/40 dark:border-white/10 flex items-center justify-center text-content-subtle disabled:opacity-30"
-                                            title="Subir">
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 15l7-7 7 7" /></svg>
-                                        </button>
-                                        <button type="button" onClick={() => mover(i, 1)} disabled={i === banners.length - 1}
-                                            className="w-7 h-7 rounded-lg border border-border/40 dark:border-white/10 flex items-center justify-center text-content-subtle disabled:opacity-30"
-                                            title="Bajar">
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M19 9l-7 7-7-7" /></svg>
-                                        </button>
-                                        <button type="button" onClick={() => alternarActivo(b)}
-                                            className={`h-7 px-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${b.active
-                                                ? "border-success/30 text-success bg-success/5"
-                                                : "border-border/40 dark:border-white/10 text-content-subtle"}`}>
-                                            {b.active ? "Activo" : "Apagado"}
-                                        </button>
-                                        <button type="button" onClick={() => abrirEdicion(b)}
-                                            className="w-7 h-7 rounded-lg border border-border/40 dark:border-white/10 flex items-center justify-center text-content-subtle"
-                                            title="Editar">
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                        </button>
-                                        <button type="button" onClick={() => setBorrar(b)}
-                                            className="w-7 h-7 rounded-lg border border-danger/30 text-danger flex items-center justify-center"
-                                            title="Eliminar">
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                {/* ── Carrusel de portada ── */}
+                <BannerList
+                    title="Carrusel de portada"
+                    hint="Las imágenes grandes de la portada. El texto de la promoción va dentro de la imagen: el sistema no escribe nada encima."
+                    addLabel="Agregar banner"
+                    emptyTitle="Sin banners"
+                    emptyHint="La vitrina abre directo en los productos"
+                    items={heroes}
+                    onAdd={() => abrirNuevo("hero")}
+                    onMove={(i, d) => mover(heroes, i, d)}
+                    onToggle={alternarActivo} onEdit={abrirEdicion} onDelete={setBorrar}
+                    detail={(b) => (
+                        <>
+                            <p className="text-[9px] font-bold text-content-subtle truncate">{b.link_url || "Sin enlace"}</p>
+                            {!b.image_mobile_url && <p className="text-[9px] font-bold text-warning">Sin arte de móvil</p>}
+                        </>
                     )}
-                </div>
+                />
+
+                {/* ── Carrusel de destacados ── */}
+                <BannerList
+                    title="Destacados al pie de la portada"
+                    hint="Imagen a un lado y tu texto al otro, antes del pie de página. Sirve para contar qué hace un producto o una línea. Solo el diseño Tienda lo muestra."
+                    addLabel="Agregar destacado"
+                    emptyTitle="Sin destacados"
+                    emptyHint="La sección no se muestra"
+                    items={destacados}
+                    onAdd={() => abrirNuevo("feature")}
+                    onMove={(i, d) => mover(destacados, i, d)}
+                    onToggle={alternarActivo} onEdit={abrirEdicion} onDelete={setBorrar}
+                    detail={(b) => (
+                        <p className="text-[9px] font-bold text-content-subtle truncate">{b.body || "Sin texto"}</p>
+                    )}
+                    name={(b) => b.heading || b.title}
+                />
 
                 {/* ── Menú destacado ── */}
                 <Card
@@ -562,10 +541,63 @@ export default function StorefrontSettings({ notify }) {
             <Modal
                 open={!!editing}
                 onClose={() => { setEditing(null); setFiles({}); }}
-                title={editing?.id ? "Editar banner" : "Nuevo banner"}
+                title={editing?.placement === "feature"
+                    ? (editing?.id ? "Editar destacado" : "Nuevo destacado")
+                    : (editing?.id ? "Editar banner" : "Nuevo banner")}
                 width={560}
             >
-                {editing && (
+                {editing && editing.placement === "feature" && (
+                    <div className="space-y-3">
+                        <ImagePicker
+                            label="Imagen"
+                            hint="Apaisada. Ej: 1600 × 900. En el teléfono va arriba del texto."
+                            current={editing.image_url}
+                            file={files.image}
+                            onPick={(f) => setFiles(p => ({ ...p, image: f }))}
+                        />
+
+                        <div>
+                            <label className="label">Título</label>
+                            <input className="input h-9" placeholder="Ej: Ideal para reconstrucción inmediata"
+                                maxLength={120}
+                                value={editing.heading || ""}
+                                onChange={(e) => setEditing(p => ({ ...p, heading: e.target.value }))} />
+                        </div>
+
+                        <div>
+                            <label className="label">Texto</label>
+                            <textarea className="input min-h-[84px] py-2 resize-none" placeholder="Qué hace el producto, en dos o tres líneas"
+                                maxLength={400}
+                                value={editing.body || ""}
+                                onChange={(e) => setEditing(p => ({ ...p, body: e.target.value }))} />
+                        </div>
+
+                        <div>
+                            <label className="label">Enlace (opcional)</label>
+                            <input className="input h-9" placeholder="https://... o /catalogo/mi-tienda/p/123"
+                                value={editing.link_url || ""}
+                                onChange={(e) => setEditing(p => ({ ...p, link_url: e.target.value }))} />
+                            <p className="text-[9px] font-bold text-content-subtle dark:text-white/20 mt-1 leading-relaxed">
+                                Con enlace aparece un botón "Ver más" bajo el texto.
+                            </p>
+                        </div>
+
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={!!editing.active}
+                                onChange={(e) => setEditing(p => ({ ...p, active: e.target.checked }))} />
+                            <span className="text-[11px] font-black text-content dark:text-white">Mostrar en la vitrina</span>
+                        </label>
+
+                        <div className="flex justify-end gap-2 pt-1">
+                            <Button variant="ghost" onClick={() => { setEditing(null); setFiles({}); }} className="h-8 px-4 text-[10px]">
+                                Cancelar
+                            </Button>
+                            <Button onClick={guardarBanner} className="h-8 px-6 text-[10px]">Guardar</Button>
+                        </div>
+                    </div>
+                )}
+
+                {editing && editing.placement !== "feature" && (
                     <div className="space-y-3">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <ImagePicker
@@ -630,13 +662,71 @@ export default function StorefrontSettings({ notify }) {
 
             <ConfirmModal
                 isOpen={!!borrar}
-                title="Eliminar banner"
-                message={`Se elimina "${borrar?.title || "este banner"}" y su imagen. No se puede deshacer.`}
+                title={borrar?.placement === "feature" ? "Eliminar destacado" : "Eliminar banner"}
+                message={`Se elimina "${borrar?.heading || borrar?.title || "esta imagen"}" y su imagen. No se puede deshacer.`}
                 confirmText="Eliminar"
                 type="danger"
                 onConfirm={eliminarBanner}
                 onCancel={() => setBorrar(null)}
             />
+        </div>
+    );
+}
+
+// Lista de un carrusel (portada o destacados): miniatura, orden, encendido, edición y borrado.
+// Las dos tarjetas son la misma lista con otro texto; lo que cambia de una a otra es qué
+// detalle se muestra bajo el nombre.
+function BannerList({ title, hint, addLabel, emptyTitle, emptyHint, items, onAdd, onMove, onToggle, onEdit, onDelete, detail, name = (b) => b.title }) {
+    const btn = "w-7 h-7 rounded-lg border border-border/40 dark:border-white/10 flex items-center justify-center text-content-subtle disabled:opacity-30";
+    return (
+        <div className="bg-white dark:bg-surface-dark-3 rounded-xl p-4 border border-border/40 dark:border-white/10 shadow-sm">
+            <div className="flex items-center justify-between mb-1 gap-2">
+                <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest opacity-60">{title}</span>
+                <Button onClick={onAdd} className="h-7 px-3 text-[10px] shrink-0">{addLabel}</Button>
+            </div>
+            <p className="text-[9px] font-bold text-content-subtle dark:text-white/20 mb-3 leading-relaxed">{hint}</p>
+
+            {items.length === 0 ? (
+                <div className="py-8 text-center border-2 border-dashed border-border/40 dark:border-white/10 rounded-xl">
+                    <p className="text-[11px] font-black text-content dark:text-white">{emptyTitle}</p>
+                    <p className="text-[9px] font-bold text-content-subtle uppercase tracking-widest mt-1">{emptyHint}</p>
+                </div>
+            ) : (
+                <div className="space-y-2">
+                    {items.map((b, i) => (
+                        <div key={b.id} className="flex items-center gap-3 p-2 rounded-xl border border-border/40 dark:border-white/10">
+                            <div className="w-24 h-14 shrink-0 rounded-lg overflow-hidden bg-surface-2 dark:bg-white/5">
+                                <img src={resolveImageUrl(b.image_url)} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-black text-content dark:text-white truncate">{name(b) || "Sin nombre"}</p>
+                                {detail(b)}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                                <button type="button" onClick={() => onMove(i, -1)} disabled={i === 0} className={btn} title="Subir">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 15l7-7 7 7" /></svg>
+                                </button>
+                                <button type="button" onClick={() => onMove(i, 1)} disabled={i === items.length - 1} className={btn} title="Bajar">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M19 9l-7 7-7-7" /></svg>
+                                </button>
+                                <button type="button" onClick={() => onToggle(b)}
+                                    className={`h-7 px-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${b.active
+                                        ? "border-success/30 text-success bg-success/5"
+                                        : "border-border/40 dark:border-white/10 text-content-subtle"}`}>
+                                    {b.active ? "Activo" : "Apagado"}
+                                </button>
+                                <button type="button" onClick={() => onEdit(b)} className={btn} title="Editar">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                </button>
+                                <button type="button" onClick={() => onDelete(b)}
+                                    className="w-7 h-7 rounded-lg border border-danger/30 text-danger flex items-center justify-center" title="Eliminar">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

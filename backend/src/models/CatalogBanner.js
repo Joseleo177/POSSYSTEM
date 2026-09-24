@@ -22,6 +22,11 @@ module.exports = (sequelize, DataTypes) => {
     image_mobile_filename: { type: DataTypes.STRING(500), allowNull: true },
     link_url:   { type: DataTypes.STRING(500), allowNull: true },
     alt_text:   { type: DataTypes.STRING(200), allowNull: true },
+    // 'hero' = carrusel de portada (texto dentro del arte); 'feature' = carrusel de
+    // destacados al pie de la portada, con título y texto que pinta la vitrina.
+    placement: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'hero' },
+    heading:    { type: DataTypes.STRING(120), allowNull: true },
+    body:       { type: DataTypes.STRING(400), allowNull: true },
     sort_order: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     active:     { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     company_id: { type: DataTypes.INTEGER, allowNull: true },

@@ -267,11 +267,14 @@ async function getStore(token, { warehouse_id } = {}) {
 
     // Carrusel de portada. Solo lo activo y en el orden que fijó el comercio: un banner
     // apagado sigue en la base porque las campañas vuelven, pero no sale a la calle.
-    const banners = await CatalogBanner.findAll({
+    // Los dos carruseles salen de la misma consulta y se separan aquí por su ubicación.
+    const todosBanners = await CatalogBanner.findAll({
       where: { active: true },
-      attributes: ["id", "image_filename", "image_mobile_filename", "link_url", "alt_text"],
+      attributes: ["id", "placement", "image_filename", "image_mobile_filename", "link_url", "alt_text", "heading", "body"],
       order: [["sort_order", "ASC"], ["id", "ASC"]],
     });
+    const banners = todosBanners.filter((b) => b.placement !== "feature");
+    const features = todosBanners.filter((b) => b.placement === "feature");
 
     const whatsapp = normalizeWhatsapp(s.catalog_whatsapp);
     const ordersEnabled = !!whatsapp && s.catalog_orders_enabled === "true";
@@ -337,6 +340,18 @@ async function getStore(token, { warehouse_id } = {}) {
         link_url: publicLink(b.link_url),
         alt_text: b.alt_text || null,
       })),
+      // Carrusel de destacados: imagen de un lado y el texto que escribió la tienda del otro.
+      // Uno sin título ni texto no tiene nada que decir junto a la foto, así que no sale.
+      features: features
+        .filter((b) => b.heading || b.body)
+        .map((b) => ({
+          id: b.id,
+          image_url: imageUrl(b.image_filename),
+          heading: b.heading || null,
+          body: b.body || null,
+          link_url: publicLink(b.link_url),
+          alt_text: b.alt_text || null,
+        })),
       currencies: currencies.map((c) => ({
         code: c.code,
         symbol: c.symbol,

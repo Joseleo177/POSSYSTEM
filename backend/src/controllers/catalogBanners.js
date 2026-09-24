@@ -6,6 +6,11 @@ const { imageUrl, saveImage, deleteImage } = require("../utils/imageStorage");
 // portada que nadie termina de ver y un teléfono que tarda en cargarla.
 const MAX_BANNERS = 8;
 
+// Dónde se publica: 'hero' es el carrusel de portada, 'feature' el de destacados con texto al
+// pie de la portada. Cualquier otro valor cae a portada, que es lo que había antes.
+const PLACEMENTS = ["hero", "feature"];
+const cleanPlacement = (v) => (PLACEMENTS.includes(v) ? v : "hero");
+
 // El aislamiento por empresa va explícito en TODAS las consultas de este módulo, y no
 // delegado en los hooks de models/index.js.
 //
@@ -68,16 +73,22 @@ const create = async (req, res) => {
     if (!image) return res.status(400).json({ ok: false, message: "Falta la imagen del banner" });
 
     const company_id = tenant(req);
-    const count = await CatalogBanner.count({ where: { company_id } });
+    // La ubicación se fija al crear y no cambia después: un banner de portada lleva el texto
+    // dentro del arte y uno de destacados no, así que moverlo de uno a otro nunca queda bien.
+    const placement = cleanPlacement(req.body.placement);
+    const count = await CatalogBanner.count({ where: { company_id, placement } });
     if (count >= MAX_BANNERS) {
-      return res.status(400).json({ ok: false, message: `El carrusel admite hasta ${MAX_BANNERS} banners.` });
+      return res.status(400).json({ ok: false, message: `El carrusel admite hasta ${MAX_BANNERS} imágenes.` });
     }
 
     // Al final de la lista: el orden lo ajusta después quien lo suba, pero un banner nuevo
     // no debería empujar hacia abajo a la campaña que está corriendo hoy.
-    const last = await CatalogBanner.max("sort_order", { where: { company_id } });
+    const last = await CatalogBanner.max("sort_order", { where: { company_id, placement } });
     const banner = await CatalogBanner.create({
       company_id,
+      placement,
+      heading:   trim(req.body.heading, 120),
+      body:      trim(req.body.body, 400),
       title:     trim(req.body.title, 120),
       alt_text:  trim(req.body.alt_text, 200),
       link_url:  cleanLink(req.body.link_url),
@@ -102,6 +113,10 @@ const update = async (req, res) => {
     if (!banner) return res.status(404).json({ ok: false, message: "Banner no encontrado" });
 
     const patch = {
+      // Solo si vinieron: el botón de encender/apagar de la lista no los manda, y sin esta
+      // guarda cada toque borraba el texto del destacado.
+      ...(req.body.heading !== undefined ? { heading: trim(req.body.heading, 120) } : {}),
+      ...(req.body.body !== undefined ? { body: trim(req.body.body, 400) } : {}),
       title:    trim(req.body.title, 120),
       alt_text: trim(req.body.alt_text, 200),
       link_url: cleanLink(req.body.link_url),

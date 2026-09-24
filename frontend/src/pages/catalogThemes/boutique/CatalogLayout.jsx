@@ -18,6 +18,7 @@ import CategoryProductRow from "./CategoryProductRow";
 import AllProductsSection from "./AllProductsSection";
 import ProductDetail from "./ProductDetail";
 import HowItWorks from "./HowItWorks";
+import FeatureCarousel from "./FeatureCarousel";
 import StoreFooter from "./StoreFooter";
 
 // Tema "boutique": la vitrina con forma de tienda de marca —franja de anuncio, carrusel de
@@ -34,7 +35,7 @@ import StoreFooter from "./StoreFooter";
 export default function CatalogLayout({ catalog, token }) {
     const {
         dark, toggle,
-        store, categories, products, total, error, banners, menu,
+        store, categories, products, total, error, banners, features, menu,
         search, setSearch, category, setCategory,
         loading, loadingMore, loadMore,
         baseCur, altCur, fmt, ordersEnabled, gated,
@@ -173,6 +174,8 @@ export default function CatalogLayout({ catalog, token }) {
                                     ordersEnabled={ordersEnabled} onAdd={addToCart}
                                     onOpenProduct={openProduct} onSeeAll={setCategory}
                                 />
+
+                                <FeatureCarousel features={features} />
                             </>
                         ) : (
                             <BoutiqueGrid
@@ -188,7 +191,10 @@ export default function CatalogLayout({ catalog, token }) {
                 )}
             </div>
 
-            <StoreFooter store={store} categories={categories} onPickCategory={setCategory} />
+            <StoreFooter
+                store={store} categories={categories} onPickCategory={setCategory}
+                pegado={!productId && enPortada && features?.length > 0}
+            />
 
             {/* Hueco para que la barra flotante del pedido no tape el pie. Con el mismo fondo
                 del pie (bg-surface) y no el de la página (bg-surface-2): sin esto se veía

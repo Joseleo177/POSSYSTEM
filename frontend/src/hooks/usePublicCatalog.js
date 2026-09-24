@@ -25,6 +25,7 @@ export function usePublicCatalog(token, initialProductId = null) {
     // Contenido de vitrina que edita la tienda desde Ajustes. Solo lo usan los temas que lo
     // saben pintar; el estándar los ignora y se ve igual que siempre.
     const [banners, setBanners] = useState([]);
+    const [features, setFeatures] = useState([]);
     const [menu, setMenu] = useState([]);
     const [products, setProducts] = useState([]);
     const [total, setTotal] = useState(0);
@@ -480,6 +481,7 @@ export function usePublicCatalog(token, initialProductId = null) {
                 setCategories(r.data.categories || []);
                 setWarehouses(r.data.warehouses || []);
                 setBanners(r.data.banners || []);
+                setFeatures(r.data.features || []);
                 setMenu(r.data.menu || []);
             })
             .catch(() => alive && setError("Este catálogo no está disponible."));
@@ -529,7 +531,7 @@ export function usePublicCatalog(token, initialProductId = null) {
         dark, toggle,
         // tienda y catálogo
         store, currencies, categories, products, total, error,
-        banners, menu,
+        banners, features, menu,
         search, setSearch, category, setCategory,
         loading, loadingMore, loadMore,
         baseCur, altCur, fmt, ordersEnabled, gated,
