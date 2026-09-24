@@ -109,6 +109,8 @@ export default function CatalogLayout({ catalog, token }) {
                         inCart={cart.find(it => it.id === productId)}
                         fmt={fmt} baseCur={baseCur} altCur={altCur}
                         canOrder={ordersEnabled} onAdd={addToCart}
+                        store={store}
+                        onOpenProduct={(id) => { openProduct(id); window.scrollTo({ top: 0 }); }}
                     />
                 ) : (
                     <>

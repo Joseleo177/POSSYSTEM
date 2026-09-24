@@ -734,9 +734,41 @@ async function getProduct(token, productId, { warehouse_id } = {}) {
     const precio = aplicarDescuento(basePrice, descuentos.pct[p.id]);
     const bxg = descuentos.bxg[p.id];
 
+    // Qué trae un kit. Sin esto la ficha de "Kit B8 Liso Perfecto" no decía de qué estaba
+    // hecho, y es justo lo que el cliente quiere saber antes de comprarlo. Solo nombre, foto
+    // y cantidad —nada de costos ni stock de cada pieza— y el id únicamente si esa pieza
+    // también se vende suelta en la vitrina, para poder enlazarla.
+    let includes = [];
+    if (p.is_combo) {
+      const links = await ProductComboItem.findAll({
+        where: { combo_id: p.id },
+        attributes: ["product_id", "quantity"],
+        order: [["id", "ASC"]],
+      });
+      const piezas = links.length
+        ? await Product.findAll({
+            where: { id: { [Op.in]: links.map((l) => l.product_id) } },
+            attributes: ["id", "name", "unit", "image_filename", "visible_in_catalog", "sellable"],
+          })
+        : [];
+      const porId = new Map(piezas.map((x) => [x.id, x]));
+      includes = links.map((l) => {
+        const x = porId.get(l.product_id);
+        if (!x) return null;
+        return {
+          id: x.visible_in_catalog && x.sellable ? x.id : null,
+          name: x.name,
+          unit: x.unit,
+          quantity: parseFloat(l.quantity),
+          image_url: imageUrl(x.image_filename),
+        };
+      }).filter(Boolean);
+    }
+
     return {
       id: p.id,
       name: p.name,
+      includes,
       price: precio.price,
       price_before: precio.price_before,
       discount_pct: precio.discount_pct,
