@@ -1,3 +1,5 @@
+import { compressFormData } from "../helpers/compressImage";
+
 const BASE = (import.meta.env.VITE_API_URL || "") + "/api";
 
 function getToken() {
@@ -15,8 +17,15 @@ function buildApiError(status, message, code, data) {
   return err;
 }
 
+// Peso total de los archivos de un FormData, para explicar un rechazo por tamaño.
+const pesoArchivos = (fd) => [...fd.values()].reduce((s, v) => s + (v instanceof File ? v.size : 0), 0);
+const MSG_PESADO = "La imagen pesa demasiado para subirla. Prueba con una más liviana (menos de 4 MB).";
+
 async function request(path, options = {}) {
   const isFormData = options.body instanceof FormData;
+  // Toda subida pasa por aquí: se achican las imágenes pesadas antes de mandarlas (ver
+  // helpers/compressImage.js — en Vercel una petición de más de 4,5 MB no llega).
+  if (isFormData) options = { ...options, body: await compressFormData(options.body) };
   let token = getToken();
   const method = options.method || "GET";
   const headers = {
@@ -30,6 +39,11 @@ async function request(path, options = {}) {
     res = await fetch(`${BASE}${path}`, { ...options, headers });
   } catch (err) {
     if (err.message?.toLowerCase().includes("failed to fetch") || err.name === "TypeError") {
+      // Vercel responde 413 sin cabeceras CORS y el navegador lo presenta como un fallo de
+      // red. Con una subida pesada, lo probable es eso y no que se cayó la conexión.
+      if (isFormData && pesoArchivos(options.body) > 4 * 1024 * 1024) {
+        throw buildApiError(413, MSG_PESADO, "PAYLOAD_TOO_LARGE");
+      }
       throw buildApiError(
         503,
         "No se pudo conectar con el servidor. Revisa tu conexión o intenta de nuevo en unos segundos.",
@@ -38,7 +52,9 @@ async function request(path, options = {}) {
     }
     throw err;
   }
-  
+
+  if (res.status === 413) throw buildApiError(413, MSG_PESADO, "PAYLOAD_TOO_LARGE");
+
   if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login') {
     const refreshToken = localStorage.getItem("pos_refresh_token");
     if (refreshToken) {
