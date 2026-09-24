@@ -129,7 +129,10 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
                 {/* El nombre en el color de la tienda, como en las referencias: es lo que le
                     da carácter a la rejilla ahora que no hay tarjetas de por medio. También
                     es enlace, para que el nombre —no solo la foto— lleve a la ficha. */}
-                <a href={href} onClick={abrir} className="mt-1 min-h-[38px] block text-[14px] font-bold text-brand-500 leading-snug line-clamp-2 hover:underline">
+                {/* Alto fijo de exactamente dos líneas (2 × leading-snug) y sin `block`: esa
+                    clase pisaba el display de line-clamp, el recorte nunca se aplicaba y un
+                    nombre de tres líneas empujaba el precio y el botón fuera de la fila. */}
+                <a href={href} onClick={abrir} title={p.name} className="mt-1 h-[2.75em] text-[14px] font-bold text-brand-500 leading-snug line-clamp-2 hover:underline">
                     {p.name}
                 </a>
 
