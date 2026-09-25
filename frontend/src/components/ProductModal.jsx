@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Modal from "./ui/Modal";
 import { Button } from "./ui/Button";
 import { useApp } from "../context/AppContext";
@@ -25,6 +25,13 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const exchangeRate = parseFloat(localCurrency?.exchange_rate || 0);
 
     const [form, setForm] = useState(EMPTY);
+    // El guardado lo bloquea el propio modal, sin depender de que cada pantalla le pase un
+    // `loading` de verdad: el catálogo le pasaba el de cargar la lista, así que mientras se
+    // subía la foto y se guardaba el botón seguía activo y sin señal. La gente volvía a
+    // pulsarlo y cada clic era otro PUT, o —al crear— otro producto duplicado. El ref corta
+    // el segundo clic en el acto; el estado solo pinta el spinner.
+    const [saving, setSaving] = useState(false);
+    const savingRef = useRef(false);
     const [priceInBs, setPriceInBs] = useState("");
     const [priceCurrency, setPriceCurrency] = useState("base");
     const [imageFile, setImageFile] = useState(null);
@@ -277,7 +284,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         setImagePreview(URL.createObjectURL(f));
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
+        if (savingRef.current) return;
         // Al insumo no se le pide precio porque no se vende; se guarda en 0 junto con el
         // margen vacío, así no arrastra un precio viejo si algún día vuelve a venderse.
         if (form.sellable && (parseFloat(form.price) <= 0 || form.price === "")) {
@@ -292,8 +300,17 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         // Al crear sirve para dar el stock inicial en ese almacén; al editar marca el alcance:
         // el precio, el costo y el mínimo son de esta sucursal y no de la empresa entera.
         if (warehouseId) submissionForm.warehouse_id = warehouseId;
-        onSave(submissionForm, imageFile, removeImage);
+        savingRef.current = true;
+        setSaving(true);
+        try {
+            await onSave(submissionForm, imageFile, removeImage);
+        } finally {
+            savingRef.current = false;
+            setSaving(false);
+        }
     };
+
+    const busy = loading || saving;
 
     const isEdit = !!editData;
 
@@ -842,16 +859,19 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
                 {/* ── Footer de Acción ── */}
                 <div className="flex gap-3 justify-end mt-3 pt-3 border-t border-border/40 dark:border-border-dark/40">
-                    <Button onClick={onClose} variant="ghost" className="border border-border/40 dark:border-white/10 min-w-[100px]">
+                    <Button onClick={onClose} disabled={saving} variant="ghost" className="border border-border/40 dark:border-white/10 min-w-[100px]">
                         Cancelar
                     </Button>
                     <Button
-                        onClick={handleSave} disabled={loading}
+                        onClick={handleSave} disabled={busy}
                         variant="primary"
                         className="min-w-[160px]"
                     >
-                        {loading ? (
-                            <svg className="animate-spin h-4 w-4 text-black" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        {busy ? (
+                            <span className="flex items-center justify-center gap-2">
+                                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                Guardando...
+                            </span>
                         ) : (
                             isEdit ? "Guardar Cambios" : "Registrar Producto"
                         )}
