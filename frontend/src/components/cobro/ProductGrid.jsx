@@ -16,6 +16,7 @@ export default function ProductGrid({
     activePromos = [],
 }) {
     const sentinelRef = useRef(null);
+    const scrollRef = useRef(null);
 
     const handleSelect = (p) => {
         // Bloquear si stock es 0 o menos, salvo: servicio, o combo con stock null (todos sus ingredientes son servicios)
@@ -38,12 +39,16 @@ export default function ProductGrid({
         }
     }, [selectedIndex, filteredProducts.length, hasMore]);
 
-    // IntersectionObserver — dispara loadMore cuando el sentinel entra en pantalla
+    // IntersectionObserver — dispara loadMore ANTES de que el sentinel entre en pantalla.
+    // Sin margen la página siguiente se pedía recién al tocar el fondo y el cajero se quedaba
+    // mirando el final de la grilla mientras llegaba (petición + preflight + fotos). El margen
+    // se mide contra el contenedor que hace scroll, no contra la ventana: con root nulo el
+    // contenedor recorta al sentinel y el margen no adelanta nada.
     useEffect(() => {
         if (!sentinelRef.current) return;
         const observer = new IntersectionObserver(
             entries => { if (entries[0].isIntersecting && hasMore && !loadingMore) loadMore(); },
-            { threshold: 0.1 }
+            { root: scrollRef.current, rootMargin: "0px 0px 1200px 0px", threshold: 0 }
         );
         observer.observe(sentinelRef.current);
         return () => observer.disconnect();
@@ -98,7 +103,7 @@ export default function ProductGrid({
 
 
             {/* Grilla de productos - Fixed height with scroll */}
-            <div className="flex-1 overflow-y-auto scrollbar-hide">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-hide">
                 {filteredProducts.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center opacity-30 gap-3 py-10">
                         <div className="w-16 h-16 rounded-[32px] bg-surface-2 dark:bg-white/5 flex items-center justify-center text-content-subtle opacity-20">

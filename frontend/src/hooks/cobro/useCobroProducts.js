@@ -3,7 +3,9 @@ import { api } from "../../services/api";
 import { onSSE } from "../../services/sse";
 import { useDebounce } from "../useDebounce";
 
-const LIMIT = 30;
+// En una pantalla ancha caben 8 columnas: con 30 la página no llenaba ni dos pantallas y
+// el scroll se detenía a esperar la siguiente a cada rato.
+const LIMIT = 60;
 
 // Cada cuánto se vuelve a pedir el stock por si el aviso en vivo no llegó.
 //
