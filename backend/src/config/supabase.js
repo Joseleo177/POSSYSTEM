@@ -7,10 +7,15 @@ const supabase = createClient(
 
 const BUCKET = "products";
 
+// Cada archivo lleva nombre único (product_<timestamp>) y nunca se reescribe con otro
+// contenido, así que el navegador puede guardarlo un año. Con la hora por defecto de Supabase
+// cada visita al catálogo revalidaba todas las fotos a la vez, y Storage respondía 429.
+const CACHE_CONTROL = "31536000";
+
 async function uploadImage(buffer, filename, mimetype) {
   const { error } = await supabase.storage
     .from(BUCKET)
-    .upload(filename, buffer, { contentType: mimetype, upsert: true });
+    .upload(filename, buffer, { contentType: mimetype, upsert: true, cacheControl: CACHE_CONTROL });
   if (error) throw error;
 
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(filename);
