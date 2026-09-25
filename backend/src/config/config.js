@@ -1,10 +1,13 @@
 require('dotenv').config();
 
+const isServerless = !!process.env.VERCEL || process.env.IS_SERVERLESS === 'true';
+
 const pool = {
-  max: 10,
-  min: 2,
-  acquire: 30000,
-  idle: 10000,
+  max: parseInt(process.env.DB_POOL_MAX || (isServerless ? '2' : '10'), 10),
+  min: parseInt(process.env.DB_POOL_MIN || (isServerless ? '0' : '2'), 10),
+  acquire: parseInt(process.env.DB_POOL_ACQUIRE || '30000', 10),
+  idle: parseInt(process.env.DB_POOL_IDLE || (isServerless ? '0' : '10000'), 10),
+  evict: isServerless ? 1000 : 10000,
 };
 
 // Zona horaria de operación. Sequelize emite SET TIME ZONE en cada conexión,
@@ -49,7 +52,13 @@ module.exports = {
     port: process.env.DB_PORT || 5432,
     dialect: 'postgres',
     logging: false,
-    pool: { max: 20, min: 5, acquire: 30000, idle: 10000 },
+    pool: {
+      max: parseInt(process.env.DB_POOL_MAX || (isServerless ? '2' : '20'), 10),
+      min: parseInt(process.env.DB_POOL_MIN || (isServerless ? '0' : '5'), 10),
+      acquire: parseInt(process.env.DB_POOL_ACQUIRE || '30000', 10),
+      idle: parseInt(process.env.DB_POOL_IDLE || (isServerless ? '0' : '10000'), 10),
+      evict: isServerless ? 1000 : 10000,
+    },
     dialectOptions: {
       ssl: {
         require: true,

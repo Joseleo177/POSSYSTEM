@@ -218,109 +218,86 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
   // porque un insumo se compra y se mueve igual que cualquier otro producto.
   if (sellable !== undefined) where.sellable = sellable === 'true' || sellable === true;
 
+  // Los filtros de almacén van como subconsultas EXISTS dentro de la misma consulta, en vez
+  // de traer antes todos los product_id a Node y devolverlos en un IN (...) gigante: con
+  // miles de fichas eso eran varias idas y vueltas por request y agotaba el pooler.
+  const andClauses = [];
+
   if (not_in_warehouse_id) {
-    const stocksInWarehouse = await ProductStock.findAll({
-      where: { warehouse_id: parseInt(not_in_warehouse_id) },
-      attributes: ['product_id'],
-    });
-    const associatedIds = stocksInWarehouse.map(s => s.product_id);
-    if (associatedIds.length > 0) {
-      where.id = { [Op.notIn]: associatedIds };
+    andClauses.push(Sequelize.literal(`NOT EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${parseInt(not_in_warehouse_id, 10)})`));
+  }
+
+  if (restrictToWarehouse) {
+    const wid = parseInt(warehouse_id, 10);
+    const fisico = `("Product"."is_combo" = false AND "Product"."is_service" = false)`;
+    // Un combo o servicio pertenece a la sucursal si tiene ficha en ella, o si no tiene
+    // ficha en ninguna (los globales, creados antes de que existieran por almacén).
+    const deLaSucursal = `(
+      EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${wid})
+      OR NOT EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id")
+    )`;
+    if (stock_filter === 'with') {
+      andClauses.push(Sequelize.literal(`(
+        (${fisico} AND EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${wid} AND ps.qty > 0))
+        OR (("Product"."is_combo" = true OR "Product"."is_service" = true) AND ${deLaSucursal})
+      )`));
+    } else if (stock_filter === 'no') {
+      // Los servicios no se agotan: nunca salen en "sin stock". El stock real de los combos
+      // se calcula después, sobre sus ingredientes.
+      andClauses.push(Sequelize.literal(`(
+        (${fisico} AND EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${wid} AND ps.qty <= 0))
+        OR ("Product"."is_combo" = true AND ${deLaSucursal})
+      )`));
+    } else {
+      andClauses.push(Sequelize.literal(`(
+        EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${wid})
+        OR (("Product"."is_service" = true OR "Product"."is_combo" = true) AND NOT EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id"))
+      )`));
+    }
+  } else if (stock_filter) {
+    if (stock_filter === 'with') {
+      andClauses.push({
+        [Op.or]: [
+          { is_combo: false, is_service: false, stock: { [Op.gt]: 0 } },
+          { is_combo: true },
+          { is_service: true },
+        ]
+      });
+    } else if (stock_filter === 'no') {
+      andClauses.push({
+        [Op.or]: [
+          { is_combo: false, is_service: false, stock: { [Op.lte]: 0 } },
+          { is_combo: true },
+        ]
+      });
     }
   }
 
-  if (restrictToWarehouse || stock_filter) {
-    let associatedIds = [];
-    let validPhysicalIds = [];
+  if (search?.trim()) {
+    const safe = search.slice(0, 100).replace(/[\x00-\x1f\\]/g, '');
+    const esc  = safe.replace(/'/g, "''");
+    andClauses.push({
+      [Op.or]: [
+        { name: { [Op.iLike]: `%${safe}%` } },
+        { barcode: { [Op.iLike]: `%${safe}%` } },
+        Sequelize.literal(`"Product"."category_id" IN (SELECT id FROM categories WHERE name ILIKE '%${esc}%')`),
+      ]
+    });
+  }
 
-    if (restrictToWarehouse) {
-      const stocksInWarehouse = await ProductStock.findAll({
-        where: { warehouse_id: parseInt(warehouse_id) },
-        attributes: ['product_id', 'qty'],
-      });
-
-      associatedIds = stocksInWarehouse.map(s => s.product_id);
-
-      if (stock_filter === 'with') {
-        validPhysicalIds = stocksInWarehouse.filter(s => parseFloat(s.qty) > 0).map(s => s.product_id);
-      } else if (stock_filter === 'no') {
-        validPhysicalIds = stocksInWarehouse.filter(s => parseFloat(s.qty) <= 0).map(s => s.product_id);
-      } else {
-        validPhysicalIds = associatedIds;
-      }
-    }
-
-    const orConditions = [];
-
-    if (restrictToWarehouse) {
-      // 1. Physical products that match the stock filter for this warehouse
-      if (validPhysicalIds.length > 0) {
-        orConditions.push({ is_combo: false, is_service: false, id: { [Op.in]: validPhysicalIds } });
-      }
-
-      // 2. Combos explicitly associated with this warehouse (qty doesn't matter, evaluated post-query)
-      if (associatedIds.length > 0) {
-        orConditions.push({ is_combo: true, id: { [Op.in]: associatedIds } });
-      }
-
-      // 3. Services explicitly associated with this warehouse
-      if (stock_filter !== 'no' && associatedIds.length > 0) {
-        orConditions.push({ is_service: true, id: { [Op.in]: associatedIds } });
-      }
-
-      // 4. Global Combos/Services (those created before this feature, with no ProductStock records anywhere)
-      const productsWithAnyStock = await ProductStock.findAll({ attributes: ['product_id'], group: ['product_id'] });
-      const idsWithAnyStock = productsWithAnyStock.map(s => s.product_id);
-      const notInIds = idsWithAnyStock.length ? idsWithAnyStock : [-1];
-
-      orConditions.push({ is_combo: true, id: { [Op.notIn]: notInIds } });
-      if (stock_filter !== 'no') {
-        orConditions.push({ is_service: true, id: { [Op.notIn]: notInIds } });
-      }
-
-      if (orConditions.length === 0) orConditions.push({ id: -1 });
-
-    } else {
-      if (stock_filter === 'with') {
-        orConditions.push({ is_combo: false, is_service: false, stock: { [Op.gt]: 0 } });
-        orConditions.push({ is_combo: true });
-        orConditions.push({ is_service: true });
-      } else if (stock_filter === 'no') {
-        orConditions.push({ is_combo: false, is_service: false, stock: { [Op.lte]: 0 } });
-        orConditions.push({ is_combo: true });
-      }
-    }
-
-    if (orConditions.length > 0) {
-      where[Op.or] = orConditions;
-    }
+  if (andClauses.length > 0) {
+    where[Op.and] = andClauses;
   }
 
   const include = [
     { model: Category, attributes: ['name'], required: false },
-    {
-      model: ProductComboItem,
-      as: 'comboItems',
-      include: [{
-        model: Product,
-        as: 'ingredient',
-        attributes: ['id', 'name', 'unit', 'price', 'cost_price', 'stock', 'is_service'],
-        include: warehouse_id ? [{
-          model: ProductStock,
-          as: 'stocks',
-          where: { warehouse_id: parseInt(warehouse_id) },
-          required: false,
-          attributes: ['qty']
-        }] : []
-      }]
-    }
   ];
 
   if (warehouse_id) {
     include.push({
       model: ProductStock,
       as: 'stocks',
-      where: { warehouse_id: parseInt(warehouse_id) },
+      where: { warehouse_id: parseInt(warehouse_id, 10) },
       required: false,
       // price, min_stock, cost_price y profit_margin salen de la misma fila: viendo un
       // almacén, lo que vale es lo que esa sucursal tenga definido.
@@ -328,33 +305,38 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
     });
   }
 
-  if (search) {
-    const categories = await Category.findAll({
-      where: { name: { [Op.iLike]: `%${search}%` } },
-      attributes: ['id']
-    });
-    const catIds = categories.map(c => c.id);
-    const searchOr = [
-      { name: { [Op.iLike]: `%${search}%` } },
-      { barcode: { [Op.iLike]: `%${search}%` } },
-      ...(catIds.length > 0 ? [{ category_id: { [Op.in]: catIds } }] : [])
-    ];
-    if (where[Op.or]) {
-      // Ya existe filtro de almacén/stock — combinar ambos con AND
-      where[Op.and] = [{ [Op.or]: where[Op.or] }, { [Op.or]: searchOr }];
-      delete where[Op.or];
-    } else {
-      where[Op.or] = searchOr;
-    }
-  }
-
   const { count, rows } = await Product.findAndCountAll({
-    where, include,
+    where,
+    include,
     order: [['name', 'ASC']],
-    limit: parseInt(limit),
-    offset: parseInt(offset),
+    limit: parseInt(limit, 10),
+    offset: parseInt(offset, 10),
     distinct: true,
   });
+
+  const comboIds = rows.filter(p => p.is_combo).map(p => p.id);
+  const comboItemsMap = {};
+  if (comboIds.length > 0) {
+    const comboData = await ProductComboItem.findAll({
+      where: { combo_id: { [Op.in]: comboIds } },
+      include: [{
+        model: Product,
+        as: 'ingredient',
+        attributes: ['id', 'name', 'unit', 'price', 'cost_price', 'stock', 'is_service'],
+        include: warehouse_id ? [{
+          model: ProductStock,
+          as: 'stocks',
+          where: { warehouse_id: parseInt(warehouse_id, 10) },
+          required: false,
+          attributes: ['qty']
+        }] : []
+      }]
+    });
+    comboData.forEach(row => {
+      if (!comboItemsMap[row.combo_id]) comboItemsMap[row.combo_id] = [];
+      comboItemsMap[row.combo_id].push(row);
+    });
+  }
 
   const data = rows.map(p => {
     const prod = p.toJSON();
@@ -410,6 +392,7 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
       prod.cost_own = false;
     }
     if (prod.is_combo) {
+      prod.comboItems = comboItemsMap[prod.id] || [];
       const stats = calculateComboStockAndCost(prod.comboItems, prod.unit);
       prod.stock = stats.stock;
       prod.cost_price = stats.cost;
@@ -427,7 +410,7 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
   }
   const adjustedTotal = count - (data.length - finalData.length);
 
-  return { data: finalData, total: adjustedTotal, limit: parseInt(limit), offset: parseInt(offset) };
+  return { data: finalData, total: adjustedTotal, limit: parseInt(limit, 10), offset: parseInt(offset, 10) };
 }
 
 async function getOne(id, company_id) {

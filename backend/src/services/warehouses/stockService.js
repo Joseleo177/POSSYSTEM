@@ -203,23 +203,17 @@ async function getProducts(req) {
       COALESCE(ps.min_stock, p.min_stock) AS min_stock,
       (ps.min_stock IS NOT NULL) AS min_stock_own,
       c.name AS category_name, c.id AS category_id,
-      ps.qty,
-      COALESCE(si_agg.total_sold, 0) AS total_sold
+      ps.qty
     FROM products p
     LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = :wid
     LEFT JOIN categories c ON c.id = p.category_id
-    LEFT JOIN (
-      SELECT product_id, SUM(quantity) AS total_sold
-      FROM sale_items
-      GROUP BY product_id
-    ) si_agg ON si_agg.product_id = p.id
     WHERE (
       ps.product_id IS NOT NULL 
       OR 
       ( (p.is_service = true OR p.is_combo = true) AND NOT EXISTS (SELECT 1 FROM product_stock WHERE product_id = p.id) )
     ) ${tcp}
     ${whereExtra}
-    ORDER BY total_sold DESC, p.name ASC
+    ORDER BY p.name ASC
     LIMIT :limit OFFSET :offset
   `, { replacements, type: Sequelize.QueryTypes.SELECT });
 
@@ -301,7 +295,7 @@ async function getProducts(req) {
     stock:        p.is_combo
       ? (ingredientStockMap[p.id] === Infinity ? null : floorToUnit(ingredientStockMap[p.id] ?? 0, p.unit))
       : (parseFloat(p.qty) || 0),
-    sales:        parseFloat(p.total_sold),
+    sales:        parseFloat(p.total_sold || 0),
     category_name: p.category_name,
     category_id:  p.category_id,
     is_combo:     p.is_combo,
