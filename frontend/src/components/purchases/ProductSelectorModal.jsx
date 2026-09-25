@@ -482,9 +482,14 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 de "Cant. a Pedir", que no decía de qué y se leía igual pidiendo
                                 una caja que una unidad. El "×" tampoco ayudaba: se lee como una
                                 multiplicación cuando lo que dice es "cuántas trae cada uno". */}
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Presentación</label>
+                            {/* En móvil cada una de 3 columnas medía ~100 px: los rótulos largos
+                                ("Sin presentación", "Cant. de unidades") partían en dos líneas y
+                                el corto no, así que los campos quedaban a alturas distintas. Ahí
+                                la presentación va sola arriba; y en cualquier ancho los campos se
+                                alinean abajo, para que un rótulo de dos líneas no los desfase. */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                <div className="col-span-2 sm:col-span-1 flex flex-col justify-end gap-1.5">
+                                    <label className="text-[10px] font-black uppercase tracking-widest leading-tight text-content-subtle dark:text-white/30">Presentación</label>
                                     <CustomSelect
                                         value={form.package_unit}
                                         onChange={val => setF("package_unit", val)}
@@ -497,8 +502,8 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                         height="h-9"
                                     />
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
+                                <div className="flex flex-col justify-end gap-1.5">
+                                    <label className="text-[10px] font-black uppercase tracking-widest leading-tight text-content-subtle dark:text-white/30">
                                         {/* Comprando suelto no hay envase del que hablar, y el
                                             campo va deshabilitado en 1: el rótulo lo explica. */}
                                         {esSuelto ? "Sin presentación" : `${selected?.unit || "Unidad"} por ${pkgSingular}`}
@@ -511,8 +516,8 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                         className={`input h-9 text-center font-black tabular-nums ${esSuelto ? "opacity-30 cursor-not-allowed" : ""}`}
                                     />
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
+                                <div className="flex flex-col justify-end gap-1.5">
+                                    <label className="text-[10px] font-black uppercase tracking-widest leading-tight text-content-subtle dark:text-white/30">
                                         Cant. de {pkgPlural}
                                     </label>
                                     <input
