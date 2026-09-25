@@ -203,17 +203,27 @@ async function getProducts(req) {
       COALESCE(ps.min_stock, p.min_stock) AS min_stock,
       (ps.min_stock IS NOT NULL) AS min_stock_own,
       c.name AS category_name, c.id AS category_id,
-      ps.qty
+      ps.qty,
+      COALESCE(si_agg.total_sold, 0) AS total_sold
     FROM products p
     LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = :wid
     LEFT JOIN categories c ON c.id = p.category_id
+    -- Lo más vendido primero, contado en ESTA sucursal. Antes se sumaba sale_items entero
+    -- —todas las empresas— en cada página; acotado a las ventas del almacén son unas pocas
+    -- miles de filas por índice (sales.warehouse_id, sale_items.sale_id).
+    LEFT JOIN (
+      SELECT si.product_id, SUM(si.quantity) AS total_sold
+      FROM sale_items si
+      JOIN sales s ON s.id = si.sale_id AND s.warehouse_id = :wid
+      GROUP BY si.product_id
+    ) si_agg ON si_agg.product_id = p.id
     WHERE (
-      ps.product_id IS NOT NULL 
-      OR 
+      ps.product_id IS NOT NULL
+      OR
       ( (p.is_service = true OR p.is_combo = true) AND NOT EXISTS (SELECT 1 FROM product_stock WHERE product_id = p.id) )
     ) ${tcp}
     ${whereExtra}
-    ORDER BY p.name ASC
+    ORDER BY total_sold DESC, p.name ASC
     LIMIT :limit OFFSET :offset
   `, { replacements, type: Sequelize.QueryTypes.SELECT });
 
