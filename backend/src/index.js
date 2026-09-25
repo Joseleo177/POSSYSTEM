@@ -26,6 +26,10 @@ const corsOptions = {
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
   allowedHeaders: ["Content-Type", "Authorization"],
+  // Sin esto el navegador guarda la respuesta del preflight solo 5 s, así que casi cada
+  // fetch iba precedido de un OPTIONS: el doble de invocaciones en Vercel y ~150 ms más por
+  // consulta. Chrome no respeta más de 2 h; Firefox acepta hasta 24 h.
+  maxAge: 7200,
 };
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
