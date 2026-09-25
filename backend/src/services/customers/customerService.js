@@ -96,13 +96,12 @@ async function getAll({ search, type, debtors, limit = 100, offset = 0, warehous
         )`), "total_debt"],
       ]
     },
-    include: [{ model: Sale, attributes: [] }],
-    group:    ['Customer.id'],
+    // Sin JOIN a sales: todas las cifras salen de las subconsultas de arriba. El join no
+    // aportaba ninguna columna y traía una fila por venta —miles para "Cliente General"—
+    // solo para volver a agruparlas; fue de las consultas que colgaron la base.
     order:    [['name', 'ASC']],
     limit:    parseInt(limit),
     offset:   parseInt(offset),
-    subQuery: false,
-    distinct: true,
     raw:      true,
   });
 
@@ -154,8 +153,7 @@ async function getOne(id, req, { warehouse_id } = {}) {
         )`), "total_debt"],
       ]
     },
-    include: [{ model: Sale, attributes: [] }],
-    group: ['Customer.id'],
+    // Sin JOIN a sales, igual que en getAll: las cifras salen de las subconsultas.
     raw:   true,
   });
 
