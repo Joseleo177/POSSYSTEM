@@ -115,9 +115,10 @@ async function request(path, options = {}) {
 
 // Campos de texto que SÍ viajan vacíos. Para el resto, una cadena vacía significa "no lo
 // mandes" y el servidor conserva lo que tenía —así una edición parcial no borra medio
-// producto—, pero en estos dos vaciar la caja es justamente cómo se quita el texto de la
-// vitrina, y sin esto no habría manera de borrarlos desde el modal.
-const CAMPOS_VACIABLES = ["brand", "short_description", "description", "benefits"];
+// producto—, pero en estos vaciar la caja es justamente cómo se quita el dato, y sin esto no
+// habría manera de borrarlo desde el modal. El código de barras va aquí porque uno mal
+// cargado (o repetido) tiene que poder quitarse: el servidor guarda el vacío como NULL.
+const CAMPOS_VACIABLES = ["brand", "short_description", "description", "benefits", "barcode"];
 
 function buildProductForm(body, imageFile, removeImage) {
   const fd = new FormData();
