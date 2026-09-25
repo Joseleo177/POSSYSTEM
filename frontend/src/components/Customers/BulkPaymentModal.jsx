@@ -6,6 +6,7 @@ import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import { fmtBase, todayISO, saleTotalAtRate, journalsForSales } from "../../helpers";
 import RateField, { resolveRate } from "../ui/RateField";
+import { Spinner } from "../ui/Spinner";
 
 /**
  * Cobro de varias facturas del mismo cliente con un solo monto.
@@ -687,7 +688,8 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
           Cancelar
         </button>
         <button onClick={submit} disabled={!canSubmit}
-          className="flex-[2] h-10 rounded-xl bg-success text-black text-[11px] font-black uppercase tracking-wide transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed">
+          className="flex-[2] h-10 rounded-xl bg-success text-black text-[11px] font-black uppercase tracking-wide transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+          {loading && <Spinner />}
           {loading ? "Registrando..." : "Confirmar cobro"}
         </button>
       </div>

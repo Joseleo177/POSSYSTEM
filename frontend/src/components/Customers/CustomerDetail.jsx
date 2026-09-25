@@ -10,6 +10,7 @@ import CustomSelect from "../ui/CustomSelect";
 import Modal from "../ui/Modal";
 import Pagination from "../ui/Pagination";
 import { api } from "../../services/api";
+import { Spinner } from "../ui/Spinner";
 
 // Debe coincidir con LIMIT del hook useCustomers (tamaño de página del historial)
 const PAID_LIMIT = 50;
@@ -581,7 +582,8 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                     <button
                         onClick={handleRefund}
                         disabled={refunding || sinCreditoAqui || !refundForm.amount || !refundForm.journal_id || !refundForm.reference_date || (warehouses.length > 1 && !refundForm.warehouse_id)}
-                        className="flex-[2] h-10 rounded-xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-wide hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                        className="flex-[2] h-10 rounded-xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-wide hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
+                        {refunding && <Spinner />}
                         {refunding ? "Registrando…" : "Confirmar devolución"}
                     </button>
                 </div>

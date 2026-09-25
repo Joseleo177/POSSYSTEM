@@ -1,4 +1,5 @@
 import CustomSelect from "../ui/CustomSelect";
+import { Spinner } from "../ui/Spinner";
 import { LABEL_ELEMENTS, LABEL_ZONES, LABEL_ALIGNS } from "./labelTemplate";
 
 const ZONE_OPTIONS = LABEL_ZONES.map(z => ({ value: z.id, label: z.label }));
@@ -235,8 +236,9 @@ export default function LabelDesignerPanel({
                         <button
                             onClick={onSave}
                             disabled={saving}
-                            className="flex-1 h-9 rounded-lg bg-brand-500 text-black text-[10px] font-black uppercase disabled:opacity-60 active:scale-95 transition-all"
+                            className="flex-1 h-9 rounded-lg bg-brand-500 text-black text-[10px] font-black uppercase disabled:opacity-60 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
+                            {saving && <Spinner className="h-3.5 w-3.5" />}
                             {saving ? "Guardando..." : "Guardar plantilla"}
                         </button>
                     )}

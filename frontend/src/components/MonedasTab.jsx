@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "../services/api";
 import Page from "./ui/Page";
 import Modal from "./ui/Modal";
 import ConfirmModal from "./ui/ConfirmModal";
+import { Spinner } from "./ui/Spinner";
 import { useApp } from "../context/AppContext";
 
 // Antes vivía como una pestaña más de Configuración Global. Se separó a su propio módulo
@@ -55,7 +56,14 @@ export default function MonedasTab({ notify }) {
         finally { setRefreshing(false); }
     };
 
+    // Sin este candado, un doble clic (o Enter seguido del clic) daba de alta la misma
+    // divisa dos veces.
+    const [addingCurrency, setAddingCurrency] = useState(false);
+    const addingRef = useRef(false);
     const addCurrency = async () => {
+        if (addingRef.current) return;
+        addingRef.current = true;
+        setAddingCurrency(true);
         try {
             await api.currencies.create({ ...newCurrency, exchange_rate: parseFloat(newCurrency.exchange_rate) });
             notify("Moneda agregada correctamente");
@@ -64,6 +72,7 @@ export default function MonedasTab({ notify }) {
             await load();
             loadCurrencies();
         } catch (e) { notify(e.message, "err"); }
+        finally { addingRef.current = false; setAddingCurrency(false); }
     };
 
     const removeCurrency = async () => {
@@ -201,9 +210,11 @@ export default function MonedasTab({ notify }) {
                             ))}
                             <button
                                 onClick={addCurrency}
-                                className="w-full h-10 bg-warning text-black font-black uppercase text-[10px] tracking-widest rounded-xl hover:shadow-lg hover:shadow-warning/20 transition-all active:scale-95"
+                                disabled={addingCurrency}
+                                className="w-full h-10 bg-warning text-black font-black uppercase text-[10px] tracking-widest rounded-xl hover:shadow-lg hover:shadow-warning/20 transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
                             >
-                                Agregar Divisa
+                                {addingCurrency && <Spinner />}
+                                {addingCurrency ? "Agregando..." : "Agregar Divisa"}
                             </button>
                         </div>
                     </Modal>

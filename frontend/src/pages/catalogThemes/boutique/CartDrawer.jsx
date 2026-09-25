@@ -1,6 +1,7 @@
 import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
 import { isIntegerUnit, fmtQtyUnit } from "../../../helpers/unitFormatter";
 import { freeUnitsFor, lineTotalFor } from "../../../helpers/promo";
+import { Spinner } from "../../../components/ui/Spinner";
 
 // Carrito lateral de la vitrina de marca.
 //
@@ -231,8 +232,9 @@ export default function CartDrawer({
                                 <button
                                     onClick={onSubmit}
                                     disabled={!canSubmit || sending}
-                                    className="w-full h-12 rounded-full bg-brand-500 text-white text-[11px] font-bold uppercase tracking-widest flex items-center justify-center active:scale-[0.99] transition-transform disabled:opacity-40"
+                                    className="w-full h-12 rounded-full bg-brand-500 text-white text-[11px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 active:scale-[0.99] transition-transform disabled:opacity-40"
                                 >
+                                    {sending && <Spinner />}
                                     {sending ? "Enviando..." : "Enviar pedido"}
                                 </button>
 

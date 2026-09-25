@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Spinner } from "../ui/Spinner";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import Modal from "../ui/Modal";
@@ -251,7 +252,8 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
           Cancelar
         </button>
         <button onClick={submit} disabled={!canSubmit}
-          className="flex-[2] h-10 rounded-xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-wide transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed">
+          className="flex-[2] h-10 rounded-xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-wide transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+          {loading && <Spinner />}
           {loading ? "Registrando..." : "Confirmar pago"}
         </button>
       </div>

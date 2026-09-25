@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Spinner } from "../ui/Spinner";
 import PurchaseItemsTable from "./PurchaseItemsTable";
 import PurchasePaymentModal from "./PurchasePaymentModal";
 import ProductSelectorModal from "./ProductSelectorModal";
@@ -426,12 +427,12 @@ export default function PurchaseDetails({ state }) {
                 <p className={`${LABEL} mb-1.5 text-center`}>Acciones</p>
                 <div className="flex items-center justify-center gap-2">
                   <button onClick={handleReceivePendiente} disabled={loading}
-                    className="h-7 px-3 rounded-lg bg-success/10 text-success border border-success/20 text-[10px] font-black uppercase tracking-wide hover:bg-success hover:text-black transition-all active:scale-95 disabled:opacity-50">
-                    {loading ? "..." : "Recibir Mercancía ✓"}
+                    className="h-7 px-3 rounded-lg bg-success/10 text-success border border-success/20 text-[10px] font-black uppercase tracking-wide hover:bg-success hover:text-black transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5">
+                    {loading ? <><Spinner className="h-3 w-3" />Procesando</> : "Recibir Mercancía ✓"}
                   </button>
                   <button onClick={() => confirmOrder?.(detail.id)} disabled={loading}
-                    className="h-7 px-3 rounded-lg bg-warning/10 text-warning border border-warning/20 text-[10px] font-black uppercase tracking-wide hover:bg-warning hover:text-black transition-all active:scale-95 disabled:opacity-50">
-                    {loading ? "..." : "Confirmar Orden →"}
+                    className="h-7 px-3 rounded-lg bg-warning/10 text-warning border border-warning/20 text-[10px] font-black uppercase tracking-wide hover:bg-warning hover:text-black transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5">
+                    {loading ? <><Spinner className="h-3 w-3" />Procesando</> : "Confirmar Orden →"}
                   </button>
                 </div>
               </div>
@@ -447,8 +448,8 @@ export default function PurchaseDetails({ state }) {
                 <div>
                   <p className={`${LABEL} mb-1.5`}>Acción</p>
                   <button onClick={handleReceivePendiente} disabled={loading}
-                    className="h-7 px-3 rounded-lg bg-success/10 text-success border border-success/20 text-[10px] font-black uppercase tracking-wide hover:bg-success hover:text-black transition-all active:scale-95 disabled:opacity-50">
-                    {loading ? "..." : "Recibir Mercancía ✓"}
+                    className="h-7 px-3 rounded-lg bg-success/10 text-success border border-success/20 text-[10px] font-black uppercase tracking-wide hover:bg-success hover:text-black transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5">
+                    {loading ? <><Spinner className="h-3 w-3" />Procesando</> : "Recibir Mercancía ✓"}
                   </button>
                 </div>
               </>

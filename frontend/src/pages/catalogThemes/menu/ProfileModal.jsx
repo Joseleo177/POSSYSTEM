@@ -5,6 +5,9 @@
 // y en el lenguaje de CartDrawer/ProductAddModal (píldoras rounded-full, brand-500 para
 // acentos, neutral-900/500/400 para texto), así que la ficha compartida se veía como una
 // ventana de otra app encima del menú — "sigue igual de generico" fue el reporte exacto.
+import { useAsyncAction } from "../../../hooks/useAsyncAction";
+import { Spinner } from "../../../components/ui/Spinner";
+
 const PANEL_POR_DEFECTO = "#F4FAF6";
 
 export default function ProfileModal({
@@ -14,6 +17,7 @@ export default function ProfileModal({
     onSave, onForget, onOpenMyOrders,
     panelColor,
 }) {
+    const [save, saving] = useAsyncAction(onSave);
     if (!open || !identity) return null;
 
     return (
@@ -121,10 +125,12 @@ export default function ProfileModal({
                                     Cancelar
                                 </button>
                                 <button
-                                    onClick={onSave}
-                                    className="flex-1 h-12 rounded-full bg-brand-500 text-white text-[11px] font-black uppercase tracking-widest hover:brightness-110 active:scale-[0.99] transition-all"
+                                    onClick={() => save()}
+                                    disabled={saving}
+                                    className="flex-1 h-12 rounded-full bg-brand-500 text-white text-[11px] font-black uppercase tracking-widest hover:brightness-110 active:scale-[0.99] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
                                 >
-                                    Guardar cambios
+                                    {saving && <Spinner />}
+                                    {saving ? "Guardando..." : "Guardar cambios"}
                                 </button>
                             </div>
                         </div>

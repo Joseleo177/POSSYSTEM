@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Spinner } from "./ui/Spinner";
 import DatePicker from "./ui/DatePicker";
 import JournalPickerButton from "./cobro/JournalPickerButton";
 import { api } from "../services/api";
@@ -773,16 +774,18 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                         </button>
                         {mode === "devolucion" ? (
                             <button onClick={handleSubmit} disabled={loading || totalReturn === 0}
-                                className={["h-8 px-4 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all",
+                                className={["h-8 px-4 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all flex items-center gap-2",
                                     loading || totalReturn === 0 ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed" : "bg-warning text-black hover:brightness-110 shadow-lg shadow-warning/20"
                                 ].join(" ")}>
+                                {loading && <Spinner className="h-3.5 w-3.5" />}
                                 {loading ? "Procesando…" : "Confirmar Devolución"}
                             </button>
                         ) : (
                             <button onClick={handleExchangeSubmit} disabled={loading || totalReturn === 0 || replacementItems.length === 0}
-                                className={["h-8 px-4 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all",
+                                className={["h-8 px-4 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all flex items-center gap-2",
                                     loading || totalReturn === 0 || replacementItems.length === 0 ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed" : "bg-brand-500 text-black hover:brightness-110 shadow-lg shadow-brand-500/20"
                                 ].join(" ")}>
+                                {loading && <Spinner className="h-3.5 w-3.5" />}
                                 {loading ? "Procesando…" : "Confirmar Cambio"}
                             </button>
                         )}

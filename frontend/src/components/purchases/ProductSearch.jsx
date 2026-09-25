@@ -1,4 +1,5 @@
 import DatePicker from "../ui/DatePicker";
+import { Spinner } from "../ui/Spinner";
 import CustomSelect from "../ui/CustomSelect";
 import { PKG_UNITS } from "../../constants/pkg";
 
@@ -355,6 +356,7 @@ export default function ProductSearch({ state }) {
                                 : "bg-brand-500 text-black hover:scale-[1.02] hover:brightness-110 shadow-brand-500/20"
                                 }`}
                         >
+                            {loading && <Spinner />}
                             <span className="text-[11px] font-black uppercase tracking-widest">
                                 {loading ? "Procesando Almacen..." : !selectedWarehouseId ? "Esperando Almacén" : "Finalizar y Cargar Stock"}
                             </span>

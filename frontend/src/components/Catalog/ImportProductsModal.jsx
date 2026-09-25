@@ -3,6 +3,7 @@ import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { descargarPlantilla, leerArchivo } from "../../helpers/productImport";
 import { api } from "../../services/api";
+import { Spinner } from "../ui/Spinner";
 
 // Importación de productos desde Excel, en tres pasos: descargar la plantilla, elegir el
 // archivo y revisar lo que va a pasar antes de confirmar.
@@ -244,6 +245,7 @@ export default function ImportProductsModal({ open, onClose, warehouseName, ware
                         disabled={!hayAlgo || importando || leyendo}
                         className="w-full h-11 bg-brand-500 text-black rounded-lg font-black text-[11px] uppercase tracking-wider shadow-md shadow-brand-500/10 active:scale-98 transition-all flex items-center justify-center gap-2 hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
+                        {importando && <Spinner />}
                         {importando
                             ? "Importando…"
                             : hayAlgo

@@ -53,9 +53,10 @@ export default function TransferReceiveModal({ open, transfer, onClose, onConfir
     const receiveAll = () =>
         setLines(prev => prev.map(l => ({ ...l, qty_received: String(l.qty_sent), diff_reason: "" })));
 
+    // Devuelve la promesa para que el botón muestre el spinner mientras se recibe.
     const confirm = () => {
         if (invalid) return;
-        onConfirm(transfer.id, parsed.map(l => ({
+        return onConfirm(transfer.id, parsed.map(l => ({
             id: l.id,
             qty_received: l.received,
             diff_reason: l.missing > 0 ? l.diff_reason : null,

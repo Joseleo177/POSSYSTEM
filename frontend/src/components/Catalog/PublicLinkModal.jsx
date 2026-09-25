@@ -3,6 +3,7 @@ import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
+import { Spinner } from "../ui/Spinner";
 
 // Genera, muestra y desactiva el enlace público del catálogo. Vive en `settings`, clave
 // public_catalog_slug.
@@ -150,8 +151,9 @@ export default function PublicLinkModal({ open, onClose }) {
                                 <button
                                     onClick={generate}
                                     disabled={working}
-                                    className="h-8 px-3 rounded-lg bg-warning text-black text-[10px] font-black uppercase tracking-wide disabled:opacity-50"
+                                    className="h-8 px-3 rounded-lg bg-warning text-black text-[10px] font-black uppercase tracking-wide disabled:opacity-50 flex items-center gap-2"
                                 >
+                                    {working && <Spinner className="h-3.5 w-3.5" />}
                                     Actualizar enlace
                                 </button>
                             </div>

@@ -1,12 +1,16 @@
 // Ficha del cliente identificado: ver y editar nombre y teléfono, o salir de la sesión para
 // que el catálogo vuelva a pedir el documento. El documento no se edita — es la llave con la
 // que la tienda encuentra al cliente y sus pedidos.
+import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { Spinner } from "../ui/Spinner";
+
 export default function ProfileModal({
     identity, open, onClose,
     editing, setEditing,
     editName, setEditName, editPhone, setEditPhone,
     onSave, onForget, onOpenMyOrders,
 }) {
+    const [save, saving] = useAsyncAction(onSave);
     if (!open || !identity) return null;
 
     return (
@@ -109,10 +113,12 @@ export default function ProfileModal({
                                             Cancelar
                                         </button>
                                         <button
-                                            onClick={onSave}
-                                            className="flex-1 h-11 rounded-2xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all"
+                                            onClick={() => save()}
+                                            disabled={saving}
+                                            className="flex-1 h-11 rounded-2xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-widest hover:bg-brand-400 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
                                         >
-                                            Guardar cambios
+                                            {saving && <Spinner />}
+                                            {saving ? "Guardando..." : "Guardar cambios"}
                                         </button>
                                     </div>
                                 </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { Spinner } from "../ui/Spinner";
 import { api } from "../../services/api";
 import CustomSelect from "../ui/CustomSelect";
 import { useDebounce } from "../../hooks/useDebounce";
@@ -712,7 +713,8 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                 </div>
 
                                 <button onClick={handleSave} disabled={saving || !selectedProduct}
-                                    className={`w-full h-11 rounded-xl font-black uppercase tracking-widest text-[11px] transition-all ${saving || !selectedProduct ? "bg-surface-3 dark:bg-white/5 text-content-subtle cursor-not-allowed" : form.type === "out" ? "bg-danger text-white hover:brightness-110 shadow-lg shadow-danger/20" : "bg-success text-black hover:brightness-110 shadow-lg shadow-success/20"}`}>
+                                    className={`w-full h-11 rounded-xl font-black uppercase tracking-widest text-[11px] transition-all flex items-center justify-center gap-2 ${saving || !selectedProduct ? "bg-surface-3 dark:bg-white/5 text-content-subtle cursor-not-allowed" : form.type === "out" ? "bg-danger text-white hover:brightness-110 shadow-lg shadow-danger/20" : "bg-success text-black hover:brightness-110 shadow-lg shadow-success/20"}`}>
+                                    {saving && <Spinner />}
                                     {saving ? "Registrando..." : "Registrar Movimiento"}
                                 </button>
                             </div>

@@ -1,4 +1,5 @@
 import { fmt2 } from "../../utils/purchaseUtils";
+import { Spinner } from "../ui/Spinner";
 
 export default function PurchaseItemsList({ state }) {
     const {
@@ -121,11 +122,12 @@ export default function PurchaseItemsList({ state }) {
                 <button
                     onClick={savePurchase}
                     disabled={loading || !selectedWarehouseId}
-                    className={`btn-md ${loading || !selectedWarehouseId
+                    className={`btn-md flex items-center justify-center gap-2 ${loading || !selectedWarehouseId
                         ? "btn-secondary opacity-60 cursor-not-allowed"
                         : "btn-primary"
                         }`}
                 >
+                    {loading && <Spinner />}
                     {loading
                         ? "Guardando..."
                         : !selectedWarehouseId

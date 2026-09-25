@@ -58,9 +58,11 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
   const maxRifLen = isRif ? 9 : 8;
   const canSave = !!form.name.trim();
 
+  // Devuelve la promesa del guardado: con ella el botón se bloquea y muestra el spinner
+  // hasta que el servidor responde (ver ui/Button).
   const handleSave = () => {
     if (!canSave) return;
-    onSave({
+    return onSave({
       ...form,
       name: (form.name || "").trim(),
       phone: (form.phone || "").trim(),
