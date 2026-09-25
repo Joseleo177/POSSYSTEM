@@ -74,7 +74,12 @@ module.exports = async function getAllSales(query, tenant = {}) {
 
   const where = andClauses.length ? { [Op.and]: andClauses } : {};
 
-  const { count, rows: sales } = await Sale.findAndCountAll({
+  // `summary=0` lo pide el listado de cuentas en espera, que cada caja consulta cada 25 s y
+  // solo usa las filas. El conteo y los totales del pie son dos consultas más por vuelta
+  // —el count(DISTINCT) llegó a ser la consulta más llamada de la base— sin que nadie las lea.
+  const conResumen = query.summary !== '0';
+
+  const { count, rows: sales } = await Sale[conResumen ? 'findAndCountAll' : 'findAll']({
     where,
     limit: parseInt(limit, 10),
     offset: parseInt(offset, 10),
@@ -98,7 +103,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
       { model: SaleItem, required: true },
     ],
     distinct: true,
-  });
+  }).then(r => (conResumen ? r : { count: r.length, rows: r }));
 
   const data = sales.map((s) => {
     const item = s.toJSON();
@@ -135,6 +140,8 @@ module.exports = async function getAllSales(query, tenant = {}) {
   // Sin JOIN a sale_items: ese join devuelve una fila por ítem y multiplicaría cada total por
   // la cantidad de líneas de su venta. El EXISTS replica el `required: true` del listado
   // —descartar ventas sin ítems— sin duplicar ninguna fila.
+  if (!conResumen) return { data, total: count };
+
   const [totals] = await Sale.findAll({
     where: {
       [Op.and]: [

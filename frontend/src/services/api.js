@@ -255,6 +255,8 @@ export const api = {
       const sp = new URLSearchParams(params);
       ["espera", "pedido"].forEach(s => sp.append("status", s));
       sp.set("limit", "100");
+      // Solo se usan las filas: sin conteo ni totales del pie (ver getAllSales.js).
+      sp.set("summary", "0");
       return request("/sales?" + sp);
     },
     // Acepta un pedido web: descuenta stock del almacén indicado y lo pasa a 'espera'
