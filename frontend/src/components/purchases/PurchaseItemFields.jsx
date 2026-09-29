@@ -1,7 +1,7 @@
 import CustomSelect from "../ui/CustomSelect";
 
 // Helper for currency formatting
-const fmt2 = (num) => Number(num || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt2 = (num) => Number(num || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
 export default function PurchaseItemFields({ state }) {
     const {
@@ -18,7 +18,7 @@ export default function PurchaseItemFields({ state }) {
             {/* FILA 1: Logística de Empaque */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle px-1">Empaque</label>
+                    <label className="text-[11px] font-semibold text-content-subtle px-1">Empaque</label>
                     <CustomSelect
                         value={itemForm.package_unit || ""}
                         onChange={(val) => setIF("package_unit", val)}
@@ -29,7 +29,7 @@ export default function PurchaseItemFields({ state }) {
                 </div>
 
                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle px-1">Unidades x Empaque</label>
+                    <label className="text-[11px] font-semibold text-content-subtle px-1">Unidades x empaque</label>
                     <input
                         type="number"
                         min="1"
@@ -47,19 +47,19 @@ export default function PurchaseItemFields({ state }) {
                 </div>
 
                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle px-1">Cant. Empaques</label>
+                    <label className="text-[11px] font-semibold text-content-subtle px-1">Cant. Empaques</label>
                     <input
                         type="number"
                         min="1"
                         step="1"
                         value={itemForm.package_qty}
                         onChange={(e) => setIF("package_qty", e.target.value)}
-                        className="input h-10 tabular-nums font-bold text-brand-500"
+                        className="input h-10 tabular-nums text-brand-500"
                     />
                 </div>
 
                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle px-1">Costo x Empaque ($)</label>
+                    <label className="text-[11px] font-semibold text-content-subtle px-1">Costo x Empaque ($)</label>
                     <input
                         type="number"
                         min="0.01"
@@ -75,7 +75,7 @@ export default function PurchaseItemFields({ state }) {
             {/* FILA 2: Proyecciones y Márgenes */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle px-1">Margen Sugerido (%)</label>
+                    <label className="text-[11px] font-semibold text-content-subtle px-1">Margen Sugerido (%)</label>
                     <div className="relative group">
                         <input
                             type="number"
@@ -83,39 +83,39 @@ export default function PurchaseItemFields({ state }) {
                             step="0.1"
                             value={itemForm.profit_margin}
                             onChange={(e) => setIF("profit_margin", e.target.value)}
-                            className="input h-10 pr-8 tabular-nums font-bold"
+                            className="input h-10 pr-8 tabular-nums"
                         />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-content-subtle">%</span>
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-content-subtle">%</span>
                     </div>
                 </div>
 
                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle px-1">Costo Unitario</label>
+                    <label className="text-[11px] font-semibold text-content-subtle px-1">Costo unitario</label>
                     <div className="card-premium h-10 flex flex-col justify-center px-4 bg-brand-500/[0.02] border-brand-500/10 rounded-lg">
-                        <div className="text-xs font-bold text-brand-500 tabular-nums">
+                        <div className="text-xs font-semibold text-brand-500 tabular-nums">
                             {calc.unit_cost ? `Ref. ${fmt2(calc.unit_cost)}` : "Ref. 0"}
                         </div>
-                        <div className="text-[8px] uppercase tracking-tighter opacity-40 font-bold">Cálculo Proyectado</div>
+                        <div className="text-[9px] uppercase tracking-tighter opacity-40 font-semibold">Cálculo proyectado</div>
                     </div>
                 </div>
 
                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle px-1">Precio de Venta</label>
+                    <label className="text-[11px] font-semibold text-content-subtle px-1">Precio de venta</label>
                     <div className="card-premium h-10 flex flex-col justify-center px-4 bg-success/5 border-success/10">
-                        <div className="text-xs font-bold text-success tabular-nums">
+                        <div className="text-xs font-semibold text-success tabular-nums">
                             {calc.sale_price ? `Ref. ${fmt2(calc.sale_price)}` : "Ref. 0"}
                         </div>
-                        <div className="text-[8px] uppercase tracking-tighter opacity-40 font-bold text-success">Sincronización Activa</div>
+                        <div className="text-[9px] uppercase tracking-tighter opacity-40 font-semibold text-success">Sincronización activa</div>
                     </div>
                 </div>
 
                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle px-1">Total Unidades</label>
+                    <label className="text-[11px] font-semibold text-content-subtle px-1">Total unidades</label>
                     <div className="card-premium h-10 flex flex-col justify-center px-4 bg-warning/5 border-warning/10">
-                        <div className="text-xs font-bold text-warning tabular-nums">
-                            {calc.total_units || 0} <span className="text-[9px] opacity-60">UDS</span>
+                        <div className="text-xs font-semibold text-warning tabular-nums">
+                            {calc.total_units || 0} <span className="text-[10px] opacity-60">Uds</span>
                         </div>
-                        <div className="text-[8px] uppercase tracking-tighter opacity-40 font-bold text-warning">Ingreso al Stock</div>
+                        <div className="text-[9px] uppercase tracking-tighter opacity-40 font-semibold text-warning">Ingreso al stock</div>
                     </div>
                 </div>
             </div>
@@ -123,7 +123,7 @@ export default function PurchaseItemFields({ state }) {
             {/* FILA 3: Lote y Vencimiento */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle px-1">N° de Lote <span className="normal-case opacity-60">(opcional)</span></label>
+                    <label className="text-[11px] font-semibold text-content-subtle px-1">N° de Lote <span className="normal-case opacity-60">(opcional)</span></label>
                     <input
                         type="text"
                         value={itemForm.lot_number || ""}
@@ -133,7 +133,7 @@ export default function PurchaseItemFields({ state }) {
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle px-1">Fecha de Vencimiento <span className="normal-case opacity-60">(opcional)</span></label>
+                    <label className="text-[11px] font-semibold text-content-subtle px-1">Fecha de vencimiento <span className="normal-case opacity-60">(opcional)</span></label>
                     <input
                         type="date"
                         value={itemForm.expiration_date || ""}
@@ -159,7 +159,7 @@ export default function PurchaseItemFields({ state }) {
                             </svg>
                         </div>
                     </div>
-                    <span className="text-[11px] font-bold text-content-subtle uppercase tracking-tight group-hover:text-brand-500 transition-colors">
+                    <span className="text-[12px] font-semibold text-content-subtle tracking-tight group-hover:text-brand-500 transition-colors">
                         Sincronizar precio en catálogo
                     </span>
                 </label>

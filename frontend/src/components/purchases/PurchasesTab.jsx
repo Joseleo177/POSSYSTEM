@@ -59,17 +59,17 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
     const getPageTitle = () => {
         if (view === "detail") {
             const os = state.detail?.status || "recibido";
-            const prefix = os === "borrador" ? "BORRADOR" : os === "pendiente" ? "ORDEN" : "RECIBO";
+            const prefix = os === "borrador" ? "Borrador" : os === "pendiente" ? "Orden" : "Recibo";
             return `${prefix} #${state.detail?.id}`;
         }
-        if (view === "new") return state.editingDraftId ? `EDITAR BORRADOR #${state.editingDraftId}` : "NUEVA ORDEN DE COMPRA";
-        return "Listado de Compras";
+        if (view === "new") return state.editingDraftId ? `Editar borrador #${state.editingDraftId}` : "Nueva orden de compra";
+        return "Órdenes de compra";
     };
 
     const getPageActions = () => {
         if (view === "list") return (
-            <Button onClick={state.openNew} className="h-8 px-2.5 sm:px-3 text-[10px]">
-                + <span className="hidden sm:inline">NUEVA ORDEN</span><span className="sm:hidden">NUEVA</span>
+            <Button onClick={state.openNew} className="h-8 px-2.5 sm:px-3 text-[11px]">
+                + <span className="hidden sm:inline">Nueva orden</span><span className="sm:hidden">Nueva</span>
             </Button>
         );
         // Volver ya no vive aquí: es navegación, no una acción sobre el documento, y va a la
@@ -79,7 +79,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
 
     return (
         <Page
-            module="MÓDULO DE COMPRAS"
+            module="Compras"
             title={getPageTitle()}
             actions={getPageActions()}
             onBack={view === "detail" || view === "new" ? () => state.setView("list") : undefined}
@@ -108,16 +108,16 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                 <button
                                     onClick={() => setShowFilterDrop(p => !p)}
                                     className={[
-                                        "h-10 px-3 rounded-lg text-[11px] font-black uppercase tracking-wide border flex items-center gap-2 transition-all",
+                                        "h-10 px-3 rounded-lg text-[12px] font-bold border flex items-center gap-2 transition-all",
                                         hasFilters
-                                            ? "bg-brand-500/10 text-brand-500 border-brand-500/30"
-                                            : "bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"
+                                            ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40"
+                                            : "bg-white dark:bg-white/5 border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:text-white"
                                     ].join(" ")}
                                 >
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                                     Filtros
                                     {hasFilters && (
-                                        <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">
+                                        <span className="bg-content text-white dark:bg-white dark:text-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-[10px]">
                                             {filtersCount}
                                         </span>
                                     )}
@@ -128,9 +128,9 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                         {/* Anclado por la derecha siempre: el botón vive al final de
                                             la barra, así que con left-0 el panel crecía hacia afuera
                                             y en móvil se salía de la pantalla. */}
-                                        <div className="absolute top-full right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                                        <div className="absolute top-full right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-dark-2 border border-black/[0.07] dark:border-white/10 rounded-xl shadow-[0_12px_40px_-8px_rgb(0_0_0/0.22)] z-[70] popover-in">
                                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado de Orden</div>
+                                                <div className="text-[12px] font-medium text-content-subtle mb-2">Estado de orden</div>
                                                 {/* flex-wrap y no grid-cols-3: en tres columnas fijas
                                                     cada botón se quedaba en 81px y "PENDIENTE" no
                                                     cabía, así que el rótulo salía cortado. Así se
@@ -145,7 +145,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                                         return (
                                                             <button key={f.id}
                                                                 onClick={() => { state.setListOrderStatus(active ? "" : f.id); state.setPurchasesPage(1); }}
-                                                                className={`flex-1 whitespace-nowrap px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${active ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                                                className={`flex-1 whitespace-nowrap h-8 px-2.5 rounded-lg text-[13px] font-medium border transition-all ${active ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:bg-white/5 dark:hover:text-white"}`}>
                                                                 {f.label}
                                                             </button>
                                                         );
@@ -153,7 +153,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                                 </div>
                                             </div>
                                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado de Pago</div>
+                                                <div className="text-[12px] font-medium text-content-subtle mb-2">Estado de Pago</div>
                                                 {/* flex-wrap y no grid-cols-3: en tres columnas fijas
                                                     cada botón se quedaba en 81px y "PENDIENTE" no
                                                     cabía, así que el rótulo salía cortado. Así se
@@ -168,7 +168,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                                         return (
                                                             <button key={f.id}
                                                                 onClick={() => { state.setListStatus(active ? "" : f.id); state.setPurchasesPage(1); }}
-                                                                className={`flex-1 whitespace-nowrap px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${active ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                                                className={`flex-1 whitespace-nowrap h-8 px-2.5 rounded-lg text-[13px] font-medium border transition-all ${active ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:bg-white/5 dark:hover:text-white"}`}>
                                                                 {f.label}
                                                             </button>
                                                         );
@@ -176,7 +176,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                                 </div>
                                             </div>
                                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Rango de Fecha</div>
+                                                <div className="text-[12px] font-medium text-content-subtle mb-2">Rango de fecha</div>
                                                 <DateRangePicker
                                                     from={state.listDateFrom}
                                                     to={state.listDateTo}
@@ -185,7 +185,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                                                 />
                                             </div>
                                             <div className="px-4 py-2">
-                                                <button onClick={clearFilters} className="w-full py-1.5 text-[10px] font-black uppercase tracking-wide text-danger hover:bg-danger/5 rounded-lg transition-colors">
+                                                <button onClick={clearFilters} className="w-full h-8 text-[13px] font-medium text-content-muted hover:text-content hover:bg-surface-2 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/5 rounded-lg transition-colors">
                                                     Limpiar todo
                                                 </button>
                                             </div>
@@ -235,7 +235,7 @@ export default function PurchasesTab({ notify, onProductsUpdated }) {
                     state.setCancelConfirm(null);
                 }}
                 type="danger"
-                confirmText="SÍ, ELIMINAR"
+                confirmText="Sí, eliminar"
                 cancelText="CANCELAR"
             />
         </Page>

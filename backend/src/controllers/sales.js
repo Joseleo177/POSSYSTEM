@@ -1,6 +1,7 @@
 const salesService = require("../services/sales");
 const { broadcast } = require("../services/sseService");
 const { visibleWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
+const { getReceivables, setSaleDueDate } = require("../services/sales/receivables");
 
 // PATCH /api/sales/:id
 const update = async (req, res) => {
@@ -170,4 +171,24 @@ const unforgive = async (req, res) => {
   }
 };
 
-module.exports = { getOne, getAll, getStats, create, cancel, update, confirmCredit, acceptOrder, claim, release, forgive, unforgive };
+// GET /api/sales/receivables
+const receivables = async (req, res) => {
+  try {
+    const result = await getReceivables(req.query, req);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ ok: false, message: err.message });
+  }
+};
+
+// PATCH /api/sales/:id/due-date
+const setDueDate = async (req, res) => {
+  try {
+    const data = await setSaleDueDate(req.params.id, req.body || {}, req);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(err.status || 500).json({ ok: false, message: err.message });
+  }
+};
+
+module.exports = { getOne, getAll, getStats, create, cancel, update, confirmCredit, acceptOrder, claim, release, forgive, unforgive, receivables, setDueDate };

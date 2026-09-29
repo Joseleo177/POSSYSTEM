@@ -310,11 +310,26 @@ const normalizarNombre = (v) => {
   return limpio ? limpio.toUpperCase() : null;
 };
 
-function buildPayload({ type, name, phone, email, address, rif, tax_name, notes }) {
+function buildPayload({ type, name, phone, email, address, rif, tax_name, notes, credit_days }) {
   if (!name) { const e = new Error("El nombre es requerido");      e.status = 400; throw e; }
   if (!rif)  { const e = new Error("La cédula / RIF es requerida"); e.status = 400; throw e; }
   const recordType = ["cliente", "proveedor"].includes(type) ? type : "cliente";
+  // Vacío = sin excepción: un cliente usa el plazo general de la empresa (Configuración), un
+  // proveedor queda de contado. 0 SÍ se guarda: es "de contado" a propósito, la excepción de
+  // un cliente al que no se le fía aunque el general sea de 15 días. Un plazo mayor a un año
+  // es casi seguro un error de tipeo.
+  // Solo se toca si viene en el cuerpo: las altas rápidas del POS no lo mandan, y sin esta
+  // guarda editar el teléfono desde ahí le borraba el crédito al proveedor.
+  const creditDays = {};
+  if (credit_days !== undefined) {
+    const dias = credit_days === "" || credit_days === null ? null : parseInt(credit_days, 10);
+    if (dias !== null && (isNaN(dias) || dias < 0 || dias > 365)) {
+      const e = new Error("Los días de crédito deben estar entre 0 y 365"); e.status = 400; throw e;
+    }
+    creditDays.credit_days = dias;
+  }
   return {
+    ...creditDays,
     type:     recordType,
     name:     normalizarNombre(name),
     phone:    phone    || null,

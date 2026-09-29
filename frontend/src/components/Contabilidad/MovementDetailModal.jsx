@@ -29,15 +29,15 @@ export default function MovementDetailModal({ movement, type, baseSym = "Ref.", 
     const inJournalCurrency = `${sym}${(amount * rate).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     const rows = [
-        ["Referencia", movement.reference || `#${movement.id}`, "text-brand-500 font-black"],
-        ["Descripción", movement.description, "uppercase"],
-        movement.category_name && ["Categoría", movement.category_name, "uppercase"],
-        movement.journal_name && ["Diario", movement.journal_name, "uppercase"],
+        ["Referencia", movement.reference || `#${movement.id}`, "text-brand-500 font-bold"],
+        ["Descripción", movement.description, ""],
+        movement.category_name && ["Categoría", movement.category_name, ""],
+        movement.journal_name && ["Diario", movement.journal_name, ""],
         ["Fecha", fmtDateShort(movement.date || movement.created_at)],
         !isBase && ["Tasa", `${rate.toFixed(4)} ${sym}/${baseSym}`, "tabular-nums"],
         !isBase && ["Equivalente", `${baseSym}${amount.toFixed(2)}`, "tabular-nums"],
-        movement.employee_name && ["Registrado por", movement.employee_name, "uppercase"],
-        ["Estado", movement.status, "uppercase"],
+        movement.employee_name && ["Registrado por", movement.employee_name, ""],
+        ["Estado", movement.status, "capitalize"],
         movement.notes && ["Notas", movement.notes],
     ].filter(Boolean);
 
@@ -45,14 +45,14 @@ export default function MovementDetailModal({ movement, type, baseSym = "Ref.", 
         <Modal open={!!movement} onClose={onClose} title={isIncome ? "Detalle del Ingreso" : "Detalle del Egreso"} width={400}>
             <div className="space-y-4">
                 <div className="p-4 rounded-xl bg-surface-2 dark:bg-white/5 border border-border/20">
-                    <div className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isIncome ? "text-success" : "text-danger"}`}>
+                    <div className={`text-[11px] font-bold uppercase tracking-widest mb-1 ${isIncome ? "text-success" : "text-danger"}`}>
                         Monto
                     </div>
-                    <div className="text-3xl font-black tabular-nums">
+                    <div className="text-3xl font-bold tabular-nums">
                         {isIncome ? "+" : "−"}{inJournalCurrency}
                     </div>
                     {!isBase && (
-                        <div className="text-[11px] font-bold text-content-subtle dark:text-white/40 tabular-nums mt-1">
+                        <div className="text-[12px] font-semibold text-content-subtle dark:text-white/40 tabular-nums mt-1">
                             ≈ {baseSym}{amount.toFixed(2)}
                         </div>
                     )}
@@ -61,8 +61,8 @@ export default function MovementDetailModal({ movement, type, baseSym = "Ref.", 
                 <div className="space-y-1">
                     {rows.map(([label, value, extra]) => (
                         <div key={label} className="flex justify-between gap-3 py-2 border-b border-border/10 dark:border-white/5 last:border-0">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle shrink-0">{label}</span>
-                            <span className={`text-[11px] font-bold text-right ${extra || "text-content dark:text-white"}`}>{value}</span>
+                            <span className="text-[12px] font-medium text-content-subtle shrink-0">{label}</span>
+                            <span className={`text-[12px] font-semibold text-right ${extra || "text-content dark:text-white"}`}>{value}</span>
                         </div>
                     ))}
                 </div>

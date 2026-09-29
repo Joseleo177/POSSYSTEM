@@ -3,7 +3,7 @@ import { Spinner } from "./ui/Spinner";
 import DatePicker from "./ui/DatePicker";
 import JournalPickerButton from "./cobro/JournalPickerButton";
 import { api } from "../services/api";
-import { fmtNumber, printNotaCreditoDoc, todayISO, journalsForWarehouse } from "../helpers";
+import { fmtNumber, printNotaCreditoDoc, todayISO, journalsForWarehouse, toNameCase } from "../helpers";
 import { fmtQtyUnit } from "../helpers/unitFormatter";
 import ConfirmModal from "./ui/ConfirmModal";
 import PaymentFormModal from "./PaymentFormModal";
@@ -259,8 +259,8 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
 
     /* ── Vista: resultado exitoso ── */
     if (returnResult) return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200">
+            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden modal-in">
                 <div className="px-5 py-4 border-b border-border/10 dark:border-white/5 flex items-center gap-3 bg-warning/5">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-warning/10 text-warning border border-warning/20">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -268,33 +268,33 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                         </svg>
                     </div>
                     <div>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Devolución Registrada</div>
-                        <div className="text-sm font-black text-content dark:text-white">{returnResult.nc_number || `NC-${returnResult.return_id}`}</div>
+                        <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">Devolución registrada</div>
+                        <div className="text-sm font-bold text-content dark:text-white">{returnResult.nc_number || `NC-${returnResult.return_id}`}</div>
                     </div>
-                    <div className="ml-auto text-[11px] font-black uppercase tracking-wide px-2.5 py-1 rounded-lg border bg-warning/10 text-warning border-warning/20">
+                    <div className="ml-auto text-[12px] font-bold px-2.5 py-1 rounded-lg border bg-warning/10 text-warning border-warning/20">
                         Procesada
                     </div>
                 </div>
 
                 <div className="px-5 py-4 space-y-2 border-b border-border/10 dark:border-white/5">
                     <div className="flex justify-between items-center">
-                        <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 uppercase">Factura ref.</span>
-                        <span className="text-[11px] font-bold text-content dark:text-white">{sale.invoice_number || `#${sale.id}`}</span>
+                        <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40">Factura ref.</span>
+                        <span className="text-[12px] font-semibold text-content dark:text-white">{sale.invoice_number || `#${sale.id}`}</span>
                     </div>
                     {sale.customer_name && (
                         <div className="flex justify-between items-center">
-                            <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 uppercase">Cliente</span>
-                            <span className="text-[11px] font-bold text-content dark:text-white/70">{sale.customer_name}</span>
+                            <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40">Cliente</span>
+                            <span className="text-[12px] font-semibold text-content dark:text-white/70">{toNameCase(sale.customer_name)}</span>
                         </div>
                     )}
                     <div className="flex justify-between items-center pt-1 border-t border-border/10 dark:border-white/5">
-                        <span className="text-[11px] font-black uppercase tracking-wide text-content dark:text-white">Total Acreditado</span>
-                        <span className="text-xl font-black text-warning tabular-nums">{fmtPrice(returnResult.total)}</span>
+                        <span className="text-[12px] font-bold text-content dark:text-white">Total acreditado</span>
+                        <span className="text-xl font-bold text-warning tabular-nums">{fmtPrice(returnResult.total)}</span>
                     </div>
                     {refundCreated && (
                         <div className="flex justify-between items-center pt-1.5 border-t border-border/10 dark:border-white/5">
-                            <span className="text-[11px] font-black uppercase text-content-subtle dark:text-white/40">Reembolso registrado</span>
-                            <span className="text-[11px] font-black text-success flex items-center gap-1 text-right">
+                            <span className="text-[12px] font-bold text-content-subtle dark:text-white/40">Reembolso registrado</span>
+                            <span className="text-[12px] font-bold text-success flex items-center gap-1 text-right">
                                 <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                                 </svg>
@@ -307,7 +307,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                 <div className="px-5 py-4 flex gap-2">
                     <button
                         onClick={() => printNotaCreditoDoc(returnResult, sale, companyInfo, baseCurrency, activeCurrencies, printerWidth)}
-                        className="flex-1 h-9 rounded-xl border border-border/30 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle hover:text-content dark:hover:text-white transition-all flex items-center justify-center gap-2"
+                        className="flex-1 h-9 rounded-xl border border-border/30 dark:border-white/10 text-[12px] font-bold text-content-subtle hover:text-content dark:hover:text-white transition-all flex items-center justify-center gap-2"
                     >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -316,7 +316,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                     </button>
                     <button
                         onClick={onClose}
-                        className="flex-1 h-9 rounded-xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-wide hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                        className="flex-1 h-9 rounded-xl btn-accent text-[12px] font-bold transition-all flex items-center justify-center gap-2"
                     >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -331,8 +331,8 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     /* ── Vista: resultado de cambio ── */
     if (exchangeResult) return (
         <>
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200">
+            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden modal-in">
                 <div className="px-5 py-4 border-b border-border/10 dark:border-white/5 flex items-center gap-3 bg-brand-500/5">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-brand-500/10 text-brand-500 border border-brand-500/20">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -340,31 +340,31 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                         </svg>
                     </div>
                     <div>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Cambio Procesado</div>
-                        <div className="text-sm font-black text-content dark:text-white">{exchangeResult.nc_number || `NC-${exchangeResult.return_id}`}</div>
+                        <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">Cambio procesado</div>
+                        <div className="text-sm font-bold text-content dark:text-white">{exchangeResult.nc_number || `NC-${exchangeResult.return_id}`}</div>
                     </div>
                 </div>
 
                 <div className="px-5 py-4 space-y-2 border-b border-border/10 dark:border-white/5">
-                    <div className="flex justify-between"><span className="text-[11px] text-content-subtle dark:text-white/40 uppercase font-bold">Devuelto</span><span className="text-[11px] font-black text-warning tabular-nums">−{fmtPrice(exchangeResult.return_total)}</span></div>
-                    <div className="flex justify-between"><span className="text-[11px] text-content-subtle dark:text-white/40 uppercase font-bold">Reemplazo</span><span className="text-[11px] font-black text-content dark:text-white tabular-nums">{fmtPrice(exchangeResult.replacement_total)}</span></div>
+                    <div className="flex justify-between"><span className="text-[12px] text-content-subtle dark:text-white/40 font-semibold">Devuelto</span><span className="text-[12px] font-bold text-warning tabular-nums">−{fmtPrice(exchangeResult.return_total)}</span></div>
+                    <div className="flex justify-between"><span className="text-[12px] text-content-subtle dark:text-white/40 font-semibold">Reemplazo</span><span className="text-[12px] font-bold text-content dark:text-white tabular-nums">{fmtPrice(exchangeResult.replacement_total)}</span></div>
                     {exchangeResult.credit_remainder > 0.001 && (
                         <div className="flex justify-between pt-1 border-t border-border/10 dark:border-white/5">
-                            <span className="text-[11px] font-black uppercase text-brand-500">Crédito generado</span>
-                            <span className="text-[13px] font-black text-brand-500 tabular-nums">{fmtPrice(exchangeResult.credit_remainder)}</span>
+                            <span className="text-[12px] font-bold text-brand-500">Crédito generado</span>
+                            <span className="text-[13px] font-bold text-brand-500 tabular-nums">{fmtPrice(exchangeResult.credit_remainder)}</span>
                         </div>
                     )}
                     {exchangeResult.remaining_to_pay > 0.001 && (
                         <div className="flex justify-between items-center pt-1 border-t border-border/10 dark:border-white/5">
                             <div>
-                                <span className="text-[11px] font-black uppercase text-danger">Por cobrar</span>
-                                <p className="text-[9px] text-content-subtle dark:text-white/30 mt-0.5">Factura {exchangeResult.new_invoice_number || `#${exchangeResult.new_sale_id}`}</p>
+                                <span className="text-[12px] font-bold text-danger">Por cobrar</span>
+                                <p className="text-[10px] text-content-subtle dark:text-white/30 mt-0.5">Factura {exchangeResult.new_invoice_number || `#${exchangeResult.new_sale_id}`}</p>
                             </div>
-                            <span className="text-[13px] font-black text-danger tabular-nums">{fmtPrice(exchangeResult.remaining_to_pay)}</span>
+                            <span className="text-[13px] font-bold text-danger tabular-nums">{fmtPrice(exchangeResult.remaining_to_pay)}</span>
                         </div>
                     )}
                     {exchangeResult.remaining_to_pay <= 0.001 && exchangeResult.credit_remainder <= 0.001 && (
-                        <div className="flex items-center justify-center gap-2 pt-1 border-t border-border/10 dark:border-white/5 text-success text-[12px] font-black">
+                        <div className="flex items-center justify-center gap-2 pt-1 border-t border-border/10 dark:border-white/5 text-success text-[12px] font-bold">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
                             Sin diferencia
                         </div>
@@ -374,7 +374,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                     <div className="px-5 py-4 flex gap-2">
                         <button
                             onClick={() => printNotaCreditoDoc({ ...exchangeResult, total: exchangeResult.return_total }, sale, companyInfo, baseCurrency, activeCurrencies, printerWidth)}
-                            className="flex-1 h-9 rounded-xl border border-border/30 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle hover:text-content dark:hover:text-white transition-all flex items-center justify-center gap-2"
+                            className="flex-1 h-9 rounded-xl border border-border/30 dark:border-white/10 text-[12px] font-bold text-content-subtle hover:text-content dark:hover:text-white transition-all flex items-center justify-center gap-2"
                         >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -382,12 +382,12 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                             Imprimir N/C
                         </button>
                         <button onClick={() => { onReturnSuccess(); onClose(); }}
-                            className="flex-1 h-9 rounded-xl border border-border/40 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle hover:text-content dark:hover:text-white transition-all">
+                            className="flex-1 h-9 rounded-xl border border-border/40 dark:border-white/10 text-[12px] font-bold text-content-subtle hover:text-content dark:hover:text-white transition-all">
                             Cerrar
                         </button>
                     {exchangeResult.remaining_to_pay > 0.001 && (
                         <button onClick={() => setShowPayDiff(true)}
-                            className="flex-1 h-9 rounded-xl bg-success text-black text-[11px] font-black uppercase tracking-wide hover:brightness-110 transition-all shadow-lg shadow-success/20 flex items-center justify-center gap-2">
+                            className="flex-1 h-9 rounded-xl bg-success text-black text-[12px] font-bold hover:brightness-110 transition-all shadow-sm flex items-center justify-center gap-2">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                             </svg>
@@ -420,11 +420,11 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     return (
         <>
             <div
-                className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+                className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200"
                 onClick={onClose}
             >
                 <div
-                    className="relative w-full max-w-xl bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out"
+                    className="relative w-full max-w-xl bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden flex flex-col max-h-[90vh] modal-in"
                     onClick={e => e.stopPropagation()}
                 >
                     {/* Header */}
@@ -436,8 +436,8 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                 </svg>
                             </div>
                             <div>
-                                <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Devolución</div>
-                                <div className="text-[13px] font-black text-content dark:text-white">{sale.invoice_number || `#${sale.id}`}</div>
+                                <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">Devolución</div>
+                                <div className="text-[13px] font-bold text-content dark:text-white">{sale.invoice_number || `#${sale.id}`}</div>
                             </div>
                         </div>
                         <button
@@ -454,8 +454,8 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                     <div className="shrink-0 px-4 pt-2.5 pb-0 flex gap-1.5">
                         {[["devolucion","Devolución"],["cambio","Cambio de Producto"]].map(([key, label]) => (
                             <button key={key} type="button" onClick={() => setMode(key)}
-                                className={["flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border",
-                                    mode === key ? "bg-brand-500 text-black border-transparent" : "text-content-subtle dark:text-white/30 border-border/20 dark:border-white/5 hover:border-brand-500/30"
+                                className={["flex-1 py-1.5 rounded-xl text-[10px] font-bold transition-all border",
+                                    mode === key ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "text-content-subtle dark:text-white/30 border-border/20 dark:border-white/5 hover:border-brand-500/30"
                                 ].join(" ")}>{label}</button>
                         ))}
                     </div>
@@ -466,12 +466,12 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                         {/* Tabla de productos */}
                         <div className="px-4 pt-3 pb-2">
                             <div className="flex items-center justify-between mb-1.5">
-                                <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
+                                <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">
                                     Productos ({sale.items.length})
                                 </div>
                                 <button
                                     onClick={handleReturnAll}
-                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-2 dark:bg-white/5 hover:bg-warning/10 text-warning border border-warning/20 text-[9px] font-black uppercase tracking-wide transition-all"
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-2 dark:bg-white/5 hover:bg-warning/10 text-warning border border-warning/20 text-[10px] font-bold transition-all"
                                 >
                                     <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -483,11 +483,11 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                             <div className="rounded-xl border border-border/20 dark:border-white/5 overflow-hidden">
                                 {/* Thead */}
                                 <div className="grid grid-cols-12 bg-surface-2 dark:bg-white/[0.03] px-3 py-1.5">
-                                    <span className="col-span-4 text-[9px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30">Producto</span>
-                                    <span className="col-span-2 text-[9px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 text-right">P. Unit</span>
-                                    <span className="col-span-2 text-[9px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 text-center">Vend.</span>
-                                    <span className="col-span-2 text-[9px] font-black uppercase tracking-wide text-danger dark:text-danger/70 text-center">Dev.</span>
-                                    <span className="col-span-2 text-[9px] font-black uppercase tracking-wide text-brand-500 text-right">{mode === "cambio" ? "Camb." : "A dev."}</span>
+                                    <span className="col-span-4 text-[10px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/30">Producto</span>
+                                    <span className="col-span-2 text-[10px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/30 text-right">P. Unit</span>
+                                    <span className="col-span-2 text-[10px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/30 text-center">Vend.</span>
+                                    <span className="col-span-2 text-[10px] font-bold uppercase tracking-wide text-danger dark:text-danger/70 text-center">Dev.</span>
+                                    <span className="col-span-2 text-[10px] font-bold uppercase tracking-wide text-brand-500 text-right">{mode === "cambio" ? "Camb." : "A dev."}</span>
                                 </div>
 
                                 <div className="divide-y divide-border/10 dark:divide-white/5">
@@ -499,15 +499,15 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                                 className={`grid grid-cols-12 items-center px-3 py-2 transition-colors ${available <= 0 ? "opacity-40 bg-surface-2/50 dark:bg-white/[0.02]" : "hover:bg-surface-2/30 dark:hover:bg-white/[0.02]"}`}
                                             >
                                                 <div className="col-span-4 min-w-0">
-                                                    <div className="text-[11px] font-bold text-content dark:text-white truncate">{item.name}</div>
+                                                    <div className="text-[12px] font-semibold text-content dark:text-white truncate">{item.name}</div>
                                                 </div>
-                                                <div className="col-span-2 text-right text-[10px] font-bold text-content-subtle dark:text-white/40 tabular-nums">
+                                                <div className="col-span-2 text-right text-[11px] font-semibold text-content-subtle dark:text-white/40 tabular-nums">
                                                     {fmtPrice(item.price)}
                                                 </div>
-                                                <div className="col-span-2 text-center text-[11px] font-bold text-content dark:text-white tabular-nums">
+                                                <div className="col-span-2 text-center text-[12px] font-semibold text-content dark:text-white tabular-nums">
                                                     {parseFloat(item.quantity)}
                                                 </div>
-                                                <div className="col-span-2 text-center text-[11px] font-bold text-danger tabular-nums">
+                                                <div className="col-span-2 text-center text-[12px] font-semibold text-danger tabular-nums">
                                                     {parseFloat(item.returned_qty || 0)}
                                                 </div>
                                                 <div className="col-span-2 flex justify-end">
@@ -517,7 +517,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                                         max={available}
                                                         step="1"
                                                         disabled={available <= 0}
-                                                        className="w-12 h-7 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-lg text-[11px] font-bold text-center outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed tabular-nums"
+                                                        className="w-12 h-7 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-lg text-[12px] font-semibold text-center outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed tabular-nums"
                                                         value={returnQtys[item.id] === 0 ? "" : (returnQtys[item.id] || "")}
                                                         onChange={e => handleQtyChange(item.id, available, e.target.value)}
                                                         placeholder="0"
@@ -532,12 +532,12 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
 
                         {/* Motivo */}
                         <div className="px-4 pb-2">
-                            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Motivo / Notas</div>
+                            <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">Motivo / notas</div>
                             <input
                                 value={reason}
                                 onChange={e => setReason(e.target.value)}
                                 placeholder="Ej: Producto dañado, cambio por defecto, cliente se arrepintió..."
-                                className="w-full h-10 bg-surface-2/50 dark:bg-white/[0.03] border border-border/20 dark:border-white/5 rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/20 transition-all placeholder:text-content-subtle dark:placeholder:text-white/20"
+                                className="w-full h-10 bg-surface-2/50 dark:bg-white/[0.03] border border-border/20 dark:border-white/5 rounded-xl px-3 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/20 transition-all placeholder:text-content-subtle dark:placeholder:text-white/20"
                             />
                         </div>
 
@@ -548,13 +548,13 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                     <svg className="w-3.5 h-3.5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                     </svg>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Reembolso al cliente</span>
+                                    <span className="text-[12px] font-medium text-content-subtle dark:text-white/50">Reembolso al cliente</span>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={handleToggleRefund}
                                     className={[
-                                        "text-[10px] font-black uppercase tracking-wide px-2.5 py-1 rounded-md border transition-all",
+                                        "text-[11px] font-bold px-2.5 py-1 rounded-md border transition-all",
                                         refund.enabled
                                             ? "border-success/30 text-success bg-success/5 hover:bg-danger/5 hover:text-danger hover:border-danger/30"
                                             : "border-border/20 dark:border-white/10 text-content-subtle dark:text-white/30 hover:border-success/30 hover:text-success"
@@ -567,7 +567,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                             {refund.enabled && (
                                 <div className="p-4 bg-surface-2/50 dark:bg-white/[0.03] rounded-xl border border-border/20 dark:border-white/5 space-y-3">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Sale de *</p>
+                                        <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">Sale de *</p>
                                         <div className="space-y-2.5">
                                             {refundParts.map((s, idx) => (
                                                 <div key={idx} className="space-y-1.5">
@@ -593,7 +593,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                                                     parts[idx] = { ...parts[idx], amount: e.target.value.replace(/[^\d.,]/g, '') };
                                                                     return { ...p, parts };
                                                                 })}
-                                                                className="w-full h-10 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all tabular-nums"
+                                                                className="w-full h-10 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all tabular-nums"
                                                             />
                                                         </div>
                                                         {refundParts.length > 1 && (
@@ -609,7 +609,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                                     </div>
 
                                                     {s.cur && !s.cur.is_base && s.montoBase > 0 && (
-                                                        <p className="text-[10px] font-bold text-success">
+                                                        <p className="text-[11px] font-semibold text-success">
                                                             ≈ {baseCurrency?.symbol}{s.montoBase.toFixed(2)} {baseCurrency?.code} · tasa {s.rate}
                                                         </p>
                                                     )}
@@ -623,7 +623,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                                                 return { ...p, parts };
                                                             })}
                                                             placeholder="N° de referencia *"
-                                                            className="w-full h-9 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3 text-[12px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
+                                                            className="w-full h-9 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3 text-[12px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
                                                         />
                                                     )}
                                                 </div>
@@ -631,19 +631,19 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                         </div>
 
                                         {refundFaltaCaja && (
-                                            <p className="text-[10px] font-black text-danger mt-1.5">Elige de qué caja sale ese monto</p>
+                                            <p className="text-[11px] font-bold text-danger mt-1.5">Elige de qué caja sale ese monto</p>
                                         )}
 
                                         <button
                                             type="button"
                                             onClick={() => setRefund(p => ({ ...p, parts: [...p.parts, { journal_id: '', amount: '', reference: '' }] }))}
-                                            className="w-full h-9 mt-2.5 rounded-xl border border-dashed border-border/40 dark:border-white/15 text-content-subtle dark:text-white/40 text-[10px] font-black uppercase tracking-widest hover:border-success/50 hover:text-success transition-all"
+                                            className="w-full h-9 mt-2.5 rounded-xl border border-dashed border-border/40 dark:border-white/15 text-content-subtle dark:text-white/40 text-[11px] font-bold hover:border-success/50 hover:text-success transition-all"
                                         >
                                             Reembolsar desde otra caja
                                         </button>
 
                                         <div className="flex items-center justify-between gap-2 mt-2.5 pt-2.5 border-t border-border/20 dark:border-white/5">
-                                            <span className={`text-[10px] font-black uppercase tracking-widest tabular-nums ${refundExcede ? "text-danger" : "text-content-subtle dark:text-white/40"}`}>
+                                            <span className={`text-[11px] font-bold uppercase tracking-widest tabular-nums ${refundExcede ? "text-danger" : "text-content-subtle dark:text-white/40"}`}>
                                                 Reembolsado {fmtPrice(refundTotalBase)} de {fmtPrice(totalReturn)}
                                             </span>
                                         </div>
@@ -651,7 +651,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
 
                                     <div className="grid grid-cols-2 gap-2">
                                         <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Fecha *</p>
+                                            <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">Fecha *</p>
                                             <DatePicker
                                                 value={refund.date}
                                                 onChange={v => setRefund(p => ({ ...p, date: v }))}
@@ -659,13 +659,13 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                             />
                                         </div>
                                         <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Notas</p>
+                                            <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">Notas</p>
                                             <input
                                                 type="text"
                                                 value={refund.notes}
                                                 onChange={e => setRefund(p => ({ ...p, notes: e.target.value }))}
                                                 placeholder="Observaciones..."
-                                                className="w-full h-10 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
+                                                className="w-full h-10 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
                                             />
                                         </div>
                                     </div>
@@ -677,8 +677,8 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                         {mode === "devolucion" && (
                             <div className="px-4 pb-3">
                                 <div className="flex items-center justify-between px-3.5 py-3 bg-warning/5 border border-warning/20 rounded-xl">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-warning/70">Total a Reintegrar</span>
-                                    <span className="text-xl font-black text-warning tabular-nums">{fmtPrice(totalReturn)}</span>
+                                    <span className="text-[11px] font-bold uppercase tracking-widest text-warning/70">Total a reintegrar</span>
+                                    <span className="text-xl font-bold text-warning tabular-nums">{fmtPrice(totalReturn)}</span>
                                 </div>
                             </div>
                         )}
@@ -688,18 +688,18 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                             <div className="px-5 pb-5 space-y-3">
                                 {/* Buscador */}
                                 <div>
-                                    <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Producto de reemplazo</div>
+                                    <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">Producto de reemplazo</div>
                                     <div className="relative">
                                         <input
                                             type="text"
                                             value={productSearch}
                                             onChange={e => setProductSearch(e.target.value)}
                                             placeholder="Buscar producto del catálogo..."
-                                            className="w-full h-10 bg-surface-2/50 dark:bg-white/[0.03] border border-border/20 dark:border-white/5 rounded-xl px-3.5 text-[12px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle dark:placeholder:text-white/20"
+                                            className="w-full h-10 bg-surface-2/50 dark:bg-white/[0.03] border border-border/20 dark:border-white/5 rounded-xl px-3.5 text-[12px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle dark:placeholder:text-white/20"
                                             autoComplete="off"
                                             spellCheck={false}
                                         />
-                                        {searchLoading && <div className="absolute right-3 top-3 text-[10px] text-content-subtle">...</div>}
+                                        {searchLoading && <div className="absolute right-3 top-3 text-[11px] text-content-subtle">...</div>}
                                     </div>
                                     {productResults.length > 0 && (
                                         <div className="mt-1 rounded-xl border border-border/20 dark:border-white/5 overflow-hidden shadow-lg">
@@ -707,10 +707,10 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                                 <button key={p.id} type="button" onClick={() => addReplacement(p)}
                                                     className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-brand-500/10 transition-colors text-left border-b last:border-0 border-border/10 dark:border-white/5">
                                                     <div>
-                                                        <div className="text-[12px] font-bold text-content dark:text-white">{p.name}</div>
-                                                        <div className="text-[10px] text-content-subtle dark:text-white/30">Stock: {p.stock != null ? fmtQtyUnit(p.stock, p.unit) : "—"}</div>
+                                                        <div className="text-[12px] font-semibold text-content dark:text-white">{p.name}</div>
+                                                        <div className="text-[11px] text-content-subtle dark:text-white/30">Stock: {p.stock != null ? fmtQtyUnit(p.stock, p.unit) : "—"}</div>
                                                     </div>
-                                                    <span className="text-[12px] font-black text-brand-500 tabular-nums">{fmtPrice(p.price)}</span>
+                                                    <span className="text-[12px] font-bold text-brand-500 tabular-nums">{fmtPrice(p.price)}</span>
                                                 </button>
                                             ))}
                                         </div>
@@ -723,14 +723,14 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                         {replacementItems.map(item => (
                                             <div key={item.product_id} className="flex items-center gap-3 px-3.5 py-2.5 border-b last:border-0 border-border/10 dark:border-white/5">
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="text-[12px] font-bold text-content dark:text-white truncate">{item.name}</div>
-                                                    <div className="text-[10px] text-content-subtle dark:text-white/30 tabular-nums">{fmtPrice(item.price)} c/u</div>
+                                                    <div className="text-[12px] font-semibold text-content dark:text-white truncate">{item.name}</div>
+                                                    <div className="text-[11px] text-content-subtle dark:text-white/30 tabular-nums">{fmtPrice(item.price)} c/u</div>
                                                 </div>
                                                 <input type="number" min="1" step="1"
                                                     value={item.qtyRaw !== undefined ? item.qtyRaw : String(item.qty)}
                                                     onChange={e => updateReplacementQty(item.product_id, e.target.value)}
                                                     onBlur={() => blurReplacementQty(item.product_id)}
-                                                    className="w-14 h-8 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-lg text-[12px] font-bold text-center outline-none focus:border-brand-500/60 transition-all tabular-nums"
+                                                    className="w-14 h-8 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-lg text-[12px] font-semibold text-center outline-none focus:border-brand-500/60 transition-all tabular-nums"
                                                 />
                                                 <button type="button" onClick={() => setReplacementItems(prev => prev.filter(i => i.product_id !== item.product_id))}
                                                     className="text-danger/60 hover:text-danger transition-colors">
@@ -745,18 +745,18 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                 {totalReturn > 0 && replacementItems.length > 0 && (
                                     <div className="rounded-xl border overflow-hidden divide-y divide-border/10 dark:divide-white/5 border-border/20 dark:border-white/5">
                                         <div className="flex justify-between px-4 py-2.5">
-                                            <span className="text-[11px] text-content-subtle dark:text-white/40 font-bold uppercase">Devuelto</span>
-                                            <span className="text-[12px] font-black text-warning tabular-nums">{fmtPrice(totalReturn)}</span>
+                                            <span className="text-[12px] text-content-subtle dark:text-white/40 font-semibold">Devuelto</span>
+                                            <span className="text-[12px] font-bold text-warning tabular-nums">{fmtPrice(totalReturn)}</span>
                                         </div>
                                         <div className="flex justify-between px-4 py-2.5">
-                                            <span className="text-[11px] text-content-subtle dark:text-white/40 font-bold uppercase">Reemplazo</span>
-                                            <span className="text-[12px] font-black text-content dark:text-white tabular-nums">{fmtPrice(totalReplacement)}</span>
+                                            <span className="text-[12px] text-content-subtle dark:text-white/40 font-semibold">Reemplazo</span>
+                                            <span className="text-[12px] font-bold text-content dark:text-white tabular-nums">{fmtPrice(totalReplacement)}</span>
                                         </div>
                                         <div className={`flex justify-between px-4 py-3 ${exchangeDiff > 0.001 ? "bg-danger/5" : exchangeDiff < -0.001 ? "bg-brand-500/5" : "bg-success/5"}`}>
-                                            <span className="text-[11px] font-black uppercase tracking-wide">
+                                            <span className="text-[12px] font-bold">
                                                 {exchangeDiff > 0.001 ? "A cobrar" : exchangeDiff < -0.001 ? "Va a crédito" : "Sin diferencia"}
                                             </span>
-                                            <span className={`text-xl font-black tabular-nums ${exchangeDiff > 0.001 ? "text-danger" : exchangeDiff < -0.001 ? "text-brand-500" : "text-success"}`}>
+                                            <span className={`text-xl font-bold tabular-nums ${exchangeDiff > 0.001 ? "text-danger" : exchangeDiff < -0.001 ? "text-brand-500" : "text-success"}`}>
                                                 {exchangeDiff > 0.001 ? `+${fmtPrice(exchangeDiff)}` : exchangeDiff < -0.001 ? fmtPrice(Math.abs(exchangeDiff)) : "—"}
                                             </span>
                                         </div>
@@ -769,21 +769,21 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                     {/* Footer */}
                     <div className="shrink-0 px-4 py-3 border-t border-border/10 dark:border-white/5 bg-surface-2/30 dark:bg-white/[0.02] flex items-center justify-end gap-2">
                         <button onClick={onClose} disabled={loading}
-                            className="h-8 px-3.5 rounded-xl border border-border/30 dark:border-white/10 text-[10px] font-black uppercase tracking-wide text-content-subtle hover:text-content dark:hover:text-white transition-all disabled:opacity-50">
+                            className="h-8 px-3.5 rounded-xl border border-border/30 dark:border-white/10 text-[11px] font-bold text-content-subtle hover:text-content dark:hover:text-white transition-all disabled:opacity-50">
                             Cerrar
                         </button>
                         {mode === "devolucion" ? (
                             <button onClick={handleSubmit} disabled={loading || totalReturn === 0}
-                                className={["h-8 px-4 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all flex items-center gap-2",
-                                    loading || totalReturn === 0 ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed" : "bg-warning text-black hover:brightness-110 shadow-lg shadow-warning/20"
+                                className={["h-8 px-4 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
+                                    loading || totalReturn === 0 ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed" : "bg-warning text-black hover:brightness-110 shadow-sm"
                                 ].join(" ")}>
                                 {loading && <Spinner className="h-3.5 w-3.5" />}
                                 {loading ? "Procesando…" : "Confirmar Devolución"}
                             </button>
                         ) : (
                             <button onClick={handleExchangeSubmit} disabled={loading || totalReturn === 0 || replacementItems.length === 0}
-                                className={["h-8 px-4 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all flex items-center gap-2",
-                                    loading || totalReturn === 0 || replacementItems.length === 0 ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed" : "bg-brand-500 text-black hover:brightness-110 shadow-lg shadow-brand-500/20"
+                                className={["h-8 px-4 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
+                                    loading || totalReturn === 0 || replacementItems.length === 0 ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed" : "btn-accent shadow-sm"
                                 ].join(" ")}>
                                 {loading && <Spinner className="h-3.5 w-3.5" />}
                                 {loading ? "Procesando…" : "Confirmar Cambio"}

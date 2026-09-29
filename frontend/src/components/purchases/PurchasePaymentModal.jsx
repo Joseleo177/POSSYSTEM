@@ -6,7 +6,7 @@ import Modal from "../ui/Modal";
 import DatePicker from "../ui/DatePicker";
 import JournalPickerButton from "../cobro/JournalPickerButton";
 import RateField, { resolveRate } from "../ui/RateField";
-import { todayISO, journalsForWarehouse } from "../../helpers";
+import { todayISO, journalsForWarehouse, fmtDateShort } from "../../helpers";
 
 const getEmpty = () => ({
   received_amount: "",
@@ -23,11 +23,19 @@ const getEmpty = () => ({
  * Modal para registrar pagos a proveedores (cuentas por pagar).
  * Props:
  *   purchase  – objeto de la compra a pagar (con .total, .balance, .amount_paid, .supplier_name)
+ *   purchases – en lugar de `purchase`: varias compras del mismo proveedor y sucursal para un
+ *               pago conjunto (una transferencia, un egreso). Con una sola, es un pago normal.
  *   onClose   – fn para cerrar
  *   onSuccess – fn(res) llamada tras pago exitoso
  */
-export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
+export default function PurchasePaymentModal({ purchase: single, purchases, onClose, onSuccess }) {
   const { notify, baseCurrency, activeCurrencies, activeJournals: allActiveJournals, outflowJournals: allOutflowJournals } = useApp();
+  // Mismo orden en que el servidor imputa: la que vence primero, y a igual vencimiento la más
+  // vieja. Así lo que se ve aquí es exactamente lo que va a quedar.
+  const list = (purchases?.length ? [...purchases] : [single].filter(Boolean))
+    .sort((a, b) => String(a.due_date || "").localeCompare(String(b.due_date || "")) || a.id - b.id);
+  const isBulk   = list.length > 1;
+  const purchase = list[0];
   // Solo los diarios de la sucursal que recibió la compra (más los compartidos): la cuenta de
   // otra tienda no es donde salió este pago.
   const activeJournals  = journalsForWarehouse(allActiveJournals, purchase?.warehouse_id);
@@ -45,7 +53,8 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
   const selectedJournal = activeJournals.find(j => j.id === form.payment_journal_id);
   const isCash = selectedJournal?.type === "efectivo";
 
-  const balanceUsd = parseFloat(purchase?.balance ?? purchase?.total ?? 0);
+  const balanceOf  = (p) => parseFloat(p?.balance ?? p?.total ?? 0);
+  const balanceUsd = parseFloat(list.reduce((acc, p) => acc + balanceOf(p), 0).toFixed(6));
 
   const receivedNum = parseFloat(String(form.received_amount).replace(",", "."));
   const amountRaw   = !isNaN(receivedNum) && receivedNum > 0 ? receivedNum / payRate : 0;
@@ -61,7 +70,7 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
 
     setLoading(true);
     try {
-      const res = await api.purchases.createPayment(purchase.id, {
+      const body = {
         amount:             amountBase,
         currency_id:        payCur?.id || null,
         exchange_rate:      payRate,
@@ -69,9 +78,17 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
         reference_date:     form.reference_date,
         reference_number:   form.reference_number?.trim() || null,
         notes:              form.notes?.trim() || null,
-      });
-      if (res.payment_status === "pagado") notify("¡Compra pagada completamente!");
-      else notify("Abono registrado correctamente");
+      };
+      let res;
+      if (isBulk) {
+        res = await api.purchases.createBulkPayment({ ...body, purchase_ids: list.map(p => p.id) });
+        const saldadas = (res.data?.applied || []).filter(a => a.payment_status === "pagado").length;
+        notify(`Pago conjunto registrado: ${saldadas} de ${list.length} compras saldadas`);
+      } else {
+        res = await api.purchases.createPayment(purchase.id, body);
+        if (res.payment_status === "pagado") notify("¡Compra pagada completamente!");
+        else notify("Abono registrado correctamente");
+      }
       setForm(getEmpty());
       onSuccess?.(res);
     } catch (e) { notify(e.message, "err"); }
@@ -88,13 +105,44 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
   const fmt = (usd) => `${infoSym}${(Number(usd || 0) * infoRate).toFixed(2)}`;
 
   // Cómo queda la compra tras este pago.
-  const paidBeforeBase = parseFloat(purchase?.amount_paid || 0);
+  const paidBeforeBase = list.reduce((acc, p) => acc + parseFloat(p?.amount_paid || 0), 0);
   const paidTotalBase  = paidBeforeBase + amountBase;
   const remainingBase  = Math.max(0, balanceUsd - amountBase);
   const settles        = amountBase > 0 && remainingBase <= 0.01;
 
-  // Resumen de la compra: al lateral en escritorio, arriba del todo en móvil.
-  const resumenCompra = (
+  // Cómo se reparte el monto entre las compras, en el mismo orden que el servidor.
+  let porRepartir = amountBase;
+  const reparto = list.map(p => {
+    const abono = Math.max(0, Math.min(porRepartir, balanceOf(p)));
+    porRepartir -= abono;
+    return { p, abono, salda: abono > 0 && balanceOf(p) - abono <= 0.01 };
+  });
+
+  // Pago conjunto: cada compra con su saldo y lo que le toca de este pago.
+  const resumenCompra = isBulk ? (
+    <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 space-y-1.5">
+      {purchase.supplier_name && <Row label="Proveedor" value={purchase.supplier_name} />}
+      <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5 space-y-1.5">
+        {reparto.map(({ p, abono, salda }) => (
+          <div key={p.id} className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <span className="text-[12px] font-bold text-content dark:text-white">#{p.id}</span>
+              {p.due_date && <span className="text-[11px] font-semibold text-content-subtle dark:text-white/40 ml-1.5">vence {fmtDateShort(p.due_date)}</span>}
+              {amountBase > 0 && (
+                <span className={`block text-[11px] font-semibold ${salda ? "text-success" : abono > 0 ? "text-warning" : "text-content-subtle/60"}`}>
+                  {salda ? "Se salda" : abono > 0 ? `Abona ${fmt(abono)}` : "No alcanza"}
+                </span>
+              )}
+            </div>
+            <span className="text-[12px] font-bold tabular-nums text-content dark:text-white shrink-0">{fmt(balanceOf(p))}</span>
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
+        <Row label={`Saldo de ${list.length} compras`} value={fmt(balanceUsd)} valueClass="text-danger font-bold" />
+      </div>
+    </div>
+  ) : (
     <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 space-y-1.5">
       {purchase.supplier_name && <Row label="Proveedor" value={purchase.supplier_name} />}
       <Row label="Compra" value={`#${purchase.id}`} />
@@ -103,13 +151,13 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
         <Row label="Ya pagado" value={fmt(purchase.amount_paid)} valueClass="text-success" />
       )}
       <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
-        <Row label="Saldo pendiente" value={fmt(balanceUsd)} valueClass="text-danger font-black" />
+        <Row label="Saldo pendiente" value={fmt(balanceUsd)} valueClass="text-danger font-bold" />
       </div>
     </div>
   );
 
   return (
-    <Modal open={!!purchase} onClose={onClose} title="PAGAR A PROVEEDOR" width={820}>
+    <Modal open={!!purchase} onClose={onClose} title={isBulk ? `Pago conjunto · ${list.length} compras` : "Pagar a proveedor"} width={820}>
       <div className="flex flex-col lg:flex-row lg:gap-6">
 
         {/* ── Columna principal: lo que se teclea ── */}
@@ -173,15 +221,15 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
               setForm(p => ({ ...p, received_amount: val }));
             }}
             placeholder={`${paySym}0.00`}
-            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
           />
           {payCur && !payCur.is_base && amountBase > 0 && (
-            <p className="text-[10px] font-bold text-success mt-1">
+            <p className="text-[11px] font-semibold text-success mt-1">
               ≈ {baseCurrency?.symbol}{amountBase.toFixed(2)} {baseCurrency?.code} · tasa {payRate}
             </p>
           )}
           {isCapped && (
-            <p className="text-[10px] font-bold text-warning mt-1">
+            <p className="text-[11px] font-semibold text-warning mt-1">
               Excede el saldo ({baseCurrency?.symbol || "Ref."}{balanceUsd.toFixed(2)}). El excedente quedará como egreso adicional.
             </p>
           )}
@@ -204,7 +252,7 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
               value={form.reference_number}
               onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
               placeholder="Ej: 000123456"
-              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
             />
           </Field>
         )}
@@ -218,15 +266,15 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
 
           {amountBase > 0 && (
             <div className={`rounded-xl border p-3.5 space-y-1.5 ${settles ? "border-success/30 bg-success/5" : "border-warning/30 bg-warning/5"}`}>
-              <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/40">
+              <div className="text-[12px] font-medium text-content-subtle dark:text-white/40">
                 Después de este pago
               </div>
-              <Row label="Total pagado" value={fmt(paidTotalBase)} valueClass="text-success font-black" />
+              <Row label="Total pagado" value={fmt(paidTotalBase)} valueClass="text-success font-bold" />
               <div className="border-t border-border/20 dark:border-white/5 pt-1.5">
                 <Row
-                  label={settles ? "Compra saldada" : "Saldo restante"}
+                  label={settles ? (isBulk ? "Compras saldadas" : "Compra saldada") : "Saldo restante"}
                   value={fmt(settles ? 0 : remainingBase)}
-                  valueClass={`font-black ${settles ? "text-success" : "text-warning"}`}
+                  valueClass={`font-bold ${settles ? "text-success" : "text-warning"}`}
                 />
               </div>
             </div>
@@ -239,20 +287,20 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
               value={form.notes}
               onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
               placeholder="Observaciones..."
-              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
             />
           </Field>
         </aside>
       </div>
 
       {/* Acciones */}
-      <div className="flex gap-2.5 mt-6 pt-4 border-t border-border/20 dark:border-white/5">
+      <div className="flex gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
         <button onClick={onClose}
-          className="flex-1 h-10 rounded-xl border border-border/40 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all">
+          className="flex-1 h-10 rounded-xl border border-border/40 dark:border-white/10 text-[12px] font-bold text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all">
           Cancelar
         </button>
         <button onClick={submit} disabled={!canSubmit}
-          className="flex-[2] h-10 rounded-xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-wide transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+          className="flex-[2] h-10 rounded-xl btn-accent text-[12px] font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
           {loading && <Spinner />}
           {loading ? "Registrando..." : "Confirmar pago"}
         </button>
@@ -264,8 +312,8 @@ export default function PurchasePaymentModal({ purchase, onClose, onSuccess }) {
 function Row({ label, value, valueClass = "text-content dark:text-white" }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-[11px] font-bold text-content-subtle dark:text-white/40">{label}</span>
-      <span className={`text-[12px] font-black tabular-nums ${valueClass}`}>{value}</span>
+      <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40">{label}</span>
+      <span className={`text-[12px] font-bold tabular-nums ${valueClass}`}>{value}</span>
     </div>
   );
 }
@@ -273,7 +321,7 @@ function Row({ label, value, valueClass = "text-content dark:text-white" }) {
 function Field({ label, children }) {
   return (
     <div>
-      <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">{label}</p>
+      <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">{label}</p>
       {children}
     </div>
   );

@@ -8,16 +8,17 @@ import Modal from "../ui/Modal";
 import CustomSelect from "../ui/CustomSelect";
 import { resolveRate, isRateEdited } from "../ui/RateField";
 import { api } from "../../services/api";
-import { fmtDateShort } from "../../helpers";
+import { fmtDateShort, todayISO, toNameCase } from "../../helpers";
+import DatePicker from "../ui/DatePicker";
 import { useApp } from "../../context/AppContext";
 import { printPurchaseOrderDoc } from "../../helpers/printPurchaseOrder";
 import { printPurchaseLetter } from "../../helpers/printPurchaseLetter";
 
-const fmt2 = (num) => Number(num || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt2 = (num) => Number(num || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 // En claro el fondo de página ya es surface-2 (#f9fafb), así que un panel surface-2 era
 // invisible: mismo color, borde al 10%. Va en blanco con sombra, igual que el .card global.
 const SECTION = "bg-surface dark:bg-white/[0.04] rounded-2xl border border-border/60 dark:border-white/[0.06] shadow-card dark:shadow-none";
-const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-subtle";
+const LABEL   = "text-[12px] font-medium text-content-subtle";
 
 const ORDER_STATUS = {
   borrador:  { label: "Borrador",  color: "text-content-subtle dark:text-white/40", dot: "bg-content-subtle/40 dark:bg-white/20", bg: "bg-surface-2/60 dark:bg-white/[0.03]" },
@@ -30,7 +31,11 @@ const ORDER_STATUS = {
 
 export default function PurchaseDetails({ state }) {
   const { detail, refreshDetail, confirmOrder, receivePurchase, loading, warehouses = [], onProductsUpdated } = state;
-  const { notify, baseCurrency, activeCurrencies, companyInfo, printerWidth } = useApp();
+  const { notify, baseCurrency, activeCurrencies, companyInfo, printerWidth, can } = useApp();
+  // El vencimiento lo ajusta quien edita la orden o quien le paga al proveedor (misma regla
+  // que la ruta).
+  const canSetDue = can("purchases.edit") || can("purchases.pay");
+  const [savingDue, setSavingDue] = useState(false);
 
   // ── Payments ──
   const [payments, setPayments]         = useState([]);
@@ -269,13 +274,28 @@ export default function PurchaseDetails({ state }) {
 
   const handleDeletePayment = async (id) => {
     try {
-      await api.purchases.removePayment(id);
-      notify("Pago eliminado", "success");
+      const res = await api.purchases.removePayment(id);
+      notify(res.message || "Pago eliminado", "success");
       await refreshDetail?.(detail.id);
       await loadPayments();
     } catch (e) { notify(e.message, "err"); }
     setDeleteConfirm(null);
   };
+
+  // null = volver al plazo del proveedor.
+  const saveDueDate = async (value) => {
+    if (savingDue) return;
+    setSavingDue(true);
+    try {
+      await api.purchases.setDueDate(detail.id, value || null);
+      notify(value ? "Vencimiento actualizado" : "Vencimiento según el crédito del proveedor");
+      await refreshDetail?.(detail.id);
+    } catch (e) { notify(e.message, "err"); }
+    finally { setSavingDue(false); }
+  };
+
+  const dueDate     = detail.effective_due_date || null;
+  const daysOverdue = dueDate ? Math.round((new Date(todayISO()) - new Date(dueDate)) / 86400000) : null;
 
   const grandTotal    = localItems.reduce((s, i) => s + (parseFloat(i.subtotal) || 0), 0);
   // Tasa con la que se cargan los costos de la factura del proveedor. Arranca en la de
@@ -306,7 +326,7 @@ export default function PurchaseDetails({ state }) {
 
             {/* Almacén */}
             <div>
-              <p className={`${LABEL} mb-1.5`}>Almacén Destino</p>
+              <p className={`${LABEL} mb-1.5`}>Almacén destino</p>
               <CustomSelect
                 value={localWarehouseId}
                 onChange={v => { setLocalWarehouseId(v); setIsDirty(true); }}
@@ -324,7 +344,7 @@ export default function PurchaseDetails({ state }) {
               {localSupplier ? (
                 <div className="h-9 flex items-center gap-2 bg-brand-500/5 border border-brand-500/20 rounded-lg px-3">
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-bold text-brand-500 uppercase truncate leading-tight">{localSupplier.name}</div>
+                    <div className="text-xs font-semibold text-brand-500 truncate leading-tight">{localSupplier.name}</div>
                   </div>
                   <button
                     onClick={() => { setLocalSupplier(null); setIsDirty(true); }}
@@ -352,8 +372,8 @@ export default function PurchaseDetails({ state }) {
                           onClick={() => { setLocalSupplier(s); setSupQuery(""); setSupHits([]); setIsDirty(true); }}
                           className="px-3 py-2 hover:bg-brand-500/10 rounded-lg cursor-pointer transition-colors group"
                         >
-                          <div className="text-xs font-bold uppercase group-hover:text-brand-500">{s.name}</div>
-                          {s.rif && <div className="text-[9px] text-content-subtle opacity-60">{s.rif}</div>}
+                          <div className="text-xs font-semibold group-hover:text-brand-500">{s.name}</div>
+                          {s.rif && <div className="text-[10px] text-content-subtle opacity-60">{s.rif}</div>}
                         </div>
                       ))}
                     </div>
@@ -364,7 +384,7 @@ export default function PurchaseDetails({ state }) {
 
             {/* Notas */}
             <div>
-              <p className={`${LABEL} mb-1.5`}>Notas / Referencia</p>
+              <p className={`${LABEL} mb-1.5`}>Notas / referencia</p>
               <input
                 value={localNotes}
                 onChange={e => { setLocalNotes(e.target.value); setIsDirty(true); }}
@@ -377,13 +397,13 @@ export default function PurchaseDetails({ state }) {
                 eso vive en la cabecera junto a la referencia y se guarda con el borrador. */}
             {nonBaseCurrencies.length > 0 && (
               <div>
-                <p className={`${LABEL} mb-1.5`}>Moneda / Tasa</p>
+                <p className={`${LABEL} mb-1.5`}>Moneda / tasa</p>
                 {(
                   <div className="flex items-center gap-1.5">
                     <div className="flex items-center h-9 rounded-lg overflow-hidden border border-border/40 dark:border-white/10 shrink-0">
                       <button
                         onClick={() => { setInvoiceCurrency(null); setInvoiceRateInput(""); setIsDirty(true); }}
-                        className={`h-full px-2 text-[10px] font-black uppercase tracking-wide transition-all ${!invoiceCurrency ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
+                        className={`h-full px-2 text-[11px] font-bold transition-all ${!invoiceCurrency ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
                         title="Costos en moneda base"
                       >
                         {baseCurrency?.symbol || "Ref."}
@@ -392,7 +412,7 @@ export default function PurchaseDetails({ state }) {
                         <button
                           key={c.id}
                           onClick={() => { setInvoiceCurrency(c); setInvoiceRateInput(rateInputFor(c)); setIsDirty(true); }}
-                          className={`h-full px-2 text-[10px] font-black uppercase tracking-wide border-l border-border/40 dark:border-white/10 transition-all ${invoiceCurrency?.id === c.id ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
+                          className={`h-full px-2 text-[11px] font-bold border-l border-border/40 dark:border-white/10 transition-all ${invoiceCurrency?.id === c.id ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
                           title={`Costos en ${c.name}`}
                         >
                           {c.code}
@@ -417,7 +437,7 @@ export default function PurchaseDetails({ state }) {
               <p className={`${LABEL} mb-1.5`}>Estado de orden</p>
               <div className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${os.bg}`}>
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${os.dot}`} />
-                <span className={`text-[11px] font-black uppercase tracking-wide ${os.color}`}>{os.label}</span>
+                <span className={`text-[12px] font-bold ${os.color}`}>{os.label}</span>
               </div>
             </div>
 
@@ -427,11 +447,11 @@ export default function PurchaseDetails({ state }) {
                 <p className={`${LABEL} mb-1.5 text-center`}>Acciones</p>
                 <div className="flex items-center justify-center gap-2">
                   <button onClick={handleReceivePendiente} disabled={loading}
-                    className="h-7 px-3 rounded-lg bg-success/10 text-success border border-success/20 text-[10px] font-black uppercase tracking-wide hover:bg-success hover:text-black transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5">
+                    className="h-7 px-3 rounded-lg bg-success/10 text-success border border-success/20 text-[11px] font-bold hover:bg-success hover:text-black transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5">
                     {loading ? <><Spinner className="h-3 w-3" />Procesando</> : "Recibir Mercancía ✓"}
                   </button>
                   <button onClick={() => confirmOrder?.(detail.id)} disabled={loading}
-                    className="h-7 px-3 rounded-lg bg-warning/10 text-warning border border-warning/20 text-[10px] font-black uppercase tracking-wide hover:bg-warning hover:text-black transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5">
+                    className="h-7 px-3 rounded-lg bg-warning/10 text-warning border border-warning/20 text-[11px] font-bold hover:bg-warning hover:text-black transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5">
                     {loading ? <><Spinner className="h-3 w-3" />Procesando</> : "Confirmar Orden →"}
                   </button>
                 </div>
@@ -442,13 +462,13 @@ export default function PurchaseDetails({ state }) {
                   <p className={`${LABEL} mb-1.5`}>Estado de Pago</p>
                   <div className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${statusBg}`}>
                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
-                    <span className={`text-[11px] font-black uppercase tracking-wide ${statusColor}`}>{payLabels[payStatus] || payStatus}</span>
+                    <span className={`text-[12px] font-bold ${statusColor}`}>{payLabels[payStatus] || payStatus}</span>
                   </div>
                 </div>
                 <div>
                   <p className={`${LABEL} mb-1.5`}>Acción</p>
                   <button onClick={handleReceivePendiente} disabled={loading}
-                    className="h-7 px-3 rounded-lg bg-success/10 text-success border border-success/20 text-[10px] font-black uppercase tracking-wide hover:bg-success hover:text-black transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5">
+                    className="h-7 px-3 rounded-lg bg-success/10 text-success border border-success/20 text-[11px] font-bold hover:bg-success hover:text-black transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5">
                     {loading ? <><Spinner className="h-3 w-3" />Procesando</> : "Recibir Mercancía ✓"}
                   </button>
                 </div>
@@ -459,28 +479,28 @@ export default function PurchaseDetails({ state }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-x-6 gap-y-5 items-start">
             <div>
               <p className={`${LABEL} mb-1`}>Proveedor</p>
-              <p className={`text-[13px] font-bold leading-snug ${detail.supplier_name ? "text-content dark:text-white" : "italic text-content-subtle"}`}>
-                {detail.supplier_name || "No registrado"}
+              <p className={`text-[13px] font-semibold leading-snug ${detail.supplier_name ? "text-content dark:text-white" : "italic text-content-subtle"}`}>
+                {toNameCase(detail.supplier_name) || "No registrado"}
               </p>
-              {detail.supplier_rif && <p className="text-[10px] font-bold text-brand-500 tabular-nums mt-0.5">{detail.supplier_rif}</p>}
+              {detail.supplier_rif && <p className="text-[11px] font-semibold text-brand-500 tabular-nums mt-0.5">{detail.supplier_rif}</p>}
             </div>
             <div>
               <p className={`${LABEL} mb-1`}>Almacén</p>
-              <p className="text-[13px] font-bold text-content dark:text-white">{detail.warehouse_name || "—"}</p>
+              <p className="text-[13px] font-semibold text-content dark:text-white">{toNameCase(detail.warehouse_name) || "—"}</p>
             </div>
             <div>
               <p className={`${LABEL} mb-1`}>Registrado por</p>
-              <p className="text-[13px] font-bold text-content dark:text-white">{detail.employee_name || "Sistema"}</p>
+              <p className="text-[13px] font-semibold text-content dark:text-white">{toNameCase(detail.employee_name) || "Sistema"}</p>
             </div>
             <div>
               <p className={`${LABEL} mb-1`}>Fecha</p>
-              <p className="text-[13px] font-bold text-content dark:text-white tabular-nums">{detail.created_at ? new Date(detail.created_at).toLocaleString("es-VE") : "—"}</p>
+              <p className="text-[13px] font-semibold text-content dark:text-white tabular-nums">{detail.created_at ? new Date(detail.created_at).toLocaleString("es-VE") : "—"}</p>
             </div>
             {/* Con la orden ya confirmada la tasa es historia: se muestra, no se toca. Es el
                 dato que responde "a cuánto compré este lote". */}
             <div>
-              <p className={`${LABEL} mb-1`}>Moneda / Tasa</p>
-              <p className="text-[13px] font-bold text-content dark:text-white tabular-nums">
+              <p className={`${LABEL} mb-1`}>Moneda / tasa</p>
+              <p className="text-[13px] font-semibold text-content dark:text-white tabular-nums">
                 {invoiceCurrency
                   ? `${invoiceCurrency.code} · ${invoiceRate.toFixed(4)}`
                   : <span className="italic text-content-subtle">{baseCurrency?.symbol || "Ref."} · sin conversión</span>}
@@ -490,14 +510,14 @@ export default function PurchaseDetails({ state }) {
               <p className={`${LABEL} mb-1.5`}>Estado de orden</p>
               <div className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${os.bg}`}>
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${os.dot}`} />
-                <span className={`text-[11px] font-black uppercase tracking-wide ${os.color}`}>{os.label}</span>
+                <span className={`text-[12px] font-bold ${os.color}`}>{os.label}</span>
               </div>
             </div>
             <div>
               <p className={`${LABEL} mb-1.5`}>Estado de pago</p>
               <div className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${statusBg}`}>
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
-                <span className={`text-[11px] font-black uppercase tracking-wide ${statusColor}`}>{payLabels[payStatus] || payStatus}</span>
+                <span className={`text-[12px] font-bold ${statusColor}`}>{payLabels[payStatus] || payStatus}</span>
               </div>
             </div>
             {detail.notes && (
@@ -511,11 +531,11 @@ export default function PurchaseDetails({ state }) {
 
         {isDirty && isEditable && (
           <div className="absolute -top-3 right-4 z-10 flex items-center gap-2 bg-surface-2 dark:bg-surface-dark-2 pl-2.5 pr-1 py-1 rounded-full border border-border/20 dark:border-white/10 shadow-lg animate-in fade-in slide-in-from-top-1 duration-200">
-            <span className="text-[9px] font-bold text-warning uppercase tracking-wide opacity-70 whitespace-nowrap">· Sin guardar</span>
+            <span className="text-[10px] font-semibold text-warning uppercase tracking-wide opacity-70 whitespace-nowrap">· Sin guardar</span>
             <button
               onClick={saveDraftChanges}
               disabled={savingChanges}
-              className="h-6 px-3 rounded-full bg-brand-500 text-black text-[10px] font-black uppercase tracking-wide hover:brightness-105 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+              className="h-6 px-3 rounded-full btn-accent text-[11px] font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
             >
               {savingChanges
                 ? <div className="w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />
@@ -533,7 +553,7 @@ export default function PurchaseDetails({ state }) {
           <div>
             <p className={LABEL}>{orderStatus === "recibido" ? "Productos Recibidos" : "Productos en Orden"}</p>
             {isEditable && localItems.length > 0 && (
-              <p className="text-[9px] font-bold text-content-subtle/60 dark:text-white/25 mt-0.5">
+              <p className="text-[10px] font-semibold text-content-subtle/60 dark:text-white/25 mt-0.5">
                 {localItems.length} {localItems.length === 1 ? "producto" : "productos"}
               </p>
             )}
@@ -544,7 +564,7 @@ export default function PurchaseDetails({ state }) {
                 onClick={() => localWarehouseId && setAddModalOpen(true)}
                 disabled={!localWarehouseId}
                 title={!localWarehouseId ? "Selecciona primero el almacén destino" : undefined}
-                className={`h-7 px-3 rounded-lg border text-[10px] font-black uppercase tracking-wide flex items-center gap-1.5 transition-all active:scale-95 ${
+                className={`h-7 px-3 rounded-lg border text-[11px] font-bold flex items-center gap-1.5 transition-all active:scale-95 ${
                   localWarehouseId
                     ? "bg-brand-500/10 text-brand-500 border-brand-500/20 hover:bg-brand-500/20"
                     : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/30 dark:border-white/10 cursor-not-allowed"
@@ -562,7 +582,7 @@ export default function PurchaseDetails({ state }) {
                   companyInfo,
                   printerWidth
                 )}
-                className="h-7 px-3 rounded-lg bg-surface-2 dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] text-[10px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 flex items-center gap-1.5 hover:bg-surface-3 dark:hover:bg-white/[0.07] transition-all active:scale-95"
+                className="h-7 px-3 rounded-lg bg-surface-2 dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] text-[11px] font-bold text-content-subtle dark:text-white/30 flex items-center gap-1.5 hover:bg-surface-3 dark:hover:bg-white/[0.07] transition-all active:scale-95"
                 title="Ticket para el depósito: lista de productos con casillas para marcar"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -583,7 +603,7 @@ export default function PurchaseDetails({ state }) {
                   baseCurrency,
                   activeCurrencies
                 )}
-                className="h-7 px-3 rounded-lg bg-danger/5 border border-danger/25 text-[10px] font-black uppercase tracking-wide text-danger flex items-center gap-1.5 hover:bg-danger hover:text-white transition-all active:scale-95"
+                className="h-7 px-3 rounded-lg bg-danger/5 border border-danger/25 text-[11px] font-bold text-danger flex items-center gap-1.5 hover:bg-danger hover:text-white transition-all active:scale-95"
                 title="Comprobante en hoja carta, con costos y saldo al proveedor"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -625,10 +645,10 @@ export default function PurchaseDetails({ state }) {
                 <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${localReceiving ? "translate-x-4" : ""}`} />
               </span>
               <span className="min-w-0">
-                <span className={`block text-[11px] font-black uppercase tracking-wide ${localReceiving ? "text-brand-500" : "text-content-subtle dark:text-white/40 group-hover:text-content dark:group-hover:text-white/70"}`}>
+                <span className={`block text-[12px] font-bold ${localReceiving ? "text-brand-500" : "text-content-subtle dark:text-white/40 group-hover:text-content dark:group-hover:text-white/70"}`}>
                   Ir recibiendo
                 </span>
-                <span className="block text-[10px] font-bold text-content-subtle dark:text-white/35 mt-0.5 leading-snug">
+                <span className="block text-[11px] font-semibold text-content-subtle dark:text-white/35 mt-0.5 leading-snug">
                   {localReceiving
                     ? "Al guardar, cada producto entra al stock de una vez. La orden queda abierta para seguir cargándola."
                     : "La mercancía entra al stock solo cuando le des a “Recibir mercancía”."}
@@ -636,7 +656,7 @@ export default function PurchaseDetails({ state }) {
               </span>
             </button>
             {localReceiving && (!localWarehouseId || !localSupplier) && (
-              <p className="text-[10px] font-black uppercase tracking-wide text-danger mt-2 pl-12">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-danger mt-2 pl-12">
                 Falta {!localWarehouseId ? "el almacén de destino" : "el proveedor"}: sin eso la mercancía no puede entrar.
               </p>
             )}
@@ -647,14 +667,14 @@ export default function PurchaseDetails({ state }) {
         {isEditable && localItems.length > 0 && (
           <div className="px-5 py-3 border-t border-border/10 dark:border-white/[0.06] flex items-center justify-between gap-4">
             <div>
-              <div className={`${LABEL} mb-0.5`}>Total Estimado</div>
+              <div className={`${LABEL} mb-0.5`}>Total estimado</div>
               {invoiceRate > 1 ? (
                 <>
-                  <div className="text-lg font-black text-brand-500 tabular-nums">{invoiceSym} {fmt2(grandTotal * invoiceRate)}</div>
-                  <div className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums mt-0.5">≈ Ref. {fmt2(grandTotal)}</div>
+                  <div className="text-lg font-bold text-brand-500 tabular-nums">{invoiceSym} {fmt2(grandTotal * invoiceRate)}</div>
+                  <div className="text-[12px] font-semibold text-content-subtle dark:text-white/45 tabular-nums mt-0.5">≈ Ref. {fmt2(grandTotal)}</div>
                 </>
               ) : (
-                <div className="text-lg font-black text-brand-500 tabular-nums">Ref. {fmt2(grandTotal)}</div>
+                <div className="text-lg font-bold text-brand-500 tabular-nums">Ref. {fmt2(grandTotal)}</div>
               )}
             </div>
           </div>
@@ -666,7 +686,7 @@ export default function PurchaseDetails({ state }) {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
 
           <div className={`${SECTION} p-5`}>
-            <p className={`${LABEL} mb-4`}>Resumen Financiero</p>
+            <p className={`${LABEL} mb-4`}>Resumen financiero</p>
             <div className="mb-5">
               <div className="flex justify-between items-center mb-2">
                 <span className={LABEL}>{paidPct.toFixed(1)}% saldado</span>
@@ -675,11 +695,11 @@ export default function PurchaseDetails({ state }) {
                       total en esa moneda arriba y la base como referencia. */}
                   {inInvoiceCur ? (
                     <>
-                      <span className="text-[13px] font-black text-content dark:text-white tabular-nums block leading-none">{invoiceSym} {fmt2(total * invoiceRate)}</span>
-                      <span className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(total)}</span>
+                      <span className="text-[13px] font-bold text-content dark:text-white tabular-nums block leading-none">{invoiceSym} {fmt2(total * invoiceRate)}</span>
+                      <span className="text-[12px] font-semibold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(total)}</span>
                     </>
                   ) : (
-                    <span className="text-[11px] font-black text-content dark:text-white tabular-nums">Ref. {fmt2(total)}</span>
+                    <span className="text-[12px] font-bold text-content dark:text-white tabular-nums">Ref. {fmt2(total)}</span>
                   )}
                 </div>
               </div>
@@ -689,27 +709,73 @@ export default function PurchaseDetails({ state }) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-surface-2 dark:bg-white/[0.02] border border-border/60 dark:border-white/[0.05] rounded-xl p-3.5">
-                <p className={`${LABEL} mb-1.5`}>Total Pagado</p>
-                <p className="text-[15px] font-black text-content dark:text-white tabular-nums tracking-tight leading-none">Ref. {fmt2(amountPaid)}</p>
+                <p className={`${LABEL} mb-1.5`}>Total pagado</p>
+                <p className="text-[15px] font-bold text-content dark:text-white tabular-nums tracking-tight leading-none">Ref. {fmt2(amountPaid)}</p>
                 {inInvoiceCur && (
-                  <p className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums mt-1">{invoiceSym} {fmt2(amountPaid * invoiceRate)}</p>
+                  <p className="text-[12px] font-semibold text-content-subtle dark:text-white/45 tabular-nums mt-1">{invoiceSym} {fmt2(amountPaid * invoiceRate)}</p>
                 )}
-                <p className="text-[9px] font-bold text-success uppercase tracking-widest mt-1.5">Conciliado</p>
+                <p className="text-[10px] font-semibold text-success uppercase tracking-widest mt-1.5">Conciliado</p>
               </div>
               <div className="bg-brand-500/[0.06] border border-brand-500/[0.12] rounded-xl p-3.5">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-brand-500 opacity-60 mb-1.5">Saldo Pendiente</p>
-                <p className="text-[15px] font-black text-brand-500 tabular-nums tracking-tight leading-none">Ref. {fmt2(balance)}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-brand-500 opacity-60 mb-1.5">Saldo pendiente</p>
+                <p className="text-[15px] font-bold text-brand-500 tabular-nums tracking-tight leading-none">Ref. {fmt2(balance)}</p>
                 {inInvoiceCur && (
-                  <p className="text-[10px] font-bold text-brand-500/50 tabular-nums mt-1">{invoiceSym} {fmt2(balance * invoiceRate)}</p>
+                  <p className="text-[11px] font-semibold text-brand-500/50 tabular-nums mt-1">{invoiceSym} {fmt2(balance * invoiceRate)}</p>
                 )}
-                <p className="text-[9px] font-bold text-brand-500/50 uppercase tracking-widest mt-1.5">Cuentas x Pagar</p>
+                <p className="text-[10px] font-semibold text-brand-500/50 uppercase tracking-widest mt-1.5">Cuentas x pagar</p>
               </div>
             </div>
+
+            {/* Vencimiento: el pactado para esta compra o, si no hay, el del crédito del
+                proveedor. Es la fecha con la que Cuentas por Pagar la marca como vencida. */}
+            {dueDate && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 bg-surface-2 dark:bg-white/[0.02] border border-border/60 dark:border-white/[0.05] rounded-xl p-3.5">
+                <div className="min-w-0">
+                  <p className={`${LABEL} mb-1`}>Vence</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[13px] font-bold text-content dark:text-white tabular-nums">{fmtDateShort(dueDate)}</span>
+                    {payStatus !== "pagado" && daysOverdue > 0 && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-danger/10 text-danger border border-danger/20">
+                        Vencida hace {daysOverdue} día{daysOverdue !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                    {payStatus !== "pagado" && daysOverdue <= 0 && daysOverdue >= -7 && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-warning/10 text-warning border border-warning/20">
+                        {daysOverdue === 0 ? "Vence hoy" : `En ${-daysOverdue} día${daysOverdue !== -1 ? "s" : ""}`}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] font-medium text-content-subtle dark:text-white/35 mt-1">
+                    {detail.due_date
+                      ? "Fecha pactada para esta compra"
+                      : detail.supplier_credit_days
+                        ? `Crédito del proveedor: ${detail.supplier_credit_days} días`
+                        : "De contado: el proveedor no tiene días de crédito"}
+                  </p>
+                </div>
+                {canSetDue && payStatus !== "pagado" && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    {savingDue && <Spinner />}
+                    <DatePicker value={dueDate} onChange={v => v && v !== dueDate && saveDueDate(v)} className="w-[150px]" />
+                    {detail.due_date && (
+                      <button
+                        onClick={() => saveDueDate(null)}
+                        disabled={savingDue}
+                        className="h-8 px-2.5 rounded-lg text-[11px] font-bold text-content-subtle hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/5 transition-all disabled:opacity-40"
+                        title="Volver al plazo de crédito del proveedor"
+                      >
+                        Restablecer
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className={`${SECTION} overflow-hidden flex flex-col`}>
             <div className="px-5 py-3 border-b border-border/10 dark:border-white/[0.06] flex items-center justify-between shrink-0">
-              <p className={LABEL}>Historial de Pagos</p>
+              <p className={LABEL}>Historial de pagos</p>
               <button onClick={loadPayments} disabled={loadingPay} className="p-1.5 hover:bg-surface-2 dark:hover:bg-white/5 rounded-lg transition-colors text-content-subtle hover:text-brand-500">
                 <svg className={`w-3.5 h-3.5 ${loadingPay ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -740,8 +806,9 @@ export default function PurchaseDetails({ state }) {
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.journal_color || "#22c55e" }} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[12px] font-bold text-content dark:text-white truncate">{p.journal_name || "—"}</span>
-                            {p.reference_number && <span className="text-[9px] font-black text-brand-500 px-1.5 py-0.5 bg-brand-500/10 rounded-md shrink-0">#{p.reference_number}</span>}
+                            <span className="text-[12px] font-semibold text-content dark:text-white truncate">{toNameCase(p.journal_name) || "—"}</span>
+                            {p.reference_number && <span className="text-[10px] font-bold text-brand-500 px-1.5 py-0.5 bg-brand-500/10 rounded-md shrink-0">#{p.reference_number}</span>}
+                            {p.batch_id && <span className="text-[10px] font-bold text-violet-500 px-1.5 py-0.5 bg-violet-500/10 rounded-md shrink-0">Conjunto</span>}
                           </div>
                           <p className={`${LABEL} mt-0.5 normal-case`}>
                             {fmtDateShort(p.reference_date || p.created_at)}
@@ -751,11 +818,11 @@ export default function PurchaseDetails({ state }) {
                         <div className="text-right shrink-0">
                           {!isBase ? (
                             <>
-                              <p className="text-[12px] font-black text-success tabular-nums">+{sym}{(parseFloat(p.amount) * rate).toFixed(2)}</p>
-                              <p className="text-[10px] font-bold text-content-subtle tabular-nums">Ref. {parseFloat(p.amount).toFixed(2)}</p>
+                              <p className="text-[12px] font-bold text-success tabular-nums">+{sym}{(parseFloat(p.amount) * rate).toFixed(2)}</p>
+                              <p className="text-[11px] font-semibold text-content-subtle tabular-nums">Ref. {parseFloat(p.amount).toFixed(2)}</p>
                             </>
                           ) : (
-                            <p className="text-[12px] font-black text-success tabular-nums">+Ref. {parseFloat(p.amount).toFixed(2)}</p>
+                            <p className="text-[12px] font-bold text-success tabular-nums">+Ref. {parseFloat(p.amount).toFixed(2)}</p>
                           )}
                         </div>
                         <button
@@ -772,7 +839,7 @@ export default function PurchaseDetails({ state }) {
             </div>
             {payStatus !== "pagado" && (
               <div className="shrink-0 px-5 py-3 border-t border-border/10 dark:border-white/[0.06] flex justify-center">
-                <button onClick={() => setShowPayModal(true)} className="h-8 px-8 rounded-xl bg-brand-500 text-black text-[10px] font-black uppercase tracking-widest hover:brightness-105 transition-all active:scale-95">
+                <button onClick={() => setShowPayModal(true)} className="h-8 px-8 rounded-xl btn-accent text-[11px] font-bold transition-all active:scale-95">
                   + Registrar Pago
                 </button>
               </div>
@@ -810,7 +877,10 @@ export default function PurchaseDetails({ state }) {
       <ConfirmModal
         isOpen={!!deleteConfirm}
         title="¿Eliminar pago?"
-        message={`¿Seguro que deseas anular este pago de Ref. ${parseFloat(deleteConfirm?.amount || 0).toLocaleString()}? Se revertirá el saldo de la compra.`}
+        message={deleteConfirm?.batch_id
+          // Un pago conjunto se deshace entero: fue una sola transferencia para varias compras.
+          ? `Este pago fue parte de un pago conjunto a varias compras. Al anularlo se anula la transferencia completa y todas esas compras vuelven a deber lo que se les había abonado. ¿Continuar?`
+          : `¿Seguro que deseas anular este pago de Ref. ${parseFloat(deleteConfirm?.amount || 0).toFixed(2)}? Se revertirá el saldo de la compra.`}
         onConfirm={() => handleDeletePayment(deleteConfirm.id)}
         onCancel={() => setDeleteConfirm(null)}
         type="danger"
@@ -840,16 +910,16 @@ function PayDetailModal({ payment: pd, activeCurrencies, baseCurrency, onClose, 
   const isBase = !cur || cur.is_base;
 
   return (
-    <Modal open onClose={onClose} title="DETALLE DE PAGO" width={380}>
+    <Modal open onClose={onClose} title="Detalle de pago" width={380}>
       <div className="rounded-xl bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.06] divide-y divide-border/60 dark:divide-white/[0.05]">
         <DRow label="Diario">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: pd.journal_color || "#22c55e" }} />
-            {pd.journal_name || "—"}
+            {toNameCase(pd.journal_name) || "—"}
           </span>
         </DRow>
         <DRow label="Monto abonado">
-          <span className="text-success font-black">
+          <span className="text-success font-bold">
             {!isBase
               ? `${sym}${(parseFloat(pd.amount) * rate).toFixed(2)} · Ref. ${parseFloat(pd.amount).toFixed(2)}`
               : `Ref. ${parseFloat(pd.amount).toFixed(2)}`}
@@ -869,7 +939,7 @@ function PayDetailModal({ payment: pd, activeCurrencies, baseCurrency, onClose, 
       <div className="mt-4 flex justify-end">
         <button
           onClick={onDelete}
-          className="h-8 px-4 rounded-xl border border-danger/30 text-danger text-[10px] font-black uppercase tracking-wide hover:bg-danger/10 transition-all"
+          className="h-8 px-4 rounded-xl border border-danger/30 text-danger text-[11px] font-bold hover:bg-danger/10 transition-all"
         >
           Eliminar pago
         </button>
@@ -881,8 +951,8 @@ function PayDetailModal({ payment: pd, activeCurrencies, baseCurrency, onClose, 
 function DRow({ label, children }) {
   return (
     <div className="flex items-start justify-between gap-4 px-4 py-2.5">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-content-subtle whitespace-nowrap shrink-0 mt-0.5">{label}</span>
-      <span className="text-[12px] font-bold text-content dark:text-white text-right">{children}</span>
+      <span className="text-[12px] font-medium text-content-subtle whitespace-nowrap shrink-0 mt-0.5">{label}</span>
+      <span className="text-[12px] font-semibold text-content dark:text-white text-right">{children}</span>
     </div>
   );
 }

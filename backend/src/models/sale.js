@@ -43,6 +43,9 @@ module.exports = (sequelize, DataTypes) => {
     forgiven_reason:    { type: DataTypes.STRING(300), allowNull: true },
     forgiven_by:        { type: DataTypes.INTEGER, allowNull: true },
     forgiven_at:        { type: DataTypes.DATE, allowNull: true },
+    // Vencimiento pactado para esta factura. Nulo = fecha de la factura + días de crédito del
+    // cliente, calculado al leer (ver utils/dueDate.js).
+    due_date:           { type: DataTypes.DATEONLY, allowNull: true },
     // Caja que tiene la cuenta abierta en su carrito. Mientras esté puesto, las demás la ven
     // bloqueada en lugar de poder tomarla o eliminarla. held_at permite soltarla sola si el
     // cajero abandona sin cerrarla (ver HOLD_TIMEOUT_MIN en holdLock.js).

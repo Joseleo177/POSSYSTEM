@@ -5,6 +5,7 @@ const {
 const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
 const { toLocalDate, endOfLocalDay } = require("../../utils/localDate");
 const { ensureOpenSession } = require("../warehouses/sessionService");
+const { effectiveDueDate } = require("./payablesService");
 const { Op } = Sequelize;
 
 async function getAll({ limit = 50, offset = 0, search, status, order_status, date_from, date_to, warehouse_id }, req) {
@@ -76,7 +77,7 @@ async function getAll({ limit = 50, offset = 0, search, status, order_status, da
     ? await sequelize.query(
         `SELECT pp.purchase_id, COALESCE(SUM(pp.amount), 0) AS paid
            FROM purchase_payments pp
-           LEFT JOIN expenses e ON e.reference = 'purchase_payment:' || pp.id::text
+           LEFT JOIN expenses e ON e.reference = COALESCE('purchase_batch:' || pp.batch_id, 'purchase_payment:' || pp.id::text)
           WHERE pp.purchase_id IN (:ids)
             AND (e.status IS NULL OR e.status = 'activo')
           GROUP BY pp.purchase_id`,
@@ -137,6 +138,14 @@ async function getOne(id, req) {
   const amountPaid = await PurchasePayment.sum('amount', { where: { purchase_id: data.id } }) || 0;
   data.amount_paid = parseFloat(parseFloat(amountPaid).toFixed(6));
   data.balance     = parseFloat(Math.max(0, parseFloat(data.total) - amountPaid).toFixed(6));
+
+  // Vencimiento con la misma regla que Cuentas por Pagar: el pactado para esta compra o, si no
+  // hay, el que dan los días de crédito del proveedor.
+  const supplier = data.supplier_id
+    ? await Customer.findByPk(data.supplier_id, { attributes: ['credit_days'] })
+    : null;
+  data.supplier_credit_days = supplier?.credit_days ?? null;
+  data.effective_due_date   = effectiveDueDate(data, data.supplier_credit_days);
 
   return { data };
 }

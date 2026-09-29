@@ -6,12 +6,13 @@ import Modal from "./ui/Modal";
 import ConfirmModal from "./ui/ConfirmModal";
 import { PERM_LABELS } from "../constants/tabs";
 import { useApp } from "../context/AppContext";
+import { toNameCase } from "../helpers";
 
 const EMPTY = { username: "", password: "", full_name: "", email: "", phone: "", role_id: "", warehouse_ids: [] };
 
 const TABS = [
     { id: "employees", label: "Empleados" },
-    { id: "roles",     label: "Roles y Permisos" },
+    { id: "roles",     label: "Roles y permisos" },
 ];
 
 export default function EmployeesTab({ notify }) {
@@ -69,7 +70,7 @@ export default function EmployeesTab({ notify }) {
         if (!editId && !form.password)
             return notify("La contraseña es requerida para nuevos empleados", "err");
         setLoading(true);
-        // El input lleva la clase `uppercase`, que es solo CSS: se ve en mayúsculas pero
+        // El input lleva la clase ``, que es solo CSS: se ve en mayúsculas pero
         // el valor viaja tal cual se tecleó. Se normaliza aquí para que también cubra
         // pegado, autocompletado del navegador y la edición de un empleado existente.
         const payload = { ...form, full_name: form.full_name.trim().toUpperCase() };
@@ -151,9 +152,9 @@ export default function EmployeesTab({ notify }) {
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={[
-                        "px-4 py-2 text-[11px] font-black uppercase tracking-wide border-b-2 transition-all",
+                        "px-4 py-2 text-[13px] font-semibold border-b-2 transition-all",
                         activeTab === tab.id
-                            ? "border-brand-500 text-brand-500"
+                            ? "border-brand-500 text-brand-700 dark:text-brand-300"
                             : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white",
                     ].join(" ")}
                 >
@@ -165,12 +166,12 @@ export default function EmployeesTab({ notify }) {
 
     return (
         <Page
-            module="MÓDULO DE PERSONAL"
-            title="Gestión de Empleados"
+            module="Personal"
+            title="Empleados"
             subheader={subheader}
             actions={activeTab === "employees" ? (
-                <Button onClick={openNew} className="h-8 px-2.5 sm:px-3 text-[10px] font-black uppercase tracking-wide">
-                    + <span className="hidden sm:inline">Nuevo Empleado</span><span className="sm:hidden">Nuevo</span>
+                <Button onClick={openNew} className="h-8 px-2.5 sm:px-3 text-[11px] font-bold">
+                    + <span className="hidden sm:inline">Nuevo empleado</span><span className="sm:hidden">Nuevo</span>
                 </Button>
             ) : null}
         >
@@ -193,7 +194,7 @@ export default function EmployeesTab({ notify }) {
                                     <td colSpan={5} className="py-20 text-center">
                                         <div className="flex flex-col items-center gap-3 opacity-30">
                                             <svg className="w-10 h-10 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                            <div className="text-[11px] font-black uppercase tracking-widest text-content-subtle">No se han registrado empleados</div>
+                                            <div className="text-[12px] font-bold text-content-subtle">No se han registrado empleados</div>
                                         </div>
                                     </td>
                                 </tr>
@@ -201,12 +202,12 @@ export default function EmployeesTab({ notify }) {
                                 <tr key={e.id} className="group hover:bg-brand-500/[0.02] transition-colors">
                                     <td>
                                         <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center text-[11px] font-black text-brand-500 uppercase shrink-0">
+                                            <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center text-[12px] font-bold text-brand-500 shrink-0">
                                                 {e.full_name?.charAt(0)}
                                             </div>
                                             <div className="flex flex-col">
-                                                <span className="text-xs font-black text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">{e.full_name}</span>
-                                                <span className="text-[10px] font-bold text-content-subtle mt-0.5">@{e.username}</span>
+                                                <span className="text-xs font-bold text-content dark:text-white tracking-tight group-hover:text-brand-500 transition-colors">{toNameCase(e.full_name)}</span>
+                                                <span className="text-[11px] font-semibold text-content-subtle mt-0.5">@{e.username}</span>
                                             </div>
                                         </div>
                                     </td>
@@ -215,8 +216,8 @@ export default function EmployeesTab({ notify }) {
                                     </td>
                                     <td>
                                         <div className="flex flex-col gap-0.5">
-                                            <span className="text-[11px] font-bold text-content dark:text-content-dark">{e.email || "—"}</span>
-                                            {e.phone && <span className="text-[10px] font-bold text-content-subtle tabular-nums">{e.phone}</span>}
+                                            <span className="text-[12px] font-semibold text-content dark:text-content-dark">{e.email || "—"}</span>
+                                            {e.phone && <span className="text-[11px] font-semibold text-content-subtle tabular-nums">{e.phone}</span>}
                                         </div>
                                     </td>
                                     <td className="text-center">
@@ -262,16 +263,16 @@ export default function EmployeesTab({ notify }) {
                             <div key={role.id} className="card-premium p-4 flex flex-col gap-3">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
-                                        <div className="text-[13px] font-black text-content dark:text-white uppercase tracking-tight truncate">{role.label}</div>
-                                        <div className="text-[10px] font-bold text-content-subtle font-mono mt-0.5">{role.name}</div>
+                                        <div className="text-[13px] font-bold text-content dark:text-white tracking-tight truncate">{role.label}</div>
+                                        <div className="text-[11px] font-semibold text-content-subtle font-mono mt-0.5">{role.name}</div>
                                     </div>
                                     {isAdmin
                                         ? <span className="badge badge-success shadow-none shrink-0">Acceso total</span>
-                                        : <span className="text-[10px] font-black tabular-nums text-brand-500 shrink-0">{concedidas}/{totales}</span>}
+                                        : <span className="text-[11px] font-bold tabular-nums text-brand-500 shrink-0">{concedidas}/{totales}</span>}
                                 </div>
 
                                 {isAdmin ? (
-                                    <p className="text-[11px] font-bold text-content-subtle leading-relaxed flex-1">
+                                    <p className="text-[12px] font-semibold text-content-subtle leading-relaxed flex-1">
                                         Tiene acceso total al sistema y no puede modificarse.
                                     </p>
                                 ) : (
@@ -282,7 +283,7 @@ export default function EmployeesTab({ notify }) {
                                             {resumen.filter(m => m.dadas > 0).map(m => (
                                                 <span
                                                     key={m.key}
-                                                    className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide border ${
+                                                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${
                                                         m.dadas === m.total
                                                             ? "bg-brand-500/10 text-brand-500 border-brand-500/25"
                                                             : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/40 dark:border-white/10"
@@ -293,14 +294,14 @@ export default function EmployeesTab({ notify }) {
                                                 </span>
                                             ))}
                                             {concedidas === 0 && (
-                                                <span className="text-[11px] font-bold text-content-subtle opacity-60">Sin permisos asignados</span>
+                                                <span className="text-[12px] font-semibold text-content-subtle opacity-60">Sin permisos asignados</span>
                                             )}
                                         </div>
 
                                         <Button
                                             variant="ghost"
                                             onClick={() => openPerms(role)}
-                                            className="h-8 w-full text-[10px] border border-border/30 dark:border-white/10"
+                                            className="h-8 w-full text-[11px] border border-border/30 dark:border-white/10"
                                         >
                                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                             Editar permisos
@@ -326,10 +327,10 @@ export default function EmployeesTab({ notify }) {
                     return (
                         <div className="space-y-3">
                             <div className="flex items-center justify-between gap-3 pb-1">
-                                <p className="text-[11px] font-bold text-content-subtle leading-relaxed">
+                                <p className="text-[12px] font-semibold text-content-subtle leading-relaxed">
                                     Lo que este rol puede hacer en cada módulo.
                                 </p>
-                                <span className="text-[10px] font-black tabular-nums text-brand-500 shrink-0">{concedidas} activos</span>
+                                <span className="text-[11px] font-bold tabular-nums text-brand-500 shrink-0">{concedidas} activos</span>
                             </div>
 
                             {/* La matriz vive dentro de un contenedor con scroll propio: son 46
@@ -342,15 +343,15 @@ export default function EmployeesTab({ notify }) {
                                         <div key={mod.key} className="rounded-xl border border-border/30 dark:border-white/5 overflow-hidden">
                                             <div className="px-3 py-2 flex items-center justify-between gap-3 bg-surface-2/60 dark:bg-white/[0.03] border-b border-border/20 dark:border-white/5">
                                                 <div className="flex items-center gap-2 min-w-0">
-                                                    <span className="text-[11px] font-black uppercase tracking-tight text-content dark:text-white truncate">{mod.label}</span>
-                                                    <span className={`text-[9px] font-black uppercase tracking-widest ${dadas ? "text-brand-500" : "text-content-subtle opacity-50"}`}>
+                                                    <span className="text-[12px] font-bold tracking-tight text-content dark:text-white truncate">{mod.label}</span>
+                                                    <span className={`text-[10px] font-bold uppercase tracking-widest ${dadas ? "text-brand-500" : "text-content-subtle opacity-50"}`}>
                                                         {dadas}/{keys.length}
                                                     </span>
                                                 </div>
                                                 <button
                                                     type="button"
                                                     onClick={() => toggleModule(permRole.id, mod)}
-                                                    className="text-[9px] font-black uppercase tracking-widest text-brand-500 hover:underline shrink-0"
+                                                    className="text-[10px] font-bold uppercase tracking-widest text-brand-500 hover:underline shrink-0"
                                                 >
                                                     {dadas === keys.length ? "Quitar todo" : "Dar todo"}
                                                 </button>
@@ -373,7 +374,7 @@ export default function EmployeesTab({ notify }) {
                                                                 onChange={() => togglePerm(permRole.id, k)}
                                                                 className="accent-brand-500 w-4 h-4 shrink-0"
                                                             />
-                                                            <span className={`text-[10px] font-bold leading-tight ${perms[k] ? "text-brand-600 dark:text-brand-400" : "text-content-subtle"}`}>
+                                                            <span className={`text-[11px] font-semibold leading-tight ${perms[k] ? "text-brand-600 dark:text-brand-400" : "text-content-subtle"}`}>
                                                                 {act.label}
                                                             </span>
                                                         </label>
@@ -385,7 +386,7 @@ export default function EmployeesTab({ notify }) {
                                 })}
                             </div>
 
-                            <div className="flex justify-end gap-3 pt-3 border-t border-border/10">
+                            <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
                                 <Button variant="ghost" onClick={() => { cancelPerms(); }}>Cancelar</Button>
                                 <Button
                                     variant="primary"
@@ -406,32 +407,32 @@ export default function EmployeesTab({ notify }) {
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2 sm:col-span-1">
-                            <label className="label mb-1.5 text-brand-500">Nombre completo <span className="text-danger">*</span></label>
+                            <label className="label mb-1.5">Nombre completo <span className="text-danger">*</span></label>
                             <input
                                 ref={nameRef}
                                 value={form.full_name}
                                 onChange={set("full_name")}
                                 onKeyDown={e => { if (e.key === "Enter") save(); }}
                                 autoComplete="name"
-                                className="input h-10 font-bold uppercase"
+                                className="input h-10"
                                 placeholder="Ej: JUAN PÉREZ"
                             />
                         </div>
                         <div className="col-span-2 sm:col-span-1">
-                            <label className="label mb-1.5 opacity-70">Usuario <span className="text-danger">*</span></label>
+                            <label className="label mb-1.5">Usuario <span className="text-danger">*</span></label>
                             <input
                                 value={form.username}
                                 onChange={set("username")}
                                 onKeyDown={e => { if (e.key === "Enter") save(); }}
                                 autoComplete="username"
-                                className="input h-10 font-bold"
+                                className="input h-10"
                                 placeholder="Ej: jperez"
                             />
                         </div>
                     </div>
 
                     <div>
-                        <label className="label mb-1.5 opacity-70">
+                        <label className="label mb-1.5">
                             {editId ? "Contraseña (vacío = no cambiar)" : <>Contraseña <span className="text-danger">*</span></>}
                         </label>
                         <input
@@ -439,39 +440,39 @@ export default function EmployeesTab({ notify }) {
                             onChange={set("password")}
                             type="password"
                             autoComplete={editId ? "new-password" : "new-password"}
-                            className="input h-10 font-bold"
+                            className="input h-10"
                             placeholder={editId ? "••••••••" : "Mínimo 6 caracteres"}
                         />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
-                            <label className="label mb-1.5 opacity-70">Rol <span className="text-danger">*</span></label>
-                            <select value={form.role_id} onChange={set("role_id")} className="input h-10 font-bold cursor-pointer">
+                            <label className="label mb-1.5">Rol <span className="text-danger">*</span></label>
+                            <select value={form.role_id} onChange={set("role_id")} className="input h-10 cursor-pointer">
                                 <option value="">Seleccionar</option>
                                 {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="label mb-1.5 opacity-70">Teléfono</label>
+                            <label className="label mb-1.5">Teléfono</label>
                             <input
                                 value={form.phone}
                                 onChange={e => setForm(p => ({ ...p, phone: e.target.value.replace(/[^\d\s+\-()]/g, "") }))}
                                 inputMode="tel"
                                 autoComplete="tel"
-                                className="input h-10 font-bold tabular-nums"
+                                className="input h-10 tabular-nums"
                                 placeholder="+58 412..."
                             />
                         </div>
                         <div>
-                            <label className="label mb-1.5 opacity-70">Correo</label>
+                            <label className="label mb-1.5">Correo</label>
                             <input
                                 value={form.email}
                                 onChange={e => setForm(p => ({ ...p, email: e.target.value.toLowerCase() }))}
                                 type="email"
                                 inputMode="email"
                                 autoComplete="email"
-                                className="input h-10 font-bold"
+                                className="input h-10"
                                 placeholder="email@..."
                             />
                         </div>
@@ -482,7 +483,7 @@ export default function EmployeesTab({ notify }) {
                         la única que hay. */}
                     {warehouses.length > 1 && (
                         <div>
-                            <label className="label mb-1.5 opacity-70">Sucursales con acceso</label>
+                            <label className="label mb-1.5">Sucursales con acceso</label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 {warehouses.map(w => {
                                     const on = (form.warehouse_ids || []).includes(w.id);
@@ -500,14 +501,14 @@ export default function EmployeesTab({ notify }) {
                                             <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${on ? "bg-success border-success" : "border-border/60"}`}>
                                                 {on && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                                             </div>
-                                            <span className={`text-[11px] font-black uppercase truncate ${on ? "text-content dark:text-white" : "text-content-subtle"}`}>
+                                            <span className={`text-[12px] font-bold truncate ${on ? "text-content dark:text-white" : "text-content-subtle"}`}>
                                                 {w.name}
                                             </span>
                                         </div>
                                     );
                                 })}
                             </div>
-                            <div className="text-[10px] font-bold text-content-subtle mt-1.5 opacity-60">
+                            <div className="text-[11px] font-semibold text-content-subtle mt-1.5 opacity-60">
                                 Sin ninguna marcada, el empleado hereda las sucursales de quien lo crea.
                             </div>
                         </div>
@@ -522,10 +523,10 @@ export default function EmployeesTab({ notify }) {
                                 className="accent-brand-500 w-4 h-4 shrink-0"
                             />
                             <div>
-                                <div className={`text-[11px] font-black uppercase tracking-wide ${form.active ? "text-success" : "text-content-subtle"}`}>
+                                <div className={`text-[12px] font-bold ${form.active ? "text-success" : "text-content-subtle"}`}>
                                     {form.active ? "Empleado activo" : "Empleado inactivo"}
                                 </div>
-                                <div className="text-[10px] text-content-subtle opacity-60 mt-0.5">
+                                <div className="text-[11px] text-content-subtle opacity-60 mt-0.5">
                                     {form.active ? "Puede iniciar sesión en el sistema" : "No puede acceder al sistema"}
                                 </div>
                             </div>
@@ -533,12 +534,12 @@ export default function EmployeesTab({ notify }) {
                     )}
                 </div>
 
-                <div className="flex justify-end gap-3 mt-8 pt-5 border-t border-border/10 dark:border-white/5">
-                    <Button variant="ghost" onClick={closeModal} className="h-10 px-6 font-black tracking-widest text-[10px] uppercase">
-                        CANCELAR
+                <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
+                    <Button variant="ghost" onClick={closeModal} className="h-10 px-6 font-bold text-[11px]">
+                        Cancelar
                     </Button>
-                    <Button onClick={save} loading={loading} className="h-10 px-8 shadow-xl font-black tracking-[0.2em] text-[10px] uppercase">
-                        {editId ? "GUARDAR CAMBIOS" : "CREAR EMPLEADO"}
+                    <Button onClick={save} loading={loading} className="h-10 px-8 shadow-xl font-bold text-[11px]">
+                        {editId ? "Guardar cambios" : "Crear empleado"}
                     </Button>
                 </div>
             </Modal>

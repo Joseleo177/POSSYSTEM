@@ -30,11 +30,11 @@ function BotonGrande({ n, name, image, onClick }) {
             onClick={onClick}
             className="group relative flex flex-col items-center justify-center gap-2 h-28 rounded-2xl border border-border/30 dark:border-white/10 bg-white/[0.02] dark:bg-white/[0.03] px-3 text-center transition-all hover:border-brand-500/60 hover:bg-brand-500/5 focus:outline-none focus:border-brand-500/70 focus:bg-brand-500/5"
         >
-            <span className="absolute top-2 left-2 min-w-[16px] h-4 px-1 rounded border border-current/30 text-[9px] font-black leading-[15px] text-center text-content-subtle dark:text-white/40">
+            <span className="absolute top-2 left-2 min-w-[16px] h-4 px-1 rounded border border-current/30 text-[10px] font-bold leading-[15px] text-center text-content-subtle dark:text-white/40">
                 {n}
             </span>
             <MethodBankLogo src={image} size={44} rounded="rounded-xl" />
-            <span className="text-[12px] font-black uppercase tracking-wide text-content dark:text-white leading-tight line-clamp-2">
+            <span className="text-[12px] font-bold text-content dark:text-white leading-tight line-clamp-2">
                 {name}
             </span>
         </button>
@@ -192,8 +192,8 @@ export default function ImmediatePayPicker({ journals: journalsProp, warehouseId
     // Portal a body: dentro de un <Modal> (overflow/backdrop-filter) un `fixed` anidado se
     // recortaba o quedaba detrás. Mismo motivo por el que CustomSelect portea su menú.
     return createPortal(
-        <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150" onKeyDown={e => e.stopPropagation()}>
-            <div className="w-full max-w-md bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out">
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-150" onKeyDown={e => e.stopPropagation()}>
+            <div className="w-full max-w-md bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden modal-in">
 
                 <div className="px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3">
                     <button
@@ -205,10 +205,10 @@ export default function ImmediatePayPicker({ journals: journalsProp, warehouseId
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
                     </button>
                     <div className="min-w-0">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
+                        <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">
                             {header.tag}
                         </div>
-                        <div className="text-sm font-black text-content dark:text-white truncate">
+                        <div className="text-sm font-bold text-content dark:text-white truncate">
                             {header.title}
                         </div>
                     </div>
@@ -216,7 +216,7 @@ export default function ImmediatePayPicker({ journals: journalsProp, warehouseId
 
                 <div className="px-5 py-5">
                     {items.length === 0 ? (
-                        <p className="text-[12px] font-bold text-content-subtle dark:text-white/40 text-center py-6">
+                        <p className="text-[12px] font-semibold text-content-subtle dark:text-white/40 text-center py-6">
                             No hay cajas disponibles para esta sucursal.
                         </p>
                     ) : (
@@ -227,7 +227,7 @@ export default function ImmediatePayPicker({ journals: journalsProp, warehouseId
                         </div>
                     )}
 
-                    <div className="flex items-center justify-center gap-3 pt-4 text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
+                    <div className="flex items-center justify-center gap-3 pt-4 text-[12px] font-medium text-content-subtle dark:text-white/50">
                         <span>1 – {items.length} elegir</span>
                         <span className="opacity-40">·</span>
                         <span>Esc {step === "method" ? "cancelar" : "volver"}</span>

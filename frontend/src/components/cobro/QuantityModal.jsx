@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Modal from "../ui/Modal";
-import { resolveImageUrl, imgRetryOnError } from "../../helpers";
+import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
+import StockQty, { splitQty } from "../ui/StockQty";
 import { fmtQtyUnit } from "../../helpers/unitFormatter";
 
 export default function QuantityModal({ isOpen, onClose, item, onSave, convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt }) {
@@ -141,19 +142,25 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
                     </div>
                     <div className="flex flex-col gap-1 min-w-0">
                         {item.category_name && (
-                            <div className="text-[9px] font-black text-brand-500 uppercase tracking-widest truncate">
-                                {item.category_name}
+                            <div className="text-[12px] text-content-subtle truncate">
+                                {toNameCase(item.category_name)}
                             </div>
                         )}
-                        <div className="text-sm font-black dark:text-white uppercase tracking-wide leading-tight line-clamp-2">
+                        <div className="text-sm font-bold dark:text-white leading-tight line-clamp-2">
                             {item.name}
                         </div>
                         {primaryPrice && (
-                            <div className="text-xl font-black dark:text-white font-display leading-none mt-0.5 tabular-nums">
+                            <div className="text-xl font-bold dark:text-white font-display leading-none mt-0.5 tabular-nums">
                                 {primaryPrice}
                                 {secondaryPrice && (
                                     <span className="text-base text-content-muted dark:text-white/60"> · {secondaryPrice}</span>
                                 )}
+                            </div>
+                        )}
+                        {!item.is_service && item.stock !== null && item.stock !== undefined && (
+                            <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-content-subtle">
+                                Disponible
+                                <StockQty qty={item.stock} value={splitQty(item.stock, item.unit)[0]} unit={splitQty(item.stock, item.unit)[1]} min={item.min_stock} />
                             </div>
                         )}
                     </div>
@@ -162,32 +169,16 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
                 {error && (
                     <div className="flex items-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-lg animate-in slide-in-from-top-1 fade-in duration-150">
                         <svg className="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                        <span className="text-red-600 dark:text-red-400 text-[11px] font-bold uppercase tracking-wider">{error}</span>
+                        <span className="text-red-600 dark:text-red-400 text-[12px] font-semibold">{error}</span>
                     </div>
                 )}
 
-                <div className="flex justify-center items-center gap-2">
-                    <div className="px-3 py-1 rounded-md bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 text-[9px] font-black uppercase tracking-widest border border-border/40 dark:border-white/5">
-                        {unit}
-                    </div>
-                    {/* Disponible: mismo semáforo que la grilla (no aplica a servicios/stock ilimitado) */}
-                    {!item.is_service && item.stock !== null && item.stock !== undefined && (
-                        <div className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border ${
-                            parseFloat(item.stock) <= 0 ? "bg-danger/10 text-danger border-danger/30"
-                            : parseFloat(item.stock) <= 5 ? "bg-orange-500/10 text-orange-500 border-orange-500/30"
-                            : "bg-success/10 text-success border-success/30"
-                        }`}>
-                            Dispo: {fmtQtyUnit(item.stock, item.unit)}
-                        </div>
-                    )}
-                </div>
-
                 {/* Main Input Control */}
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 pt-1 pb-6">
                     <div className="flex items-center justify-between gap-4 px-1">
                         <button
                             onClick={() => adjust(-1)}
-                            className="w-12 h-12 rounded-lg bg-surface-2 dark:bg-white/5 flex items-center justify-center text-xl font-black text-content dark:text-white active:scale-95 transition-all border border-border/40 dark:border-white/5 shadow-sm hover:bg-surface-3 dark:hover:bg-white/10"
+                            className="w-12 h-12 rounded-lg bg-surface-2 dark:bg-white/5 flex items-center justify-center text-xl font-bold text-content dark:text-white active:scale-95 transition-all border border-border/40 dark:border-white/5 shadow-sm hover:bg-surface-3 dark:hover:bg-white/10"
                         >
                             -
                         </button>
@@ -208,15 +199,18 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
                                         handleSave();
                                     }
                                 }}
-                                className="w-full bg-transparent text-center text-4xl font-display font-black dark:text-white border-none outline-none focus:ring-0 placeholder:opacity-20 tabular-nums"
+                                className="w-full bg-transparent text-center text-4xl font-display font-bold dark:text-white border-none outline-none focus:ring-0 placeholder:opacity-20 tabular-nums"
                                 placeholder="0"
                             />
                             <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-12 h-0.5 bg-brand-500 rounded-full opacity-40 group-focus-within:opacity-100 transition-all" />
+                            <div className="absolute top-full inset-x-0 mt-2 text-center text-[12px] font-medium text-content-subtle lowercase">
+                                {splitQty(qtyNum || 0, unit)[1]}
+                            </div>
                         </div>
 
                         <button
                             onClick={() => adjust(1)}
-                            className="w-12 h-12 rounded-lg bg-brand-500 text-black flex items-center justify-center text-xl font-black active:scale-95 transition-all shadow-md shadow-brand-500/10 hover:brightness-105"
+                            className="w-12 h-12 rounded-lg btn-accent flex items-center justify-center text-xl font-bold active:scale-95 transition-all shadow-sm"
                         >
                             +
                         </button>
@@ -225,19 +219,19 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
 
                 {/* Importe resultante: se recalcula al escribir o al usar +/-. */}
                 {primaryPrice && (
-                    <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-brand-500/5 border border-brand-500/20">
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface-2 dark:bg-white/[0.04]">
                         <div className="flex flex-col">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/40">Subtotal</span>
-                            <span className="text-[10px] font-black uppercase text-brand-500 tabular-nums">
-                                {fmtQtyUnit(qtyNum, item.unit)} <span className="opacity-40">×</span> {primaryPrice}
+                            <span className="text-[13px] font-semibold text-content dark:text-white">Subtotal</span>
+                            <span className="text-[12px] text-content-subtle tabular-nums mt-0.5">
+                                {fmtQtyUnit(qtyNum, item.unit).toLowerCase()} <span className="opacity-60">×</span> {primaryPrice}
                             </span>
                         </div>
                         <div className="flex flex-col items-end">
-                            <span className="text-lg font-black font-display text-content dark:text-white tabular-nums leading-tight">
+                            <span className="text-lg font-bold font-display text-content dark:text-white tabular-nums leading-tight">
                                 {fmt(lineTotal, currSym)}
                             </span>
                             {lineTotalSecondary !== null && (
-                                <span className="text-lg font-black font-display text-content dark:text-white tabular-nums leading-tight">
+                                <span className="text-lg font-bold font-display text-content dark:text-white tabular-nums leading-tight">
                                     {fmt(lineTotalSecondary, secondaryCurrency.symbol)}
                                 </span>
                             )}
@@ -249,14 +243,14 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
                 <div className="flex flex-col gap-2 pt-2">
                     <button
                         onClick={handleSave}
-                        className="w-full h-11 bg-brand-500 text-black rounded-lg font-black text-[11px] uppercase tracking-wider shadow-md shadow-brand-500/10 active:scale-98 transition-all flex items-center justify-center gap-2 hover:brightness-105"
+                        className="w-full h-11 btn-accent rounded-lg font-semibold text-[14px] shadow-sm active:scale-[0.99] transition-all flex items-center justify-center gap-2"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                        Confirmar Cantidad
+                        Confirmar cantidad
                     </button>
                     <button
                         onClick={onClose}
-                        className="w-full h-8 text-content-subtle dark:text-content-dark-muted rounded-lg font-black uppercase tracking-widest text-[9px] hover:bg-surface-2 dark:hover:bg-white/5 transition-all"
+                        className="w-full h-9 text-content-subtle dark:text-content-dark-muted rounded-lg font-medium text-[13px] hover:bg-surface-2 dark:hover:bg-white/5 transition-colors"
                     >
                         Cerrar (ESC)
                     </button>

@@ -1,7 +1,7 @@
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import { Button } from "../ui/Button";
-import { printQuotationDoc, printQuotationLetter } from "../../helpers";
+import { printQuotationDoc, printQuotationLetter, toNameCase } from "../../helpers";
 import { useEffect } from "react";
 
 export default function QuotationConfirmModal({ quotation, onNext }) {
@@ -38,8 +38,8 @@ export default function QuotationConfirmModal({ quotation, onNext }) {
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out" onKeyDown={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200">
+            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden modal-in" onKeyDown={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3 bg-brand-500/5">
@@ -49,10 +49,10 @@ export default function QuotationConfirmModal({ quotation, onNext }) {
                         </svg>
                     </div>
                     <div>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Cotización Guardada</div>
-                        <div className="text-sm font-black text-content dark:text-white">Cotización #{quotation.id}</div>
+                        <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">Cotización guardada</div>
+                        <div className="text-sm font-bold text-content dark:text-white">Cotización #{quotation.id}</div>
                     </div>
-                    <div className="ml-auto text-[11px] font-black uppercase tracking-wide px-2.5 py-1 rounded-lg border bg-amber-500/10 text-amber-500 border-amber-500/20">
+                    <div className="ml-auto text-[12px] font-bold px-2.5 py-1 rounded-lg border bg-amber-500/10 text-amber-500 border-amber-500/20">
                         Pendiente
                     </div>
                 </div>
@@ -62,23 +62,23 @@ export default function QuotationConfirmModal({ quotation, onNext }) {
                     {discount > 0 && (
                         <>
                             <div className="flex justify-between items-center">
-                                <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 uppercase tracking-wide">Subtotal</span>
-                                <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 tabular-nums">{fmt(total + discount)}</span>
+                                <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40">Subtotal</span>
+                                <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40 tabular-nums">{fmt(total + discount)}</span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className="text-[11px] font-bold text-danger uppercase tracking-wide">Descuento</span>
-                                <span className="text-[11px] font-bold text-danger tabular-nums">-{fmt(discount)}</span>
+                                <span className="text-[12px] font-semibold text-danger">Descuento</span>
+                                <span className="text-[12px] font-semibold text-danger tabular-nums">-{fmt(discount)}</span>
                             </div>
                         </>
                     )}
                     <div className="flex justify-between items-center pt-1">
-                        <span className="text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40">Total</span>
-                        <span className="text-xl font-black text-brand-500 tabular-nums">{fmt(total)}</span>
+                        <span className="text-[12px] font-bold text-content-subtle dark:text-white/40">Total</span>
+                        <span className="text-xl font-bold text-brand-500 tabular-nums">{fmt(total)}</span>
                     </div>
                     {quotation.customer_name && (
                         <div className="flex justify-between items-center">
-                            <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 uppercase tracking-wide">Cliente</span>
-                            <span className="text-[11px] font-bold text-content dark:text-white/70 tabular-nums">{quotation.customer_name}</span>
+                            <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40">Cliente</span>
+                            <span className="text-[12px] font-semibold text-content dark:text-white/70 tabular-nums">{toNameCase(quotation.customer_name)}</span>
                         </div>
                     )}
                 </div>

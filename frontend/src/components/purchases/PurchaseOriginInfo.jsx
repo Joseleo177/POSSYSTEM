@@ -1,6 +1,6 @@
-import { fmtDate } from "../../helpers";
+import { fmtDate, toNameCase } from "../../helpers";
 
-const fmt2 = (num) => Number(num || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt2 = (num) => Number(num || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
 export default function PurchaseOriginInfo({ detail }) {
     return (
@@ -8,34 +8,34 @@ export default function PurchaseOriginInfo({ detail }) {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
 
                 <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-content-subtle mb-1">Proveedor</p>
-                    <p className={`text-[13px] font-bold leading-snug ${detail.supplier_name ? "text-content dark:text-white" : "italic text-content-subtle"}`}>
-                        {detail.supplier_name || "No registrado"}
+                    <p className="text-[12px] font-medium text-content-subtle mb-1">Proveedor</p>
+                    <p className={`text-[13px] font-semibold leading-snug ${detail.supplier_name ? "text-content dark:text-white" : "italic text-content-subtle"}`}>
+                        {toNameCase(detail.supplier_name) || "No registrado"}
                     </p>
                     {detail.supplier_rif && (
-                        <p className="text-[10px] font-bold text-brand-500 tabular-nums mt-0.5">{detail.supplier_rif}</p>
+                        <p className="text-[11px] font-semibold text-brand-500 tabular-nums mt-0.5">{detail.supplier_rif}</p>
                     )}
                 </div>
 
                 <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-content-subtle mb-1">Almacén</p>
-                    <p className="text-[13px] font-bold text-content dark:text-white">{detail.warehouse_name || "—"}</p>
+                    <p className="text-[12px] font-medium text-content-subtle mb-1">Almacén</p>
+                    <p className="text-[13px] font-semibold text-content dark:text-white">{toNameCase(detail.warehouse_name) || "—"}</p>
                 </div>
 
                 <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-content-subtle mb-1">Registrado por</p>
-                    <p className="text-[13px] font-bold text-content dark:text-white">{detail.employee_name || "Sistema"}</p>
+                    <p className="text-[12px] font-medium text-content-subtle mb-1">Registrado por</p>
+                    <p className="text-[13px] font-semibold text-content dark:text-white">{toNameCase(detail.employee_name) || "Sistema"}</p>
                 </div>
 
                 <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-content-subtle mb-1">Fecha</p>
-                    <p className="text-[13px] font-bold text-content dark:text-white tabular-nums">{fmtDate(detail.created_at)}</p>
+                    <p className="text-[12px] font-medium text-content-subtle mb-1">Fecha</p>
+                    <p className="text-[13px] font-semibold text-content dark:text-white tabular-nums">{fmtDate(detail.created_at)}</p>
                 </div>
             </div>
 
             {detail.notes && (
                 <div className="mt-4 pt-4 border-t border-border/10 dark:border-white/[0.06]">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-content-subtle mb-1">Observaciones</p>
+                    <p className="text-[12px] font-medium text-content-subtle mb-1">Observaciones</p>
                     <p className="text-[12px] italic text-content-subtle opacity-70">{detail.notes}</p>
                 </div>
             )}

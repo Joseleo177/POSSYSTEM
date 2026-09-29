@@ -17,6 +17,9 @@ module.exports = (sequelize, DataTypes) => {
     reference_date:     { type: DataTypes.DATEONLY },
     reference_number:   { type: DataTypes.STRING(100) },
     notes:              { type: DataTypes.TEXT },
+    // Pago conjunto: los pagos del mismo acto comparten esta clave y un solo egreso
+    // (`purchase_batch:<batch_id>`). Nulo = pago suelto, con su egreso `purchase_payment:<id>`.
+    batch_id:           { type: DataTypes.STRING(64), allowNull: true },
     created_at:         { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

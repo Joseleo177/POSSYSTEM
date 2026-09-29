@@ -6,12 +6,15 @@ import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { saleTotalAtRate } from "../../helpers";
 import { useApp } from "../../context/AppContext";
+import StatusMark from "../ui/StatusMark";
+import Money from "../ui/Money";
+import Kbd from "../ui/Kbd";
 
 // Número de atajo dentro del botón. Se dibuja como tecla para que se lea como "pulsa el 1"
 // y no como parte del texto de la acción.
 function KeyHint({ n }) {
     return (
-        <span className="mr-1.5 min-w-[14px] h-[14px] px-1 rounded border border-current/30 text-[9px] font-black leading-[13px] text-center opacity-60 shrink-0">
+        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-[4px] ring-1 ring-inset ring-current text-[11px] font-semibold tabular-nums opacity-45 shrink-0">
             {n}
         </span>
     );
@@ -258,161 +261,157 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         // `printing` va en las dependencias: sin él, el handler quedaba capturado con el valor
         // viejo y dos pulsaciones seguidas del atajo lanzaban dos impresiones.
     }, [onNext, showReceiptModal, showPayModal, showPicker, actionKeys.join(","), creditLoading, printing, isUnresolved]);
-    // La insignia describe el ESTADO de la factura, no la acción que se acaba de hacer.
-    // "Abono parcial" nombraba el movimiento; lo que importa aquí es que queda saldo.
-    const STATUS_LABELS = {
-        pagado:    "Pagada",
-        exonerado: "Exonerada",
-        parcial:   "Saldo pendiente",
-        borrador:  "Sin cobrar",
-        espera:    "En espera",
-        pendiente: "Por cobrar",
+    // Mismo lenguaje que las tablas (ui/StatusMark): saldada va en gris con su check; lo que
+    // aún espera dinero lleva punto de color. Antes toda la cabecera se teñía de rojo, y una
+    // venta a crédito —algo normal— se leía como un error.
+    const STATUS_MAP = {
+        pagado:    { label: "Pagada",          tone: "success", quiet: "check" },
+        exonerado: { label: "Exonerada",       tone: "violet" },
+        parcial:   { label: "Saldo pendiente", tone: "warning" },
+        borrador:  { label: "Sin cobrar",      tone: "neutral" },
+        espera:    { label: "En espera",       tone: "info" },
+        pendiente: { label: "Por cobrar",      tone: "danger" },
     };
-    const statusLabel = STATUS_LABELS[currentStatus] || "Por cobrar";
-    const badgeClass     = currentStatus === "pagado"
-        ? "bg-green-500/10 text-green-500 border-green-500/20"
-        : currentStatus === "exonerado"
-        ? "bg-violet-500/10 text-violet-400 border-violet-500/20"
-        : currentStatus === "parcial"
-        ? "bg-brand-500/10 text-brand-500 border-brand-500/20"
-        : currentStatus === "borrador"
-        ? "bg-surface-3 text-content-muted border-border dark:bg-white/5 dark:text-white/40 dark:border-white/10"
-        : "bg-danger/10 text-danger border-danger/20";
+    const saldada = ["pagado", "exonerado"].includes(currentStatus);
+    // Un solo botón de tinta: la acción que sigue. Si falta dinero, cobrar; si no, pasar a la
+    // siguiente venta. Antes Imprimir y Siguiente iban los dos en negro y competían.
+    const principal = canSettle ? "pay" : "next";
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out" onKeyDown={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] overlay-in">
+            <div className="w-full max-w-[400px] bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden modal-in" onKeyDown={e => e.stopPropagation()}>
 
-                {/* Header */}
-                <div className={`px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3 ${currentStatus === "pagado" ? "bg-success/5" : currentStatus === "exonerado" ? "bg-violet-500/5" : currentStatus === "borrador" ? "bg-surface-2/50" : "bg-danger/5"}`}>
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${badgeClass}`}>
-                        {/* Cuenta cerrada —cobrada o exonerada— lleva el visto; el reloj es para
-                            la que todavía espera dinero. */}
-                        {["pagado", "exonerado"].includes(currentStatus)
-                            ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-                            : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2" /></svg>
-                        }
-                    </div>
-                    <div>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Transacción Registrada</div>
-                        <div className="text-sm font-black text-content dark:text-white">{receipt.invoice_number ? `Orden ${receipt.invoice_number}` : `Borrador #${receipt.id}`}</div>
-                    </div>
-                    <div className={`ml-auto text-[11px] font-black uppercase tracking-wide px-2.5 py-1 rounded-lg border ${badgeClass}`}>
-                        {statusLabel}
-                    </div>
-                </div>
-
-                {/* Totales */}
-                <div className="px-5 py-4 space-y-2 border-b border-border/20 dark:border-white/5">
-                    {(parseFloat(receipt.discount_amount) > 0 || saleCharge > 0) && (
-                        <>
-                            <div className="flex justify-between items-center">
-                                <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 uppercase tracking-wide">Subtotal</span>
-                                <span className="text-[11px] font-bold text-content-muted tabular-nums">
-                                    {fmtSubtotal(totalMain, mainRate, receiptSym)}
-                                </span>
+                {/* Cabecera */}
+                <div className="px-6 pt-6">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${saldada
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                : "bg-surface-3 text-content-muted dark:bg-white/[0.06] dark:text-white/70"}`}>
+                                {/* Cuenta cerrada —cobrada o exonerada— lleva el visto; el reloj es
+                                    para la que todavía espera dinero. */}
+                                {saldada
+                                    ? <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M5 13l4 4L19 7" /></svg>
+                                    : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                }
                             </div>
-                            {parseFloat(receipt.discount_amount) > 0 && (
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[11px] font-bold text-danger uppercase tracking-wide">Descuento</span>
-                                    <span className="text-[11px] font-bold text-danger tabular-nums">-{fmt(receipt.discount_amount)}</span>
+                            <div className="min-w-0">
+                                <div className="text-[12px] font-medium text-content-subtle">Venta registrada</div>
+                                <div className="text-[16px] font-bold tracking-[-0.01em] text-content dark:text-white tabular-nums truncate">
+                                    {receipt.invoice_number ? `Orden ${receipt.invoice_number}` : `Borrador #${receipt.id}`}
                                 </div>
-                            )}
-                            {saleCharge > 0 && (
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[11px] font-bold text-content-muted uppercase tracking-wide truncate pr-2">{saleChargeLabel}</span>
-                                    <span className="text-[11px] font-bold text-content-muted tabular-nums shrink-0">+{fmt(saleCharge)}</span>
-                                </div>
-                            )}
-                        </>
-                    )}
-                    <div className="flex justify-between items-center pt-1">
-                        <span className="text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40">
-                            {currentStatus === "parcial" ? "Total de la factura" : "Total a Pagar"}
-                        </span>
-                        <div className="text-right">
-                            <div className={`text-xl font-black tabular-nums leading-tight ${currentStatus === "parcial" ? "text-content-muted" : "text-brand-500"}`}>
-                                {fmtTotal(totalMain, receiptSym)}
                             </div>
-                            {/* Sin dark:text-white/40: ese override daba ~3.2:1 sobre el fondo
-                                oscuro. text-content-muted ya cambia con el tema (7.5:1 en claro,
-                                11:1 en oscuro) y es un monto que el cajero tiene que leer. */}
-                            {showAlt && (
-                                <div className="text-sm font-bold tabular-nums text-content-muted mt-0.5">
-                                    {fmtTotal(totalAlt, altCurrency?.symbol || "")}
-                                </div>
-                            )}
+                        </div>
+                        <div className="pt-1 shrink-0">
+                            <StatusMark status={currentStatus} map={STATUS_MAP} />
                         </div>
                     </div>
-                    {/* Con un abono parcial, mostrar solo el total contradice la insignia:
-                        lo que el cajero necesita ver es cuánto falta por cobrar. */}
-                    {currentStatus === "parcial" && (
-                        <div className="flex justify-between items-center pt-1 border-t border-border/20 dark:border-white/5 mt-1">
-                            <span className="text-[11px] font-black uppercase tracking-wide text-warning">Falta por cobrar</span>
-                            <div className="text-right">
-                                <div className="text-xl font-black text-warning tabular-nums leading-tight">
-                                    {fmtTotal(pendingAt(totalMain, mainRate), receiptSym)}
+
+                    {/* Totales: un bloque gris con la cifra grande en tinta. El turquesa del
+                        total competía con el botón principal por la atención. */}
+                    <div className="mt-5 rounded-lg bg-surface-2 dark:bg-white/[0.04] px-4 py-3.5 space-y-1.5">
+                        {(parseFloat(receipt.discount_amount) > 0 || saleCharge > 0) && (
+                            <div className="space-y-1 pb-2 mb-1 border-b border-border/70 dark:border-white/[0.06]">
+                                <div className="flex justify-between items-center text-[13px]">
+                                    <span className="text-content-subtle">Subtotal</span>
+                                    <Money value={fmtSubtotal(totalMain, mainRate, receiptSym)} className="font-medium text-content-muted" />
                                 </div>
-                                {showAlt && (
-                                    <div className="text-sm font-bold tabular-nums text-warning mt-0.5">
-                                        {fmtTotal(pendingAt(totalAlt, altRate), altCurrency?.symbol || "")}
+                                {parseFloat(receipt.discount_amount) > 0 && (
+                                    <div className="flex justify-between items-center text-[13px]">
+                                        <span className="text-content-subtle">Descuento</span>
+                                        <Money value={`-${fmt(receipt.discount_amount)}`} className="font-medium text-content-muted" />
+                                    </div>
+                                )}
+                                {saleCharge > 0 && (
+                                    <div className="flex justify-between items-center text-[13px]">
+                                        <span className="text-content-subtle truncate pr-2">{saleChargeLabel}</span>
+                                        <Money value={`+${fmt(saleCharge)}`} className="font-medium text-content-muted shrink-0" />
                                     </div>
                                 )}
                             </div>
+                        )}
+                        <div className="flex items-end justify-between gap-3">
+                            <span className="text-[13px] font-medium text-content-muted pb-0.5">
+                                {currentStatus === "parcial" ? "Total de la factura" : "Total a pagar"}
+                            </span>
+                            <div className="text-right">
+                                <Money
+                                    value={fmtTotal(totalMain, receiptSym)}
+                                    className={`block text-[26px] font-bold tracking-[-0.02em] leading-none ${currentStatus === "parcial" ? "text-content-muted" : "text-content dark:text-white"}`}
+                                />
+                                {showAlt && (
+                                    <Money value={fmtTotal(totalAlt, altCurrency?.symbol || "")} className="block mt-1.5 text-[13px] font-medium text-content-subtle" />
+                                )}
+                            </div>
                         </div>
-                    )}
+                        {/* Con un abono parcial, mostrar solo el total contradice el estado: lo
+                            que el cajero necesita ver es cuánto falta por cobrar. */}
+                        {currentStatus === "parcial" && (
+                            <div className="flex items-end justify-between gap-3 pt-2 mt-1 border-t border-border/70 dark:border-white/[0.06]">
+                                <span className="text-[13px] font-semibold text-amber-700 dark:text-amber-400 pb-0.5">Falta por cobrar</span>
+                                <div className="text-right">
+                                    <Money value={fmtTotal(pendingAt(totalMain, mainRate), receiptSym)} className="block text-[22px] font-bold leading-none text-amber-700 dark:text-amber-400" />
+                                    {showAlt && (
+                                        <Money value={fmtTotal(pendingAt(totalAlt, altRate), altCurrency?.symbol || "")} className="block mt-1.5 text-[13px] font-medium text-amber-700/80 dark:text-amber-400/80" />
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Acciones. Cada una lleva su número: en caja se opera con el teclado y sin
                     la etiqueta visible el atajo no existe para quien no lo memorizó. */}
-                <div className="px-5 py-4 flex flex-col gap-2">
+                <div className="px-6 pt-5 pb-5 flex flex-col gap-2">
                     {/* En teléfono van uno debajo del otro: los botones no se encogen (llevan
-                        whitespace-nowrap) y en fila estiraban el modal más allá de la pantalla,
-                        dejando "A Crédito" y "Dejar Pendiente" cortados contra el borde. */}
+                        whitespace-nowrap) y en fila estiraban el modal más allá de la pantalla. */}
                     {canSettle && (
                         <div className="flex flex-col sm:flex-row gap-2">
                             <Button
+                                variant={principal === "pay" ? "primary" : "ghost"}
                                 onClick={() => setShowPicker(true)}
-                                className="flex-1 min-w-0 h-9 bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none"
+                                className="flex-1 min-w-0 h-10"
                             >
                                 <KeyHint n={numOf("pay")} />
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
-                                Pago Inmediato
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                                Cobrar ahora
                             </Button>
                             {/* Solo tiene sentido antes de facturar: una venta ya confirmada
                                 (pendiente/parcial) no debe volver a consumir correlativo. */}
                             {["borrador", "espera"].includes(currentStatus) && (
                                 <Button
+                                    variant="ghost"
                                     onClick={confirmCredit}
                                     disabled={creditLoading}
-                                    className="flex-1 min-w-0 h-9 bg-warning/10 text-warning border border-warning/30 hover:bg-warning hover:text-black shadow-none disabled:opacity-50"
+                                    className="flex-1 min-w-0 h-10"
                                     title="Entregar a crédito: emite la factura y queda por cobrar"
                                 >
                                     <KeyHint n={numOf("credit")} />
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    {creditLoading ? "..." : "A Crédito"}
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    {creditLoading ? "..." : "A crédito"}
                                 </Button>
                             )}
                         </div>
                     )}
                     {/* Imprimir va solo y a ancho completo: es la acción que se repite en cada
-                        venta, y compartir fila con "Ver Ticket" invitaba a confundirlas. */}
+                        venta, y compartir fila con "Ver ticket" invitaba a confundirlas. */}
                     <Button
+                        variant="ghost"
                         onClick={printDirect}
                         disabled={printing}
-                        className="h-9 bg-brand-500/10 text-brand-500 border border-brand-500/30 hover:bg-brand-500 hover:text-black shadow-none disabled:opacity-50"
+                        className="h-10"
                         title="Imprime el ticket en la impresora térmica, sin abrir la vista previa"
                     >
                         <KeyHint n={numOf("print")} />
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                        {printing ? "Imprimiendo..." : "Imprimir Ticket"}
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                        {printing ? "Imprimiendo..." : "Imprimir ticket"}
                     </Button>
 
                     <div className="flex flex-col sm:flex-row gap-2">
-                        <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="flex-1 min-w-0 h-9 border border-border/30 dark:border-white/10">
+                        <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="flex-1 min-w-0 h-10">
                             <KeyHint n={numOf("ticket")} />
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            Ver Ticket
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            Ver ticket
                         </Button>
                         {/* Una venta ya no puede quedarse en borrador: o se cobra, o sale a
                             crédito con su factura. Salir de aquí sin resolver la dejaba sin
@@ -420,31 +419,30 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             la factura a crédito, que es lo que de hecho ocurrió: la mercancía
                             se entregó y queda por cobrar. */}
                         <Button
+                            variant={principal === "next" ? "primary" : "ghost"}
                             onClick={isUnresolved ? salirComoCredito : onNext}
                             disabled={creditLoading}
-                            className="flex-1 min-w-0 h-9 shadow-none"
+                            className="flex-1 min-w-0 h-10"
                             title={isUnresolved ? "Emite la factura y la deja por cobrar" : undefined}
                         >
                             <KeyHint n={numOf("next")} />
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            {isUnresolved ? (creditLoading ? "..." : "Dejar a Crédito") : "Siguiente"}
+                            {isUnresolved ? (creditLoading ? "..." : "Dejar a crédito") : "Siguiente venta"}
+                            <svg className="w-4 h-4 -mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
                         </Button>
                     </div>
 
                     {isUnresolved && (
-                        <p className="text-[10px] font-bold text-content-subtle dark:text-white/40 text-center leading-relaxed pt-0.5">
-                            Al salir se emite la factura
-                            <span className="text-warning"> a crédito</span>, por cobrar a nombre del cliente.
+                        <p className="text-[12px] text-content-subtle text-center leading-relaxed pt-1">
+                            Al salir se emite la factura <span className="font-semibold text-content dark:text-white">a crédito</span>, por cobrar a nombre del cliente.
                         </p>
                     )}
+                </div>
 
-                    {/* Los atajos se anuncian: el cajero no tiene por qué adivinar que Enter
-                        y Esc hacen lo mismo que el botón resaltado. */}
-                    <div className="flex items-center justify-center gap-3 pt-1 text-[9px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
-                        <span>1 – {actionKeys.length} elegir</span>
-                        <span className="opacity-40">·</span>
-                        <span>Enter / Esc {isUnresolved ? "dejar pendiente" : "siguiente"}</span>
-                    </div>
+                {/* Los atajos se anuncian: el cajero no tiene por qué adivinar que Enter y Esc
+                    hacen lo mismo que el último botón. */}
+                <div className="px-6 py-3 border-t border-border/60 dark:border-white/[0.06] bg-surface-2/60 dark:bg-white/[0.02] flex items-center justify-center gap-4 text-[12px] text-content-subtle">
+                    <span className="inline-flex items-center gap-1.5"><Kbd>1</Kbd>–<Kbd>{actionKeys.length}</Kbd> elegir</span>
+                    <span className="inline-flex items-center gap-1.5"><Kbd>Enter</Kbd><Kbd>Esc</Kbd> {isUnresolved ? "dejar a crédito" : "siguiente venta"}</span>
                 </div>
             </div>
 

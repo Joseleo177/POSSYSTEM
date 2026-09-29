@@ -12,7 +12,7 @@ export default function HeaderMobile({ settings, visibleTabs, safeTab, storeName
                     {settings.logo_url ? (
                         <img src={resolveImageUrl(settings.logo_url)} alt="logo" className="h-9 w-auto object-contain shrink-0" />
                     ) : (
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shrink-0 shadow-sm shadow-brand-500/20">
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shrink-0 shadow-sm">
                             <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path
                                     strokeLinecap="round"
@@ -23,7 +23,7 @@ export default function HeaderMobile({ settings, visibleTabs, safeTab, storeName
                             </svg>
                         </div>
                     )}
-                    <span className="text-sm font-black text-content dark:text-content-dark tracking-tight">
+                    <span className="text-sm font-bold text-content dark:text-content-dark tracking-tight">
                         {activeTab?.mobileLabel || storeName}
                     </span>
                 </div>

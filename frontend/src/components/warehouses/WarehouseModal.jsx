@@ -21,10 +21,10 @@ function Toggle({ checked, onChange, title, description, tone = "brand" }) {
                 }`}
         >
             <div className="min-w-0">
-                <div className={`text-xs font-bold ${checked ? titulo : "text-content dark:text-content-dark"}`}>
+                <div className={`text-xs font-semibold ${checked ? titulo : "text-content dark:text-content-dark"}`}>
                     {title}
                 </div>
-                <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5 leading-relaxed">
+                <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-0.5 leading-relaxed">
                     {description}
                 </div>
             </div>
@@ -65,7 +65,6 @@ export default function WarehouseModal({ open, onClose, form, setForm, editId, l
                     los reportes, pero no atiende público: no aparece en la caja, no factura y
                     no admite series ni cajas propias. */}
                 <Toggle
-                    tone="warning"
                     checked={form.sells === false}
                     onChange={v => setForm(p => ({ ...p, sells: !v, ...(v ? {} : { parent_warehouse_id: null }) }))}
                     title="Solo depósito"
@@ -77,10 +76,10 @@ export default function WarehouseModal({ open, onClose, form, setForm, editId, l
                 {/* Selector de almacén padre: solo visible cuando es depósito. */}
                 {form.sells === false && parentOptions.length > 0 && (
                     <div className="p-3 rounded-lg border bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5">
-                        <div className="text-xs font-bold text-content dark:text-content-dark mb-1.5">
+                        <div className="text-xs font-semibold text-content dark:text-content-dark mb-1.5">
                             Almacén principal
                         </div>
-                        <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mb-2 leading-relaxed">
+                        <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mb-2 leading-relaxed">
                             Vincula este depósito con la tienda o sucursal a la que pertenece.
                         </div>
                         <CustomSelect
@@ -108,7 +107,7 @@ export default function WarehouseModal({ open, onClose, form, setForm, editId, l
                 )}
             </div>
 
-            <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-border/10">
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
                 <Button variant="ghost" onClick={onClose}>Cancelar</Button>
                 <Button variant="primary" onClick={onSave} disabled={loading}>
                     {loading ? "Guardando..." : editId ? "Guardar cambios" : "Crear almacén"}

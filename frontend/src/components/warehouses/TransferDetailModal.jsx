@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
 import CustomSelect from "../ui/CustomSelect";
-import { fmtDate } from "../../helpers";
+import { fmtDate, toNameCase } from "../../helpers";
 import { fmtQtyUnit } from "../../helpers/unitFormatter";
 import { printTransferNote } from "../../helpers/printTransferNote";
 import { printTransferNoteLetter } from "../../helpers/printTransferNoteLetter";
@@ -16,8 +16,8 @@ const RESOLUTIONS = [
 
 const Row = ({ label, children }) => (
     <div className="flex items-start justify-between gap-3">
-        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle whitespace-nowrap">{label}</span>
-        <span className="text-[11px] font-black uppercase tracking-tight text-right">{children}</span>
+        <span className="text-[12px] font-medium text-content-subtle whitespace-nowrap">{label}</span>
+        <span className="text-[12px] font-bold tracking-tight text-right">{children}</span>
     </div>
 );
 
@@ -57,23 +57,23 @@ export default function TransferDetailModal({
                 {/* ── Cabecera del documento ── */}
                 <div className="rounded-xl border border-border/30 dark:border-white/10 p-3.5 space-y-2">
                     <div className="flex items-center justify-between gap-3">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Estado</span>
-                        <span className={`badge ${meta.badge} shadow-none text-[10px]`}>{meta.label}</span>
+                        <span className="text-[12px] font-medium text-content-subtle">Estado</span>
+                        <span className={`badge ${meta.badge} shadow-none text-[11px]`}>{meta.label}</span>
                     </div>
                     <Row label="Ruta">
                         {transfer.from_warehouse_name || "Externo"} <span className="text-content-subtle">&rarr;</span>{" "}
                         <span className="text-brand-500">{transfer.to_warehouse_name}</span>
                     </Row>
                     <Row label="Despachó">
-                        {transfer.employee_name || "Sistema"}
-                        <span className="block text-[10px] font-bold text-content-subtle tabular-nums normal-case">
+                        {toNameCase(transfer.employee_name) || "Sistema"}
+                        <span className="block text-[11px] font-semibold text-content-subtle tabular-nums normal-case">
                             {fmtDate(transfer.dispatched_at || transfer.created_at)}
                         </span>
                     </Row>
                     {transfer.received_at && (
                         <Row label="Recibió">
                             {transfer.received_by_name || "—"}
-                            <span className="block text-[10px] font-bold text-content-subtle tabular-nums normal-case">
+                            <span className="block text-[11px] font-semibold text-content-subtle tabular-nums normal-case">
                                 {fmtDate(transfer.received_at)}
                             </span>
                         </Row>
@@ -81,7 +81,7 @@ export default function TransferDetailModal({
                     {transfer.cancelled_at && (
                         <Row label="Anuló">
                             {transfer.cancelled_by_name || "—"}
-                            <span className="block text-[10px] font-bold text-content-subtle tabular-nums normal-case">
+                            <span className="block text-[11px] font-semibold text-content-subtle tabular-nums normal-case">
                                 {fmtDate(transfer.cancelled_at)}
                             </span>
                         </Row>
@@ -89,17 +89,17 @@ export default function TransferDetailModal({
                     {(transfer.note || transfer.receipt_note || transfer.cancel_reason) && (
                         <div className="pt-2 border-t border-border/20 dark:border-white/5 space-y-1.5">
                             {transfer.note && (
-                                <p className="text-[10px] font-medium italic text-content-subtle leading-relaxed">
+                                <p className="text-[11px] font-medium italic text-content-subtle leading-relaxed">
                                     Despacho: {transfer.note}
                                 </p>
                             )}
                             {transfer.receipt_note && (
-                                <p className="text-[10px] font-medium italic text-content-subtle leading-relaxed">
+                                <p className="text-[11px] font-medium italic text-content-subtle leading-relaxed">
                                     Recepción: {transfer.receipt_note}
                                 </p>
                             )}
                             {transfer.cancel_reason && (
-                                <p className="text-[10px] font-medium italic text-danger leading-relaxed">
+                                <p className="text-[11px] font-medium italic text-danger leading-relaxed">
                                     Anulación: {transfer.cancel_reason}
                                 </p>
                             )}
@@ -110,9 +110,9 @@ export default function TransferDetailModal({
                 {/* ── Líneas: despachado contra recibido ── */}
                 <div className="rounded-xl border border-border/30 dark:border-white/10 overflow-hidden">
                     <div className="px-4 py-2 bg-surface-2/50 dark:bg-white/[0.03] grid grid-cols-[1fr_auto_auto] gap-3">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Producto</span>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle w-24 text-right">Despachado</span>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle w-24 text-right">Recibido</span>
+                        <span className="text-[12px] font-medium text-content-subtle">Producto</span>
+                        <span className="text-[11px] font-bold text-content-subtle w-24 text-right">Despachado</span>
+                        <span className="text-[11px] font-bold text-content-subtle w-24 text-right">Recibido</span>
                     </div>
                     <div className="max-h-[260px] overflow-y-auto divide-y divide-border/10 dark:divide-white/5">
                         {items.map(i => {
@@ -122,16 +122,16 @@ export default function TransferDetailModal({
                             return (
                                 <div key={i.id} className="px-4 py-2.5">
                                     <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center">
-                                        <p className="text-[11px] font-black uppercase tracking-tight truncate">{i.product_name}</p>
-                                        <span className="text-[11px] font-black tabular-nums w-24 text-right">{fmtQtyUnit(sent, i.unit)}</span>
-                                        <span className={`text-[11px] font-black tabular-nums w-24 text-right ${
+                                        <p className="text-[12px] font-bold tracking-tight truncate">{i.product_name}</p>
+                                        <span className="text-[12px] font-bold tabular-nums w-24 text-right">{fmtQtyUnit(sent, i.unit)}</span>
+                                        <span className={`text-[12px] font-bold tabular-nums w-24 text-right ${
                                             received == null ? "text-content-subtle opacity-50" : missing > 0 ? "text-danger" : "text-success"
                                         }`}>
                                             {received == null ? "En tránsito" : fmtQtyUnit(received, i.unit)}
                                         </span>
                                     </div>
                                     {missing > 0 && (
-                                        <p className="text-[9px] font-black uppercase tracking-wide text-danger mt-1">
+                                        <p className="text-[10px] font-bold uppercase tracking-wide text-danger mt-1">
                                             Faltan {fmtQtyUnit(missing, i.unit)}
                                             {i.diff_reason ? ` · ${i.diff_reason}` : ""}
                                             {i.resolved_at ? ` · ${i.diff_resolution === "return" ? "Devuelto al origen" : "Cargado como merma"}` : ""}
@@ -147,8 +147,8 @@ export default function TransferDetailModal({
                 {pendingDiff && missingLines.length > 0 && (
                     <div className="rounded-xl border border-danger/25 bg-danger/5 overflow-hidden">
                         <div className="px-4 py-2.5">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-danger">Faltantes por resolver</p>
-                            <p className="text-[10px] font-medium text-content-subtle mt-1 leading-relaxed">
+                            <p className="text-[11px] font-bold uppercase tracking-widest text-danger">Faltantes por resolver</p>
+                            <p className="text-[11px] font-medium text-content-subtle mt-1 leading-relaxed">
                                 Esta mercancía salió del origen y no entró al destino. Decide qué pasó con cada una:
                                 si se dio por perdida queda como merma, si apareció vuelve a contar en el origen.
                             </p>
@@ -159,8 +159,8 @@ export default function TransferDetailModal({
                                 return (
                                     <div key={l.id} className="px-4 py-2.5 flex items-center gap-3">
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-[11px] font-black uppercase tracking-tight truncate">{l.product_name}</p>
-                                            <p className="text-[9px] font-bold text-danger">Faltan {fmtQtyUnit(missing, l.unit)}</p>
+                                            <p className="text-[12px] font-bold tracking-tight truncate">{l.product_name}</p>
+                                            <p className="text-[10px] font-semibold text-danger">Faltan {fmtQtyUnit(missing, l.unit)}</p>
                                         </div>
                                         <CustomSelect
                                             value={resolutions[l.id] || ""}
@@ -180,7 +180,7 @@ export default function TransferDetailModal({
                                     variant="primary"
                                     onClick={submitResolve}
                                     disabled={!allResolved || saving}
-                                    className="h-9 px-5 font-black tracking-widest text-[10px] uppercase w-full"
+                                    className="h-9 px-5 font-bold text-[11px] w-full"
                                 >
                                     {saving ? "Guardando..." : "Resolver faltantes"}
                                 </Button>
@@ -193,8 +193,8 @@ export default function TransferDetailModal({
                 {canManage && transfer.status === "sent" && (
                     cancelMode ? (
                         <div className="rounded-xl border border-danger/25 bg-danger/5 p-3.5 space-y-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-danger">Anular transferencia</p>
-                            <p className="text-[10px] font-medium text-content-subtle leading-relaxed">
+                            <p className="text-[11px] font-bold uppercase tracking-widest text-danger">Anular transferencia</p>
+                            <p className="text-[11px] font-medium text-content-subtle leading-relaxed">
                                 Todo lo despachado vuelve al almacén origen. La transferencia queda anulada en el
                                 histórico: no se borra.
                             </p>
@@ -202,18 +202,18 @@ export default function TransferDetailModal({
                                 value={cancelReason}
                                 onChange={e => setCancelReason(e.target.value)}
                                 placeholder="Motivo de la anulación..."
-                                className="input min-h-[60px] py-3 px-3 resize-none text-[11px] leading-relaxed"
+                                className="input min-h-[60px] py-3 px-3 resize-none text-[12px] leading-relaxed"
                                 rows={2}
                             />
                             <div className="flex gap-2">
-                                <Button variant="ghost" onClick={() => setCancelMode(false)} className="h-9 px-4 font-black tracking-widest text-[10px] uppercase flex-1">
+                                <Button variant="ghost" onClick={() => setCancelMode(false)} className="h-9 px-4 font-bold text-[11px] flex-1">
                                     Volver
                                 </Button>
                                 <Button
                                     variant="danger"
                                     onClick={() => onCancel(transfer.id, cancelReason)}
                                     disabled={saving || !cancelReason.trim()}
-                                    className="h-9 px-4 font-black tracking-widest text-[10px] uppercase flex-1"
+                                    className="h-9 px-4 font-bold text-[11px] flex-1"
                                 >
                                     {saving ? "Anulando..." : "Confirmar anulación"}
                                 </Button>
@@ -230,7 +230,7 @@ export default function TransferDetailModal({
                     <Button
                         variant="ghost"
                         onClick={() => printTransferNote(transfer, companyInfo, printerWidth)}
-                        className="h-10 px-4 font-black tracking-widest text-[10px] uppercase"
+                        className="h-10 px-4 font-bold text-[11px]"
                         title="Nota de despacho en rollo térmico"
                     >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
@@ -239,7 +239,7 @@ export default function TransferDetailModal({
                     <Button
                         variant="ghost"
                         onClick={() => printTransferNoteLetter(transfer, companyInfo)}
-                        className="h-10 px-4 font-black tracking-widest text-[10px] uppercase"
+                        className="h-10 px-4 font-bold text-[11px]"
                         title="Nota de despacho en tamaño carta, para guardar como PDF"
                     >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
@@ -249,13 +249,13 @@ export default function TransferDetailModal({
                         <Button
                             variant="ghost"
                             onClick={() => setCancelMode(true)}
-                            className="h-10 px-4 font-black tracking-widest text-[10px] uppercase text-danger hover:bg-danger/10"
+                            className="h-10 px-4 font-bold text-[11px] text-danger hover:bg-danger/10"
                         >
                             Anular
                         </Button>
                     )}
                 </div>
-                <Button variant="primary" onClick={onClose} className="h-10 px-8 font-black tracking-[0.2em] text-[10px] uppercase">
+                <Button variant="primary" onClick={onClose} className="h-10 px-8 font-bold text-[11px]">
                     Cerrar
                 </Button>
             </div>

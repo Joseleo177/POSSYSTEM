@@ -188,11 +188,11 @@ export default function CommandPalette({ open, onClose, visibleTabs, safeTab, go
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[950] flex items-start justify-center pt-[12vh] bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-[950] flex items-start justify-center pt-[12vh] bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-150"
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-md mx-4 rounded-2xl overflow-hidden border border-border/40 dark:border-white/10 shadow-2xl bg-surface-2 dark:bg-[#1a1a1a] animate-in zoom-in-95 fade-in duration-150"
+        className="w-full max-w-md mx-4 rounded-xl overflow-hidden border border-black/[0.06] dark:border-white/[0.08] shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] bg-surface-2 dark:bg-[#1a1a1a] modal-in"
       >
         {/* Input */}
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border/20 dark:border-white/[0.06]">
@@ -220,7 +220,7 @@ export default function CommandPalette({ open, onClose, visibleTabs, safeTab, go
         {/* Lista */}
         <div ref={listRef} className="max-h-80 overflow-y-auto py-1">
           {totalItems === 0 ? (
-            <p className="px-4 py-6 text-center text-[12px] font-bold text-content-subtle dark:text-white/25">
+            <p className="px-4 py-6 text-center text-[12px] font-semibold text-content-subtle dark:text-white/25">
               Sin resultados para "{query}"
             </p>
           ) : (
@@ -228,7 +228,7 @@ export default function CommandPalette({ open, onClose, visibleTabs, safeTab, go
               {/* Sección Acciones rápidas */}
               {filteredActions.length > 0 && (
                 <>
-                  <p className="px-4 pt-2.5 pb-1 text-[9px] font-black uppercase tracking-widest text-content-subtle/60 dark:text-white/20">
+                  <p className="px-4 pt-2.5 pb-1 text-[10px] font-bold text-content-subtle/60 dark:text-white/20">
                     Acciones rápidas
                   </p>
                   {filteredActions.map((a, i) => {
@@ -251,7 +251,7 @@ export default function CommandPalette({ open, onClose, visibleTabs, safeTab, go
                           <span className={`block text-[13px] font-semibold ${isHovered ? "text-content dark:text-white" : "text-content-muted dark:text-white/70"}`}>
                             {a.label}
                           </span>
-                          <span className="block text-[10px] font-medium text-content-subtle dark:text-white/30 truncate">
+                          <span className="block text-[11px] font-medium text-content-subtle dark:text-white/30 truncate">
                             {a.desc}
                           </span>
                         </span>
@@ -269,7 +269,7 @@ export default function CommandPalette({ open, onClose, visibleTabs, safeTab, go
               {/* Sección Módulos */}
               {filteredTabs.length > 0 && (
                 <>
-                  <p className={`px-4 pb-1 text-[9px] font-black uppercase tracking-widest text-content-subtle/60 dark:text-white/20 ${filteredActions.length > 0 ? "pt-3 mt-1 border-t border-border/10 dark:border-white/[0.05]" : "pt-2.5"}`}>
+                  <p className={`px-4 pb-1 text-[10px] font-bold text-content-subtle/60 dark:text-white/20 ${filteredActions.length > 0 ? "pt-3 mt-1 border-t border-border/10 dark:border-white/[0.05]" : "pt-2.5"}`}>
                     Módulos
                   </p>
                   {filteredTabs.map((t, ti) => {
@@ -294,7 +294,7 @@ export default function CommandPalette({ open, onClose, visibleTabs, safeTab, go
                           {t.label}
                         </span>
                         {isActive && (
-                          <span className="text-[9px] font-black uppercase tracking-widest text-brand-500 bg-brand-500/10 px-2 py-0.5 rounded-full">
+                          <span className="text-[10px] font-bold text-brand-500 bg-brand-500/10 px-2 py-0.5 rounded-full">
                             Aquí
                           </span>
                         )}
@@ -316,10 +316,10 @@ export default function CommandPalette({ open, onClose, visibleTabs, safeTab, go
         <div className="flex items-center gap-4 px-4 py-2.5 border-t border-border/20 dark:border-white/[0.06]">
           {[["↑↓", "navegar"], ["↵", "ejecutar"], ["Esc", "cerrar"]].map(([key, label]) => (
             <div key={key} className="flex items-center gap-1.5">
-              <kbd className="px-1.5 py-0.5 rounded-md bg-white/[0.06] border border-border/20 dark:border-white/10 text-[9px] font-black text-content-subtle dark:text-white/30 leading-none">
+              <kbd className="px-1.5 py-0.5 rounded-md bg-white/[0.06] border border-border/20 dark:border-white/10 text-[10px] font-bold text-content-subtle dark:text-white/30 leading-none">
                 {key}
               </kbd>
-              <span className="text-[9px] font-bold text-content-subtle/60 dark:text-white/20 uppercase tracking-wide">{label}</span>
+              <span className="text-[10px] font-semibold text-content-subtle/60 dark:text-white/20 uppercase tracking-wide">{label}</span>
             </div>
           ))}
         </div>

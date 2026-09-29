@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
 import CustomSelect from "../ui/CustomSelect";
-import { fmtDate } from "../../helpers";
+import { fmtDate, toNameCase } from "../../helpers";
 import { isIntegerUnit, fmtQtyUnit } from "../../helpers/unitFormatter";
 
 // Motivos del faltante. Se guardan en la línea para que después se sepa QUÉ pasó, no solo
@@ -71,19 +71,19 @@ export default function TransferReceiveModal({ open, transfer, onClose, onConfir
                 {/* ── Datos del despacho ── */}
                 <div className="rounded-xl border border-border/30 dark:border-white/10 p-3.5 space-y-2">
                     <div className="flex items-center justify-between gap-3">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Origen</span>
-                        <span className="text-[11px] font-black uppercase tracking-tight">{transfer.from_warehouse_name || "Externo"}</span>
+                        <span className="text-[12px] font-medium text-content-subtle">Origen</span>
+                        <span className="text-[12px] font-bold tracking-tight">{transfer.from_warehouse_name || "Externo"}</span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Destino</span>
-                        <span className="text-[11px] font-black uppercase tracking-tight text-brand-500">{transfer.to_warehouse_name}</span>
+                        <span className="text-[12px] font-medium text-content-subtle">Destino</span>
+                        <span className="text-[12px] font-bold tracking-tight text-brand-500">{transfer.to_warehouse_name}</span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Despachado</span>
-                        <span className="text-[11px] font-bold tabular-nums">{fmtDate(transfer.dispatched_at || transfer.created_at)} · {transfer.employee_name || "Sistema"}</span>
+                        <span className="text-[12px] font-medium text-content-subtle">Despachado</span>
+                        <span className="text-[12px] font-semibold tabular-nums">{fmtDate(transfer.dispatched_at || transfer.created_at)} · {toNameCase(transfer.employee_name) || "Sistema"}</span>
                     </div>
                     {transfer.note && (
-                        <div className="pt-2 border-t border-border/20 dark:border-white/5 text-[10px] font-medium italic text-content-subtle leading-relaxed">
+                        <div className="pt-2 border-t border-border/20 dark:border-white/5 text-[11px] font-medium italic text-content-subtle leading-relaxed">
                             {transfer.note}
                         </div>
                     )}
@@ -92,10 +92,10 @@ export default function TransferReceiveModal({ open, transfer, onClose, onConfir
                 {/* ── Conteo línea por línea ── */}
                 <div className="rounded-xl border border-border/30 dark:border-white/10 overflow-hidden">
                     <div className="px-4 py-2 bg-surface-2/50 dark:bg-white/[0.03] flex items-center justify-between gap-3">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Cuenta lo que llegó</span>
+                        <span className="text-[12px] font-medium text-content-subtle">Cuenta lo que llegó</span>
                         <button
                             onClick={receiveAll}
-                            className="h-7 px-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest text-brand-500 hover:bg-brand-500/10 transition-all"
+                            className="h-7 px-2.5 rounded-lg text-[10px] font-bold text-brand-500 hover:bg-brand-500/10 transition-all"
                         >
                             Todo conforme
                         </button>
@@ -108,8 +108,8 @@ export default function TransferReceiveModal({ open, transfer, onClose, onConfir
                                 <div key={l.id} className="px-4 py-3 space-y-2">
                                     <div className="flex items-center gap-3">
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-[11px] font-black uppercase tracking-tight truncate">{l.product_name}</p>
-                                            <p className="text-[9px] font-bold text-content-subtle">
+                                            <p className="text-[12px] font-bold tracking-tight truncate">{l.product_name}</p>
+                                            <p className="text-[10px] font-semibold text-content-subtle">
                                                 Despachado: {fmtQtyUnit(l.qty_sent, l.unit)}
                                             </p>
                                         </div>
@@ -124,19 +124,19 @@ export default function TransferReceiveModal({ open, transfer, onClose, onConfir
                                                 if (intUnit) v = String(v).replace(/[.,].*$/, "");
                                                 setLine(l.id, { qty_received: v });
                                             }}
-                                            className={`input h-10 w-28 text-center font-black tabular-nums ${
+                                            className={`input h-10 w-28 text-center tabular-nums ${
                                                 over ? "border-danger text-danger" : l.missing > 0 ? "border-warning text-warning" : "text-brand-500"
                                             }`}
                                         />
                                     </div>
                                     {over && (
-                                        <p className="text-[9px] font-black uppercase tracking-wide text-danger">
+                                        <p className="text-[10px] font-bold uppercase tracking-wide text-danger">
                                             No puedes recibir más de lo despachado
                                         </p>
                                     )}
                                     {l.missing > 0 && (
                                         <div className="flex items-center gap-2">
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-warning whitespace-nowrap">
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-warning whitespace-nowrap">
                                                 Faltan {fmtQtyUnit(l.missing, l.unit)}
                                             </span>
                                             <CustomSelect
@@ -157,22 +157,22 @@ export default function TransferReceiveModal({ open, transfer, onClose, onConfir
 
                 {/* ── Observación del receptor ── */}
                 <div>
-                    <label className="label mb-1.5 opacity-70">Observaciones de la recepción (Opcional)</label>
+                    <label className="label mb-1.5">Observaciones de la recepción (Opcional)</label>
                     <textarea
                         value={note}
                         onChange={e => setNote(e.target.value)}
                         placeholder="ej. Un bulto llegó abierto, se contó pieza por pieza..."
-                        className="input min-h-[64px] py-3 px-3 resize-none text-[11px] leading-relaxed"
+                        className="input min-h-[64px] py-3 px-3 resize-none text-[12px] leading-relaxed"
                         rows={2}
                     />
                 </div>
 
                 {withDiff.length > 0 && (
                     <div className="rounded-xl bg-warning/10 border border-warning/25 px-4 py-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-warning">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-warning">
                             {withDiff.length} línea{withDiff.length !== 1 ? "s" : ""} con faltante
                         </p>
-                        <p className="text-[10px] font-medium text-content-subtle mt-1 leading-relaxed">
+                        <p className="text-[11px] font-medium text-content-subtle mt-1 leading-relaxed">
                             Solo entra al almacén lo que confirmes. El faltante queda registrado contra esta
                             transferencia hasta que se decida si fue merma o si vuelve al origen.
                         </p>
@@ -180,15 +180,15 @@ export default function TransferReceiveModal({ open, transfer, onClose, onConfir
                 )}
             </div>
 
-            <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-border/10 dark:border-white/5">
-                <Button variant="ghost" onClick={onClose} className="h-10 px-6 font-black tracking-widest text-[10px] uppercase">
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
+                <Button variant="ghost" onClick={onClose} className="h-10 px-6 font-bold text-[11px]">
                     Cancelar
                 </Button>
                 <Button
                     variant="primary"
                     onClick={confirm}
                     disabled={invalid || needReason || saving}
-                    className="h-10 px-8 shadow-lg shadow-brand-500/20 font-black tracking-[0.2em] text-[10px] uppercase"
+                    className="h-10 px-8 shadow-sm font-bold text-[11px]"
                 >
                     {saving ? "Registrando..." : needReason ? "Indica el motivo del faltante" : "Confirmar recepción"}
                 </Button>

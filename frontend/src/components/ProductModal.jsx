@@ -415,7 +415,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 ) : (
                                     <div className="text-center flex flex-col items-center text-content-subtle dark:text-content-dark-muted group-hover:text-brand-500 transition-colors">
                                         <svg className="w-6 h-6 mb-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                                        <div className="text-[10px] font-bold uppercase tracking-wide">Imagen</div>
+                                        <div className="text-[11px] font-semibold uppercase tracking-wide">Imagen</div>
                                     </div>
                                 )}
                             </div>
@@ -424,7 +424,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         {imagePreview && (
                             <button
                                 onClick={(e) => { e.preventDefault(); setImageFile(null); setImagePreview(null); setRemoveImage(true); }}
-                                className="mt-3 text-[11px] font-black text-danger uppercase tracking-wide opacity-60 hover:opacity-100 transition-opacity flex items-center gap-1.5"
+                                className="mt-3 text-[12px] font-bold text-danger opacity-60 hover:opacity-100 transition-opacity flex items-center gap-1.5"
                             >
                                 <span className="text-xs">×</span> Eliminar
                             </button>
@@ -437,7 +437,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         {/* Fila 1 */}
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                             <div className="col-span-12 md:col-span-8">
-                                <label className="label">Nombre del Artículo / Referencia</label>
+                                <label className="label">Nombre del artículo / referencia</label>
                                 <input value={form.name} onChange={e => set("name", e.target.value)} autoFocus className="input " placeholder="Ej. Computadora Portátil Gamer X-1..." />
                             </div>
                             <div className="col-span-12 md:col-span-4">
@@ -446,8 +446,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                     <CustomSelect
                                         value={form.category_id}
                                         onChange={val => set("category_id", val)}
-                                        options={[{ value: "", label: "Sin Categoría" }, ...categories.map(c => ({ value: String(c.id), label: c.name }))]}
-                                        placeholder="Sin Categoría"
+                                        options={[{ value: "", label: "Sin categoría" }, ...categories.map(c => ({ value: String(c.id), label: c.name }))]}
+                                        placeholder="Sin categoría"
                                         className="w-full"
                                     />
                                 </div>
@@ -457,19 +457,19 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         {/* Fila 2 */}
                         <div className={`grid grid-cols-1 gap-3 items-end ${editData?.id && !form.is_combo && !form.is_service ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
                             <div>
-                                <label className="label">Unidad de Medida</label>
+                                <label className="label">Unidad de medida</label>
                                 <div className="relative">
                                     <CustomSelect
                                         value={form.unit}
                                         onChange={val => set("unit", val)}
                                         options={UNITS.map(u => ({ value: u, label: u.toUpperCase() }))}
-                                        placeholder="Unidad de Medida"
+                                        placeholder="Unidad de medida"
                                         className="w-full"
                                     />
                                 </div>
                             </div>
                             <div>
-                                <label className="label">Código de Barras</label>
+                                <label className="label">Código de barras</label>
                                 <input value={form.barcode} onChange={e => set("barcode", e.target.value)} className="input" placeholder="Ej. 123456789012" />
                             </div>
                             {form.sellable && (
@@ -479,13 +479,13 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         en la que se está trabajando, porque es la que se cambia. */}
                                     {sucursal ? `Precio en ${sucursal}` : "Precio de Venta"}
                                     {localCurrency && (
-                                        <div className="flex text-[9px] font-black rounded overflow-hidden border border-border/30 dark:border-white/10">
+                                        <div className="flex text-[10px] font-bold rounded overflow-hidden border border-border/30 dark:border-white/10">
                                             <button type="button" onClick={() => setPriceCurrency("base")}
-                                                className={`px-2 py-0.5 transition-colors ${priceCurrency === "base" ? "bg-brand-500 text-black" : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content"}`}>
+                                                className={`px-2 py-0.5 transition-colors ${priceCurrency === "base" ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40" : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content"}`}>
                                                 $
                                             </button>
                                             <button type="button" onClick={() => setPriceCurrency("local")}
-                                                className={`px-2 py-0.5 transition-colors ${priceCurrency === "local" ? "bg-brand-500 text-black" : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content"}`}>
+                                                className={`px-2 py-0.5 transition-colors ${priceCurrency === "local" ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40" : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content"}`}>
                                                 {localCurrency.symbol || "Bs."}
                                             </button>
                                         </div>
@@ -493,12 +493,12 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 </label>
                                 {priceCurrency === "base" || !localCurrency ? (
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle font-bold text-xs">$</span>
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle font-semibold text-xs">$</span>
                                         <input value={form.price} onChange={e => handlePriceChange(e.target.value.replace(/[^0-9.]/g, ""))} type="text" inputMode="decimal" className="input !pl-7" placeholder="0.00000" />
                                     </div>
                                 ) : (
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-[11px] font-bold">{localCurrency.symbol || "Bs."}</span>
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-[12px] font-semibold">{localCurrency.symbol || "Bs."}</span>
                                         <input value={priceInBs} onChange={e => handlePriceInBsChange(e.target.value)} type="number" step="0.01" min="0" className="input !pl-9" placeholder="0.00" />
                                     </div>
                                 )}
@@ -510,7 +510,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         {sucursal ? `Stock en ${sucursal}` : "Stock Actual"}
                                     </label>
                                     <div className="bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border border-border/40 rounded-lg px-3 flex justify-between items-center gap-2 cursor-not-allowed opacity-80 h-10 min-w-0 overflow-hidden" title={`${fmtQtyUnit(form.stock ?? 0, form.unit)} (solo lectura)`}>
-                                        <span className="text-sm font-bold truncate min-w-0 tabular-nums">{fmtQtyUnit(form.stock ?? 0, form.unit)}</span>
+                                        <span className="text-sm font-semibold truncate min-w-0 tabular-nums">{fmtQtyUnit(form.stock ?? 0, form.unit)}</span>
                                         <svg className="w-3.5 h-3.5 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                         </svg>
@@ -544,8 +544,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             key={id}
                             type="button"
                             onClick={() => setTab(id)}
-                            className={`px-3 py-2 text-[11px] font-black uppercase tracking-wide border-b-2 -mb-px transition-colors ${tab === id
-                                ? "border-brand-500 text-content dark:text-white"
+                            className={`px-3 py-2 text-[13px] font-semibold border-b-2 -mb-px transition-colors ${tab === id
+                                ? "border-brand-500 text-brand-700 dark:text-brand-300"
                                 : "border-transparent text-content-subtle dark:text-content-dark-muted hover:text-content dark:hover:text-white"}`}
                         >
                             {label}
@@ -560,8 +560,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     {/* Toggle Servicio */}
                     <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${form.is_service ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
                         <div>
-                            <div className="text-xs font-bold text-content dark:text-content-dark">Servicio</div>
-                            <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5">No afecta inventario.</div>
+                            <div className="text-xs font-semibold text-content dark:text-content-dark">Servicio</div>
+                            <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-0.5">No afecta inventario.</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" className="sr-only peer" checked={form.is_service} onChange={handleIsServiceChange} />
@@ -573,8 +573,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     {!form.is_service && (
                         <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${form.is_combo ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
                             <div>
-                                <div className="text-xs font-bold text-content dark:text-content-dark">Producto Compuesto</div>
-                                <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5">Compuesto por otros ítems.</div>
+                                <div className="text-xs font-semibold text-content dark:text-content-dark">Producto compuesto</div>
+                                <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-0.5">Compuesto por otros ítems.</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" className="sr-only peer" checked={form.is_combo} onChange={handleIsComboChange} disabled={isEdit && form.combo_items.length > 0} />
@@ -590,8 +590,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 {/* ── Insumo: entra al inventario pero no se vende ── */}
                 <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${!form.sellable ? "bg-warning/5 border-warning/30" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
                     <div>
-                        <div className="text-xs font-bold text-content dark:text-content-dark">No disponible para venta</div>
-                        <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5">
+                        <div className="text-xs font-semibold text-content dark:text-content-dark">No disponible para venta</div>
+                        <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-0.5">
                             Insumo de producción: se compra y se inventaría, pero no se cobra en caja.
                         </div>
                     </div>
@@ -612,8 +612,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 {catalogEnabled && (
                 <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${!form.sellable ? "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5 opacity-50" : form.visible_in_catalog ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
                     <div>
-                        <div className="text-xs font-bold text-content dark:text-content-dark">Mostrar en catálogo público</div>
-                        <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5">
+                        <div className="text-xs font-semibold text-content dark:text-content-dark">Mostrar en catálogo público</div>
+                        <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-0.5">
                             {form.sellable
                                 ? "Los clientes verán foto, categoría y precio. Nunca el stock ni el costo."
                                 : "No disponible: los insumos no se publican."}
@@ -645,8 +645,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         />
                     ) : (
                         <div className="p-4 rounded-lg border border-border/40 dark:border-white/5 bg-surface-2 dark:bg-white/5 text-center mt-1">
-                            <p className="text-xs font-bold text-content dark:text-content-dark">Este producto no es compuesto</p>
-                            <p className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-1">
+                            <p className="text-xs font-semibold text-content dark:text-content-dark">Este producto no es compuesto</p>
+                            <p className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-1">
                                 Activa "Producto Compuesto" en General para armarlo con otros ítems.
                             </p>
                         </div>
@@ -658,7 +658,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         {form.visible_in_catalog && form.sellable ? (
                             <>
                                 <div>
-                                    <label className="label">MARCA O LÍNEA</label>
+                                    <label className="label">Marca o línea</label>
                                     <input
                                         value={form.brand}
                                         onChange={e => set("brand", e.target.value)}
@@ -668,7 +668,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                     />
                                 </div>
                                 <div>
-                                    <label className="label">FRASE DE BENEFICIO</label>
+                                    <label className="label">Frase de beneficio</label>
                                     <input
                                         value={form.short_description}
                                         onChange={e => set("short_description", e.target.value)}
@@ -676,12 +676,12 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         maxLength={200}
                                         placeholder="Ej. Desenreda sin dolor · 450 ml"
                                     />
-                                    <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-1">
+                                    <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-1">
                                         Una línea corta bajo el nombre. Se ve en el catálogo público, no en la factura.
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="label">DESCRIPCIÓN</label>
+                                    <label className="label">Descripción</label>
                                     <textarea
                                         value={form.description}
                                         onChange={e => set("description", e.target.value)}
@@ -689,12 +689,12 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         rows={4}
                                         placeholder="Texto largo para la ficha del producto. Un párrafo por línea en blanco."
                                     />
-                                    <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-1">
+                                    <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-1">
                                         Se muestra en la página propia del producto, no en la tarjeta del catálogo.
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="label">BENEFICIOS</label>
+                                    <label className="label">Beneficios</label>
                                     <BenefitTagPicker
                                         selectedIds={form.benefit_tag_ids}
                                         onChange={(ids) => set("benefit_tag_ids", ids)}
@@ -705,7 +705,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             // No es un aviso de error: es lo esperable con el producto todavía
                             // sin publicar. Explica qué interruptor prender y en qué pestaña
                             // está, para no dejar al usuario buscándolo.
-                            <p className="text-[11px] font-bold text-content-subtle dark:text-content-dark-muted text-center py-4">
+                            <p className="text-[12px] font-semibold text-content-subtle dark:text-content-dark-muted text-center py-4">
                                 {form.sellable
                                     ? 'Activa "Mostrar en catálogo público" en la pestaña General para escribir estos textos.'
                                     : "Los insumos no se publican, así que no tienen textos de vitrina."}
@@ -723,7 +723,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     <div className="space-y-3 animate-in fade-in duration-300 mt-2">
                         {/* ── Rentabilidad ── */}
                         <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
-                            <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">
+                            <h3 className="text-xs font-semibold text-content-subtle dark:text-content-dark-muted mb-3">
                                 {form.sellable ? "Costos y Rentabilidad" : "Costo del insumo"}
                             </h3>
                             {/* Sin precio de venta no hay rentabilidad que mostrar: el bloque
@@ -732,9 +732,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 <div className="space-y-3">
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="label">Costo Unitario</label>
+                                            <label className="label">Costo unitario</label>
                                             <div className="relative">
-                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">$</span>
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-semibold">$</span>
                                                 <input value={form.cost_price} onChange={e => handleCostOrMarginChange("cost_price", e.target.value)} type="number" step="0.0001" min="0" className={`input !pl-6 ${form.is_combo ? "bg-surface-2 dark:bg-white/5" : ""}`} placeholder="0.0000" readOnly={form.is_combo} />
                                             </div>
                                         </div>
@@ -743,7 +743,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                             <label className="label">Margen (%)</label>
                                             <div className="relative">
                                                 <input value={form.profit_margin} onChange={e => handleCostOrMarginChange("profit_margin", e.target.value)} type="number" step="0.1" className="input pr-6" placeholder="0" />
-                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">%</span>
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-semibold">%</span>
                                             </div>
                                         </div>
                                         )}
@@ -758,7 +758,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                             </label>
                                             <div className="flex items-center gap-2">
                                                 <div className="relative flex-1">
-                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-bold">$</span>
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-semibold">$</span>
                                                     <input
                                                         value={form.bulk_price}
                                                         onChange={e => handleBulkPriceChange(e.target.value)}
@@ -768,7 +768,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                                     />
                                                 </div>
                                                 {form.bulk_price && parseFloat(form.package_size) > 0 && (
-                                                    <span className="text-[11px] text-brand-500 font-bold whitespace-nowrap">
+                                                    <span className="text-[12px] text-brand-500 font-semibold whitespace-nowrap">
                                                         = $ {(parseFloat(form.bulk_price) / parseFloat(form.package_size)).toFixed(4)} c/u
                                                     </span>
                                                 )}
@@ -782,10 +782,10 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                     onClick={() => { if (suggestedPrice) handlePriceChange(suggestedPrice); }}
                                 >
                                     <div className="flex justify-between items-center mb-1">
-                                        <span className="text-[10px] font-bold uppercase tracking-wide text-green-600 dark:text-green-400">PVP Sugerido</span>
-                                        {suggestedPrice && <span className="text-[10px] bg-green-500 text-white px-1.5 py-0.5 rounded font-bold uppercase transition-all">Aplicar</span>}
+                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-green-600 dark:text-green-400">PVP Sugerido</span>
+                                        {suggestedPrice && <span className="text-[11px] bg-green-500 text-white px-1.5 py-0.5 rounded font-semibold transition-all">Aplicar</span>}
                                     </div>
-                                    <div className="text-lg font-bold text-green-600 dark:text-green-400 tabular-nums">
+                                    <div className="text-lg font-semibold text-green-600 dark:text-green-400 tabular-nums">
                                         {suggestedPrice ? `Ref. ${suggestedPrice}` : "—"}
                                     </div>
                                 </div>
@@ -797,7 +797,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         {!form.is_combo && !form.is_service && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
-                                <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">Presentación de Compra</h3>
+                                <h3 className="text-xs font-semibold text-content-subtle dark:text-content-dark-muted mb-3">Presentación de compra</h3>
                                 <div className="flex gap-2">
                                     <div className="flex-1">
                                         <CustomSelect
@@ -827,10 +827,10 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                             title={form.package_unit === "UNIDAD" ? "Una unidad contiene una unidad" : undefined}
                                             className="input text-center !pr-9 disabled:opacity-45 disabled:cursor-not-allowed"
                                         />
-                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-content-subtle font-bold uppercase pointer-events-none">{form.unit || "uds"}</span>
+                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-content-subtle font-semibold uppercase pointer-events-none">{form.unit || "uds"}</span>
                                     </div>
                                 </div>
-                                <p className="mt-2 text-[10px] font-bold text-content-muted leading-tight">
+                                <p className="mt-2 text-[11px] font-semibold text-content-muted leading-tight">
                                     {!form.package_unit
                                         ? "Este producto se compra suelto, sin bulto."
                                         : form.package_unit === "UNIDAD"
@@ -840,7 +840,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             </div>
 
                             <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
-                                <h3 className="text-xs font-bold uppercase text-content-subtle dark:text-content-dark-muted mb-3">
+                                <h3 className="text-xs font-semibold text-content-subtle dark:text-content-dark-muted mb-3">
                                     {sucursal ? `Alerta de Reposición en ${sucursal}` : "Alerta de Reposición"}
                                 </h3>
                                 <div className="relative">
@@ -848,7 +848,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 </div>
                                 {/* El aviso se mide sucursal por sucursal, no sobre la suma de
                                     todas: una tienda en cero tiene que avisar aunque otra esté llena. */}
-                                <p className="mt-2 text-[10px] font-bold text-content-muted leading-tight">
+                                <p className="mt-2 text-[11px] font-semibold text-content-muted leading-tight">
                                     Avisa cuando esta sucursal baje de aquí.
                                 </p>
                             </div>
@@ -858,7 +858,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 )}
 
                 {/* ── Footer de Acción ── */}
-                <div className="flex gap-3 justify-end mt-3 pt-3 border-t border-border/40 dark:border-border-dark/40">
+                <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
                     <Button onClick={onClose} disabled={saving} variant="ghost" className="border border-border/40 dark:border-white/10 min-w-[100px]">
                         Cancelar
                     </Button>

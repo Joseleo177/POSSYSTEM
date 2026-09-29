@@ -69,12 +69,12 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
   return (
     <>
       <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex items-center justify-between gap-3">
-        <span className="text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
+        <span className="text-[12px] font-bold text-content-subtle dark:text-white/30">
           {journals.length} diario{journals.length !== 1 ? "s" : ""}
         </span>
         {can("journals.manage") && (
-          <Button onClick={() => { setEditJournal(null); setNewJournal(EMPTY_JOURNAL); setShowModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
-            + Nuevo Diario
+          <Button onClick={() => { setEditJournal(null); setNewJournal(EMPTY_JOURNAL); setShowModal(true); }} className="h-8 px-3 text-[11px] shadow-none">
+            + Nuevo diario
           </Button>
         )}
       </div>
@@ -82,7 +82,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
       <div className="card-premium overflow-auto flex-1">
         {journals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 opacity-20">
-            <div className="text-xs font-black uppercase tracking-wide">No hay diarios configurados</div>
+            <div className="text-xs font-bold">No hay diarios configurados</div>
           </div>
         ) : (
           <table className="table-pos min-w-[680px]">
@@ -114,9 +114,9 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
                         />
                       ) : (
                         <span className="inline-flex items-center gap-1.5">
-                          <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{j.name}</span>
+                          <span className="text-[12px] font-bold text-content dark:text-white tracking-tight">{j.name}</span>
                           {dupIds.has(j.id) && (
-                            <span className="badge badge-danger shadow-none text-[8px]" title="Otro diario tiene el mismo método, banco y moneda. Desactívalo o elimínalo.">
+                            <span className="badge badge-danger shadow-none text-[9px]" title="Otro diario tiene el mismo método, banco y moneda. Desactívalo o elimínalo.">
                               Duplicado
                             </span>
                           )}
@@ -126,25 +126,25 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
                     <td>
                       {(() => {
                         const m = methodByCode[j.type];
-                        return <span className="text-[10px] font-black text-content-subtle opacity-60 uppercase tracking-wide">{m ? m.name : (j.type || "—")}</span>;
+                        return <span className="text-[11px] font-bold text-content-subtle opacity-60 uppercase tracking-wide">{m ? m.name : (j.type || "—")}</span>;
                       })()}
                     </td>
                     <td>
-                      <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest">{j.bank_name || j.bank || "—"}</span>
+                      <span className="text-[12px] font-medium text-content-subtle">{j.bank_name || j.bank || "—"}</span>
                     </td>
                     <td>
                       {(j.warehouse_ids?.length ?? 0) === 0
                         ? <span className="badge badge-neutral shadow-none">Todas</span>
                         : (j.warehouse_ids.length === 1
-                            ? <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest">{j.warehouse_names?.[0] || j.warehouse_name}</span>
-                            : <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest" title={(j.warehouse_names || []).join(", ")}>{j.warehouse_ids.length} sucursales</span>)}
+                            ? <span className="text-[12px] font-medium text-content-subtle">{j.warehouse_names?.[0] || j.warehouse_name}</span>
+                            : <span className="text-[12px] font-medium text-content-subtle" title={(j.warehouse_names || []).join(", ")}>{j.warehouse_ids.length} sucursales</span>)}
                     </td>
                     <td className="text-center">
                       {j.currency_code ? (
                         <span className="badge badge-info shadow-none">
                           {j.currency_symbol} {j.currency_code}
                         </span>
-                      ) : <span className="opacity-30 text-[10px]">—</span>}
+                      ) : <span className="opacity-30 text-[11px]">—</span>}
                     </td>
                     <td className="text-center">
                       <span className={`badge shadow-none ${j.active ? "badge-success" : "badge-danger"}`}>
@@ -247,18 +247,18 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
               <div className="flex flex-wrap gap-1.5">
                 <button type="button"
                   onClick={() => setForm(p => ({ ...p, warehouse_ids: [] }))}
-                  className={`px-2.5 h-7 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all ${marcadas.length === 0 ? "bg-brand-500 text-black border-transparent" : "border-border/40 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-500/40"}`}>
+                  className={`px-2.5 h-7 rounded-lg text-[11px] font-bold border transition-all ${marcadas.length === 0 ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "border-border/40 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-500/40"}`}>
                   Todas
                 </button>
                 {sedes.map(w => (
                   <button key={w.id} type="button"
                     onClick={() => toggle(w.id)}
-                    className={`px-2.5 h-7 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all ${marcadas.includes(w.id) ? "bg-brand-500 text-black border-transparent" : "border-border/40 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-500/40"}`}>
+                    className={`px-2.5 h-7 rounded-lg text-[11px] font-bold border transition-all ${marcadas.includes(w.id) ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "border-border/40 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-brand-500/40"}`}>
                     {w.name}
                   </button>
                 ))}
               </div>
-              <div className="text-[10px] font-bold text-content-subtle mt-1 opacity-60">
+              <div className="text-[11px] font-semibold text-content-subtle mt-1 opacity-60">
                 {marcadas.length === 0
                   ? "Aparece y suma en todas las sucursales."
                   : `Solo aparece y suma en ${marcadas.length === 1 ? "esa sucursal" : `esas ${marcadas.length} sucursales`}.`}
@@ -288,7 +288,7 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
             className="w-full h-9 p-1 bg-white border border-border/40 rounded-lg cursor-pointer"
           />
         </div>
-        <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
+        <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
           <Button variant="ghost" onClick={closeModal}>Cancelar</Button>
           <Button variant="primary" onClick={submitJournal}>
             {editJournal ? "Guardar cambios" : "Crear diario"}

@@ -1,5 +1,6 @@
 const { Sale, SALE_INCLUDE } = require("./shared");
 const { assertWarehouseAccess } = require("../../middleware/auth");
+const { effectiveDueDate, resolveCustomerCreditDays } = require("../../utils/dueDate");
 
 module.exports = async function getOneSale(id, req) {
   const s = await Sale.findByPk(id, { include: SALE_INCLUDE });
@@ -112,6 +113,17 @@ module.exports = async function getOneSale(id, req) {
   } else {
     item.forgiven_by_name = null;
   }
+
+  // Vencimiento con la misma regla que Cuentas por Cobrar: el pactado para esta factura o, si
+  // no hay, el de los días de crédito del cliente (su excepción o el plazo general).
+  const { Customer } = require("../../models");
+  const cliente = item.customer_id
+    ? await Customer.findByPk(item.customer_id, { attributes: ['credit_days'] })
+    : null;
+  const credito = await resolveCustomerCreditDays(cliente, item.company_id);
+  item.customer_credit_days       = credito.days;
+  item.customer_credit_is_default = credito.isDefault;
+  item.effective_due_date         = effectiveDueDate(item, credito.days);
 
   return item;
 };

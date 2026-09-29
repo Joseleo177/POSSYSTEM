@@ -108,29 +108,29 @@ export default function EditSaleModal({ open, onClose, sale, notify, onSaved }) 
 
             {/* Items table */}
             <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-[1rem] border border-border/40 overflow-x-auto shadow-sm mb-4 max-h-[35vh] overflow-y-auto scrollbar-dark">
-                <table className="w-full text-[11px] border-collapse min-w-[460px]">
+                <table className="w-full text-[12px] border-collapse min-w-[460px]">
                     <thead className="sticky top-0 bg-surface-3 dark:bg-surface-dark border-b border-border/40 z-10">
                         <tr>
-                            <th className="text-left px-4 py-2 font-black text-content-subtle uppercase tracking-wide">Producto</th>
-                            <th className="text-center px-4 py-2 font-black text-content-subtle uppercase tracking-wide w-24">Precio U.</th>
-                            <th className="text-right px-4 py-2 font-black text-content-subtle uppercase tracking-wide w-28 text-brand-500">Cantidad</th>
+                            <th className="text-left px-4 py-2 font-bold text-content-subtle">Producto</th>
+                            <th className="text-center px-4 py-2 font-bold text-content-subtle w-24">Precio U.</th>
+                            <th className="text-right px-4 py-2 font-bold text-content-subtle w-28 text-brand-500">Cantidad</th>
                             <th className="w-10" />
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border/20">
                         {items.length === 0 && (
-                            <tr><td colSpan={4} className="py-8 text-center text-[11px] text-content-subtle italic">Sin productos</td></tr>
+                            <tr><td colSpan={4} className="py-8 text-center text-[12px] text-content-subtle italic">Sin productos</td></tr>
                         )}
                         {items.map((item, idx) => (
                             <tr key={idx} className="hover:bg-brand-500/5 transition-colors">
-                                <td className="px-4 py-3 font-bold text-content">{item.name}</td>
-                                <td className="px-4 py-3 text-center font-bold text-content-muted">{fmtPrice(item.price)}</td>
+                                <td className="px-4 py-3 font-semibold text-content">{item.name}</td>
+                                <td className="px-4 py-3 text-center font-semibold text-content-muted">{fmtPrice(item.price)}</td>
                                 <td className="px-4 py-2 text-right">
                                     <input
                                         type="number"
                                         min="0"
                                         step="1"
-                                        className="w-[70px] bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark py-1.5 px-2 rounded-lg text-[11px] font-bold text-center outline-none focus:ring-1 focus:ring-brand-500/20 shadow-sm"
+                                        className="w-[70px] bg-white dark:bg-surface-dark-2 border border-border dark:border-border-dark py-1.5 px-2 rounded-lg text-[12px] font-semibold text-center outline-none focus:ring-1 focus:ring-brand-500/20 shadow-sm"
                                         value={item.qty === 0 ? "" : item.qty}
                                         onChange={e => handleQtyChange(idx, e.target.value)}
                                         placeholder="0"
@@ -155,7 +155,7 @@ export default function EditSaleModal({ open, onClose, sale, notify, onSaved }) 
 
             {/* Product search */}
             <div className="mb-4 relative">
-                <label className="label text-[11px] font-black uppercase tracking-wide text-content-subtle mb-1">Agregar producto</label>
+                <label className="label text-[12px] font-bold text-content-subtle mb-1">Agregar producto</label>
                 <input
                     ref={searchRef}
                     type="text"
@@ -167,7 +167,7 @@ export default function EditSaleModal({ open, onClose, sale, notify, onSaved }) 
                 {(results.length > 0 || searching) && (
                     <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden">
                         {searching && (
-                            <div className="px-4 py-3 text-[11px] text-content-subtle animate-pulse">Buscando...</div>
+                            <div className="px-4 py-3 text-[12px] text-content-subtle animate-pulse">Buscando...</div>
                         )}
                         {results.map(p => (
                             <button
@@ -175,8 +175,8 @@ export default function EditSaleModal({ open, onClose, sale, notify, onSaved }) 
                                 onClick={() => handleAddProduct(p)}
                                 className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-brand-500/5 transition-colors text-left"
                             >
-                                <span className="text-[11px] font-bold text-content dark:text-white truncate">{p.name}</span>
-                                <span className="text-[11px] font-black text-brand-500 ml-4 shrink-0">{fmtPrice(p.price)}</span>
+                                <span className="text-[12px] font-semibold text-content dark:text-white truncate">{p.name}</span>
+                                <span className="text-[12px] font-bold text-brand-500 ml-4 shrink-0">{fmtPrice(p.price)}</span>
                             </button>
                         ))}
                     </div>
@@ -185,22 +185,22 @@ export default function EditSaleModal({ open, onClose, sale, notify, onSaved }) 
 
             {/* Total */}
             <div className="p-4 bg-brand-500/10 border border-brand-500/20 rounded-2xl flex items-center justify-between">
-                <span className="text-[11px] font-black uppercase tracking-wide text-brand-400 opacity-80">Nuevo Total</span>
-                <span className="text-2xl font-black text-brand-400 tracking-tight">{fmtPrice(total)}</span>
+                <span className="text-[12px] font-bold text-brand-400 opacity-80">Nuevo total</span>
+                <span className="text-2xl font-bold text-brand-400 tracking-tight">{fmtPrice(total)}</span>
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
-                <button onClick={onClose} disabled={loading} className="btn-sm btn-secondary font-black uppercase tracking-wide">
+                <button onClick={onClose} disabled={loading} className="btn-sm btn-secondary font-bold">
                     Cerrar
                 </button>
                 <button
                     onClick={handleSave}
                     disabled={loading || items.filter(i => i.qty > 0).length === 0}
                     className={[
-                        "btn-md font-black uppercase tracking-wide transition-all duration-300 shadow-lg border-transparent",
+                        "btn-md font-bold transition-all duration-300 shadow-lg border-transparent",
                         (loading || items.filter(i => i.qty > 0).length === 0)
                             ? "bg-surface-3 dark:bg-surface-dark-3 text-content-muted cursor-not-allowed shadow-none"
-                            : "bg-brand-500 text-black hover:brightness-110 hover:scale-[1.02] cursor-pointer"
+                            : "btn-accent cursor-pointer"
                     ].join(" ")}
                 >
                     {loading ? "Guardando..." : "Guardar cambios"}

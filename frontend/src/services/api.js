@@ -233,6 +233,8 @@ export const api = {
   },
   sales: {
     getAll:      (params={}) => request("/sales?"       + new URLSearchParams(params)),
+    receivables: (params={}) => request("/sales/receivables?" + new URLSearchParams(params)),
+    setDueDate:  (id, due_date) => request(`/sales/${id}/due-date`, { method: "PATCH", body: JSON.stringify({ due_date }) }),
     getPending:  (params={}) => {
       const sp = new URLSearchParams(params);
       ["borrador", "pendiente", "parcial"].forEach(s => sp.append("status", s));
@@ -307,6 +309,9 @@ export const api = {
     cancel:         (id)          => request(`/purchases/${id}`,                { method: "DELETE" }),
     getPayments:    (id)          => request(`/purchases/${id}/payments`),
     createPayment:  (id, body)    => request(`/purchases/${id}/payments`,       { method: "POST",   body: JSON.stringify(body) }),
+    payables:       (params = {}) => request("/purchases/payables?"              + new URLSearchParams(params)),
+    createBulkPayment: (body)     => request("/purchases/payments/bulk",         { method: "POST",   body: JSON.stringify(body) }),
+    setDueDate:     (id, due_date) => request(`/purchases/${id}/due-date`,      { method: "PATCH",  body: JSON.stringify({ due_date }) }),
     removePayment:  (paymentId)   => request(`/purchase-payments/${paymentId}`, { method: "DELETE" }),
   },
   settings: {

@@ -298,34 +298,34 @@ export default function HeldCartBarCard({
                 className="w-full px-3 py-2.5 flex items-center gap-3 text-left"
             >
                 <div className="w-10 h-10 rounded-xl bg-surface-2 dark:bg-black/20 flex flex-col items-center justify-center text-center shrink-0">
-                    <span className="text-[9px] font-black leading-none opacity-40">
+                    <span className="text-[10px] font-bold leading-none opacity-40">
                         {new Date(cart.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
-                    <span className={`text-xs font-black ${isWebOrder ? "text-info" : "text-brand-500"}`}>{lines.length}</span>
-                    <span className="text-[7px] font-black uppercase opacity-40">items</span>
+                    <span className={`text-xs font-bold ${isWebOrder ? "text-info" : "text-brand-500"}`}>{lines.length}</span>
+                    <span className="text-[8px] font-bold uppercase opacity-40">items</span>
                 </div>
 
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                         {isWebOrder && (
-                            <span className="text-[8px] font-black uppercase tracking-widest bg-info text-white px-1.5 py-0.5 rounded shrink-0">Web</span>
+                            <span className="text-[9px] font-bold bg-info text-white px-1.5 py-0.5 rounded shrink-0">Web</span>
                         )}
-                        <span className={`text-[10px] font-black uppercase tracking-widest truncate ${isWebOrder ? "text-info" : "text-brand-500"}`}>
+                        <span className={`text-[11px] font-bold uppercase tracking-widest truncate ${isWebOrder ? "text-info" : "text-brand-500"}`}>
                             {cart.customer_name || cart.web_customer_name || "Cliente General"}
                         </span>
                     </div>
-                    <div className="text-base font-black tracking-tight text-content dark:text-white tabular-nums leading-tight">
+                    <div className="text-base font-bold tracking-tight text-content dark:text-white tabular-nums leading-tight">
                         {fmtMoney(totalDisplay, sym)}
                     </div>
                     {secondaryCurrency && totalSecondary !== null && (
-                        <div className="text-[10px] font-bold text-content-subtle dark:text-white/50 tabular-nums">
+                        <div className="text-[11px] font-semibold text-content-subtle dark:text-white/50 tabular-nums">
                             ≈ {fmtMoney(totalSecondary, secondaryCurrency.symbol)}
                         </div>
                     )}
                 </div>
 
                 {estado && (
-                    <span className={`text-[9px] font-black uppercase tracking-widest shrink-0 flex items-center gap-1 ${estado.cls}`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest shrink-0 flex items-center gap-1 ${estado.cls}`}>
                         {saving && (
                             <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -350,12 +350,12 @@ export default function HeldCartBarCard({
                             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0l-7.1 12.25A2 2 0 004.99 19z" />
                             </svg>
-                            <span className="text-[9px] font-black uppercase tracking-widest">{lockedReason}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest">{lockedReason}</span>
                         </div>
                     )}
 
                     {lines.length === 0 && (
-                        <div className="py-4 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-50">
+                        <div className="py-4 text-center text-[11px] font-bold text-content-subtle opacity-50">
                             La cuenta quedó vacía · agrega algo o elimínala
                         </div>
                     )}
@@ -367,8 +367,8 @@ export default function HeldCartBarCard({
                         return (
                             <div key={l.product_id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-2 dark:bg-black/20">
                                 <div className="flex-1 min-w-0">
-                                    <div className="text-[11px] font-black text-content dark:text-white truncate leading-tight">{l.name}</div>
-                                    <div className="text-[9px] font-bold text-content-subtle tabular-nums">
+                                    <div className="text-[12px] font-bold text-content dark:text-white truncate leading-tight">{l.name}</div>
+                                    <div className="text-[10px] font-semibold text-content-subtle tabular-nums">
                                         {fmtMoney(precioEn(l.price), sym)}
                                         {" · "}
                                         {fmtMoney(precioEn(l.price) * l.qty, sym)}
@@ -389,7 +389,7 @@ export default function HeldCartBarCard({
                                             onChange={e => setQty(l.product_id, e.target.value)}
                                             onFocus={e => e.target.select()}
                                             inputMode={entera ? "numeric" : "decimal"}
-                                            className="w-14 h-10 rounded-xl bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 text-center text-sm font-black tabular-nums text-content dark:text-white outline-none focus:border-brand-500/50"
+                                            className="w-14 h-10 rounded-xl bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 text-center text-sm font-bold tabular-nums text-content dark:text-white outline-none focus:border-brand-500/50"
                                         />
                                         <button
                                             onClick={() => bump(l.product_id, 1)}
@@ -412,7 +412,7 @@ export default function HeldCartBarCard({
                                         </button>
                                     </div>
                                 ) : (
-                                    <span className="text-sm font-black tabular-nums text-content dark:text-white shrink-0 px-2">{l.qty}</span>
+                                    <span className="text-sm font-bold tabular-nums text-content dark:text-white shrink-0 px-2">{l.qty}</span>
                                 )}
                             </div>
                         );
@@ -421,13 +421,13 @@ export default function HeldCartBarCard({
                     {/* Agregar otro producto */}
                     {editable && (
                         <div className="relative pt-1">
-                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle/70 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v14M5 12h14" />
                             </svg>
                             <input
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
-                                className="input h-10 pl-9 text-[11px] w-full"
+                                className="input h-10 pl-9 text-[12px] w-full"
                                 placeholder="Agregar otro producto..."
                             />
                             {/* Los resultados van en el flujo de la tarjeta, no flotando sobre
@@ -435,7 +435,7 @@ export default function HeldCartBarCard({
                                 tarjeta y por el propio scroll de la lista de cuentas, y del
                                 producto de abajo solo se veía media línea. */}
                             {search.trim().length >= 2 && resultados.length === 0 && (
-                                <div className="mt-1.5 px-3 py-3 rounded-xl bg-surface-2 dark:bg-black/20 text-[10px] font-black uppercase tracking-widest text-content-subtle text-center">
+                                <div className="mt-1.5 px-3 py-3 rounded-xl bg-surface-2 dark:bg-black/20 text-[11px] font-bold text-content-subtle text-center">
                                     Sin coincidencias
                                 </div>
                             )}
@@ -454,8 +454,8 @@ export default function HeldCartBarCard({
                                                         : "bg-surface-2 dark:bg-black/20 hover:bg-brand-500/10 active:bg-brand-500/20"
                                                 }`}
                                             >
-                                                <span className="text-[11px] font-black text-content dark:text-white truncate">{p.name}</span>
-                                                <span className="text-[10px] font-black text-brand-500 shrink-0 tabular-nums">
+                                                <span className="text-[12px] font-bold text-content dark:text-white truncate">{p.name}</span>
+                                                <span className="text-[11px] font-bold text-brand-500 shrink-0 tabular-nums">
                                                     {sinStock ? "Sin stock" : fmtMoney(convertToDisplay ? convertToDisplay(p.price) : p.price, sym)}
                                                 </span>
                                             </button>
@@ -468,10 +468,10 @@ export default function HeldCartBarCard({
 
                     {error && (
                         <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-danger/10">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-danger truncate">{error}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-danger truncate">{error}</span>
                             <button
                                 onClick={() => { dirtyRef.current = true; setDirty(true); flushRef.current?.(); }}
-                                className="text-[9px] font-black uppercase tracking-widest text-danger underline shrink-0"
+                                className="text-[10px] font-bold uppercase tracking-widest text-danger underline shrink-0"
                             >
                                 Reintentar
                             </button>
@@ -498,10 +498,10 @@ export default function HeldCartBarCard({
                         <button
                             onClick={() => onTake(cart.id)}
                             disabled={saving || dirty}
-                            className={`flex-1 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 ${
+                            className={`flex-1 h-10 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-1.5 ${
                                 saving || dirty
                                     ? "bg-surface-3 dark:bg-white/5 text-content-subtle"
-                                    : "bg-brand-500 text-brand-900 hover:bg-brand-600 shadow-lg shadow-brand-500/20"
+                                    : "bg-brand-500 text-brand-900 hover:bg-brand-600 shadow-sm"
                             }`}
                             title="Llevarla al carrito para cobrarla"
                         >

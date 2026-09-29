@@ -21,7 +21,7 @@ export default function PurchaseItemsList({ state }) {
 
     return (
         <div className="card card-md mb-3">
-            <div className="text-[11px] font-bold text-content-muted dark:text-content-dark-muted tracking-wide mb-3">
+            <div className="text-[12px] font-semibold text-content-muted dark:text-content-dark-muted tracking-wide mb-3">
                 PRODUCTOS EN ESTE RECIBO
             </div>
 
@@ -49,7 +49,7 @@ export default function PurchaseItemsList({ state }) {
                 <tbody>
                     {items.map((item) => (
                         <tr key={item.key}>
-                            <td className="font-bold text-content dark:text-content-dark">
+                            <td className="font-semibold text-content dark:text-content-dark">
                                 {item.product?.name}
                             </td>
 
@@ -78,11 +78,11 @@ export default function PurchaseItemsList({ state }) {
                                     : `${item.profit_margin}%`}
                             </td>
 
-                            <td className="text-success font-bold">
+                            <td className="text-success font-semibold">
                                 {(item.product?.sellable === false || item.sellable === false)
-                                    ? <span className="text-warning text-[10px] font-black uppercase tracking-widest">Insumo</span>
+                                    ? <span className="text-warning text-[11px] font-bold uppercase tracking-widest">Insumo</span>
                                     : item.update_price === false
-                                        ? <span className="text-content-subtle font-bold">Sin cambio</span>
+                                        ? <span className="text-content-subtle font-semibold">Sin cambio</span>
                                         : <>Ref. {fmt2(item.sale_price)}</>}
                             </td>
 
@@ -90,7 +90,7 @@ export default function PurchaseItemsList({ state }) {
                                 {item.total_units}
                             </td>
 
-                            <td className="text-warning font-bold">
+                            <td className="text-warning font-semibold">
                                 Ref. {fmt2(item.subtotal)}
                             </td>
 
@@ -111,10 +111,10 @@ export default function PurchaseItemsList({ state }) {
             {/* TOTAL */}
             <div className="flex justify-end items-center gap-3 mt-4 pt-3 border-t border-border dark:border-border-dark">
                 <div>
-                    <span className="text-[11px] text-content-muted dark:text-content-dark-muted tracking-wide">
+                    <span className="text-[12px] text-content-muted dark:text-content-dark-muted tracking-wide">
                         TOTAL COMPRA:{" "}
                     </span>
-                    <span className="text-xl font-bold text-warning">
+                    <span className="text-xl font-semibold text-warning">
                         Ref. {fmt2(grandTotal)}
                     </span>
                 </div>

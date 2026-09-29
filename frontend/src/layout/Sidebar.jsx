@@ -1,7 +1,7 @@
 // src/Layout/Sidebar.jsx
 import React from "react";
 import NavTab from "../components/navigation/NavTab";
-import { resolveImageUrl } from "../helpers";
+import { resolveImageUrl, toNameCase } from "../helpers";
 import { ROLE_COLORS, DEFAULT_ROLE_CLASS } from "../constants/roles";
 
 export default function Sidebar({ settings, storeName, visibleTabs, safeTab, goTab, employee, dark, toggle, logout }) {
@@ -14,7 +14,7 @@ export default function Sidebar({ settings, storeName, visibleTabs, safeTab, goT
                     // Mismo criterio que TopBar: un logo de 32px en una cabecera de 56 se pierde.
                     <img src={resolveImageUrl(settings.logo_url)} alt="logo" className="h-10 w-auto object-contain shrink-0" />
                 ) : (
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shrink-0 shadow-sm shadow-brand-500/20">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shrink-0 shadow-sm">
                         <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path
                                 strokeLinecap="round"
@@ -25,7 +25,7 @@ export default function Sidebar({ settings, storeName, visibleTabs, safeTab, goT
                         </svg>
                     </div>
                 )}
-                <span className="text-sm font-bold text-content dark:text-content-dark tracking-tight truncate">
+                <span className="text-sm font-semibold text-content dark:text-content-dark tracking-tight truncate">
                     {storeName}
                 </span>
             </div>
@@ -38,12 +38,12 @@ export default function Sidebar({ settings, storeName, visibleTabs, safeTab, goT
 
             <div className="border-t border-border dark:border-border-dark p-3 space-y-2">
                 <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-brand-500/10 flex items-center justify-center text-brand-500 text-xs font-black shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-brand-500/10 flex items-center justify-center text-brand-500 text-xs font-bold shrink-0">
                         {employee.full_name?.charAt(0)?.toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
                         <div className="text-xs font-semibold text-content dark:text-content-dark truncate">
-                            {employee.full_name}
+                            {toNameCase(employee.full_name)}
                         </div>
                         <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded border ${roleClass}`}>
                             {employee.role_label || employee.role}

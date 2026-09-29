@@ -104,21 +104,21 @@ export default function WarehousesTab({ notify, currentEmployee }) {
     // ── Acciones dinámicas por sub-tab ────────────────────────
     const pageActions = subTab === "almacenes" ? (
         canManageWarehouses ? (
-            <Button onClick={openNewWarehouse} className="h-8 px-2.5 sm:px-3 text-[10px]">
-                + <span className="hidden sm:inline">Nuevo Almacén</span><span className="sm:hidden">Nuevo</span>
+            <Button onClick={openNewWarehouse} className="h-8 px-2.5 sm:px-3 text-[11px]">
+                + <span className="hidden sm:inline">Nuevo almacén</span><span className="sm:hidden">Nuevo</span>
             </Button>
         ) : null
     ) : subTab === "stock" && selectedWarehouse ? (
         <Button
             onClick={openAddStock}
-            className="h-8 px-2.5 sm:px-3 text-[10px] bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none"
+            className="h-8 px-2.5 sm:px-3"
         >
-            + <span className="hidden sm:inline">Registrar Stock</span><span className="sm:hidden">Stock</span>
+            + <span className="hidden sm:inline">Registrar stock</span><span className="sm:hidden">Stock</span>
         </Button>
     ) : subTab === "transferencias" ? (
         canDispatch ? (
-            <Button onClick={() => setTransferModal(true)} className="h-8 px-2.5 sm:px-3 text-[10px]">
-                + <span className="hidden sm:inline">Despachar Transferencia</span><span className="sm:hidden">Despachar</span>
+            <Button onClick={() => setTransferModal(true)} className="h-8 px-2.5 sm:px-3 text-[11px]">
+                + <span className="hidden sm:inline">Despachar transferencia</span><span className="sm:hidden">Despachar</span>
             </Button>
         ) : null
     ) : null;
@@ -127,14 +127,14 @@ export default function WarehousesTab({ notify, currentEmployee }) {
     const pageTitle = subTab === "transferencias"
         ? "Transferencias"
         : subTab === "ajustes"
-        ? `Movimiento Manual · ${selectedWarehouse?.name || ""}`
+        ? `Movimiento manual · ${selectedWarehouse?.name || ""}`
         : subTab === "stock"
         ? `Stock · ${selectedWarehouse?.name || ""}`
-        : "Almacenes / Sucursales";
+        : "Almacenes y sucursales";
 
     return (
         <Page
-            module="MÓDULO DE INVENTARIO"
+            module="Inventario"
             title={pageTitle}
             actions={pageActions}
             subheader={<WarehousesHeader subTab={subTab} setSubTab={requestSubTab} />}
@@ -142,6 +142,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
             {subTab === "almacenes" && (
                 <WarehouseGrid
                     warehouses={warehouses}
+                    employees={employees}
                     canManage={canManageWarehouses}
                     openAssign={openAssign}
                     startEdit={startEdit}

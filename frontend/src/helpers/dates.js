@@ -73,3 +73,36 @@ export const toLocalISO = (date = new Date()) => {
  * Devuelve la fecha de hoy en formato YYYY-MM-DD (valor de input[type=date]).
  */
 export const todayISO = () => toLocalISO();
+
+/**
+ * Solo la hora de un instante: "14:05".
+ *
+ * Para listados agrupados por día, donde la fecha ya va en el rótulo del grupo y repetirla
+ * en cada fila era ruido. h23 por el mismo motivo que en [fmtDate].
+ * @param {string} isoDate
+ */
+export const fmtTime = (isoDate) => {
+  const d = parseFecha(isoDate);
+  if (!d) return "—";
+  return d.toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+};
+
+/**
+ * Rótulo de un día para agrupar listados: "Hoy", "Ayer" o "Lunes 27 de septiembre".
+ * Lleva el año solo si no es el actual: dentro del año en curso es información repetida.
+ * @param {string} isoDate
+ */
+export const fmtDayLabel = (isoDate) => {
+  const d = parseFecha(isoDate);
+  if (!d) return "—";
+  const dia = toLocalISO(d);
+  const hoy = new Date();
+  if (dia === toLocalISO(hoy)) return "Hoy";
+  const ayer = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 1);
+  if (dia === toLocalISO(ayer)) return "Ayer";
+  const txt = d.toLocaleDateString("es-VE", {
+    weekday: "long", day: "numeric", month: "long",
+    ...(d.getFullYear() !== hoy.getFullYear() && { year: "numeric" }),
+  });
+  return txt.charAt(0).toUpperCase() + txt.slice(1);
+};

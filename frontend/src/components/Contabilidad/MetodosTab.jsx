@@ -60,12 +60,12 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
   return (
     <>
       <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex items-center justify-between gap-3">
-        <span className="text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
+        <span className="text-[12px] font-bold text-content-subtle dark:text-white/30">
           {paymentMethods.length} método{paymentMethods.length !== 1 ? "s" : ""}
         </span>
         {can("journals.manage") && (
-          <Button onClick={() => { setMethodEditId(null); setMethodForm(EMPTY_METHOD); setImage(EMPTY_IMAGE); setShowModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
-            + Nuevo Método
+          <Button onClick={() => { setMethodEditId(null); setMethodForm(EMPTY_METHOD); setImage(EMPTY_IMAGE); setShowModal(true); }} className="h-8 px-3 text-[11px] shadow-none">
+            + Nuevo método
           </Button>
         )}
       </div>
@@ -73,7 +73,7 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
       <div className="card-premium overflow-auto flex-1">
       {paymentMethods.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 opacity-20">
-          <div className="text-xs font-black uppercase tracking-wide">Sin métodos configurados</div>
+          <div className="text-xs font-bold">Sin métodos configurados</div>
         </div>
       ) : (
         <table className="table-pos min-w-[680px]">
@@ -104,7 +104,7 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
                           className="input"
                         />
                       ) : (
-                        <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{m.name}</span>
+                        <span className="text-[12px] font-bold text-content dark:text-white tracking-tight">{m.name}</span>
                       )}
                     </td>
                     <td>
@@ -213,13 +213,13 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
                 onChange={e => e.target.files[0] && setImage(p => ({ ...p, file: e.target.files[0], clearImage: false }))} />
             </label>
             <div className="min-w-0">
-              <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 leading-relaxed">
+              <p className="text-[11px] font-semibold text-content-subtle dark:text-white/30 leading-relaxed">
                 Se ve en la botonera de "Pago Inmediato". PNG con fondo transparente queda mejor.
               </p>
               {imgPreview && (
                 <button type="button"
                   onClick={() => setImage({ file: null, current: null, clearImage: true })}
-                  className="text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-danger transition-colors mt-1">
+                  className="text-[12px] font-medium text-content-subtle hover:text-danger transition-colors mt-1">
                   Quitar logo
                 </button>
               )}
@@ -235,7 +235,7 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
               onChange={e => setMethodForm(p => ({ ...p, color: e.target.value }))}
               className="w-12 h-9 p-1 bg-white border border-border/40 rounded-lg cursor-pointer"
             />
-            <span className="text-[11px] text-content-subtle uppercase tracking-wide">
+            <span className="text-[12px] text-content-subtle">
               Identifica al método en reportes
             </span>
           </div>
@@ -249,14 +249,14 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
               className="mt-0.5 w-4 h-4 rounded cursor-pointer accent-brand-500"
             />
             <span>
-              <span className="block text-[11px] font-black text-content dark:text-white uppercase tracking-tight">Tiene salidas</span>
-              <span className="block text-[10px] font-bold text-content-subtle mt-0.5">
+              <span className="block text-[12px] font-bold text-content dark:text-white tracking-tight">Tiene salidas</span>
+              <span className="block text-[11px] font-semibold text-content-subtle mt-0.5">
                 Permite usarlo para pagar egresos o compras. Desactívalo en métodos que solo reciben, como Punto de Venta.
               </span>
             </span>
           </label>
         </div>
-        <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
+        <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
           <Button variant="ghost" onClick={closeForm}>Cancelar</Button>
           <Button variant="primary" onClick={saveMethod} disabled={methodSaving}>
             {methodSaving ? "Guardando..." : methodEditId ? "Guardar cambios" : "Registrar método"}

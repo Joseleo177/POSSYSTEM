@@ -1,4 +1,4 @@
-const { getPayments, createPayment, removePayment } = require("../services/purchasePayments");
+const { getPayments, createPayment, createBulkPayment, removePayment } = require("../services/purchasePayments");
 
 const wrap = (fn, status = 200) => async (req, res) => {
   try {
@@ -14,4 +14,5 @@ module.exports = {
   getPayments:   wrap(req => getPayments(parseInt(req.params.id), req)),
   createPayment: wrap(req => createPayment(parseInt(req.params.id), req.body, req.employee?.id ?? null, req.employee?.company_id ?? null, req), 201),
   removePayment: wrap(req => removePayment(parseInt(req.params.id), req)),
+  createBulk:    wrap(req => createBulkPayment(req.body, req.employee?.id ?? null, req.employee?.company_id ?? null, req), 201),
 };

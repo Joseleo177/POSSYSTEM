@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import CustomSelect from "./ui/CustomSelect";
-import { Button } from "./ui/Button";
-import { journalsForWarehouse } from "../helpers";
+import { Spinner } from "./ui/Spinner";
+import { journalsForWarehouse, toNameCase } from "../helpers";
+import { useApp } from "../context/AppContext";
 
 export default function AperturaCajaModal({ employee, warehouses = [], initialWarehouse, onOpened, onWarehouseChange, onSkip }) {
+    const { activeCurrencies, baseCurrency } = useApp();
     const [selectedWarehouseId, setSelectedWarehouseId] = useState(initialWarehouse?.id || "");
     const [allJournals, setAllJournals] = useState([]); // todos los de tipo efectivo, de cualquier sucursal
     const [selected, setSelected] = useState({}); // { [journal_id]: { checked, amount } }
@@ -41,12 +43,18 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
     const setAmount = (id, val) =>
         setSelected(prev => ({ ...prev, [id]: { ...prev[id], amount: val } }));
 
+    // Símbolo de la moneda de cada caja. Antes todas decían "$", también la de bolívares.
+    const symbolOf = (j) =>
+        (activeCurrencies || []).find(c => c.id === j.currency_id)?.symbol
+        || (!j.currency_id ? baseCurrency?.symbol : "")
+        || "";
+
     const handleOpen = async () => {
         const journalsData = Object.entries(selected)
             .filter(([, v]) => v.checked)
             .map(([id, v]) => ({ journal_id: parseInt(id), opening_amount: parseFloat(v.amount) || 0 }));
 
-        if (!journalsData.length) return setError("Selecciona al menos un diario de efectivo");
+        if (!journalsData.length) return setError("Selecciona al menos una caja de efectivo");
         if (!selectedWarehouseId) return setError("Selecciona una sucursal");
 
         setError("");
@@ -74,34 +82,35 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
     const currentWh = warehouses.find(w => w.id === parseInt(selectedWarehouseId)) || initialWarehouse;
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-md bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] overlay-in">
+            <div className="w-full max-w-md bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden modal-in">
 
-                {/* Header */}
-                <div className="px-5 py-4 border-b border-border/20 dark:border-white/5 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-success/10 border border-success/20 flex items-center justify-center shrink-0">
-                        <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                {/* Cabecera. Un solo título en caja normal; antes "TURNO DE TRABAJO" en verde
+                    versalitas encima de "Apertura de caja" competían entre sí. */}
+                <div className="pl-6 pr-4 pt-5 pb-4 flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
                     </div>
-                    <div className="flex-1">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-success opacity-70">Turno de Trabajo</div>
-                        <div className="text-sm font-black text-content dark:text-white">Apertura de Caja</div>
+                    <div className="flex-1 min-w-0">
+                        <div className="text-[17px] font-bold tracking-[-0.015em] text-content dark:text-white">Abrir turno</div>
+                        <div className="text-[13px] text-content-subtle">Cuenta el fondo de cada caja antes de empezar a vender.</div>
                     </div>
                     {onSkip && (
-                        <button onClick={onSkip} className="w-8 h-8 rounded-full bg-surface-2 dark:bg-white/5 flex items-center justify-center text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/10 transition-all shrink-0" title="Continuar sin abrir caja">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        <button onClick={onSkip} aria-label="Continuar sin abrir caja" title="Continuar sin abrir caja" className="w-8 h-8 rounded-lg flex items-center justify-center text-content-subtle hover:text-content hover:bg-surface-3 dark:hover:text-white dark:hover:bg-white/[0.06] transition-colors shrink-0">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                     )}
                 </div>
 
-                <div className="p-5 space-y-4">
-                    {/* Cajero + Sucursal */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-surface-2 dark:bg-white/5 rounded-lg p-3 border border-border/20 dark:border-white/5">
-                            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1">Cajero</div>
-                            <div className="text-[13px] font-black text-content dark:text-white truncate">{employee?.full_name || employee?.name}</div>
+                <div className="px-6 pb-6 space-y-5">
+                    {/* Cajero y sucursal: una franja de datos, no dos tarjetas. */}
+                    <div className="grid grid-cols-2 rounded-lg bg-surface-2 dark:bg-white/[0.04] divide-x divide-border/70 dark:divide-white/[0.06]">
+                        <div className="px-3 py-2.5 min-w-0">
+                            <div className="text-[12px] text-content-subtle mb-0.5">Cajero</div>
+                            <div className="text-[14px] font-semibold text-content dark:text-white truncate">{toNameCase(employee?.full_name || employee?.name)}</div>
                         </div>
-                        <div className={`bg-surface-2 dark:bg-white/5 rounded-lg p-3 border border-border/20 dark:border-white/5 flex flex-col ${warehouses.length > 1 ? "relative overflow-visible" : ""}`}>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1">Sucursal</div>
+                        <div className={`px-3 py-2.5 min-w-0 ${warehouses.length > 1 ? "relative overflow-visible" : ""}`}>
+                            <div className="text-[12px] text-content-subtle mb-0.5">Sucursal</div>
                             {warehouses.length > 1 ? (
                                 <CustomSelect
                                     value={selectedWarehouseId}
@@ -111,57 +120,59 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
                                         if (onWarehouseChange) onWarehouseChange(val);
                                     }}
                                     options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
-                                    placeholder="Selec. Sucursal"
+                                    placeholder="Elegir sucursal"
                                     className="w-full"
+                                    boxClassName="h-8"
                                 />
                             ) : (
-                                <div className="text-[13px] font-black text-content dark:text-white truncate">
-                                    {currentWh?.name || "Sin Sucursal"}
+                                <div className="text-[14px] font-semibold text-content dark:text-white truncate">
+                                    {toNameCase(currentWh?.name) || "Sin sucursal"}
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Diarios de efectivo */}
+                    {/* Cajas de efectivo */}
                     <div>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-3 flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-success" />
-                            Cajas de Efectivo — Fondo Inicial
-                        </div>
+                        <div className="text-[14px] font-semibold text-content dark:text-white">Fondo inicial</div>
+                        <div className="text-[12px] text-content-subtle mb-3">Apaga las cajas que no vas a usar en este turno.</div>
 
                         {journals.length === 0 ? (
-                            <div className="text-[11px] text-danger font-bold bg-danger/5 border border-danger/20 rounded-lg p-3">
-                                No hay diarios de tipo "efectivo" activos. Configúralos en Contabilidad → Diarios.
+                            <div className="text-[13px] text-red-700 dark:text-red-400 bg-red-500/10 rounded-lg p-3">
+                                No hay cajas de efectivo activas para esta sucursal. Configúralas en Contabilidad → Diarios.
                             </div>
                         ) : (
-                            <div className="space-y-2">
+                            <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/70 dark:divide-white/[0.06] overflow-hidden">
                                 {journals.map(j => {
                                     const s = selected[j.id] || { checked: false, amount: "" };
+                                    const sym = symbolOf(j);
                                     return (
-                                        <div key={j.id}
-                                            className={`rounded-lg border transition-all overflow-hidden ${s.checked ? "border-success/30 bg-success/5" : "border-border/20 dark:border-white/5 opacity-40"}`}>
-                                            <div className="flex items-center gap-3 px-4 py-2.5">
-                                                {/* Toggle */}
-                                                <button onClick={() => toggle(j.id)}
-                                                    className={`relative w-9 h-5 rounded-full transition-colors duration-300 shrink-0 ${s.checked ? "bg-success" : "bg-surface-3 dark:bg-white/10"}`}>
-                                                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-300 ${s.checked ? "translate-x-4" : "translate-x-0"}`} />
-                                                </button>
-                                                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: j.color || "#27ae60" }} />
-                                                <span className="font-black text-[11px] uppercase tracking-wide text-content dark:text-white flex-1">{j.name}</span>
-                                            </div>
-                                            {s.checked && (
-                                                <div className="px-4 pb-3 animate-in slide-in-from-top-1 duration-200">
-                                                    <div className="relative">
-                                                        <input
-                                                            type="number" min="0" step="0.01"
-                                                            value={s.amount}
-                                                            onChange={e => setAmount(j.id, e.target.value)}
-                                                            placeholder="0.00"
-                                                            className="input h-9 pr-8 text-[13px] font-black text-success"
-                                                        />
-                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-black text-content-subtle dark:text-white/30">$</span>
-                                                    </div>
+                                        <div key={j.id} className={`flex items-center gap-3 px-4 min-h-[60px] transition-colors ${s.checked ? "" : "bg-surface-2/60 dark:bg-white/[0.02]"}`}>
+                                            {/* Interruptor en el color de marca */}
+                                            <button
+                                                onClick={() => toggle(j.id)}
+                                                role="switch"
+                                                aria-checked={!!s.checked}
+                                                aria-label={`Usar ${j.name}`}
+                                                className={`relative w-9 h-5 rounded-full transition-colors duration-200 shrink-0 ${s.checked ? "bg-brand-500" : "bg-surface-3 dark:bg-white/15"}`}
+                                            >
+                                                <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-[0_1px_2px_rgb(0_0_0/0.25)] transition-transform duration-200 ${s.checked ? "translate-x-4" : "translate-x-0"}`} />
+                                            </button>
+                                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: j.color || "#94a3b8" }} />
+                                            <span className={`text-[14px] font-medium flex-1 truncate ${s.checked ? "text-content dark:text-white" : "text-content-subtle"}`}>{toNameCase(j.name)}</span>
+                                            {s.checked ? (
+                                                <div className="relative w-36 shrink-0">
+                                                    <input
+                                                        type="number" min="0" step="0.01" inputMode="decimal"
+                                                        value={s.amount}
+                                                        onChange={e => setAmount(j.id, e.target.value)}
+                                                        placeholder="0.00"
+                                                        className={`input h-10 text-right text-[15px] font-semibold tabular-nums ${sym ? "pr-11" : ""}`}
+                                                    />
+                                                    {sym && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] font-medium text-content-subtle pointer-events-none">{sym}</span>}
                                                 </div>
+                                            ) : (
+                                                <span className="text-[12px] text-content-subtle shrink-0">No se usa</span>
                                             )}
                                         </div>
                                     );
@@ -173,19 +184,23 @@ export default function AperturaCajaModal({ employee, warehouses = [], initialWa
                     {/* Error + botón */}
                     <div className="space-y-3">
                         {error && (
-                            <div className="bg-danger/5 border border-danger/20 text-danger text-[11px] font-black uppercase tracking-wide rounded-lg px-4 h-9 flex items-center gap-2">
-                                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+                            <div className="bg-red-500/10 text-red-700 dark:text-red-400 text-[13px] font-medium rounded-lg px-3 py-2.5 flex items-center gap-2">
+                                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
                                 {error}
                             </div>
                         )}
-                        <Button
+                        <button
                             onClick={handleOpen}
                             disabled={saving || !anySelected}
-                            className="w-full h-10 bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none disabled:opacity-40"
+                            className={`w-full h-11 rounded-lg text-[14px] font-semibold flex items-center justify-center gap-2 transition-all ${saving || !anySelected
+                                ? "bg-surface-3 dark:bg-white/[0.06] text-content-subtle cursor-not-allowed"
+                                : "btn-accent active:scale-[0.99]"}`}
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
-                            {saving ? "Abriendo..." : "Abrir Caja"}
-                        </Button>
+                            {saving ? <Spinner className="h-4 w-4" /> : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                            )}
+                            {saving ? "Abriendo…" : "Abrir turno"}
+                        </button>
                     </div>
                 </div>
             </div>

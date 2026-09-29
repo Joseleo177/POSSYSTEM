@@ -2,7 +2,7 @@ import { useState } from "react";
 import CustomSelect from "../ui/CustomSelect";
 import CustomerModal from "../Customers/CustomerModal";
 import { fmtQtyUnit } from "../../helpers/unitFormatter";
-import { resolveImageUrl, imgRetryOnError } from "../../helpers";
+import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 
@@ -73,89 +73,80 @@ export default function CartSidebar({
 
                 {/* Mobile toggle */}
                 <div className="lg:hidden flex items-center gap-2">
-                    <button onClick={() => setMobileTab("products")} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all ${mobileTab === "products" ? "bg-brand-500 text-white" : "bg-surface-2 dark:bg-white/5 text-content-subtle"}`}>
+                    <button onClick={() => setMobileTab("products")} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[12px] font-bold transition-all ${mobileTab === "products" ? "bg-brand-500 text-white" : "bg-surface-2 dark:bg-white/5 text-content-subtle"}`}>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
                         Catálogo
                     </button>
-                    <button onClick={() => setMobileTab("cart")} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all relative ${mobileTab === "cart" ? "bg-brand-500 text-white" : "bg-surface-2 dark:bg-white/5 text-content-subtle"}`}>
+                    <button onClick={() => setMobileTab("cart")} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[12px] font-bold transition-all relative ${mobileTab === "cart" ? "bg-brand-500 text-white" : "bg-surface-2 dark:bg-white/5 text-content-subtle"}`}>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
                         Carrito
-                        {cart.length > 0 && <span className="w-4 h-4 bg-danger text-white text-[11px] font-black rounded-full flex items-center justify-center">{cart.length}</span>}
+                        {cart.length > 0 && <span className="w-4 h-4 bg-danger text-white text-[12px] font-bold rounded-full flex items-center justify-center">{cart.length}</span>}
                     </button>
                 </div>
 
-                {/* Header - Hidden on mobile */}
-                <div className="hidden lg:flex items-center justify-between gap-2">
-                    {/* Título */}
-                    <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-500 shrink-0">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
-                        </div>
-                        <div className="min-w-0">
-                            <div className="text-[13px] font-black text-content dark:text-white tracking-tight leading-none">POS</div>
-                            <div className="text-[9px] font-bold text-content-subtle dark:text-white/30 uppercase tracking-widest leading-none mt-0.5">Punto de Venta</div>
-                        </div>
-                    </div>
-
-                    {/* Acciones de sesión */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                        {cashSession ? (
-                            <>
-                                {/* Facturas pendientes */}
-                                <button
-                                    onClick={() => setShowPendingSales(true)}
-                                    className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl bg-surface-2 dark:bg-white/5 hover:bg-amber-400/10 hover:text-amber-500 dark:hover:text-amber-400 text-content-subtle dark:text-white/40 transition-all"
-                                    title="Facturas pendientes"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-                                    <span className="text-[7px] font-black uppercase tracking-wide leading-none">Pendientes</span>
-                                </button>
-
-                                {/* Cuentas en espera */}
-                                <button
-                                    onClick={() => setShowHeldModal(true)}
-                                    className="relative flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl bg-surface-2 dark:bg-white/5 hover:bg-brand-500/10 hover:text-brand-500 text-content-subtle dark:text-white/40 transition-all"
-                                    title="Cuentas en espera"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    <span className="text-[7px] font-black uppercase tracking-wide leading-none">En espera</span>
-                                    {heldCarts.length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-[#0c0c0c]">{heldCarts.length}</span>}
-                                </button>
-
-                                {/* Caja abierta → cierre */}
-                                <button
-                                    onClick={() => setShowCierre(true)}
-                                    className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-all"
-                                >
-                                    <div className="flex items-center gap-1">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                        <span className="text-[10px] font-black uppercase tracking-wide text-green-500">Caja Abierta</span>
-                                    </div>
-                                    <span className="text-[7px] font-black uppercase tracking-wide text-green-500/50 leading-none">Cerrar turno</span>
-                                </button>
-                            </>
-                        ) : (
-                            /* Caja cerrada → apertura */
+                {/* Acciones de sesión (escritorio). Sin título "POS · Punto de venta": el
+                    módulo ya se nombra en la barra superior, y el título le quitaba ancho a estos
+                    tres botones hasta montarlos unos sobre otros. Ahora van en una fila pareja. */}
+                <div className="hidden lg:grid grid-cols-3 gap-1.5">
+                    {cashSession ? (
+                        <>
+                            {/* Facturas pendientes */}
                             <button
-                                onClick={() => setShowApertura(true)}
-                                className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl bg-danger/10 border border-danger/20 hover:bg-danger/20 transition-all"
+                                onClick={() => setShowPendingSales(true)}
+                                className="btn-outline h-10 px-2 rounded-lg flex items-center justify-center gap-1.5 text-[12px] font-semibold active:scale-[0.98] min-w-0"
+                                title="Facturas pendientes (F5)"
                             >
-                                <div className="flex items-center gap-1">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-danger" />
-                                    <span className="text-[10px] font-black uppercase tracking-wide text-danger">Caja Cerrada</span>
-                                </div>
-                                <span className="text-[7px] font-black uppercase tracking-wide text-danger/50 leading-none">Abrir turno</span>
+                                <svg className="w-4 h-4 shrink-0 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                <span className="truncate">Pendientes</span>
                             </button>
-                        )}
-                    </div>
+
+                            {/* Cuentas en espera */}
+                            <button
+                                onClick={() => setShowHeldModal(true)}
+                                className="btn-outline relative h-10 px-2 rounded-lg flex items-center justify-center gap-1.5 text-[12px] font-semibold active:scale-[0.98] min-w-0"
+                                title="Cuentas en espera (F3)"
+                            >
+                                <svg className="w-4 h-4 shrink-0 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                <span className="truncate">En espera</span>
+                                {/* Burbuja en la esquina y no dentro del botón: dentro le quitaba
+                                    ancho a la etiqueta y "En espera" salía cortado. */}
+                                {heldCarts.length > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-500 text-brand-ink text-[11px] font-bold flex items-center justify-center tabular-nums ring-2 ring-white dark:ring-surface-dark">{heldCarts.length}</span>
+                                )}
+                            </button>
+
+                            {/* Caja abierta → cierre. El punto verde es el estado; la segunda
+                                línea dice qué hace el botón. */}
+                            <button
+                                onClick={() => setShowCierre(true)}
+                                className="h-10 px-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/20 flex flex-col items-center justify-center transition-colors active:scale-[0.98] min-w-0"
+                                title="Cerrar turno"
+                            >
+                                <span className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-700 dark:text-emerald-400 leading-none">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                    Caja abierta
+                                </span>
+                                <span className="text-[11px] text-emerald-700/70 dark:text-emerald-400/70 leading-none mt-1">Cerrar turno</span>
+                            </button>
+                        </>
+                    ) : (
+                        /* Caja cerrada → apertura: es lo único que se puede hacer, ocupa la fila. */
+                        <button
+                            onClick={() => setShowApertura(true)}
+                            className="col-span-3 btn-accent h-10 rounded-lg flex items-center justify-center gap-2 text-[13px] font-semibold active:scale-[0.98]"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                            Abrir turno
+                        </button>
+                    )}
                 </div>
 
                 {/* Almacén activo: solo informativo, se elige al abrir caja (AperturaCajaModal).
                     Línea de ancho completo para que el nombre no se corte. */}
-                <div className="hidden lg:flex items-center gap-1.5 -mt-1 min-w-0">
-                    <svg className="w-3 h-3 text-brand-500 opacity-60 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-content-subtle dark:text-white/30 shrink-0">Sucursal</span>
-                    <span className="text-[10px] font-black uppercase tracking-wide text-brand-500 truncate">{activeWarehouse?.name || "Sin sucursal"}</span>
+                <div className="hidden lg:flex items-center gap-1.5 min-w-0 text-[12px]">
+                    <svg className="w-3.5 h-3.5 text-content-subtle shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                    <span className="text-content-subtle shrink-0">Sucursal</span>
+                    <span className="font-semibold text-content dark:text-white truncate">{toNameCase(activeWarehouse?.name) || "Sin sucursal"}</span>
                 </div>
 
                 {/* Acciones de sesión en móvil. Antes esta barra solo tenía "en espera" y un
@@ -163,7 +154,7 @@ export default function CartSidebar({
                     y, sobre todo, no había forma de cerrar la caja desde el teléfono —el resto
                     de acciones vive en el bloque hidden lg:flex de arriba—. */}
                 <div className="lg:hidden flex items-center justify-between gap-2 pb-1">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-500 truncate min-w-0" title="Sucursal de venta">{activeWarehouse?.name || "Sin sucursal"}</span>
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-brand-500 truncate min-w-0" title="Sucursal de venta">{activeWarehouse?.name || "Sin sucursal"}</span>
                     <div className="flex items-center gap-1.5 shrink-0">
                         {cashSession ? (
                             <>
@@ -181,7 +172,7 @@ export default function CartSidebar({
                                     title="Cuentas en espera"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m9-.828l-1.414-1.414M3.707 18.293V21h2.707l14.586-14.586a2 2 0 10-2.828-2.828L3.707 18.293z" /></svg>
-                                    {heldCarts.length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-[#0c0c0c]">{heldCarts.length}</span>}
+                                    {heldCarts.length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white dark:border-[#0c0c0c]">{heldCarts.length}</span>}
                                 </button>
 
                                 {/* Botón, no indicador: es el único acceso al cierre de turno en móvil. */}
@@ -191,7 +182,7 @@ export default function CartSidebar({
                                     title="Cerrar turno"
                                 >
                                     <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
-                                    <span className="text-[9px] font-black uppercase tracking-wide text-green-500 whitespace-nowrap">Cerrar caja</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wide text-green-500 whitespace-nowrap">Cerrar caja</span>
                                 </button>
                             </>
                         ) : (
@@ -201,7 +192,7 @@ export default function CartSidebar({
                                 title="Abrir turno"
                             >
                                 <div className="w-1.5 h-1.5 rounded-full bg-danger shrink-0" />
-                                <span className="text-[9px] font-black uppercase tracking-wide text-danger whitespace-nowrap">Abrir caja</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wide text-danger whitespace-nowrap">Abrir caja</span>
                             </button>
                         )}
                     </div>
@@ -221,11 +212,11 @@ export default function CartSidebar({
                                     <div className="min-w-0">
                                         {selectedCustomer.rif ? (
                                             <>
-                                                <div className="text-sm font-black tracking-wide text-content dark:text-white truncate">{selectedCustomer.rif}</div>
-                                                <div className="text-[11px] font-black text-brand-600 dark:text-brand-400 truncate">{selectedCustomer.name}</div>
+                                                <div className="text-sm font-bold tracking-wide text-content dark:text-white truncate">{selectedCustomer.rif}</div>
+                                                <div className="text-[12px] font-bold text-brand-600 dark:text-brand-400 truncate">{selectedCustomer.name}</div>
                                             </>
                                         ) : (
-                                            <div className="text-sm font-black text-content dark:text-white truncate">{selectedCustomer.name}</div>
+                                            <div className="text-sm font-bold text-content dark:text-white truncate">{selectedCustomer.name}</div>
                                         )}
                                     </div>
                                 </div>
@@ -277,7 +268,7 @@ export default function CartSidebar({
                                         setCustSearch(""); setSelectedCustIdx(-1);
                                     }
                                 }}
-                                placeholder="CLIENTE... (F2)"
+                                placeholder="Cliente... (F2)"
                                 className="input !h-10 !pl-10 relative z-10 !text-xs"
                             />
                             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-content-subtle opacity-60 z-20 pointer-events-none">
@@ -286,25 +277,28 @@ export default function CartSidebar({
                         </>
                     )}
                     {!selectedCustomer && custSearch.trim().length > 0 && (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-surface-2 dark:bg-surface-dark-2 border border-border dark:border-border-dark rounded-xl shadow-2xl z-[100] max-h-56 overflow-y-auto">
+                        <div className="absolute top-full left-0 right-0 mt-1 p-1 bg-white dark:bg-surface-dark-2 border border-black/[0.07] dark:border-white/10 rounded-xl shadow-[0_12px_40px_-8px_rgb(0_0_0/0.22)] z-[100] popover-in max-h-64 overflow-y-auto">
+                            {/* Resaltado con velo de marca y nombre en tinta: el nombre en cian y
+                                un borde grueso a la izquierda competían con el propio buscador. */}
                             {customers.map((c, idx) => (
                                 <button
                                     key={c.id}
                                     onClick={() => pickCustomer(c)}
                                     onMouseEnter={() => setSelectedCustIdx(idx)}
-                                    className={`w-full text-left px-4 py-2 cursor-pointer border-b border-border/50 dark:border-border-dark/50 transition-colors flex flex-col
-                                        ${idx === selectedCustIdx ? "bg-brand-500/20 border-l-4 border-l-brand-500" : "hover:bg-surface-3 dark:hover:bg-surface-dark-3"}`}
+                                    className={`w-full text-left px-3 py-2 rounded-lg cursor-pointer transition-colors flex flex-col ${idx === selectedCustIdx ? "bg-brand-500/10" : "hover:bg-surface-2 dark:hover:bg-white/[0.04]"}`}
                                 >
-                                    <div className="text-sm font-bold text-brand-500 truncate">{c.name}</div>
-                                    <div className="text-[11px] text-content-muted mt-0.5">{c.rif || "Sin datos adicionales"}</div>
+                                    <div className={`text-[14px] font-semibold truncate ${idx === selectedCustIdx ? "text-brand-700 dark:text-brand-300" : "text-content dark:text-white"}`}>{toNameCase(c.name)}</div>
+                                    <div className="text-[12px] text-content-subtle tabular-nums">{c.rif || "Sin documento"}</div>
                                 </button>
                             ))}
                             <button
                                 onClick={() => { setCustomerEditData(buildNewCustomer(custSearch)); setCustomerModal(true); setCustSearch(""); setSelectedCustIdx(-1); }}
-                                className={`w-full text-left px-4 py-3 cursor-pointer text-sm font-bold text-warning flex items-center gap-2 transition-colors ${customers.length > 0 ? "border-t border-border dark:border-border-dark" : ""} ${selectedCustIdx === customers.length ? "bg-warning/10" : "hover:bg-surface-3 dark:hover:bg-surface-dark-3"}`}
+                                className={`w-full text-left px-3 py-2.5 mt-0.5 rounded-lg cursor-pointer text-[13px] font-semibold text-brand-700 dark:text-brand-300 flex items-center gap-2.5 transition-colors ${customers.length > 0 ? "border-t border-border/60 dark:border-white/[0.06] rounded-t-none" : ""} ${selectedCustIdx === customers.length ? "bg-brand-500/10" : "hover:bg-surface-2 dark:hover:bg-white/[0.04]"}`}
                             >
-                                <span className="text-lg bg-warning/10 text-warning w-6 h-6 flex items-center justify-center rounded-md">+</span>
-                                Crear "{custSearch}"
+                                <span className="w-6 h-6 rounded-md bg-brand-500/10 flex items-center justify-center shrink-0">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v14M5 12h14" /></svg>
+                                </span>
+                                <span className="truncate">Crear cliente «{custSearch}»</span>
                             </button>
                         </div>
                     )}
@@ -320,7 +314,7 @@ export default function CartSidebar({
                             value={currentCurrency?.id || ""}
                             onChange={val => setSelectedCurrency(activeCurrencies.find(x => x.id === parseInt(val)))}
                             options={activeCurrencies.map(c => ({ value: c.id, label: c.code }))}
-                            className="!p-0 !bg-transparent !border-none !text-[11px] font-black flex-1"
+                            className="!p-0 !bg-transparent !border-none !text-[11px] font-bold flex-1"
                         />
                     </div>
                     <div className="flex-1 bg-surface-2 dark:bg-white/5 rounded-xl lg:rounded-2xl flex items-center px-3 lg:px-4 gap-2 border border-black/5 dark:border-white/5">
@@ -332,7 +326,7 @@ export default function CartSidebar({
                             onChange={val => selectSerie(parseInt(val))}
                             options={mySeries.map(s => ({ value: s.id, label: s.name }))}
                             placeholder="SERIE..."
-                            className="!p-0 !bg-transparent !border-none !text-[11px] font-black flex-1"
+                            className="!p-0 !bg-transparent !border-none !text-[11px] font-bold flex-1"
                         />
                     </div>
                 </div>
@@ -345,7 +339,7 @@ export default function CartSidebar({
                             <div className="w-14 h-14 rounded-2xl bg-surface-2 dark:bg-white/5 flex items-center justify-center text-content-subtle opacity-20">
                                 <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                             </div>
-                            <div className="text-[11px] font-black tracking-wide uppercase text-center dark:text-white">Inicia una venta</div>
+                            <div className="text-[12px] font-bold text-center dark:text-white">Inicia una venta</div>
                         </div>
                     ) : (
                         cart.map(i => {
@@ -376,18 +370,18 @@ export default function CartSidebar({
                                     <div className="flex items-center gap-1.5 flex-wrap">
                                         {/* El nombre se lee entero: truncado, "SARDINA INCOSA T..." no
                                             distingue una presentación de otra en pleno cobro. */}
-                                        <div className="text-[11px] font-black dark:text-white uppercase tracking-wide leading-tight break-words min-w-0 flex-1">{i.name}</div>
+                                        <div className="text-[12px] font-bold dark:text-white leading-tight break-words min-w-0 flex-1">{i.name}</div>
                                         {activePromos.find(p => p.product_ids?.includes(i.id)) && (() => {
                                             const promo = activePromos.find(p => p.product_ids?.includes(i.id));
                                             return (
-                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-success/10 text-success border border-success/20 shrink-0">
+                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-success/10 text-success border border-success/20 shrink-0">
                                                     {promo.type === 'percentage' ? `-${promo.discount_pct}%` : `${promo.buy_qty}×${promo.buy_qty + promo.get_qty}`}
                                                 </span>
                                             );
                                         })()}
                                     </div>
                                     <div className="flex flex-col mt-0.5">
-                                        <div className="text-[9px] font-black text-brand-500 uppercase flex items-center gap-1 flex-wrap">
+                                        <div className="text-[10px] font-bold text-brand-500 uppercase flex items-center gap-1 flex-wrap">
                                             <span>{fmtQtyUnit(i.qty, i.unit)}</span>
                                             <span className="opacity-40">×</span>
                                             <span>{fmt(convertToDisplay(i.price), currSym)}</span>
@@ -398,9 +392,9 @@ export default function CartSidebar({
                                         {/* Los importes no se parten por dentro: si no caben juntos,
                                             el segundo baja completo a la línea siguiente. */}
                                         <div className="flex items-baseline flex-wrap gap-x-1.5 gap-y-0.5 mt-0.5">
-                                            <span className="text-[12px] font-black text-content dark:text-white leading-tight whitespace-nowrap tabular-nums">{fmt(lineTotal, currSym)}</span>
+                                            <span className="text-[12px] font-bold text-content dark:text-white leading-tight whitespace-nowrap tabular-nums">{fmt(lineTotal, currSym)}</span>
                                             {secondaryCurrency && (
-                                                <span className="text-[12px] font-black text-content dark:text-white leading-tight whitespace-nowrap tabular-nums">
+                                                <span className="text-[12px] font-bold text-content dark:text-white leading-tight whitespace-nowrap tabular-nums">
                                                     {fmt(lineTotalSecondary, secondaryCurrency.symbol)}
                                                 </span>
                                             )}
@@ -408,7 +402,7 @@ export default function CartSidebar({
                                     </div>
                                 </div>
                                 <div className="flex items-center bg-surface-2 dark:bg-black/20 p-1 rounded-xl border border-black/5 dark:border-white/5 shrink-0">
-                                    <button onClick={() => changeQty(i.id, -1)} className="hidden lg:block w-7 h-7 rounded-lg font-black dark:text-white hover:bg-white/10">-</button>
+                                    <button onClick={() => changeQty(i.id, -1)} className="hidden lg:block w-7 h-7 rounded-lg font-bold dark:text-white hover:bg-white/10">-</button>
                                     <input
                                         id={`qty-input-${i.id}`}
                                         type="number"
@@ -426,9 +420,9 @@ export default function CartSidebar({
                                             if (!(q > 0)) setQtyDirect(i.id, String(parseFloat(i.qty_step) || 1), true);
                                         }}
                                         onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); searchInputRef.current?.focus(); } }}
-                                        className="w-10 bg-transparent text-center text-[11px] font-black border-none outline-none dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none cursor-pointer lg:cursor-text"
+                                        className="w-10 bg-transparent text-center text-[12px] font-bold border-none outline-none dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none cursor-pointer lg:cursor-text"
                                     />
-                                    <button onClick={() => changeQty(i.id, 1)} className="hidden lg:block w-7 h-7 rounded-lg font-black dark:text-white hover:bg-white/10">+</button>
+                                    <button onClick={() => changeQty(i.id, 1)} className="hidden lg:block w-7 h-7 rounded-lg font-bold dark:text-white hover:bg-white/10">+</button>
                                 </div>
                             </div>
                             );
@@ -443,7 +437,7 @@ export default function CartSidebar({
                             <button onClick={() => setDiscountEnabled(!discountEnabled)} className={`w-8 h-5 lg:w-10 lg:h-6 rounded-full transition-all relative ${discountEnabled ? "bg-brand-500" : "bg-surface-3 dark:bg-white/10"}`}>
                                 <div className={`absolute top-0.5 lg:top-1 left-0.5 lg:left-1 w-4 h-4 bg-white rounded-full transition-all ${discountEnabled ? "translate-x-3 lg:translate-x-4" : ""}`} />
                             </button>
-                            <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide opacity-60 dark:text-content-dark-muted">Dto. Global</span>
+                            <span className="text-[11px] lg:text-[12px] font-bold uppercase tracking-wide opacity-60 dark:text-content-dark-muted">Dto. Global</span>
                         </div>
                         {discountEnabled && (
                             <div className="flex items-center gap-1.5">
@@ -457,8 +451,8 @@ export default function CartSidebar({
                                         <button
                                             key={modo}
                                             onClick={() => { setDiscountMode(modo); setDiscountPct(""); }}
-                                            className={`h-7 lg:h-8 px-2 text-[10px] font-black transition-all ${discountMode === modo
-                                                ? "bg-brand-500 text-black"
+                                            className={`h-7 lg:h-8 px-2 text-[11px] font-bold transition-all ${discountMode === modo
+                                                ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40"
                                                 : "bg-surface-2 dark:bg-white/10 text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white"}`}
                                         >
                                             {etiqueta}
@@ -472,7 +466,7 @@ export default function CartSidebar({
                                         value={discountPct}
                                         onChange={e => setDiscountPct(e.target.value)}
                                         placeholder={discountMode === "pct" ? "0" : "0.00"}
-                                        className="w-full bg-surface-2 dark:bg-white/10 h-7 lg:h-8 rounded-lg px-2 text-right text-xs font-black outline-none focus:ring-2 focus:ring-brand-500/20 dark:text-white"
+                                        className="w-full bg-surface-2 dark:bg-white/10 h-7 lg:h-8 rounded-lg px-2 text-right text-xs font-bold outline-none focus:ring-2 focus:ring-brand-500/20 dark:text-white"
                                     />
                                 </div>
                             </div>
@@ -488,7 +482,7 @@ export default function CartSidebar({
                                 <button onClick={() => setChargeEnabled(!chargeEnabled)} className={`w-8 h-5 lg:w-10 lg:h-6 rounded-full transition-all relative ${chargeEnabled ? "bg-brand-500" : "bg-surface-3 dark:bg-white/10"}`}>
                                     <div className={`absolute top-0.5 lg:top-1 left-0.5 lg:left-1 w-4 h-4 bg-white rounded-full transition-all ${chargeEnabled ? "translate-x-3 lg:translate-x-4" : ""}`} />
                                 </button>
-                                <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-wide opacity-60 dark:text-content-dark-muted">Recargo</span>
+                                <span className="text-[11px] lg:text-[12px] font-bold uppercase tracking-wide opacity-60 dark:text-content-dark-muted">Recargo</span>
                             </div>
                             {chargeEnabled && (
                                 <div className="flex items-center gap-1.5">
@@ -501,8 +495,8 @@ export default function CartSidebar({
                                             <button
                                                 key={modo}
                                                 onClick={() => { setChargeMode(modo); setChargeInput(""); }}
-                                                className={`h-7 lg:h-8 px-2 text-[10px] font-black transition-all ${chargeMode === modo
-                                                    ? "bg-brand-500 text-black"
+                                                className={`h-7 lg:h-8 px-2 text-[11px] font-bold transition-all ${chargeMode === modo
+                                                    ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40"
                                                     : "bg-surface-2 dark:bg-white/10 text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white"}`}
                                             >
                                                 {etiqueta}
@@ -517,7 +511,7 @@ export default function CartSidebar({
                                             value={chargeInput}
                                             onChange={e => setChargeInput(e.target.value)}
                                             placeholder={chargeMode === "pct" ? "0" : "0.00"}
-                                            className="w-full bg-surface-2 dark:bg-white/10 h-7 lg:h-8 rounded-lg px-2 text-right text-xs font-black outline-none focus:ring-2 focus:ring-brand-500/20 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            className="w-full bg-surface-2 dark:bg-white/10 h-7 lg:h-8 rounded-lg px-2 text-right text-xs font-bold outline-none focus:ring-2 focus:ring-brand-500/20 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         />
                                     </div>
                                 </div>
@@ -530,13 +524,13 @@ export default function CartSidebar({
                                     value={chargeLabel}
                                     onChange={e => setChargeLabel(e.target.value)}
                                     placeholder="Servicio"
-                                    className="flex-1 min-w-0 bg-surface-2 dark:bg-white/10 h-7 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide outline-none focus:ring-2 focus:ring-brand-500/20 dark:text-white"
+                                    className="flex-1 min-w-0 bg-surface-2 dark:bg-white/10 h-7 rounded-lg px-2 text-[11px] font-bold outline-none focus:ring-2 focus:ring-brand-500/20 dark:text-white"
                                 />
                                 {[10, 15, 20].map(p => (
                                     <button
                                         key={p}
                                         onClick={() => setChargeFromPct(p)}
-                                        className="h-7 px-2 rounded-lg bg-surface-2 dark:bg-white/10 text-[10px] font-black text-content-subtle dark:text-content-dark-muted hover:bg-brand-500 hover:text-white transition-all shrink-0"
+                                        className="h-7 px-2 rounded-lg bg-surface-2 dark:bg-white/10 text-[11px] font-bold text-content-subtle dark:text-content-dark-muted hover:bg-brand-500 hover:text-white transition-all shrink-0"
                                     >
                                         {p}%
                                     </button>
@@ -547,57 +541,78 @@ export default function CartSidebar({
                     <div className="bg-surface-2 dark:bg-white/5 p-3 rounded-xl border border-black/5 dark:border-white/10">
                         <div className="space-y-1 mb-2">
                             <div className="flex justify-between items-center opacity-60 dark:text-content-dark-muted">
-                                <span className="text-[10px] lg:text-xs font-black uppercase tracking-wide">SUBTOTAL</span>
-                                <span className="text-[11px] lg:text-sm font-black tabular-nums">{fmt(subtotalDisplay, currSym)}</span>
+                                <span className="text-[11px] lg:text-xs font-bold uppercase tracking-wide">Subtotal</span>
+                                <span className="text-[12px] lg:text-sm font-bold tabular-nums">{fmt(subtotalDisplay, currSym)}</span>
                             </div>
                             {promoDiscount > 0 && (
                                 <div className="flex justify-between items-center text-success">
-                                    <span className="text-[10px] lg:text-xs font-black uppercase tracking-wide">Promociones</span>
-                                    <span className="text-[11px] lg:text-sm font-black tabular-nums">-{fmt(promoDiscountDisplay, currSym)}</span>
+                                    <span className="text-[11px] lg:text-xs font-bold uppercase tracking-wide">Promociones</span>
+                                    <span className="text-[12px] lg:text-sm font-bold tabular-nums">-{fmt(promoDiscountDisplay, currSym)}</span>
                                 </div>
                             )}
                             {discountEnabled && discountAmount > 0 && (
                                 <div className="flex justify-between items-center text-brand-500">
                                     {/* Por monto el "%" sobraba: el renglón ya muestra el importe
                                         descontado y repetirlo como porcentaje era falso. */}
-                                    <span className="text-[10px] lg:text-xs font-black uppercase tracking-wide">
+                                    <span className="text-[11px] lg:text-xs font-bold uppercase tracking-wide">
                                         DESC.{discountMode === "pct" ? ` (${discountPct}%)` : ""}
                                     </span>
-                                    <span className="text-[11px] lg:text-sm font-black tabular-nums">-{fmt(discountAmountDisplay, currSym)}</span>
+                                    <span className="text-[12px] lg:text-sm font-bold tabular-nums">-{fmt(discountAmountDisplay, currSym)}</span>
                                 </div>
                             )}
                             {chargeAmountDisplay > 0 && (
                                 <div className="flex justify-between items-center text-content dark:text-white">
-                                    <span className="text-[10px] lg:text-xs font-black uppercase tracking-wide truncate pr-2">
+                                    <span className="text-[11px] lg:text-xs font-bold uppercase tracking-wide truncate pr-2">
                                         {/* Un recargo simbólico frente a un consumo grande da
                                             0.0%: en ese caso no se rotula, en vez de mostrar
                                             un porcentaje que parece un error de cálculo. */}
                                         {chargeLabel?.trim() || "Servicio"}{chargePct >= 0.05 ? ` (${chargePct.toFixed(1)}%)` : ""}
                                     </span>
-                                    <span className="text-[11px] lg:text-sm font-black tabular-nums shrink-0">+{fmt(chargeAmountDisplay, currSym)}</span>
+                                    <span className="text-[12px] lg:text-sm font-bold tabular-nums shrink-0">+{fmt(chargeAmountDisplay, currSym)}</span>
                                 </div>
                             )}
                         </div>
                         <div className="flex justify-between items-end">
-                            <span className="text-[10px] lg:text-xs font-black text-brand-500 uppercase tracking-wide shrink-0">TOTAL</span>
+                            <span className="text-[11px] lg:text-xs font-bold text-brand-500 uppercase tracking-wide shrink-0">Total</span>
                             <div className="flex flex-col items-end min-w-0">
-                                <div className="text-2xl lg:text-3xl font-black tracking-tighter tabular-nums font-display dark:text-white leading-none whitespace-nowrap">{fmt(totalDisplay, currSym)}</div>
+                                <div className="text-2xl lg:text-3xl font-bold tracking-tighter tabular-nums font-display dark:text-white leading-none whitespace-nowrap">{fmt(totalDisplay, currSym)}</div>
                                 {secondaryCurrency && (
-                                    <div className="text-[10px] lg:text-sm font-bold text-content-subtle dark:text-brand-500/60 tabular-nums mt-1 whitespace-nowrap">
+                                    <div className="text-[11px] lg:text-sm font-semibold text-content-subtle dark:text-brand-500/60 tabular-nums mt-1 whitespace-nowrap">
                                         ≈ {fmt(totalSecondary, secondaryCurrency.symbol)}
                                     </div>
                                 )}
                             </div>
                         </div>
                     </div>
-                    <div className="flex gap-2">
-                        {/* En espera es un botón que se usa tanto como finalizar: con 48px de
-                            ancho quedaba como un accesorio del otro y en tablet se fallaba el toque. */}
-                        <button onClick={holdCart} disabled={cart.length === 0} className="w-[4.5rem] h-12 rounded-xl bg-surface-2 dark:bg-white/5 flex items-center justify-center hover:bg-brand-500 hover:text-white transition-all disabled:opacity-30 shrink-0">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 2m9-.828l-1.414-1.414M3.707 18.293V21h2.707l14.586-14.586a2 2 0 10-2.828-2.828L3.707 18.293z" /></svg>
+                    {!cashSession && cart.length > 0 && (
+                        <button
+                            onClick={() => setShowApertura(true)}
+                            className="w-full flex items-center justify-center gap-2 h-9 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[12px] font-semibold hover:bg-amber-500/15 transition-colors"
+                        >
+                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            Caja cerrada · abre el turno para facturar
                         </button>
-                        <button onClick={() => setShowConfirmCheckout(true)} disabled={loading || cart.length === 0} className="flex-1 bg-brand-500 text-brand-900 py-2.5 rounded-xl font-black uppercase tracking-wide shadow-xl shadow-brand-500/20 active:scale-95 transition-all text-[11px] lg:text-xs disabled:opacity-50 disabled:cursor-not-allowed">
-                            {loading ? "..." : "FINALIZAR VENTA"}
+                    )}
+                    <div className="flex gap-2">
+                        {/* Pausar (F4) deja la cuenta en espera. Es un botón que se usa tanto
+                            como finalizar: con 48px de ancho quedaba como un accesorio del otro y
+                            en tablet se fallaba el toque. Antes era solo un lápiz y nadie adivinaba
+                            qué hacía; ahora dice "Pausar", igual que el atajo de la leyenda. */}
+                        <button
+                            onClick={holdCart}
+                            disabled={cart.length === 0}
+                            title="Pausar la venta y dejarla en espera (F4)"
+                            className="btn-outline h-12 px-4 rounded-xl flex items-center justify-center gap-2 text-[13px] font-semibold active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none shrink-0"
+                        >
+                            <svg className="w-5 h-5 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            Pausar
+                        </button>
+                        {/* Deshabilitado va en gris y no en cian pálido: el cian apagado se leía
+                            como un botón roto, no como "todavía no hay nada que cobrar".
+                            Sin turno abierto sigue activo —desde aquí también se cotiza—, pero
+                            facturar pide abrir la caja (ver onSelectFactura en CobroPage). */}
+                        <button onClick={() => setShowConfirmCheckout(true)} disabled={loading || cart.length === 0} className="flex-1 h-12 rounded-xl text-[14px] font-semibold active:scale-[0.98] transition-all btn-accent disabled:!bg-surface-3 disabled:!bg-none disabled:!text-content-subtle disabled:!border-transparent disabled:!shadow-none dark:disabled:!bg-white/[0.06] disabled:cursor-not-allowed">
+                            {loading ? "..." : "Finalizar venta"}
                         </button>
                     </div>
                 </div>

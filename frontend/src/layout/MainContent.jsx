@@ -12,7 +12,7 @@ export default function MainContent({ safeTab }) {
         return (
             <main className="flex-1 min-h-0 w-full h-full flex items-center justify-center p-8">
                 <div className="text-center max-w-sm">
-                    <div className="text-sm font-black uppercase tracking-widest text-content dark:text-content-dark mb-2">
+                    <div className="text-sm font-bold text-content dark:text-content-dark mb-2">
                         Sin módulos asignados
                     </div>
                     <p className="text-xs text-content-muted dark:text-content-dark-muted">

@@ -25,6 +25,9 @@ module.exports = (sequelize, DataTypes) => {
     // Con el interruptor prendido, cada línea que se guarda entra al stock en el acto.
     receiving_mode:  { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     payment_status:  { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'pendiente' },
+    // Vencimiento pactado para esta compra. Nulo = fecha de la compra + días de crédito del
+    // proveedor, calculado al leer (ver services/purchases/payablesService.js).
+    due_date:        { type: DataTypes.DATEONLY, allowNull: true },
     created_at:      { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

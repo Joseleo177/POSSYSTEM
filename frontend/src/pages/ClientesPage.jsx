@@ -40,14 +40,14 @@ export default function ClientesPage() {
 
     // Acciones de la página
     const pageActions = !detail && (
-        <Button onClick={() => openNew("cliente")} className="h-8 px-2.5 sm:px-3 text-[10px]">
-            + <span className="hidden sm:inline">NUEVO CONTACTO</span><span className="sm:hidden">NUEVO</span>
+        <Button onClick={() => openNew("cliente")} className="h-8 px-2.5 sm:px-3 text-[11px]">
+            + <span className="hidden sm:inline">Nuevo contacto</span><span className="sm:hidden">Nuevo</span>
         </Button>
     );
 
     return (
         <Page
-            module="MÓDULO CONTACTOS"
+            module="Contactos"
             title={detail ? `Detalle: ${detail.name}` : "Contactos"}
             actions={pageActions}
         >
@@ -75,16 +75,16 @@ export default function ClientesPage() {
                             <button
                                 onClick={() => setShowFilterDrop(p => !p)}
                                 className={[
-                                    "h-10 px-3 rounded-lg text-[11px] font-black uppercase tracking-wide border flex items-center gap-2 transition-all",
+                                    "h-10 px-3 rounded-lg text-[12px] font-bold border flex items-center gap-2 transition-all",
                                     hasFilters
-                                        ? "bg-brand-500/10 text-brand-500 border-brand-500/30"
-                                        : "bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"
+                                        ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40"
+                                        : "bg-white dark:bg-white/5 border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:text-white"
                                 ].join(" ")}
                             >
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                                 Filtros
                                 {hasFilters && (
-                                    <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">
+                                    <span className="bg-content text-white dark:bg-white dark:text-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-[10px]">
                                         {filtersCount}
                                     </span>
                                 )}
@@ -96,9 +96,9 @@ export default function ClientesPage() {
                                         barra, así que con left-0 el panel crecía hacia afuera de la
                                         pantalla y en móvil se salía por el borde. Desde right-0 crece
                                         hacia adentro y queda visible completo. */}
-                                    <div className="absolute top-full right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150">
+                                    <div className="absolute top-full right-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-dark-2 border border-black/[0.07] dark:border-white/10 rounded-xl shadow-[0_12px_40px_-8px_rgb(0_0_0/0.22)] z-[70] popover-in">
                                         <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Tipo de Contacto</div>
+                                            <div className="text-[12px] font-medium text-content-subtle mb-2">Tipo de contacto</div>
                                             <div className="grid grid-cols-2 gap-1.5">
                                                 {[
                                                     { id: "cliente",   label: "Clientes" },
@@ -108,7 +108,7 @@ export default function ClientesPage() {
                                                     return (
                                                         <button key={f.id}
                                                             onClick={() => setTypeFilter(active ? "" : f.id)}
-                                                            className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${active ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                                            className={`h-8 px-2.5 rounded-lg text-[13px] font-medium border transition-all ${active ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:bg-white/5 dark:hover:text-white"}`}>
                                                             {f.label}
                                                         </button>
                                                     );
@@ -116,26 +116,26 @@ export default function ClientesPage() {
                                             </div>
                                         </div>
                                         <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Balance</div>
+                                            <div className="text-[12px] font-medium text-content-subtle mb-2">Balance</div>
                                             <button
                                                 onClick={() => setDebtorsFilter(!debtorsFilter)}
-                                                className={`w-full px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all flex items-center justify-center gap-2 ${debtorsFilter ? "bg-danger text-white border-danger" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-danger hover:border-danger/40"}`}>
+                                                className={`w-full h-8 px-2.5 rounded-lg text-[13px] font-medium border transition-all flex items-center justify-center gap-2 ${debtorsFilter ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 dark:hover:bg-white/5"}`}>
                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                 </svg>
                                                 {/* La misma casilla sirve para las dos preguntas, y el texto
                                                     dice cuál según la lista que se esté viendo. */}
-                                                {typeFilter === "proveedor" ? "Solo a los que debo" : "Solo Deudores"}
+                                                {typeFilter === "proveedor" ? "Solo a los que debo" : "Solo deudores"}
                                             </button>
                                             {!typeFilter && debtorsFilter && (
-                                                <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1.5 leading-snug">
+                                                <p className="text-[12px] text-content-subtle dark:text-white/50 mt-1.5 leading-snug">
                                                     Clientes que deben y proveedores por pagar. Filtra por tipo para ver uno solo.
                                                 </p>
                                             )}
                                         </div>
                                         {hasFilters && (
                                             <div className="px-4 py-2">
-                                                <button onClick={clearFilters} className="w-full py-1.5 text-[10px] font-black uppercase tracking-wide text-danger hover:bg-danger/5 rounded-lg transition-colors">
+                                                <button onClick={clearFilters} className="w-full h-8 text-[13px] font-medium text-content-muted hover:text-content hover:bg-surface-2 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/5 rounded-lg transition-colors">
                                                     Limpiar todo
                                                 </button>
                                             </div>

@@ -264,7 +264,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
         <Row
           label="Deuda seleccionada"
           value={rate > 1 ? `${sym}${deudaEnPago.toFixed(2)}` : fmtP(deudaTotal)}
-          valueClass="text-danger font-black"
+          valueClass="text-danger font-bold"
         />
         {rate > 1 && (
           <Row label="Equivalente" value={fmtP(deudaTotal)} valueClass="text-content-subtle dark:text-white/40" />
@@ -276,25 +276,25 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   // Reparto: qué se salda y qué queda debiendo (contexto de solo lectura → lateral).
   const repartoBulk = (
     <div>
-      <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">
+      <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">
         Cómo se aplica · de la más antigua a la más reciente
       </p>
       <div className="rounded-xl border border-border/20 dark:border-white/[0.08] divide-y divide-border/10 dark:divide-white/5 max-h-48 overflow-y-auto">
         {reparto.map(({ sale, saldo, aplica, queda, salda }) => (
           <div key={sale.id} className="px-3.5 py-2.5 flex items-center gap-3">
             <div className="flex-1 min-w-0">
-              <div className="text-[12px] font-bold text-content dark:text-white truncate">
+              <div className="text-[12px] font-semibold text-content dark:text-white truncate">
                 {sale.invoice_number || `#${sale.id}`}
               </div>
-              <div className="text-[10px] font-bold text-content-subtle dark:text-white/30">
+              <div className="text-[11px] font-semibold text-content-subtle dark:text-white/30">
                 {new Date(sale.created_at).toLocaleDateString("es-VE")} · debe {fmtPago(saldo)}
               </div>
             </div>
             <div className="text-right shrink-0">
-              <div className={`text-[12px] font-black tabular-nums ${aplica > 0 ? "text-success" : "text-content-subtle dark:text-white/20"}`}>
+              <div className={`text-[12px] font-bold tabular-nums ${aplica > 0 ? "text-success" : "text-content-subtle dark:text-white/20"}`}>
                 {aplica > 0 ? fmtPago(aplica) : "—"}
               </div>
-              <div className={`text-[9px] font-black uppercase tracking-wide ${salda ? "text-success" : queda > 0 ? "text-warning" : "text-content-subtle dark:text-white/20"}`}>
+              <div className={`text-[10px] font-bold uppercase tracking-wide ${salda ? "text-success" : queda > 0 ? "text-warning" : "text-content-subtle dark:text-white/20"}`}>
                 {salda ? "Salda" : aplica > 0 ? `Queda ${fmtPago(queda)}` : "Sin cubrir"}
               </div>
             </div>
@@ -305,7 +305,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   );
 
   return (
-    <Modal open={!!sales?.length} onClose={onClose} title="COBRAR VARIAS FACTURAS" width={860}>
+    <Modal open={!!sales?.length} onClose={onClose} title="Cobrar varias facturas" width={860}>
       <div className="flex flex-col lg:flex-row lg:gap-6">
 
         {/* ── Columna principal: lo que se teclea ── */}
@@ -315,9 +315,9 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
         {combinado && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Formas de pago *</p>
+              <p className="text-[12px] font-medium text-content-subtle dark:text-white/50">Formas de pago *</p>
               <button type="button" onClick={() => setForm(p => ({ ...p, pay_parts: [] }))}
-                className="text-[10px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-danger transition-colors">
+                className="text-[11px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-danger transition-colors">
                 Pago simple
               </button>
             </div>
@@ -359,7 +359,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                           parts[idx] = { ...parts[idx], amount: e.target.value.replace(/[^\d.,]/g, "") };
                           return { ...p, pay_parts: parts };
                         })}
-                        className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all tabular-nums"
+                        className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all tabular-nums"
                       />
                     </div>
                     {partesComb.length >= 2 && (
@@ -385,7 +385,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                     )}
                   </div>
                   {s.cur && !s.cur.is_base && s.base > 0 && (
-                    <p className="text-[10px] font-bold text-success">≈ {fmtP(s.base)} {baseCurrency?.code} · tasa {s.rate}</p>
+                    <p className="text-[11px] font-semibold text-success">≈ {fmtP(s.base)} {baseCurrency?.code} · tasa {s.rate}</p>
                   )}
                   {s.journal_id && !s.isCash && (
                     <input
@@ -397,22 +397,22 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                         return { ...p, pay_parts: parts };
                       })}
                       placeholder="N° de referencia (opcional)"
-                      className="w-full h-9 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[12px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
+                      className="w-full h-9 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[12px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
                     />
                   )}
                 </div>
               ))}
             </div>
             {combNoUltimoExcede && (
-              <p className="text-[10px] font-black text-danger mt-1.5">Solo la última forma de pago puede exceder la deuda</p>
+              <p className="text-[11px] font-bold text-danger mt-1.5">Solo la última forma de pago puede exceder la deuda</p>
             )}
             <button type="button"
               onClick={() => setForm(p => ({ ...p, pay_parts: [...p.pay_parts, { journal_id: "", amount: "", reference: "" }] }))}
-              className="w-full h-9 mt-2.5 rounded-xl border border-dashed border-border/40 dark:border-white/15 text-content-subtle dark:text-white/40 text-[10px] font-black uppercase tracking-widest hover:border-brand-500/50 hover:text-brand-500 transition-all">
+              className="w-full h-9 mt-2.5 rounded-xl border border-dashed border-border/40 dark:border-white/15 text-content-subtle dark:text-white/40 text-[11px] font-bold hover:border-brand-500/50 hover:text-brand-500 transition-all">
               Otra forma de pago
             </button>
             <div className="flex items-center justify-between gap-2 mt-2.5 pt-2.5 border-t border-border/20 dark:border-white/5">
-              <span className="text-[10px] font-black uppercase tracking-widest tabular-nums text-content-subtle dark:text-white/40">
+              <span className="text-[12px] font-medium tabular-nums text-content-subtle dark:text-white/40">
                 Recibido {fmtP(recibidoComb)} de {fmtP(deudaTotal)}
               </span>
             </div>
@@ -454,7 +454,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
               value={form.amount}
               onChange={e => setForm(p => ({ ...p, amount: e.target.value.replace(/[^\d.,]/g, "") }))}
               placeholder={deudaEnPago.toFixed(2)}
-              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
             />
           </Field>
           <Field label="FECHA DE REFERENCIA *">
@@ -468,7 +468,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
 
         {/* Solo cuando se cobra en otra moneda: en la base no hay nada que convertir. */}
         {currency && !currency.is_base && (
-          <Field label="TASA DE CAMBIO">
+          <Field label="Tasa de cambio">
             <RateField
               value={form.rate}
               onChange={v => setForm(p => ({
@@ -487,7 +487,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
         )}
 
         {rate !== 1 && amountLocal > 0 && (
-          <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 tabular-nums -mt-1">
+          <p className="text-[11px] font-semibold text-content-subtle dark:text-white/30 tabular-nums -mt-1">
             ≈ {fmtP(amountBase)} a la tasa del sistema
           </p>
         )}
@@ -499,7 +499,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
               value={form.reference_number}
               onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
               placeholder="Ej: 000123456"
-              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
             />
           </Field>
         )}
@@ -520,7 +520,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                 ],
               };
             })}
-            className="w-full h-9 -mt-1 rounded-xl border border-dashed border-brand-500/40 text-brand-500 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500/10 transition-all"
+            className="w-full h-9 -mt-1 rounded-xl border border-dashed border-brand-500/40 text-brand-500 text-[11px] font-bold hover:bg-brand-500/10 transition-all"
           >
             Combinar con otra forma de pago
           </button>
@@ -541,8 +541,8 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
         {haySobrante && (
           <div className="rounded-xl border-2 border-warning/30 bg-warning/5 p-3.5 space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase tracking-widest text-warning">Sobrante</span>
-              <span className="text-sm font-black text-warning tabular-nums">{fmtP(sobrante)}</span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-warning">Sobrante</span>
+              <span className="text-sm font-bold text-warning tabular-nums">{fmtP(sobrante)}</span>
             </div>
 
             <div className="grid grid-cols-3 gap-1.5">
@@ -555,10 +555,10 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                   key={modo}
                   type="button"
                   onClick={() => setForm(p => ({ ...p, surplus_mode: modo }))}
-                  className={`h-9 rounded-xl border text-[10px] font-black uppercase tracking-wide transition-all ${
+                  className={`h-9 rounded-xl border text-[11px] font-bold transition-all ${
                     form.surplus_mode === modo
                       ? "border-warning bg-warning text-black"
-                      : "border-border/30 dark:border-white/10 text-content-subtle dark:text-white/40 hover:border-warning/60"
+                      : "border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 dark:hover:bg-white/5"
                   }`}
                 >
                   {etiqueta}
@@ -568,7 +568,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
 
             {form.surplus_mode === "devolver" && (
               <div className="space-y-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
+                <p className="text-[12px] font-medium text-content-subtle dark:text-white/50">
                   Sale de *
                 </p>
 
@@ -611,7 +611,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                           return { ...p, change_parts: partes };
                         })}
                         placeholder={salida.sym}
-                        className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-warning/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20 tabular-nums"
+                        className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-warning/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20 tabular-nums"
                       />
                     </div>
                     {salidas.length > 1 && (
@@ -632,20 +632,20 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                   <button
                     type="button"
                     onClick={() => setForm(p => ({ ...p, change_parts: [...p.change_parts, { journal_id: "", amount: "" }] }))}
-                    className="w-full h-9 rounded-xl border border-dashed border-warning/40 text-warning text-[10px] font-black uppercase tracking-widest hover:bg-warning/10 transition-all"
+                    className="w-full h-9 rounded-xl border border-dashed border-warning/40 text-warning text-[11px] font-bold hover:bg-warning/10 transition-all"
                   >
                     Devolver el resto desde otra caja
                   </button>
                 )}
 
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-bold text-content-subtle dark:text-white/30 tabular-nums">
+                  <span className="text-[11px] font-semibold text-content-subtle dark:text-white/30 tabular-nums">
                     Entregado: {fmtP(vueltoBase)} de {fmtP(sobrante)}
                   </span>
                   {vueltoExcedido ? (
-                    <span className="text-[10px] font-black text-danger">Supera el sobrante</span>
+                    <span className="text-[11px] font-bold text-danger">Supera el sobrante</span>
                   ) : restoEnCaja > 0.0001 ? (
-                    <span className="text-[10px] font-black text-warning tabular-nums">
+                    <span className="text-[11px] font-bold text-warning tabular-nums">
                       Quedan {fmtP(restoEnCaja)} en caja
                     </span>
                   ) : null}
@@ -653,7 +653,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
               </div>
             )}
 
-            <p className="text-[10px] font-bold text-content-subtle dark:text-white/40 leading-relaxed">
+            <p className="text-[11px] font-semibold text-content-subtle dark:text-white/40 leading-relaxed">
               {form.surplus_mode === "devolver"
                 ? "Entra el monto completo y sale el vuelto: la caja queda con lo que cubre las facturas."
                 : form.surplus_mode === "caja"
@@ -676,19 +676,19 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
               value={form.notes}
               onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
               placeholder="Observaciones..."
-              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
             />
           </Field>
         </aside>
       </div>
 
-      <div className="flex gap-2.5 mt-6 pt-4 border-t border-border/20 dark:border-white/5">
+      <div className="flex gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
         <button onClick={onClose}
-          className="flex-1 h-10 rounded-xl border border-border/40 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all">
+          className="flex-1 h-10 rounded-xl border border-border/40 dark:border-white/10 text-[12px] font-bold text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all">
           Cancelar
         </button>
         <button onClick={submit} disabled={!canSubmit}
-          className="flex-[2] h-10 rounded-xl bg-success text-black text-[11px] font-black uppercase tracking-wide transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+          className="flex-[2] h-10 rounded-xl bg-success text-black text-[12px] font-bold transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
           {loading && <Spinner />}
           {loading ? "Registrando..." : "Confirmar cobro"}
         </button>
@@ -701,8 +701,8 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
 function Row({ label, value, valueClass = "text-content dark:text-white" }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-[11px] font-bold text-content-subtle dark:text-white/40">{label}</span>
-      <span className={`text-[12px] font-black tabular-nums ${valueClass}`}>{value}</span>
+      <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40">{label}</span>
+      <span className={`text-[12px] font-bold tabular-nums ${valueClass}`}>{value}</span>
     </div>
   );
 }
@@ -710,7 +710,7 @@ function Row({ label, value, valueClass = "text-content dark:text-white" }) {
 function Field({ label, children }) {
   return (
     <div>
-      <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">{label}</p>
+      <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">{label}</p>
       {children}
     </div>
   );

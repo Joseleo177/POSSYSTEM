@@ -68,7 +68,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
       <div
         ref={triggerRef}
         onClick={() => setOpen(!open)}
-        className={`${height} text-[11px] cursor-pointer flex items-center justify-between transition-all duration-200 border px-3 rounded-md ${boxClassName}
+        className={`${height} text-[12px] cursor-pointer flex items-center justify-between transition-all duration-200 border px-3 rounded-md ${boxClassName}
           ${open
             ? "border-brand-500 bg-brand-500/5 ring-[3px] ring-brand-500/15"
             : "bg-white dark:bg-[#12141a] border-border/80 dark:border-white/5 hover:border-brand-500/40"}
@@ -86,7 +86,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
           {/* truncate + min-w-0: con ancho fijo, una etiqueta larga debe recortarse en vez
               de desbordar la caja o empujar la flecha. */}
           <span className={`truncate ${selectedOption
-            ? "text-content dark:text-content-dark font-bold uppercase tracking-tight"
+            ? "text-content dark:text-content-dark font-semibold tracking-tight"
             : "text-content-subtle/50 dark:text-content-dark-muted/30 font-medium"
           }`}>
             {selectedOption ? selectedOption.label : placeholder}
@@ -108,7 +108,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
           // reconocer este menú como parte suya y no cerrarse cuando se elige una opción.
           data-custom-select-menu=""
           style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width }}
-          className="bg-white dark:bg-[#1a1c23] border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[9999] max-h-64 overflow-y-auto scrollbar-none animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-3xl"
+          className="bg-white dark:bg-[#1a1c23] border border-black/[0.06] dark:border-white/[0.08] rounded-lg shadow-[0_12px_40px_-8px_rgb(0_0_0/0.22)] z-[9999] max-h-64 overflow-y-auto scrollbar-none backdrop-blur-3xl popover-in"
         >
           <div className="p-1.5 space-y-1">
             {options.map((opt) => {
@@ -117,9 +117,9 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
                 <div
                   key={opt.value}
                   onClick={() => { onChange(opt.value); setOpen(false); }}
-                  className={`px-4 py-2 rounded-md cursor-pointer flex items-center justify-between text-[11px] font-bold uppercase tracking-wide transition-all duration-200
-                    ${isActive
-                      ? "bg-brand-500 text-black shadow-md shadow-brand-500/20"
+                  className={`px-4 py-2 rounded-md cursor-pointer flex items-center justify-between text-[12px] font-semibold transition-all duration-200
+ ${isActive
+                      ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40 shadow-sm"
                       : "hover:bg-brand-500/10 dark:hover:bg-white/5 text-content dark:text-white/70 hover:text-brand-500 dark:hover:text-brand-500"}
                   `}
                 >
@@ -140,7 +140,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
 
             {options.length === 0 && (
               <div className="px-5 py-6 text-center">
-                <div className="text-[10px] font-bold text-content-subtle uppercase tracking-widest italic">No hay resultados</div>
+                <div className="text-[12px] font-medium text-content-subtle italic">No hay resultados</div>
               </div>
             )}
           </div>

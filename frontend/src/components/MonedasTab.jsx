@@ -91,7 +91,7 @@ export default function MonedasTab({ notify }) {
     const base = currencies.find(c => c.is_base);
 
     return (
-        <Page module="MÓDULO DE SISTEMA" title="Monedas y Tasas">
+        <Page module="Sistema" title="Monedas y tasas">
             <div className="flex-1 min-h-0 overflow-auto custom-scrollbar p-4">
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-3">
                     {base && (
@@ -100,33 +100,33 @@ export default function MonedasTab({ notify }) {
                                 <svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 10h18M7 15h1m4 0h1m-7 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                             </div>
                             <div>
-                                <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest leading-none mb-0.5">Moneda Base</div>
-                                <div className="text-[11px] font-black text-content dark:text-white uppercase">{base.name} ({base.symbol} {base.code})</div>
-                                <div className="text-[9px] font-bold text-content-subtle opacity-60 uppercase tracking-widest">Tipo de cambio fijo en 1.0 · Base de todos los movimientos</div>
+                                <div className="text-[11px] font-semibold text-content-subtle uppercase tracking-[0.08em] leading-none mb-0.5">Moneda base</div>
+                                <div className="text-[12px] font-bold text-content dark:text-white">{base.name} ({base.symbol} {base.code})</div>
+                                <div className="text-[12px] font-medium text-content-subtle opacity-60">Tipo de cambio fijo en 1.0 · Base de todos los movimientos</div>
                             </div>
                         </div>
                     )}
 
                     <div className="bg-white dark:bg-surface-dark-3 rounded-xl border border-border/40 dark:border-white/10 shadow-sm overflow-hidden">
                         <div className="px-4 py-3 flex items-center justify-between border-b border-border/10">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-content dark:text-white">Tipos de Cambio</span>
+                            <span className="text-[11px] font-bold uppercase tracking-widest text-content dark:text-white">Tipos de cambio</span>
                             {puedeEditar && (
                                 <div className="flex items-center gap-2">
                                     {lastRefresh && (
-                                        <span className="text-[9px] font-black text-content-subtle uppercase tracking-widest">Última actualización: {lastRefresh.toLocaleTimeString()}</span>
+                                        <span className="text-[12px] font-medium text-content-subtle">Última actualización: {lastRefresh.toLocaleTimeString()}</span>
                                     )}
                                     <button
                                         onClick={autoRefreshRates}
                                         disabled={refreshing}
-                                        className={`h-7 px-3 rounded-lg bg-info/10 text-info text-[10px] font-black uppercase tracking-widest border border-info/20 hover:bg-info hover:text-black transition-all ${refreshing ? "animate-pulse" : ""}`}
+                                        className={`h-7 px-3 rounded-lg bg-info/10 text-info text-[11px] font-bold border border-info/20 hover:bg-info hover:text-black transition-all ${refreshing ? "animate-pulse" : ""}`}
                                     >
                                         {refreshing ? "Sincronizando..." : "Sincronizar Online"}
                                     </button>
                                     <button
                                         onClick={() => setShowNewCurrency(true)}
-                                        className="h-7 px-3 rounded-lg bg-warning/10 text-warning text-[10px] font-black uppercase tracking-widest border border-warning/20 hover:bg-warning hover:text-black transition-all"
+                                        className="h-7 px-3 rounded-lg bg-warning/10 text-warning text-[11px] font-bold border border-warning/20 hover:bg-warning hover:text-black transition-all"
                                     >
-                                        + Nueva Divisa
+                                        + Nueva divisa
                                     </button>
                                 </div>
                             )}
@@ -136,27 +136,27 @@ export default function MonedasTab({ notify }) {
                                 <thead>
                                     <tr className="bg-surface-2 dark:bg-white/[0.02]">
                                         {["Código", "Nombre", "Símbolo", "Tasa (1 USD =)", "Estado", ""].map(h => (
-                                            <th key={h} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-content-subtle">{h}</th>
+                                            <th key={h} className="px-4 py-2 text-[11px] font-bold text-content-subtle">{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-border/10 text-[11px]">
+                                <tbody className="divide-y divide-border/10 text-[12px]">
                                     {currencies.map((c) => (
                                         <tr key={c.id} className="hover:bg-brand-500/[0.02] transition-colors">
-                                            <td className="px-4 py-2 font-black text-brand-500">{c.code}</td>
-                                            <td className="px-4 py-2 font-bold text-content dark:text-white uppercase truncate">{c.name}</td>
-                                            <td className="px-4 py-2 font-black text-content-subtle">{c.symbol}</td>
+                                            <td className="px-4 py-2 font-bold text-brand-500">{c.code}</td>
+                                            <td className="px-4 py-2 font-semibold text-content dark:text-white truncate">{c.name}</td>
+                                            <td className="px-4 py-2 font-bold text-content-subtle">{c.symbol}</td>
                                             <td className="px-4 py-2">
                                                 {c.is_base ? (
-                                                    <span className="text-content-subtle font-black tracking-widest italic">1.000 (Base)</span>
+                                                    <span className="text-content-subtle font-bold tracking-widest italic">1.000 (Base)</span>
                                                 ) : puedeEditar ? (
                                                     <RateEditor currency={c} onSave={updateRate} />
                                                 ) : (
-                                                    <span className="text-content dark:text-white font-black tracking-widest">{parseFloat(c.exchange_rate).toFixed(4)}</span>
+                                                    <span className="text-content dark:text-white font-bold tracking-widest">{parseFloat(c.exchange_rate).toFixed(4)}</span>
                                                 )}
                                             </td>
                                             <td className="px-4 py-2">
-                                                <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border ${c.active ? "bg-success/10 text-success border-success/30" : "bg-danger/10 text-danger border-danger/30"}`}>
+                                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${c.active ? "bg-success/10 text-success border-success/30" : "bg-danger/10 text-danger border-danger/30"}`}>
                                                     {c.active ? "Activa" : "Inactiva"}
                                                 </span>
                                             </td>
@@ -165,7 +165,7 @@ export default function MonedasTab({ notify }) {
                                                     <div className="flex items-center gap-1.5">
                                                         <button
                                                             onClick={() => api.currencies.toggle(c.id).then(() => { load(); loadCurrencies(); }).catch(e => notify(e.message, "err"))}
-                                                            className={`h-6 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide border transition-all ${c.active ? "bg-danger/10 text-danger border-danger/20 hover:bg-danger hover:text-white" : "bg-success/10 text-success border-success/20 hover:bg-success hover:text-black"}`}
+                                                            className={`h-6 px-3 rounded-lg text-[11px] font-bold border transition-all ${c.active ? "bg-danger/10 text-danger border-danger/20 hover:bg-danger hover:text-white" : "bg-success/10 text-success border-success/20 hover:bg-success hover:text-black"}`}
                                                         >
                                                             {c.active ? "Suspender" : "Habilitar"}
                                                         </button>
@@ -187,7 +187,7 @@ export default function MonedasTab({ notify }) {
                     </div>
 
                     {/* Modal: Nueva Divisa */}
-                    <Modal open={showNewCurrency} onClose={() => setShowNewCurrency(false)} title="Registrar Nueva Divisa" width={420}>
+                    <Modal open={showNewCurrency} onClose={() => setShowNewCurrency(false)} title="Registrar nueva divisa" width={420}>
                         <div className="space-y-3">
                             {[
                                 ["Código ISO", "code", "text", "EUR"],
@@ -211,7 +211,7 @@ export default function MonedasTab({ notify }) {
                             <button
                                 onClick={addCurrency}
                                 disabled={addingCurrency}
-                                className="w-full h-10 bg-warning text-black font-black uppercase text-[10px] tracking-widest rounded-xl hover:shadow-lg hover:shadow-warning/20 transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+                                className="w-full h-10 bg-warning text-black font-bold text-[11px] rounded-xl shadow-sm transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
                             >
                                 {addingCurrency && <Spinner />}
                                 {addingCurrency ? "Agregando..." : "Agregar Divisa"}
@@ -265,7 +265,7 @@ function RateEditor({ currency, onSave }) {
                 }}
                 type="number"
                 step="0.000001"
-                className="w-24 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/5 rounded-lg px-2 h-7 text-[11px] font-bold text-content dark:text-white outline-none focus:border-brand-500"
+                className="w-24 bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/5 rounded-lg px-2 h-7 text-[12px] font-semibold text-content dark:text-white outline-none focus:border-brand-500"
             />
             <button
                 onClick={confirmar}

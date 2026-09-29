@@ -48,16 +48,16 @@ export default function LoginScreen({ onLogin }) {
         
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 shadow-[0_0_40px] shadow-brand-500/30 mb-5 rotate-3 hover:rotate-0 transition-transform duration-500">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 shadow-[0_0_40px] mb-5 rotate-3 hover:rotate-0 transition-transform duration-500">
             <svg className="w-8 h-8 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
-          <h1 className="text-3xl font-black text-content tracking-tighter mb-1.5">
+          <h1 className="text-3xl font-bold text-content tracking-tighter mb-1.5">
             NEXUS <span className="text-brand-500">ERP</span>
           </h1>
-          <p className="text-[10px] font-bold text-content-subtle uppercase tracking-[0.2em]">
-            Ecosistema de Gestión Inteligente
+          <p className="text-[11px] font-semibold text-content-subtle uppercase tracking-[0.2em]">
+            Ecosistema de gestión inteligente
           </p>
         </div>
 
@@ -67,7 +67,7 @@ export default function LoginScreen({ onLogin }) {
           
           <div className="space-y-5">
             <div className="space-y-1.5">
-                <label className="label ml-1">Identidad de Acceso</label>
+                <label className="label ml-1">Identidad de acceso</label>
                 <div className="relative group/input">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-content-subtle group-focus-within/input:text-brand-500 transition-colors">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -84,7 +84,7 @@ export default function LoginScreen({ onLogin }) {
             </div>
 
             <div className="space-y-1.5">
-                <label className="label ml-1">Clave de Seguridad</label>
+                <label className="label ml-1">Clave de seguridad</label>
                 <div className="relative group/input">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-content-subtle group-focus-within/input:text-brand-500 transition-colors">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
@@ -112,7 +112,7 @@ export default function LoginScreen({ onLogin }) {
             </div>
 
             {error && (
-              <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-danger/10 border border-danger/20 text-danger text-[10px] font-bold uppercase tracking-wider animate-shake">
+              <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-danger/10 border border-danger/20 text-danger text-[11px] font-semibold animate-shake">
                 <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
                 {error}
               </div>
@@ -121,7 +121,7 @@ export default function LoginScreen({ onLogin }) {
             <button
               onClick={handleSubmit}
               disabled={loading || !form.username || !form.password}
-              className="btn btn-primary w-full h-11 text-[12px] mt-2 shadow-brand-500/30"
+              className="btn btn-primary w-full h-11 text-[12px] mt-2"
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
@@ -134,10 +134,10 @@ export default function LoginScreen({ onLogin }) {
         </div>
 
         <div className="mt-6 text-center space-y-1">
-          <p className="text-[9px] font-black text-content-muted uppercase tracking-[0.3em]">
+          <p className="text-[10px] font-bold text-content-muted uppercase tracking-[0.3em]">
             Versión Enterprise 3.1.5
           </p>
-          <p className="text-[8px] font-medium text-content-muted/60 uppercase tracking-widest">
+          <p className="text-[9px] font-medium text-content-muted/60 uppercase tracking-widest">
             © 2026 Nexus Global Technologies
           </p>
         </div>

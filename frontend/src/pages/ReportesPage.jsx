@@ -1,3 +1,4 @@
+import NavDropdownMenu from "../components/ui/NavDropdownMenu";
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "../context/AppContext";
 import Page from "../components/ui/Page";
@@ -62,8 +63,8 @@ export default function ReportesPage() {
           <div key={group.label} className="relative">
             <button
               onClick={() => setOpenGroup(isOpen ? null : group.label)}
-              className={`flex items-center gap-1 px-4 py-2 text-[11px] font-black uppercase tracking-wide border-b-2 whitespace-nowrap transition-all ${
-                isActive ? "border-brand-500 text-brand-500" : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+              className={`flex items-center gap-1 px-4 py-2 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-all ${
+                isActive ? "border-brand-500 text-brand-700 dark:text-brand-300" : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
               }`}
             >
               {group.label}
@@ -72,19 +73,12 @@ export default function ReportesPage() {
               </svg>
             </button>
             {isOpen && (
-              <div className="absolute top-full left-0 mt-1 bg-white dark:bg-surface-dark-3 border border-border/40 dark:border-white/10 rounded-xl shadow-lg shadow-black/10 z-50 py-1 min-w-[150px]">
-                {group.items.map(key => (
-                  <button
-                    key={key}
-                    onClick={() => { setTab(key); setOpenGroup(null); }}
-                    className={`w-full text-left px-4 py-2 text-[11px] font-bold transition-colors rounded-lg ${
-                      tab === key ? "text-brand-500 bg-brand-500/5" : "text-content dark:text-white/70 hover:bg-surface-2 dark:hover:bg-white/5"
-                    }`}
-                  >
-                    {tabLabel(key)}
-                  </button>
-                ))}
-              </div>
+              <NavDropdownMenu
+                items={group.items}
+                active={tab}
+                onSelect={key => { setTab(key); setOpenGroup(null); }}
+                getLabel={tabLabel}
+              />
             )}
           </div>
         );
@@ -93,7 +87,7 @@ export default function ReportesPage() {
   );
 
   return (
-    <Page module="MÓDULO DE ANALÍTICA" title="Reportes Estratégicos" subheader={subheader}>
+    <Page module="Analítica" title="Reportes" subheader={subheader}>
       <div className="flex-1 min-h-0 overflow-y-auto p-3">
         {tab === "ventas"       && <SalesReport />}
         {tab === "inventario"   && <InventoryReport />}

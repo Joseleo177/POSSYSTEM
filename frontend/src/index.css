@@ -9,6 +9,11 @@ input[type=number]::-webkit-outer-spin-button,
 input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input[type=number] { -moz-appearance: textfield; }
 
+/* Casillas nativas marcadas en tinta, igual que ui/Check: con el azul del navegador eran lo
+   único de la pantalla en ese color. */
+input[type=checkbox], input[type=radio] { accent-color: #18181b; }
+.dark input[type=checkbox], .dark input[type=radio] { accent-color: #f4f4f5; }
+
 /* Mobile app utilities */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
@@ -34,9 +39,18 @@ input[type=number] { -moz-appearance: textfield; }
   .sheet-up { animation: sheet-up .24s cubic-bezier(.32, .72, 0, 1); }
 }
 
+/* Modales y paneles flotantes (filtros, menús). Mismo motivo: con `animate-in` sin plugin
+   aparecían de golpe. Entrada corta —el modal sube 6px y el panel baja 4px— para que se lea
+   de dónde sale sin hacer esperar a nadie. */
+@keyframes modal-in   { from { opacity: 0; transform: translateY(6px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes popover-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.modal-in   { animation: modal-in .18s cubic-bezier(.2, .8, .2, 1); }
+.overlay-in { animation: catalog-fade-in .15s ease-out; }
+.popover-in { animation: popover-in .14s ease-out; }
+
 /* Quien pidió menos movimiento en su sistema no debería recibir un panel deslizándose. */
 @media (prefers-reduced-motion: reduce) {
-  .catalog-drawer-in, .catalog-overlay-in, .sheet-up { animation: none; }
+  .catalog-drawer-in, .catalog-overlay-in, .sheet-up, .modal-in, .overlay-in, .popover-in { animation: none; }
 }
 
 @layer base {
@@ -49,21 +63,40 @@ input[type=number] { -moz-appearance: textfield; }
     --c-content-muted:  75 85 99;    /* #4b5563 — 7.5:1 sobre blanco */
     --c-content-subtle: 107 114 128; /* #6b7280 — 4.8:1 sobre blanco */
 
-    /* Color de marca por defecto: el teal histórico del sistema, con los valores exactos
-       que antes estaban escritos en tailwind.config.js. Cuando la empresa configura su
-       propio color, helpers/brandColor.js escribe estas mismas variables en el <html> y
-       gana por especificidad; al restaurar el color por defecto las borra y vuelve a
-       mandar esta declaración, sin quedar en un teal aproximado. */
-    --c-brand-50:  240 253 250;
-    --c-brand-100: 204 251 241;
-    --c-brand-200: 153 246 228;
-    --c-brand-300: 94 234 212;
-    --c-brand-400: 45 212 191;
-    --c-brand-500: 20 184 166;
-    --c-brand-600: 13 148 136;
-    --c-brand-700: 15 118 110;
-    --c-brand-800: 17 94 89;
-    --c-brand-900: 19 78 74;
+    /* Color de marca por defecto: cian (la escala cyan de Tailwind). Era el teal histórico;
+       se cambió al volver el color de acento del sistema (29-09-2026). Cuando la empresa
+       configura su propio color, helpers/brandColor.js escribe estas mismas variables en el
+       <html> y gana por especificidad; al restaurar el color por defecto las borra y vuelve
+       a mandar esta declaración. */
+    --c-brand-50:  236 254 255;
+    --c-brand-100: 207 250 254;
+    --c-brand-200: 165 243 252;
+    --c-brand-300: 103 232 249;
+    --c-brand-400: 34 211 238;
+    --c-brand-500: 6 182 212;
+    --c-brand-600: 8 145 178;
+    --c-brand-700: 14 116 144;
+    --c-brand-800: 21 94 117;
+    --c-brand-900: 22 78 99;
+    /* Texto sobre brand-500 (el botón principal). Con el cian va casi negro —blanco daba
+       2,4:1—; brandColor.js lo recalcula para cada marca y elige el que más contraste dé. */
+    --c-brand-ink: 8 51 68;        /* #083344 */
+  }
+
+  /* Color de los gráficos: el de la marca, un paso más profundo en claro (brand-600, que pasa
+     contraste sobre blanco) y uno más luminoso en oscuro (brand-400). Así cada empresa ve
+     sus gráficos en su color. El gris es la parte secundaria de una barra apilada (el costo
+     frente a la utilidad). Con el cian por defecto: #0891B2 y #22D3EE, validados con
+     validate_palette; el cian puro que se pidió (#00E9FF) daba 1,5:1 sobre blanco. */
+  :root {
+    /* brand-500 y no 600: con 600 las barras salían petróleo apagado. brandColor.js fija
+       brand-500 en 40% de luminosidad, que sobre blanco da ~3:1, el mínimo para gráficos. */
+    --c-chart:       var(--c-brand-500);
+    --c-chart-muted: 203 213 225;  /* #CBD5E1 */
+  }
+  .dark {
+    --c-chart:       var(--c-brand-400);
+    --c-chart-muted: 71 85 105;    /* #475569 */
   }
 
   .dark {
@@ -120,14 +153,14 @@ input[type=number] { -moz-appearance: textfield; }
            active:scale-95 disabled:opacity-50 disabled:pointer-events-none
            focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2;
   }
-  .btn-sm  { @apply btn px-2.5 py-1.5 text-[10px]; }
-  .btn-md  { @apply btn px-4 py-2 text-xs; }
+  .btn-sm  { @apply btn px-2.5 py-1.5 text-[12px]; }
+  .btn-md  { @apply btn px-4 py-2 text-[13px]; }
   .btn-lg  { @apply btn px-5 py-2.5 text-sm; }
 
+  /* Sin halo de color bajo los botones: ese resplandor del tono de marca era el sello de
+     plantilla genérica. La jerarquía la da el relleno, no la sombra. */
   .btn-primary {
-    @apply bg-brand-500 text-white shadow-lg shadow-brand-500/20 
-           hover:bg-brand-600 hover:shadow-brand-600/30
-           dark:shadow-brand-500/10 dark:hover:shadow-brand-500/20;
+    @apply bg-brand-500 text-white shadow-sm hover:bg-brand-600;
   }
   .btn-secondary {
     @apply bg-white text-content border border-border shadow-sm 
@@ -135,19 +168,44 @@ input[type=number] { -moz-appearance: textfield; }
            dark:bg-surface-dark-2 dark:text-content-dark dark:border-border-dark dark:hover:bg-surface-dark-3;
   }
   .btn-danger {
-    @apply bg-danger text-white shadow-lg shadow-danger/20 hover:bg-danger-dark hover:shadow-danger/30;
+    @apply bg-danger text-white shadow-sm hover:bg-danger-dark;
   }
   .btn-ghost {
     @apply bg-transparent text-content-muted hover:bg-surface-3/50 hover:text-content
            dark:hover:bg-surface-dark-3/50 dark:text-content-dark-muted dark:hover:text-content-dark;
   }
+  /* ── Botón de acento y botón de borde ──
+     La acción principal va en el color de marca (cian por defecto). Solo en tinta el sistema
+     se leía apagado. El texto no es blanco fijo: es --c-brand-ink, que brandColor.js calcula
+     para cada marca (casi negro sobre cian o amarillo, blanco sobre azul o rojo), así ningún
+     color elegido deja el botón ilegible. Un relleno plano se leía como plantilla: un
+     degradado leve y un filo de luz arriba le dan volumen de botón físico.
+     Son @layer components: el alto, el ancho y el relleno los sigue poniendo cada botón. */
+  .btn-accent {
+    @apply text-brand-ink bg-brand-500 border border-brand-600/60 transition-colors;
+    background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.22), rgb(255 255 255 / 0));
+    box-shadow: 0 1px 2px rgb(var(--c-brand-700) / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.30);
+  }
+  .btn-accent:hover { @apply bg-brand-400; }
+  .dark .btn-accent {
+    @apply border-brand-400/40;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(var(--c-brand-500) / 0.15), inset 0 1px 0 rgb(255 255 255 / 0.25);
+  }
+
+  .btn-outline {
+    @apply bg-white text-content border border-border transition-colors
+           hover:bg-surface-2 hover:border-content-subtle/30
+           dark:bg-white/[0.03] dark:text-white/85 dark:border-white/10 dark:hover:bg-white/[0.07];
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  }
+
   .btn-success {
-    @apply bg-success text-white shadow-lg shadow-success/20 hover:bg-success-dark hover:shadow-success/30;
+    @apply bg-success text-white shadow-sm hover:bg-success-dark;
   }
 
   /* ── Inputs Refinados ── */
   .input {
-    @apply w-full px-3 h-10 text-[11px] font-medium rounded-md
+    @apply w-full px-3 h-10 text-[13px] font-medium rounded-md
            bg-white border border-border/80 text-content placeholder-content-subtle/50
            transition-all duration-200
            focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15
@@ -155,7 +213,7 @@ input[type=number] { -moz-appearance: textfield; }
            dark:bg-[#12141a] dark:border-white/5 dark:text-content-dark
            dark:placeholder-content-dark-muted/30 dark:focus:border-brand-500 dark:focus:bg-[#161821];
   }
-  .input-sm { @apply input !h-8 text-[10px] px-2.5; }
+  .input-sm { @apply input !h-8 text-[12px] px-2.5; }
 
   /* ── Cards Premium ── */
   .card {
@@ -166,15 +224,17 @@ input[type=number] { -moz-appearance: textfield; }
     @apply card shadow-premium border-white/40 dark:shadow-premium-dark dark:border-white/5;
   }
 
-  /* ── Badges Modernos ── */
-  .badge { @apply inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border; }
-  .badge-success { @apply badge bg-success/10 text-success border-success/20; }
-  .badge-warning { @apply badge bg-warning/10 text-warning border-warning/20; }
-  .badge-danger  { @apply badge badge-info; } /* Fallback or fix */
-  .badge-danger  { @apply badge bg-danger/10 text-danger border-danger/20; }
-  .badge-info    { @apply badge bg-info/10 text-info border-info/20; }
-  .badge-neutral { @apply badge bg-surface-3 text-content-muted border-border dark:bg-white/5 dark:text-white/40 dark:border-white/10; }
-  .badge-violet  { @apply badge bg-violet-500/10 text-violet-400 border-violet-500/20; }
+  /* ── Badges ──
+     Caja normal con inicial mayúscula (capitalize: muchos llegan como el valor crudo,
+     "pagado", "pendiente"), sin borde y con el texto un tono más oscuro que el velo: los
+     success/warning puros sobre su propio velo no llegaban a 4.5:1. */
+  .badge { @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold capitalize whitespace-nowrap; }
+  .badge-success { @apply badge bg-emerald-500/10 text-emerald-700 dark:text-emerald-400; }
+  .badge-warning { @apply badge bg-amber-500/10 text-amber-700 dark:text-amber-400; }
+  .badge-danger  { @apply badge bg-red-500/10 text-red-600 dark:text-red-400; }
+  .badge-info    { @apply badge bg-sky-500/10 text-sky-700 dark:text-sky-400; }
+  .badge-neutral { @apply badge bg-surface-3 text-content-muted dark:bg-white/5 dark:text-white/50; }
+  .badge-violet  { @apply badge bg-violet-500/10 text-violet-600 dark:text-violet-400; }
 
   /* Etiqueta cuyo color lo elige el usuario (los diarios de caja y banco).
      El tono viaja en dos variables ya corregidas para tener contraste de lectura —una por
@@ -183,19 +243,61 @@ input[type=number] { -moz-appearance: textfield; }
   .badge-ink     { color: var(--journal-ink); }
   .dark .badge-ink { color: var(--journal-ink-dark); }
 
-  /* ── Tablas de Grado Comercial ── */
-  .table-pos { @apply w-full text-sm; }
-  .table-pos thead th {
-    @apply text-[11px] font-bold text-content-subtle uppercase tracking-wider py-2.5 px-3
-           bg-surface-2/50 dark:bg-surface-dark-3/50 border-b border-border dark:border-border-dark;
+  /* ── Tablas de Grado Comercial ──
+     Celdas y cabeceras van dentro de :where(), que no suma especificidad. Con el selector
+     normal (.table-ledger thead th) la regla le ganaba a las utilidades de cada celda: el
+     "text-right" de la columna Monto no hacía nada y la cabecera quedaba a la izquierda
+     mientras las cifras iban a la derecha; lo mismo con los pl-4/pr-4 de los bordes. */
+  /* Mismo lenguaje que .table-ledger: rótulo de columna en versalitas pequeñas y celdas con
+     aire. Las cifras alinean por tabular-nums sin fuente mono. */
+  .table-pos { @apply w-full text-[13px] tracking-[-0.005em]; }
+  :where(.table-pos thead th) {
+    @apply h-9 text-[10px] font-semibold text-content-subtle uppercase tracking-[0.08em] py-2 px-3
+           bg-surface-2 dark:bg-surface-dark border-b border-border dark:border-border-dark;
   }
-  .table-pos tbody td { 
-    @apply py-2.5 px-3 border-b border-border/40 dark:border-border-dark/40 
-           text-content dark:text-content-dark transition-colors; 
+  :where(.table-pos tbody td) {
+    @apply py-3 px-3 border-b border-border/50 dark:border-white/[0.04] tabular-nums
+           text-content dark:text-content-dark transition-colors;
   }
-  .table-pos tbody tr:hover td { @apply bg-surface-2/30 dark:bg-surface-dark-3/30; }
+  .table-pos tbody tr:hover td { @apply bg-surface-2/70 dark:bg-white/[0.025]; }
+  /* ── Tabla libro (ledger) ──
+     Para listados de documentos: facturas, pagos, compras. Frente a .table-pos cambia tres
+     cosas a propósito: los datos van en caja normal (solo el rótulo de columna en versalitas),
+     los códigos y montos con dígitos tabulares (misma Inter, sin fuente mono: se leía a
+     sistema viejo) para que alineen como en un libro contable, y las
+     filas se agrupan por día con un rótulo propio. El color de estado lo pone cada fila:
+     aquí no hay nada que se pinte por defecto. */
+  .table-ledger { @apply w-full border-separate border-spacing-0 text-[13px] tracking-[-0.005em]; }
+  :where(.table-ledger thead th) {
+    @apply h-9 px-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em]
+           text-content-subtle bg-surface-2 dark:bg-surface-dark border-b border-border dark:border-border-dark;
+  }
+  :where(.table-ledger tbody td) {
+    @apply h-[52px] px-3 border-b border-border/50 dark:border-white/[0.04] align-middle
+           text-content dark:text-content-dark;
+  }
+  .table-ledger tbody tr.ledger-row { @apply cursor-pointer transition-colors duration-150; }
+  .table-ledger tbody tr.ledger-row:hover td,
+  .table-ledger tbody tr.ledger-row:focus-visible td { @apply bg-surface-2/70 dark:bg-white/[0.025]; }
+  .table-ledger tbody tr.ledger-row:focus-visible { @apply outline-none; }
+  .table-ledger tbody tr.ledger-row:focus-visible td:first-child { box-shadow: inset 2px 0 0 rgb(var(--c-brand-500)); }
+  /* Filete a la izquierda solo en filas que piden atención (deben, quedaron a medias). */
+  .table-ledger tbody tr[data-tone] td:first-child { box-shadow: inset 2px 0 0 var(--row-tone); }
+  :where(.table-ledger tbody tr.ledger-day td) {
+    @apply h-auto pt-5 pb-2 border-b border-border dark:border-border-dark;
+  }
+  :where(.table-ledger tfoot td) {
+    @apply px-3 py-3 bg-surface-2 dark:bg-surface-dark-2 border-t border-border dark:border-border-dark;
+  }
+  /* Botón de icono de fila: siempre visible (hay tablets: nada vive solo en el hover). */
+  .row-icon {
+    @apply w-8 h-8 inline-flex items-center justify-center rounded-lg text-content-subtle/70
+           transition-colors hover:bg-surface-3 hover:text-content dark:text-white/35
+           dark:hover:bg-white/[0.06] dark:hover:text-white active:scale-95 disabled:opacity-40;
+  }
+
   /* ── Labels de formulario ── */
-  .label { @apply block text-[10px] font-bold text-content-subtle dark:text-content-dark-muted mb-1.5 uppercase tracking-wider; }
+  .label { @apply block text-[12px] font-semibold text-content-muted dark:text-content-dark-muted mb-1.5; }
 
   /* ── Divisor ── */
   .divider { @apply border-t border-border dark:border-border-dark my-4; }

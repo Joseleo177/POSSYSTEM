@@ -6,7 +6,7 @@ import { PKG_UNITS } from "../../constants/pkg";
 import CustomSelect from "../ui/CustomSelect";
 import ProductModal from "../ProductModal";
 
-const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
 // Tamaño de página para el scroll infinito
 const PAGE_SIZE = 40;
@@ -274,11 +274,11 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
 
     return (
         <div
-            className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+            className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200"
             onClick={onClose}
         >
             <div
-                className="relative w-full max-w-xl bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out"
+                className="relative w-full max-w-xl bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden flex flex-col max-h-[85vh] modal-in"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
@@ -300,10 +300,10 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                             </svg>
                         </div>
                         <div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
+                            <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">
                                 {step === 1 ? "Paso 1 de 2" : "Paso 2 de 2"}
                             </div>
-                            <div className="text-sm font-black text-content dark:text-white">
+                            <div className="text-sm font-bold text-content dark:text-white">
                                 {step === 1 ? "Seleccionar Producto" : selected?.name}
                             </div>
                         </div>
@@ -342,7 +342,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                             <div className="relative shrink-0">
                                 <button
                                     onClick={() => setShowStockFilter(v => !v)}
-                                    className={`h-10 px-3 flex items-center gap-1.5 rounded-md border text-[10px] font-black uppercase tracking-wide transition-all ${stockFilter !== "todos"
+                                    className={`h-10 px-3 flex items-center gap-1.5 rounded-md border text-[11px] font-bold transition-all ${stockFilter !== "todos"
                                         ? "bg-brand-500/10 border-brand-500/30 text-brand-500"
                                         : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}
                                 >
@@ -359,7 +359,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                                 <button
                                                     key={f.key}
                                                     onClick={() => { setStockFilter(f.key); setShowStockFilter(false); }}
-                                                    className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all ${stockFilter === f.key
+                                                    className={`w-full text-left px-3 py-2 rounded-lg text-[12px] font-semibold transition-all ${stockFilter === f.key
                                                         ? "bg-brand-500 text-white"
                                                         : "hover:bg-brand-500/10 text-content-subtle hover:text-brand-500"}`}
                                                 >
@@ -380,13 +380,13 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                             )}
                             {!searching && visibleResults.length === 0 && (
                                 <div className="py-6 space-y-3">
-                                    <p className="text-center text-[11px] font-bold text-content-subtle dark:text-white/30 uppercase tracking-wide">
+                                    <p className="text-center text-[12px] font-semibold text-content-subtle dark:text-white/30">
                                         {search.trim() ? `Sin resultados para "${search}"` : stockFilter !== "todos" ? `Sin productos · ${STOCK_FILTERS.find(f => f.key === stockFilter)?.label}` : "Sin productos"}
                                     </p>
                                     <div className="flex justify-center">
                                         <button
                                             onClick={openProductModal}
-                                            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-500 text-[11px] font-black uppercase tracking-wide hover:bg-brand-500 hover:text-black transition-all"
+                                            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-500 text-[12px] font-bold hover:bg-brand-500 hover:text-black transition-all"
                                         >
                                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4"/></svg>
                                             Crear producto{search.trim() ? ` "${search.trim()}"` : ""}
@@ -410,23 +410,23 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                         >
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-black text-content dark:text-white uppercase tracking-tight truncate">{p.name}</span>
+                                                    <span className="text-xs font-bold text-content dark:text-white tracking-tight truncate">{p.name}</span>
                                                     {inOrder && (
-                                                        <span className="shrink-0 text-[9px] font-black uppercase tracking-wider bg-brand-500/10 text-brand-500 px-1.5 py-0.5 rounded-md">Ya en orden</span>
+                                                        <span className="shrink-0 text-[10px] font-bold bg-brand-500/10 text-brand-500 px-1.5 py-0.5 rounded-md">Ya en orden</span>
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-3 mt-0.5">
                                                     {p.cost_price > 0 && (
-                                                        <span className="text-[10px] font-bold text-content-subtle dark:text-white/30">
+                                                        <span className="text-[11px] font-semibold text-content-subtle dark:text-white/30">
                                                             Último costo: Ref. {fmt2(p.cost_price)}
                                                         </span>
                                                     )}
                                                     {p.category_name && (
-                                                        <span className="text-[10px] font-bold text-content-subtle dark:text-white/30 border-l border-border/20 pl-3">{p.category_name}</span>
+                                                        <span className="text-[11px] font-semibold text-content-subtle dark:text-white/30 border-l border-border/20 pl-3">{p.category_name}</span>
                                                     )}
                                                 </div>
                                             </div>
-                                            <div className={`shrink-0 text-[11px] font-black px-2.5 py-1 rounded-lg border tabular-nums ${stockColor(p.stock)}`}>
+                                            <div className={`shrink-0 text-[12px] font-bold px-2.5 py-1 rounded-lg border tabular-nums ${stockColor(p.stock)}`}>
                                                 {fmtQtyUnit(p.stock, p.unit)}
                                             </div>
                                         </button>
@@ -441,7 +441,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 </div>
                             )}
                             {!searching && !loadingMore && results.length > 0 && results.length >= total && (
-                                <p className="text-center text-[10px] font-bold text-content-subtle dark:text-white/20 uppercase tracking-widest py-3">
+                                <p className="text-center text-[11px] font-semibold text-content-subtle dark:text-white/20 py-3">
                                     {total} producto{total !== 1 ? "s" : ""}
                                 </p>
                             )}
@@ -456,21 +456,21 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                         <div className="px-5 pt-4 pb-3 border-b border-border/10 dark:border-white/5">
                             <div className="flex items-center justify-between gap-3 bg-surface-2/50 dark:bg-white/[0.03] rounded-xl px-3 py-2.5 border border-border/20 dark:border-white/5">
                                 <div>
-                                    <div className="text-[10px] font-black text-content-subtle dark:text-white/30 uppercase tracking-widest mb-0.5">Stock actual</div>
+                                    <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-0.5">Stock actual</div>
                                     {selected.stock != null ? (
-                                        <div className={`text-sm font-black tabular-nums ${stockColor(selected.stock).split(" ")[0]}`}>
+                                        <div className={`text-sm font-bold tabular-nums ${stockColor(selected.stock).split(" ")[0]}`}>
                                             {fmtQtyUnit(selected.stock, selected.unit)}
                                         </div>
                                     ) : (
-                                        <div className="text-sm font-black text-content-subtle">—</div>
+                                        <div className="text-sm font-bold text-content-subtle">—</div>
                                     )}
                                 </div>
                                 {selected.cost_price > 0 && (
                                     <div className="text-right">
-                                        <div className="text-[10px] font-black text-content-subtle dark:text-white/30 uppercase tracking-widest mb-0.5">Último costo unit.</div>
-                                        <div className="text-sm font-black text-brand-500 tabular-nums">Ref. {fmt2(selected.cost_price)}</div>
+                                        <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-0.5">Último costo unit.</div>
+                                        <div className="text-sm font-bold text-brand-500 tabular-nums">Ref. {fmt2(selected.cost_price)}</div>
                                         {invoiceRate > 1 && (
-                                            <div className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums mt-0.5">{invoiceSym} {fmt2(selected.cost_price * invoiceRate)}</div>
+                                            <div className="text-[12px] font-semibold text-content-subtle dark:text-white/45 tabular-nums mt-0.5">{invoiceSym} {fmt2(selected.cost_price * invoiceRate)}</div>
                                         )}
                                     </div>
                                 )}
@@ -489,7 +489,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 alinean abajo, para que un rótulo de dos líneas no los desfase. */}
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                 <div className="col-span-2 sm:col-span-1 flex flex-col justify-end gap-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest leading-tight text-content-subtle dark:text-white/30">Presentación</label>
+                                    <label className="text-[12px] font-medium leading-tight text-content-subtle dark:text-white/50">Presentación</label>
                                     <CustomSelect
                                         value={form.package_unit}
                                         onChange={val => setF("package_unit", val)}
@@ -503,7 +503,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     />
                                 </div>
                                 <div className="flex flex-col justify-end gap-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest leading-tight text-content-subtle dark:text-white/30">
+                                    <label className="text-[12px] font-medium leading-tight text-content-subtle dark:text-white/50">
                                         {/* Comprando suelto no hay envase del que hablar, y el
                                             campo va deshabilitado en 1: el rótulo lo explica. */}
                                         {esSuelto ? "Sin presentación" : `${selected?.unit || "Unidad"} por ${pkgSingular}`}
@@ -513,18 +513,18 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                         value={form.package_size}
                                         onChange={e => setQtyField("package_size", e.target.value)}
                                         disabled={esSuelto}
-                                        className={`input h-9 text-center font-black tabular-nums ${esSuelto ? "opacity-30 cursor-not-allowed" : ""}`}
+                                        className={`input h-9 text-center tabular-nums ${esSuelto ? "opacity-30 cursor-not-allowed" : ""}`}
                                     />
                                 </div>
                                 <div className="flex flex-col justify-end gap-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest leading-tight text-content-subtle dark:text-white/30">
+                                    <label className="text-[12px] font-medium leading-tight text-content-subtle dark:text-white/50">
                                         Cant. de {pkgPlural}
                                     </label>
                                     <input
                                         type="text" inputMode="decimal"
                                         value={form.package_qty}
                                         onChange={e => setQtyField("package_qty", e.target.value)}
-                                        className="input h-9 text-center font-black tabular-nums"
+                                        className="input h-9 text-center tabular-nums"
                                     />
                                 </div>
                             </div>
@@ -533,36 +533,36 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 entera en vez de dejar media columna vacía. */}
                             <div className={selected.sellable === false ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">
-                                        Costo por {pkgSingular}{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70 normal-case font-bold">({invoiceSym})</span> : ""}
+                                    <label className="text-[12px] font-medium text-content-subtle dark:text-white/50">
+                                        Costo por {pkgSingular}{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70 normal-case font-semibold">({invoiceSym})</span> : ""}
                                     </label>
                                     <input
                                         type="text" inputMode="decimal"
                                         value={form.package_price}
                                         onChange={e => setF("package_price", sanitizeDecimal(e.target.value, true))}
                                         placeholder="0.00"
-                                        className="input h-9 font-black tabular-nums text-brand-500"
+                                        className="input h-9 tabular-nums text-brand-500"
                                     />
                                     {invoiceRate > 1 && pkgPriceBase > 0 && (
-                                        <p className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(pkgPriceBase)}</p>
+                                        <p className="text-[12px] font-semibold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(pkgPriceBase)}</p>
                                     )}
                                 </div>
                                 {/* Un insumo no se vende, así que no hay margen que fijar:
                                     comprarlo solo actualiza su costo. */}
                                 {selected.sellable !== false && (
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Margen (%)</label>
+                                        <label className="text-[12px] font-medium text-content-subtle dark:text-white/50">Margen (%)</label>
                                         <input
                                             type="text" inputMode="decimal"
                                             value={form.profit_margin}
                                             onChange={e => setF("profit_margin", sanitizeDecimal(e.target.value, true))}
                                             placeholder="Sin cambio"
-                                            className="input h-9 font-black tabular-nums"
+                                            className="input h-9 tabular-nums"
                                         />
                                         {/* Vaciarlo es una decisión válida, no un olvido: hay
                                             productos con precio puesto a mano. */}
                                         {calc?.keepsPrice && (
-                                            <p className="text-[10px] font-bold text-content-subtle dark:text-white/40 leading-snug">
+                                            <p className="text-[11px] font-semibold text-content-subtle dark:text-white/40 leading-snug">
                                                 Vacío: se actualiza el costo y el precio de venta queda como está.
                                             </p>
                                         )}
@@ -574,23 +574,23 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                             {calc && parseFloat(form.package_price) > 0 && (
                                 <div className={selected.sellable === false ? "grid grid-cols-2 gap-2" : "grid grid-cols-3 gap-2"}>
                                     {[
-                                        { label: "Costo Unit.", value: `Ref. ${fmt2(calc.unit_cost)}`, color: "text-info" },
+                                        { label: "Costo unit.", value: `Ref. ${fmt2(calc.unit_cost)}`, color: "text-info" },
                                         // El precio de venta se omite en los insumos: la compra
                                         // no se lo va a escribir al producto.
                                         ...(selected.sellable === false
                                             ? []
                                             : [{
-                                                label: "Precio Venta",
+                                                label: "Precio venta",
                                                 // Sin margen la compra no toca el precio, y decirlo
                                                 // evita que parezca que va a quedar en 0.
                                                 value: calc.keepsPrice ? "Sin cambio" : `Ref. ${fmt2(calc.sale_price)}`,
                                                 color: calc.keepsPrice ? "text-content-subtle dark:text-white/40" : "text-success",
                                             }]),
-                                        { label: "Total Unids.", value: fmtQtyUnit(calc.total_units, selected.unit), color: "text-warning" },
+                                        { label: "Total unids.", value: fmtQtyUnit(calc.total_units, selected.unit), color: "text-warning" },
                                     ].map(({ label, value, color }) => (
                                         <div key={label} className="bg-surface-2/50 dark:bg-white/[0.03] rounded-xl p-2.5 border border-border/20 dark:border-white/5 text-center">
-                                            <div className="text-[9px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide mb-0.5">{label}</div>
-                                            <div className={`text-xs font-black tabular-nums ${color}`}>{value}</div>
+                                            <div className="text-[10px] font-bold text-content-subtle dark:text-white/30 uppercase tracking-wide mb-0.5">{label}</div>
+                                            <div className={`text-xs font-bold tabular-nums ${color}`}>{value}</div>
                                         </div>
                                     ))}
                                 </div>
@@ -600,22 +600,22 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                             {showLotFields ? (
                                 <div className="grid grid-cols-2 gap-3 pt-1">
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">N° de Lote</label>
+                                        <label className="text-[12px] font-medium text-content-subtle dark:text-white/50">N° de Lote</label>
                                         <input
                                             type="text"
                                             value={form.lot_number || ""}
                                             onChange={e => setF("lot_number", e.target.value)}
                                             placeholder="Ej. LOT-2026-001"
-                                            className="input h-9 text-xs font-bold"
+                                            className="input h-9 text-xs"
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Fecha Vencimiento</label>
+                                        <label className="text-[12px] font-medium text-content-subtle dark:text-white/50">Fecha vencimiento</label>
                                         <input
                                             type="date"
                                             value={form.expiration_date || ""}
                                             onChange={e => setF("expiration_date", e.target.value)}
-                                            className="input h-9 text-xs font-bold"
+                                            className="input h-9 text-xs"
                                         />
                                     </div>
                                 </div>
@@ -624,7 +624,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     <svg className="w-3.5 h-3.5 text-info/60 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    <p className="text-[10px] font-medium text-info/60">
+                                    <p className="text-[11px] font-medium text-info/60">
                                         Lote y fecha de vencimiento se registran al <strong>confirmar</strong> la orden.
                                     </p>
                                 </div>
@@ -637,7 +637,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                 <div className="shrink-0 px-5 py-4 border-t border-border/10 dark:border-white/5 flex gap-2 bg-surface-2/30 dark:bg-white/[0.02]">
                     <button
                         onClick={onClose}
-                        className="flex-1 h-9 rounded-xl border border-border/30 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle hover:bg-surface-2 dark:hover:bg-white/10 transition-all"
+                        className="flex-1 h-9 rounded-xl border border-border/30 dark:border-white/10 text-[12px] font-bold text-content-subtle hover:bg-surface-2 dark:hover:bg-white/10 transition-all"
                     >
                         Cancelar
                     </button>
@@ -647,10 +647,10 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                             disabled={!lineaValida}
                             title={!lineaValida ? "Falta la cantidad de empaques o el costo" : undefined}
                             className={[
-                                "flex-[2] h-9 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center justify-center gap-2",
+                                "flex-[2] h-9 rounded-xl text-[12px] font-bold transition-all flex items-center justify-center gap-2",
                                 !lineaValida
                                     ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed"
-                                    : "bg-brand-500 text-white hover:brightness-105 active:scale-[0.99] shadow-lg shadow-brand-500/20"
+                                    : "bg-brand-500 text-white hover:brightness-105 active:scale-[0.99] shadow-sm"
                             ].join(" ")}
                         >
                             {editItem ? (

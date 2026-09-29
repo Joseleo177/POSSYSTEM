@@ -23,15 +23,15 @@ export default function CustomerDebtAlert({ alert, onClose, fmt, convertToDispla
         </div>
 
         <div className="flex flex-col gap-1">
-          <div className="text-[13px] font-black uppercase tracking-widest text-danger">Tiene cuentas pendientes</div>
-          <div className="text-sm font-bold text-content dark:text-white truncate max-w-[300px]">{alert.name}</div>
+          <div className="text-[13px] font-bold text-danger">Tiene cuentas pendientes</div>
+          <div className="text-sm font-semibold text-content dark:text-white truncate max-w-[300px]">{alert.name}</div>
         </div>
 
         <div className="w-full rounded-2xl bg-surface-2 dark:bg-white/5 border border-black/5 dark:border-white/5 py-4">
-          <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-1">Saldo por cobrar</div>
-          <div className="text-2xl font-black text-danger tabular-nums">{display}</div>
+          <div className="text-[12px] font-medium text-content-subtle mb-1">Saldo por cobrar</div>
+          <div className="text-2xl font-bold text-danger tabular-nums">{display}</div>
           {showBase && (
-            <div className="text-[11px] font-bold text-content-subtle tabular-nums mt-0.5">{fmt(alert.debt, baseSym)}</div>
+            <div className="text-[12px] font-semibold text-content-subtle tabular-nums mt-0.5">{fmt(alert.debt, baseSym)}</div>
           )}
         </div>
 
@@ -42,7 +42,7 @@ export default function CustomerDebtAlert({ alert, onClose, fmt, convertToDispla
         <button
           autoFocus
           onClick={onClose}
-          className="w-full h-11 rounded-xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-widest hover:brightness-110 transition-all active:scale-95"
+          className="w-full h-11 rounded-xl btn-accent text-[12px] font-bold transition-all active:scale-95"
         >
           Continuar con la venta
         </button>

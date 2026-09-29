@@ -1,4 +1,4 @@
-const { getAll, getOne, createPurchase, updateDraft, confirmOrder, receivePurchase, updateItemLots, deletePurchase } = require("../services/purchases");
+const { getAll, getOne, createPurchase, updateDraft, confirmOrder, receivePurchase, updateItemLots, deletePurchase, getPayables, setDueDate } = require("../services/purchases");
 const { broadcast } = require("../services/sseService");
 
 const wrap = (fn, status = 200) => async (req, res) => {
@@ -33,5 +33,7 @@ module.exports = {
     return result;
   }),
   updateLots:   wrap(req => updateItemLots(req.params.id, req.body.items || [], req)),
+  payables:     wrap(req => getPayables(req.query, req)),
+  setDueDate:   wrap(req => setDueDate(req.params.id, req.body, req)),
   remove:       wrap(async req => { const r = await deletePurchase(req.params.id, req); broadcast(companyId(req), 'products:updated', {}); return r; }),
 };

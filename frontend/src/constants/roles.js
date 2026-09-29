@@ -1,9 +1,13 @@
+// Etiqueta del rol junto al nombre del empleado (barra superior, menú lateral).
+// Tintes suaves sin borde y con el texto un tono más oscuro que el velo, para que se lean.
+// Antes el administrador iba en rojo de peligro, y se leía como una alerta permanente en la
+// esquina de la pantalla; ahora lleva el color de marca.
 export const ROLE_COLORS = {
-    admin: "text-danger border-danger/40 bg-danger/10",
-    manager: "text-warning border-warning/40 bg-warning/10",
-    cashier: "text-success border-success/40 bg-success/10",
-    warehouse: "text-info border-info/40 bg-info/10",
+    admin:     "text-brand-700 bg-brand-500/10 border-transparent dark:text-brand-300",
+    manager:   "text-violet-700 bg-violet-500/10 border-transparent dark:text-violet-300",
+    cashier:   "text-emerald-700 bg-emerald-500/10 border-transparent dark:text-emerald-300",
+    warehouse: "text-sky-700 bg-sky-500/10 border-transparent dark:text-sky-300",
 };
 
 export const DEFAULT_ROLE_CLASS =
-    "text-content-muted border-border bg-surface-3 dark:bg-surface-dark-3";
+    "text-content-muted border-transparent bg-surface-3 dark:bg-white/[0.06]";

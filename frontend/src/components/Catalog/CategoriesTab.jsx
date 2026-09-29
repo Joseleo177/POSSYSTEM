@@ -86,17 +86,17 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
     return (
         <>
             <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex items-center justify-between gap-3">
-                <span className="text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
+                <span className="text-[12px] font-bold text-content-subtle dark:text-white/30">
                     {categories.length} categoría{categories.length !== 1 ? "s" : ""}
                 </span>
             </div>
 
             <div className="flex-1 overflow-auto">
                 {loading ? (
-                    <div className="flex items-center justify-center py-20 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/20 animate-pulse">Cargando…</div>
+                    <div className="flex items-center justify-center py-20 text-[12px] font-bold text-content-subtle dark:text-white/20 animate-pulse">Cargando…</div>
                 ) : categories.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20">
-                        <div className="text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/20">Sin categorías registradas</div>
+                        <div className="text-[12px] font-bold text-content-subtle dark:text-white/20">Sin categorías registradas</div>
                     </div>
                 ) : (
                     <div className="card-premium overflow-auto flex-1">
@@ -104,7 +104,7 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
                             <thead className="sticky top-0 z-10">
                                 <tr className="bg-surface-2 dark:bg-surface-dark-2">
                                     {["Color", "Nombre", "Productos", "Acciones"].map(h => (
-                                        <th key={h} className={`px-4 py-3 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 border-b border-border/40 dark:border-white/5 ${h === "Acciones" ? "text-right" : ""}`}>{h}</th>
+                                        <th key={h} className={`px-4 py-3 text-[12px] font-bold text-content-subtle dark:text-white/30 border-b border-border/40 dark:border-white/5 ${h === "Acciones" ? "text-right" : ""}`}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -115,10 +115,10 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
                                             <div className="w-6 h-6 rounded-md border border-white/10" style={{ background: cat.color || "#fabd2f" }} />
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className="text-[13px] font-black text-content dark:text-white">{cat.name}</span>
+                                            <span className="text-[13px] font-bold text-content dark:text-white">{cat.name}</span>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 tabular-nums">{cat.product_count ?? "—"}</span>
+                                            <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40 tabular-nums">{cat.product_count ?? "—"}</span>
                                         </td>
                                         <td className="px-4 py-3 text-right">
                                             {can("products.edit") && (
@@ -147,10 +147,10 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
                         <input type="text" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Ej: Bebidas, Lácteos..." className="input" autoFocus onKeyDown={e => e.key === "Enter" && save()} />
                     </div>
                     <div>
-                        <label className="label">COLOR</label>
+                        <label className="label">Color</label>
                         <div className="flex items-center gap-3">
                             <input type="color" value={form.color} onChange={e => setForm(p => ({ ...p, color: e.target.value }))} className="w-10 h-10 rounded-lg border border-border/30 dark:border-white/10 cursor-pointer bg-transparent" />
-                            <span className="text-[11px] font-bold text-content-subtle dark:text-white/30 uppercase tracking-wide">{form.color}</span>
+                            <span className="text-[12px] font-semibold text-content-subtle dark:text-white/30">{form.color}</span>
                         </div>
                     </div>
                     {/* Frase corta y foto no sirven de nada sin el catálogo público (extra
@@ -161,7 +161,7 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
                     {catalogEnabled && (
                     <>
                     <div>
-                        <label className="label">FRASE CORTA (OPCIONAL)</label>
+                        <label className="label">Frase corta (opcional)</label>
                         <input
                             type="text"
                             value={form.short_description}
@@ -170,12 +170,12 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
                             maxLength={160}
                             className="input"
                         />
-                        <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1 leading-relaxed">
+                        <p className="text-[11px] font-semibold text-content-subtle dark:text-white/30 mt-1 leading-relaxed">
                             Se ve bajo el nombre en los mosaicos del tema de menú.
                         </p>
                     </div>
                     <div>
-                        <label className="label">FOTO PARA EL CATÁLOGO PÚBLICO</label>
+                        <label className="label">Foto para el catálogo público</label>
                         <div className="flex items-center gap-3">
                             <label className="cursor-pointer group shrink-0">
                                 <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-dashed border-border/40 dark:border-white/10 bg-surface-2 dark:bg-white/5 flex items-center justify-center group-hover:border-brand-500/50 transition-all">
@@ -187,13 +187,13 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
                                     onChange={e => e.target.files[0] && setImage(p => ({ ...p, file: e.target.files[0], clearImage: false }))} />
                             </label>
                             <div className="min-w-0">
-                                <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 leading-relaxed">
+                                <p className="text-[11px] font-semibold text-content-subtle dark:text-white/30 leading-relaxed">
                                     Opcional. Solo se ve en la vitrina pública, en la sección de categorías.
                                 </p>
                                 {imgPreview && (
                                     <button type="button"
                                         onClick={() => setImage({ file: null, current: null, clearImage: true })}
-                                        className="text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-danger transition-colors mt-1">
+                                        className="text-[12px] font-medium text-content-subtle hover:text-danger transition-colors mt-1">
                                         Quitar foto
                                     </button>
                                 )}
@@ -203,7 +203,7 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
                     </>
                     )}
                 </div>
-                <div className="flex justify-end gap-2 pt-4 border-t border-border/10 dark:border-white/5 mt-4">
+                <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
                     <Button variant="ghost" onClick={() => setModal(false)}>Cancelar</Button>
                     <Button onClick={save} disabled={saving}>{saving ? "Guardando..." : modal === "new" ? "Crear" : "Guardar"}</Button>
                 </div>
@@ -211,7 +211,7 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
 
             <ConfirmModal
                 isOpen={!!deleteDialog}
-                title="¿Eliminar Categoría?"
+                title="¿Eliminar categoría?"
                 message={`¿Seguro que deseas eliminar "${deleteDialog?.name}"? Los productos quedarán sin categoría.`}
                 onConfirm={confirmDelete}
                 onCancel={() => setDeleteDialog(null)}

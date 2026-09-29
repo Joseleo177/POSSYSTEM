@@ -18,6 +18,9 @@ module.exports = (sequelize, DataTypes) => {
     tax_regime: { type: DataTypes.STRING(100) },
     notes: { type: DataTypes.TEXT },
     credit_balance: { type: DataTypes.DECIMAL(14, 6), allowNull: false, defaultValue: 0 },
+    // Días de crédito del contacto. Nulo = de contado. De aquí sale el vencimiento de una
+    // compra que no tiene uno fijado a mano (ver purchases.due_date).
+    credit_days: { type: DataTypes.INTEGER, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

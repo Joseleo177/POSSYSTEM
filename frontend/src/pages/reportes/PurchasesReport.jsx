@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { buildPurchasesExcel } from "../../helpers/excel";
 import CustomSelect from "../../components/ui/CustomSelect";
+import { toNameCase } from "../../helpers";
 import {
  fmt$, fmtN,
  useReport, defaultRange, usePagination, Pagination, useExportFull,
@@ -19,7 +20,7 @@ export default function PurchasesReport() {
    .then(r => setWarehouses(r.data || []))
    .catch(e => console.error("[PurchasesReport] no se pudieron cargar los almacenes:", e));
  }, []);
- const todasLabel = warehouses.length === 1 ? warehouses[0].name : "TODAS LAS SUCURSALES";
+ const todasLabel = warehouses.length === 1 ? warehouses[0].name : "Todas las sucursales";
 
  const params = { date_from: range.from, date_to: range.to, warehouse_id: warehouseId };
  const { data, loading, error } = useReport(api.reports.purchases, params, [range, warehouseId]);
@@ -52,37 +53,37 @@ export default function PurchasesReport() {
  </div>
 
  {loading && <div className="flex-1 flex items-center justify-center"><Loading /></div>}
- {!loading && error && <div className="flex-1 flex items-center justify-center p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-black uppercase tracking-wide">{error}</div>}
+ {!loading && error && <div className="flex-1 flex items-center justify-center p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-bold">{error}</div>}
 
  {!loading && !error && data && (
  <div className="flex-1 min-h-0 space-y-3 overflow-auto">
  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
- <KpiCard label="Órdenes Compra" value={fmtN(s.total_orders || 0)} icon="" color="text-brand-500" />
+ <KpiCard label="Órdenes compra" value={fmtN(s.total_orders || 0)} icon="" color="text-content dark:text-white" />
  <KpiCard label="Inversión" value={fmt$(s.total_cost || 0)} icon="" color="text-danger" />
- <KpiCard label="Ticket Promedio" value={fmt$(s.avg_order || 0)} icon="" color="text-blue-500" />
- <KpiCard label="Compra Máxima" value={fmt$(s.max_order || 0)} icon="" color="text-green-500" />
+ <KpiCard label="Ticket promedio" value={fmt$(s.avg_order || 0)} icon="" color="text-content dark:text-white" />
+ <KpiCard label="Compra máxima" value={fmt$(s.max_order || 0)} icon="" color="text-content dark:text-white" />
  </div>
 
  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
- <Card className="!p-0 min-h-0 flex flex-col">
- <div className="p-3 border-b border-border dark:border-white/5">
- <SectionHeader title="Principales Aliados" sub="Gasto acumulado" />
+ <Card className="!p-0 min-h-0 flex flex-col overflow-hidden">
+ <div className="px-4 pt-4">
+ <SectionHeader title="Principales aliados" sub="Gasto acumulado" />
  </div>
  <div className="overflow-x-auto">
- <table className="w-full text-left border-collapse min-w-[600px]">
- <thead className="bg-surface-2 dark:bg-surface-dark-2/50">
- <tr className="border-b border-border/40 dark:border-white/5">
- <th className="px-4 py-2 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted">Proveedor</th>
- <th className="px-4 py-2 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted text-right">Inversión</th>
+ <table className="table-ledger min-w-[600px]">
+ <thead>
+ <tr>
+ <th className="px-4">Proveedor</th>
+ <th className="px-4 text-right">Inversión</th>
  </tr>
  </thead>
- <tbody className="divide-y divide-border/20 dark:divide-white/5">
+ <tbody>
  {supplierPag.total === 0
- ? <tr><td colSpan={2} className="px-4 py-10 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin compras en este período</td></tr>
+ ? <tr><td colSpan={2} className="px-4 py-10 text-center text-[12px] font-bold text-content-subtle">Sin compras en este período</td></tr>
  : supplierPag.paginated.map((sup, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
- <td className="px-4 py-2 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{sup.supplier_name}</td>
- <td className="px-4 py-2 text-right tabular-nums text-danger font-black text-[11px]">{fmt$(sup.total_cost)}</td>
+ <td className="px-4 py-2 font-bold text-[12px] text-content dark:text-white">{toNameCase(sup.supplier_name)}</td>
+ <td className="px-4 py-2 text-right tabular-nums text-danger font-bold text-[12px]">{fmt$(sup.total_cost)}</td>
  </tr>
  ))}
  </tbody>
@@ -91,25 +92,25 @@ export default function PurchasesReport() {
  <Pagination page={supplierPag.page} totalPages={supplierPag.totalPages} total={supplierPag.total} onPage={supplierPag.setPage} />
  </Card>
 
- <Card className="!p-0 min-h-0 flex flex-col">
- <div className="p-3 border-b border-border dark:border-white/5">
+ <Card className="!p-0 min-h-0 flex flex-col overflow-hidden">
+ <div className="px-4 pt-4">
  <SectionHeader title="Abastecimiento" sub="Mayor volumen de compra" />
  </div>
  <div className="overflow-x-auto">
- <table className="w-full text-left border-collapse min-w-[600px]">
- <thead className="bg-surface-2 dark:bg-surface-dark-2/50">
- <tr className="border-b border-border/40 dark:border-white/5">
- <th className="px-4 py-2 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted">Producto</th>
- <th className="px-4 py-2 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted text-right">Costo Total</th>
+ <table className="table-ledger min-w-[600px]">
+ <thead>
+ <tr>
+ <th className="px-4">Producto</th>
+ <th className="px-4 text-right">Costo total</th>
  </tr>
  </thead>
- <tbody className="divide-y divide-border/20 dark:divide-white/5">
+ <tbody>
  {productPag.total === 0
- ? <tr><td colSpan={2} className="px-4 py-10 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin productos comprados</td></tr>
+ ? <tr><td colSpan={2} className="px-4 py-10 text-center text-[12px] font-bold text-content-subtle">Sin productos comprados</td></tr>
  : productPag.paginated.map((p, i) => (
  <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
- <td className="px-4 py-2 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.product_name}</td>
- <td className="px-4 py-2 text-right tabular-nums text-blue-500 font-black text-[11px]">{fmt$(p.total_cost)}</td>
+ <td className="px-4 py-2 font-bold text-[12px] text-content dark:text-white">{p.product_name}</td>
+ <td className="px-4 py-2 text-right tabular-nums text-content dark:text-white font-bold text-[12px]">{fmt$(p.total_cost)}</td>
  </tr>
  ))}
  </tbody>

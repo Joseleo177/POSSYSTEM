@@ -80,7 +80,7 @@ export default function FilterPopover({ open, onClose, anchorRef, children, widt
                     // medidas se mantiene fuera de la vista en vez de parpadear en la esquina.
                     : { position: "fixed", top: -9999, left: -9999, width }
                 }
-                className="overflow-y-auto scrollbar-hide bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-lg shadow-2xl z-[70] animate-in fade-in zoom-in-95 duration-150"
+                className="overflow-y-auto scrollbar-hide bg-white dark:bg-surface-dark-2 border border-black/[0.07] dark:border-white/10 rounded-xl shadow-[0_12px_40px_-8px_rgb(0_0_0/0.22)] z-[70] popover-in"
             >
                 {children}
             </div>

@@ -1,6 +1,6 @@
 // src/layout/TopBar.jsx
 import React from "react";
-import { resolveImageUrl } from "../helpers";
+import { resolveImageUrl, toNameCase } from "../helpers";
 import { ROLE_COLORS, DEFAULT_ROLE_CLASS } from "../constants/roles";
 import { api } from "../services/api";
 
@@ -63,13 +63,13 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
                     // leía. h-10 lo acerca al alto útil dejando el aire justo arriba y abajo.
                     <img src={resolveImageUrl(settings.logo_url)} alt="logo" className="h-10 w-auto object-contain shrink-0" />
                 ) : (
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-sm shadow-brand-500/20 shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-sm shrink-0">
                         <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                     </div>
                 )}
-                <span className="text-sm font-black text-content dark:text-content-dark tracking-tight truncate max-w-[160px]">
+                <span className="text-sm font-bold text-content dark:text-content-dark tracking-tight truncate max-w-[160px]">
                     {storeName}
                 </span>
             </div>
@@ -78,7 +78,7 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
             <div className="w-px h-6 bg-border dark:bg-border-dark shrink-0 mx-1" />
 
             {/* Active module */}
-            <span className="text-[11px] font-black text-brand-500 uppercase tracking-widest truncate">
+            <span className="text-[12px] font-bold text-brand-500 truncate">
                 {activeTab?.label ?? ""}
             </span>
 
@@ -89,14 +89,14 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
                         <svg className="w-3 h-3 text-content-subtle opacity-50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        <span className="text-[11px] font-bold text-content dark:text-white/70 tabular-nums">{dateStr}</span>
+                        <span className="text-[12px] font-semibold text-content dark:text-white/70 tabular-nums">{dateStr}</span>
                         {rateStr && (
                             <>
-                                <span className="text-[10px] text-content-subtle mx-0.5">|</span>
+                                <span className="text-[11px] text-content-subtle mx-0.5">|</span>
                                 <svg className="w-3 h-3 text-brand-500 opacity-70 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                <span className="text-[11px] font-bold text-brand-500 tabular-nums">{rateStr}</span>
+                                <span className="text-[12px] font-semibold text-brand-500 tabular-nums">{rateStr}</span>
                             </>
                         )}
                     </div>
@@ -117,7 +117,7 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
 
             {/* Employee info */}
             <div className="flex items-center gap-2 shrink-0">
-                <div className="w-7 h-7 rounded-full bg-brand-500/10 flex items-center justify-center text-brand-500 text-xs font-black shrink-0">
+                <div className="w-7 h-7 rounded-full bg-brand-500/10 flex items-center justify-center text-brand-500 text-xs font-bold shrink-0">
                     {employee?.full_name?.charAt(0)?.toUpperCase()}
                 </div>
                 <div className="flex flex-col items-start leading-none min-w-0">
@@ -129,9 +129,9 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
                         className="text-xs font-semibold text-content dark:text-content-dark truncate max-w-[110px] sm:max-w-[180px] lg:max-w-[280px]"
                         title={employee?.full_name || ""}
                     >
-                        {employee?.full_name}
+                        {toNameCase(employee?.full_name)}
                     </span>
-                    <span className={`text-[10px] font-semibold px-1 py-px rounded border mt-0.5 ${roleClass}`}>
+                    <span className={`text-[11px] font-semibold px-1 py-px rounded border mt-0.5 ${roleClass}`}>
                         {employee?.role_label || employee?.role}
                     </span>
                 </div>

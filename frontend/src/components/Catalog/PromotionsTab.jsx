@@ -169,17 +169,17 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
     return (
         <>
             <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex items-center justify-between gap-3">
-                <span className="text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
+                <span className="text-[12px] font-bold text-content-subtle dark:text-white/30">
                     {promos.length} promoción{promos.length !== 1 ? "es" : ""}
                 </span>
             </div>
 
             <div className="flex-1 overflow-auto">
                 {loading ? (
-                    <div className="flex items-center justify-center py-20 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/20 animate-pulse">Cargando…</div>
+                    <div className="flex items-center justify-center py-20 text-[12px] font-bold text-content-subtle dark:text-white/20 animate-pulse">Cargando…</div>
                 ) : promos.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20">
-                        <div className="text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/20">Sin promociones registradas</div>
+                        <div className="text-[12px] font-bold text-content-subtle dark:text-white/20">Sin promociones registradas</div>
                     </div>
                 ) : (
                     <div className="card-premium overflow-auto flex-1">
@@ -187,7 +187,7 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                             <thead className="sticky top-0 z-10">
                                 <tr className="bg-surface-2 dark:bg-surface-dark-2">
                                     {["Nombre", "Tipo", "Detalle", "Productos", "Vigencia", "Estado", "Acciones"].map(h => (
-                                        <th key={h} className={`px-4 py-3 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/30 border-b border-border/40 dark:border-white/5 ${h === "Acciones" ? "text-right" : ""}`}>{h}</th>
+                                        <th key={h} className={`px-4 py-3 text-[12px] font-bold text-content-subtle dark:text-white/30 border-b border-border/40 dark:border-white/5 ${h === "Acciones" ? "text-right" : ""}`}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -201,37 +201,37 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                                     return (
                                         <tr key={p.id} className="group hover:bg-brand-500/[0.02] transition-colors">
                                             <td className="px-4 py-3">
-                                                <span className="text-[13px] font-black text-content dark:text-white">{p.name}</span>
+                                                <span className="text-[13px] font-bold text-content dark:text-white">{p.name}</span>
                                                 {/* Solo se nombra cuando está limitada: decir "todas"
                                                     en cada fila sería ruido, porque es lo normal. */}
                                                 {p.warehouse_id && (
-                                                    <div className="text-[10px] font-black uppercase tracking-widest text-brand-500 mt-0.5 truncate">
+                                                    <div className="text-[11px] font-bold uppercase tracking-widest text-brand-500 mt-0.5 truncate">
                                                         {warehouses.find(w => w.id === p.warehouse_id)?.name || "Sucursal"}
                                                     </div>
                                                 )}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className="text-[11px] font-bold text-content-subtle dark:text-white/40">{TYPE_LABELS[p.type] || p.type}</span>
+                                                <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40">{TYPE_LABELS[p.type] || p.type}</span>
                                             </td>
                                             <td className="px-4 py-3">
                                                 {p.type === "percentage" && (
-                                                    <span className="text-[12px] font-black text-brand-500">{p.discount_pct}% OFF</span>
+                                                    <span className="text-[12px] font-bold text-brand-500">{p.discount_pct}% OFF</span>
                                                 )}
                                                 {p.type === "buy_x_get_y" && (
-                                                    <span className="text-[12px] font-black text-brand-500">Compra {p.buy_qty} lleva {p.get_qty} gratis</span>
+                                                    <span className="text-[12px] font-bold text-brand-500">Compra {p.buy_qty} lleva {p.get_qty} gratis</span>
                                                 )}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className="text-[11px] font-bold text-content-subtle dark:text-white/40 tabular-nums">{(p.Products || []).length}</span>
+                                                <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40 tabular-nums">{(p.Products || []).length}</span>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <div className="text-[11px] font-bold text-content-subtle dark:text-white/40">
+                                                <div className="text-[12px] font-semibold text-content-subtle dark:text-white/40">
                                                     <div>{fmtDate(p.starts_at)}</div>
                                                     {p.ends_at && <div className="opacity-60">→ {fmtDate(p.ends_at)}</div>}
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`text-[10px] font-black px-2 py-1 rounded-lg border ${statusClass}`}>{statusLabel}</span>
+                                                <span className={`text-[11px] font-bold px-2 py-1 rounded-lg border ${statusClass}`}>{statusLabel}</span>
                                             </td>
                                             <td className="px-4 py-3 text-right">
                                                 {can("products.edit") && (
@@ -268,7 +268,7 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                         <div className="flex gap-2">
                             {[{ v: "percentage", l: "Porcentaje" }, { v: "buy_x_get_y", l: "Compra X lleva Y gratis" }].map(opt => (
                                 <button key={opt.v} onClick={() => setForm(p => ({ ...p, type: opt.v }))}
-                                    className={`flex-1 py-2 rounded-xl text-[11px] font-black border transition-all ${form.type === opt.v ? "bg-brand-500 text-white border-brand-500" : "bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:border-brand-500/40"}`}>
+                                    className={`flex-1 py-2 rounded-xl text-[12px] font-bold border transition-all ${form.type === opt.v ? "bg-brand-500 text-white border-brand-500" : "bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:border-brand-500/40"}`}>
                                     {opt.l}
                                 </button>
                             ))}
@@ -281,7 +281,7 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                             <label className="label">DESCUENTO % *</label>
                             <div className="relative">
                                 <input type="number" min="0.01" max="100" step="0.01" value={form.discount_pct} onChange={e => setForm(p => ({ ...p, discount_pct: e.target.value }))} placeholder="10" className="input pr-8" />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-black text-content-subtle">%</span>
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] font-bold text-content-subtle">%</span>
                             </div>
                         </div>
                     )}
@@ -315,7 +315,7 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                         "todas" y "esa" son lo mismo: el selector no aporta nada. */}
                     {warehouses.length > 1 && (
                         <div>
-                            <label className="label">SUCURSAL</label>
+                            <label className="label">Sucursal</label>
                             <CustomSelect
                                 value={String(form.warehouse_id || "")}
                                 onChange={val => setForm(p => ({ ...p, warehouse_id: val }))}
@@ -335,7 +335,7 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                             className={`w-10 h-6 rounded-full transition-all relative ${form.active ? "bg-brand-500" : "bg-surface-3 dark:bg-white/10"}`}>
                             <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all ${form.active ? "translate-x-4" : ""}`} />
                         </button>
-                        <span className="text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40">
+                        <span className="text-[12px] font-bold text-content-subtle dark:text-white/40">
                             {form.active ? "Activa" : "Inactiva"}
                         </span>
                     </div>
@@ -354,7 +354,7 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                         />
                         <div className="max-h-48 overflow-y-auto border border-border/20 dark:border-white/5 rounded-xl divide-y divide-border/10 dark:divide-white/5">
                             {filteredProducts.length === 0 ? (
-                                <div className="px-3 py-4 text-[11px] text-center text-content-subtle dark:text-white/30">Sin resultados</div>
+                                <div className="px-3 py-4 text-[12px] text-center text-content-subtle dark:text-white/30">Sin resultados</div>
                             ) : filteredProducts.map(prod => {
                                 const checked = form.product_ids.includes(prod.id);
                                 return (
@@ -363,8 +363,8 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                                         <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${checked ? "bg-brand-500 border-brand-500" : "border-border dark:border-white/20"}`}>
                                             {checked && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                                         </div>
-                                        <span className="text-[12px] font-bold text-content dark:text-white truncate">{prod.name}</span>
-                                        <span className="text-[10px] text-content-subtle dark:text-white/30 ml-auto shrink-0">{prod.Category?.name || ""}</span>
+                                        <span className="text-[12px] font-semibold text-content dark:text-white truncate">{prod.name}</span>
+                                        <span className="text-[11px] text-content-subtle dark:text-white/30 ml-auto shrink-0">{prod.Category?.name || ""}</span>
                                     </button>
                                 );
                             })}
@@ -372,7 +372,7 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                     </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-4 border-t border-border/10 dark:border-white/5 mt-4">
+                <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
                     <Button variant="ghost" onClick={() => setModal(false)}>Cancelar</Button>
                     <Button onClick={save} disabled={saving}>{saving ? "Guardando..." : modal === "new" ? "Crear" : "Guardar"}</Button>
                 </div>
@@ -380,7 +380,7 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
 
             <ConfirmModal
                 isOpen={!!deleteDialog}
-                title="¿Eliminar Promoción?"
+                title="¿Eliminar promoción?"
                 message={`¿Seguro que deseas eliminar "${deleteDialog?.name}"?`}
                 onConfirm={confirmDelete}
                 onCancel={() => setDeleteDialog(null)}

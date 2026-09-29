@@ -56,8 +56,8 @@ export default function CheckoutTypeModal({ open, onClose, onSelectFactura, onSe
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out" onKeyDown={e => e.stopPropagation()}>
+            <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-[2px]" onClick={onClose} />
+            <div className="relative bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] p-6 w-full max-w-sm mx-4 modal-in" onKeyDown={e => e.stopPropagation()}>
 
                 <div className="text-center mb-5">
                     <div className="w-12 h-12 rounded-[16px] bg-brand-500/10 text-brand-500 flex items-center justify-center mx-auto mb-3">
@@ -65,9 +65,9 @@ export default function CheckoutTypeModal({ open, onClose, onSelectFactura, onSe
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
                         </svg>
                     </div>
-                    <h2 className="text-sm font-black uppercase tracking-wide">¿Cómo deseas procesar?</h2>
-                    <p className="text-[10px] text-content-subtle mt-1 font-medium">
-                        Presiona <kbd className="px-1 py-0.5 rounded bg-surface-2 dark:bg-white/10 font-mono text-[9px]">1</kbd> o <kbd className="px-1 py-0.5 rounded bg-surface-2 dark:bg-white/10 font-mono text-[9px]">2</kbd> para navegar · <kbd className="px-1 py-0.5 rounded bg-surface-2 dark:bg-white/10 font-mono text-[9px]">Enter</kbd> para confirmar
+                    <h2 className="text-sm font-bold">¿Cómo deseas procesar?</h2>
+                    <p className="text-[11px] text-content-subtle mt-1 font-medium">
+                        Presiona <kbd className="px-1 py-0.5 rounded bg-surface-2 dark:bg-white/10 font-mono text-[10px]">1</kbd> o <kbd className="px-1 py-0.5 rounded bg-surface-2 dark:bg-white/10 font-mono text-[10px]">2</kbd> para navegar · <kbd className="px-1 py-0.5 rounded bg-surface-2 dark:bg-white/10 font-mono text-[10px]">Enter</kbd> para confirmar
                     </p>
                 </div>
 
@@ -86,17 +86,17 @@ export default function CheckoutTypeModal({ open, onClose, onSelectFactura, onSe
                                         : "border-border/30 dark:border-white/10 hover:border-brand-500/40 dark:hover:border-brand-500/30",
                                 ].join(" ")}
                             >
-                                <span className={`absolute top-2 right-2 text-[10px] font-black tabular-nums px-1.5 py-0.5 rounded-md ${isSelected ? "bg-brand-500 text-black" : "bg-surface-2 dark:bg-white/10 text-content-subtle"}`}>
+                                <span className={`absolute top-2 right-2 text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded-md ${isSelected ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40" : "bg-surface-2 dark:bg-white/10 text-content-subtle"}`}>
                                     {opt.num}
                                 </span>
                                 <span className={isSelected ? "text-brand-500" : "text-content-subtle"}>
                                     {opt.icon}
                                 </span>
                                 <div>
-                                    <div className={`text-[12px] font-black uppercase tracking-tight ${isSelected ? "text-brand-500" : "text-content dark:text-white"}`}>
+                                    <div className={`text-[12px] font-bold tracking-tight ${isSelected ? "text-brand-500" : "text-content dark:text-white"}`}>
                                         {opt.title}
                                     </div>
-                                    <div className="text-[10px] text-content-subtle mt-0.5 leading-snug">
+                                    <div className="text-[11px] text-content-subtle mt-0.5 leading-snug">
                                         {opt.desc}
                                     </div>
                                 </div>
@@ -108,13 +108,13 @@ export default function CheckoutTypeModal({ open, onClose, onSelectFactura, onSe
                 <div className="grid grid-cols-2 gap-2">
                     <button
                         onClick={onClose}
-                        className="h-10 rounded-xl border border-border/40 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white transition-all"
+                        className="h-10 rounded-xl border border-border/40 dark:border-white/10 text-[12px] font-bold text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white transition-all"
                     >
                         Cancelar
                     </button>
                     <button
                         onClick={() => selected === 0 ? onSelectFactura() : onSelectCotizacion()}
-                        className="h-10 rounded-xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-wide hover:brightness-110 transition-all"
+                        className="h-10 rounded-xl btn-accent text-[12px] font-bold transition-all"
                     >
                         {selected === 0 ? "Crear Factura" : "Crear Cotización"}
                     </button>

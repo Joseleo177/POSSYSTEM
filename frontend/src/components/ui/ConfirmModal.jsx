@@ -36,25 +36,27 @@ export default function ConfirmModal({
   };
   const busy = loading || running;
 
+  // Rojo solo si la acción destruye algo; el resto confirma en tinta, como cualquier botón
+  // principal. El ámbar pasa a texto negro: el blanco sobre ámbar no se leía.
   const cfg = {
-    danger:  { btn: "bg-danger text-white hover:brightness-110 shadow-lg shadow-danger/20" },
-    warning: { btn: "bg-warning text-white hover:brightness-110 shadow-lg shadow-warning/20" },
-    primary: { btn: "bg-brand-500 text-black hover:brightness-110 shadow-lg shadow-brand-500/20" },
-    info:    { btn: "bg-info text-white hover:brightness-110 shadow-lg shadow-info/20" },
+    danger:  { btn: "bg-red-600 text-white hover:bg-red-700" },
+    warning: { btn: "bg-amber-500 text-black hover:bg-amber-400" },
+    primary: { btn: "btn-accent" },
+    info:    { btn: "btn-accent" },
   };
   const c = cfg[type] || cfg.danger;
 
   return (
-    <Modal open={isOpen} onClose={busy ? () => {} : onCancel} title={title} width={380}>
-      <div className="flex flex-col gap-5">
-        <p className="text-[13px] text-content-subtle dark:text-white/50 leading-relaxed">
+    <Modal open={isOpen} onClose={busy ? () => {} : onCancel} title={title} width={420}>
+      <div className="flex flex-col gap-6">
+        <p className="text-[14px] text-content-muted dark:text-white/65 leading-relaxed">
           {message}
         </p>
-        <div className="flex gap-2.5">
+        <div className="flex justify-end gap-2">
           <button
             onClick={onCancel}
             disabled={busy}
-            className="flex-1 h-10 rounded-xl border border-border/30 dark:border-white/10 text-[11px] font-black uppercase tracking-widest text-content-subtle dark:text-white/40 hover:border-border dark:hover:border-white/20 hover:text-content dark:hover:text-white transition-all active:scale-95 disabled:opacity-40"
+            className="h-9 px-4 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-transparent text-[13px] font-semibold text-content dark:text-white/80 hover:bg-surface-2 dark:hover:bg-white/5 transition-colors active:scale-[0.98] disabled:opacity-40"
           >
             {cancelText}
           </button>
@@ -62,7 +64,7 @@ export default function ConfirmModal({
             onClick={handleConfirm}
             disabled={busy}
             aria-busy={busy || undefined}
-            className={`flex-[2] h-10 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2 ${c.btn}`}
+            className={`h-9 px-4 rounded-lg text-[13px] font-semibold transition-colors active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-2 ${c.btn}`}
           >
             {busy && <Spinner />}
             {confirmText}

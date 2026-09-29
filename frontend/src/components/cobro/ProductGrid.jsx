@@ -1,8 +1,11 @@
 import { useRef, useEffect } from "react";
 import CustomSelect from "../ui/CustomSelect";
 import KeyboardLegend from "./KeyboardLegend";
-import { fmtQtyUnit } from "../../helpers/unitFormatter";
-import { resolveImageUrl, imgRetryOnError } from "../../helpers";
+import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
+import { StockBand, splitQty } from "../ui/StockQty";
+
+// Agotado y sin posibilidad de venderse: misma regla que handleSelect.
+const agotado = (p) => !p.is_service && p.stock !== null && parseFloat(p.stock) <= 0;
 
 export default function ProductGrid({
     mobileTab, setMobileTab, cart,
@@ -59,14 +62,14 @@ export default function ProductGrid({
 
             {/* Mobile toggle */}
             <div className="lg:hidden flex items-center gap-2 mb-3">
-                <button onClick={() => setMobileTab("products")} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all ${mobileTab === "products" ? "bg-brand-500 text-white" : "bg-white dark:bg-white/5 text-content-subtle"}`}>
+                <button onClick={() => setMobileTab("products")} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[12px] font-bold transition-all ${mobileTab === "products" ? "bg-brand-500 text-white" : "bg-white dark:bg-white/5 text-content-subtle"}`}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
                     Catálogo
                 </button>
-                <button onClick={() => setMobileTab("cart")} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all relative ${mobileTab === "cart" ? "bg-brand-500 text-white" : "bg-white dark:bg-white/5 text-content-subtle"}`}>
+                <button onClick={() => setMobileTab("cart")} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[12px] font-bold transition-all relative ${mobileTab === "cart" ? "bg-brand-500 text-white" : "bg-white dark:bg-white/5 text-content-subtle"}`}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
                     Carrito
-                    {cart.length > 0 && <span className="w-4 h-4 bg-danger text-white text-[11px] font-black rounded-full flex items-center justify-center">{cart.length}</span>}
+                    {cart.length > 0 && <span className="w-4 h-4 bg-danger text-white text-[12px] font-bold rounded-full flex items-center justify-center">{cart.length}</span>}
                 </button>
             </div>
 
@@ -96,7 +99,7 @@ export default function ProductGrid({
                     value={selectedCat}
                     onChange={setSelectedCat}
                     options={[{ value: "all", label: "Todas las categorías" }, ...categories.map(c => ({ value: c.name, label: c.name }))]}
-                    className="w-[200px] shrink-0 !text-[11px] font-black uppercase tracking-wide"
+                    className="w-[200px] shrink-0 !text-[11px] font-bold"
                     icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" /></svg>}
                 />
             </div>
@@ -109,7 +112,7 @@ export default function ProductGrid({
                         <div className="w-16 h-16 rounded-[32px] bg-surface-2 dark:bg-white/5 flex items-center justify-center text-content-subtle opacity-20">
                             <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                         </div>
-                        <div className="text-[11px] font-black tracking-widest uppercase text-center dark:text-white">No se encontraron productos</div>
+                        <div className="text-[12px] font-bold text-center dark:text-white">No se encontraron productos</div>
                     </div>
                 ) : (
                     <div data-product-grid className="grid grid-cols-3 sm:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-1.5 lg:gap-4 pb-10">
@@ -119,14 +122,14 @@ export default function ProductGrid({
                                 data-product-idx={idx}
                                 onClick={() => handleSelect(p)}
                                 className={`group bg-white dark:bg-white/5 rounded-2xl lg:rounded-[32px] overflow-hidden border transition-all cursor-pointer active:scale-95
-                                    ${idx === selectedIndex ? "border-brand-500 ring-2 lg:ring-4 ring-brand-500/10 shadow-2xl -translate-y-0.5 lg:-translate-y-1 scale-[1.02]" : "border-black/5 dark:border-white/5 hover:border-brand-500/50"}`}
+ ${idx === selectedIndex ? "border-brand-500 ring-2 lg:ring-4 ring-brand-500/10 shadow-2xl -translate-y-0.5 lg:-translate-y-1 scale-[1.02]" : "border-black/5 dark:border-white/5 hover:border-brand-500/50"}`}
                             >
                                 {/* 4/3 en todos los tamaños. Con aspect-square en pantalla grande la
                                     foto se comía la altura de la tarjeta y en una rejilla de 6
                                     columnas obligaba a desplazarse para ver la segunda fila. */}
                                 <div className="aspect-[4/3] relative overflow-hidden bg-surface-2 dark:bg-black/20">
                                     {p.image_url ? (
-                                        <img src={resolveImageUrl(p.image_url)} alt={p.name} loading="lazy" onError={imgRetryOnError} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                        <img src={resolveImageUrl(p.image_url)} alt={p.name} loading="lazy" onError={imgRetryOnError} className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${agotado(p) ? "grayscale opacity-60" : ""}`} />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center opacity-10 dark:text-white">
                                             <svg className="w-6 h-6 lg:w-10 lg:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -142,31 +145,32 @@ export default function ProductGrid({
                                             : `${promo.buy_qty}+${promo.get_qty}`;
                                         return (
                                             <div className="absolute top-0 left-0 overflow-hidden w-[56px] h-[56px] lg:w-[76px] lg:h-[76px] pointer-events-none">
-                                                <div className="absolute -left-[20px] lg:-left-[24px] top-[13px] lg:top-[18px] w-[84px] lg:w-[114px] bg-amber-400 text-black text-[7px] lg:text-[10px] font-black uppercase tracking-wide text-center py-[3px] lg:py-[5px] shadow-md -rotate-45 leading-none">
+                                                <div className="absolute -left-[20px] lg:-left-[24px] top-[13px] lg:top-[18px] w-[84px] lg:w-[114px] bg-amber-400 text-black text-[8px] lg:text-[11px] font-bold text-center py-[3px] lg:py-[5px] shadow-md -rotate-45 leading-none">
                                                     {label}
                                                 </div>
                                             </div>
                                         );
                                     })()}
 
-                                    {/* Badge de stock: rojo = agotado, naranja = bajo, verde = disponible */}
-                                    {!p.is_service && p.stock !== null && (
-                                        <div className={`absolute top-1 lg:top-2 right-1 lg:right-2 text-[6px] lg:text-[10px] font-black px-1 lg:px-1.5 py-0.5 rounded-full shadow-lg uppercase tracking-tighter ${
-                                            parseFloat(p.stock) <= 0 ? "bg-danger text-white"
-                                            : parseFloat(p.stock) <= 5 ? "bg-orange-500 text-white"
-                                            : "bg-success text-black"
-                                        }`}>
-                                            {fmtQtyUnit(p.stock, p.unit)}
-                                        </div>
-                                    )}
+                                    {/* Existencia en franja al pie de la foto, como en Inventario y
+                                        Catálogo: oscura para todo, roja si se agotó, punto ámbar si
+                                        está bajo el mínimo (ver ui/StockQty). */}
+                                    {!p.is_service && p.stock !== null && (() => {
+                                        const [n, u] = splitQty(p.stock, p.unit);
+                                        return (
+                                            <StockBand qty={p.stock} value={n} unit={u} min={p.min_stock}
+                                                className="absolute bottom-0 inset-x-0 px-1.5 lg:px-2.5 py-0.5 lg:py-1.5 backdrop-blur-sm text-[10px] lg:text-[15px]"
+                                                unitClass="text-[7px] lg:text-[10px]" />
+                                        );
+                                    })()}
                                 </div>
                                 <div className="p-1 lg:p-3 flex flex-col gap-0.5 lg:gap-1">
-                                    <div className="text-[7px] lg:text-[11px] font-black text-brand-500 uppercase tracking-tighter lg:tracking-wide truncate">{p.category_name || "Sin Categoría"}</div>
-                                    <div className="text-[8px] lg:text-xs font-black line-clamp-2 dark:text-white uppercase tracking-tight lg:tracking-wide leading-none h-4 lg:h-8">{p.name}</div>
+                                    <div className="text-[8px] lg:text-[12px] text-content-subtle truncate">{toNameCase(p.category_name || "Sin categoría")}</div>
+                                    <div className="text-[9px] lg:text-xs font-bold uppercase line-clamp-2 dark:text-white tracking-tight leading-none h-4 lg:h-8">{p.name}</div>
                                     <div className="mt-0.5">
-                                        <div className="text-[9px] lg:text-lg font-black dark:text-white font-display tabular-nums leading-none">{fmt(convertToDisplay(p.price), currSym)}</div>
+                                        <div className="text-[10px] lg:text-lg font-bold dark:text-white font-display tabular-nums leading-none">{fmt(convertToDisplay(p.price), currSym)}</div>
                                         {secondaryCurrency && (
-                                            <div className="text-[8px] lg:text-sm font-black text-content-muted dark:text-white/75 tabular-nums mt-1">
+                                            <div className="text-[9px] lg:text-sm font-bold text-content-muted dark:text-white/75 tabular-nums mt-1">
                                                 {fmt(convertToSecondary(p.price), secondaryCurrency.symbol)}
                                             </div>
                                         )}

@@ -21,10 +21,10 @@ function ManualRow({ label, summary, journals, sign, tone, fmtJ, fmtB }) {
     const hay = (summary?.tx_count || 0) > 0;
     return (
         <tr className={`border-t border-border/60 dark:border-white/5 ${hay ? "" : "opacity-40"}`}>
-            <td className={`px-4 py-2 font-black uppercase tracking-wide whitespace-nowrap text-[10px] ${hay ? tone : "text-content-muted dark:text-content-dark-muted"}`}>
+            <td className={`px-4 py-2 font-bold whitespace-nowrap text-[11px] ${hay ? tone : "text-content-muted dark:text-content-dark-muted"}`}>
                 {label}
                 {hay && (
-                    <span className="ml-1.5 font-bold opacity-60 normal-case tracking-normal">
+                    <span className="ml-1.5 font-semibold opacity-60 normal-case tracking-normal">
                         ({summary.tx_count})
                     </span>
                 )}
@@ -35,9 +35,9 @@ function ManualRow({ label, summary, journals, sign, tone, fmtJ, fmtB }) {
                     <td key={j.id} className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
                         {c ? (
                             <>
-                                <div className={`font-black ${tone}`}>{sign} {fmtJ(c.amount_journal, j.currency_symbol)}</div>
+                                <div className={`font-bold ${tone}`}>{sign} {fmtJ(c.amount_journal, j.currency_symbol)}</div>
                                 {!j.is_base && (
-                                    <div className="text-[10px] font-bold text-content-muted dark:text-content-dark-muted opacity-60">{fmtB(c.amount_base)}</div>
+                                    <div className="text-[11px] font-semibold text-content-muted dark:text-content-dark-muted opacity-60">{fmtB(c.amount_base)}</div>
                                 )}
                             </>
                         ) : (
@@ -46,7 +46,7 @@ function ManualRow({ label, summary, journals, sign, tone, fmtJ, fmtB }) {
                     </td>
                 );
             })}
-            <td className={`px-4 py-2 text-right font-black tabular-nums whitespace-nowrap ${hay ? tone : "opacity-20"}`}>
+            <td className={`px-4 py-2 text-right font-bold tabular-nums whitespace-nowrap ${hay ? tone : "opacity-20"}`}>
                 {hay ? `${sign} ${fmtB(summary.total_base)}` : "—"}
             </td>
         </tr>
@@ -77,7 +77,7 @@ export default function PaymentJournalsReport() {
         // Un depósito no tiene diario de caja: no aporta nada a un reporte de cobros.
         api.warehouses.getAll().then(r => setWarehouses((r.data || []).filter(w => w.sells !== false))).catch(() => setWarehouses([]));
     }, []);
-    const todasLabel = warehouses.length === 1 ? warehouses[0].name : "TODAS LAS SUCURSALES";
+    const todasLabel = warehouses.length === 1 ? warehouses[0].name : "Todas las sucursales";
 
     // Una serie es de UNA sucursal, sin excepción; un empleado que nunca trabajó ahí tampoco
     // pudo cobrar nada. Mismo criterio que Transacciones y Pagos.
@@ -146,14 +146,14 @@ export default function PaymentJournalsReport() {
                         <button
                             ref={filtrosBtnRef}
                             onClick={() => setShowFilters(p => !p)}
-                            className={`h-9 px-3 rounded-lg text-[11px] font-black uppercase tracking-wide border flex items-center gap-2 transition-all ${filtrosActivos
-                                ? "bg-brand-500/10 text-brand-500 border-brand-500/30"
-                                : "bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}
+                            className={`h-9 px-3 rounded-lg text-[12px] font-bold border flex items-center gap-2 transition-all ${filtrosActivos
+                                ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40"
+                                : "bg-white dark:bg-white/5 border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:text-white"}`}
                         >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                             Filtros
                             {filtrosActivos > 0 && (
-                                <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">{filtrosActivos}</span>
+                                <span className="bg-content text-white dark:bg-white dark:text-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-[10px]">{filtrosActivos}</span>
                             )}
                         </button>
 
@@ -163,9 +163,9 @@ export default function PaymentJournalsReport() {
                                         { titulo: "Serie",   vacio: "Sin series",   items: visibleSeries.map(s => ({ id: s.id, label: s.name })),                     sel: serieSel, set: setSerieSel },
                                     ].map(grupo => (
                                         <div key={grupo.titulo} className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">{grupo.titulo}</div>
+                                            <div className="text-[12px] font-medium text-content-subtle mb-2">{grupo.titulo}</div>
                                             {grupo.items.length === 0 ? (
-                                                <div className="text-[10px] font-bold text-content-subtle opacity-60">{grupo.vacio}</div>
+                                                <div className="text-[11px] font-semibold text-content-subtle opacity-60">{grupo.vacio}</div>
                                             ) : (
                                                 <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
                                                     {grupo.items.map(it => {
@@ -174,9 +174,9 @@ export default function PaymentJournalsReport() {
                                                             <button
                                                                 key={it.id}
                                                                 onClick={() => toggle(grupo.set)(it.id)}
-                                                                className={`w-full px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border text-left truncate transition-all ${activo
-                                                                    ? "bg-brand-500 text-black border-brand-500"
-                                                                    : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}
+                                                                className={`w-full h-8 px-2.5 rounded-lg text-[13px] font-medium border text-left truncate transition-all ${activo
+                                                                    ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40"
+                                                                    : "border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:bg-white/5 dark:hover:text-white"}`}
                                                                 title={it.label}
                                                             >
                                                                 {it.label}
@@ -190,7 +190,7 @@ export default function PaymentJournalsReport() {
                                     {/* Filtrar por serie deja fuera ingresos y egresos manuales: no pertenecen
                                         a ninguna, y el reporte lo avisa para que nadie lea un neto incompleto. */}
                                     {serieSel.length > 0 && (
-                                        <div className="px-4 py-2 text-[10px] font-bold text-warning leading-snug border-b border-border/20 dark:border-white/5">
+                                        <div className="px-4 py-2 text-[11px] font-semibold text-warning leading-snug border-b border-border/20 dark:border-white/5">
                                             Con serie seleccionada no se incluyen ingresos ni egresos manuales.
                                         </div>
                                     )}
@@ -198,7 +198,7 @@ export default function PaymentJournalsReport() {
                                         <div className="px-4 py-2">
                                             <button
                                                 onClick={() => { setEmpSel([]); setSerieSel([]); }}
-                                                className="w-full py-1.5 text-[10px] font-black uppercase tracking-wide text-danger hover:bg-danger/5 rounded-lg transition-colors"
+                                                className="w-full h-8 text-[13px] font-medium text-content-muted hover:text-content hover:bg-surface-2 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/5 rounded-lg transition-colors"
                                             >
                                                 Limpiar filtros
                                             </button>
@@ -215,16 +215,16 @@ export default function PaymentJournalsReport() {
 
             {loading && <div className="flex-1 flex items-center justify-center"><Loading /></div>}
             {!loading && error && (
-                <div className="flex-1 flex items-center justify-center p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-black uppercase tracking-wide">{error}</div>
+                <div className="flex-1 flex items-center justify-center p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-bold">{error}</div>
             )}
 
             {!loading && !error && data && (
                 <div className="flex-1 min-h-0 space-y-3 overflow-auto">
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                        <KpiCard label="Cobrado en Ventas" value={fmtB(totals?.total_base)} color="text-brand-500" sub="Convertido a moneda base" />
-                        <KpiCard label="Movimiento Neto" value={fmtB(manual?.net?.total_base)} color="text-content dark:text-white" sub="Cobros + ingresos − egresos" />
-                        <KpiCard label="Cobros" value={fmtNumber(totals?.tx_count || 0, 0)} color="text-blue-500" />
-                        <KpiCard label="Diarios con Movimiento" value={fmtNumber(journals.length, 0)} color="text-violet-500" />
+                        <KpiCard label="Cobrado en ventas" value={fmtB(totals?.total_base)} color="text-content dark:text-white" sub="Convertido a moneda base" />
+                        <KpiCard label="Movimiento neto" value={fmtB(manual?.net?.total_base)} color="text-content dark:text-white" sub="Cobros + ingresos − egresos" />
+                        <KpiCard label="Cobros" value={fmtNumber(totals?.tx_count || 0, 0)} color="text-content dark:text-white" />
+                        <KpiCard label="Diarios con movimiento" value={fmtNumber(journals.length, 0)} color="text-violet-500" />
                     </div>
 
                     <SectionHeader
@@ -233,35 +233,35 @@ export default function PaymentJournalsReport() {
                     />
 
                     {days.length === 0 ? (
-                        <div className="p-12 text-center text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted opacity-60">
+                        <div className="p-12 text-center text-[12px] font-bold text-content-muted dark:text-content-dark-muted opacity-60">
                             Sin cobros en el rango seleccionado
                         </div>
                     ) : (
                         // La tabla crece con el número de diarios, así que desplaza dentro de su
                         // propio contenedor en vez de romper el ancho de la página.
                         <div className="bg-white dark:bg-white/5 rounded-xl border border-border dark:border-white/5 shadow-sm overflow-x-auto">
-                            <table className="w-full text-[11px] border-collapse">
+                            <table className="w-full text-[12px] border-collapse">
                                 <thead>
                                     <tr className="bg-surface-2 dark:bg-white/5">
-                                        <th className="px-4 py-2.5 text-left font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted whitespace-nowrap">Fecha</th>
+                                        <th className="px-4 py-2.5 text-left font-bold text-content-muted dark:text-content-dark-muted whitespace-nowrap">Fecha</th>
                                         {journals.map(j => (
-                                            <th key={j.id} className="px-4 py-2.5 text-right font-black uppercase tracking-wide whitespace-nowrap">
+                                            <th key={j.id} className="px-4 py-2.5 text-right font-bold whitespace-nowrap">
                                                 <span className="inline-flex items-center gap-1.5 justify-end">
                                                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: j.color || "#888" }} />
                                                     <span className="text-content dark:text-white">{j.name}</span>
                                                 </span>
-                                                <div className="font-bold text-content-muted dark:text-content-dark-muted opacity-60 normal-case">
+                                                <div className="font-semibold text-content-muted dark:text-content-dark-muted opacity-60 normal-case">
                                                     {j.bank_name || j.currency_symbol}
                                                 </div>
                                             </th>
                                         ))}
-                                        <th className="px-4 py-2.5 text-right font-black uppercase tracking-wide text-brand-500 whitespace-nowrap">Total</th>
+                                        <th className="px-4 py-2.5 text-right font-bold text-content dark:text-white whitespace-nowrap">Total</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {days.map(d => (
                                         <tr key={d.date} className="border-t border-border/60 dark:border-white/5">
-                                            <td className="px-4 py-2.5 font-bold text-content dark:text-white whitespace-nowrap tabular-nums">
+                                            <td className="px-4 py-2.5 font-semibold text-content dark:text-white whitespace-nowrap tabular-nums">
                                                 {d.date.split("-").reverse().join("/")}
                                             </td>
                                             {journals.map(j => {
@@ -270,10 +270,10 @@ export default function PaymentJournalsReport() {
                                                     <td key={j.id} className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">
                                                         {c ? (
                                                             <>
-                                                                <div className="font-black text-content dark:text-white">{fmtJ(c.amount_journal, j.currency_symbol)}</div>
+                                                                <div className="font-bold text-content dark:text-white">{fmtJ(c.amount_journal, j.currency_symbol)}</div>
                                                                 {/* El equivalente solo aporta cuando el diario no está ya en base */}
                                                                 {!j.is_base && (
-                                                                    <div className="text-[10px] font-bold text-content-muted dark:text-content-dark-muted opacity-60">{fmtB(c.amount_base)}</div>
+                                                                    <div className="text-[11px] font-semibold text-content-muted dark:text-content-dark-muted opacity-60">{fmtB(c.amount_base)}</div>
                                                                 )}
                                                             </>
                                                         ) : (
@@ -282,25 +282,25 @@ export default function PaymentJournalsReport() {
                                                     </td>
                                                 );
                                             })}
-                                            <td className="px-4 py-2.5 text-right font-black text-brand-500 tabular-nums whitespace-nowrap">{fmtB(d.total_base)}</td>
+                                            <td className="px-4 py-2.5 text-right font-bold text-content dark:text-white tabular-nums whitespace-nowrap">{fmtB(d.total_base)}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                                 <tfoot>
                                     <tr className="border-t-2 border-content/20 dark:border-white/20 bg-surface-2 dark:bg-white/5">
-                                        <td className="px-4 py-2.5 font-black uppercase tracking-wide text-content dark:text-white whitespace-nowrap">Total ventas</td>
+                                        <td className="px-4 py-2.5 font-bold text-content dark:text-white whitespace-nowrap">Total ventas</td>
                                         {journals.map(j => {
                                             const c = totals?.cells?.[j.id];
                                             return (
                                                 <td key={j.id} className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">
-                                                    <div className="font-black text-content dark:text-white">{fmtJ(c?.amount_journal, j.currency_symbol)}</div>
+                                                    <div className="font-bold text-content dark:text-white">{fmtJ(c?.amount_journal, j.currency_symbol)}</div>
                                                     {!j.is_base && (
-                                                        <div className="text-[10px] font-bold text-content-muted dark:text-content-dark-muted opacity-60">{fmtB(c?.amount_base)}</div>
+                                                        <div className="text-[11px] font-semibold text-content-muted dark:text-content-dark-muted opacity-60">{fmtB(c?.amount_base)}</div>
                                                     )}
                                                 </td>
                                             );
                                         })}
-                                        <td className="px-4 py-2.5 text-right font-black text-brand-500 tabular-nums whitespace-nowrap">{fmtB(totals?.total_base)}</td>
+                                        <td className="px-4 py-2.5 text-right font-bold text-content dark:text-white tabular-nums whitespace-nowrap">{fmtB(totals?.total_base)}</td>
                                     </tr>
 
                                     {/* Lo cargado a mano en la caja. Va aparte y no dentro de la matriz: una
@@ -312,7 +312,7 @@ export default function PaymentJournalsReport() {
                                         summary={manual?.incomes}
                                         journals={journals}
                                         sign="+"
-                                        tone="text-success"
+                                        tone="text-content dark:text-white"
                                         fmtJ={fmtJ}
                                         fmtB={fmtB}
                                     />
@@ -327,9 +327,9 @@ export default function PaymentJournalsReport() {
                                     />
 
                                     <tr className="border-t-2 border-content/20 dark:border-white/20 bg-brand-500/[0.07]">
-                                        <td className="px-4 py-3 font-black uppercase tracking-wide text-content dark:text-white whitespace-nowrap">
+                                        <td className="px-4 py-3 font-bold text-content dark:text-white whitespace-nowrap">
                                             Movimiento neto
-                                            <div className="text-[9px] font-bold normal-case tracking-normal text-content-muted dark:text-content-dark-muted opacity-70">
+                                            <div className="text-[10px] font-semibold normal-case tracking-normal text-content-muted dark:text-content-dark-muted opacity-70">
                                                 Cobros + ingresos − egresos
                                             </div>
                                         </td>
@@ -337,14 +337,14 @@ export default function PaymentJournalsReport() {
                                             const c = manual?.net?.cells?.[j.id];
                                             return (
                                                 <td key={j.id} className="px-4 py-3 text-right tabular-nums whitespace-nowrap">
-                                                    <div className="font-black text-content dark:text-white">{fmtJ(c?.amount_journal, j.currency_symbol)}</div>
+                                                    <div className="font-bold text-content dark:text-white">{fmtJ(c?.amount_journal, j.currency_symbol)}</div>
                                                     {!j.is_base && (
-                                                        <div className="text-[10px] font-bold text-content-muted dark:text-content-dark-muted opacity-60">{fmtB(c?.amount_base)}</div>
+                                                        <div className="text-[11px] font-semibold text-content-muted dark:text-content-dark-muted opacity-60">{fmtB(c?.amount_base)}</div>
                                                     )}
                                                 </td>
                                             );
                                         })}
-                                        <td className="px-4 py-3 text-right font-black text-brand-500 tabular-nums whitespace-nowrap">{fmtB(manual?.net?.total_base)}</td>
+                                        <td className="px-4 py-3 text-right font-bold text-content dark:text-white tabular-nums whitespace-nowrap">{fmtB(manual?.net?.total_base)}</td>
                                     </tr>
                                 </tfoot>
                             </table>

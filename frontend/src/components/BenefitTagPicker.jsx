@@ -60,8 +60,8 @@ export default function BenefitTagPicker({ selectedIds, onChange }) {
                             key={tag.id}
                             type="button"
                             onClick={() => toggle(tag.id)}
-                            className={`h-7 px-3 rounded-full text-[11px] font-bold transition-all border ${on
-                                ? "bg-brand-500 text-black border-brand-500"
+                            className={`h-7 px-3 rounded-full text-[12px] font-semibold transition-all border ${on
+                                ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40"
                                 : "bg-transparent text-content-subtle dark:text-content-dark-muted border-border dark:border-white/10 hover:border-brand-500/50"}`}
                         >
                             {tag.name}
@@ -81,9 +81,9 @@ export default function BenefitTagPicker({ selectedIds, onChange }) {
                             }}
                             placeholder="Nombre del beneficio"
                             maxLength={60}
-                            className="h-7 px-2.5 rounded-full text-[11px] font-bold bg-surface dark:bg-surface-dark-3 border border-brand-500/50 outline-none w-40"
+                            className="h-7 px-2.5 rounded-full text-[12px] font-semibold bg-surface dark:bg-surface-dark-3 border border-brand-500/50 outline-none w-40"
                         />
-                        <button type="button" onClick={crear} className="h-7 px-2 rounded-full bg-brand-500 text-black text-[11px] font-bold">
+                        <button type="button" onClick={crear} className="h-7 px-2 rounded-full btn-accent text-[12px] font-semibold">
                             OK
                         </button>
                     </div>
@@ -91,15 +91,15 @@ export default function BenefitTagPicker({ selectedIds, onChange }) {
                     <button
                         type="button"
                         onClick={() => setCreating(true)}
-                        className="h-7 px-3 rounded-full text-[11px] font-bold border border-dashed border-border dark:border-white/15 text-content-subtle hover:border-brand-500/50 hover:text-brand-500 transition-all"
+                        className="h-7 px-3 rounded-full text-[12px] font-semibold border border-dashed border-border dark:border-white/15 text-content-subtle hover:border-brand-500/50 hover:text-brand-500 transition-all"
                     >
                         + Nuevo
                     </button>
                 )}
             </div>
-            {error && <p className="text-[10px] font-bold text-danger mt-1.5">{error}</p>}
+            {error && <p className="text-[11px] font-semibold text-danger mt-1.5">{error}</p>}
             {tags.length === 0 && !creating && (
-                <p className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-1.5">
+                <p className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-1.5">
                     Todavía no hay beneficios creados. Usa "+ Nuevo" para crear el primero.
                 </p>
             )}

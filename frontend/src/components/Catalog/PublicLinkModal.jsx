@@ -104,7 +104,7 @@ export default function PublicLinkModal({ open, onClose }) {
     return (
         <Modal open={open} onClose={onClose} title="Catálogo público" width={480}>
             <div className="space-y-4">
-                <p className="text-[12px] font-bold text-content-muted leading-relaxed">
+                <p className="text-[12px] font-semibold text-content-muted leading-relaxed">
                     Un enlace para compartir con tus clientes. Muestra nombre, foto, categoría y
                     precio de los productos que hayas marcado como públicos, e indica si están
                     agotados — nunca la cantidad en inventario, ni costos, ni ningún otro dato del
@@ -112,26 +112,26 @@ export default function PublicLinkModal({ open, onClose }) {
                 </p>
 
                 {loading ? (
-                    <div className="py-8 text-center text-[11px] font-black uppercase tracking-widest text-content-subtle">
+                    <div className="py-8 text-center text-[12px] font-bold text-content-subtle">
                         Cargando...
                     </div>
                 ) : token ? (
                     <>
                         <div className="rounded-xl border border-brand-500/30 bg-brand-500/5 p-3 space-y-2">
-                            <div className="text-[9px] font-black uppercase tracking-widest text-brand-500">
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-brand-500">
                                 Enlace activo
                             </div>
-                            <div className="text-[11px] font-bold text-content dark:text-white break-all leading-relaxed">
+                            <div className="text-[12px] font-semibold text-content dark:text-white break-all leading-relaxed">
                                 {url}
                             </div>
                             <div className="flex gap-2 pt-1">
-                                <Button onClick={copy} className="h-8 px-3 text-[10px] shadow-none flex-1">
+                                <Button onClick={copy} className="h-8 px-3 text-[11px] shadow-none flex-1">
                                     Copiar enlace
                                 </Button>
                                 <Button
                                     onClick={() => window.open(url, "_blank", "noopener")}
                                     variant="ghost"
-                                    className="h-8 px-3 text-[10px] shadow-none border border-border dark:border-white/10"
+                                    className="h-8 px-3 text-[11px] shadow-none border border-border dark:border-white/10"
                                 >
                                     Abrir
                                 </Button>
@@ -140,10 +140,10 @@ export default function PublicLinkModal({ open, onClose }) {
 
                         {outdated && (
                             <div className="rounded-xl border border-warning/40 bg-warning/5 p-3 space-y-2">
-                                <div className="text-[9px] font-black uppercase tracking-widest text-warning">
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-warning">
                                     El enlace no coincide con el nombre
                                 </div>
-                                <p className="text-[11px] font-bold text-content-muted leading-relaxed">
+                                <p className="text-[12px] font-semibold text-content-muted leading-relaxed">
                                     Cambiaste el nombre de la tienda. El enlace de arriba sigue funcionando;
                                     si lo actualizas a <span className="text-content dark:text-white">/catalogo/{suggested}</span>,
                                     el anterior deja de servir y hay que repartirlo de nuevo.
@@ -151,7 +151,7 @@ export default function PublicLinkModal({ open, onClose }) {
                                 <button
                                     onClick={generate}
                                     disabled={working}
-                                    className="h-8 px-3 rounded-lg bg-warning text-black text-[10px] font-black uppercase tracking-wide disabled:opacity-50 flex items-center gap-2"
+                                    className="h-8 px-3 rounded-lg bg-warning text-black text-[11px] font-bold disabled:opacity-50 flex items-center gap-2"
                                 >
                                     {working && <Spinner className="h-3.5 w-3.5" />}
                                     Actualizar enlace
@@ -163,10 +163,10 @@ export default function PublicLinkModal({ open, onClose }) {
                         <div className="rounded-xl border border-border dark:border-white/10 p-3 space-y-3">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle">
+                                    <div className="text-[12px] font-medium text-content-subtle">
                                         Pedidos por WhatsApp
                                     </div>
-                                    <p className="text-[11px] font-bold text-content-muted leading-relaxed mt-1">
+                                    <p className="text-[12px] font-semibold text-content-muted leading-relaxed mt-1">
                                         El cliente arma un carrito y te lo envía por WhatsApp. No genera
                                         ninguna venta ni aparta inventario: la gestionas tú.
                                     </p>
@@ -184,7 +184,7 @@ export default function PublicLinkModal({ open, onClose }) {
                             </div>
 
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest text-content-subtle">
+                                <label className="text-[12px] font-medium text-content-subtle">
                                     Número con código de país
                                 </label>
                                 <div className="flex gap-2 mt-1">
@@ -192,17 +192,17 @@ export default function PublicLinkModal({ open, onClose }) {
                                         value={whatsapp}
                                         onChange={e => setWhatsapp(e.target.value)}
                                         placeholder="58 414 5550000"
-                                        className="input h-8 text-[11px] flex-1"
+                                        className="input h-8 text-[12px] flex-1"
                                     />
                                     <button
                                         onClick={() => saveOrders(ordersOn, whatsapp)}
                                         disabled={working || !whatsappValid || whatsapp === savedWhatsapp}
-                                        className="h-8 px-3 rounded-lg bg-brand-500 text-black text-[10px] font-black uppercase tracking-wide disabled:opacity-40"
+                                        className="h-8 px-3 rounded-lg btn-accent text-[11px] font-bold disabled:opacity-40"
                                     >
                                         Guardar
                                     </button>
                                 </div>
-                                <p className="text-[10px] font-bold text-content-subtle mt-1.5 leading-relaxed">
+                                <p className="text-[11px] font-semibold text-content-subtle mt-1.5 leading-relaxed">
                                     {whatsapp && !whatsappValid
                                         ? "Número incompleto: hacen falta al menos 8 dígitos."
                                         : whatsappValid
@@ -217,25 +217,25 @@ export default function PublicLinkModal({ open, onClose }) {
                             catálogo. Decirlo aquí evita que alguien crea que el enlace protege
                             algo por ser difícil de adivinar. */}
                         <div className="rounded-xl border border-border dark:border-white/10 p-3 space-y-2">
-                            <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle">
+                            <div className="text-[12px] font-medium text-content-subtle">
                                 Dejar de publicar
                             </div>
                             {confirmRevoke ? (
                                 <div className="space-y-2">
-                                    <p className="text-[11px] font-bold text-danger">
+                                    <p className="text-[12px] font-semibold text-danger">
                                         El catálogo dejará de estar disponible para todos. ¿Continuar?
                                     </p>
                                     <div className="flex gap-2">
                                         <button
                                             onClick={revoke}
                                             disabled={working}
-                                            className="h-8 px-3 rounded-lg bg-danger text-white text-[10px] font-black uppercase tracking-wide disabled:opacity-50"
+                                            className="h-8 px-3 rounded-lg bg-danger text-white text-[11px] font-bold disabled:opacity-50"
                                         >
                                             Desactivar
                                         </button>
                                         <button
                                             onClick={() => setConfirmRevoke(false)}
-                                            className="h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wide text-content-subtle"
+                                            className="h-8 px-3 rounded-lg text-[11px] font-bold text-content-subtle"
                                         >
                                             Cancelar
                                         </button>
@@ -243,13 +243,13 @@ export default function PublicLinkModal({ open, onClose }) {
                                 </div>
                             ) : (
                                 <>
-                                    <p className="text-[11px] font-bold text-content-muted leading-relaxed">
+                                    <p className="text-[12px] font-semibold text-content-muted leading-relaxed">
                                         El enlace lleva el nombre de tu tienda, así que cualquiera que lo
                                         escriba entra. Para que deje de verse hay que desactivar el catálogo.
                                     </p>
                                     <button
                                         onClick={() => setConfirmRevoke(true)}
-                                        className="text-[11px] font-black uppercase tracking-wide text-danger hover:underline"
+                                        className="text-[12px] font-bold text-danger hover:underline"
                                     >
                                         Desactivar catálogo
                                     </button>
@@ -259,10 +259,10 @@ export default function PublicLinkModal({ open, onClose }) {
                     </>
                 ) : (
                     <div className="rounded-xl border border-border dark:border-white/10 p-5 text-center space-y-3">
-                        <p className="text-[12px] font-bold text-content-muted">
+                        <p className="text-[12px] font-semibold text-content-muted">
                             Todavía no has creado el enlace.
                         </p>
-                        <Button onClick={generate} disabled={working} className="h-9 px-5 text-[11px] shadow-none">
+                        <Button onClick={generate} disabled={working} className="h-9 px-5 text-[12px] shadow-none">
                             {working ? "Creando..." : "Crear enlace"}
                         </Button>
                     </div>

@@ -26,8 +26,8 @@ const TEMAS = [
 
 const Card = ({ title, hint, children }) => (
     <div className="bg-white dark:bg-surface-dark-3 rounded-xl p-4 border border-border/40 dark:border-white/10 shadow-sm">
-        <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest block opacity-60">{title}</span>
-        {hint && <p className="text-[9px] font-bold text-content-subtle dark:text-white/20 mt-1 mb-3 leading-relaxed">{hint}</p>}
+        <span className="text-[12px] font-medium text-content-subtle block opacity-60">{title}</span>
+        {hint && <p className="text-[10px] font-semibold text-content-subtle dark:text-white/20 mt-1 mb-3 leading-relaxed">{hint}</p>}
         <div className={hint ? "" : "mt-3"}>{children}</div>
     </div>
 );
@@ -228,8 +228,8 @@ export default function StorefrontSettings({ notify }) {
                     onToggle={alternarActivo} onEdit={abrirEdicion} onDelete={setBorrar}
                     detail={(b) => (
                         <>
-                            <p className="text-[9px] font-bold text-content-subtle truncate">{b.link_url || "Sin enlace"}</p>
-                            {!b.image_mobile_url && <p className="text-[9px] font-bold text-warning">Sin arte de móvil</p>}
+                            <p className="text-[10px] font-semibold text-content-subtle truncate">{b.link_url || "Sin enlace"}</p>
+                            {!b.image_mobile_url && <p className="text-[10px] font-semibold text-warning">Sin arte de móvil</p>}
                         </>
                     )}
                 />
@@ -246,7 +246,7 @@ export default function StorefrontSettings({ notify }) {
                     onMove={(i, d) => mover(destacados, i, d)}
                     onToggle={alternarActivo} onEdit={abrirEdicion} onDelete={setBorrar}
                     detail={(b) => (
-                        <p className="text-[9px] font-bold text-content-subtle truncate">{b.body || "Sin texto"}</p>
+                        <p className="text-[10px] font-semibold text-content-subtle truncate">{b.body || "Sin texto"}</p>
                     )}
                     name={(b) => b.heading || b.title}
                 />
@@ -283,7 +283,7 @@ export default function StorefrontSettings({ notify }) {
                         ))}
                         <button type="button" onClick={() => setMenu(prev => [...prev, { category_id: "", label: "", badge: "" }])}
                             disabled={menu.length >= 10}
-                            className="text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-brand-500 transition-colors disabled:opacity-40">
+                            className="text-[12px] font-medium text-content-subtle hover:text-brand-500 transition-colors disabled:opacity-40">
                             Agregar categoría al menú
                         </button>
                     </div>
@@ -316,14 +316,14 @@ export default function StorefrontSettings({ notify }) {
                         ))}
                         <button type="button" onClick={() => setHighlights(prev => [...prev, ""])}
                             disabled={highlights.length >= 5}
-                            className="text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-brand-500 transition-colors disabled:opacity-40">
+                            className="text-[12px] font-medium text-content-subtle hover:text-brand-500 transition-colors disabled:opacity-40">
                             Agregar frase
                         </button>
                     </div>
                 </Card>
 
                 <div className="flex justify-end">
-                    <Button onClick={guardar} disabled={saving} className="h-8 px-6 text-[10px]">
+                    <Button onClick={guardar} disabled={saving} className="h-8 px-6 text-[11px]">
                         {saving ? "Guardando..." : "Guardar Cambios"}
                     </Button>
                 </div>
@@ -375,7 +375,7 @@ export default function StorefrontSettings({ notify }) {
                             />
                         </label>
                         <input
-                            className="input h-9 flex-1 font-mono uppercase"
+                            className="input h-9 flex-1 font-mono"
                             placeholder="Sin elegir"
                             value={settings.catalog_brand_color || ""}
                             onChange={(e) => set("catalog_brand_color", e.target.value.trim())}
@@ -386,7 +386,7 @@ export default function StorefrontSettings({ notify }) {
                         <button
                             type="button"
                             onClick={() => set("catalog_brand_color", "")}
-                            className="text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-brand-500 transition-colors mt-2"
+                            className="text-[12px] font-medium text-content-subtle hover:text-brand-500 transition-colors mt-2"
                         >
                             Usar el color del sistema
                         </button>
@@ -431,7 +431,7 @@ export default function StorefrontSettings({ notify }) {
                                 />
                             </label>
                             <input
-                                className="input h-9 flex-1 font-mono uppercase"
+                                className="input h-9 flex-1 font-mono"
                                 placeholder="Sin elegir"
                                 value={settings.catalog_bg_color || ""}
                                 onChange={(e) => set("catalog_bg_color", e.target.value.trim())}
@@ -442,7 +442,7 @@ export default function StorefrontSettings({ notify }) {
                             <button
                                 type="button"
                                 onClick={() => set("catalog_bg_color", "")}
-                                className="text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-brand-500 transition-colors mt-2"
+                                className="text-[12px] font-medium text-content-subtle hover:text-brand-500 transition-colors mt-2"
                             >
                                 Usar el tono por defecto
                             </button>
@@ -487,7 +487,7 @@ export default function StorefrontSettings({ notify }) {
                                 />
                             </label>
                             <input
-                                className="input h-9 flex-1 font-mono uppercase"
+                                className="input h-9 flex-1 font-mono"
                                 placeholder="Sin elegir"
                                 value={settings.catalog_panel_color || ""}
                                 onChange={(e) => set("catalog_panel_color", e.target.value.trim())}
@@ -498,7 +498,7 @@ export default function StorefrontSettings({ notify }) {
                             <button
                                 type="button"
                                 onClick={() => set("catalog_panel_color", "")}
-                                className="text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-brand-500 transition-colors mt-2"
+                                className="text-[12px] font-medium text-content-subtle hover:text-brand-500 transition-colors mt-2"
                             >
                                 Usar el tono por defecto
                             </button>
@@ -577,7 +577,7 @@ export default function StorefrontSettings({ notify }) {
                             <input className="input h-9" placeholder="https://... o /catalogo/mi-tienda/p/123"
                                 value={editing.link_url || ""}
                                 onChange={(e) => setEditing(p => ({ ...p, link_url: e.target.value }))} />
-                            <p className="text-[9px] font-bold text-content-subtle dark:text-white/20 mt-1 leading-relaxed">
+                            <p className="text-[10px] font-semibold text-content-subtle dark:text-white/20 mt-1 leading-relaxed">
                                 Con enlace aparece un botón "Ver más" bajo el texto.
                             </p>
                         </div>
@@ -585,14 +585,14 @@ export default function StorefrontSettings({ notify }) {
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input type="checkbox" checked={!!editing.active}
                                 onChange={(e) => setEditing(p => ({ ...p, active: e.target.checked }))} />
-                            <span className="text-[11px] font-black text-content dark:text-white">Mostrar en la vitrina</span>
+                            <span className="text-[12px] font-bold text-content dark:text-white">Mostrar en la vitrina</span>
                         </label>
 
                         <div className="flex justify-end gap-2 pt-1">
-                            <Button variant="ghost" onClick={() => { setEditing(null); setFiles({}); }} className="h-8 px-4 text-[10px]">
+                            <Button variant="ghost" onClick={() => { setEditing(null); setFiles({}); }} className="h-8 px-4 text-[11px]">
                                 Cancelar
                             </Button>
-                            <Button onClick={guardarBanner} className="h-8 px-6 text-[10px]">Guardar</Button>
+                            <Button onClick={guardarBanner} className="h-8 px-6 text-[11px]">Guardar</Button>
                         </div>
                     </div>
                 )}
@@ -638,7 +638,7 @@ export default function StorefrontSettings({ notify }) {
                             <input className="input h-9" placeholder="Qué dice el banner"
                                 value={editing.alt_text || ""}
                                 onChange={(e) => setEditing(p => ({ ...p, alt_text: e.target.value }))} />
-                            <p className="text-[9px] font-bold text-content-subtle dark:text-white/20 mt-1 leading-relaxed">
+                            <p className="text-[10px] font-semibold text-content-subtle dark:text-white/20 mt-1 leading-relaxed">
                                 Es lo que se lee si la imagen no carga, y lo único que reciben los clientes
                                 que usan lector de pantalla: el mensaje de la promoción está dentro del arte.
                             </p>
@@ -647,14 +647,14 @@ export default function StorefrontSettings({ notify }) {
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input type="checkbox" checked={!!editing.active}
                                 onChange={(e) => setEditing(p => ({ ...p, active: e.target.checked }))} />
-                            <span className="text-[11px] font-black text-content dark:text-white">Mostrar en la vitrina</span>
+                            <span className="text-[12px] font-bold text-content dark:text-white">Mostrar en la vitrina</span>
                         </label>
 
                         <div className="flex justify-end gap-2 pt-1">
-                            <Button variant="ghost" onClick={() => { setEditing(null); setFiles({}); }} className="h-8 px-4 text-[10px]">
+                            <Button variant="ghost" onClick={() => { setEditing(null); setFiles({}); }} className="h-8 px-4 text-[11px]">
                                 Cancelar
                             </Button>
-                            <Button onClick={guardarBanner} className="h-8 px-6 text-[10px]">Guardar</Button>
+                            <Button onClick={guardarBanner} className="h-8 px-6 text-[11px]">Guardar</Button>
                         </div>
                     </div>
                 )}
@@ -681,15 +681,15 @@ function BannerList({ title, hint, addLabel, emptyTitle, emptyHint, items, onAdd
     return (
         <div className="bg-white dark:bg-surface-dark-3 rounded-xl p-4 border border-border/40 dark:border-white/10 shadow-sm">
             <div className="flex items-center justify-between mb-1 gap-2">
-                <span className="text-[10px] font-black text-content-subtle uppercase tracking-widest opacity-60">{title}</span>
-                <Button onClick={onAdd} className="h-7 px-3 text-[10px] shrink-0">{addLabel}</Button>
+                <span className="text-[12px] font-medium text-content-subtle opacity-60">{title}</span>
+                <Button onClick={onAdd} className="h-7 px-3 text-[11px] shrink-0">{addLabel}</Button>
             </div>
-            <p className="text-[9px] font-bold text-content-subtle dark:text-white/20 mb-3 leading-relaxed">{hint}</p>
+            <p className="text-[10px] font-semibold text-content-subtle dark:text-white/20 mb-3 leading-relaxed">{hint}</p>
 
             {items.length === 0 ? (
                 <div className="py-8 text-center border-2 border-dashed border-border/40 dark:border-white/10 rounded-xl">
-                    <p className="text-[11px] font-black text-content dark:text-white">{emptyTitle}</p>
-                    <p className="text-[9px] font-bold text-content-subtle uppercase tracking-widest mt-1">{emptyHint}</p>
+                    <p className="text-[12px] font-bold text-content dark:text-white">{emptyTitle}</p>
+                    <p className="text-[12px] font-medium text-content-subtle mt-1">{emptyHint}</p>
                 </div>
             ) : (
                 <div className="space-y-2">
@@ -699,7 +699,7 @@ function BannerList({ title, hint, addLabel, emptyTitle, emptyHint, items, onAdd
                                 <img src={resolveImageUrl(b.image_url)} alt="" className="w-full h-full object-cover" />
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="text-[11px] font-black text-content dark:text-white truncate">{name(b) || "Sin nombre"}</p>
+                                <p className="text-[12px] font-bold text-content dark:text-white truncate">{name(b) || "Sin nombre"}</p>
                                 {detail(b)}
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
@@ -710,7 +710,7 @@ function BannerList({ title, hint, addLabel, emptyTitle, emptyHint, items, onAdd
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M19 9l-7 7-7-7" /></svg>
                                 </button>
                                 <button type="button" onClick={() => onToggle(b)}
-                                    className={`h-7 px-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${b.active
+                                    className={`h-7 px-2.5 rounded-lg text-[10px] font-bold border ${b.active
                                         ? "border-success/30 text-success bg-success/5"
                                         : "border-border/40 dark:border-white/10 text-content-subtle"}`}>
                                     {b.active ? "Activo" : "Apagado"}
@@ -743,16 +743,16 @@ function ImagePicker({ label, hint, current, file, onPick, onClear }) {
                 <div className="w-full h-24 bg-surface-2 dark:bg-white/5 border-2 border-dashed border-border/40 dark:border-white/10 rounded-xl flex items-center justify-center overflow-hidden group-hover:border-brand-500/50 transition-all">
                     {preview
                         ? <img src={preview} alt="" className="w-full h-full object-cover" />
-                        : <span className="text-[9px] font-black text-content-subtle uppercase tracking-widest">Subir imagen</span>}
+                        : <span className="text-[12px] font-medium text-content-subtle">Subir imagen</span>}
                 </div>
                 <input type="file" accept="image/*" className="hidden"
                     onChange={(e) => e.target.files[0] && onPick(e.target.files[0])} />
             </label>
             <div className="flex items-center justify-between mt-1">
-                <p className="text-[9px] font-bold text-content-subtle dark:text-white/20">{hint}</p>
+                <p className="text-[10px] font-semibold text-content-subtle dark:text-white/20">{hint}</p>
                 {onClear && (
                     <button type="button" onClick={onClear}
-                        className="text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-danger transition-colors">
+                        className="text-[12px] font-medium text-content-subtle hover:text-danger transition-colors">
                         Quitar
                     </button>
                 )}

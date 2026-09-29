@@ -1,3 +1,4 @@
+import NavDropdownMenu from "../components/ui/NavDropdownMenu";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
@@ -17,8 +18,10 @@ import MetodosTab from "../components/Contabilidad/MetodosTab";
 import EgresosTab from "../components/Contabilidad/EgresosTab";
 import CotizacionesTab from "../components/Contabilidad/CotizacionesTab";
 import NotasCreditoTab from "../components/Contabilidad/NotasCreditoTab";
+import CuentasPorPagarTab from "../components/Contabilidad/CuentasPorPagarTab";
+import CuentasPorCobrarTab from "../components/Contabilidad/CuentasPorCobrarTab";
 
-const SUB_PAGES = ["Estado de Cuenta", "Ingresos", "Egresos", "Facturas", "Notas de Crédito", "Cotizaciones", "Pagos", "Series", "Diarios", "Tipos de pago", "Bancos"];
+const SUB_PAGES = ["Estado de Cuenta", "Ingresos", "Egresos", "Facturas", "Notas de Crédito", "Cotizaciones", "Por Cobrar", "Por Pagar", "Pagos", "Series", "Diarios", "Tipos de pago", "Bancos"];
 
 export default function ContabilidadPage() {
  const {
@@ -73,6 +76,8 @@ export default function ContabilidadPage() {
  const canConfig   = canSeries || canJournals;
  // Solo para ofrecer la asignación de series a usuarios; no habilita nada más.
  const canManageUsers = can("employees.view");
+ const canPayables    = can("purchases.view");
+ const canReceivables = can("sales.view") || can("accounting.view");
 
  useEffect(() => {
  if (!canConfig) return;
@@ -109,6 +114,12 @@ export default function ContabilidadPage() {
  const NAV_GROUPS = [
    { label: "Movimientos", items: ["Estado de Cuenta", "Ingresos", "Egresos"] },
    { label: "Ventas",      items: ["Facturas", "Notas de Crédito", "Cotizaciones"] },
+   // Lo que nos deben y lo que se debe. Cada una responde al permiso de lo que lee: Por
+   // Cobrar a ver ventas (o contabilidad), Por Pagar a ver compras.
+   ...((canReceivables || canPayables) ? [{ label: "Cuentas", items: [
+     ...(canReceivables ? ["Por Cobrar"] : []),
+     ...(canPayables    ? ["Por Pagar"]  : []),
+   ] }] : []),
    { label: "Pagos",       items: null },
    // Solo se listan las pantallas que el rol puede abrir de verdad: ofrecer "Series" a quien
    // no tiene el permiso lo llevaba a una pantalla que el servidor le niega.
@@ -174,6 +185,10 @@ export default function ContabilidadPage() {
  allSeries={allSeries}
  />
  );
+ case "Por Cobrar":
+ return <CuentasPorCobrarTab notify={notify} fmtPrice={fmtPrice} />;
+ case "Por Pagar":
+ return <CuentasPorPagarTab notify={notify} fmtPrice={fmtPrice} />;
  case "Pagos":
  return (
  <PagosTab
@@ -240,8 +255,8 @@ export default function ContabilidadPage() {
  {/* ── Header ─────────────────────────── */}
  <div className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between gap-3 border-b border-border/30 dark:border-white/5">
  <div>
- <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest leading-none mb-1">MÓDULO FINANCIERO</div>
- <h1 className="text-sm font-black uppercase tracking-tight">Contabilidad</h1>
+ <div className="text-[11px] sm:text-[12px] font-semibold text-brand-600 dark:text-brand-400 leading-none mb-1">Finanzas</div>
+ <h1 className="text-[15px] sm:text-[17px] font-bold tracking-[-0.015em] leading-tight text-content dark:text-white">Contabilidad</h1>
  </div>
  </div>
 
@@ -260,8 +275,8 @@ export default function ContabilidadPage() {
          <button
            key={group.label}
            onClick={() => { setSubPage(group.label); setOpenGroup(null); }}
-           className={`px-2.5 sm:px-4 py-2 text-[10px] sm:text-[11px] font-black uppercase tracking-wide border-b-2 whitespace-nowrap transition-all ${
-             isActive ? "border-brand-500 text-brand-500" : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+           className={`px-2.5 sm:px-4 py-2 text-[12px] sm:text-[13px] font-semibold border-b-2 whitespace-nowrap transition-all ${
+             isActive ? "border-brand-500 text-brand-700 dark:text-brand-300" : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
            }`}
          >
            {group.label}
@@ -273,8 +288,8 @@ export default function ContabilidadPage() {
        <div key={group.label} className="relative">
          <button
            onClick={() => setOpenGroup(isOpen ? null : group.label)}
-           className={`flex items-center gap-1 px-2.5 sm:px-4 py-2 text-[10px] sm:text-[11px] font-black uppercase tracking-wide border-b-2 whitespace-nowrap transition-all ${
-             isActive ? "border-brand-500 text-brand-500" : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+           className={`flex items-center gap-1 px-2.5 sm:px-4 py-2 text-[12px] sm:text-[13px] font-semibold border-b-2 whitespace-nowrap transition-all ${
+             isActive ? "border-brand-500 text-brand-700 dark:text-brand-300" : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
            }`}
          >
            {group.label}
@@ -283,21 +298,11 @@ export default function ContabilidadPage() {
            </svg>
          </button>
          {isOpen && (
-           <div className="absolute top-full left-0 mt-1 bg-white dark:bg-surface-dark-3 border border-border/40 dark:border-white/10 rounded-xl shadow-lg shadow-black/10 z-50 py-1 min-w-[170px]">
-             {group.items.map(item => (
-               <button
-                 key={item}
-                 onClick={() => { setSubPage(item); setOpenGroup(null); }}
-                 className={`w-full text-left px-4 py-2 text-[11px] font-bold transition-colors rounded-lg ${
-                   subPage === item
-                     ? "text-brand-500 bg-brand-500/5"
-                     : "text-content dark:text-white/70 hover:bg-surface-2 dark:hover:bg-white/5"
-                 }`}
-               >
-                 {item}
-               </button>
-             ))}
-           </div>
+           <NavDropdownMenu
+             items={group.items}
+             active={subPage}
+             onSelect={item => { setSubPage(item); setOpenGroup(null); }}
+           />
          )}
        </div>
      );

@@ -4,7 +4,7 @@ import ProductSelectorModal from "./ProductSelectorModal";
 import EditablePriceInput from "../ui/EditablePriceInput";
 import { useApp } from "../../context/AppContext";
 
-const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
 export default function PurchaseForm({ state }) {
     const { items, removeItem, updateItem, grandTotal, savePurchase, loading, editingDraftId, selectedWarehouseId,
@@ -36,16 +36,16 @@ export default function PurchaseForm({ state }) {
             <div className="card-premium !p-0 overflow-hidden">
                 <div className="px-4 py-3 bg-surface-2/50 dark:bg-white/[0.03] border-b border-border/10 dark:border-white/5 flex items-center justify-between gap-3">
                     <div>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Productos</div>
+                        <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">Productos</div>
                         {items.length > 0 && (
-                            <div className="text-[10px] font-bold text-content-subtle dark:text-white/40 mt-0.5">{items.length} {items.length === 1 ? "producto" : "productos"} en la orden</div>
+                            <div className="text-[11px] font-semibold text-content-subtle dark:text-white/40 mt-0.5">{items.length} {items.length === 1 ? "producto" : "productos"} en la orden</div>
                         )}
                     </div>
                     <button
                         onClick={() => selectedWarehouseId && setModalOpen(true)}
                         disabled={!selectedWarehouseId}
                         title={!selectedWarehouseId ? "Selecciona primero el almacén destino" : undefined}
-                        className={`h-8 px-4 rounded-xl border text-[11px] font-black uppercase tracking-wide flex items-center gap-2 transition-all active:scale-95 ${
+                        className={`h-8 px-4 rounded-xl border text-[12px] font-bold flex items-center gap-2 transition-all active:scale-95 ${
                             selectedWarehouseId
                                 ? "bg-brand-500/10 text-brand-500 border-brand-500/20 hover:bg-brand-500/20"
                                 : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/30 dark:border-white/10 cursor-not-allowed"
@@ -54,7 +54,7 @@ export default function PurchaseForm({ state }) {
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                         </svg>
-                        Agregar Producto
+                        Agregar producto
                     </button>
                 </div>
 
@@ -78,12 +78,12 @@ export default function PurchaseForm({ state }) {
                                 {items.map(item => (
                                     <tr key={item.key} className="group hover:bg-surface-2/30 dark:hover:bg-white/[0.02] transition-colors">
                                         <td>
-                                            <div className="font-medium text-xs text-content dark:text-white uppercase tracking-tight">{item.product?.name}</div>
+                                            <div className="font-medium text-xs text-content dark:text-white tracking-tight">{item.product?.name}</div>
                                             {item.lot_number && (
-                                                <div className="text-[9px] font-bold text-warning/70 uppercase mt-0.5">L: {item.lot_number}</div>
+                                                <div className="text-[10px] font-semibold text-warning/70 uppercase mt-0.5">L: {item.lot_number}</div>
                                             )}
                                         </td>
-                                        <td className="text-[10px] text-content-subtle dark:text-white/40 font-medium uppercase whitespace-nowrap">
+                                        <td className="text-[11px] text-content-subtle dark:text-white/40 font-medium uppercase whitespace-nowrap">
                                             {item.package_unit} × {item.package_unit?.toLowerCase() === "unidad" ? "1" : item.package_size}
                                         </td>
                                         <td className="text-center">
@@ -93,7 +93,7 @@ export default function PurchaseForm({ state }) {
                                                     inputMode="numeric"
                                                     value={item.package_qty}
                                                     onChange={e => updateItem(item.key, { package_qty: e.target.value })}
-                                                    className="w-14 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-content dark:text-white"
+                                                    className="w-14 text-center text-xs font-semibold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-content dark:text-white"
                                                 />
                                             </div>
                                         </td>
@@ -107,31 +107,31 @@ export default function PurchaseForm({ state }) {
                                                     onChange={raw => updateItem(item.key, {
                                                         package_price: inInvoiceCur ? (parseFloat(raw) || 0) / invoiceRate : raw,
                                                     })}
-                                                    className="w-28 p-0 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-info"
+                                                    className="w-28 p-0 text-center text-xs font-semibold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-info"
                                                 />
                                                 {inInvoiceCur && parseFloat(item.package_price) > 0 && (
-                                                    <span className="text-[11px] font-bold tabular-nums text-content-subtle dark:text-white/45">
+                                                    <span className="text-[12px] font-semibold tabular-nums text-content-subtle dark:text-white/45">
                                                         ≈ Ref. {fmt2(item.package_price)}
                                                     </span>
                                                 )}
                                                 {item.unit_cost > 0 && (
-                                                    <span className="text-[11px] font-bold tabular-nums text-content-subtle dark:text-white/45">
+                                                    <span className="text-[12px] font-semibold tabular-nums text-content-subtle dark:text-white/45">
                                                         unit: Ref. {fmt2(item.unit_cost)}
                                                     </span>
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="text-right text-[10px] font-bold tabular-nums text-success">
+                                        <td className="text-right text-[11px] font-semibold tabular-nums text-success">
                                             {item.sale_price > 0
                                                 ? (inInvoiceCur ? fmtInvoice(item.sale_price) : `Ref. ${fmt2(item.sale_price)}`)
                                                 : "—"}
                                         </td>
-                                        <td className="text-right text-xs font-black tabular-nums text-warning">
+                                        <td className="text-right text-xs font-bold tabular-nums text-warning">
                                             {item.subtotal > 0 ? (
                                                 inInvoiceCur ? (
                                                     <>
                                                         <div>{fmtInvoice(item.subtotal)}</div>
-                                                        <div className="text-[11px] font-bold text-content-subtle dark:text-white/45">≈ Ref. {fmt2(item.subtotal)}</div>
+                                                        <div className="text-[12px] font-semibold text-content-subtle dark:text-white/45">≈ Ref. {fmt2(item.subtotal)}</div>
                                                     </>
                                                 ) : `Ref. ${fmt2(item.subtotal)}`
                                             ) : "—"}
@@ -156,7 +156,7 @@ export default function PurchaseForm({ state }) {
                         <svg className="w-10 h-10 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
-                        <div className="text-[11px] font-black uppercase tracking-widest text-center opacity-40">
+                        <div className="text-[12px] font-bold text-center opacity-40">
                             Sin productos.<br />Usa el botón para agregar.
                         </div>
                     </div>
@@ -179,10 +179,10 @@ export default function PurchaseForm({ state }) {
                                 <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${receivingMode ? "translate-x-4" : ""}`} />
                             </span>
                             <span className="min-w-0">
-                                <span className={`block text-[11px] font-black uppercase tracking-wide ${receivingMode ? "text-brand-500" : "text-content-subtle dark:text-white/40 group-hover:text-content dark:group-hover:text-white/70"}`}>
+                                <span className={`block text-[12px] font-bold ${receivingMode ? "text-brand-500" : "text-content-subtle dark:text-white/40 group-hover:text-content dark:group-hover:text-white/70"}`}>
                                     Ir recibiendo
                                 </span>
-                                <span className="block text-[10px] font-bold text-content-subtle dark:text-white/35 mt-0.5 leading-snug">
+                                <span className="block text-[11px] font-semibold text-content-subtle dark:text-white/35 mt-0.5 leading-snug">
                                     {receivingMode
                                         ? "Al guardar, cada producto entra al stock de una vez. La orden queda abierta para seguir cargándola."
                                         : "La mercancía entra al stock solo cuando le des a “Recibir mercancía”."}
@@ -190,7 +190,7 @@ export default function PurchaseForm({ state }) {
                             </span>
                         </button>
                         {receivingMode && !selectedWarehouseId && (
-                            <p className="text-[10px] font-black uppercase tracking-wide text-danger mt-2 pl-12">
+                            <p className="text-[11px] font-bold uppercase tracking-wide text-danger mt-2 pl-12">
                                 Elige el almacén de destino y el proveedor: sin eso la mercancía no puede entrar.
                             </p>
                         )}
@@ -201,24 +201,24 @@ export default function PurchaseForm({ state }) {
                 {items.length > 0 && (
                     <div className="px-5 py-4 border-t border-border/20 dark:border-white/5 bg-surface-2/30 dark:bg-white/[0.02] flex items-center justify-between gap-4">
                         <div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-0.5">Total Estimado</div>
+                            <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-0.5">Total estimado</div>
                             {inInvoiceCur ? (
                                 <>
-                                    <div className="text-xl font-black text-brand-500 tabular-nums">{fmtInvoice(grandTotal)}</div>
-                                    <div className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums mt-0.5">≈ Ref. {fmt2(grandTotal)}</div>
+                                    <div className="text-xl font-bold text-brand-500 tabular-nums">{fmtInvoice(grandTotal)}</div>
+                                    <div className="text-[12px] font-semibold text-content-subtle dark:text-white/45 tabular-nums mt-0.5">≈ Ref. {fmt2(grandTotal)}</div>
                                 </>
                             ) : (
-                                <div className="text-xl font-black text-brand-500 tabular-nums">Ref. {fmt2(grandTotal)}</div>
+                                <div className="text-xl font-bold text-brand-500 tabular-nums">Ref. {fmt2(grandTotal)}</div>
                             )}
                         </div>
                         <button
                             onClick={savePurchase}
                             disabled={loading}
                             className={[
-                                "h-9 px-6 rounded-xl text-[11px] font-black uppercase tracking-wide flex items-center gap-2 transition-all active:scale-[0.99]",
+                                "h-9 px-6 rounded-xl text-[12px] font-bold flex items-center gap-2 transition-all active:scale-[0.99]",
                                 loading
                                     ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed"
-                                    : "bg-brand-500 text-white hover:brightness-105 shadow-lg shadow-brand-500/20"
+                                    : "bg-brand-500 text-white hover:brightness-105 shadow-sm"
                             ].join(" ")}
                         >
                             {loading ? (

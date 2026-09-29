@@ -24,20 +24,20 @@ export default function EstadoCuentaTab() {
     }, []);
     // Con una sola sucursal, "todas" promete un alcance que no existe. Mismo criterio que
     // Márgenes e Inventario.
-    const todasLabel = warehouses.length === 1 ? warehouses[0].name : "TODAS LAS SUCURSALES";
+    const todasLabel = warehouses.length === 1 ? warehouses[0].name : "Todas las sucursales";
 
     return (
         <div className="h-full flex flex-col overflow-hidden">
             {/* Subheader con filtros */}
             <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-3">
-                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle opacity-60">
+                <div className="text-[12px] text-content-subtle">
                     Filtrar por período
                 </div>
                 <DateRangePicker from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo} />
                 {(dateFrom || dateTo) && (
                     <button
                         onClick={() => { setDateFrom(""); setDateTo(""); }}
-                        className="text-[10px] font-black uppercase tracking-wide text-danger hover:bg-danger/5 px-2 py-1 rounded-lg transition-colors"
+                        className="h-8 px-2.5 rounded-lg text-[12px] font-medium text-content-muted dark:text-white/60 hover:text-content dark:hover:text-white hover:bg-surface-2 dark:hover:bg-white/5 transition-colors"
                     >
                         Limpiar
                     </button>

@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
-import { fmtQty, resolveImageUrl, imgRetryOnError } from "../../helpers";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { fmtQty, resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import { api } from "../../services/api";
 import Pagination from "../ui/Pagination";
+import StockQty, { StockBand, splitQty } from "../ui/StockQty";
+import FilterPopover from "../ui/FilterPopover";
 
 export default function StockView({
     selectedWarehouse, stockSearch, setStockSearch, loadingStock, filteredStock,
@@ -57,6 +59,7 @@ export default function StockView({
 
     const [catError, setCatError] = useState(null);
     const [showFilters, setShowFilters] = useState(false);
+    const filtrosRef = useRef(null);
 
     useEffect(() => {
         api.categories.getAll()
@@ -73,7 +76,7 @@ export default function StockView({
     if (!selectedWarehouse) {
         return (
             <div className="flex-1 flex items-center justify-center">
-                <div className="text-content-subtle text-xs font-black uppercase tracking-wide">
+                <div className="text-content-subtle text-xs font-bold">
                     Selecciona un almacén para gestionar inventario
                 </div>
             </div>
@@ -89,7 +92,7 @@ export default function StockView({
             {/* Barra de herramientas local */}
             <div className="shrink-0 py-3 flex items-center gap-3 px-4">
                 <div className="relative flex-1 max-w-xs">
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle/70 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                     <input
@@ -108,34 +111,30 @@ export default function StockView({
                 {/* Filtros: mismo patrón de desplegable que el catálogo, para que el control
                     se maneje igual en toda la app. El filtro se aplica en el servidor. */}
                 <div className="relative shrink-0">
-                    <button onClick={() => setShowFilters(!showFilters)}
-                        className={`h-9 px-2.5 flex items-center gap-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide border transition-all ${stockCategory ? "bg-warning/10 border-warning/30 text-warning" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/10 text-content-subtle hover:text-content"}`}>
+                    <button ref={filtrosRef} onClick={() => setShowFilters(!showFilters)}
+                        className={`h-9 px-3 flex items-center gap-2 rounded-lg text-[13px] font-medium border transition-colors ${stockCategory ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "bg-white dark:bg-white/5 border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:text-white"}`}>
                         <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" /></svg>
                         Filtros
-                        {stockCategory && <span className="w-4 h-4 rounded-full bg-warning text-black text-[9px] font-black flex items-center justify-center shrink-0">1</span>}
+                        {stockCategory && <span className="min-w-4 h-4 px-1 rounded-full bg-content text-white dark:bg-white dark:text-black text-[10px] font-semibold flex items-center justify-center shrink-0">1</span>}
                         <svg className={`w-3 h-3 shrink-0 transition-transform ${showFilters ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
                     </button>
-                    {showFilters && (
-                        <>
-                            <div className="fixed inset-0 z-30" onClick={() => setShowFilters(false)} />
-                            {/* Anclado por la derecha: el botón vive al final de la barra, así que
-                                con left-0 el panel crecía hacia afuera y se salía de la pantalla. */}
-                            <div className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] bg-surface-2 dark:bg-surface-dark-2 rounded-2xl border border-border/40 dark:border-white/10 shadow-2xl z-40 p-4 animate-in fade-in slide-in-from-top-2 duration-200 space-y-4">
+                    <FilterPopover open={showFilters} onClose={() => setShowFilters(false)} anchorRef={filtrosRef} width={288}>
+                        <div className="p-4 space-y-4">
                                 <div>
-                                    <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mb-1.5">Categoría</div>
+                                    <div className="text-[12px] font-medium text-content-subtle mb-1.5">Categoría</div>
                                     {catError ? (
-                                        <p className="text-[11px] font-bold text-danger">{catError}</p>
+                                        <p className="text-[12px] font-semibold text-danger">{catError}</p>
                                     ) : categories.length === 0 ? (
-                                        <p className="text-[11px] font-bold text-content-subtle">Sin categorías creadas</p>
+                                        <p className="text-[12px] font-semibold text-content-subtle">Sin categorías creadas</p>
                                     ) : (
                                         <div className="space-y-0.5 max-h-48 overflow-y-auto pr-1">
                                             <button onClick={() => setStockCategory("")}
-                                                className={`w-full text-left px-3 py-2 rounded-xl text-[11px] font-bold transition-all ${!stockCategory ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                                className={`w-full text-left px-3 py-2 rounded-xl text-[12px] font-semibold transition-all ${!stockCategory ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40" : "hover:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"}`}>
                                                 Todas
                                             </button>
                                             {categories.map(c => (
                                                 <button key={c.id} onClick={() => setStockCategory(String(c.id))}
-                                                    className={`w-full text-left px-3 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2 ${String(stockCategory) === String(c.id) ? "bg-brand-500 text-black" : "hover:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                                    className={`w-full text-left px-3 py-2 rounded-xl text-[12px] font-semibold transition-all flex items-center gap-2 ${String(stockCategory) === String(c.id) ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40" : "hover:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"}`}>
                                                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color || "#fabd2f" }} />
                                                     <span className="truncate">{c.name}</span>
                                                 </button>
@@ -145,13 +144,12 @@ export default function StockView({
                                 </div>
                                 {stockCategory && (
                                     <button onClick={() => { setStockCategory(""); setShowFilters(false); }}
-                                        className="w-full py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-danger hover:bg-danger/10 transition-all border border-danger/20">
+                                        className="w-full h-9 rounded-lg text-[13px] font-medium text-content-muted dark:text-white/70 border border-border dark:border-white/10 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 transition-colors">
                                         Limpiar filtros
                                     </button>
                                 )}
-                            </div>
-                        </>
-                    )}
+                        </div>
+                    </FilterPopover>
                 </div>
 
                 {/* Lista o cuadrícula: contar físicamente es más rápido viendo la foto. */}
@@ -160,7 +158,7 @@ export default function StockView({
                         onClick={() => setViewMode("list")}
                         title="Vista de lista"
                         className={`h-full px-2.5 flex items-center justify-center transition-all ${
-                            viewMode === "list" ? "bg-brand-500 text-black" : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
+                            viewMode === "list" ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40" : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
                         }`}>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" /></svg>
                     </button>
@@ -168,7 +166,7 @@ export default function StockView({
                         onClick={() => setViewMode("grid")}
                         title="Vista de cuadrícula"
                         className={`h-full px-2.5 flex items-center justify-center border-l border-border/40 dark:border-white/10 transition-all ${
-                            viewMode === "grid" ? "bg-brand-500 text-black" : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
+                            viewMode === "grid" ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40" : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
                         }`}>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
                     </button>
@@ -178,24 +176,24 @@ export default function StockView({
             {/* Estado de la sesión de ajustes: sin ella no se puede editar el stock. */}
             {!loadingSession && (
                 session ? (
-                    <div className="shrink-0 mx-4 mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-success">
+                    <div className="shrink-0 mx-4 mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-success">
                         <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                         Sesión de ajustes abierta · {session.line_count || session.lines?.length || 0} mov.
                     </div>
                 ) : (
-                    <div className="shrink-0 mx-4 mb-2 rounded-xl border border-warning/20 bg-warning/5 px-4 py-3 flex items-center justify-between gap-4">
+                    <div className="shrink-0 mx-4 mb-2 rounded-xl border border-border dark:border-white/10 bg-surface-2/60 dark:bg-white/[0.03] px-4 py-3 flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-8 h-8 rounded-lg bg-warning/10 text-warning flex items-center justify-center shrink-0">
+                            <div className="w-8 h-8 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                             </div>
                             <div className="min-w-0">
-                                <p className="text-[11px] font-black text-content dark:text-white">Sesión de ajustes requerida</p>
-                                <p className="text-[10px] text-content-subtle/60">Para editar existencias necesitas una sesión abierta; cada cambio queda registrado en ella</p>
+                                <p className="text-[13px] font-semibold text-content dark:text-white">Sesión de ajustes requerida</p>
+                                <p className="text-[12px] text-content-subtle">Para editar existencias necesitas una sesión abierta; cada cambio queda registrado en ella</p>
                             </div>
                         </div>
                         <button onClick={handleOpenSession} disabled={openingSession}
-                            className="h-8 px-4 rounded-xl bg-warning text-black text-[10px] font-black uppercase tracking-widest hover:brightness-105 transition-all active:scale-95 disabled:opacity-50 shrink-0">
-                            {openingSession ? "Abriendo..." : "Abrir Sesión"}
+                            className="btn-accent h-8 px-4 rounded-lg text-[13px] font-semibold active:scale-95 disabled:opacity-50 shrink-0">
+                            {openingSession ? "Abriendo..." : "Abrir sesión"}
                         </button>
                     </div>
                 )
@@ -208,8 +206,8 @@ export default function StockView({
                         {filteredStock.length === 0 ? (
                             loadingStock ? null : (
                                 <div className="py-20 flex flex-col items-center gap-3">
-                                    <div className="text-content-subtle text-[11px] font-bold uppercase tracking-widest">No se encontraron productos</div>
-                                    <button onClick={openAddStock} className="text-brand-500 font-black text-[10px] uppercase tracking-widest underline underline-offset-4 hover:text-brand-400 transition-colors">Agregar Stock</button>
+                                    <div className="text-content-subtle text-[12px] font-semibold">No se encontraron productos</div>
+                                    <button onClick={openAddStock} className="text-brand-700 dark:text-brand-300 font-medium text-[13px] underline underline-offset-4 hover:text-brand-600 transition-colors">Agregar stock</button>
                                 </div>
                             )
                         ) : (
@@ -218,7 +216,6 @@ export default function StockView({
                                     angosta se quedaba en una sola columna y cada foto ocupaba el
                                     ancho entero, así que apenas entraba un producto por pantallazo. */}
                                 {filteredStock.map(s => {
-                                    const qty = parseFloat(s.qty);
                                     return (
                                         <article key={s.product_id}
                                             className="bg-surface dark:bg-surface-dark-2 rounded-2xl border border-border dark:border-white/5 overflow-hidden flex flex-col group">
@@ -231,38 +228,32 @@ export default function StockView({
                                                         className="absolute inset-0 w-full h-full object-cover" />
                                                 ) : (
                                                     <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-brand-500/5 to-brand-500/[0.12]">
-                                                        <span className="text-3xl font-black text-brand-500/30 select-none">{s.product_name.charAt(0)}</span>
+                                                        <span className="text-3xl font-bold text-brand-500/30 select-none">{s.product_name.charAt(0)}</span>
                                                     </div>
                                                 )}
                                                 {/* La existencia va grande sobre la foto: es el dato que se
                                                     compara contra lo que hay en el anaquel. */}
                                                 {!s.is_service && (
-                                                    <div className={`absolute bottom-0 inset-x-0 px-2 py-1 flex items-baseline gap-1 backdrop-blur-sm ${
-                                                        qty <= 0 ? "bg-danger/90 text-white"
-                                                        : qty <= 5 ? "bg-warning/90 text-black"
-                                                        : "bg-success/90 text-white"
-                                                    }`}>
-                                                        <span className="text-base font-black tabular-nums leading-none">{fmtQty(s.qty)}</span>
-                                                        <span className="text-[9px] font-black uppercase opacity-80">{s.unit || "uds"}</span>
-                                                    </div>
+                                                    <StockBand qty={s.qty} value={splitQty(s.qty, s.unit)[0]} unit={splitQty(s.qty, s.unit)[1]} min={s.min_stock}
+                                                        className="absolute bottom-0 inset-x-0 px-2 py-1 backdrop-blur-sm text-base" />
                                                 )}
                                             </div>
                                             <div className="p-2.5 flex flex-col gap-0.5 flex-1">
-                                                <span className="text-[8px] font-black uppercase tracking-widest text-brand-500 truncate">
-                                                    {s.category_name || "General"}
+                                                <span className="text-[11px] text-content-subtle truncate">
+                                                    {toNameCase(s.category_name || "General")}
                                                 </span>
-                                                <h3 className="text-[10px] font-black uppercase tracking-tight text-content dark:text-white leading-tight line-clamp-2">
+                                                <h3 className="text-[12px] font-semibold text-content dark:text-white leading-tight line-clamp-2">
                                                     {s.product_name}
                                                 </h3>
                                                 <div className="mt-auto pt-1.5 flex items-center gap-1">
                                                     <button onClick={() => guardEdit(s)}
                                                         disabled={!session}
-                                                        className="flex-1 h-7 rounded-lg bg-info/10 text-info border border-info/20 hover:bg-info hover:text-black transition-all text-[9px] font-black uppercase tracking-wide disabled:opacity-40 disabled:hover:bg-info/10 disabled:hover:text-info"
+                                                        className="btn-outline flex-1 h-7 rounded-lg text-[12px] font-medium disabled:opacity-40"
                                                         title={session ? "Ajustar existencias" : "Abre una sesión de ajustes primero"}>
                                                         Ajustar
                                                     </button>
                                                     <button onClick={() => handleDeleteStock(s)}
-                                                        className="w-7 h-7 rounded-lg bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-black transition-all flex items-center justify-center shrink-0"
+                                                        className="w-7 h-7 rounded-lg text-content-subtle hover:text-red-600 hover:bg-red-500/10 dark:hover:text-red-400 transition-colors flex items-center justify-center shrink-0"
                                                         title="Retirar">
                                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                     </button>
@@ -276,10 +267,10 @@ export default function StockView({
                     </div>
                     ) : (
                     <div className={`card-premium overflow-auto flex-1 mx-4 mb-2 transition-opacity ${loadingStock ? "opacity-40 pointer-events-none" : ""}`}>
-                        <table className="table-pos min-w-[680px]">
+                        <table className="table-ledger min-w-[680px]">
                             <thead>
                                 <tr>
-                                    {["Producto", "Categoría", "Stock Actual", "P. Venta", "Acciones"].map(h => (
+                                    {["Producto", "Categoría", "Existencia", "Precio", ""].map(h => (
                                         <th key={h} className="text-left">{h}</th>
                                     ))}
                                 </tr>
@@ -293,49 +284,46 @@ export default function StockView({
                                                 <div className="w-12 h-12 rounded-full bg-surface-3 dark:bg-white/5 flex items-center justify-center">
                                                     <svg className="w-6 h-6 text-content-subtle opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                                                 </div>
-                                                <div className="text-content-subtle text-[11px] font-bold uppercase tracking-widest">No se encontraron productos</div>
-                                                <button onClick={openAddStock} className="text-brand-500 font-black text-[10px] uppercase tracking-widest underline underline-offset-4 hover:text-brand-400 transition-colors">Agregar Stock</button>
+                                                <div className="text-content-subtle text-[12px] font-semibold">No se encontraron productos</div>
+                                                <button onClick={openAddStock} className="text-brand-700 dark:text-brand-300 font-medium text-[13px] underline underline-offset-4 hover:text-brand-600 transition-colors">Agregar stock</button>
                                             </div>
                                         </td>
                                     </tr>
                                     )
                                 ) : filteredStock.map(s => (
                                     <tr key={s.product_id} className="group transition-colors">
-                                        <td className="font-black text-xs text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">
+                                        <td className="font-semibold text-[13px] text-content dark:text-white">
                                             {s.product_name}
                                             {s.is_combo && (
-                                                <span className="ml-2 px-1.5 py-0.5 bg-indigo-500/10 text-indigo-400 text-[8px] font-black uppercase tracking-widest rounded">Combo</span>
+                                                <span className="ml-2 px-1.5 py-0.5 bg-surface-3 dark:bg-white/[0.06] text-content-subtle text-[10px] font-medium rounded">Combo</span>
                                             )}
                                             {s.is_service && (
-                                                <span className="ml-2 px-1.5 py-0.5 bg-fuchsia-500/10 text-fuchsia-400 text-[8px] font-black uppercase tracking-widest rounded">Servicio</span>
+                                                <span className="ml-2 px-1.5 py-0.5 bg-surface-3 dark:bg-white/[0.06] text-content-subtle text-[10px] font-medium rounded">Servicio</span>
                                             )}
                                         </td>
                                         <td>
-                                            <span className="text-[10px] font-bold text-content-subtle uppercase tracking-tighter opacity-70">{s.category_name || "General"}</span>
+                                            <span className="text-[13px] text-content-subtle">{toNameCase(s.category_name || "General")}</span>
                                         </td>
                                         <td>
                                             {s.is_service ? (
-                                                <span className="text-[13px] font-black text-content-subtle">—</span>
+                                                <span className="text-[13px] font-bold text-content-subtle">—</span>
                                             ) : (
-                                                <span className={`text-[13px] font-black tabular-nums transition-colors ${parseFloat(s.qty) <= 0 ? "text-danger" : parseFloat(s.qty) <= 5 ? "text-warning" : "text-success"}`}>
-                                                    {fmtQty(s.qty)}
-                                                    <span className="text-[9px] ml-1 opacity-40 uppercase font-bold">{s.unit || "uds"}</span>
-                                                </span>
+                                                <StockQty qty={s.qty} value={splitQty(s.qty, s.unit)[0]} unit={splitQty(s.qty, s.unit)[1]} min={s.min_stock} />
                                             )}
                                         </td>
                                         {/* El precio vigente aquí. Si la sucursal fijó el suyo se
                                             marca, para no confundirlo con el del catálogo. */}
-                                        <td className="font-bold text-brand-500 text-xs tabular-nums tracking-tight">
+                                        <td className="font-semibold text-content dark:text-white text-[13px] tabular-nums">
                                             <div className="flex items-center gap-1.5">
                                                 <span>${parseFloat(s.price || 0).toFixed(2)}</span>
                                                 {s.price_own && (
-                                                    <span className="px-1.5 py-0.5 bg-brand-500/10 text-brand-500 text-[8px] font-black uppercase tracking-widest rounded" title="Precio propio de esta sucursal">Sucursal</span>
+                                                    <span className="px-1.5 py-0.5 bg-brand-500/10 text-brand-700 dark:text-brand-300 text-[10px] font-medium rounded" title="Precio propio de esta sucursal">Sucursal</span>
                                                 )}
                                             </div>
                                             {s.min_stock > 0 && (
-                                                <span className={`text-[9px] font-bold uppercase tracking-tight ${s.min_stock_own ? "text-brand-500" : "text-content-subtle"}`}
+                                                <span className={`text-[11px] font-normal ${s.min_stock_own ? "text-brand-700 dark:text-brand-300" : "text-content-subtle"}`}
                                                     title={s.min_stock_own ? "Mínimo propio de esta sucursal" : "Mínimo heredado del catálogo"}>
-                                                    Min: {fmtQty(s.min_stock)}
+                                                    Mín. {fmtQty(s.min_stock)}
                                                 </span>
                                             )}
                                         </td>
@@ -344,14 +332,14 @@ export default function StockView({
                                                 <button
                                                     onClick={() => guardEdit(s)}
                                                     disabled={!session}
-                                                    className="w-8 h-8 rounded-lg bg-info/10 text-info border border-info/20 hover:bg-info hover:text-black transition-all flex items-center justify-center disabled:opacity-40 disabled:hover:bg-info/10 disabled:hover:text-info"
+                                                    className="row-icon"
                                                     title={session ? "Ajustar" : "Abre una sesión de ajustes primero"}
                                                 >
                                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                                 </button>
                                                 <button
                                                     onClick={() => handleDeleteStock(s)}
-                                                    className="w-8 h-8 rounded-lg bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-black transition-all flex items-center justify-center"
+                                                    className="row-icon hover:!text-red-600 dark:hover:!text-red-400"
                                                     title="Retirar"
                                                 >
                                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>

@@ -35,7 +35,7 @@ export default function Page({ module = "Módulo", title, subheader, actions, on
                         onClick={onBack}
                         title={backLabel}
                         aria-label={backLabel}
-                        className="shrink-0 h-8 pl-1.5 pr-2 sm:pr-3 flex items-center gap-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:bg-surface-2 dark:hover:bg-white/5 transition-all"
+                        className="shrink-0 h-8 pl-1.5 pr-2 sm:pr-3 flex items-center gap-1.5 rounded-lg text-[11px] font-bold text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:bg-surface-2 dark:hover:bg-white/5 transition-all"
                     >
                         <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
@@ -46,10 +46,12 @@ export default function Page({ module = "Módulo", title, subheader, actions, on
                 )}
 
                 <div className="min-w-0 shrink-0 max-w-[40%] xs:max-w-none">
-                    <div className="text-[9px] sm:text-[10px] font-black text-brand-500 uppercase tracking-widest leading-none mb-0.5 sm:mb-1 truncate">
+                    {/* Migas en gris y título en caja normal: antes eran dos líneas en
+                        mayúsculas, la de arriba en color de marca, y competían entre sí. */}
+                    <div className="text-[11px] sm:text-[12px] font-semibold text-brand-600 dark:text-brand-400 leading-none mb-1 truncate">
                         {module}
                     </div>
-                    <h1 className="text-xs sm:text-sm font-black uppercase tracking-tight truncate">
+                    <h1 className="text-[15px] sm:text-[17px] font-bold tracking-[-0.015em] leading-tight truncate text-content dark:text-white">
                         {title}
                     </h1>
                 </div>

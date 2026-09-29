@@ -9,8 +9,10 @@ import Pagination from "../ui/Pagination";
 import DateRangePicker from "../ui/DateRangePicker";
 import CustomSelect from "../ui/CustomSelect";
 import { useApp } from "../../context/AppContext";
-import { readableInk } from "../../helpers/brandColor";
-import { journalsForWarehouse } from "../../helpers";
+import StatusMark, { statusTone } from "../ui/StatusMark";
+import Money from "../ui/Money";
+import { ledgerRow, stopRow, LedgerSkeleton, LedgerEmpty, JournalDot, RowIcon, RowCta } from "../ui/Ledger";
+import { journalsForWarehouse, fmtDate, toNameCase } from "../../helpers";
 
 export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayment, setReceiptSale, journals = [] }) {
     const {
@@ -48,23 +50,23 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
     const subheader = (
         <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[200px]">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle/70 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                <input type="text" placeholder="Buscar cliente o factura..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="input h-8 pl-8 text-[11px] w-full" />
+                <input type="text" placeholder="Buscar cliente o factura..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="input h-9 pl-9 w-full" />
             </div>
 
             <div className="relative">
                 <button
                     ref={filtrosBtnRef}
                     onClick={() => setShowFilterDrop(p => !p)}
-                    className={["h-8 px-3 rounded-lg text-[11px] font-black uppercase tracking-wide border flex items-center gap-2 transition-all",
-                        hasFilters ? "bg-brand-500/10 text-brand-500 border-brand-500/30" : "bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"
+                    className={["h-9 px-3 rounded-lg text-[13px] font-medium border flex items-center gap-2 transition-colors",
+                        hasFilters ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "bg-white dark:bg-white/5 border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:text-white"
                     ].join(" ")}
                 >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                     Filtros
-                    {hasFilters && <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">{filterCount}</span>}
+                    {hasFilters && <span className="bg-content text-white dark:bg-white dark:text-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-[10px]">{filterCount}</span>}
                 </button>
                 <FilterPopover open={showFilterDrop} onClose={() => setShowFilterDrop(false)} anchorRef={filtrosBtnRef}>
                             {/* El selector de vista Historial / Por Cobrar se retiró de aquí: las
@@ -72,7 +74,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                 sigue implementada en usePagos y en la tabla por si se reactiva. */}
                             {visibleJournals.length > 0 && (
                                 <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                    <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Diario de pago</div>
+                                    <div className="text-[12px] font-medium text-content-subtle mb-2">Diario de pago</div>
                                     {/* Select y no rejilla de botones: los diarios los crea el usuario y
                                         no tienen tope, así que en botones los nombres salían truncados
                                         ("PAG MOVIL ME...") dentro de un scroll propio. Misma regla que
@@ -99,7 +101,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                 la lista crece con la nómina. */}
                             {visibleEmployees.length > 0 && (
                                 <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                    <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Empleado</div>
+                                    <div className="text-[12px] font-medium text-content-subtle mb-2">Empleado</div>
                                     <CustomSelect
                                         value={employeeFilter}
                                         onChange={setEmployeeFilter}
@@ -116,7 +118,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                 insinuaría que hay más, cuando no las hay. */}
                             {warehouses.length > 1 && (
                                 <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                    <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Sucursal</div>
+                                    <div className="text-[12px] font-medium text-content-subtle mb-2">Sucursal</div>
                                     <CustomSelect
                                         value={warehouseFilter}
                                         onChange={setWarehouseFilter}
@@ -130,11 +132,11 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                 </div>
                             )}
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Rango de fechas</div>
+                                <div className="text-[12px] font-medium text-content-subtle mb-2">Rango de fechas</div>
                                 <DateRangePicker compact from={payDateFrom} to={payDateTo} setFrom={setPayDateFrom} setTo={setPayDateTo} />
                             </div>
                             <div className="px-4 py-2">
-                                <button onClick={clearFilters} className="w-full py-1.5 text-[10px] font-black uppercase tracking-wide text-danger hover:bg-danger/5 rounded-lg transition-colors">
+                                <button onClick={clearFilters} className="w-full h-8 text-[13px] font-medium text-content-muted hover:text-content hover:bg-surface-2 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/5 rounded-lg transition-colors">
                                     Limpiar todo
                                 </button>
                             </div>
@@ -148,120 +150,91 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
         <div className="h-full flex flex-col overflow-hidden">
             {subheader}
             <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-                <div className="card-premium overflow-auto flex-1 border-none shadow-none rounded-none bg-transparent">
-                    <table className="table-pos min-w-[680px]">
+                <div className="overflow-auto flex-1">
+                    <table className="table-ledger min-w-[720px]">
                         <thead className="sticky top-0 z-10">
                             <tr>
                                 {/* La columna cambia de contenido según la vista: en el historial
                                     muestra el diario del cobro; en pendientes, el estado de la factura. */}
-                                {["Referencia", viewType === "pendientes" ? "Estado" : "Diario", "Cliente", "Fecha", "Monto", "Acciones"].map(h => (
-                                    <th key={h} className={h === "Acciones" || h === "Monto" ? "text-right pr-6" : "text-left"}>{h}</th>
-                                ))}
+                                <th className="pl-4">Referencia</th>
+                                <th>{viewType === "pendientes" ? "Estado" : "Diario"}</th>
+                                <th>Cliente</th>
+                                <th>Fecha</th>
+                                <th className="text-right">Monto</th>
+                                <th className="pr-4 w-px"><span className="sr-only">Acciones</span></th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={6} className="py-20 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">Sincronizando movimientos...</td></tr>
+                                <LedgerSkeleton cols={6} />
                             ) : data.length === 0 ? (
-                                <tr><td colSpan={6} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic">Sin movimientos en esta vista</td></tr>
+                                <LedgerEmpty cols={6} title={viewType === "pendientes" ? "Nada pendiente por cobrar" : "Sin cobros"} hint="No hay movimientos en esta vista." />
                             ) : data.map(item => {
                                 const isInvoice = viewType === "pendientes";
+                                // En el historial la fila abre el detalle del cobro (antes, un
+                                // botón "Detalle" en cada fila). En pendientes manda el botón Cobrar.
+                                const row = ledgerRow(isInvoice ? undefined : () => setPayDetail(item), isInvoice ? statusTone(item.status) : undefined);
                                 return (
-                                    <tr key={`${viewType}-${item.id}`} className="group">
-                                        <td>
-                                            <span className="text-[11px] font-black text-brand-500 tracking-tight">
+                                    <tr key={`${viewType}-${item.id}`} {...row}>
+                                        <td className="pl-4">
+                                            <span className="text-[13px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums">
                                                 {item.invoice_number || (isInvoice ? `Factura #${item.id}` : `Cobro #${item.id}`)}
                                             </span>
                                             {/* Un solo movimiento de dinero que saldó varias facturas: la
                                                 fila es el movimiento, no cada factura. */}
                                             {item.group_count > 1 && (
-                                                <div className="text-[9px] font-black text-content-subtle uppercase tracking-tighter mt-0.5">
-                                                    Cobro conjunto · {item.group_count} facturas
-                                                </div>
+                                                <div className="text-[12px] text-content-subtle">Cobro conjunto · {item.group_count} facturas</div>
                                             )}
                                             {/* Pago combinado: cada caja es su propia fila (su propio
                                                 movimiento), pero el cobro fue uno solo. */}
                                             {item.batch_journal_count > 1 && (
-                                                <div className="text-[9px] font-black text-warning uppercase tracking-tighter mt-0.5">
-                                                    Pago combinado · {item.batch_journal_count} formas
-                                                </div>
+                                                <div className="text-[12px] font-medium text-amber-700 dark:text-amber-400">Pago combinado · {item.batch_journal_count} formas</div>
                                             )}
                                             {!isInvoice && item.reference_number && (
-                                                <div className="text-[9px] font-black text-content-subtle uppercase tracking-tighter mt-0.5">Ref: {item.reference_number}</div>
+                                                <div className="text-[12px] text-content-subtle tabular-nums">Ref. {item.reference_number}</div>
                                             )}
                                             {warehouses.length > 1 && item.warehouse_name && (
-                                                <div className="text-[9px] font-black opacity-30 uppercase mt-0.5">{item.warehouse_name}</div>
+                                                <div className="text-[12px] text-content-subtle">{toNameCase(item.warehouse_name)}</div>
                                             )}
                                         </td>
                                         <td>
                                             {/* En el historial todas las filas son cobros hechos, así que
-                                                un badge "Cobro Realizado" repetido no decía nada: va el
-                                                diario, que es el dato que cambia de fila a fila y con el
-                                                que se concilia la caja. En pendientes sí manda el estado. */}
+                                                un "Cobro realizado" repetido no decía nada: va el diario,
+                                                que es el dato que cambia de fila a fila y con el que se
+                                                concilia la caja. En pendientes sí manda el estado. */}
                                             {isInvoice ? (
-                                                <span className={`badge shadow-none ${
-                                                    item.status === "parcial"  ? "badge-warning"
-                                                    : item.status === "borrador" ? "badge-neutral"
-                                                    : "badge-danger"}`}>
-                                                    {item.status === "parcial"  ? "Parcial"
-                                                     : item.status === "borrador" ? "Sin factura"
-                                                     : "Pendiente"}
-                                                </span>
+                                                item.status === "borrador"
+                                                    ? <StatusMark status="borrador" map={{ borrador: { label: "Sin factura", tone: "neutral" } }} />
+                                                    : <StatusMark status={item.status === "parcial" ? "parcial" : "pendiente"} />
                                             ) : item.journal_name ? (
-                                                <span
-                                                    className="badge shadow-none border badge-ink"
-                                                    style={{
-                                                        // El tono se corrige para que se lea: el color crudo del
-                                                        // diario puede ser un amarillo que desaparece sobre el velo.
-                                                        "--journal-ink": readableInk(item.journal_color, false) || undefined,
-                                                        "--journal-ink-dark": readableInk(item.journal_color, true) || undefined,
-                                                        backgroundColor: item.journal_color ? `${item.journal_color}14` : undefined,
-                                                        borderColor: item.journal_color ? `${item.journal_color}33` : undefined,
-                                                    }}
-                                                >
-                                                    {item.journal_name}
-                                                </span>
+                                                <JournalDot name={item.journal_name} color={item.journal_color} />
                                             ) : (
-                                                <span className="badge badge-neutral shadow-none">Devolución</span>
+                                                <span className="text-[12px] font-medium text-content-subtle">Devolución</span>
                                             )}
                                         </td>
-                                        <td className="truncate max-w-[200px]">
-                                            <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight truncate block">{item.customer_name || "Consumidor Final"}</span>
+                                        <td className="max-w-0">
+                                            <span className="block truncate font-semibold text-content dark:text-white">{toNameCase(item.customer_name) || "Consumidor final"}</span>
                                         </td>
                                         <td>
-                                            <span className="text-[11px] font-bold text-content-subtle uppercase">{new Date(item.created_at).toLocaleDateString()}</span>
+                                            <span className="text-[12px] font-medium text-content-subtle tabular-nums whitespace-nowrap">{fmtDate(item.created_at)}</span>
                                         </td>
-                                        <td className="text-right pr-6">
-                                            <span className={`text-[11px] font-black tabular-nums ${isInvoice ? "text-brand-500" : "text-success"}`}>
-                                                {isInvoice ? fmtPrice(item.total) : fmtPayment(item)}
-                                            </span>
+                                        <td className="text-right">
+                                            <Money value={isInvoice ? fmtPrice(item.total) : fmtPayment(item)} className="text-[14px] font-semibold text-content dark:text-white" />
                                             {isInvoice && item.status === "parcial" && (
-                                                <div className="text-[10px] font-bold text-danger tabular-nums">Debe: {fmtPrice(item.balance)}</div>
+                                                <div className="text-[12px] text-red-600 dark:text-red-400">Debe <Money value={fmtPrice(item.balance)} /></div>
                                             )}
                                         </td>
-                                        <td className="text-right pr-6">
-                                            <div className="flex items-center justify-end gap-1.5">
+                                        <td className="pr-4 whitespace-nowrap cursor-default" onClick={stopRow}>
+                                            <div className="flex items-center justify-end gap-0.5">
                                                 {isInvoice ? (
                                                     <>
+                                                        <RowCta onClick={() => setPayModal(item)}>Cobrar</RowCta>
                                                         {item.status !== "borrador" && (
-                                                            <button onClick={() => setReceiptSale(item)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 active:scale-90" title="Ver Factura">
-                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                                            </button>
-                                                        )}
-                                                        <button onClick={() => setPayModal(item)} className="h-7 px-3 rounded-lg bg-success text-black text-[10px] font-black uppercase tracking-wide transition-all active:scale-90 flex items-center gap-1 shadow-lg shadow-success/20">
-                                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                                                            Cobrar
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <button onClick={() => setPayDetail(item)} className="h-7 px-3 rounded-lg bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black text-[10px] font-black uppercase tracking-wide transition-all">Detalle</button>
-                                                        {can("admin") && (
-                                                            <button onClick={() => setDeleteDialog(item)} className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90" title={item.group_count > 1 ? "Eliminar el cobro completo" : "Eliminar"}>
-                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                            </button>
+                                                            <RowIcon icon="doc" title="Ver factura" onClick={() => setReceiptSale(item)} />
                                                         )}
                                                     </>
+                                                ) : can("admin") && (
+                                                    <RowIcon icon="trash" tone="danger" title={item.group_count > 1 ? "Eliminar el cobro completo" : "Eliminar"} onClick={() => setDeleteDialog(item)} />
                                                 )}
                                             </div>
                                         </td>
@@ -276,16 +249,13 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                             moneda base porque es la única común entre diarios de distinta moneda. */}
                         {!loading && data.length > 0 && viewType !== "pendientes" && (
                             <tfoot className="sticky bottom-0">
-                                <tr className="bg-surface-2 dark:bg-surface-dark-2 border-t-2 border-border/40 dark:border-white/10">
-                                    <td colSpan={4} className="py-2.5">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">
-                                            Total · {total} {total === 1 ? "cobro" : "cobros"}
-                                        </span>
+                                <tr>
+                                    <td colSpan={4} className="pl-4">
+                                        <div className="text-[13px] font-semibold text-content dark:text-white">Total del filtro</div>
+                                        <div className="text-[12px] text-content-subtle tabular-nums">{total.toLocaleString("es-VE")} {total === 1 ? "cobro" : "cobros"}</div>
                                     </td>
-                                    <td className="text-right pr-6 py-2.5">
-                                        <div className="text-[13px] font-black tabular-nums text-success">
-                                            {fmtPrice(sumBase)}
-                                        </div>
+                                    <td className="text-right">
+                                        <Money value={fmtPrice(sumBase)} className="text-[15px] font-semibold text-content dark:text-white" />
                                         {/* Si todo el filtro comparte moneda, se muestra el monto REAL
                                             recibido —cada cobro a la tasa de su día—, que es el que
                                             cuadra con el estado de cuenta del diario. Convertir el
@@ -294,12 +264,12 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                             Con monedas mezcladas no se muestra nada: sumar bolívares
                                             con divisas no significaría nada. */}
                                         {currencyCount === 1 && filterCurrency && !filterCurrency.is_base && (
-                                            <div className="text-[11px] font-bold tabular-nums text-content-subtle dark:text-white/45">
+                                            <div className="text-[12px] font-medium tabular-nums text-content-subtle">
                                                 {filterCurrency.symbol}{sumLocal.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </div>
                                         )}
                                     </td>
-                                    <td />
+                                    <td className="pr-4" />
                                 </tr>
                             </tfoot>
                         )}
@@ -324,13 +294,13 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                 // reportes, que suman en base. Se omiten si el cobro ya fue en moneda base.
                 const baseSym = baseCurrency?.symbol || "Ref.";
                 return (
-                    <Modal open={!!payDetail} onClose={() => setPayDetail(null)} title="Detalle del Cobro" width={400}>
+                    <Modal open={!!payDetail} onClose={() => setPayDetail(null)} title="Detalle del cobro" width={400}>
                         <div className="space-y-4">
                             <div className="p-4 rounded-xl bg-surface-2 dark:bg-white/5 border border-border/20">
-                                <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-1">Monto Cobrado</div>
-                                <div className="text-3xl font-black tabular-nums">{fmtP(p.amount)}</div>
+                                <div className="text-[11px] font-semibold text-content-subtle uppercase tracking-[0.08em] mb-1">Monto cobrado</div>
+                                <div className="text-3xl font-bold tabular-nums">{fmtP(p.amount)}</div>
                                 {!isBase && (
-                                    <div className="text-[11px] font-bold text-content-subtle dark:text-white/40 tabular-nums mt-1">
+                                    <div className="text-[12px] font-semibold text-content-subtle dark:text-white/40 tabular-nums mt-1">
                                         ≈ {baseSym}{Number(p.amount || 0).toFixed(2)}
                                     </div>
                                 )}
@@ -339,8 +309,8 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                 formas de pago, las otras son sus propias filas y se borran juntas. */}
                             {p.batch_journal_count > 1 && (
                                 <div className="rounded-xl border border-warning/30 bg-warning/5 px-3.5 py-2.5">
-                                    <p className="text-[10px] font-bold text-content-subtle dark:text-white/50 leading-relaxed">
-                                        Parte de un <span className="font-black text-warning">pago combinado</span> de {p.batch_journal_count} formas
+                                    <p className="text-[11px] font-semibold text-content-subtle dark:text-white/50 leading-relaxed">
+                                        Parte de un <span className="font-bold text-warning">pago combinado</span> de {p.batch_journal_count} formas
                                         de pago. Cada una es su propio movimiento de caja; eliminar cualquiera deshace el cobro completo.
                                     </p>
                                 </div>
@@ -349,14 +319,14 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                             {/* Desglose del cobro conjunto: cuánto se aplicó a cada factura. */}
                             {(p.items?.length > 1) && (
                                 <div>
-                                    <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-1.5">
+                                    <div className="text-[12px] font-medium text-content-subtle mb-1.5">
                                         Aplicado a {p.group_count} {p.group_count === 1 ? "factura" : "facturas"}
                                     </div>
                                     <div className="rounded-xl border border-border/20 dark:border-white/5 divide-y divide-border/10 dark:divide-white/5">
                                         {(p.items || []).map(it => (
                                             <div key={it.payment_id} className="px-3 py-2 flex items-center justify-between gap-3">
-                                                <span className="text-[11px] font-black text-brand-500 truncate">{it.invoice_number || `#${it.sale_id}`}</span>
-                                                <span className="text-[11px] font-black tabular-nums text-success shrink-0">{fmtP(it.amount)}</span>
+                                                <span className="text-[12px] font-bold text-brand-500 truncate">{it.invoice_number || `#${it.sale_id}`}</span>
+                                                <span className="text-[12px] font-bold tabular-nums text-success shrink-0">{fmtP(it.amount)}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -366,18 +336,18 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                             <div className="space-y-1">
                                 {[
                                     p.group_count > 1
-                                        ? ["Documentos", `${p.group_count} facturas`, "text-brand-500 font-black"]
-                                        : ["Documento", p.invoice_number || `#${p.sale_id}`, "text-brand-500 font-black"],
-                                    p.customer_name && ["Cliente", p.customer_name, "uppercase"],
-                                    p.journal_name  && ["Caja / Banco", p.journal_name, "uppercase"],
+                                        ? ["Documentos", `${p.group_count} facturas`, "text-brand-500 font-bold"]
+                                        : ["Documento", p.invoice_number || `#${p.sale_id}`, "text-brand-500 font-bold"],
+                                    p.customer_name && ["Cliente", p.customer_name, ""],
+                                    p.journal_name  && ["Caja / Banco", p.journal_name, ""],
                                     !isBase && ["Tasa", `${rate.toFixed(4)} ${sym}/${baseSym}`, "tabular-nums"],
                                     !isBase && ["Equivalente", `${baseSym}${Number(p.amount || 0).toFixed(2)}`, "tabular-nums"],
                                     p.reference_number && ["Referencia", p.reference_number],
                                     p.notes && ["Notas", p.notes],
                                 ].filter(Boolean).map(([label, value, extra]) => (
                                     <div key={label} className="flex justify-between py-2 border-b border-border/10 dark:border-white/5 last:border-0">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">{label}</span>
-                                        <span className={`text-[11px] font-bold ${extra || "text-content dark:text-white"}`}>{value}</span>
+                                        <span className="text-[12px] font-medium text-content-subtle">{label}</span>
+                                        <span className={`text-[12px] font-semibold ${extra || "text-content dark:text-white"}`}>{value}</span>
                                     </div>
                                 ))}
                             </div>

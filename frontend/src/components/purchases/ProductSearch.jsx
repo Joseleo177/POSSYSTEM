@@ -3,7 +3,7 @@ import { Spinner } from "../ui/Spinner";
 import CustomSelect from "../ui/CustomSelect";
 import { PKG_UNITS } from "../../constants/pkg";
 
-const fmt2 = (num) => Number(num || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt2 = (num) => Number(num || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
 export default function ProductSearch({ state }) {
     const {
@@ -28,35 +28,35 @@ export default function ProductSearch({ state }) {
     return (
         <div className="flex flex-col gap-3">
             <div className="card-premium overflow-visible p-4">
-                <div className="text-[10px] font-black uppercase tracking-widest text-brand-500 mb-3 flex items-center gap-2">
+                <div className="text-[11px] font-bold uppercase tracking-widest text-brand-500 mb-3 flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shadow-[0_0_8px_rgba(var(--color-brand-500),0.6)]" />
-                    Buscador de Mercancia
+                    Buscador de mercancía
                 </div>
 
                 {/* Buscador */}
                 <div className="mb-3 relative z-[40]">
-                    <label className="label !text-[10px] mb-1">Producto a Ingresar</label>
+                    <label className="label !text-[10px] mb-1">Producto a ingresar</label>
 
                     {itemForm.product ? (
                         <div className="flex items-center gap-3 bg-brand-500/[0.03] border border-brand-500/20 rounded-xl p-3 shadow-sm border-l-4 border-l-brand-500">
                             <div className="flex-1">
-                                <div className="text-sm font-black text-brand-500 uppercase tracking-tight">
+                                <div className="text-sm font-bold text-brand-500 tracking-tight">
                                     {itemForm.product.name}
                                 </div>
                                 <div className="flex items-center gap-3 mt-0.5">
-                                    <div className="text-[10px] font-bold text-content-subtle opacity-60 uppercase tracking-widest">
+                                    <div className="text-[12px] font-medium text-content-subtle opacity-60">
                                         Stock actual: <span className="text-content dark:text-white tabular-nums">{itemForm.product.stock} {itemForm.product.unit}</span>
                                     </div>
                                     {itemForm.product.cost_price && (
-                                        <div className="text-[10px] font-bold text-content-subtle opacity-60 uppercase tracking-widest border-l border-border/20 pl-3">
-                                            Último Costo: <span className="text-brand-500 tabular-nums">Ref. {fmt2(itemForm.product.cost_price)}</span>
+                                        <div className="text-[11px] font-semibold text-content-subtle opacity-60 border-l border-border/20 pl-3">
+                                            Último costo: <span className="text-brand-500 tabular-nums">Ref. {fmt2(itemForm.product.cost_price)}</span>
                                         </div>
                                     )}
                                 </div>
                             </div>
                             <button
                                 onClick={() => setIF("product", null)}
-                                className="h-8 px-3 flex items-center justify-center rounded-xl bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all text-[10px] font-black uppercase tracking-widest active:scale-95"
+                                className="h-8 px-3 flex items-center justify-center rounded-xl bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-white transition-all text-[11px] font-bold active:scale-95"
                             >
                                 <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
                                 Cambiar
@@ -88,8 +88,8 @@ export default function ProductSearch({ state }) {
                                             onClick={() => selectProduct(p)}
                                             className="px-4 py-2.5 cursor-pointer rounded-xl border border-transparent hover:border-brand-500/20 hover:bg-brand-500/5 transition-all group"
                                         >
-                                            <div className="font-black text-brand-500 group-hover:text-brand-400 uppercase text-xs">{p.name}</div>
-                                            <div className="text-[10px] font-bold text-content-subtle mt-0.5 uppercase whitespace-nowrap overflow-hidden text-ellipsis tabular-nums">
+                                            <div className="font-bold text-brand-500 group-hover:text-brand-400 text-xs">{p.name}</div>
+                                            <div className="text-[11px] font-semibold text-content-subtle mt-0.5 uppercase whitespace-nowrap overflow-hidden text-ellipsis tabular-nums">
                                                 Stock: {p.stock} {p.unit}
                                                 {p.package_unit && ` · Pack: ${p.package_unit} x${p.package_size}`}
                                                 {p.cost_price && ` · Anterior: Ref. ${fmt2(p.cost_price)}`}
@@ -98,7 +98,7 @@ export default function ProductSearch({ state }) {
                                     ))}
                                     <div
                                         onClick={() => openCreateProduct(productSearch)}
-                                        className="mt-1 px-4 py-2.5 cursor-pointer rounded-xl bg-warning/5 border border-warning/10 text-[11px] font-black text-warning flex items-center gap-3 hover:bg-warning hover:text-black transition-all group"
+                                        className="mt-1 px-4 py-2.5 cursor-pointer rounded-xl bg-warning/5 border border-warning/10 text-[12px] font-bold text-warning flex items-center gap-3 hover:bg-warning hover:text-black transition-all group"
                                     >
                                         <div className="w-6 h-6 flex items-center justify-center rounded-lg bg-warning/10 group-hover:bg-black/10">
                                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
@@ -125,7 +125,7 @@ export default function ProductSearch({ state }) {
                             />
                         </div>
                         <div className="space-y-1">
-                            <label className="label !text-[10px]">Unidades x Empaque</label>
+                            <label className="label !text-[10px]">Unidades x empaque</label>
                             <input
                                 type="number"
                                 min="1"
@@ -133,7 +133,7 @@ export default function ProductSearch({ state }) {
                                 value={itemForm.package_size}
                                 onChange={e => setIF("package_size", e.target.value)}
                                 disabled={itemForm.package_unit?.toLowerCase() === "unidad"}
-                                className={`input h-9 text-center font-black tabular-nums transition-all ${itemForm.package_unit?.toLowerCase() === "unidad" ? "bg-surface-3 opacity-30 cursor-not-allowed border-dashed" : ""}`}
+                                className={`input h-9 text-center tabular-nums transition-all ${itemForm.package_unit?.toLowerCase() === "unidad" ? "bg-surface-3 opacity-30 cursor-not-allowed border-dashed" : ""}`}
                             />
                         </div>
                         <div className="space-y-1">
@@ -144,7 +144,7 @@ export default function ProductSearch({ state }) {
                                 step="1"
                                 value={itemForm.package_qty}
                                 onChange={e => setIF("package_qty", e.target.value)}
-                                className="input h-9 text-center font-black tabular-nums border-brand-500/20 active:border-brand-500 focus:border-brand-500"
+                                className="input h-9 text-center tabular-nums border-brand-500/20 active:border-brand-500 focus:border-brand-500"
                             />
                         </div>
                         <div className="space-y-1">
@@ -156,7 +156,7 @@ export default function ProductSearch({ state }) {
                                 value={itemForm.package_price}
                                 onChange={e => setIF("package_price", e.target.value)}
                                 placeholder="0.00"
-                                className="input h-9 text-center font-black tabular-nums text-brand-500"
+                                className="input h-9 text-center tabular-nums text-brand-500"
                             />
                         </div>
                     </div>
@@ -164,7 +164,7 @@ export default function ProductSearch({ state }) {
                     {/* Cálculos y Proyecciones */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div className="bg-surface-1 dark:bg-white/[0.02] p-3 rounded-xl border border-border/10">
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle mb-2 block">Margen Sugerido</label>
+                            <label className="text-[12px] font-medium text-content-subtle mb-2 block">Margen sugerido</label>
                             <div className="relative">
                                 <input
                                     type="number"
@@ -172,37 +172,37 @@ export default function ProductSearch({ state }) {
                                     step="0.1"
                                     value={itemForm.profit_margin}
                                     onChange={e => setIF("profit_margin", e.target.value)}
-                                    className="input h-9 pr-8 font-bold tabular-nums"
+                                    className="input h-9 pr-8 tabular-nums"
                                 />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-content-subtle">%</span>
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-content-subtle">%</span>
                             </div>
                         </div>
 
                         <div className="bg-surface-1 dark:bg-white/[0.02] p-3 rounded-xl border border-border/10 flex flex-col justify-between">
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle mb-1 block">Costo Unitario</label>
-                            <div className="text-lg font-black text-info tabular-nums tracking-tighter">
+                            <label className="text-[12px] font-medium text-content-subtle mb-1 block">Costo unitario</label>
+                            <div className="text-lg font-bold text-info tabular-nums tracking-tighter">
                                 <span className="text-xs mr-1 opacity-40">$</span>
                                 {calc?.unit_cost ? fmt2(calc.unit_cost) : "0"}
                             </div>
-                            <div className="text-[8px] font-bold text-info/50 uppercase tracking-widest leading-none">Cálculo Proyectado</div>
+                            <div className="text-[9px] font-semibold text-info/50 uppercase tracking-widest leading-none">Cálculo proyectado</div>
                         </div>
 
                         <div className="bg-brand-500/5 p-3 rounded-xl border border-brand-500/10 flex flex-col justify-between">
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-brand-500 mb-1 block">Precio de Venta</label>
-                            <div className="text-lg font-black text-brand-500 tabular-nums tracking-tighter">
+                            <label className="text-[11px] font-semibold uppercase tracking-wider text-brand-500 mb-1 block">Precio de venta</label>
+                            <div className="text-lg font-bold text-brand-500 tabular-nums tracking-tighter">
                                 <span className="text-xs mr-1 opacity-40">$</span>
                                 {calc?.sale_price ? fmt2(calc.sale_price) : "0"}
                             </div>
-                            <div className="text-[8px] font-bold text-brand-500/50 uppercase tracking-widest leading-none italic">Sincronización Activa</div>
+                            <div className="text-[9px] font-semibold text-brand-500/50 uppercase tracking-widest leading-none italic">Sincronización activa</div>
                         </div>
 
                         <div className="bg-surface-1 dark:bg-white/[0.02] p-3 rounded-xl border border-border/10 flex flex-col justify-between">
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-warning mb-1 block">Total Unidades</label>
-                            <div className="text-lg font-black text-warning tabular-nums tracking-tighter">
+                            <label className="text-[11px] font-semibold uppercase tracking-wider text-warning mb-1 block">Total unidades</label>
+                            <div className="text-lg font-bold text-warning tabular-nums tracking-tighter">
                                 {calc?.total_units || "0"}
-                                <span className="text-[10px] ml-1.5 opacity-40 uppercase">{itemForm.product?.unit || "uds"}</span>
+                                <span className="text-[11px] ml-1.5 opacity-40 uppercase">{itemForm.product?.unit || "uds"}</span>
                             </div>
-                            <div className="text-[8px] font-bold text-warning/50 uppercase tracking-widest leading-none">Ingreso al Stock</div>
+                            <div className="text-[9px] font-semibold text-warning/50 uppercase tracking-widest leading-none">Ingreso al stock</div>
                         </div>
                     </div>
 
@@ -210,23 +210,23 @@ export default function ProductSearch({ state }) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
                         <div className="space-y-1">
                             <div className="flex items-center justify-between px-1">
-                                <label className="label !text-[10px] !mb-0">Identificador de Lote</label>
-                                <span className="text-[9px] font-black uppercase text-brand-500 tracking-[0.2em]">obligatorio</span>
+                                <label className="label !text-[10px] !mb-0">Identificador de lote</label>
+                                <span className="text-[10px] font-bold uppercase text-brand-500 tracking-[0.2em]">obligatorio</span>
                             </div>
                             <input
                                 type="text"
                                 value={itemForm.lot_number || ""}
                                 onChange={e => setIF("lot_number", e.target.value)}
                                 placeholder="Ej. LOT-2024-AUG"
-                                className="input h-9 font-bold tracking-widest uppercase tabular-nums"
+                                className="input h-9 tabular-nums"
                             />
                         </div>
                         <div className="space-y-1">
-                            <label className="label !text-[10px] px-1">Fecha de Expiración</label>
+                            <label className="label !text-[10px] px-1">Fecha de expiración</label>
                             <DatePicker
                                 value={itemForm.expiration_date || ""}
                                 onChange={v => setIF("expiration_date", v)}
-                                placeholder="Indefinido / Permanente"
+                                placeholder="Indefinido / permanente"
                                 className="w-full"
                             />
                         </div>
@@ -246,11 +246,11 @@ export default function ProductSearch({ state }) {
                             <svg className="absolute w-3.5 h-3.5 text-black left-[3px] opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">
-                                Sincronizar precio en Catalago
+                            <span className="text-[12px] font-bold text-content dark:text-white tracking-tight group-hover:text-brand-500 transition-colors">
+                                Sincronizar precio en catálogo
                             </span>
                             {calc?.sale_price > 0 && (
-                                <span className="text-[9px] font-bold text-success uppercase leading-none mt-0.5">
+                                <span className="text-[10px] font-semibold text-success uppercase leading-none mt-0.5">
                                     Nuevo PVP: Ref. {fmt2(calc.sale_price)}
                                 </span>
                             )}
@@ -259,10 +259,10 @@ export default function ProductSearch({ state }) {
                     <button
                         onClick={addItem}
                         disabled={!itemForm.product}
-                        className="h-9 px-6 rounded-xl bg-success text-black text-[11px] font-bold uppercase tracking-widest hover:brightness-105 disabled:opacity-30 disabled:grayscale transition-all shadow-lg shadow-success/10 active:scale-95 flex items-center justify-center gap-2"
+                        className="h-9 px-6 rounded-xl bg-success text-black text-[12px] font-semibold hover:brightness-105 disabled:opacity-30 disabled:grayscale transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2"
                     >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                        Confirmar Entrada
+                        Confirmar entrada
                     </button>
                 </div>
             </div>
@@ -271,8 +271,8 @@ export default function ProductSearch({ state }) {
             {items.length > 0 && (
                 <div className="card-premium !p-0 overflow-hidden shadow-2xl">
                     <div className="px-4 py-2.5 bg-surface-2 dark:bg-white/[0.01] border-b border-border/10 dark:border-white/5 flex items-center justify-between">
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-content-subtle">Mercancía en Tránsito (Recibo)</div>
-                        <div className="badge badge-info shadow-none !px-2 font-bold uppercase tabular-nums">{items.length} Tipos de productos</div>
+                        <div className="text-[12px] font-medium text-content-subtle">Mercancía en Tránsito (Recibo)</div>
+                        <div className="badge badge-info shadow-none !px-2 font-semibold tabular-nums">{items.length} Tipos de productos</div>
                     </div>
 
                     <div className="overflow-auto max-h-[360px]">
@@ -293,33 +293,33 @@ export default function ProductSearch({ state }) {
                                 {items.map(item => (
                                     <tr key={item.key} className="group hover:bg-brand-500/[0.02] transition-colors">
                                         <td>
-                                            <div className="font-medium text-xs text-content dark:text-white uppercase tracking-tight truncate max-w-[200px]">
+                                            <div className="font-medium text-xs text-content dark:text-white tracking-tight truncate max-w-[200px]">
                                                 {item.product?.name}
                                             </div>
                                         </td>
                                         <td className="text-center">
                                             <div className="flex flex-col items-center gap-0.5 leading-none">
-                                                <span className="text-[9px] font-bold bg-warning/10 text-warning px-1.5 py-0.5 rounded uppercase tracking-tighter">L: {item.lot_number || "S/L"}</span>
+                                                <span className="text-[10px] font-semibold bg-warning/10 text-warning px-1.5 py-0.5 rounded tracking-tighter">L: {item.lot_number || "S/L"}</span>
                                                 {item.expiration_date && (
-                                                    <span className="text-[8px] font-medium text-content-subtle uppercase tabular-nums opacity-60">V: {item.expiration_date}</span>
+                                                    <span className="text-[9px] font-medium text-content-subtle uppercase tabular-nums opacity-60">V: {item.expiration_date}</span>
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="text-[10px] font-medium text-content-subtle opacity-60 uppercase whitespace-nowrap">
+                                        <td className="text-[11px] font-medium text-content-subtle opacity-60 uppercase whitespace-nowrap">
                                             {item.package_unit} × {item.package_unit?.toLowerCase() === "unidad" ? "1" : item.package_size}
                                         </td>
                                         <td className="text-center font-medium text-xs tabular-nums text-content dark:text-white">
                                             {item.package_qty}
                                         </td>
-                                        <td className="text-right tabular-nums text-[10px] font-bold opacity-60">
+                                        <td className="text-right tabular-nums text-[11px] font-semibold opacity-60">
                                             Ref. {fmt2(item.unit_cost)}
                                         </td>
                                         <td className="text-center">
-                                            <span className="badge badge-success !bg-success/5 !text-success shadow-none font-black tabular-nums scale-90 uppercase">
+                                            <span className="badge badge-success !bg-success/5 !text-success shadow-none font-bold tabular-nums scale-90">
                                                 Ref. {fmt2(item.sale_price)}
                                             </span>
                                         </td>
-                                        <td className="text-right font-black text-xs tabular-nums text-warning tracking-tighter pr-2">
+                                        <td className="text-right font-bold text-xs tabular-nums text-warning tracking-tighter pr-2">
                                             Ref. {fmt2(item.subtotal)}
                                         </td>
                                         <td className="text-right pr-6">
@@ -343,8 +343,8 @@ export default function ProductSearch({ state }) {
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             </div>
                             <div>
-                                <div className="text-[10px] font-black uppercase tracking-[0.3em] text-content-subtle leading-none mb-0.5">Total del Recibo</div>
-                                <div className="text-2xl font-black text-brand-500 tabular-nums tracking-tighter leading-none">Ref. {fmt2(grandTotal)}</div>
+                                <div className="text-[11px] font-bold uppercase tracking-[0.3em] text-content-subtle leading-none mb-0.5">Total del recibo</div>
+                                <div className="text-2xl font-bold text-brand-500 tabular-nums tracking-tighter leading-none">Ref. {fmt2(grandTotal)}</div>
                             </div>
                         </div>
 
@@ -353,11 +353,11 @@ export default function ProductSearch({ state }) {
                             disabled={loading || !selectedWarehouseId}
                             className={`h-10 px-8 rounded-xl flex items-center gap-3 transition-all active:scale-95 shadow-2xl ${loading || !selectedWarehouseId
                                 ? "bg-surface-3 cursor-not-allowed opacity-50 text-content-subtle"
-                                : "bg-brand-500 text-black hover:scale-[1.02] hover:brightness-110 shadow-brand-500/20"
+                                : "btn-accent"
                                 }`}
                         >
                             {loading && <Spinner />}
-                            <span className="text-[11px] font-black uppercase tracking-widest">
+                            <span className="text-[12px] font-bold">
                                 {loading ? "Procesando Almacen..." : !selectedWarehouseId ? "Esperando Almacén" : "Finalizar y Cargar Stock"}
                             </span>
                             {!loading && selectedWarehouseId && (
@@ -371,7 +371,7 @@ export default function ProductSearch({ state }) {
             {items.length === 0 && (
                 <div className="card-premium flex flex-col items-center justify-center py-10 gap-3 opacity-20 grayscale border-dashed">
                     <svg className="w-10 h-10 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
-                    <div className="text-[10px] font-black uppercase tracking-widest text-center">El recibo esta vacío.<br />Agrega productos para registrar la compra.</div>
+                    <div className="text-[11px] font-bold uppercase tracking-widest text-center">El recibo esta vacío.<br />Agrega productos para registrar la compra.</div>
                 </div>
             )}
         </div>

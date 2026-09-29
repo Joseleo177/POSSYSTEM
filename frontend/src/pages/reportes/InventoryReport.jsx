@@ -8,15 +8,16 @@ import {
 } from "./reportes.utils";
 import CustomSelect from "../../components/ui/CustomSelect";
 import FilterPopover from "../../components/ui/FilterPopover";
+import Segmented from "../../components/ui/Segmented";
 
 const TH = ({ children, right, center }) => (
-  <th className={`px-4 py-2 text-[11px] font-black uppercase tracking-wide text-content-muted dark:text-content-dark-muted ${right ? "text-right" : center ? "text-center" : ""}`}>
+  <th className={`px-4 ${right ? "text-right" : center ? "text-center" : ""}`}>
     {children}
   </th>
 );
 
 const EMPTY = ({ msg = "Sin registros en este período" }) => (
-  <tr><td colSpan={10} className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">{msg}</td></tr>
+  <tr><td colSpan={10} className="px-4 py-16 text-center text-[12px] font-bold text-content-subtle">{msg}</td></tr>
 );
 
 const LIMIT = 50;
@@ -29,8 +30,8 @@ const MobileRow = ({ lead, title, titleClass = "text-content dark:text-white", s
       <div className="min-w-0 flex items-start gap-2">
         {lead}
         <div className="min-w-0">
-          <div className={`text-[12px] font-black uppercase tracking-wide leading-snug break-words ${titleClass}`}>{title}</div>
-          {sub && <div className="text-[10px] font-bold text-content-subtle uppercase mt-0.5 break-words">{sub}</div>}
+          <div className={`text-[12px] font-bold leading-snug break-words ${titleClass}`}>{title}</div>
+          {sub && <div className="text-[11px] font-semibold text-content-subtle uppercase mt-0.5 break-words">{sub}</div>}
         </div>
       </div>
       {badge && <div className="shrink-0">{badge}</div>}
@@ -38,8 +39,8 @@ const MobileRow = ({ lead, title, titleClass = "text-content dark:text-white", s
     <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5">
       {metrics.map(m => (
         <div key={m.label} className="min-w-0">
-          <div className="text-[9px] font-black uppercase tracking-widest text-content-subtle/70">{m.label}</div>
-          <div className={`text-[12px] tabular-nums font-black ${m.className || "text-content dark:text-white"}`}>{m.value}</div>
+          <div className="text-[12px] font-medium text-content-subtle/70">{m.label}</div>
+          <div className={`text-[12px] tabular-nums font-bold ${m.className || "text-content dark:text-white"}`}>{m.value}</div>
         </div>
       ))}
     </div>
@@ -150,7 +151,7 @@ export default function InventoryReport() {
   // La lista de almacenes ya viene recortada a los del usuario.
   const allWarehousesLabel = warehouses.length === 1
     ? warehouses[0].name.toUpperCase()
-    : "TODOS MIS ALMACENES";
+    : "Todos mis almacenes";
 
   const mobileList = !data ? { rows: [], empty: "" } :
     view === "valuation" ? {
@@ -158,9 +159,9 @@ export default function InventoryReport() {
       rows: (data.valuation || []).map((p, i) => (
         <MobileRow key={i} title={p.name} sub={p.category_name} metrics={[
           { label: "Stock", value: `${fmtNumber(p.stock, 2)} ${p.unit || ""}` },
-          { label: "Costo Unit.", value: fmt$(p.cost_price) },
-          { label: "Capital (Costo)", value: fmt$(p.value_cost), className: "text-brand-500" },
-          { label: "Valor Venta", value: fmt$(p.value_sale), className: "text-success" },
+          { label: "Costo unit.", value: fmt$(p.cost_price) },
+          { label: "Capital (Costo)", value: fmt$(p.value_cost), className: "text-content dark:text-white" },
+          { label: "Valor venta", value: fmt$(p.value_sale), className: "text-content dark:text-white" },
         ]} />
       )),
     } :
@@ -173,7 +174,7 @@ export default function InventoryReport() {
           metrics={[
             { label: "Stock", value: fmtNumber(p.stock, 2), className: "text-danger" },
             { label: "Mínimo", value: fmtNumber(p.min_stock, 2) },
-            { label: "Faltante", value: `+${fmtNumber(p.needed, 2)}`, className: "text-brand-500" },
+            { label: "Faltante", value: `+${fmtNumber(p.needed, 2)}`, className: "text-content dark:text-white" },
           ]} />
       )),
     } :
@@ -189,11 +190,11 @@ export default function InventoryReport() {
       empty: "Sin ventas en este período",
       rows: (data.top_rotation || []).map((p, i) => (
         <MobileRow key={i} title={p.name}
-          lead={<span className="text-[11px] font-black text-content-subtle tabular-nums pt-px">{(page - 1) * LIMIT + i + 1}</span>}
+          lead={<span className="text-[12px] font-bold text-content-subtle tabular-nums pt-px">{(page - 1) * LIMIT + i + 1}</span>}
           metrics={[
-            { label: "Vendidas", value: fmtNumber(p.units_sold, 2), className: "text-success" },
-            { label: "Ingresos", value: fmt$(p.revenue), className: "text-brand-500" },
-            { label: "Stock Actual", value: fmtNumber(p.stock, 2) },
+            { label: "Vendidas", value: fmtNumber(p.units_sold, 2), className: "text-content dark:text-white" },
+            { label: "Ingresos", value: fmt$(p.revenue), className: "text-content dark:text-white" },
+            { label: "Stock actual", value: fmtNumber(p.stock, 2) },
           ]} />
       )),
     } :
@@ -202,16 +203,16 @@ export default function InventoryReport() {
       rows: (data.low_rotation || []).map((p, i) => (
         <MobileRow key={i} title={p.name} sub={p.category_name} metrics={[
           { label: "Stock", value: fmtNumber(p.stock, 2) },
-          { label: "Capital Inmovilizado", value: fmt$(p.value_locked), className: "text-orange-500" },
+          { label: "Capital inmovilizado", value: fmt$(p.value_locked), className: "text-content dark:text-white" },
         ]} />
       )),
     } : {
       empty: "Sin categorías con stock",
       rows: (data.by_category || []).map((c, i) => (
-        <MobileRow key={i} title={c.category_name} titleClass="text-brand-500" metrics={[
+        <MobileRow key={i} title={c.category_name} titleClass="text-content dark:text-white" metrics={[
           { label: "Surtido", value: `${c.product_count} SKU` },
           { label: "Unidades", value: fmtInt(c.total_units) },
-          { label: "Costo Total", value: fmt$(c.value_cost), className: "text-danger" },
+          { label: "Costo total", value: fmt$(c.value_cost), className: "text-danger" },
         ]} />
       )),
     };
@@ -228,8 +229,8 @@ export default function InventoryReport() {
       <div className="shrink-0 flex flex-wrap items-center gap-2">
         {/* Buscador de Producto */}
         <div className="relative group basis-full lg:basis-auto lg:flex-1 min-w-0 order-1">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle opacity-40 group-focus-within:opacity-100 group-focus-within:text-brand-500 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle/70 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             type="text"
@@ -237,7 +238,7 @@ export default function InventoryReport() {
             placeholder="Buscar por nombre de producto o SKU..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full h-10 pl-10 pr-4 bg-surface-2 dark:bg-white/[0.03] border border-border/40 dark:border-white/5 rounded-xl text-[11px] font-bold tracking-wide focus:border-brand-500/50 focus:ring-4 focus:ring-brand-500/5 outline-none transition-all placeholder:text-content-subtle/50"
+            className="input h-10 pl-10"
           />
         </div>
 
@@ -246,18 +247,18 @@ export default function InventoryReport() {
           <button
             ref={filtrosBtnRef}
             onClick={() => setShowFilterDrop(!showFilterDrop)}
-            className={`h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border flex items-center gap-2.5 transition-all
-              ${hasActiveFilters
-                ? "bg-brand-500 text-black border-brand-500 shadow-lg shadow-brand-500/20"
-                : "bg-surface-2 dark:bg-white/5 border-border/30 text-content-subtle hover:text-content hover:border-content/20"
+            className={`h-10 px-3.5 rounded-lg text-[13px] font-medium border flex items-center gap-2 transition-colors
+ ${hasActiveFilters
+                ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40"
+                : "bg-white dark:bg-white/5 border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:text-white"
               }`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
             </svg>
-            FILTROS
+            Filtros
             {hasActiveFilters && (
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-black/20 text-[9px] font-black">
+              <span className="flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-content text-white dark:bg-white dark:text-black text-[10px] font-bold">
                 {(categoryId ? 1 : 0) + (warehouseId ? 1 : 0)}
               </span>
             )}
@@ -267,19 +268,19 @@ export default function InventoryReport() {
             <div className="p-5">
               <div className="space-y-5">
                 <header className="flex items-center justify-between border-b border-border/10 pb-3 mb-1">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Opciones de filtrado</span>
+                  <span className="text-[12px] font-medium text-content-subtle">Opciones de filtrado</span>
                 </header>
 
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-content-subtle/60 ml-1">Categoría</label>
+                    <label className="text-[12px] font-medium text-content-subtle/60 ml-1">Categoría</label>
                     <CustomSelect
                       value={categoryId}
                       onChange={handleFilterChange(setCategoryId)}
-                      placeholder="TODAS LAS CATEGORÍAS"
+                      placeholder="Todas las categorías"
                       className="w-full"
                       options={[
-                        { value: "", label: "TODAS LAS CATEGORÍAS" },
+                        { value: "", label: "Todas las categorías" },
                         ...categories.map(c => ({ value: String(c.id), label: c.name }))
                       ]}
                     />
@@ -289,7 +290,7 @@ export default function InventoryReport() {
                         insinuaría que hay más, cuando no los hay. */}
                   {warehouses.length > 1 && (
                     <div className="space-y-1.5">
-                      <label className="text-[9px] font-black uppercase tracking-widest text-content-subtle/60 ml-1">Almacén</label>
+                      <label className="text-[12px] font-medium text-content-subtle/60 ml-1">Almacén</label>
                       <CustomSelect
                         value={warehouseId}
                         onChange={handleFilterChange(setWarehouseId)}
@@ -307,13 +308,13 @@ export default function InventoryReport() {
                 <footer className="pt-2 border-t border-border/10 flex gap-2 pt-4">
                   <button
                     onClick={() => { setCategoryId(""); setWarehouseId(""); setShowFilterDrop(false); }}
-                    className="flex-1 py-2.5 text-[9px] font-black uppercase tracking-tighter text-danger hover:bg-danger/5 rounded-xl border border-danger/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    className="flex-1 h-9 text-[13px] font-semibold btn-outline rounded-lg active:scale-[0.98]"
                   >
-                    Limpiar Todo
+                    Limpiar todo
                   </button>
                   <button
                     onClick={() => setShowFilterDrop(false)}
-                    className="flex-2 px-6 py-2.5 bg-surface-3 dark:bg-white/10 text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-surface-4 dark:hover:bg-white/20 transition-all"
+                    className="flex-1 h-9 text-[13px] font-semibold btn-accent rounded-lg active:scale-[0.98]"
                   >
                     Cerrar
                   </button>
@@ -330,53 +331,51 @@ export default function InventoryReport() {
       </div>
 
       {loading && !data && <div className="flex-1 flex items-center justify-center"><Loading /></div>}
-      {error && <div className="flex-1 flex items-center justify-center p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-black uppercase tracking-wide">{error}</div>}
+      {error && <div className="flex-1 flex items-center justify-center p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-bold">{error}</div>}
 
       {data && (
         <div className={`lg:flex-1 lg:min-h-0 flex flex-col space-y-3 ${loading ? "opacity-50 pointer-events-none" : ""}`}>
           {view === "valuation" ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <KpiCard label="Capital en Stock (Costo)" value={fmt$(s.stock_cost_value)} color="text-brand-500" />
-              <KpiCard label="Valor a Precio de Venta" value={fmt$(s.stock_sale_value)} color="text-success" />
-              <KpiCard label="Utilidad Potencial" value={fmt$((s.stock_sale_value || 0) - (s.stock_cost_value || 0))} color="text-emerald-500" />
-              <KpiCard label="Unidades / Producto" value={`${fmtInt(s.stock_units)} / ${fmtN(s.stock_skus)}`} color="text-content dark:text-white" />
+              <KpiCard label="Capital en stock (costo)" value={fmt$(s.stock_cost_value)} color="text-content dark:text-white" />
+              <KpiCard label="Valor a precio de venta" value={fmt$(s.stock_sale_value)} color="text-content dark:text-white" />
+              <KpiCard label="Utilidad potencial" value={fmt$((s.stock_sale_value || 0) - (s.stock_cost_value || 0))} color="text-content dark:text-white" />
+              <KpiCard label="Unidades / producto" value={`${fmtInt(s.stock_units)} / ${fmtN(s.stock_skus)}`} color="text-content dark:text-white" />
             </div>
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <KpiCard label="Nivel Crítico" value={fmtN(s.critical_count)} color="text-danger" />
-              <KpiCard label="Quiebre de Stock" value={fmtN(s.zero_count)} color="text-danger" />
-              <KpiCard label="Baja Rotación" value={fmtN(s.low_rotation_count)} color="text-brand-500" />
-              <KpiCard label="Capital Inmovilizado" value={fmt$(s.total_locked_value)} color="text-orange-500" />
+              <KpiCard label="Nivel crítico" value={fmtN(s.critical_count)} color="text-danger" />
+              <KpiCard label="Quiebre de stock" value={fmtN(s.zero_count)} color="text-danger" />
+              <KpiCard label="Baja rotación" value={fmtN(s.low_rotation_count)} color="text-content dark:text-white" />
+              <KpiCard label="Capital inmovilizado" value={fmt$(s.total_locked_value)} color="text-content dark:text-white" />
             </div>
           )}
 
-          <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide shrink-0">
-            {[
-              ["valuation", "Valorización"],
-              ["critical", "Crítico"],
-              ["zero", "Agotado"],
-              ["top", "Alta Rotación"],
-              ["slow", "Sin Mov."],
-              ["category", "Categorías"],
-            ].map(([k, l]) => (
-              <button key={k} onClick={() => { setView(k); setPage(1); }}
-                className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all whitespace-nowrap border
-                ${view === k ? "bg-brand-500 text-black border-brand-500 shadow-lg shadow-brand-500/20" : "bg-surface-3 dark:bg-white/5 border-transparent text-content-muted dark:text-content-dark-muted opacity-60 hover:opacity-100"}`}>
-                {l}
-              </button>
-            ))}
+          <div className="overflow-x-auto scrollbar-hide shrink-0">
+            <Segmented
+              value={view}
+              onChange={(k) => { setView(k); setPage(1); }}
+              options={[
+                { key: "valuation", label: "Valorización" },
+                { key: "critical",  label: "Crítico" },
+                { key: "zero",      label: "Agotado" },
+                { key: "top",       label: "Alta rotación" },
+                { key: "slow",      label: "Sin movimiento" },
+                { key: "category",  label: "Categorías" },
+              ]}
+            />
           </div>
 
           <Card className="!p-0 overflow-hidden lg:flex-1 flex flex-col lg:min-h-0 bg-transparent border-none shadow-none">
             <div ref={listTopRef} className="scroll-mt-3 p-4 pb-3 border-b border-border dark:border-white/5 bg-surface-1 dark:bg-surface-dark-1 rounded-t-xl border-x">
               <SectionHeader
                 title={
-                  view === "valuation" ? "Valorización de Existencias" :
-                    view === "critical" ? "Reposición Urgente" :
-                      view === "zero" ? "Inventario Agotado" :
-                        view === "top" ? "Productos de Alta Rotación" :
-                          view === "slow" ? "Capital Inmovilizado / Sin Movimiento" :
-                            "Valorización por Categoría"
+                  view === "valuation" ? "Valorización de existencias" :
+                    view === "critical" ? "Reposición urgente" :
+                      view === "zero" ? "Inventario agotado" :
+                        view === "top" ? "Productos de alta rotación" :
+                          view === "slow" ? "Capital inmovilizado sin movimiento" :
+                            "Valorización por categoría"
                 }
                 sub="Análisis operacional de existencia"
               />
@@ -384,25 +383,25 @@ export default function InventoryReport() {
 
             <div className="lg:hidden bg-surface-1 dark:bg-surface-dark-1 border-x divide-y divide-border/20 dark:divide-white/5">
               {mobileList.rows.length === 0
-                ? <div className="px-4 py-16 text-center text-[11px] font-black uppercase tracking-wide text-content-subtle">{mobileList.empty}</div>
+                ? <div className="px-4 py-16 text-center text-[12px] font-bold text-content-subtle">{mobileList.empty}</div>
                 : mobileList.rows}
             </div>
 
             <div className="hidden lg:block overflow-auto flex-1 bg-surface-1 dark:bg-surface-dark-1 border-x">
-              <table className="w-full text-left border-collapse min-w-[600px]">
-                <thead className="bg-surface-2 dark:bg-surface-dark-2/50 sticky top-0 z-10">
+              <table className="table-ledger min-w-[600px]">
+                <thead className="sticky top-0 z-10">
                   {view === "valuation" && (
-                    <tr className="border-b border-border/40 dark:border-white/5">
+                    <tr>
                       <TH>Producto</TH>
                       <TH>Categoría</TH>
                       <TH right>Stock</TH>
-                      <TH right>Costo Unit.</TH>
+                      <TH right>Costo unit.</TH>
                       <TH right>Capital (Costo)</TH>
-                      <TH right>Valor Venta</TH>
+                      <TH right>Valor venta</TH>
                     </tr>
                   )}
                   {view === "critical" && (
-                    <tr className="border-b border-border/40 dark:border-white/5">
+                    <tr>
                       <TH>Producto</TH>
                       <TH right>Stock</TH>
                       <TH right>Mínimo</TH>
@@ -411,7 +410,7 @@ export default function InventoryReport() {
                     </tr>
                   )}
                   {view === "zero" && (
-                    <tr className="border-b border-border/40 dark:border-white/5">
+                    <tr>
                       <TH>Producto</TH>
                       <TH>Categoría</TH>
                       <TH right>Stock</TH>
@@ -419,32 +418,32 @@ export default function InventoryReport() {
                     </tr>
                   )}
                   {view === "top" && (
-                    <tr className="border-b border-border/40 dark:border-white/5">
+                    <tr>
                       <TH>Producto</TH>
-                      <TH right>Unidades Vendidas</TH>
+                      <TH right>Unidades vendidas</TH>
                       <TH right>Ingresos</TH>
-                      <TH right>Stock Actual</TH>
+                      <TH right>Stock actual</TH>
                     </tr>
                   )}
                   {view === "slow" && (
-                    <tr className="border-b border-border/40 dark:border-white/5">
+                    <tr>
                       <TH>Producto</TH>
                       <TH>Categoría</TH>
                       <TH right>Stock</TH>
-                      <TH right>Capital Inmovilizado</TH>
+                      <TH right>Capital inmovilizado</TH>
                     </tr>
                   )}
                   {view === "category" && (
-                    <tr className="border-b border-border/40 dark:border-white/5">
+                    <tr>
                       <TH>Categoría</TH>
                       <TH right>Surtido</TH>
                       <TH right>Unidades</TH>
-                      <TH right>Costo Total</TH>
+                      <TH right>Costo total</TH>
                     </tr>
                   )}
                 </thead>
 
-                <tbody className="divide-y divide-border/20 dark:divide-white/5">
+                <tbody>
                   {(loading && !data) ? (
                     <tr><td colSpan={10} className="py-20 text-center"><Loading /></td></tr>
                   ) : (
@@ -453,12 +452,12 @@ export default function InventoryReport() {
                         ? <EMPTY msg="Sin productos con existencia" />
                         : data.valuation.map((p, i) => (
                           <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
-                            <td className="px-4 py-3 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.name}</td>
-                            <td className="px-4 py-3 text-[11px] text-content-subtle">{p.category_name}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-[11px] text-content-subtle">{fmtNumber(p.stock, 2)} {p.unit}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-[11px] text-content-subtle">{fmt$(p.cost_price)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums font-black text-brand-500 text-[11px]">{fmt$(p.value_cost)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-[11px] text-success">{fmt$(p.value_sale)}</td>
+                            <td className="px-4 py-3 font-bold text-[12px] text-content dark:text-white">{p.name}</td>
+                            <td className="px-4 py-3 text-[12px] text-content-subtle">{p.category_name}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-[12px] text-content-subtle">{fmtNumber(p.stock, 2)} {p.unit}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-[12px] text-content-subtle">{fmt$(p.cost_price)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums font-bold text-content dark:text-white text-[12px]">{fmt$(p.value_cost)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-[12px] text-content dark:text-white">{fmt$(p.value_sale)}</td>
                           </tr>
                         ))
                       )}
@@ -468,16 +467,16 @@ export default function InventoryReport() {
                         : data.critical_stock.map((p, i) => (
                           <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
                             <td className="px-4 py-3">
-                              <div className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.name}</div>
+                              <div className="font-bold text-[12px] text-content dark:text-white">{p.name}</div>
                               {/* Sin almacén elegido la falta es de una sucursal concreta, y el
                                   mismo producto puede aparecer por varias. */}
-                              <div className="text-[10px] font-bold text-content-subtle uppercase">
+                              <div className="text-[11px] font-semibold text-content-subtle uppercase">
                                 {p.warehouse_name ? `${p.warehouse_name} · ${p.category_name}` : p.category_name}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-right tabular-nums font-black text-danger text-[11px]">{fmtNumber(p.stock, 2)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-[11px] text-content-subtle">{fmtNumber(p.min_stock, 2)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-brand-500 font-black text-[11px]">+{fmtNumber(p.needed, 2)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums font-bold text-danger text-[12px]">{fmtNumber(p.stock, 2)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-[12px] text-content-subtle">{fmtNumber(p.min_stock, 2)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-content dark:text-white font-bold text-[12px]">+{fmtNumber(p.needed, 2)}</td>
                             <td className="px-4 py-3 text-center"><StockBadge qty={p.stock} min={p.min_stock} /></td>
                           </tr>
                         ))
@@ -487,9 +486,9 @@ export default function InventoryReport() {
                         ? <EMPTY msg="Sin productos agotados" />
                         : data.zero_stock.map((p, i) => (
                           <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
-                            <td className="px-4 py-3 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.name}</td>
-                            <td className="px-4 py-3 text-[11px] text-content-subtle">{p.category_name}</td>
-                            <td className="px-4 py-3 text-right tabular-nums font-black text-danger text-[11px]">{fmtNumber(p.stock, 2)}</td>
+                            <td className="px-4 py-3 font-bold text-[12px] text-content dark:text-white">{p.name}</td>
+                            <td className="px-4 py-3 text-[12px] text-content-subtle">{p.category_name}</td>
+                            <td className="px-4 py-3 text-right tabular-nums font-bold text-danger text-[12px]">{fmtNumber(p.stock, 2)}</td>
                             <td className="px-4 py-3 text-center"><StockBadge qty={0} min={1} /></td>
                           </tr>
                         ))
@@ -501,13 +500,13 @@ export default function InventoryReport() {
                           <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black text-content-subtle w-5 text-right">{(page - 1) * LIMIT + i + 1}</span>
-                                <span className="font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.name}</span>
+                                <span className="text-[11px] font-bold text-content-subtle w-5 text-right">{(page - 1) * LIMIT + i + 1}</span>
+                                <span className="font-bold text-[12px] text-content dark:text-white">{p.name}</span>
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-right tabular-nums font-black text-success text-[11px]">{fmtNumber(p.units_sold, 2)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums font-black text-brand-500 text-[11px]">{fmt$(p.revenue)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-[11px] text-content-subtle">{fmtNumber(p.stock, 2)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums font-bold text-content dark:text-white text-[12px]">{fmtNumber(p.units_sold, 2)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums font-bold text-content dark:text-white text-[12px]">{fmt$(p.revenue)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-[12px] text-content-subtle">{fmtNumber(p.stock, 2)}</td>
                           </tr>
                         ))
                       )}
@@ -516,10 +515,10 @@ export default function InventoryReport() {
                         ? <EMPTY msg="Sin productos inmovilizados en este período" />
                         : data.low_rotation.map((p, i) => (
                           <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
-                            <td className="px-4 py-3 font-black text-[11px] uppercase tracking-wider text-content dark:text-white">{p.name}</td>
-                            <td className="px-4 py-3 text-[11px] text-content-subtle">{p.category_name}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-[11px] text-content-subtle">{fmtNumber(p.stock, 2)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums font-black text-orange-500 text-[11px]">{fmt$(p.value_locked)}</td>
+                            <td className="px-4 py-3 font-bold text-[12px] text-content dark:text-white">{p.name}</td>
+                            <td className="px-4 py-3 text-[12px] text-content-subtle">{p.category_name}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-[12px] text-content-subtle">{fmtNumber(p.stock, 2)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums font-bold text-content dark:text-white text-[12px]">{fmt$(p.value_locked)}</td>
                           </tr>
                         ))
                       )}
@@ -528,10 +527,10 @@ export default function InventoryReport() {
                         ? <EMPTY msg="Sin categorías con stock" />
                         : data.by_category.map((c, i) => (
                           <tr key={i} className="hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
-                            <td className="px-4 py-3 font-black text-[11px] uppercase tracking-wider text-brand-500">{c.category_name}</td>
-                            <td className="px-4 py-3 text-right font-bold text-[11px] text-content-subtle">{c.product_count} SKU</td>
-                            <td className="px-4 py-3 text-right tabular-nums font-black text-[11px] text-content dark:text-white">{fmtInt(c.total_units)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-danger font-black text-[11px]">{fmt$(c.value_cost)}</td>
+                            <td className="px-4 py-3 font-bold text-[12px] text-content dark:text-white">{c.category_name}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-[12px] text-content-subtle">{c.product_count} SKU</td>
+                            <td className="px-4 py-3 text-right tabular-nums font-bold text-[12px] text-content dark:text-white">{fmtInt(c.total_units)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-danger font-bold text-[12px]">{fmt$(c.value_cost)}</td>
                           </tr>
                         ))
                       )}
@@ -544,15 +543,15 @@ export default function InventoryReport() {
             {/* BARRA DE PAGINACIÓN */}
             {totalPages > 1 && (
               <div className="shrink-0 px-4 py-2 border-t border-border dark:border-white/5 bg-surface-2/50 dark:bg-white/[0.02] flex flex-wrap items-center justify-between gap-2 rounded-b-xl border-x border-b">
-                <div className="text-[10px] font-black text-content-subtle uppercase tracking-widest leading-none whitespace-nowrap">
+                <div className="text-[12px] font-medium text-content-subtle leading-none whitespace-nowrap">
                   Total items: <span className="text-content dark:text-white">{totalItems}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <button disabled={page === 1} onClick={() => goPage(1)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">«</button>
-                  <button disabled={page === 1} onClick={() => goPage(page - 1)} className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">Ant.</button>
-                  <div className="px-3 h-7 flex items-center justify-center text-[10px] font-black text-brand-500 bg-brand-500/10 rounded-lg border border-brand-500/20 whitespace-nowrap">Pág {page}/{totalPages}</div>
-                  <button disabled={page === totalPages} onClick={() => goPage(page + 1)} className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">Sig.</button>
-                  <button disabled={page === totalPages} onClick={() => goPage(totalPages)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">»</button>
+                  <button disabled={page === 1} onClick={() => goPage(1)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-[11px] font-bold hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">«</button>
+                  <button disabled={page === 1} onClick={() => goPage(page - 1)} className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 text-[11px] font-bold hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">Ant.</button>
+                  <div className="px-3 h-7 flex items-center justify-center text-[11px] font-bold text-content dark:text-white bg-brand-500/10 rounded-lg border border-brand-500/20 whitespace-nowrap">Pág {page}/{totalPages}</div>
+                  <button disabled={page === totalPages} onClick={() => goPage(page + 1)} className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 text-[11px] font-bold hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">Sig.</button>
+                  <button disabled={page === totalPages} onClick={() => goPage(totalPages)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-[11px] font-bold hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">»</button>
                 </div>
               </div>
             )}

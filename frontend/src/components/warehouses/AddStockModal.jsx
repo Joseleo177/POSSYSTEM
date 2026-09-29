@@ -70,7 +70,7 @@ export default function AddStockModal({
     }, [open]);
 
     return (
-        <Modal open={open} onClose={onClose} title="Agregar Producto al Almacén" width={480}>
+        <Modal open={open} onClose={onClose} title="Agregar producto al almacén" width={480}>
             <p className="text-xs text-content-muted dark:text-content-dark-muted mb-4">
                 Almacén: <b className="text-content dark:text-content-dark">{selectedWarehouse?.name}</b>
             </p>
@@ -80,8 +80,8 @@ export default function AddStockModal({
                 {addStockProduct ? (
                     <div className="flex items-center gap-2.5 bg-info/10 border border-info/40 rounded-lg px-3 py-2">
                         <div className="flex-1">
-                            <div className="text-xs font-bold text-info">{addStockProduct.name}</div>
-                            <div className="text-[11px] text-content-muted dark:text-content-dark-muted">
+                            <div className="text-xs font-semibold text-info">{addStockProduct.name}</div>
+                            <div className="text-[12px] text-content-muted dark:text-content-dark-muted">
                                 {addStockProduct.category_name || "Sin categoría"} · Stock: {fmtQtyUnit(addStockProduct.stock, addStockProduct.unit)}
                             </div>
                         </div>
@@ -110,11 +110,11 @@ export default function AddStockModal({
                             onScroll={handleScroll}
                         >
                             {loadingList ? (
-                                <div className="py-6 text-center text-xs text-content-muted dark:text-content-dark-muted font-bold uppercase tracking-widest">
+                                <div className="py-6 text-center text-xs text-content-muted dark:text-content-dark-muted font-semibold">
                                     Buscando productos...
                                 </div>
                             ) : results.length === 0 ? (
-                                <div className="py-6 text-center text-xs text-content-muted dark:text-content-dark-muted font-bold uppercase tracking-widest">
+                                <div className="py-6 text-center text-xs text-content-muted dark:text-content-dark-muted font-semibold">
                                     No hay resultados
                                 </div>
                             ) : (
@@ -125,8 +125,8 @@ export default function AddStockModal({
                                         className="px-3 py-2 cursor-pointer text-xs hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors flex items-center justify-between"
                                     >
                                         <div>
-                                            <div className="font-bold text-content dark:text-content-dark">{p.name}</div>
-                                            <div className="text-[11px] text-content-muted dark:text-content-dark-muted">
+                                            <div className="font-semibold text-content dark:text-content-dark">{p.name}</div>
+                                            <div className="text-[12px] text-content-muted dark:text-content-dark-muted">
                                                 {p.category_name || "Sin categoría"}
                                             </div>
                                         </div>
@@ -134,7 +134,7 @@ export default function AddStockModal({
                                 ))
                             )}
                             {loadingMore && (
-                                <div className="py-3 text-center text-[10px] text-content-muted dark:text-content-dark-muted font-black uppercase tracking-widest opacity-50">
+                                <div className="py-3 text-center text-[11px] text-content-muted dark:text-content-dark-muted font-bold opacity-50">
                                     Cargando más...
                                 </div>
                             )}
@@ -146,7 +146,7 @@ export default function AddStockModal({
             <div className="mb-4">
                 <div className="label mb-1">
                     Cantidad inicial *
-                    {addStockProduct?.unit && <span className="ml-1 opacity-40 font-bold">({addStockProduct.unit})</span>}
+                    {addStockProduct?.unit && <span className="ml-1 opacity-40 font-semibold">({addStockProduct.unit})</span>}
                 </div>
                 <input
                     type="number"
@@ -161,7 +161,7 @@ export default function AddStockModal({
                     placeholder="0"
                     className="input"
                 />
-                <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-1">
+                <div className="text-[12px] text-content-muted dark:text-content-dark-muted mt-1">
                     Puedes ingresar 0 para registrar sin stock inicial
                 </div>
             </div>

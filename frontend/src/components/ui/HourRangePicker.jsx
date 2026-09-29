@@ -98,12 +98,12 @@ export default function HourRangePicker({ from, to, onChange, className = "" }) 
         <div className="flex items-center justify-center flex-1 gap-2 whitespace-nowrap">
           {activo ? (
             <>
-              <span className="text-[11px] font-medium uppercase tracking-tight">{from}</span>
-              <span className="text-[10px] text-content-subtle opacity-20 font-bold group-hover:opacity-40 transition-opacity">→</span>
-              <span className="text-[11px] font-medium uppercase tracking-tight">{to}</span>
+              <span className="text-[12px] font-medium tracking-tight">{from}</span>
+              <span className="text-[11px] text-content-subtle opacity-20 font-semibold group-hover:opacity-40 transition-opacity">→</span>
+              <span className="text-[12px] font-medium tracking-tight">{to}</span>
             </>
           ) : (
-            <span className="text-[11px] font-medium uppercase tracking-tight opacity-30">Todo el día</span>
+            <span className="text-[12px] font-medium tracking-tight opacity-30">Todo el día</span>
           )}
         </div>
 
@@ -123,9 +123,9 @@ export default function HourRangePicker({ from, to, onChange, className = "" }) 
         <div
           ref={dropdownRef}
           style={{ position: "absolute", top: coords.top, left: coords.left, zIndex: 9999 }}
-          className="w-[260px] p-3 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-150"
+          className="w-[260px] p-3 bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_12px_40px_-8px_rgb(0_0_0/0.22)] popover-in"
         >
-          <div className="text-[8px] font-black text-content-subtle uppercase tracking-widest mb-2">Franja horaria</div>
+          <div className="text-[12px] font-medium text-content-subtle mb-2">Franja horaria</div>
 
           <div className="flex items-center gap-2">
             <CustomSelect
@@ -135,9 +135,9 @@ export default function HourRangePicker({ from, to, onChange, className = "" }) 
               placeholder="Desde"
               height="h-8"
               className="flex-1"
-              boxClassName="text-[11px]"
+              boxClassName="text-[12px]"
             />
-            <span className="text-[10px] font-bold text-content-subtle opacity-40 shrink-0">→</span>
+            <span className="text-[11px] font-semibold text-content-subtle opacity-40 shrink-0">→</span>
             <CustomSelect
               value={to || ""}
               onChange={(v) => onChange(from || "", v)}
@@ -145,7 +145,7 @@ export default function HourRangePicker({ from, to, onChange, className = "" }) 
               placeholder="Hasta"
               height="h-8"
               className="flex-1"
-              boxClassName="text-[11px]"
+              boxClassName="text-[12px]"
             />
           </div>
 
@@ -154,14 +154,14 @@ export default function HourRangePicker({ from, to, onChange, className = "" }) 
               <button
                 key={a.label}
                 onClick={() => { onChange(a.from, a.to); setIsOpen(false); }}
-                className="flex-1 py-1 text-[9px] font-bold text-center text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 rounded-md transition-all uppercase"
+                className="flex-1 py-1 text-[10px] font-semibold text-center text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 rounded-md transition-all"
               >
                 {a.label}
               </button>
             ))}
             <button
               onClick={() => { onChange("", ""); setIsOpen(false); }}
-              className="flex-1 py-1 text-[9px] font-bold text-center text-content-subtle hover:text-danger hover:bg-danger/10 rounded-md transition-all uppercase"
+              className="flex-1 py-1 text-[10px] font-semibold text-center text-content-subtle hover:text-danger hover:bg-danger/10 rounded-md transition-all"
             >
               Todo
             </button>
@@ -174,7 +174,7 @@ export default function HourRangePicker({ from, to, onChange, className = "" }) 
               <svg className="w-3 h-3 shrink-0 text-brand-500 mt-px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
               </svg>
-              <p className="text-[9px] font-bold leading-tight text-content-subtle">
+              <p className="text-[10px] font-semibold leading-tight text-content-subtle">
                 La franja cruza medianoche: el calendario elige <strong className="text-brand-500">jornadas</strong>,
                 no días. Para una sola jornada, pon la misma fecha en desde y hasta — la
                 madrugada del día siguiente entra sola.

@@ -28,9 +28,9 @@ export default function PurchaseItemsTable({
         <div className="overflow-x-auto">
             <table className="w-full text-left min-w-[720px]">
                 <thead>
-                    <tr className="border-b border-border/20 dark:border-white/[0.06] text-[10px] font-black text-content-subtle dark:text-white/30 uppercase tracking-widest">
+                    <tr className="border-b border-border/20 dark:border-white/[0.06] text-[11px] font-bold text-content-subtle dark:text-white/30">
                         <th className="px-4 py-3">Producto</th>
-                        {showLots && <th className="px-4 py-3">Lote / Vence</th>}
+                        {showLots && <th className="px-4 py-3">Lote / vence</th>}
                         {/* Aquí el rótulo no puede nombrar la presentación —cada línea puede traer
                             uno distinto—, pero al menos dice de qué es la cantidad y cambia el
                             "×" por "/", que se lee "por" y no como una multiplicación. */}
@@ -41,7 +41,7 @@ export default function PurchaseItemsTable({
                         </th>
                         <th className="px-4 py-3 text-right">C.Unit</th>
                         <th className="px-4 py-3 text-center">P.Venta</th>
-                        {!isEditing && <th className="px-4 py-3 text-right">Total Uds.</th>}
+                        {!isEditing && <th className="px-4 py-3 text-right">Total uds.</th>}
                         <th className="px-4 py-3 text-right">Subtotal</th>
                         {showActions && <th className="px-4 py-3 w-20"></th>}
                     </tr>
@@ -56,10 +56,10 @@ export default function PurchaseItemsTable({
 
                             {/* Producto + empaque */}
                             <td className="px-4 py-3">
-                                <div className="text-xs font-black text-content dark:text-white uppercase tracking-tight">
+                                <div className="text-xs font-bold text-content dark:text-white tracking-tight">
                                     {item.product_name}
                                 </div>
-                                <div className="text-[9px] font-medium text-content-subtle dark:text-white/30 uppercase mt-0.5">
+                                <div className="text-[10px] font-medium text-content-subtle dark:text-white/30 uppercase mt-0.5">
                                     {item.package_unit} × {fmtQty(item.package_size)}
                                 </div>
                             </td>
@@ -67,8 +67,8 @@ export default function PurchaseItemsTable({
                             {/* Lote / Vence */}
                             {showLots && (
                                 <td className="px-4 py-3">
-                                    <div className="text-[10px] font-bold text-warning">{item.lot_number || <span className="opacity-30">S/L</span>}</div>
-                                    <div className="text-[9px] text-content-subtle dark:text-white/30">{item.expiration_date || <span className="opacity-30">S/V</span>}</div>
+                                    <div className="text-[11px] font-semibold text-warning">{item.lot_number || <span className="opacity-30">S/L</span>}</div>
+                                    <div className="text-[10px] text-content-subtle dark:text-white/30">{item.expiration_date || <span className="opacity-30">S/V</span>}</div>
                                 </td>
                             )}
 
@@ -80,10 +80,10 @@ export default function PurchaseItemsTable({
                                         decimals={qtyIsInteger ? 0 : 3}
                                         integer={qtyIsInteger}
                                         onChange={raw => onUpdate?.(item.id ?? item.key, { package_qty: raw })}
-                                        className="w-14 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-content dark:text-white"
+                                        className="w-14 text-center text-xs font-semibold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-content dark:text-white"
                                     />
                                 ) : (
-                                    <span className="text-xs font-bold tabular-nums">{fmtQty(item.package_qty)}</span>
+                                    <span className="text-xs font-semibold tabular-nums">{fmtQty(item.package_qty)}</span>
                                 )}
                             </td>
 
@@ -97,13 +97,13 @@ export default function PurchaseItemsTable({
                                 return (
                                     <td className="px-4 py-3 text-center whitespace-nowrap">
                                         {entraron > 0 ? (
-                                            <span className={`text-[10px] font-black uppercase tracking-wide tabular-nums px-2 py-1 rounded-md ${completa
+                                            <span className={`text-[11px] font-bold tabular-nums px-2 py-1 rounded-md ${completa
                                                 ? "text-success bg-success/10"
                                                 : "text-brand-500 bg-brand-500/10"}`}>
                                                 {completa ? "Completa" : `${fmtQty(entraron)} / ${fmtQty(pedidas)}`}
                                             </span>
                                         ) : (
-                                            <span className="text-[10px] font-black uppercase tracking-wide text-content-subtle/50 dark:text-white/20">Sin recibir</span>
+                                            <span className="text-[11px] font-bold uppercase tracking-wide text-content-subtle/50 dark:text-white/20">Sin recibir</span>
                                         )}
                                     </td>
                                 );
@@ -120,10 +120,10 @@ export default function PurchaseItemsTable({
                                                 const num = parseFloat(raw) || 0;
                                                 onUpdate?.(item.id ?? item.key, { package_price: invoiceRate > 1 ? num / invoiceRate : raw });
                                             }}
-                                            className="w-28 p-0 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-info"
+                                            className="w-28 p-0 text-center text-xs font-semibold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-info"
                                         />
                                         {invoiceRate > 1 && parseFloat(item.package_price) > 0 && (
-                                            <span className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(item.package_price)}</span>
+                                            <span className="text-[12px] font-semibold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(item.package_price)}</span>
                                         )}
                                     </div>
                                 ) : invoiceRate > 1 ? (
@@ -131,16 +131,16 @@ export default function PurchaseItemsTable({
                                     // compró. Es el dato que se va a buscar aquí —a cómo salió en la
                                     // factura del proveedor— y la columna ya se rotula en esa moneda.
                                     <div className="flex flex-col items-center gap-0.5">
-                                        <span className="text-xs font-black text-info tabular-nums">{invoiceSym} {fmt2(parseFloat(item.package_price) * invoiceRate)}</span>
-                                        <span className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(item.package_price)}</span>
+                                        <span className="text-xs font-bold text-info tabular-nums">{invoiceSym} {fmt2(parseFloat(item.package_price) * invoiceRate)}</span>
+                                        <span className="text-[12px] font-semibold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(item.package_price)}</span>
                                     </div>
                                 ) : (
-                                    <span className="text-xs font-black text-info tabular-nums">Ref. {fmt2(item.package_price)}</span>
+                                    <span className="text-xs font-bold text-info tabular-nums">Ref. {fmt2(item.package_price)}</span>
                                 )}
                             </td>
 
                             {/* Costo Unitario (siempre computed) */}
-                            <td className="px-4 py-3 text-right text-[11px] font-bold tabular-nums text-content-subtle dark:text-white/40">
+                            <td className="px-4 py-3 text-right text-[12px] font-semibold tabular-nums text-content-subtle dark:text-white/40">
                                 {item.unit_cost > 0 ? `Ref. ${fmt2(item.unit_cost)}` : "—"}
                             </td>
 
@@ -149,7 +149,7 @@ export default function PurchaseItemsTable({
                                 {/* Un insumo no tiene precio de venta: ni se muestra ni se ofrece
                                     el interruptor, que aquí no cambiaría nada. */}
                                 {(item.product?.sellable === false || item.sellable === false) ? (
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-warning">Insumo</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-warning">Insumo</span>
                                 ) : isEditing && item.unit_cost > 0 ? (
                                     <div className="flex items-center justify-center gap-2">
                                         <div className={`flex flex-col items-center gap-0.5 ${item.update_price === false ? "opacity-30" : ""}`}>
@@ -165,9 +165,9 @@ export default function PurchaseItemsTable({
                                                         onUpdate?.(item.id ?? item.key, { profit_margin: ((newPrice / cost) - 1) * 100 });
                                                     }
                                                 }}
-                                                className="w-20 p-0 text-center text-xs font-black tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-success dark:focus:border-success focus:outline-none text-success"
+                                                className="w-20 p-0 text-center text-xs font-bold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-success dark:focus:border-success focus:outline-none text-success"
                                             />
-                                            <span className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums">
+                                            <span className="text-[12px] font-semibold text-content-subtle dark:text-white/45 tabular-nums">
                                                 {invoiceRate > 1 && parseFloat(item.sale_price) > 0
                                                     ? `≈ Ref. ${fmt2(item.sale_price)} · ${(parseFloat(item.profit_margin) || 0).toFixed(1)}%`
                                                     : `${(parseFloat(item.profit_margin) || 0).toFixed(1)}%`}
@@ -186,11 +186,11 @@ export default function PurchaseItemsTable({
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-center gap-0.5">
-                                        <span className="text-xs font-black text-success tabular-nums">
+                                        <span className="text-xs font-bold text-success tabular-nums">
                                             {item.sale_price > 0 ? `Ref. ${fmt2(item.sale_price)}` : "—"}
                                         </span>
                                         {item.update_price === false && (
-                                            <span className="text-[8px] font-black uppercase tracking-widest text-content-subtle/40">No actualiza PVP</span>
+                                            <span className="text-[12px] font-medium text-content-subtle/40">No actualiza PVP</span>
                                         )}
                                     </div>
                                 )}
@@ -198,8 +198,8 @@ export default function PurchaseItemsTable({
 
                             {/* Total Uds. (solo no-borrador) */}
                             {!isEditing && (
-                                <td className="px-4 py-3 text-right text-xs font-bold text-brand-500 tabular-nums">
-                                    {fmtQty(item.total_units)} <span className="text-[10px] opacity-40">u</span>
+                                <td className="px-4 py-3 text-right text-xs font-semibold text-brand-500 tabular-nums">
+                                    {fmtQty(item.total_units)} <span className="text-[11px] opacity-40">u</span>
                                 </td>
                             )}
 
@@ -207,11 +207,11 @@ export default function PurchaseItemsTable({
                             <td className="px-4 py-3 text-right">
                                 {invoiceRate > 1 ? (
                                     <div className="flex flex-col items-end gap-0.5">
-                                        <span className="text-sm font-black text-warning tabular-nums">{invoiceSym} {fmt2(parseFloat(item.subtotal) * invoiceRate)}</span>
-                                        <span className="text-[11px] font-bold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(item.subtotal)}</span>
+                                        <span className="text-sm font-bold text-warning tabular-nums">{invoiceSym} {fmt2(parseFloat(item.subtotal) * invoiceRate)}</span>
+                                        <span className="text-[12px] font-semibold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(item.subtotal)}</span>
                                     </div>
                                 ) : (
-                                    <span className="text-sm font-black text-warning tabular-nums">Ref. {fmt2(item.subtotal)}</span>
+                                    <span className="text-sm font-bold text-warning tabular-nums">Ref. {fmt2(item.subtotal)}</span>
                                 )}
                             </td>
 

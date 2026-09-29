@@ -57,7 +57,7 @@ export default function ComboItemsEditor({ comboItems, onChange, excludeId, ware
     return (
         <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-lg p-3 border border-border/40 dark:border-white/5 animate-in slide-in-from-bottom-2 duration-300">
             <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-content-subtle dark:text-content-dark-muted">Fórmula del Producto</span>
+                <span className="text-[12px] font-semibold text-content-subtle dark:text-content-dark-muted">Fórmula del producto</span>
             </div>
 
             <div className="space-y-2">
@@ -83,9 +83,9 @@ export default function ComboItemsEditor({ comboItems, onChange, excludeId, ware
                                 <div key={p.id} onClick={() => add(p)} className="p-2 hover:bg-surface-2 dark:hover:bg-white/5 rounded-lg cursor-pointer flex justify-between items-center transition-colors">
                                     <div>
                                         <div className="text-xs font-medium">{p.name}</div>
-                                        <div className="text-[10px] text-content-subtle">{p.category_name || "General"}</div>
+                                        <div className="text-[11px] text-content-subtle">{p.category_name || "General"}</div>
                                     </div>
-                                    <span className="text-[11px] font-medium text-brand-500">Ref. {p.price}</span>
+                                    <span className="text-[12px] font-medium text-brand-500">Ref. {p.price}</span>
                                 </div>
                             ))}
                         </div>
@@ -99,7 +99,7 @@ export default function ComboItemsEditor({ comboItems, onChange, excludeId, ware
                     </div>
                 ) : (
                     <div className="space-y-1">
-                        <div className="flex px-2 text-[10px] font-bold text-content-subtle uppercase">
+                        <div className="flex px-2 text-[11px] font-semibold text-content-subtle">
                             <div className="flex-1">Componente</div>
                             <div className="w-20 text-center">Cant.</div>
                             <div className="w-7"></div>
@@ -124,8 +124,8 @@ export default function ComboItemsEditor({ comboItems, onChange, excludeId, ware
                             </div>
                         ))}
                         <div className="flex justify-end pt-1">
-                            <span className="text-[11px] font-medium text-content-subtle">
-                                Total: <span className="font-bold text-content dark:text-content-dark">{totalQty % 1 === 0 ? totalQty : totalQty.toFixed(3)} uds</span>
+                            <span className="text-[12px] font-medium text-content-subtle">
+                                Total: <span className="font-semibold text-content dark:text-content-dark">{totalQty % 1 === 0 ? totalQty : totalQty.toFixed(3)} uds</span>
                             </span>
                         </div>
                     </div>

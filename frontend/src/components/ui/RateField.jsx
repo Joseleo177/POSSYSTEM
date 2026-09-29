@@ -50,7 +50,7 @@ export default function RateField({
                     placeholder={configured.toFixed(4)}
                     className={[
                         "w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border rounded-xl px-3.5 pr-24",
-                        "text-[13px] font-bold tabular-nums text-content dark:text-white outline-none transition-all",
+                        "text-[13px] font-semibold tabular-nums text-content dark:text-white outline-none transition-all",
                         "placeholder:text-content-subtle/40 dark:placeholder:text-white/20 disabled:opacity-40",
                         edited
                             ? "border-warning/60 focus:border-warning"
@@ -63,19 +63,19 @@ export default function RateField({
                     <button
                         type="button"
                         onClick={() => onChange("")}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-6 px-2 rounded-lg bg-warning/10 text-warning border border-warning/30 text-[9px] font-black uppercase tracking-wide hover:bg-warning/20 transition-all"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-6 px-2 rounded-lg bg-warning/10 text-warning border border-warning/30 text-[10px] font-bold hover:bg-warning/20 transition-all"
                     >
                         Restaurar
                     </button>
                 ) : (
                     currency?.code && (
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase tracking-wide text-content-subtle/50 dark:text-white/20 pointer-events-none">
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] font-medium text-content-subtle pointer-events-none">
                             {currency.code}
                         </span>
                     )
                 )}
             </div>
-            <p className={`text-[10px] font-bold mt-1 ${edited ? "text-warning" : "text-content-subtle dark:text-white/30"}`}>
+            <p className={`text-[11px] font-semibold mt-1 ${edited ? "text-warning" : "text-content-subtle dark:text-white/30"}`}>
                 {edited
                     ? `Tasa manual · configurada ${configured.toFixed(4)}`
                     : `Tasa de configuración · ${configured.toFixed(4)}`}

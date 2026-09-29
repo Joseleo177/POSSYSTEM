@@ -68,12 +68,12 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
   return (
     <>
       <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex items-center justify-between gap-3">
-        <span className="text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
+        <span className="text-[12px] font-bold text-content-subtle dark:text-white/30">
           {banks.length} banco{banks.length !== 1 ? "s" : ""}
         </span>
         {can("journals.manage") && (
-          <Button onClick={() => { setBankEditId(null); setBankForm(EMPTY_BANK); setImage(EMPTY_IMAGE); setShowModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
-            + Vincular Banco
+          <Button onClick={() => { setBankEditId(null); setBankForm(EMPTY_BANK); setImage(EMPTY_IMAGE); setShowModal(true); }} className="h-8 px-3 text-[11px] shadow-none">
+            + Vincular banco
           </Button>
         )}
       </div>
@@ -81,7 +81,7 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
       <div className="card-premium overflow-auto flex-1">
       {banks.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 opacity-20">
-          <div className="text-xs font-black uppercase tracking-wide">Sin bancos registrados</div>
+          <div className="text-xs font-bold">Sin bancos registrados</div>
         </div>
       ) : (
         <table className="table-pos min-w-[680px]">
@@ -113,7 +113,7 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
                           onKeyDown={e => e.key === "Enter" && saveBank()}
                         />
                       ) : (
-                        <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{b.name}</span>
+                        <span className="text-[12px] font-bold text-content dark:text-white tracking-tight">{b.name}</span>
                       )}
                     </td>
                     <td>
@@ -132,7 +132,7 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
                       )}
                     </td>
                     <td className="text-center">
-                      <span className="text-brand-500 font-black text-[11px]">{b.journals_count ?? 0}</span>
+                      <span className="text-brand-500 font-bold text-[12px]">{b.journals_count ?? 0}</span>
                     </td>
                     <td className="text-center">
                       <span className={`badge shadow-none ${b.active ? "badge-success" : "badge-danger"}`}>
@@ -223,20 +223,20 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
                 onChange={e => e.target.files[0] && setImage(p => ({ ...p, file: e.target.files[0], clearImage: false }))} />
             </label>
             <div className="min-w-0">
-              <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 leading-relaxed">
+              <p className="text-[11px] font-semibold text-content-subtle dark:text-white/30 leading-relaxed">
                 Se ve en la botonera de "Pago Inmediato". PNG con fondo transparente queda mejor.
               </p>
               {imgPreview && (
                 <button type="button"
                   onClick={() => setImage({ file: null, current: null, clearImage: true })}
-                  className="text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-danger transition-colors mt-1">
+                  className="text-[12px] font-medium text-content-subtle hover:text-danger transition-colors mt-1">
                   Quitar logo
                 </button>
               )}
             </div>
           </div>
         </div>
-        <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
+        <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
           <Button variant="ghost" onClick={closeForm}>Cancelar</Button>
           <Button variant="primary" onClick={saveBank} disabled={bankSaving}>
             {bankSaving ? "Guardando..." : bankEditId ? "Guardar cambios" : "Registrar banco"}

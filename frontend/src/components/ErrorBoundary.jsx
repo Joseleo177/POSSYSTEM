@@ -34,7 +34,7 @@ export default class ErrorBoundary extends Component {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
                     </svg>
                 </div>
-                <div className="font-black text-xl tracking-wide text-danger uppercase">
+                <div className="font-bold text-xl text-danger">
                     Ocurrió un error inesperado
                 </div>
                 <p className="text-sm text-content-subtle dark:text-white/50 max-w-sm leading-relaxed font-medium">
@@ -42,13 +42,13 @@ export default class ErrorBoundary extends Component {
                     Puedes recargar para volver a intentarlo.
                 </p>
                 {this.state.error?.message && (
-                    <code className="text-[10px] font-mono text-content-subtle/70 dark:text-white/30 max-w-md break-words">
+                    <code className="text-[11px] font-mono text-content-subtle/70 dark:text-white/30 max-w-md break-words">
                         {this.state.error.message}
                     </code>
                 )}
                 <button
                     onClick={this.handleReload}
-                    className="mt-2 h-10 px-6 rounded-xl bg-brand-500 text-white text-[12px] font-black uppercase tracking-wide hover:bg-brand-600 active:scale-95 transition-all shadow-lg"
+                    className="mt-2 h-10 px-6 rounded-xl bg-brand-500 text-white text-[12px] font-bold hover:bg-brand-600 active:scale-95 transition-all shadow-lg"
                 >
                     Recargar aplicación
                 </button>

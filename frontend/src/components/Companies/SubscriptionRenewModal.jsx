@@ -64,12 +64,12 @@ export default function SubscriptionRenewModal({ open, onClose, onSave, company,
                 {/* Header info empresa */}
                 <div className="bg-surface-2 dark:bg-white/[0.03] p-3 rounded-xl border border-border/40 dark:border-white/5 flex items-center justify-between">
                     <div>
-                        <div className="text-xs font-black text-content dark:text-white uppercase tracking-tight">{company.name}</div>
-                        <div className="text-[10px] font-bold text-content-subtle mt-0.5">RIF: {company.tax_id || "N/A"}</div>
+                        <div className="text-xs font-bold text-content dark:text-white tracking-tight">{company.name}</div>
+                        <div className="text-[11px] font-semibold text-content-subtle mt-0.5">RIF: {company.tax_id || "N/A"}</div>
                     </div>
                     <div className="text-right">
-                        <div className="text-[10px] font-black uppercase text-brand-500 tracking-wider">Estado Actual</div>
-                        <span className={`inline-block px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+                        <div className="text-[11px] font-bold uppercase text-brand-500 tracking-wider">Estado actual</div>
+                        <span className={`inline-block px-2 py-0.5 text-[11px] font-extrabold rounded-full ${
                             company.subscription_status === 'Activa' || company.subscription_status === 'Ilimitado' 
                                 ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
                                 : company.subscription_status === 'Demo'
@@ -83,42 +83,42 @@ export default function SubscriptionRenewModal({ open, onClose, onSave, company,
 
                 {/* Extensión rápida de vigencia */}
                 <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-brand-500 block">
-                        Renovación Rápida de Vigencia
+                    <label className="text-[11px] font-bold uppercase tracking-widest text-brand-500 block">
+                        Renovación rápida de vigencia
                     </label>
                     <div className="grid grid-cols-5 gap-1.5">
                         <button
                             type="button"
                             onClick={() => addDays(30)}
-                            className="py-1.5 px-2 bg-surface-2 dark:bg-white/5 hover:bg-brand-500 hover:text-white text-content dark:text-white border border-border/40 dark:border-white/10 rounded-lg text-[10px] font-black uppercase transition-all"
+                            className="py-1.5 px-2 bg-surface-2 dark:bg-white/5 hover:bg-brand-500 hover:text-white text-content dark:text-white border border-border/40 dark:border-white/10 rounded-lg text-[11px] font-bold transition-all"
                         >
                             +30 días
                         </button>
                         <button
                             type="button"
                             onClick={() => addDays(90)}
-                            className="py-1.5 px-2 bg-surface-2 dark:bg-white/5 hover:bg-brand-500 hover:text-white text-content dark:text-white border border-border/40 dark:border-white/10 rounded-lg text-[10px] font-black uppercase transition-all"
+                            className="py-1.5 px-2 bg-surface-2 dark:bg-white/5 hover:bg-brand-500 hover:text-white text-content dark:text-white border border-border/40 dark:border-white/10 rounded-lg text-[11px] font-bold transition-all"
                         >
                             +90 días
                         </button>
                         <button
                             type="button"
                             onClick={() => addDays(180)}
-                            className="py-1.5 px-2 bg-surface-2 dark:bg-white/5 hover:bg-brand-500 hover:text-white text-content dark:text-white border border-border/40 dark:border-white/10 rounded-lg text-[10px] font-black uppercase transition-all"
+                            className="py-1.5 px-2 bg-surface-2 dark:bg-white/5 hover:bg-brand-500 hover:text-white text-content dark:text-white border border-border/40 dark:border-white/10 rounded-lg text-[11px] font-bold transition-all"
                         >
                             +180 días
                         </button>
                         <button
                             type="button"
                             onClick={() => addDays(365)}
-                            className="py-1.5 px-2 bg-surface-2 dark:bg-white/5 hover:bg-brand-500 hover:text-white text-content dark:text-white border border-border/40 dark:border-white/10 rounded-lg text-[10px] font-black uppercase transition-all"
+                            className="py-1.5 px-2 bg-surface-2 dark:bg-white/5 hover:bg-brand-500 hover:text-white text-content dark:text-white border border-border/40 dark:border-white/10 rounded-lg text-[11px] font-bold transition-all"
                         >
                             +1 año
                         </button>
                         <button
                             type="button"
                             onClick={handleUnlimited}
-                            className={`py-1.5 px-2 text-[10px] font-black uppercase rounded-lg border transition-all ${
+                            className={`py-1.5 px-2 text-[11px] font-bold rounded-lg border transition-all ${
                                 isUnlimitedDate 
                                     ? 'bg-emerald-500 text-white border-emerald-500' 
                                     : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500 hover:text-white'
@@ -133,9 +133,9 @@ export default function SubscriptionRenewModal({ open, onClose, onSave, company,
                 <div className="p-4 bg-surface-2 dark:bg-white/[0.03] rounded-2xl border border-border/40 dark:border-white/5 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="label">PLAN DE SUSCRIPCIÓN</label>
+                            <label className="label">Plan de suscripción</label>
                             <select 
-                                className="input h-10 font-bold"
+                                className="input h-10"
                                 value={planName}
                                 onChange={e => {
                                     const selected = e.target.value;
@@ -148,9 +148,9 @@ export default function SubscriptionRenewModal({ open, onClose, onSave, company,
                             </select>
                         </div>
                         <div>
-                            <label className="label">ESTADO DE LICENCIA</label>
+                            <label className="label">Estado de licencia</label>
                             <select 
-                                className="input h-10 font-bold"
+                                className="input h-10"
                                 value={status}
                                 onChange={e => setStatus(e.target.value)}
                             >
@@ -159,14 +159,14 @@ export default function SubscriptionRenewModal({ open, onClose, onSave, company,
                         </div>
 
                         <div>
-                            <label className="label">FECHA DE VENCIMIENTO</label>
+                            <label className="label">Fecha de vencimiento</label>
                             {isUnlimitedDate ? (
-                                <div className="h-10 px-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 rounded-xl text-[11px] font-black uppercase flex items-center justify-between">
-                                    <span>Vencimiento Ilimitado</span>
+                                <div className="h-10 px-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 rounded-xl text-[12px] font-bold flex items-center justify-between">
+                                    <span>Vencimiento ilimitado</span>
                                     <button 
                                         type="button" 
                                         onClick={() => addDays(30)}
-                                        className="text-[9px] underline hover:text-emerald-400"
+                                        className="text-[10px] underline hover:text-emerald-400"
                                     >
                                         Cambiar
                                     </button>
@@ -181,21 +181,21 @@ export default function SubscriptionRenewModal({ open, onClose, onSave, company,
                         </div>
 
                         <div>
-                            <label className="label">MÁX. USUARIOS PERMITIDOS</label>
+                            <label className="label">Máx. usuarios permitidos</label>
                             <input
                                 type="number"
                                 min={0}
-                                className="input h-10 font-mono text-[11px]"
+                                className="input h-10 font-mono text-[12px]"
                                 value={maxUsers}
                                 onChange={e => setMaxUsers(e.target.value)}
                                 placeholder="0 = Sin límite"
                             />
-                            <span className="text-[9px] text-content-subtle block mt-0.5">Colocar 0 para usuarios ilimitados</span>
+                            <span className="text-[10px] text-content-subtle block mt-0.5">Colocar 0 para usuarios ilimitados</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-border/10 dark:border-white/5">
+                <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
                     <Button variant="ghost" type="button" onClick={onClose}>Cancelar</Button>
                     <Button type="submit" disabled={loading}>
                         {loading ? "Actualizando..." : "Aplicar Renovación"}

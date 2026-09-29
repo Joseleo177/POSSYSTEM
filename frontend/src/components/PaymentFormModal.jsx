@@ -6,7 +6,8 @@ import Modal from "./ui/Modal";
 import { saleTotalAtRate, todayISO, PAYMENT_TOLERANCE } from "../helpers";
 import DatePicker from "./ui/DatePicker";
 import RateField, { resolveRate } from "./ui/RateField";
-import { journalsForWarehouse } from "../helpers";
+import { journalsForWarehouse, toNameCase } from "../helpers";
+import Money from "./ui/Money";
 import ImmediatePayPicker from "./cobro/ImmediatePayPicker";
 import JournalPickerButton from "./cobro/JournalPickerButton";
 
@@ -469,27 +470,27 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // Pantalla de exoneración. Ocupa el modal entero en vez de ser un campo más del cobro:
   // perdonar el saldo no es una variante de pagar y no debe poder marcarse de paso.
   if (forgiveMode) return (
-    <Modal open={!!sale} onClose={() => { setForgiveMode(false); setForgiveReason(""); }} title="EXONERAR SALDO" width={460}>
+    <Modal open={!!sale} onClose={() => { setForgiveMode(false); setForgiveReason(""); }} title="Exonerar saldo" width={460}>
 
       <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 mb-5 space-y-1.5">
         <Row label="Factura" value={sale.invoice_number || `#${sale.id}`} />
         {sale.customer_name && <Row label="Cliente" value={sale.customer_name} />}
         <Row label="Total" value={fmtBase(sale.total)} />
         {sale.amount_paid > 0 && <Row label="Ya pagado" value={fmtBase(sale.amount_paid)} valueClass="text-success" />}
-        <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
-          <Row label="Se dejará de cobrar" value={fmtBase(balanceUsd)} valueClass="text-violet-500 dark:text-violet-400 font-black" />
+        <div className="border-t border-border/70 dark:border-white/[0.08] pt-2 mt-2">
+          <Row label="Se dejará de cobrar" value={fmtBase(balanceUsd)} valueClass="text-violet-500 dark:text-violet-400 font-bold" />
         </div>
       </div>
 
       <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 p-3.5 mb-5">
-        <p className="text-[11px] font-bold text-content-subtle dark:text-white/50 leading-relaxed">
-          La factura queda cerrada como <span className="font-black text-violet-500 dark:text-violet-400">exonerada</span>: sale de
+        <p className="text-[12px] font-semibold text-content-subtle dark:text-white/50 leading-relaxed">
+          La factura queda cerrada como <span className="font-bold text-violet-500 dark:text-violet-400">exonerada</span>: sale de
           cuentas por cobrar sin registrarse como cobrada. No devuelve mercancía al inventario ni genera
           crédito a favor del cliente. Se puede deshacer.
         </p>
       </div>
 
-      <Field label="MOTIVO *">
+      <Field label="Motivo *">
         <input
           type="text"
           autoFocus
@@ -498,17 +499,17 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
           onChange={e => setForgiveReason(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && forgiveReason.trim()) submitForgive(); }}
           placeholder="Ej: consumo del personal, diferencia de redondeo..."
-          className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+          className="input h-10"
         />
       </Field>
 
-      <div className="flex gap-2.5 mt-6 pt-4 border-t border-border/20 dark:border-white/5">
+      <div className="flex gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
         <button onClick={() => { setForgiveMode(false); setForgiveReason(""); }}
-          className="flex-1 h-10 rounded-xl border border-border/40 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all">
+          className="flex-1 h-10 rounded-xl border border-border/40 dark:border-white/10 text-[12px] font-bold text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all">
           Volver
         </button>
         <button onClick={submitForgive} disabled={loading || !forgiveReason.trim()}
-          className="flex-[2] h-10 rounded-xl bg-violet-500 text-white text-[11px] font-black uppercase tracking-wide transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed">
+          className="flex-[2] h-10 rounded-xl bg-violet-500 text-white text-[12px] font-bold transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed">
           {loading ? "Exonerando..." : `Exonerar ${fmtBase(balanceUsd)}`}
         </button>
       </div>
@@ -519,26 +520,26 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // contexto de solo lectura —qué se cobra y cómo queda—, así que se separa de los campos
   // que el cajero teclea para que no se pierda "entre tanta información".
   const resumenFactura = (
-    <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 space-y-1.5">
+    <div className="rounded-xl bg-surface-2 dark:bg-white/[0.04] p-4 space-y-2">
       <Row label="Factura" value={sale.invoice_number || `#${sale.id}`} />
       {sale.customer_name && <Row label="Cliente" value={sale.customer_name} />}
       <Row label="Total" value={hasBsRate ? `${defaultSym}${totalPreciseBs.toFixed(2)}` : fmt(sale.total)} />
       {sale.amount_paid > 0 && (
-        <Row label="Ya pagado" value={fmt(sale.amount_paid)} valueClass="text-success" />
+        <Row label="Ya pagado" value={fmt(sale.amount_paid)} />
       )}
       {creditApplied > 0 && (
-        <Row label="Crédito aplicado" value={`−${fmt(creditApplied)}`} valueClass="text-brand-500 font-black" />
+        <Row label="Crédito aplicado" value={`−${fmt(creditApplied)}`} valueClass="text-brand-700 dark:text-brand-300" />
       )}
-      <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
+      <div className="border-t border-border/70 dark:border-white/[0.08] pt-2 mt-2">
         <Row label="Saldo pendiente"
           value={hasBsRate ? `${defaultSym}${pendingPreciseBs.toFixed(2)}` : fmt(pendingAfterCredit)}
-          valueClass="text-danger font-black" />
+          valueClass="text-content dark:text-white !text-[15px] !font-bold" />
       </div>
     </div>
   );
 
   return (
-    <Modal open={!!sale} onClose={onClose} title="REGISTRAR PAGO" width={880}>
+    <Modal open={!!sale} onClose={onClose} title="Registrar pago" width={880}>
       {/* Dos columnas en escritorio: a la izquierda lo que se teclea, a la derecha el
           contexto. En móvil se apila en el mismo orden: primero lo que el cajero teclea
           (método, monto recibido…), después el contexto (resumen, proyección, notas). */}
@@ -549,12 +550,12 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
 
         {/* Crédito de cliente */}
         {customerCredit > 0.001 && (
-          <div className="rounded-xl border-2 border-brand-500/30 bg-brand-500/5 p-3.5 space-y-2.5">
+          <div className="rounded-xl bg-brand-500/[0.07] ring-1 ring-inset ring-brand-500/25 p-4 space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase tracking-widest text-brand-500">
+              <span className="text-[13px] font-semibold text-brand-700 dark:text-brand-300">
                 Crédito disponible
               </span>
-              <span className="text-sm font-black text-brand-500 tabular-nums">
+              <span className="text-[15px] font-bold text-brand-700 dark:text-brand-300 tabular-nums">
                 {fmtBase(customerCredit)}
               </span>
             </div>
@@ -565,18 +566,18 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                 value={creditToApply}
                 onChange={e => setCreditToApply(e.target.value.replace(/[^\d.,]/g, ""))}
                 placeholder={fmtBase(Math.min(customerCredit, balanceUsd))}
-                className="flex-1 h-9 bg-white/[0.02] dark:bg-white/[0.04] border border-brand-500/30 rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+                className="flex-1 h-9 bg-white/[0.02] dark:bg-white/[0.04] border border-brand-500/30 rounded-xl px-3 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
               />
               <button
                 type="button"
                 onClick={() => setCreditToApply(String(Math.min(customerCredit, balanceUsd).toFixed(6)))}
-                className="px-3 h-9 rounded-xl bg-brand-500 text-black text-[10px] font-black uppercase tracking-wide hover:brightness-110 transition-all"
+                className="px-3 h-9 rounded-xl btn-accent text-[11px] font-bold transition-all"
               >
                 Aplicar todo
               </button>
             </div>
             {creditApplied > 0 && creditCoversAll && (
-              <p className="text-[10px] font-black text-success">
+              <p className="text-[11px] font-bold text-success">
                 ✓ El crédito cubre el saldo completo. No se requiere pago adicional.
               </p>
             )}
@@ -590,11 +591,11 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
         {combinado && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30">Formas de pago *</p>
+              <p className="text-[12px] font-medium text-content-subtle dark:text-white/50">Formas de pago *</p>
               <button
                 type="button"
                 onClick={() => setForm(p => ({ ...p, pay_parts: [] }))}
-                className="text-[10px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-danger transition-colors"
+                className="text-[11px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-danger transition-colors"
               >
                 Pago simple
               </button>
@@ -639,7 +640,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                           parts[idx] = { ...parts[idx], amount: e.target.value.replace(/[^\d.,]/g, "") };
                           return { ...p, pay_parts: parts };
                         })}
-                        className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all tabular-nums"
+                        className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all tabular-nums"
                       />
                     </div>
                     {partesComb.length >= 2 && (
@@ -671,7 +672,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                     )}
                   </div>
                   {s.cur && !s.cur.is_base && s.base > 0 && (
-                    <p className="text-[10px] font-bold text-success">≈ {baseSym}{s.base.toFixed(2)} {baseCurrency?.code} · tasa {s.rate}</p>
+                    <p className="text-[11px] font-semibold text-success">≈ {baseSym}{s.base.toFixed(2)} {baseCurrency?.code} · tasa {s.rate}</p>
                   )}
                   {s.journal_id && !s.isCash && (
                     <input
@@ -683,24 +684,24 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                         return { ...p, pay_parts: parts };
                       })}
                       placeholder="N° de referencia (opcional)"
-                      className="w-full h-9 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[12px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
+                      className="w-full h-9 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[12px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
                     />
                   )}
                 </div>
               ))}
             </div>
             {combNoUltimoExcede && (
-              <p className="text-[10px] font-black text-danger mt-1.5">Solo la última forma de pago puede exceder el saldo</p>
+              <p className="text-[11px] font-bold text-danger mt-1.5">Solo la última forma de pago puede exceder el saldo</p>
             )}
             <button
               type="button"
               onClick={() => setForm(p => ({ ...p, pay_parts: [...p.pay_parts, { journal_id: "", amount: "", reference: "" }] }))}
-              className="w-full h-9 mt-2.5 rounded-xl border border-dashed border-border/40 dark:border-white/15 text-content-subtle dark:text-white/40 text-[10px] font-black uppercase tracking-widest hover:border-brand-500/50 hover:text-brand-500 transition-all"
+              className="w-full h-9 mt-2.5 rounded-xl border border-dashed border-border/40 dark:border-white/15 text-content-subtle dark:text-white/40 text-[11px] font-bold hover:border-brand-500/50 hover:text-brand-500 transition-all"
             >
               Otra forma de pago
             </button>
             <div className="flex items-center justify-between gap-2 mt-2.5 pt-2.5 border-t border-border/20 dark:border-white/5">
-              <span className="text-[10px] font-black uppercase tracking-widest tabular-nums text-content-subtle dark:text-white/40">
+              <span className="text-[12px] font-medium tabular-nums text-content-subtle dark:text-white/40">
                 Recibido {baseSym}{recibidoComb.toFixed(2)} de {baseSym}{pendingAfterCredit.toFixed(2)}
               </span>
             </div>
@@ -710,7 +711,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
         {/* Botonera método → banco → caja, la misma en todo el sistema. Con "Pago Inmediato"
             llega ya elegida (lockedJournalId); desde Clientes / Facturas se elige acá. */}
         {!combinado && (
-        <Field label="MÉTODO DE PAGO *">
+        <Field label="Método de pago *">
           <JournalPickerButton
             value={form.payment_journal_id}
             journals={activeJournals}
@@ -726,7 +727,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
             se cobra semanas después—. Mismo campo que ya usan ingresos y egresos, así que se
             comporta igual en todo el sistema: al tocarlo se pone en ámbar y ofrece restaurar. */}
         {isNonBasePay && (
-          <Field label={`TASA DE CAMBIO (${payCur.code})`}>
+          <Field label={`Tasa de cambio (${payCur.code})`}>
             <RateField
               value={form.rate}
               onChange={v => setForm(p => {
@@ -748,7 +749,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
         )}
 
         {!combinado && (<>
-        <Field label="MONTO RECIBIDO DEL CLIENTE *">
+        <Field label="Monto recibido del cliente *">
           <input
             ref={receivedRef}
             type="text"
@@ -772,7 +773,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                 submit();
               }
             }}
-            className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+            className="input h-10"
           />
         </Field>
 
@@ -794,7 +795,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                 ],
               };
             })}
-            className="w-full h-9 -mt-1 rounded-xl border border-dashed border-brand-500/40 text-brand-500 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500/10 transition-all"
+            className="w-full h-9 -mt-1 rounded-lg border border-dashed border-border dark:border-white/15 text-content-muted dark:text-white/60 text-[13px] font-medium hover:border-brand-500/50 hover:text-brand-700 dark:hover:text-brand-300 hover:bg-brand-500/5 transition-colors"
           >
             Combinar con otra forma de pago
           </button>
@@ -803,16 +804,16 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
 
         {/* Sobrante */}
         {changeBase > 0 && (
-          <div className="rounded-xl border-2 border-warning/30 bg-warning/5 p-4 space-y-3">
+          <div className="rounded-xl bg-amber-500/[0.07] ring-1 ring-inset ring-amber-500/25 p-4 space-y-3">
             {/* Título + monto */}
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase tracking-widest text-warning/80">Sobrante</span>
+              <span className="text-[13px] font-semibold text-amber-700 dark:text-amber-400">Sobrante</span>
               <div className="text-right">
-                <span className="text-sm font-black text-warning tabular-nums">
+                <span className="text-[15px] font-bold text-amber-700 dark:text-amber-400 tabular-nums">
                   {paySym}{changeDisplay.toFixed(2)}
                 </span>
                 {payCur && !payCur.is_base && (
-                  <span className="block text-[10px] font-bold text-content-subtle dark:text-white/30 tabular-nums">
+                  <span className="block text-[11px] font-semibold text-content-subtle dark:text-white/30 tabular-nums">
                     ≈ {baseCurrency?.symbol}{changeBase.toFixed(2)}
                   </span>
                 )}
@@ -820,14 +821,14 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
             </div>
 
             {/* Toggle dar cambio / quedarse / crédito */}
-            <div className="flex p-1 bg-white/[0.02] dark:bg-white/[0.04] rounded-xl border border-white/[0.06]">
+            <div className="flex p-[3px] gap-[2px] bg-surface-3 dark:bg-white/[0.06] rounded-lg">
               <button type="button"
                 onClick={() => setForm(p => ({ ...p, keep_change: false, credit_change: false, change_parts: [{ journal_id: "", amount: "" }] }))}
                 className={[
-                  "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
+                  "flex-1 h-8 text-[13px] font-medium rounded-md transition-all",
                   !form.keep_change && !form.credit_change
-                    ? "bg-warning text-black shadow-lg"
-                    : "text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+                    ? "bg-white text-brand-700 font-semibold shadow-[0_1px_2px_rgb(0_0_0/0.08),0_0_0_1px_rgb(0_0_0/0.04)] dark:bg-white/15 dark:text-brand-300"
+                    : "text-content-subtle hover:text-content dark:text-white/55 dark:hover:text-white"
                 ].join(" ")}
               >
                 Dar cambio
@@ -835,10 +836,10 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
               <button type="button"
                 onClick={() => setForm(p => ({ ...p, keep_change: true, credit_change: false, change_parts: [{ journal_id: "", amount: "" }] }))}
                 className={[
-                  "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
+                  "flex-1 h-8 text-[13px] font-medium rounded-md transition-all",
                   form.keep_change
-                    ? "bg-success text-black shadow-lg"
-                    : "text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+                    ? "bg-white text-brand-700 font-semibold shadow-[0_1px_2px_rgb(0_0_0/0.08),0_0_0_1px_rgb(0_0_0/0.04)] dark:bg-white/15 dark:text-brand-300"
+                    : "text-content-subtle hover:text-content dark:text-white/55 dark:hover:text-white"
                 ].join(" ")}
               >
                 Quedarse
@@ -847,10 +848,10 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                 <button type="button"
                   onClick={() => setForm(p => ({ ...p, keep_change: false, credit_change: true, change_parts: [{ journal_id: "", amount: "" }] }))}
                   className={[
-                    "flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
+                    "flex-1 h-8 text-[13px] font-medium rounded-md transition-all",
                     form.credit_change
-                      ? "bg-brand-500 text-black shadow-lg"
-                      : "text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
+                      ? "bg-white text-brand-700 font-semibold shadow-[0_1px_2px_rgb(0_0_0/0.08),0_0_0_1px_rgb(0_0_0/0.04)] dark:bg-white/15 dark:text-brand-300"
+                      : "text-content-subtle hover:text-content dark:text-white/55 dark:hover:text-white"
                   ].join(" ")}
                 >
                   Crédito
@@ -860,15 +861,15 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
 
             {/* Nota de crédito al cliente */}
             {form.credit_change && (
-              <p className="text-[10px] font-black text-brand-500">
-                ✓ {paySym}{changeDisplay.toFixed(2)} se añadirá al crédito del cliente.
+              <p className="text-[12px] font-medium text-brand-700 dark:text-brand-300">
+                {paySym}{changeDisplay.toFixed(2)} se añadirá al crédito del cliente.
               </p>
             )}
 
             {/* Selector de diario de cambio */}
             {!form.keep_change && !form.credit_change && (
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-warning/80 mb-1.5">DAR CAMBIO DESDE *</p>
+                <p className="text-[12px] font-semibold text-amber-700 dark:text-amber-400 mb-1.5">Dar cambio desde <span className="text-red-500">*</span></p>
                 {/* Misma botonera que "Pago Inmediato" (método → caja), filtrada a cajas con
                     salidas: dar vuelto por un Punto de Venta no tiene sentido. */}
                 <div className="space-y-2">
@@ -878,7 +879,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                         <button
                           type="button"
                           onClick={() => setChangePickerIdx(idx)}
-                          className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-warning/40 rounded-xl px-3 flex items-center justify-between gap-2 text-[13px] font-bold outline-none focus:border-warning/70 transition-all"
+                          className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-warning/40 rounded-xl px-3 flex items-center justify-between gap-2 text-[13px] font-semibold outline-none focus:border-warning/70 transition-all"
                         >
                           <span className={`truncate ${salida.journal_id ? "text-content dark:text-white" : "text-content-subtle/60 dark:text-white/25"}`}>
                             {salida.journal_id
@@ -899,7 +900,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                             partes[idx] = { ...partes[idx], amount: e.target.value.replace(/[^\d.,]/g, "") };
                             return { ...p, change_parts: partes };
                           })}
-                          className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-warning/40 rounded-xl px-3 text-[13px] font-bold text-content dark:text-white outline-none focus:border-warning/70 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20 tabular-nums"
+                          className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-warning/40 rounded-xl px-3 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-warning/70 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20 tabular-nums"
                         />
                       </div>
                       {salidasCambio.length > 1 && (
@@ -927,7 +928,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                 )}
 
                 {faltaCajaEnCambio && (
-                  <p className="text-[10px] font-black text-danger mt-1.5">Selecciona de dónde saldrá el cambio</p>
+                  <p className="text-[11px] font-bold text-danger mt-1.5">Selecciona de dónde saldrá el cambio</p>
                 )}
 
                 {/* Sin sencillo en una sola moneda: parte en divisas y el resto en bolívares. */}
@@ -935,21 +936,21 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                   <button
                     type="button"
                     onClick={() => setForm(p => ({ ...p, change_parts: [...p.change_parts, { journal_id: "", amount: "" }] }))}
-                    className="w-full h-9 mt-2 rounded-xl border border-dashed border-warning/50 text-warning text-[10px] font-black uppercase tracking-widest hover:bg-warning/10 transition-all"
+                    className="w-full h-9 mt-2 rounded-xl border border-dashed border-warning/50 text-warning text-[11px] font-bold hover:bg-warning/10 transition-all"
                   >
                     Devolver el resto desde otra caja
                   </button>
                 )}
 
                 <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-warning/20">
-                  <span className="text-[10px] font-black text-warning/70 uppercase tracking-widest tabular-nums">
+                  <span className="text-[12px] font-medium text-amber-700/80 dark:text-amber-400/80 tabular-nums">
                     Entregado {fmtBase(actualChangeBase)} de {fmtBase(changeBase)}
                   </span>
                   {/* Devolver menos que el cambio exacto deja esa diferencia dentro de la caja.
                       Se avisa acá y queda anotada en el cobro: es dinero que entró y que no
                       cubre nada de la factura. */}
                   {sobranteRetenido > 0.001 && (
-                    <span className="text-[10px] font-black text-warning tabular-nums">
+                    <span className="text-[11px] font-bold text-warning tabular-nums">
                       Quedan {fmtBase(sobranteRetenido)} en caja
                     </span>
                   )}
@@ -959,7 +960,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
           </div>
         )}
 
-        <Field label="FECHA DE REFERENCIA *">
+        <Field label="Fecha de referencia *">
           <DatePicker
             value={form.reference_date}
             onChange={v => setForm(p => ({ ...p, reference_date: v }))}
@@ -969,13 +970,13 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
 
         {/* N° Referencia (oculto si es efectivo) */}
         {!isCash && (
-          <Field label="N° REFERENCIA">
+          <Field label="N° de referencia">
             <input
               type="text"
               value={form.reference_number}
               onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
               placeholder="Ej: 000123456"
-              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+              className="input h-10"
             />
           </Field>
         )}
@@ -992,12 +993,12 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
             {/* Monto / Abono (readonly). La etiqueta usa el mismo criterio que el servidor:
                 entregar 5,00 por una factura de 5,10 la cierra, así que llamarlo "abono
                 parcial" sería anunciar algo que no va a pasar. */}
-            <Field label={settlesInvoice ? "PAGO COMPLETO A FACTURA" : "ABONO PARCIAL A FACTURA"}>
-              <div className="w-full h-11 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 flex items-center text-[15px] font-black text-content dark:text-white tabular-nums">
+            <Field label={settlesInvoice ? "Pago completo a factura" : "Abono parcial a factura"}>
+              <div className="w-full h-11 bg-surface-2 dark:bg-white/[0.04] rounded-lg px-3.5 flex items-center text-[17px] font-bold text-content dark:text-white tabular-nums">
                 {paySym}{(payCur && !payCur.is_base ? amountNum : amountBase * payRate).toFixed(2)}
               </div>
               {payCur && !payCur.is_base && amountBase > 0 && (
-                <p className="text-[10px] font-bold text-success mt-1">
+                <p className="text-[12px] text-content-subtle mt-1.5 tabular-nums">
                   ≈ {baseCurrency?.symbol}{amountBase.toFixed(2)} {baseCurrency?.code} · tasa {payRate}
                 </p>
               )}
@@ -1005,10 +1006,10 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
 
             {/* Cómo queda la factura con este pago, para no tener que calcularlo de cabeza. */}
             {amountBase > 0 && (
-              <div className={`rounded-xl border p-3.5 space-y-1.5 ${settlesInvoice
-                ? "border-success/30 bg-success/5"
-                : "border-warning/30 bg-warning/5"}`}>
-                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/40">
+              <div className={`rounded-xl p-4 space-y-2 ${settlesInvoice
+                ? "bg-emerald-500/10"
+                : "bg-surface-2 dark:bg-white/[0.04]"}`}>
+                <div className="text-[13px] font-semibold text-content dark:text-white">
                   Después de este pago
                 </div>
                 {/* En la moneda con la que se está cobrando, no siempre en bolívares.
@@ -1019,13 +1020,13 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                 <Row
                   label="Total pagado"
                   value={isNonBasePay ? `${defaultSym}${paidTotalBs.toFixed(2)}` : fmtBase(paidTotalBase)}
-                  valueClass="text-success font-black"
+                  valueClass="text-content dark:text-white"
                 />
-                <div className="border-t border-border/20 dark:border-white/5 pt-1.5">
+                <div className="border-t border-border/70 dark:border-white/[0.08] pt-2">
                   <Row
                     label={settlesInvoice ? "Factura saldada" : "Saldo restante"}
                     value={isNonBasePay ? `${defaultSym}${remainingShown.toFixed(2)}` : fmtBase(settlesInvoice ? 0 : remainingBase)}
-                    valueClass={`font-black ${settlesInvoice ? "text-success" : "text-warning"}`}
+                    valueClass={`!text-[15px] !font-bold ${settlesInvoice ? "text-emerald-700 dark:text-emerald-400" : "text-content dark:text-white"}`}
                   />
                 </div>
               </div>
@@ -1033,26 +1034,26 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
           </>)}
 
           {/* Notas */}
-          <Field label="NOTAS">
+          <Field label="Notas">
             <input
               type="text"
               value={form.notes}
               onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
               placeholder="Observaciones..."
-              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+              className="input h-10"
             />
           </Field>
         </aside>
       </div>
 
       {/* Acciones */}
-      <div className="flex gap-2.5 mt-6 pt-4 border-t border-border/20 dark:border-white/5">
+      <div className="flex gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
         <button onClick={onClose}
-          className="flex-1 h-10 rounded-xl border border-border/40 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all">
+          className="btn-outline flex-1 h-10 rounded-lg text-[13px] font-semibold">
           Cancelar
         </button>
         <button onClick={submit} disabled={!canSubmit}
-          className="flex-[2] h-10 rounded-xl bg-success text-black text-[11px] font-black uppercase tracking-wide transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+          className="btn-accent flex-[2] h-10 rounded-lg text-[13px] font-semibold active:scale-[0.99] disabled:!bg-surface-3 disabled:!bg-none disabled:!text-content-subtle disabled:!border-transparent disabled:!shadow-none dark:disabled:!bg-white/[0.06] disabled:cursor-not-allowed flex items-center justify-center gap-2">
           {loading && <Spinner />}
           {loading ? "Registrando..." : "Confirmar pago"}
         </button>
@@ -1065,7 +1066,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
           <button
             type="button"
             onClick={() => setForgiveMode(true)}
-            className="w-full h-10 rounded-xl border border-violet-500/40 text-violet-500 dark:text-violet-400 text-[11px] font-black uppercase tracking-wide transition-all hover:bg-violet-500 hover:text-white"
+            className="w-full h-9 rounded-lg text-[13px] font-medium text-content-subtle hover:text-violet-700 dark:hover:text-violet-300 hover:bg-violet-500/10 transition-colors"
           >
             Exonerar saldo de {fmtBase(balanceUsd)}
           </button>
@@ -1076,19 +1077,31 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+// Fila del resumen: etiqueta gris y valor en tinta. Los nombres llegan en mayúsculas desde la
+// base y se muestran en caja normal (ver toNameCase).
 function Row({ label, value, valueClass = "text-content dark:text-white" }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-[11px] font-bold text-content-subtle dark:text-white/40">{label}</span>
-      <span className={`text-[12px] font-black tabular-nums ${valueClass}`}>{value}</span>
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-[13px] text-content-subtle shrink-0">{label}</span>
+      <span className={`text-[13px] font-semibold tabular-nums text-right truncate ${valueClass}`}>
+        {typeof value !== "string" ? value
+          : /^[+\-−]?\s*(Ref\.|Bs\.?|\$|€|USD|VES)\s?\d/.test(value) ? <Money value={value} />
+          : toNameCase(value)}
+      </span>
     </div>
   );
 }
 
+// Etiqueta de campo. Un "*" al final marca el campo obligatorio: se dibuja aparte, en rojo,
+// en vez de ir pegado al texto en mayúsculas como antes.
 function Field({ label, children }) {
+  const obligatorio = typeof label === "string" && /\s*\*$/.test(label);
+  const texto = obligatorio ? label.replace(/\s*\*$/, "") : label;
   return (
     <div>
-      <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">{label}</p>
+      <p className="text-[12px] font-semibold text-content-muted dark:text-white/70 mb-1.5">
+        {texto}{obligatorio && <span className="text-red-500 ml-0.5">*</span>}
+      </p>
       {children}
     </div>
   );

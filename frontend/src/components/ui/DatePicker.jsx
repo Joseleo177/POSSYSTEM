@@ -183,7 +183,7 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa"
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
         
-        <span className={`text-[11px] font-medium uppercase tracking-tight truncate ${value ? "" : "opacity-30"}`}>
+        <span className={`text-[12px] font-medium tracking-tight truncate ${value ? "" : "opacity-30"}`}>
           {fmt(value)}
         </span>
 
@@ -207,12 +207,12 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa"
             left: coords.left,
             zIndex: 9999
           }}
-          className="bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+          className="bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_12px_40px_-8px_rgb(0_0_0/0.22)] overflow-hidden popover-in"
         >
           <div className="flex bg-white dark:bg-surface-dark-2">
             {/* Sidebar Shortcuts - Consistently Compact */}
             <div className="w-16 border-r border-border/10 dark:border-white/5 py-2 flex flex-col gap-1 px-1 shrink-0 bg-surface-2/30 dark:bg-white/[0.02]">
-              <div className="text-[7px] font-black text-content-subtle uppercase tracking-widest mb-1 px-1.5">Atajos</div>
+              <div className="text-[8px] font-bold text-content-subtle mb-1 px-1.5">Atajos</div>
               {[
                 { id: "today", label: "Hoy" },
                 { id: "yesterday", label: "Ayer" },
@@ -222,7 +222,7 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa"
                 <button 
                   key={s.id} 
                   onClick={() => setShortcut(s.id)}
-                  className="w-full py-1 px-0.5 text-[8px] font-black text-center text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 rounded-md transition-all uppercase"
+                  className="w-full py-1 px-0.5 text-[9px] font-bold text-center text-content-subtle hover:text-brand-500 hover:bg-brand-500/10 rounded-md transition-all"
                 >
                   {s.label}
                 </button>
@@ -236,13 +236,13 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa"
                 <div className="flex items-center gap-1 group/header">
                   <button
                     onClick={() => setMode(mode === "months" ? "days" : "months")}
-                    className={`text-[11px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded transition-all ${mode === "months" ? "bg-brand-500 text-black px-2 shadow-lg shadow-brand-500/20" : "text-content dark:text-white hover:bg-surface-2 dark:hover:bg-white/5"}`}
+                    className={`text-[12px] font-bold px-1.5 py-0.5 rounded transition-all ${mode === "months" ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40 px-2 shadow-sm" : "text-content dark:text-white hover:bg-surface-2 dark:hover:bg-white/5"}`}
                   >
                     {monthName}
                   </button>
                   <button
                     onClick={() => setMode(mode === "years" ? "days" : "years")}
-                    className={`text-[11px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded transition-all ${mode === "years" ? "bg-brand-500 text-black px-2 shadow-lg shadow-brand-500/20" : "text-content-subtle opacity-40 hover:opacity-100 hover:bg-surface-2 dark:hover:bg-white/5"}`}
+                    className={`text-[12px] font-bold px-1.5 py-0.5 rounded transition-all ${mode === "years" ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40 px-2 shadow-sm" : "text-content-subtle opacity-40 hover:opacity-100 hover:bg-surface-2 dark:hover:bg-white/5"}`}
                   >
                     {yearTitle}
                   </button>
@@ -265,7 +265,7 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa"
                 <>
                   <div className="grid grid-cols-7 gap-1 mb-1">
                     {["L", "M", "X", "J", "V", "S", "D"].map(d => (
-                      <div key={d} className="h-6 flex items-center justify-center text-[9px] font-black text-content-subtle">{d}</div>
+                      <div key={d} className="h-6 flex items-center justify-center text-[10px] font-bold text-content-subtle">{d}</div>
                     ))}
                   </div>
                   <div className="grid grid-cols-7 gap-0.5">
@@ -278,9 +278,9 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa"
                           key={i}
                           onClick={() => handleDateClick(d.date)}
                           className={`
-                            h-8 flex flex-col items-center justify-center text-[10px] font-black cursor-pointer rounded-md transition-all relative
-                            ${!d.currentMonth ? "opacity-10 text-content-subtle" : "text-content dark:text-white/80 hover:bg-brand-500/10 hover:text-brand-500"}
-                            ${selected ? "!bg-brand-500 !text-black shadow-lg shadow-brand-500/20" : ""}
+ h-8 flex flex-col items-center justify-center text-[11px] font-bold cursor-pointer rounded-md transition-all relative
+ ${!d.currentMonth ? "opacity-10 text-content-subtle" : "text-content dark:text-white/80 hover:bg-brand-500/10 hover:text-brand-500"}
+                            ${selected ? "!bg-brand-500 !text-black shadow-sm" : ""}
                           `}
                         >
                           {d.date.getDate()}
@@ -300,8 +300,8 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa"
                     <button
                       key={m}
                       onClick={() => jumpToMonth(i)}
-                      className={`py-3 text-[10px] font-black uppercase tracking-widest rounded-lg border transition-all
-                        ${viewDate.getMonth() === i ? "bg-brand-500 text-black border-brand-500 shadow-lg" : "bg-surface-2 dark:bg-white/5 border-border/10 dark:border-white/5 text-content-subtle hover:text-brand-500 hover:border-brand-500/30"}`}
+                      className={`py-3 text-[11px] font-bold rounded-lg border transition-all
+ ${viewDate.getMonth() === i ? "btn-accent border-brand-500" : "bg-surface-2 dark:bg-white/5 border-border/10 dark:border-white/5 text-content-subtle hover:text-brand-500 hover:border-brand-500/30"}`}
                     >
                       {m}
                     </button>
@@ -319,8 +319,8 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa"
                       <button
                         key={y}
                         onClick={() => jumpToYear(y)}
-                        className={`py-2 text-[10px] font-black uppercase tracking-widest rounded-lg border transition-all
-                          ${viewDate.getFullYear() === y ? "selected-year bg-brand-500 text-black border-brand-500 shadow-lg font-black" : "bg-surface-2 dark:bg-white/5 border-border/10 dark:border-white/5 text-content-subtle hover:text-brand-500 hover:border-brand-500/30 font-bold"}`}
+                        className={`py-2 text-[11px] font-bold rounded-lg border transition-all
+ ${viewDate.getFullYear() === y ? "selected-year btn-accent border-brand-500 font-bold" : "bg-surface-2 dark:bg-white/5 border-border/10 dark:border-white/5 text-content-subtle hover:text-brand-500 hover:border-brand-500/30 font-semibold"}`}
                       >
                         {y}
                       </button>

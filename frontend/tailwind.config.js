@@ -53,6 +53,13 @@ module.exports = {
           700: "rgb(var(--c-brand-700) / <alpha-value>)",
           800: "rgb(var(--c-brand-800) / <alpha-value>)",
           900: "rgb(var(--c-brand-900) / <alpha-value>)",
+          // Texto que va encima de brand-500 (blanco o casi negro según la marca).
+          ink: "rgb(var(--c-brand-ink) / <alpha-value>)",
+        },
+        // Gráficos (ver --c-chart en index.css): bg-chart, bg-chart/30, text-chart…
+        chart: {
+          DEFAULT: "rgb(var(--c-chart) / <alpha-value>)",
+          muted:   "rgb(var(--c-chart-muted) / <alpha-value>)",
         },
         success: { DEFAULT: "#10b981", light: "#d1fae5", dark: "#065f46" },
         warning: { DEFAULT: "#f59e0b", light: "#fef3c7", dark: "#78350f" },

@@ -68,7 +68,7 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                         />
                     </div>
                     <div>
-                        <label className="label">RIF / TAX ID</label>
+                        <label className="label">RIF / tax ID</label>
                         <input
                             className="input h-10"
                             value={form.tax_id}
@@ -77,7 +77,7 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                         />
                     </div>
                     <div>
-                        <label className="label">TELÉFONO</label>
+                        <label className="label">Teléfono</label>
                         <input
                             className="input h-10"
                             value={form.phone}
@@ -86,7 +86,7 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                         />
                     </div>
                     <div className="col-span-2">
-                        <label className="label">CORREO ELECTRÓNICO</label>
+                        <label className="label">Correo electrónico</label>
                         <input
                             type="email"
                             className="input h-10"
@@ -99,44 +99,44 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
 
                 {!editData && (
                     <div className="p-4 bg-surface-2 dark:bg-white/[0.03] rounded-2xl border border-border/40 dark:border-white/5 space-y-3">
-                        <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest border-b border-brand-500/10 pb-2">
+                        <div className="text-[11px] font-bold text-brand-500 border-b border-brand-500/10 pb-2">
                             Credenciales Administrador Inicial (Opcional)
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="label">USUARIO ADMINISTRADOR</label>
+                                <label className="label">Usuario administrador</label>
                                 <input
-                                    className="input h-10 font-mono text-[11px]"
+                                    className="input h-10 font-mono text-[12px]"
                                     value={form.admin_username}
                                     onChange={e => setForm({ ...form, admin_username: e.target.value })}
                                     placeholder="Dejar vacío para admin_ID"
                                 />
                             </div>
                             <div>
-                                <label className="label">CONTRASEÑA INICIAL</label>
+                                <label className="label">Contraseña inicial</label>
                                 <input
                                     type="text"
-                                    className="input h-10 font-mono text-[11px]"
+                                    className="input h-10 font-mono text-[12px]"
                                     value={form.admin_password}
                                     onChange={e => setForm({ ...form, admin_password: e.target.value })}
                                     placeholder="Dejar vacío para aleatoria"
                                     minLength={8}
                                 />
                                 {/* El backend rechaza menos de 8; avisar aquí evita el viaje. */}
-                                <p className="mt-1 text-[10px] font-bold text-content-subtle">Mínimo 8 caracteres</p>
+                                <p className="mt-1 text-[11px] font-semibold text-content-subtle">Mínimo 8 caracteres</p>
                             </div>
                         </div>
                     </div>
                 )}
 
                 <div className="p-4 bg-surface-2 dark:bg-white/[0.03] rounded-2xl border border-border/40 dark:border-white/5 space-y-4">
-                    <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest border-b border-brand-500/10 pb-2">
-                        Suscripción y Límites
+                    <div className="text-[11px] font-bold text-brand-500 border-b border-brand-500/10 pb-2">
+                        Suscripción y límites
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="label">PLAN</label>
+                            <label className="label">Plan</label>
                             <select 
                                 className="input h-10"
                                 value={form.plan_name}
@@ -146,9 +146,9 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                             </select>
                         </div>
                         <div>
-                            <label className="label">ESTADO</label>
+                            <label className="label">Estado</label>
                             <select 
-                                className="input h-10 text-[11px] font-bold"
+                                className="input h-10 text-[12px]"
                                 value={form.subscription_status}
                                 onChange={e => setForm({ ...form, subscription_status: e.target.value })}
                             >
@@ -156,7 +156,7 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                             </select>
                         </div>
                         <div>
-                            <label className="label">VENCE EL</label>
+                            <label className="label">Vence el</label>
                             <DatePicker
                                 value={form.expires_at}
                                 onChange={v => setForm({ ...form, expires_at: v })}
@@ -164,10 +164,10 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                             />
                         </div>
                         <div>
-                            <label className="label">MÁX. USUARIOS</label>
+                            <label className="label">Máx. usuarios</label>
                             <input
                                 type="number"
-                                className="input h-10 font-mono text-[11px]"
+                                className="input h-10 font-mono text-[12px]"
                                 value={form.max_users}
                                 onChange={e => setForm({ ...form, max_users: parseInt(e.target.value) })}
                             />
@@ -181,8 +181,8 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                     catálogo público responde 404 aunque todo lo demás esté listo. */}
                 <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${form.catalog_enabled ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
                     <div>
-                        <div className="text-xs font-bold text-content dark:text-content-dark">Catálogo público (extra)</div>
-                        <div className="text-[10px] text-content-subtle dark:text-content-dark-muted mt-0.5">
+                        <div className="text-xs font-semibold text-content dark:text-content-dark">Catálogo público (extra)</div>
+                        <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-0.5">
                             Permite a esta empresa activar y personalizar su propia vitrina pública.
                         </div>
                     </div>
@@ -197,7 +197,7 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                     </label>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-border/10 dark:border-white/5">
+                <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
                     <Button variant="ghost" type="button" onClick={onClose}>Cancelar</Button>
                     <Button type="submit" disabled={loading}>
                         {loading ? "Procesando..." : editData ? "Guardar Cambios" : "Crear Empresa"}

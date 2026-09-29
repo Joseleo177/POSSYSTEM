@@ -7,20 +7,22 @@ import { isIntegerUnit } from "../../helpers/unitFormatter";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers/image";
 import { useApp } from "../../context/AppContext";
 import { printCountSheet } from "../../helpers/printCountSheet";
+import { toNameCase } from "../../helpers";
+import StockQty, { StockBand, splitQty } from "../ui/StockQty";
 
 const REASONS_OUT = [
     { value: "merma",       label: "Merma (Deterioro/Rotura)" },
-    { value: "vencimiento", label: "Producto Vencido" },
-    { value: "consumo",     label: "Consumo Interno" },
-    { value: "robo",        label: "Robo / Pérdida" },
-    { value: "conteo",      label: "Ajuste de Conteo Físico" },
+    { value: "vencimiento", label: "Producto vencido" },
+    { value: "consumo",     label: "Consumo interno" },
+    { value: "robo",        label: "Robo / pérdida" },
+    { value: "conteo",      label: "Ajuste de conteo físico" },
 ];
 const REASONS_IN = [
-    { value: "compra",        label: "Compra / Recepción" },
-    { value: "devolucion",    label: "Devolución de Cliente" },
-    { value: "transferencia", label: "Transferencia Recibida" },
-    { value: "produccion",    label: "Producción Interna" },
-    { value: "conteo",        label: "Ajuste de Conteo Físico" },
+    { value: "compra",        label: "Compra / recepción" },
+    { value: "devolucion",    label: "Devolución de cliente" },
+    { value: "transferencia", label: "Transferencia recibida" },
+    { value: "produccion",    label: "Producción interna" },
+    { value: "conteo",        label: "Ajuste de conteo físico" },
 ];
 
 // Etiquetas para mostrar el motivo guardado en la línea. Incluye 'ajuste_directo', que no
@@ -34,22 +36,6 @@ const REASON_LABELS = Object.fromEntries(
     ].map(r => [r.value, r.label])
 );
 const reasonLabel = (r) => REASON_LABELS[r] || r;
-
-function stockColor(qty) {
-    const n = parseFloat(qty) || 0;
-    if (n <= 0)  return "text-danger";
-    if (n <= 10) return "text-warning";
-    return "text-success";
-}
-
-// Versión en franja para las tarjetas: mismo semáforo pero en fondo sólido, que a tamaño
-// pequeño se lee de un golpe mientras que un número de color sobre la foto se pierde.
-function stockBand(qty) {
-    const n = parseFloat(qty) || 0;
-    if (n <= 0)  return "bg-danger text-white";
-    if (n <= 10) return "bg-warning text-black";
-    return "bg-success text-white";
-}
 
 const fmt = n => Number(n || 0).toLocaleString("es-VE", { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 const fmtDate = d => d ? new Date(d).toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
@@ -297,7 +283,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
         return (
             <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
                 <svg className="w-10 h-10 text-content-subtle opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                <p className="text-[11px] font-black uppercase tracking-wide text-content-subtle">Selecciona un almacén</p>
+                <p className="text-[12px] font-bold text-content-subtle">Selecciona un almacén</p>
             </div>
         );
     }
@@ -309,16 +295,16 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
             {/* min-h en vez de alto fijo, y wrap: con h-10 y sin flex-wrap los textos no cabían
                 en móvil, se comprimían por debajo de su contenido y terminaban encimados unos
                 sobre otros. Ahora bajan de línea en vez de pisarse. */}
-            <div className="shrink-0 px-4 py-2 min-h-10 border-b border-warning/15 bg-warning/[0.03] flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+            <div className="shrink-0 px-4 py-2 min-h-10 border-b border-border/60 dark:border-white/[0.06] flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
-                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest min-w-0">
-                        <svg className="w-3.5 h-3.5 text-warning shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                        <span className="text-warning/70 shrink-0">Almacén:</span>
-                        <span className="text-content dark:text-white truncate">{selectedWarehouse.name}</span>
+                    <div className="flex items-center gap-2 text-[13px] min-w-0">
+                        <svg className="w-3.5 h-3.5 text-content-subtle shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                        <span className="text-content-subtle shrink-0">Almacén</span>
+                        <span className="font-semibold text-content dark:text-white truncate">{selectedWarehouse.name}</span>
                     </div>
                     {session && (
-                        <span className="flex items-center gap-1.5 text-[10px] font-black text-success uppercase tracking-widest whitespace-nowrap shrink-0">
-                            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />
+                        <span className="flex items-center gap-1.5 text-[12px] font-medium text-emerald-700 dark:text-emerald-400 whitespace-nowrap shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                             Sesión abierta · {session.line_count || (session.lines?.length || 0)} mov.
                         </span>
                     )}
@@ -328,15 +314,15 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                         <button
                             onClick={handleCloseSession}
                             disabled={closingSession}
-                            className="h-6 px-3 rounded-md bg-success/10 text-success border border-success/20 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-success hover:text-black transition-all flex items-center gap-1.5 disabled:opacity-50"
+                            className="btn-accent h-7 px-3 rounded-md text-[12px] font-semibold whitespace-nowrap flex items-center gap-1.5 disabled:opacity-50"
                         >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
-                            {closingSession ? "Cerrando..." : "Cerrar Sesión"}
+                            {closingSession ? "Cerrando..." : "Cerrar sesión"}
                         </button>
                     )}
                     {onChangeWarehouse && (
                         <button onClick={onChangeWarehouse}
-                            className="h-6 px-2.5 rounded-md text-warning hover:bg-warning hover:text-black text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all flex items-center gap-1.5">
+                            className="h-7 px-2.5 rounded-md text-content-muted dark:text-white/60 hover:text-brand-700 dark:hover:text-brand-300 hover:bg-brand-500/10 text-[12px] font-medium whitespace-nowrap transition-colors flex items-center gap-1.5">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m-4 6H4m0 0l4 4m-4-4l4-4" /></svg>
                             Cambiar
                         </button>
@@ -348,9 +334,9 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
             <div className="shrink-0 flex border-b border-border/10 dark:border-white/[0.06]">
                 {[{ key: "ajuste", label: "Movimiento" }, { key: "historial", label: "Historial de sesiones" }].map(t => (
                     <button key={t.key} onClick={() => setTab(t.key)}
-                        className={`px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 ${
+                        className={`px-5 py-2.5 text-[11px] font-bold transition-all border-b-2 ${
                             tab === t.key
-                                ? "border-brand-500 text-brand-500"
+                                ? "border-brand-500 text-brand-700 dark:text-brand-300"
                                 : "border-transparent text-content-subtle hover:text-content dark:hover:text-white"
                         }`}>
                         {t.label}
@@ -364,24 +350,24 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
 
                     {/* Banner para abrir sesión */}
                     {!loadingSession && !session && (
-                        <div className="shrink-0 mx-3 lg:mx-4 mt-3 lg:mt-4 rounded-xl border border-warning/20 bg-warning/5 px-3 lg:px-4 py-2 lg:py-3 flex items-center justify-between gap-3 lg:gap-4">
+                        <div className="shrink-0 mx-3 lg:mx-4 mt-3 lg:mt-4 rounded-xl border border-border dark:border-white/10 bg-surface-2/60 dark:bg-white/[0.03] px-3 lg:px-4 py-2 lg:py-3 flex items-center justify-between gap-3 lg:gap-4">
                             <div className="flex items-center gap-2.5 lg:gap-3 min-w-0">
-                                <div className="w-8 h-8 rounded-lg bg-warning/10 text-warning items-center justify-center shrink-0 hidden lg:flex">
+                                <div className="w-8 h-8 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-400 items-center justify-center shrink-0 hidden lg:flex">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="text-[11px] font-black text-content dark:text-white truncate">Iniciar sesión de ajustes</p>
+                                    <p className="text-[13px] font-semibold text-content dark:text-white truncate">Iniciar sesión de ajustes</p>
                                     {/* El párrafo se queda para escritorio: en un teléfono costaba
                                         dos renglones de lista y el botón ya dice lo que hay que hacer. */}
-                                    <p className="hidden lg:block text-[10px] text-content-subtle/60">Todos los movimientos quedarán registrados bajo esta sesión</p>
+                                    <p className="hidden lg:block text-[12px] text-content-subtle">Todos los movimientos quedarán registrados bajo esta sesión</p>
                                 </div>
                             </div>
                             <button
                                 onClick={handleOpenSession}
                                 disabled={openingSession}
-                                className="h-8 px-4 rounded-xl bg-warning text-black text-[10px] font-black uppercase tracking-widest hover:brightness-105 transition-all active:scale-95 disabled:opacity-50 shrink-0"
+                                className="btn-accent h-8 px-4 rounded-lg text-[13px] font-semibold active:scale-95 disabled:opacity-50 shrink-0"
                             >
-                                {openingSession ? "Abriendo..." : "Abrir Sesión"}
+                                {openingSession ? "Abriendo..." : "Abrir sesión"}
                             </button>
                         </div>
                     )}
@@ -426,7 +412,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                     </div>
                                 </div>
                                 <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5">
-                                    <p className="text-[9px] font-bold text-content-subtle/40 uppercase tracking-widest truncate">
+                                    <p className="text-[12px] font-medium text-content-subtle/40 truncate">
                                         {loadingList ? "Cargando..." : `${allProducts.length} producto${allProducts.length !== 1 ? "s" : ""}`}
                                         {/* Avance de la sesión: cuenta productos distintos, no movimientos,
                                             que es lo que interesa al recorrer el inventario. */}
@@ -440,7 +426,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                     {session?.lines?.length > 0 && (
                                         <button
                                             onClick={() => setShowLinesMobile(true)}
-                                            className="lg:hidden h-7 px-2.5 shrink-0 rounded-lg bg-success/10 border border-success/25 text-[9px] font-black uppercase tracking-wide text-success flex items-center gap-1.5 active:scale-95 transition-all">
+                                            className="lg:hidden h-7 px-2.5 shrink-0 rounded-lg bg-success/10 border border-success/25 text-[10px] font-bold text-success flex items-center gap-1.5 active:scale-95 transition-all">
                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
                                             Sesión ({session.lines.length})
                                         </button>
@@ -453,10 +439,10 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                         onClick={imprimirPlanilla}
                                         disabled={printing || !selectedWarehouse}
                                         title="Planilla en blanco para el conteo físico, con los filtros de esta pantalla"
-                                        className="h-7 px-2.5 shrink-0 rounded-lg bg-danger/5 border border-danger/25 text-[9px] font-black uppercase tracking-wide text-danger flex items-center gap-1.5 hover:bg-danger hover:text-white transition-all active:scale-95 disabled:opacity-50"
+                                        className="btn-outline h-7 px-2.5 shrink-0 rounded-lg text-[12px] font-medium flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
                                     >
                                         {printing ? (
-                                            <div className="w-3 h-3 border-2 border-danger/30 border-t-danger rounded-full animate-spin" />
+                                            <div className="w-3 h-3 border-2 border-content-subtle/30 border-t-content rounded-full animate-spin" />
                                         ) : (
                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -473,7 +459,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                             title="Vista de lista"
                                             className={`h-full px-2 flex items-center justify-center transition-all ${
                                                 viewMode === "list"
-                                                    ? "bg-brand-500 text-black"
+                                                    ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40"
                                                     : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
                                             }`}>
                                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -483,7 +469,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                             title="Vista con imagen"
                                             className={`h-full px-2 flex items-center justify-center border-l border-border/40 dark:border-white/10 transition-all ${
                                                 viewMode === "grid"
-                                                    ? "bg-brand-500 text-black"
+                                                    ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40"
                                                     : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content dark:hover:text-white"
                                             }`}>
                                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
@@ -501,7 +487,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                     </div>
                                 ) : allProducts.length === 0 ? (
                                     <div className="flex items-center justify-center py-16">
-                                        <p className="text-[11px] font-bold text-content-subtle/40 uppercase tracking-wide">Sin productos</p>
+                                        <p className="text-[12px] font-semibold text-content-subtle/40">Sin productos</p>
                                     </div>
                                 ) : viewMode === "grid" ? (
                                     <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-1.5">
@@ -510,28 +496,28 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                             const moves = adjustedCount.get(p.id) || 0;
                                             return (
                                                 <button key={p.id} onClick={() => setSelectedProduct(p)}
-                                                    className={["rounded-xl border overflow-hidden text-left transition-all relative",
+                                                    className={["bg-surface dark:bg-surface-dark-2 rounded-xl border overflow-hidden text-left transition-all relative w-full flex flex-col justify-start",
                                                         isSelected
                                                             ? "border-brand-500 ring-2 ring-brand-500/30"
                                                             : moves > 0
-                                                            ? "border-success/50"
+                                                            ? "border-emerald-500/50"
                                                             : "border-border/40 dark:border-white/10 hover:border-brand-500/40"
                                                     ].join(" ")}>
                                                     {/* 4/3 en vez de cuadrado: baja el alto de la foto sin recortar
                                                         de más, que es lo que hacía la tarjeta tan alta. La imagen va
                                                         en absolute porque en flujo normal una foto vertical estira
                                                         la tarjeta y descuadra toda la fila. */}
-                                                    <div className="aspect-[4/3] bg-surface-2 dark:bg-white/5 relative overflow-hidden">
+                                                    <div className="w-full shrink-0 aspect-[4/3] bg-surface-2 dark:bg-white/5 relative overflow-hidden">
                                                         {p.image_url ? (
                                                             <img
                                                                 src={resolveImageUrl(p.image_url)}
                                                                 alt={p.name}
                                                                 loading="lazy"
                                                                 onError={imgRetryOnError}
-                                                                className="absolute inset-0 w-full h-full object-contain p-1"
+                                                                className="absolute inset-0 w-full h-full object-cover"
                                                             />
                                                         ) : (
-                                                            <div className="absolute inset-0 flex items-center justify-center text-xl font-black text-content-subtle opacity-30">
+                                                            <div className="absolute inset-0 flex items-center justify-center text-xl font-bold text-content-subtle opacity-30">
                                                                 {p.name.charAt(0)}
                                                             </div>
                                                         )}
@@ -543,18 +529,22 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                                                 title={`Ajustado en esta sesión (${moves} ${moves === 1 ? "movimiento" : "movimientos"})`}
                                                             >
                                                                 <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
-                                                                {moves > 1 && <span className="text-[8px] font-black leading-none">{moves}</span>}
+                                                                {moves > 1 && <span className="text-[9px] font-bold leading-none">{moves}</span>}
                                                             </span>
                                                         )}
+                                                        {/* Franja de cantidad sobre la foto, igual que en Stock, Catálogo y
+                                                            POS: es el dato que se busca al ajustar inventario. */}
+                                                        {(() => {
+                                                            const [n, u] = splitQty(p.stock, p.unit);
+                                                            return (
+                                                                <StockBand qty={p.stock} value={n} unit={u} min={p.min_stock}
+                                                                    className="absolute bottom-0 inset-x-0 px-2 py-1 backdrop-blur-sm text-[14px]" />
+                                                            );
+                                                        })()}
                                                     </div>
-                                                    {/* Franja de cantidad a todo el ancho: es el dato que se busca al
-                                                        ajustar inventario, y en banda sólida se distingue de lejos. */}
-                                                    <div className={`px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide tabular-nums ${stockBand(p.stock)}`}>
-                                                        {fmt(p.stock)} <span className="opacity-75">{p.unit}</span>
-                                                    </div>
-                                                    <div className="px-1.5 py-1">
-                                                        {p.category_name && <p className="text-[8px] font-black text-content-subtle/60 uppercase tracking-wide truncate leading-none mb-0.5">{p.category_name}</p>}
-                                                        <p className={`text-[11px] font-black uppercase tracking-tight leading-tight line-clamp-2 ${isSelected ? "text-brand-500" : "text-content dark:text-white"}`}>{p.name}</p>
+                                                    <div className="px-2 py-1.5 flex flex-col gap-0.5">
+                                                        <p className="text-[11px] text-content-subtle truncate leading-none">{toNameCase(p.category_name || "General")}</p>
+                                                        <p className={`text-[12px] font-semibold leading-tight line-clamp-2 ${isSelected ? "text-brand-700 dark:text-brand-300" : "text-content dark:text-white"}`}>{p.name}</p>
                                                     </div>
                                                 </button>
                                             );
@@ -582,7 +572,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                                         className="absolute inset-0 w-full h-full object-cover"
                                                     />
                                                 ) : (
-                                                    <div className="absolute inset-0 flex items-center justify-center text-[13px] font-black text-content-subtle opacity-30">
+                                                    <div className="absolute inset-0 flex items-center justify-center text-[13px] font-bold text-content-subtle opacity-30">
                                                         {p.name.charAt(0)}
                                                     </div>
                                                 )}
@@ -595,22 +585,22 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                                             title={`Ajustado en esta sesión (${moves} ${moves === 1 ? "movimiento" : "movimientos"})`}
                                                         >
                                                             <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
-                                                            {moves > 1 && <span className="text-[7px] font-black leading-none">{moves}</span>}
+                                                            {moves > 1 && <span className="text-[8px] font-bold leading-none">{moves}</span>}
                                                         </span>
                                                     )}
-                                                    <p className={`text-[11px] font-black uppercase tracking-tight truncate ${isSelected ? "text-brand-500" : "text-content dark:text-white"}`}>{p.name}</p>
+                                                    <p className={`text-[12px] font-bold tracking-tight truncate ${isSelected ? "text-brand-500" : "text-content dark:text-white"}`}>{p.name}</p>
                                                 </div>
-                                                {p.category_name && <p className="text-[9px] text-content-subtle/50 uppercase tracking-wide mt-0.5">{p.category_name}</p>}
+                                                {p.category_name && <p className="text-[10px] text-content-subtle/50 uppercase tracking-wide mt-0.5">{p.category_name}</p>}
                                             </div>
-                                            <span className={`shrink-0 text-[11px] font-black tabular-nums ml-3 ${stockColor(p.stock)}`}>
-                                                {fmt(p.stock)} <span className="text-[9px] opacity-60">{p.unit}</span>
+                                            <span className="shrink-0 ml-3">
+                                                <StockQty qty={p.stock} value={splitQty(p.stock, p.unit)[0]} unit={splitQty(p.stock, p.unit)[1]} min={p.min_stock} size="text-[12px]" />
                                             </span>
                                         </button>
                                     );
                                 })}
                                 {loadingMore && (
                                     <div className="py-4 text-center">
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-content-subtle">Cargando más...</p>
+                                        <p className="text-[12px] font-medium text-content-subtle">Cargando más...</p>
                                     </div>
                                 )}
                             </div>
@@ -638,7 +628,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                 está siempre a la vista y no hay nada que cerrar. */}
                             <div className="lg:hidden sticky top-0 z-10 bg-white dark:bg-surface-dark-2 pt-2.5 pb-1 px-5 flex items-center justify-between border-b border-border/10 dark:border-white/[0.06]">
                                 <div className="absolute left-1/2 -translate-x-1/2 top-2 w-10 h-1 rounded-full bg-border dark:bg-white/20" />
-                                <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle mt-2">
+                                <p className="text-[12px] font-medium text-content-subtle mt-2">
                                     {selectedProduct ? "Registrar movimiento" : `Movimientos de la sesión`}
                                 </p>
                                 <button
@@ -651,17 +641,18 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                             {/* Formulario */}
                             <div className={`shrink-0 p-5 space-y-4 transition-all duration-200 ${!selectedProduct ? "hidden lg:block opacity-40 pointer-events-none" : ""}`}>
                                 {/* Producto seleccionado */}
-                                <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all ${selectedProduct ? "border-brand-500 bg-brand-500/5" : "border-border/20 dark:border-white/[0.06]"}`}>
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${selectedProduct ? "bg-brand-500" : "bg-surface-3 dark:bg-white/5"}`}>
-                                        <svg className={`w-4 h-4 ${selectedProduct ? "text-black" : "text-content-subtle"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                                <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${selectedProduct ? "border-brand-500/40 bg-brand-500/[0.06]" : "border-border/20 dark:border-white/[0.06]"}`}>
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${selectedProduct ? "bg-brand-500/15" : "bg-surface-3 dark:bg-white/5"}`}>
+                                        <svg className={`w-4 h-4 ${selectedProduct ? "text-brand-700 dark:text-brand-300" : "text-content-subtle"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[11px] font-black uppercase tracking-tight text-content dark:text-white truncate">
+                                        <p className="text-[12px] font-bold tracking-tight text-content dark:text-white truncate">
                                             {selectedProduct?.name || "← Selecciona un producto"}
                                         </p>
                                         {selectedProduct && (
-                                            <p className={`text-[10px] font-black ${stockColor(selectedProduct.stock)}`}>
-                                                Stock actual: {fmt(selectedProduct.stock)} {selectedProduct.unit}
+                                            <p className="text-[12px] text-content-subtle flex items-center gap-1.5">
+                                                Stock actual
+                                                <StockQty qty={selectedProduct.stock} value={splitQty(selectedProduct.stock, selectedProduct.unit)[0]} unit={splitQty(selectedProduct.stock, selectedProduct.unit)[1]} min={selectedProduct.min_stock} size="text-[12px]" />
                                             </p>
                                         )}
                                     </div>
@@ -670,12 +661,12 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                 {/* Tipo */}
                                 <div className="bg-surface-3 dark:bg-white/5 p-1 rounded-xl flex gap-1 border border-border/10">
                                     <button onClick={() => setForm(p => ({ ...p, type: "out", reason: "merma" }))}
-                                        className={`flex-1 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all font-black uppercase text-[10px] tracking-widest ${form.type === "out" ? "bg-danger text-white shadow-lg shadow-danger/20" : "text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                        className={`flex-1 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all font-bold text-[11px] ${form.type === "out" ? "bg-white dark:bg-white/15 text-red-600 dark:text-red-400 shadow-[0_1px_2px_rgb(0_0_0/0.08),0_0_0_1px_rgb(0_0_0/0.04)]" : "text-content-subtle hover:text-content dark:hover:text-white"}`}>
                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                         Restar (Salida)
                                     </button>
                                     <button onClick={() => setForm(p => ({ ...p, type: "in", reason: "compra" }))}
-                                        className={`flex-1 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all font-black uppercase text-[10px] tracking-widest ${form.type === "in" ? "bg-success text-white shadow-lg shadow-success/20" : "text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                        className={`flex-1 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all font-bold text-[11px] ${form.type === "in" ? "bg-white dark:bg-white/15 text-emerald-700 dark:text-emerald-400 shadow-[0_1px_2px_rgb(0_0_0/0.08),0_0_0_1px_rgb(0_0_0/0.04)]" : "text-content-subtle hover:text-content dark:hover:text-white"}`}>
                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                         Sumar (Entrada)
                                     </button>
@@ -685,7 +676,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                     <div>
                                         <label className="label">
                                             Cantidad
-                                            {selectedProduct?.unit && <span className="ml-1 opacity-40 font-bold">({selectedProduct.unit})</span>}
+                                            {selectedProduct?.unit && <span className="ml-1 opacity-40 font-semibold">({selectedProduct.unit})</span>}
                                         </label>
                                         <input type="number" min="0"
                                             step={isIntegerUnit(selectedProduct?.unit) ? "1" : "0.01"}
@@ -696,7 +687,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                                 if (isIntegerUnit(selectedProduct?.unit)) v = String(v).replace(/[.,].*$/, "");
                                                 setForm(p => ({ ...p, quantity: v }));
                                             }}
-                                            className={`input h-10 text-[13px] font-black tabular-nums ${form.type === "out" ? "text-danger" : "text-success"}`} />
+                                            className={`input h-10 text-[13px] tabular-nums ${form.type === "out" ? "text-danger" : "text-success"}`} />
                                     </div>
                                     <div>
                                         <label className="label">Motivo</label>
@@ -713,9 +704,9 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                 </div>
 
                                 <button onClick={handleSave} disabled={saving || !selectedProduct}
-                                    className={`w-full h-11 rounded-xl font-black uppercase tracking-widest text-[11px] transition-all flex items-center justify-center gap-2 ${saving || !selectedProduct ? "bg-surface-3 dark:bg-white/5 text-content-subtle cursor-not-allowed" : form.type === "out" ? "bg-danger text-white hover:brightness-110 shadow-lg shadow-danger/20" : "bg-success text-black hover:brightness-110 shadow-lg shadow-success/20"}`}>
+                                    className={`w-full h-11 rounded-lg font-semibold text-[13px] transition-all flex items-center justify-center gap-2 ${saving || !selectedProduct ? "bg-surface-3 dark:bg-white/5 text-content-subtle cursor-not-allowed" : "btn-accent active:scale-[0.99]"}`}>
                                     {saving && <Spinner />}
-                                    {saving ? "Registrando..." : "Registrar Movimiento"}
+                                    {saving ? "Registrando..." : "Registrar movimiento"}
                                 </button>
                             </div>
 
@@ -723,7 +714,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                             {session?.lines?.length > 0 && (
                                 <div className="shrink-0 border-t border-border/10 dark:border-white/[0.06]">
                                     <div className="px-5 py-2.5 flex items-center justify-between">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle">
+                                        <p className="text-[12px] font-medium text-content-subtle">
                                             Movimientos en esta sesión ({session.lines.length})
                                         </p>
                                     </div>
@@ -731,14 +722,14 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                         {[...session.lines].reverse().map(line => (
                                             <div key={line.id} className="px-5 py-2.5 flex items-center justify-between gap-3">
                                                 <div className="min-w-0 flex-1">
-                                                    <p className="text-[11px] font-black text-content dark:text-white truncate">{line.product_name}</p>
-                                                    <p className="text-[9px] text-content-subtle/50 uppercase">{reasonLabel(line.reason)}</p>
+                                                    <p className="text-[12px] font-bold text-content dark:text-white truncate">{line.product_name}</p>
+                                                    <p className="text-[10px] text-content-subtle/50 uppercase">{reasonLabel(line.reason)}</p>
                                                 </div>
                                                 <div className="text-right shrink-0">
-                                                    <p className={`text-[11px] font-black tabular-nums ${line.type === "in" ? "text-success" : "text-danger"}`}>
+                                                    <p className={`text-[12px] font-bold tabular-nums ${line.type === "in" ? "text-success" : "text-danger"}`}>
                                                         {line.type === "in" ? "+" : ""}{fmt(line.qty_adjusted)}
                                                     </p>
-                                                    <p className="text-[9px] text-content-subtle/40 tabular-nums">{fmt(line.qty_before)} → {fmt(line.qty_after)}</p>
+                                                    <p className="text-[10px] text-content-subtle/40 tabular-nums">{fmt(line.qty_before)} → {fmt(line.qty_after)}</p>
                                                 </div>
                                             </div>
                                         ))}
@@ -760,7 +751,7 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                     ) : history.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 gap-2 opacity-30">
                             <svg className="w-8 h-8 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                            <p className="text-[11px] font-black uppercase tracking-wide text-content-subtle">Sin sesiones registradas</p>
+                            <p className="text-[12px] font-bold text-content-subtle">Sin sesiones registradas</p>
                         </div>
                     ) : history.map(s => {
                         const isOpen     = s.status === "open";
@@ -774,17 +765,17 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                         <span className={`w-2 h-2 rounded-full shrink-0 ${isOpen ? "bg-success animate-pulse" : "bg-content-subtle/30"}`} />
                                         <div className="min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="text-[11px] font-black text-content dark:text-white">{s.employee_name || "Sistema"}</span>
-                                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase ${isOpen ? "bg-success/10 text-success" : "bg-surface-3 dark:bg-white/5 text-content-subtle"}`}>
+                                                <span className="text-[12px] font-bold text-content dark:text-white">{toNameCase(s.employee_name) || "Sistema"}</span>
+                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${isOpen ? "bg-success/10 text-success" : "bg-surface-3 dark:bg-white/5 text-content-subtle"}`}>
                                                     {isOpen ? "Abierta" : "Cerrada"}
                                                 </span>
                                             </div>
-                                            <p className="text-[9px] text-content-subtle/50 mt-0.5">{fmtDate(s.opened_at)}{s.closed_at ? ` → ${fmtDate(s.closed_at)}` : ""}</p>
-                                            {s.notes && <p className="text-[9px] text-content-subtle/40 italic mt-0.5 truncate">{s.notes}</p>}
+                                            <p className="text-[10px] text-content-subtle/50 mt-0.5">{fmtDate(s.opened_at)}{s.closed_at ? ` → ${fmtDate(s.closed_at)}` : ""}</p>
+                                            {s.notes && <p className="text-[10px] text-content-subtle/40 italic mt-0.5 truncate">{s.notes}</p>}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0">
-                                        <span className="text-[10px] font-black text-brand-500 tabular-nums">{lineCount} mov.</span>
+                                        <span className="text-[11px] font-bold text-brand-500 tabular-nums">{lineCount} mov.</span>
                                         <svg className={`w-3.5 h-3.5 text-content-subtle transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
                                     </div>
                                 </button>
@@ -793,14 +784,14 @@ export default function AdjustmentsView({ selectedWarehouse, notify, onChangeWar
                                         {s.lines.map(line => (
                                             <div key={line.id} className="px-5 py-2.5 flex items-center justify-between gap-3 bg-surface-1/30 dark:bg-white/[0.01]">
                                                 <div className="min-w-0 flex-1">
-                                                    <p className="text-[11px] font-bold text-content dark:text-white truncate">{line.product_name}</p>
-                                                    <p className="text-[9px] text-content-subtle/50 uppercase">{reasonLabel(line.reason)} {line.notes ? `· ${line.notes}` : ""}</p>
+                                                    <p className="text-[12px] font-semibold text-content dark:text-white truncate">{line.product_name}</p>
+                                                    <p className="text-[10px] text-content-subtle/50 uppercase">{reasonLabel(line.reason)} {line.notes ? `· ${line.notes}` : ""}</p>
                                                 </div>
                                                 <div className="text-right shrink-0">
-                                                    <p className={`text-[11px] font-black tabular-nums ${line.type === "in" ? "text-success" : "text-danger"}`}>
+                                                    <p className={`text-[12px] font-bold tabular-nums ${line.type === "in" ? "text-success" : "text-danger"}`}>
                                                         {line.type === "in" ? "+" : ""}{fmt(line.qty_adjusted)}
                                                     </p>
-                                                    <p className="text-[9px] text-content-subtle/40 tabular-nums">{fmt(line.qty_before)} → {fmt(line.qty_after)}</p>
+                                                    <p className="text-[10px] text-content-subtle/40 tabular-nums">{fmt(line.qty_before)} → {fmt(line.qty_after)}</p>
                                                 </div>
                                             </div>
                                         ))}

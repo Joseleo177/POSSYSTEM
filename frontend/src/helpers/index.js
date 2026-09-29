@@ -13,3 +13,4 @@ export * from "./printKitchenOrder";
 export * from "./printQuotationLetter";
 export * from "./journals";
 export * from "./overlayGuard";
+export * from "./text";

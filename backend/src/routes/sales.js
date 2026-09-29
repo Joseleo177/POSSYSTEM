@@ -4,7 +4,11 @@ const { permit, warehouseAccess } = require("../middleware/auth");
 
 router.get("/", permit("sales.view"),          ctrl.getAll);
 router.get("/stats",     permit("sales.view"), ctrl.getStats);
+// Cuentas por cobrar: antes de "/:id", o "receivables" se tomaría por un id.
+router.get("/receivables", permit("sales.view", "accounting.view"), ctrl.receivables);
 router.get("/:id", permit("sales.view"),       ctrl.getOne);
+// El vencimiento lo ajusta quien da crédito o edita ventas.
+router.patch("/:id/due-date", permit("sales.credit", "sales.edit"), ctrl.setDueDate);
 // Se vende desde el almacén asignado: sin esto, la API acepta cualquier warehouse_id y la
 // venta descuenta stock de otra sucursal.
 router.post("/",         permit("sales.create"), warehouseAccess(req => req.body?.warehouse_id), ctrl.create);

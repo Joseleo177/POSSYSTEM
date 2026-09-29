@@ -34,11 +34,20 @@ async function getAll(req) {
       raw: true,
     }),
     sequelize.query(
-      `SELECT warehouse_id,
-              COUNT(DISTINCT product_id)::int AS product_count,
-              COALESCE(SUM(qty), 0)::float    AS total_stock
-         FROM product_stock
-         GROUP BY warehouse_id`,
+      // Agotados y bajos para la salud del almacén en su tarjeta. "Bajo" es la misma regla
+      // que ui/StockQty en el front: el mínimo de la sucursal o del producto; sin mínimo, 5.
+      // Servicios y combos no llevan existencia propia y quedan fuera. LEFT JOIN para no
+      // alterar los dos conteos de siempre si una fila apunta a un producto que ya no está.
+      `SELECT ps.warehouse_id,
+              COUNT(DISTINCT ps.product_id)::int AS product_count,
+              COALESCE(SUM(ps.qty), 0)::float    AS total_stock,
+              COUNT(*) FILTER (WHERE NOT p.is_service AND NOT p.is_combo AND ps.qty <= 0)::int AS out_count,
+              COUNT(*) FILTER (WHERE NOT p.is_service AND NOT p.is_combo AND ps.qty > 0
+                               AND ps.qty <= CASE WHEN COALESCE(ps.min_stock, p.min_stock, 0) > 0
+                                                  THEN COALESCE(ps.min_stock, p.min_stock) ELSE 5 END)::int AS low_count
+         FROM product_stock ps
+         LEFT JOIN products p ON p.id = ps.product_id
+         GROUP BY ps.warehouse_id`,
       { type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
@@ -63,6 +72,8 @@ async function getAll(req) {
       ...w,
       product_count: agg ? agg.product_count : 0,
       total_stock:   agg ? agg.total_stock   : 0,
+      out_count:     agg ? agg.out_count     : 0,
+      low_count:     agg ? agg.low_count     : 0,
       assigned_employees: empsByWh.get(w.id) || [],
       parent_warehouse_name: w.parent_warehouse_id ? (nameById.get(w.parent_warehouse_id) || null) : null,
     };

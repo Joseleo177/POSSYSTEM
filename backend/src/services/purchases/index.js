@@ -1,1 +1,4 @@
-module.exports = require("./purchaseService");
+module.exports = {
+  ...require("./purchaseService"),
+  ...require("./payablesService"),
+};

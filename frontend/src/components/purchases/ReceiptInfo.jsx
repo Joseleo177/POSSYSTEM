@@ -39,7 +39,7 @@ export default function ReceiptInfo({ state }) {
         <div className="card-premium mb-3 overflow-visible bg-surface-1 dark:bg-white/[0.01]">
             <div className="flex items-center gap-2 mb-3">
                 <span className="w-1.5 h-1.5 rounded-full bg-brand-500" />
-                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-content-subtle">Cabecera del Recibo de Compra</div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-content-subtle">Cabecera del recibo de compra</div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
@@ -48,12 +48,12 @@ export default function ReceiptInfo({ state }) {
                     queda fijo en el único disponible desde el hook. */}
                 {warehouses.length > 1 && (
                     <div className="md:col-span-3">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Almacén Destino</label>
+                        <label className="text-[11px] font-semibold text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Almacén destino</label>
                         <CustomSelect
                             value={String(selectedWarehouseId || "")}
                             onChange={val => setSelectedWarehouseId(val)}
                             options={warehouses.map(w => ({ value: String(w.id), label: w.name.toUpperCase() }))}
-                            placeholder="Seleccionar Almacén..."
+                            placeholder="Seleccionar almacén..."
                             className="w-full"
                         />
                     </div>
@@ -64,13 +64,13 @@ export default function ReceiptInfo({ state }) {
                     {/* El borrador se guarda sin proveedor —es el papel de trabajo donde se
                         arma la lista antes de decidir a quién comprarle—, pero confirmar o
                         recibir sí lo exige, así que se marca desde el principio. */}
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Proveedor <span className="text-danger">*</span></label>
+                    <label className="text-[11px] font-semibold text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Proveedor <span className="text-danger">*</span></label>
 
                     {selectedSupplier ? (
                         <div className="h-9 flex items-center justify-between gap-3 bg-brand-500/5 border border-brand-500/20 rounded-lg px-3 animate-in zoom-in-95 duration-200">
                             <div className="flex-1 min-w-0">
-                                <div className="text-xs font-bold text-brand-500 uppercase truncate tracking-tight">{selectedSupplier.name}</div>
-                                <div className="text-[9px] font-bold text-brand-500/50 tabular-nums">RIF: {selectedSupplier.rif}</div>
+                                <div className="text-xs font-semibold text-brand-500 truncate tracking-tight">{selectedSupplier.name}</div>
+                                <div className="text-[10px] font-semibold text-brand-500/50 tabular-nums">RIF: {selectedSupplier.rif}</div>
                             </div>
                             <button
                                 onClick={() => setSelectedSupplier(null)}
@@ -94,18 +94,18 @@ export default function ReceiptInfo({ state }) {
                             </div>
 
                             {supplierSearch.trim() !== "" && (
-                                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-xl shadow-2xl p-1 max-h-[200px] overflow-y-auto animate-in fade-in slide-in-from-top-2">
+                                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_12px_40px_-8px_rgb(0_0_0/0.22)] p-1 max-h-[200px] overflow-y-auto popover-in">
                                     {supplierResults.length === 0 ? (
                                         <div className="p-3 text-center">
-                                            <div className="text-[10px] font-bold text-content-subtle uppercase mb-2">Sin resultados</div>
-                                            <button onClick={() => openCreateSupplier(supplierSearch)} className="text-[10px] font-bold text-brand-500 uppercase hover:underline">+ Crear Nuevo</button>
+                                            <div className="text-[11px] font-semibold text-content-subtle uppercase mb-2">Sin resultados</div>
+                                            <button onClick={() => openCreateSupplier(supplierSearch)} className="text-[11px] font-semibold text-brand-500 uppercase hover:underline">+ Crear nuevo</button>
                                         </div>
                                     ) : (
                                         supplierResults.map(s => (
                                             <div key={s.id} onClick={() => selectSupplier(s)} className="p-3 hover:bg-brand-500/10 rounded-lg cursor-pointer flex justify-between items-center transition-colors group">
                                                 <div>
-                                                    <div className="text-xs font-bold uppercase tracking-tight group-hover:text-brand-500">{s.name}</div>
-                                                    <div className="text-[10px] text-content-subtle opacity-60 tabular-nums">RIF: {s.rif}</div>
+                                                    <div className="text-xs font-semibold tracking-tight group-hover:text-brand-500">{s.name}</div>
+                                                    <div className="text-[11px] text-content-subtle opacity-60 tabular-nums">RIF: {s.rif}</div>
                                                 </div>
                                                 <svg className="w-3.5 h-3.5 text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                                             </div>
@@ -119,7 +119,7 @@ export default function ReceiptInfo({ state }) {
 
                 {/* Notas */}
                 <div className="md:col-span-3">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Notas / Referencia</label>
+                    <label className="text-[11px] font-semibold text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Notas / referencia</label>
                     <input
                         value={notes}
                         onChange={e => setNotes(e.target.value)}
@@ -133,13 +133,13 @@ export default function ReceiptInfo({ state }) {
                     no una preferencia de visualización de la tabla. */}
                 {nonBaseCurrencies.length > 0 && (
                     <div className="md:col-span-3">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Moneda / Tasa</label>
+                        <label className="text-[11px] font-semibold text-content-subtle dark:text-content-dark-muted mb-1 block px-1">Moneda / tasa</label>
                         <div className="flex items-center gap-1.5">
                             <div className="flex items-center h-9 rounded-lg overflow-hidden border border-border/40 dark:border-white/10 shrink-0">
                                 <button
                                     type="button"
                                     onClick={() => selectInvoiceCurrency(null)}
-                                    className={`h-full px-2 text-[10px] font-black uppercase tracking-wide transition-all ${!invoiceCurrency ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
+                                    className={`h-full px-2 text-[11px] font-bold transition-all ${!invoiceCurrency ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
                                     title="Cargar costos en moneda base"
                                 >
                                     {baseCurrency?.symbol || "Ref."}
@@ -149,7 +149,7 @@ export default function ReceiptInfo({ state }) {
                                         key={c.id}
                                         type="button"
                                         onClick={() => selectInvoiceCurrency(c)}
-                                        className={`h-full px-2 text-[10px] font-black uppercase tracking-wide border-l border-border/40 dark:border-white/10 transition-all ${invoiceCurrency?.id === c.id ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
+                                        className={`h-full px-2 text-[11px] font-bold border-l border-border/40 dark:border-white/10 transition-all ${invoiceCurrency?.id === c.id ? "bg-brand-500 text-white" : "text-content-subtle dark:text-white/30 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}
                                         title={`Cargar costos en ${c.name}`}
                                     >
                                         {c.code}

@@ -9,10 +9,12 @@ export const fmtN = (n) => fmtInt(n);
 export const pct = (part, total) => total > 0 ? ((part / total) * 100).toFixed(1) : "0.0";
 export const delta = (curr, prev) => prev > 0 ? (((curr - prev) / prev) * 100).toFixed(1) : null;
 
+// Todos los métodos comparten el color de los gráficos (ver ProgressBar): la barra mide
+// cuánto entró por cada uno, no quién es. Se conserva el mapa para no romper las llamadas.
 export const METHOD_COLORS = {
- efectivo: "bg-success", transferencia: "bg-info", banco: "bg-info",
- movil: "bg-violet-500", pago_movil: "bg-violet-500", zelle: "bg-warning",
- punto_venta: "bg-brand-500", otro: "bg-surface-3",
+ efectivo: "bg-chart", transferencia: "bg-chart", banco: "bg-chart",
+ movil: "bg-chart", pago_movil: "bg-chart", zelle: "bg-chart",
+ punto_venta: "bg-chart", otro: "bg-chart",
 };
 
 // ── Hook de reporte genérico ──────────────────────────────────
@@ -111,25 +113,27 @@ export function NightShiftNotice({ from, to, dateFrom, dateTo }) {
      <svg className="w-3 h-3 shrink-0 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
      </svg>
-     <span className="text-[10px] font-bold uppercase tracking-tight text-brand-500 whitespace-nowrap">
+     <span className="text-[11px] font-semibold uppercase tracking-tight text-brand-500 whitespace-nowrap">
        {jornadas === 1 ? "Jornada" : `${jornadas} jornadas`}: {ventana}
      </span>
    </div>
  );
 }
 
-export function KpiCard({ label, value, sub, icon, color = "text-brand-500", delta: d }) {
+// Cifra destacada. La cifra va SIEMPRE en tinta: antes cada tarjeta traía su color (verde,
+// azul, rojo) y cuatro tarjetas en fila se leían como un semáforo sin significado. El color
+// queda para lo que sí lo tiene —la variación contra el período anterior—. `color` se acepta
+// por compatibilidad con las llamadas viejas, pero ya no pinta la cifra.
+// eslint-disable-next-line no-unused-vars
+export function KpiCard({ label, value, sub, icon, color, delta: d }) {
  return (
- <div className="rounded-xl border border-border dark:border-white/5 bg-white dark:bg-white/5 p-3 flex flex-col gap-1 shadow-sm transition-all group overflow-auto">
- <div className="flex justify-between items-start">
- <div className="text-[11px] font-black text-content-muted dark:text-content-dark-muted uppercase tracking-wide leading-none">{label}</div>
- <span className="text-sm opacity-30">{icon}</span>
- </div>
- <div className={`text-xl font-black ${color} tracking-tight leading-none tabular-nums font-display`}>{value}</div>
- <div className="flex items-center justify-between gap-1 mt-0.5">
- {sub && <div className="text-[10px] font-bold text-content-muted dark:text-content-dark-muted opacity-60 truncate">{sub}</div>}
+ <div className="rounded-xl border border-border/70 dark:border-white/[0.06] bg-white dark:bg-white/[0.03] px-4 py-3.5 flex flex-col gap-1.5 min-w-0">
+ <div className="text-[12px] font-medium text-content-subtle leading-none truncate">{label}</div>
+ <div className="text-[22px] font-bold text-content dark:text-white tracking-[-0.02em] leading-none tabular-nums truncate">{value}</div>
+ <div className="flex items-center justify-between gap-2 min-h-[16px]">
+ {sub && <div className="text-[12px] text-content-subtle truncate">{sub}</div>}
  {d !== null && d !== undefined && (
- <div className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${parseFloat(d) >= 0 ? "text-green-500 bg-green-500/10" : "text-danger bg-danger/10"}`}>
+ <div className={`text-[12px] font-semibold tabular-nums shrink-0 ${parseFloat(d) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
  {parseFloat(d) >= 0 ? "▲" : "▼"} {Math.abs(d)}%
  </div>
  )}
@@ -138,21 +142,36 @@ export function KpiCard({ label, value, sub, icon, color = "text-brand-500", del
  );
 }
 
-export function SectionHeader({ title, sub }) {
+// Título de tarjeta: en tinta y caja normal. El título en color de marca y el subtítulo en
+// versalitas competían con los datos de la tarjeta.
+export function SectionHeader({ title, sub, right }) {
  return (
- <div className="flex flex-col gap-0.5 mb-2">
- <div className="text-[11px] font-black text-brand-500 uppercase tracking-wide leading-none">
- {title}
+ <div className="flex items-start justify-between gap-3 mb-3">
+ <div className="min-w-0">
+ <div className="text-[14px] font-semibold text-content dark:text-white leading-tight">{title}</div>
+ {sub && <div className="text-[12px] text-content-subtle mt-0.5">{sub}</div>}
  </div>
- {sub && <div className="text-[10px] font-bold text-content-muted dark:text-content-dark-muted opacity-60 uppercase tracking-tight">{sub}</div>}
+ {right}
  </div>
  );
 }
 
 export function Card({ children, className = "" }) {
  return (
- <div className={`bg-white dark:bg-white/5 rounded-xl border border-border dark:border-white/5 p-3 shadow-sm transition-all ${className}`}>
+ <div className={`bg-white dark:bg-white/[0.03] rounded-xl border border-border/70 dark:border-white/[0.06] p-4 ${className}`}>
  {children}
+ </div>
+ );
+}
+
+// Dato destacado dentro de una tarjeta ("Pico de actividad", "Mejor día"): rótulo gris y
+// cifra en tinta sobre un fondo apenas gris. Antes era una caja punteada en color de marca
+// con el rótulo en versalitas.
+export function Callout({ label, children }) {
+ return (
+ <div className="mt-3 px-3 py-2.5 rounded-lg bg-surface-2 dark:bg-white/[0.04] flex items-center justify-between gap-3">
+ <span className="text-[12px] text-content-subtle">{label}</span>
+ <span className="text-[13px] font-semibold text-content dark:text-white tabular-nums text-right">{children}</span>
  </div>
  );
 }
@@ -161,17 +180,20 @@ export function Loading() {
  return (
  <div className="flex flex-col items-center justify-center py-24 gap-4">
  <div className="w-12 border-4 border-brand-500/20 border-t-brand-500 rounded-full animate-spin" />
- <div className="text-[11px] font-black text-content-muted dark:text-content-subtle uppercase tracking-wide">Cargando reporte...</div>
+ <div className="text-[12px] font-bold text-content-muted dark:text-content-subtle">Cargando reporte...</div>
  </div>
  );
 }
 
+// Botón de borde de la barra de reportes (Excel, PDF): mismo alto que los filtros (h-10) y sin
+// color propio. Antes Excel iba en verde y PDF en rojo, y el rojo se leía como un error.
+export const REPORT_BTN = "btn-outline shrink-0 whitespace-nowrap flex items-center gap-2 h-10 px-3 sm:px-4 text-[13px] font-semibold rounded-lg active:scale-[0.98] disabled:opacity-60";
+
 export function ExportButton({ onClick, loading = false }) {
  if (loading) {
  return (
- <button disabled
- className="shrink-0 whitespace-nowrap flex items-center gap-2 px-3 sm:px-4 py-2 text-[11px] font-black uppercase tracking-wide rounded-xl border border-green-500/30 text-green-500 bg-green-500/5 opacity-60 animate-pulse shadow-sm">
- <div className="w-4 h-4 shrink-0 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin" />
+ <button disabled className={REPORT_BTN}>
+ <div className="w-4 h-4 shrink-0 border-2 border-content-subtle/25 border-t-content-subtle rounded-full animate-spin" />
  Generando...
  </button>
  );
@@ -180,10 +202,9 @@ export function ExportButton({ onClick, loading = false }) {
  // shrink-0 y whitespace-nowrap: compartiendo fila con el buscador y los filtros, el botón se
  // comprimía hasta partir "Exportar Excel" en dos líneas y quedaba el doble de alto que sus
  // vecinos. En pantallas estrechas la etiqueta se acorta en vez de envolverse.
- <button onClick={onClick} title="Exportar a Excel"
- className="shrink-0 whitespace-nowrap flex items-center gap-2 px-3 sm:px-4 py-2 text-[11px] font-black uppercase tracking-wide rounded-xl border border-green-500/30 text-green-500 bg-green-500/5 hover:bg-green-500 hover:text-white transition-all shadow-sm">
- <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
- <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+ <button onClick={onClick} title="Exportar a Excel" className={REPORT_BTN}>
+ <svg className="w-4 h-4 shrink-0 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
  </svg>
  <span className="hidden sm:inline">Exportar Excel</span>
  <span className="sm:hidden">Excel</span>
@@ -191,29 +212,85 @@ export function ExportButton({ onClick, loading = false }) {
  );
 }
 
+// Estado de existencias con el mismo lenguaje que las tablas: "OK" en gris con su check, y
+// punto de color solo para lo que pide reponer.
 export function StockBadge({ qty, min }) {
- if (parseFloat(qty) <= 0) return <span className="text-[11px] font-black text-danger bg-danger/10 px-1.5 py-0.5 rounded border border-danger/20">SIN STOCK</span>;
- if (min > 0 && parseFloat(qty) < parseFloat(min)) return <span className="text-[11px] font-black text-warning bg-warning/10 px-1.5 py-0.5 rounded border border-warning/20">CRÍTICO</span>;
- return <span className="text-[11px] font-black text-success bg-success/10 px-1.5 py-0.5 rounded border border-success/20">OK</span>;
+ const mark = (label, dot, text) => (
+ <span className={`inline-flex items-center gap-2 text-[12px] font-semibold whitespace-nowrap ${text}`}>
+ <span className={`w-1.5 h-1.5 rounded-full ring-4 ${dot}`} />{label}
+ </span>
+ );
+ if (parseFloat(qty) <= 0) return mark("Sin stock", "bg-red-500 ring-red-500/20", "text-red-600 dark:text-red-400");
+ if (min > 0 && parseFloat(qty) < parseFloat(min)) return mark("Crítico", "bg-amber-500 ring-amber-500/20", "text-amber-700 dark:text-amber-400");
+ return (
+ <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-content-subtle">
+ <svg className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+ OK
+ </span>
+ );
 }
 
-export function ProgressBar({ value, max, color = "bg-warning" }) {
+// Barra de proporción de una lista (canales de pago, vendedores, productos). Un solo tono
+// —el de los gráficos— porque mide magnitud; el nombre de cada fila ya dice quién es. Antes
+// cada método de pago traía su color y la tarjeta parecía un arcoíris. `color` solo se
+// respeta si es un color de estado (rojo/ámbar), que sí significa algo.
+export function ProgressBar({ value, max, color }) {
  const w = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+ const fill = /\b(bg-danger|bg-red-|bg-amber-|bg-warning)/.test(color || "") ? color : "bg-chart";
  return (
- <div className="h-1.5 bg-surface-3 dark:bg-surface-dark-3 rounded-full overflow-auto">
- <div className={`h-full rounded-full ${color} transition-all duration-700`} style={{ width: `${w}%` }} />
+ <div className="h-1.5 bg-surface-3 dark:bg-white/[0.06] rounded-full overflow-hidden">
+ <div className={`h-full rounded-full ${fill} transition-all duration-700`} style={{ width: `${w}%` }} />
  </div>
  );
 }
 
+// Color de un tramo. "chart" y "chart-muted" (o sin color) salen de las variables CSS del
+// tema, que el canvas no puede leer como clase. Los amarillos que traían las llamadas viejas
+// (#FFB800, #fabd2f) se tratan como "chart": ese amarillo con degradado es lo que se cambió.
+const LEGACY_YELLOW = /^#?(ffb800|fabd2f|f59e0b|fbbf24)/i;
+const cssVar = (name) => typeof document === "undefined" ? "" :
+ getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const resolveColor = (c) => {
+ if (!c || LEGACY_YELLOW.test(c) || c === "chart") return `rgb(${cssVar("--c-chart")})`;
+ if (c === "chart-muted") return `rgb(${cssVar("--c-chart-muted")})`;
+ return c;
+};
+
+// Redibuja el canvas al cambiar de tema (la clase .dark del <html>): los colores se leen al
+// dibujar, y sin esto el gráfico se quedaba con los del tema anterior.
+function useThemeKey() {
+ const [k, setK] = useState(0);
+ useEffect(() => {
+ const o = new MutationObserver(() => setK(x => x + 1));
+ o.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+ return () => o.disconnect();
+ }, []);
+ return k;
+}
+
 // `series` dibuja varios tramos apilados por barra ([{ key, color, label }], de abajo
 // hacia arriba); `yKey` + `color` siguen sirviendo para el caso de una sola serie.
-export function BarChart({ data, xKey, yKey, series, color = "#fabd2f", height = 160 }) {
+// `format` da el texto de la etiqueta flotante (por defecto, monto en Ref.).
+export function BarChart({ data, xKey, yKey, series, color = "chart", height = 160, format = fmt$ }) {
  const ref = useRef(null);
+ const wrapRef = useRef(null);
+ const geo = useRef(null);
+ const [hover, setHover] = useState(null);
+ const [width, setWidth] = useState(0);
+ const themeKey = useThemeKey();
  const tramos = useMemo(
  () => (series?.length ? series : [{ key: yKey, color }]),
  [series, yKey, color]
  );
+
+ // Redibujo al cambiar el ancho (sidebar, ventana): antes quedaba estirado o cortado.
+ useEffect(() => {
+ if (!wrapRef.current) return;
+ const ro = new ResizeObserver(([e]) => setWidth(Math.round(e.contentRect.width)));
+ ro.observe(wrapRef.current);
+ return () => ro.disconnect();
+ }, []);
+
  useEffect(() => {
  if (!data?.length || !ref.current) return;
  const canvas = ref.current;
@@ -225,52 +302,88 @@ export function BarChart({ data, xKey, yKey, series, color = "#fabd2f", height =
  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
  const totalDe = d => tramos.reduce((t, s) => t + (parseFloat(d[s.key]) || 0), 0);
  const maxY = Math.max(...data.map(totalDe), 1);
- const pad = { top: 10, right: 10, bottom: 28, left: 55 };
+ const pad = { top: 10, right: 8, bottom: 26, left: 44 };
  const cW = W - pad.left - pad.right;
  const cH = H - pad.top - pad.bottom;
  const slotW = cW / data.length;
- // Antes el ancho se topaba en 40px, así que con pocos días las barras quedaban
- // flotando en medio de slots enormes. Ahora llenan el slot menos una holgura.
- const barW = Math.max(3, Math.min(slotW - Math.min(12, slotW * 0.14), 120));
+ // Llenan el slot menos una holgura, con tope para que 3 días no den barras de 300px.
+ const barW = Math.max(3, Math.min(slotW - Math.min(12, slotW * 0.25), 72));
+ geo.current = { pad, slotW, cH, maxY, H };
+ const axis = `rgb(${cssVar("--c-content-subtle")} / 0.85)`;
+ const colores = tramos.map(s => resolveColor(s.color));
  ctx.clearRect(0, 0, W, H);
+
+ // Rejilla y eje: recesivos. Cuatro guías, solo la base con más peso.
  for (let i = 0; i <= 4; i++) {
- const y = pad.top + (cH / 4) * i;
- ctx.strokeStyle = "rgba(150,150,150,0.1)"; ctx.lineWidth = 1;
+ const y = Math.round(pad.top + (cH / 4) * i) + 0.5;
+ ctx.strokeStyle = i === 4 ? `rgb(${cssVar("--c-content-subtle")} / 0.35)` : `rgb(${cssVar("--c-content-subtle")} / 0.12)`;
+ ctx.lineWidth = 1;
  ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
- ctx.fillStyle = "rgba(150,150,150,0.6)"; ctx.font = "9px Inter,sans-serif"; ctx.textAlign = "right";
+ ctx.fillStyle = axis; ctx.font = "500 10px Inter,sans-serif"; ctx.textAlign = "right";
  const v = maxY * (1 - i / 4);
- ctx.fillText(v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0), pad.left - 4, y + 3);
+ ctx.fillText(v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0), pad.left - 8, y + 3);
  }
+
  data.forEach((d, i) => {
  const x = pad.left + i * slotW + (slotW - barW) / 2;
  let base = pad.top + cH;   // se apila de abajo hacia arriba
+ // Con el cursor encima de una barra, las demás se atenúan: se ve cuál describe la etiqueta.
+ ctx.globalAlpha = hover === null || hover === i ? 1 : 0.45;
+ const vivos = tramos.filter(s => (parseFloat(d[s.key]) || 0) > 0);
  tramos.forEach((s, si) => {
- const alto = ((parseFloat(d[s.key]) || 0) / maxY) * cH;
+ let alto = ((parseFloat(d[s.key]) || 0) / maxY) * cH;
  if (alto <= 0) return;
+ const esTope = s === vivos[vivos.length - 1];
+ // 2px de fondo entre tramos apilados, para que se lean como dos partes y no una mancha.
+ const hueco = !esTope && alto > 4 ? 2 : 0;
  const y = base - alto;
- const grad = ctx.createLinearGradient(0, y, 0, base);
- grad.addColorStop(0, s.color + "cc"); grad.addColorStop(1, s.color + "22");
- ctx.fillStyle = grad;
- // Solo el tramo de más arriba lleva las esquinas redondeadas.
- const r = si === tramos.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0];
- ctx.beginPath(); ctx.roundRect(x, y, barW, alto, r); ctx.fill();
+ ctx.fillStyle = colores[si];
+ ctx.beginPath(); ctx.roundRect(x, y + hueco, barW, alto - hueco, esTope ? [4, 4, 0, 0] : 0); ctx.fill();
  base = y;
  });
+ ctx.globalAlpha = 1;
  const step = Math.ceil(data.length / 10);
  if (i % step === 0) {
- ctx.fillStyle = "rgba(150,150,150,0.7)"; ctx.font = "8px Inter,sans-serif"; ctx.textAlign = "center";
+ ctx.fillStyle = axis; ctx.font = "500 10px Inter,sans-serif"; ctx.textAlign = "center";
  ctx.fillText(String(d[xKey]).slice(5), x + barW / 2, H - 8);
  }
  });
- }, [data, tramos, xKey, height]);
+ }, [data, tramos, xKey, height, hover, width, themeKey]);
+
+ const onMove = (e) => {
+ const g = geo.current;
+ if (!g || !data?.length) return;
+ const r = ref.current.getBoundingClientRect();
+ const i = Math.floor((e.clientX - r.left - g.pad.left) / g.slotW);
+ setHover(i >= 0 && i < data.length ? i : null);
+ };
+
+ const punto = hover !== null && data?.[hover] ? data[hover] : null;
+ const g = geo.current;
+
  return (
- <div>
-  <canvas ref={ref} className="w-full" style={{ height }} />
+ <div ref={wrapRef} className="relative">
+  <canvas ref={ref} className="w-full cursor-crosshair" style={{ height }} onMouseMove={onMove} onMouseLeave={() => setHover(null)} />
+  {punto && g && (
+  <div
+   className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full px-2.5 py-2 rounded-lg bg-white dark:bg-surface-dark-3 border border-black/[0.08] dark:border-white/10 shadow-[0_8px_24px_-6px_rgb(0_0_0/0.2)] whitespace-nowrap"
+   style={{ left: g.pad.left + hover * g.slotW + g.slotW / 2, top: g.pad.top - 4 }}
+  >
+   <div className="text-[11px] text-content-subtle mb-0.5 tabular-nums">{String(punto[xKey])}</div>
+   {tramos.map(s => (
+   <div key={s.key} className="flex items-center gap-2 text-[12px] tabular-nums">
+    {tramos.length > 1 && <span className="w-2 h-2 rounded-sm" style={{ background: resolveColor(s.color) }} />}
+    {tramos.length > 1 && <span className="text-content-subtle">{s.label || s.key}</span>}
+    <span className="font-semibold text-content dark:text-white ml-auto">{format(parseFloat(punto[s.key]) || 0)}</span>
+   </div>
+   ))}
+  </div>
+  )}
   {tramos.length > 1 && (
   <div className="flex items-center justify-center gap-4 mt-2">
    {tramos.map(s => (
-   <span key={s.key} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/40">
-    <span className="w-2.5 h-2.5 rounded-sm" style={{ background: s.color }} />
+   <span key={s.key} className="flex items-center gap-1.5 text-[12px] font-medium text-content-subtle">
+    <span className="w-2.5 h-2.5 rounded-sm" style={{ background: resolveColor(s.color) }} />
     {s.label || s.key}
    </span>
    ))}
@@ -292,16 +405,31 @@ export function usePagination(items = [], pageSize = 25) {
 export function Pagination({ page, totalPages, total, onPage }) {
  if (totalPages <= 1) return null;
  return (
-  <div className="shrink-0 px-4 py-2 border-t border-border dark:border-white/5 bg-surface-2/50 dark:bg-white/[0.02] flex items-center justify-between rounded-b-xl">
-   <div className="text-[10px] font-black text-content-subtle uppercase tracking-widest">
-    Total: <span className="text-content dark:text-white">{total}</span>
+  // Mismo aspecto que ui/Pagination: flechas grises y "Página N de M".
+  <div className="shrink-0 px-4 h-12 border-t border-border/70 dark:border-white/[0.06] bg-surface-2/60 dark:bg-white/[0.02] flex items-center justify-between rounded-b-xl">
+   <div className="text-[12px] text-content-subtle tabular-nums">
+    <span className="font-semibold text-content dark:text-white">{total}</span> registros
    </div>
-   <div className="flex items-center gap-1.5">
-    <button disabled={page === 1} onClick={() => onPage(1)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">«</button>
-    <button disabled={page === 1} onClick={() => onPage(page - 1)} className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">Ant.</button>
-    <div className="px-3 h-7 flex items-center justify-center text-[10px] font-black text-brand-500 bg-brand-500/10 rounded-lg border border-brand-500/20">Pág {page}/{totalPages}</div>
-    <button disabled={page === totalPages} onClick={() => onPage(page + 1)} className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">Sig.</button>
-    <button disabled={page === totalPages} onClick={() => onPage(totalPages)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-20 disabled:hover:bg-transparent">»</button>
+   <div className="flex items-center gap-0.5">
+    {[
+     { to: 1, dis: page === 1, d: "M11 19l-7-7 7-7m8 14l-7-7 7-7", t: "Primera página" },
+     { to: page - 1, dis: page === 1, d: "M15 19l-7-7 7-7", t: "Anterior" },
+    ].map(b => (
+     <button key={b.t} disabled={b.dis} onClick={() => onPage(b.to)} title={b.t} aria-label={b.t} className="row-icon disabled:opacity-30">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={b.d} /></svg>
+     </button>
+    ))}
+    <span className="px-2 text-[12px] text-content-subtle tabular-nums whitespace-nowrap">
+     Página <span className="font-semibold text-content dark:text-white">{page}</span> de {totalPages}
+    </span>
+    {[
+     { to: page + 1, dis: page === totalPages, d: "M9 5l7 7-7 7", t: "Siguiente" },
+     { to: totalPages, dis: page === totalPages, d: "M13 5l7 7-7 7M5 5l7 7-7 7", t: "Última página" },
+    ].map(b => (
+     <button key={b.t} disabled={b.dis} onClick={() => onPage(b.to)} title={b.t} aria-label={b.t} className="row-icon disabled:opacity-30">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={b.d} /></svg>
+     </button>
+    ))}
    </div>
   </div>
  );
@@ -319,7 +447,14 @@ export function HeatmapHours({ data }) {
  const intensity = rev / maxRev;
  return (
  <div key={h} className="flex-1 flex flex-col items-center" title={`${h}:00 — ${fmt$(rev)}`}>
- <div className="w-full rounded-sm" style={{ height: `${Math.max(4, intensity * 52)}px`, background: `rgba(250,189,47,${0.12 + intensity * 0.88})` }} />
+ {/* Escala secuencial de un solo tono: más venta, cian más lleno. Las horas sin venta
+     quedan como una raya gris, no como un amarillo desteñido. */}
+ <div
+ className={`w-full rounded-[3px] ${rev > 0 ? "" : "bg-surface-3 dark:bg-white/[0.06]"}`}
+ style={rev > 0
+ ? { height: `${Math.max(6, intensity * 52)}px`, background: `rgb(var(--c-chart) / ${0.25 + intensity * 0.75})` }
+ : { height: "4px" }}
+ />
  </div>
  );
  })}
@@ -327,7 +462,7 @@ export function HeatmapHours({ data }) {
  <div className="flex gap-1 items-end">
  {Array.from({ length: 24 }, (_, h) => (
  <div key={h} className="flex-1 text-center">
- {h % 6 === 0 && <span className="text-[10px] text-content-subtle dark:text-content-dark-muted">{h}h</span>}
+ {h % 6 === 0 && <span className="text-[11px] text-content-subtle dark:text-content-dark-muted">{h}h</span>}
  </div>
  ))}
  </div>

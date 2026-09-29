@@ -1,6 +1,7 @@
 const { PaymentJournal, PaymentJournalWarehouse, Currency, Bank, Sale, Warehouse, Sequelize, sequelize } = require("../../models");
 const { localDate, TZ } = require("../reports/shared");
 const { visibleWarehouseIds, isAdmin, assertWarehouseAccess } = require("../../middleware/auth");
+const { expenseRefSql } = require("../../utils/expenseReference");
 
 function flattenJournal(j) {
   const jj = j.toJSON ? j.toJSON() : j;
@@ -522,7 +523,7 @@ async function getMovements(req) {
           'egreso'                                               AS type,
           COALESCE(e.date, e.created_at)                        AS date,
           e.created_at                                           AS created_at,
-          COALESCE(e.reference, CONCAT('EGR-', e.id))          AS reference,
+          COALESCE(${expenseRefSql('e')}, CONCAT('EGR-', e.id))          AS reference,
           e.description                                          AS concept,
           (e.amount * COALESCE(e.rate, 1))                     AS amount_local,
           e.amount                                               AS amount_base,
@@ -719,7 +720,7 @@ async function getBankMovements(req) {
 
         SELECT e.id, 'egreso' AS type, COALESCE(e.date, e.created_at) AS date,
           e.created_at                                 AS created_at,
-          COALESCE(e.reference, CONCAT('EGR-', e.id)) AS reference,
+          COALESCE(${expenseRefSql('e')}, CONCAT('EGR-', e.id)) AS reference,
           e.description AS concept,
           (e.amount * COALESCE(e.rate, 1)) AS amount_local,
           e.amount AS amount_base, COALESCE(e.rate, 1) AS rate,

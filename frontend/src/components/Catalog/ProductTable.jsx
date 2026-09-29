@@ -1,4 +1,5 @@
 import { fmtBase, resolveImageUrl, imgRetryOnError } from "../../helpers";
+import StockQty, { splitQty } from "../ui/StockQty";
 import { useApp } from "../../context/AppContext";
 
 export default function ProductTable({
@@ -53,7 +54,7 @@ export default function ProductTable({
                             </td>
                         )}
                         <td>
-                            <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-[11px] font-black border border-white/5 overflow-hidden">
+                            <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-[12px] font-bold border border-white/5 overflow-hidden">
                                 {p.image_url
                                     ? <img src={resolveImageUrl(p.image_url)} className="w-full h-full object-cover" loading="lazy" onError={imgRetryOnError} />
                                     : p.name.charAt(0)}
@@ -61,53 +62,45 @@ export default function ProductTable({
                         </td>
                         <td>
                             <div className="flex items-center gap-2">
-                                <div className="text-xs font-bold text-content dark:text-white uppercase tracking-tight group-hover:text-brand-500 transition-colors">
+                                <div className="text-xs font-semibold text-content dark:text-white tracking-tight group-hover:text-brand-500 transition-colors">
                                     {p.name}
                                 </div>
                                 {p.is_combo && (
-                                    <span className="text-[9px] bg-brand-500/10 text-brand-500 border border-brand-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wide whitespace-nowrap">
+                                    <span className="text-[10px] bg-brand-500/10 text-brand-500 border border-brand-500/20 px-1.5 py-0.5 rounded font-semibold whitespace-nowrap">
                                         Combo
                                     </span>
                                 )}
                                 {p.is_service && (
-                                    <span className="text-[9px] bg-blue-500/10 text-blue-500 border border-blue-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wide whitespace-nowrap">
+                                    <span className="text-[10px] bg-blue-500/10 text-blue-500 border border-blue-500/20 px-1.5 py-0.5 rounded font-semibold whitespace-nowrap">
                                         Servicio
                                     </span>
                                 )}
                             </div>
                         </td>
                         <td>
-                            <span className="text-[10px] font-bold text-content-subtle uppercase tracking-wide">
+                            <span className="text-[11px] font-semibold text-content-subtle uppercase tracking-wide">
                                 {p.category_name || "General"}
                             </span>
                         </td>
                         <td className="text-center">
                             {p.is_service ? (
-                                <span className="text-xs font-bold text-content-subtle">—</span>
+                                <span className="text-xs font-semibold text-content-subtle">—</span>
                             ) : (
-                                <>
-                                    <span className={`text-xs font-bold tabular-nums ${
-                                        parseFloat(p.warehouse_stock ?? p.stock) <= 0
-                                            ? "text-danger"
-                                            : parseFloat(p.warehouse_stock ?? p.stock) <= 5
-                                            ? "text-warning"
-                                            : "text-success"
-                                    }`}>
-                                        {p.warehouse_stock ?? p.stock}
-                                    </span>
-                                    <span className="ml-1 text-[9px] font-bold text-content-subtle uppercase">{p.unit || "uds"}</span>
-                                </>
+                                (() => {
+                                    const [n, u] = splitQty(p.warehouse_stock ?? p.stock, p.unit);
+                                    return <StockQty qty={p.warehouse_stock ?? p.stock} value={n} unit={u} min={p.min_stock} />;
+                                })()
                             )}
                         </td>
                         <td className="text-right">
                             {/* Mismo criterio que en las tarjetas: el insumo no tiene precio
                                 de venta, así que se muestra su costo en vez de un 0. */}
                             {p.sellable === false ? (
-                                <span className="text-xs font-bold text-content-subtle dark:text-white/40 tabular-nums tracking-tighter">
+                                <span className="text-xs font-semibold text-content-subtle dark:text-white/40 tabular-nums tracking-tighter">
                                     {parseFloat(p.cost_price) > 0 ? <>Costo {fmtPrice(p.cost_price)}</> : "—"}
                                 </span>
                             ) : (
-                                <span className="text-xs font-bold text-brand-500 tabular-nums tracking-tighter">
+                                <span className="text-xs font-semibold text-brand-500 tabular-nums tracking-tighter">
                                     {fmtPrice(p.price)}
                                 </span>
                             )}
@@ -120,7 +113,7 @@ export default function ProductTable({
                                 {/* Un insumo no se publica, así que en vez del interruptor
                                     —que el servidor rechazaría— la fila dice por qué. */}
                                 {p.sellable === false ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-warning/15 text-warning border border-warning/30 text-[9px] font-black uppercase tracking-wide"
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-warning/15 text-warning border border-warning/30 text-[10px] font-bold"
                                         title="Insumo: no se vende en caja ni se publica">
                                         Insumo
                                     </span>

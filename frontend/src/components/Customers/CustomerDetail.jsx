@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { Button } from "../ui/Button";
 import { exportToCSV } from "../../utils/exportUtils";
-import { fmtBase, fmtSale as fmtSaleHelper, todayISO, journalsForWarehouse } from "../../helpers";
+import { fmtBase, fmtSale as fmtSaleHelper, todayISO, journalsForWarehouse, fmtDateShort } from "../../helpers";
+import Check from "../ui/Check";
+import Money from "../ui/Money";
 import { useApp } from "../../context/AppContext";
 import SaleDetailModal from "./SaleDetailModal";
 import BulkPaymentModal from "./BulkPaymentModal";
@@ -20,7 +22,7 @@ const PAID_LIMIT = 50;
 // flotando sin recuadro. El borde al 10% tampoco alcanzaba para separarlas. En oscuro se
 // mantiene tal cual estaba, que ahí el velo blanco sí contrasta contra el fondo.
 const SECTION = "bg-white dark:bg-white/[0.04] rounded-2xl border border-border/60 dark:border-white/[0.06] shadow-card dark:shadow-none";
-const LABEL   = "text-[10px] font-bold uppercase tracking-widest text-content-subtle";
+const LABEL   = "text-[12px] font-medium text-content-subtle";
 
 // Cuerpo scrolleable de cada lista: rellena el alto disponible de su sección y desplaza dentro.
 // En impresión se desactiva para que salgan todas las filas.
@@ -160,15 +162,15 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
 
             {/* ── Barra superior ── */}
             <div className="shrink-0 px-4 pt-3 pb-2 flex justify-between items-center border-b border-border/10 dark:border-white/[0.06] print-hidden">
-                <button onClick={onClose} className="flex items-center gap-1.5 text-[11px] font-bold text-content-subtle dark:text-white/40 hover:text-brand-500 dark:hover:text-brand-500 transition-colors uppercase tracking-widest">
+                <button onClick={onClose} className="flex items-center gap-1.5 text-[12px] font-semibold text-content-subtle dark:text-white/40 hover:text-brand-500 dark:hover:text-brand-500 transition-colors">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
                     Volver
                 </button>
                 <div className="flex gap-2">
-                    <button onClick={handleExportStatement} className="h-8 px-3 rounded-xl border border-border/20 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/40 hover:border-border dark:hover:border-white/20 hover:text-content dark:hover:text-white transition-all">
+                    <button onClick={handleExportStatement} className="h-8 px-3 rounded-xl border border-border/20 dark:border-white/10 text-[11px] font-bold text-content-subtle dark:text-white/40 hover:border-border dark:hover:border-white/20 hover:text-content dark:hover:text-white transition-all">
                         CSV
                     </button>
-                    <button onClick={() => window.print()} className="h-8 px-4 rounded-xl bg-brand-500 text-black text-[10px] font-black uppercase tracking-widest hover:brightness-105 transition-all active:scale-95">
+                    <button onClick={() => window.print()} className="h-8 px-4 rounded-xl btn-accent text-[11px] font-bold transition-all active:scale-95">
                         Imprimir
                     </button>
                 </div>
@@ -178,9 +180,9 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
 
                 {/* Print header */}
                 <div className="hidden print-force-break mb-4 text-center text-black">
-                    <h1 className="text-xl font-black uppercase tracking-tight">Estado de Cuenta</h1>
-                    <p className="text-xs mt-1 tracking-wide font-bold opacity-70">{detail.name} — RIF: {detail.rif || "S/N"}</p>
-                    <p className="text-[11px] uppercase font-black tracking-wide opacity-50 mt-1">Fecha: {new Date().toLocaleDateString("es-VE")}</p>
+                    <h1 className="text-xl font-bold tracking-tight">Estado de cuenta</h1>
+                    <p className="text-xs mt-1 tracking-wide font-semibold opacity-70">{detail.name} — RIF: {detail.rif || "S/N"}</p>
+                    <p className="text-[12px] font-bold opacity-50 mt-1">Fecha: {new Date().toLocaleDateString("es-VE")}</p>
                 </div>
 
                 {/* ── Card resumen de cliente ── */}
@@ -189,14 +191,14 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
 
                         {/* Identidad */}
                         <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[13px] font-black shrink-0 border border-white/10 ${detail.type === "proveedor" ? "bg-violet-500/10 text-violet-400" : "bg-info/10 text-info"}`}>
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[13px] font-bold shrink-0 border border-white/10 ${detail.type === "proveedor" ? "bg-violet-500/10 text-violet-400" : "bg-info/10 text-info"}`}>
                                 {detail.name.charAt(0).toUpperCase()}
                             </div>
                             <div className="min-w-0">
-                                <p className="text-[13px] font-bold text-content dark:text-white uppercase tracking-tight leading-none">{detail.name}</p>
+                                <p className="text-[13px] font-semibold text-content dark:text-white tracking-tight leading-none">{detail.name}</p>
                                 <div className="flex flex-wrap gap-1 mt-1">
-                                    {detail.rif   && <span className="text-[10px] font-bold bg-surface-3 dark:bg-white/5 px-1.5 py-0.5 rounded border border-border/40 dark:border-white/10 text-content-subtle uppercase tracking-wide">RIF: {detail.rif}</span>}
-                                    {detail.phone && <span className="text-[10px] font-bold bg-surface-3 dark:bg-white/5 px-1.5 py-0.5 rounded border border-border/40 dark:border-white/10 text-content-subtle tracking-wide">{detail.phone}</span>}
+                                    {detail.rif   && <span className="text-[11px] font-semibold bg-surface-3 dark:bg-white/5 px-1.5 py-0.5 rounded border border-border/40 dark:border-white/10 text-content-subtle">RIF: {detail.rif}</span>}
+                                    {detail.phone && <span className="text-[11px] font-semibold bg-surface-3 dark:bg-white/5 px-1.5 py-0.5 rounded border border-border/40 dark:border-white/10 text-content-subtle tracking-wide">{detail.phone}</span>}
                                 </div>
                             </div>
                         </div>
@@ -206,7 +208,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                         {/* Transacciones */}
                         <div>
                             <p className={`${LABEL} mb-0.5`}>Transacciones</p>
-                            <p className="text-[13px] font-black text-warning tabular-nums">{detail.total_purchases}</p>
+                            <p className="text-[13px] font-bold text-warning tabular-nums">{detail.total_purchases}</p>
                         </div>
 
                         <div className="h-7 w-px bg-border/20 dark:bg-white/[0.06] hidden sm:block" />
@@ -214,31 +216,31 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                         {/* Facturación */}
                         <div>
                             <p className={`${LABEL} mb-0.5`}>Facturación</p>
-                            <p className="text-[13px] font-black text-success tabular-nums">{fmtPrice(detail.total_spent)}</p>
+                            <p className="text-[13px] font-bold text-success tabular-nums">{fmtPrice(detail.total_spent)}</p>
                         </div>
 
                         {/* Crédito disponible */}
                         {parseFloat(detail.credit_balance || 0) > 0.001 && (
                             <div className="flex-1">
-                                <p className={`${LABEL} mb-0.5`}>Crédito Disponible</p>
+                                <p className={`${LABEL} mb-0.5`}>Crédito disponible</p>
                                 {confirmClear ? (
                                     <div className="flex items-center gap-1.5">
-                                        <span className="text-[10px] text-content-subtle dark:text-white/40">¿Anular todo?</span>
+                                        <span className="text-[11px] text-content-subtle dark:text-white/40">¿Anular todo?</span>
                                         <button onClick={handleClearCredit} disabled={clearingCredit}
-                                            className="h-6 px-2 rounded-lg bg-danger text-white text-[10px] font-black uppercase transition-all hover:brightness-110 disabled:opacity-50">
+                                            className="h-6 px-2 rounded-lg bg-danger text-white text-[11px] font-bold transition-all hover:brightness-110 disabled:opacity-50">
                                             {clearingCredit ? "…" : "Sí"}
                                         </button>
                                         <button onClick={() => setConfirmClear(false)}
-                                            className="h-6 px-2 rounded-lg border border-border/30 dark:border-white/10 text-[10px] font-black uppercase text-content-subtle hover:text-content dark:hover:text-white transition-all">
+                                            className="h-6 px-2 rounded-lg border border-border/30 dark:border-white/10 text-[11px] font-bold text-content-subtle hover:text-content dark:hover:text-white transition-all">
                                             No
                                         </button>
                                     </div>
                                 ) : (
                                     <div className="flex items-center gap-2">
-                                        <p className="text-[15px] font-black text-brand-500 tabular-nums">{fmtPrice(detail.credit_balance)}</p>
+                                        <p className="text-[15px] font-bold text-brand-500 tabular-nums">{fmtPrice(detail.credit_balance)}</p>
                                         <button onClick={() => { setShowRefund(true); setConfirmClear(false); }}
                                             title="Devolver crédito en efectivo"
-                                            className="h-6 px-2 rounded-lg border border-brand-500/30 text-brand-500 text-[10px] font-black uppercase tracking-wide hover:bg-brand-500/10 transition-all">
+                                            className="h-6 px-2 rounded-lg border border-brand-500/30 text-brand-500 text-[11px] font-bold hover:bg-brand-500/10 transition-all">
                                             Devolver
                                         </button>
                                         <button onClick={() => setConfirmClear(true)}
@@ -258,10 +260,10 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             dejaba pegado al borde derecho con un hueco delante, desalineado de
                             Transacciones y Facturación. */}
                         <div className="sm:ml-auto sm:text-right">
-                            <p className={`${LABEL} mb-0.5`}>Saldo Pendiente</p>
+                            <p className={`${LABEL} mb-0.5`}>Saldo pendiente</p>
                             {hasPending
-                                ? <p className="text-[15px] font-black text-danger tabular-nums">{fmtPrice(detail.total_debt)}</p>
-                                : <div className="flex items-center sm:justify-end gap-1 text-[12px] font-black text-success">
+                                ? <p className="text-[15px] font-bold text-danger tabular-nums">{fmtPrice(detail.total_debt)}</p>
+                                : <div className="flex items-center sm:justify-end gap-1 text-[12px] font-bold text-success">
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
                                     Al día
                                 </div>
@@ -273,85 +275,89 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                 {/* ── Cuentas por Cobrar ── */}
                 {pendingSales.length > 0 && (
                     <div className={`${SECTION} overflow-hidden flex-1 min-h-0 flex flex-col print:flex-none print:min-h-0 print:overflow-visible`}>
-                        <div className="shrink-0 px-5 py-3 border-b border-border/10 dark:border-white/[0.06] flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-danger" />
-                            <p className="text-[10px] font-black uppercase tracking-widest text-danger opacity-70">
-                                {detail.type === 'proveedor' ? 'Cuentas por Pagar' : 'Cuentas por Cobrar'}
-                            </p>
+                        <div className="shrink-0 px-5 py-3 border-b border-border/60 dark:border-white/[0.06] flex items-center gap-3 min-h-[56px]">
+                            {/* Casilla de "todas": solo si hay cobro conjunto, alineada con las de cada fila. */}
+                            {cobrables.length > 1 && (
+                                <Check
+                                    checked={seleccionadas.length === cobrables.length}
+                                    onChange={() => setCheckedIds(seleccionadas.length === cobrables.length ? [] : cobrables.map(s => s.id))}
+                                    title={seleccionadas.length === cobrables.length ? "Quitar todas" : "Marcar todas"}
+                                />
+                            )}
+                            <div className="min-w-0">
+                                <p className="text-[14px] font-semibold text-content dark:text-white leading-tight">
+                                    {detail.type === 'proveedor' ? 'Cuentas por pagar' : 'Cuentas por cobrar'}
+                                </p>
+                                <p className="text-[12px] text-content-subtle tabular-nums">
+                                    {pendingSales.length} {pendingSales.length === 1 ? "documento abierto" : "documentos abiertos"}
+                                </p>
+                            </div>
 
                             {/* Cobro conjunto: con una sola factura no aporta nada, así que la
                                 selección solo aparece cuando hay más de una que cobrar. */}
                             {cobrables.length > 1 && (
-                                <div className="ml-auto flex items-center gap-2 print-hidden">
-                                    <button
-                                        onClick={() => setCheckedIds(
-                                            seleccionadas.length === cobrables.length ? [] : cobrables.map(s => s.id)
-                                        )}
-                                        className="h-7 px-3 rounded-lg border border-border/30 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all"
-                                    >
-                                        {seleccionadas.length === cobrables.length ? "Ninguna" : "Todas"}
-                                    </button>
-                                    <button
-                                        onClick={() => setShowBulk(true)}
-                                        disabled={!seleccionadas.length}
-                                        className="h-7 px-3 rounded-lg border border-success/20 bg-success/5 text-success text-[10px] font-black uppercase tracking-widest hover:bg-success hover:text-black transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-success/5 disabled:hover:text-success"
-                                    >
-                                        {seleccionadas.length
-                                            ? `Cobrar ${seleccionadas.length} · ${fmtPrice(totalSeleccionado)}`
-                                            : "Cobrar juntas"}
-                                    </button>
-                                </div>
+                                <button
+                                    onClick={() => setShowBulk(true)}
+                                    disabled={!seleccionadas.length}
+                                    className="ml-auto h-9 px-4 rounded-lg text-[13px] font-semibold btn-accent active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed print-hidden whitespace-nowrap tabular-nums"
+                                >
+                                    {seleccionadas.length
+                                        ? `Cobrar ${seleccionadas.length} · ${fmtPrice(totalSeleccionado)}`
+                                        : "Marca las que vas a cobrar"}
+                                </button>
                             )}
                         </div>
-                        <div className={`divide-y divide-border/10 dark:divide-white/[0.05] ${SCROLL_LIST}`}>
-                            {pendingSales.map(sale => (
-                                <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-surface-2 dark:hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => {
+                        <div className={`divide-y divide-border/50 dark:divide-white/[0.05] ${SCROLL_LIST}`}>
+                            {pendingSales.map(sale => {
+                                const marcada = checkedIds.includes(sale.id);
+                                const abrir = () => {
                                     if (detail.type === "proveedor") {
                                         onClose();
                                         triggerAction("Compras", "compras:abrir:" + sale.id);
                                     } else {
                                         setSelectedSaleId(sale.id);
                                     }
-                                }}>
-                                    {/* Casilla del cobro conjunto. Va fuera del área que abre el
-                                        detalle: marcar una factura no es querer verla. */}
+                                };
+                                return (
+                                <div
+                                    key={sale.id}
+                                    onClick={abrir}
+                                    className={`px-5 h-[60px] flex items-center gap-3 transition-colors cursor-pointer ${marcada ? "bg-brand-500/[0.05] dark:bg-brand-500/[0.08]" : "hover:bg-surface-2/70 dark:hover:bg-white/[0.02]"}`}
+                                >
+                                    {/* Casilla del cobro conjunto. Check detiene el clic: marcar una
+                                        factura no es querer verla. */}
                                     {cobrables.length > 1 && (() => {
                                         const esCobrable = cobrables.some(c => c.id === sale.id);
                                         // Otra sucursal que la ya marcada: no se puede sumar a este cobro conjunto.
-                                        const otraSucursal = esCobrable && !checkedIds.includes(sale.id)
+                                        const otraSucursal = esCobrable && !marcada
                                             && seleccionadas.length > 0 && seleccionadas[0].warehouse_id !== sale.warehouse_id;
                                         return (
-                                        <button
-                                            onClick={e => { e.stopPropagation(); toggleChecked(sale.id); }}
-                                            disabled={!esCobrable || otraSucursal}
-                                            className={`w-5 h-5 rounded-md border shrink-0 flex items-center justify-center transition-all print-hidden ${
-                                                checkedIds.includes(sale.id)
-                                                    ? "bg-success border-success text-black"
-                                                    : "border-border/40 dark:border-white/20 text-transparent hover:border-success/60"
-                                            } disabled:opacity-20 disabled:cursor-not-allowed`}
-                                            title={!esCobrable ? "Sin saldo por cobrar" : otraSucursal ? "El cobro conjunto solo admite facturas de la misma sucursal" : "Incluir en el cobro conjunto"}
-                                        >
-                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7"/></svg>
-                                        </button>
+                                            <Check
+                                                checked={marcada}
+                                                disabled={!esCobrable || otraSucursal}
+                                                onChange={() => toggleChecked(sale.id)}
+                                                title={!esCobrable ? "Sin saldo por cobrar" : otraSucursal ? "El cobro conjunto solo admite facturas de la misma sucursal" : "Incluir en el cobro conjunto"}
+                                            />
                                         );
                                     })()}
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[12px] font-bold text-content dark:text-white">#{sale.id}</span>
-                                            <span className={`text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
-                                                sale.status === "parcial"  ? "bg-warning/10 text-warning border-warning/20" :
-                                                sale.status === "borrador" ? "bg-surface-3 dark:bg-white/5 text-content-subtle dark:text-white/40 border-border/30 dark:border-white/10" :
-                                                "bg-danger/10 text-danger border-danger/20"
-                                            }`}>
-                                                {sale.status === "parcial" ? "Parcial" : sale.status === "borrador" ? "Sin factura" : "Pendiente"}
-                                            </span>
+                                        <p className="text-[14px] font-semibold text-content dark:text-white tabular-nums leading-tight truncate">
+                                            {detail.type === "proveedor" ? `Compra #${sale.id}` : (sale.invoice_number || `Factura #${sale.id}`)}
+                                        </p>
+                                        {/* Fecha y estado en una línea gris. Todas las filas de esta
+                                            lista deben algo, así que "Pendiente" no lleva color; solo
+                                            se marca lo que difiere: a medio pagar o sin facturar. */}
+                                        <div className="flex items-center gap-1.5 text-[12px] text-content-subtle tabular-nums mt-0.5">
+                                            <span>{fmtDateShort(sale.created_at)}</span>
+                                            <span aria-hidden="true">·</span>
+                                            {sale.status === "parcial"
+                                                ? <span className="font-medium text-amber-700 dark:text-amber-400">Abonada en parte</span>
+                                                : sale.status === "borrador"
+                                                    ? <span>Sin factura</span>
+                                                    : <span>Pendiente</span>}
                                         </div>
-                                        <p className={`${LABEL} mt-0.5 normal-case`}>{new Date(sale.created_at).toLocaleDateString("es-VE")}</p>
                                     </div>
-                                    <div className="text-right shrink-0">
-                                        <p className={`${LABEL} mb-0.5`}>Saldo</p>
-                                        <p className="text-[13px] font-black text-danger tabular-nums">{fmtSale(sale, sale.balance)}</p>
-                                    </div>
+                                    <Money value={fmtSale(sale, sale.balance)} className="text-[14px] font-semibold text-content dark:text-white shrink-0" />
                                     <button
                                         onClick={e => {
                                             e.stopPropagation();
@@ -362,12 +368,13 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                                 onPay(sale);
                                             }
                                         }}
-                                        className="h-8 px-3 rounded-xl border border-success/20 bg-success/5 text-success text-[10px] font-black uppercase tracking-widest hover:bg-success hover:text-black transition-all active:scale-95 shrink-0"
+                                        className="h-8 px-3 rounded-lg text-[13px] font-semibold btn-outline active:scale-[0.98] shrink-0 print-hidden"
                                     >
                                         {detail.type === "proveedor" ? "Pagar" : "Cobrar"}
                                     </button>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 )}
@@ -375,9 +382,9 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                 {/* ── Historial de Pagos ── */}
                 <div className={`${SECTION} overflow-hidden flex-1 min-h-0 flex flex-col print:flex-none print:min-h-0 print:overflow-visible`}>
                     <div className="shrink-0 px-5 py-3 border-b border-border/10 dark:border-white/[0.06] flex items-center justify-between">
-                        <p className={LABEL}>Historial de Pagos</p>
+                        <p className={LABEL}>Historial de pagos</p>
                         {paidTotal > 0 && (
-                            <p className="text-[10px] font-bold text-content-subtle dark:text-white/20 tabular-nums">{paidTotal} en total</p>
+                            <p className="text-[11px] font-semibold text-content-subtle dark:text-white/20 tabular-nums">{paidTotal} en total</p>
                         )}
                     </div>
                     {/* opacity-20 se calibró contra el fondo oscuro; sobre el panel blanco dejaba
@@ -399,8 +406,8 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                 }}>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-[12px] font-bold text-content dark:text-white">#{sale.id}</span>
-                                            <span className={`text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
+                                            <span className="text-[12px] font-semibold text-content dark:text-white">#{sale.id}</span>
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
                                                 sale.status === 'anulado' ? 'bg-danger/10 text-danger border-danger/20' :
                                                 sale.status === 'devuelto' ? 'bg-warning/10 text-warning border-warning/20' :
                                                 'bg-success/10 text-success border-success/20'
@@ -415,14 +422,14 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                             solo dice cómo estaba puesta la pantalla al crearla, así
                                             que la lista mezclaba Bs. y Ref. sin poder compararse ni
                                             sumarse de un vistazo. Debajo, por dónde entró el dinero. */}
-                                        <p className="text-[13px] font-black text-success tabular-nums">{fmtPrice(sale.total)}</p>
+                                        <p className="text-[13px] font-bold text-success tabular-nums">{fmtPrice(sale.total)}</p>
                                         {sale.paid_journals && (
-                                            <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 truncate max-w-[140px]">
+                                            <p className="text-[11px] font-semibold text-content-subtle dark:text-white/30 truncate max-w-[140px]">
                                                 {sale.paid_journals}
                                             </p>
                                         )}
                                     </div>
-                                    <span className="text-[10px] font-bold text-content-subtle dark:text-white/20 group-hover:text-brand-500 transition-colors uppercase tracking-widest shrink-0">
+                                    <span className="text-[12px] font-medium text-content-subtle dark:text-white/20 group-hover:text-brand-500 transition-colors shrink-0">
                                         Ver →
                                     </span>
                                 </div>
@@ -467,15 +474,15 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                 {/* Crédito disponible EN LA SUCURSAL elegida, no el global: es el número contra
                     el que valida el backend. En rojo cuando esa caja no tiene nada que devolver. */}
                 <div className={`rounded-xl px-4 py-3 flex items-center justify-between border ${sinCreditoAqui ? "bg-danger/5 border-danger/20" : "bg-brand-500/5 border-brand-500/20"}`}>
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${sinCreditoAqui ? "text-danger" : "text-brand-500"}`}>
+                    <span className={`text-[11px] font-bold uppercase tracking-widest ${sinCreditoAqui ? "text-danger" : "text-brand-500"}`}>
                         Crédito disponible{refundForm.warehouse_id && warehouses.length > 1 ? " aquí" : ""}
                     </span>
-                    <span className={`text-[15px] font-black tabular-nums ${sinCreditoAqui ? "text-danger" : "text-brand-500"}`}>
+                    <span className={`text-[15px] font-bold tabular-nums ${sinCreditoAqui ? "text-danger" : "text-brand-500"}`}>
                         {fmtPrice(refundAvailable)}
                     </span>
                 </div>
                 {sinCreditoAqui && (
-                    <p className="text-[10px] font-bold text-danger -mt-2">
+                    <p className="text-[11px] font-semibold text-danger -mt-2">
                         Este cliente tiene {fmtPrice(detail.credit_balance)} de crédito, pero se generó en otra sucursal:
                         de esta caja no puede salir. Devuélveselo desde donde lo acreditó.
                     </p>
@@ -485,7 +492,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                     ofrecen abajo. Solo aparece si el usuario atiende más de una. */}
                 {warehouses.length > 1 && (
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Sucursal *</p>
+                        <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">Sucursal *</p>
                         <CustomSelect
                             value={refundForm.warehouse_id}
                             onChange={v => setRefundForm(p => {
@@ -509,7 +516,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                     efectivo, como un punto de venta. Va ANTES del monto porque es la caja la
                     que decide en qué moneda se teclea. */}
                 <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">De qué caja sale *</p>
+                    <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">De qué caja sale *</p>
                     <JournalPickerButton
                         value={refundForm.journal_id}
                         journals={journalsForWarehouse(activeJournals, refundForm.warehouse_id)}
@@ -534,7 +541,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                 {/* Monto + fecha */}
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">
+                        <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">
                             Monto a devolver * {refundSym && <span className="text-brand-500 normal-case">({refundSym})</span>}
                         </p>
                         <input
@@ -542,47 +549,47 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             value={refundForm.amount}
                             placeholder={refundForm.journal_id ? (refundAvailable * refundRate).toFixed(2) : "0.00"}
                             onChange={e => setRefundForm(p => ({ ...p, amount: e.target.value.replace(/[^\d.,]/g, "") }))}
-                            className="w-full h-10 bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+                            className="w-full h-10 bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
                         />
                         {refundForm.journal_id && refundRate !== 1 && refundForm.amount && (
-                            <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 mt-1 tabular-nums">
+                            <p className="text-[11px] font-semibold text-content-subtle dark:text-white/30 mt-1 tabular-nums">
                                 ≈ {baseCurrency?.symbol}{refundAmountBase.toFixed(2)}
                             </p>
                         )}
                     </div>
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Fecha *</p>
+                        <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">Fecha *</p>
                         <input
                             type="date"
                             value={refundForm.reference_date}
                             onChange={e => setRefundForm(p => ({ ...p, reference_date: e.target.value }))}
-                            className="w-full h-10 bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
+                            className="w-full h-10 bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
                         />
                     </div>
                 </div>
 
                 {/* Notas */}
                 <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 mb-1.5">Notas</p>
+                    <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">Notas</p>
                     <input
                         type="text"
                         value={refundForm.notes}
                         onChange={e => setRefundForm(p => ({ ...p, notes: e.target.value }))}
                         placeholder="Observaciones..."
-                        className="w-full h-10 bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+                        className="w-full h-10 bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
                     />
                 </div>
 
                 {/* Acciones */}
-                <div className="flex gap-2.5 pt-2 border-t border-border/20 dark:border-white/5">
+                <div className="flex gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
                     <button onClick={() => setShowRefund(false)}
-                        className="flex-1 h-10 rounded-xl border border-border/40 dark:border-white/10 text-[11px] font-black uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all">
+                        className="flex-1 h-10 rounded-xl border border-border/40 dark:border-white/10 text-[12px] font-bold text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all">
                         Cancelar
                     </button>
                     <button
                         onClick={handleRefund}
                         disabled={refunding || sinCreditoAqui || !refundForm.amount || !refundForm.journal_id || !refundForm.reference_date || (warehouses.length > 1 && !refundForm.warehouse_id)}
-                        className="flex-[2] h-10 rounded-xl bg-brand-500 text-black text-[11px] font-black uppercase tracking-wide hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
+                        className="flex-[2] h-10 rounded-xl btn-accent text-[12px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
                         {refunding && <Spinner />}
                         {refunding ? "Registrando…" : "Confirmar devolución"}
                     </button>

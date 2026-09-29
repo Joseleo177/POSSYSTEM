@@ -1,16 +1,35 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../../services/api";
 import DateRangePicker from "../ui/DateRangePicker";
+import Pagination from "../ui/Pagination";
+import { LedgerSkeleton, LedgerEmpty, DayRow } from "../ui/Ledger";
 import { useApp } from "../../context/AppContext";
+import { toNameCase } from "../../helpers";
+import { fmtDayLabel } from "../../helpers/dates";
 
 const LIMIT = 100;
+const COLS = 4;
 
-const fmtDate = (d) => {
-    if (!d) return "—";
-    const dt = new Date(d);
-    return dt.toLocaleDateString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric" });
-};
+// Estado de cuenta de un diario (caja o banco), leído como un libro: los movimientos se
+// agrupan por día y cada fila dice qué documento es, de qué se trata, cuánto movió y cómo
+// quedó el saldo. El color se reserva: verde para lo que entra; lo que sale va en tinta con
+// su signo (la mayoría de los egresos son vueltos y pagos normales, no alertas), y el rojo
+// queda solo para un saldo negativo.
 
+const fmtNum = (n) => Number(n || 0).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Monto con el símbolo atenuado, igual que ui/Money.
+function Amount({ sym, n, sign = "", className = "" }) {
+    return (
+        <span className={`tabular-nums whitespace-nowrap ${className}`}>
+            {sign}<span className="text-[0.78em] font-medium text-content-subtle mr-1">{sym}</span>{fmtNum(Math.abs(n))}
+        </span>
+    );
+}
+
+const ARROW_IN = "M17 7L7 17m0 0h8m-8 0V9";
+const ARROW_OUT = "M7 17L17 7m0 0H9m8 0v8";
+const VOID = "M18.364 5.636L5.636 18.364M21 12a9 9 0 11-18 0 9 9 0 0118 0z";
 
 export default function JournalMovementsModal({ journalId, bankId, warehouseId, onClose }) {
     const [movements, setMovements] = useState([]);
@@ -24,10 +43,8 @@ export default function JournalMovementsModal({ journalId, bankId, warehouseId, 
     const { baseCurrency } = useApp();
     const sym = journal?.currency_symbol || "Ref.";
     const baseSym = baseCurrency?.symbol || "Ref.";
-    const fmtLocal = (n) => `${sym}${Number(n).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     // Los montos se guardan en base y se muestran en la moneda del diario. Sin el equivalente
     // no había forma de conciliar este estado de cuenta con los reportes, que suman en base.
-    const fmtBaseEq = (n) => `≈ ${baseSym}${Number(n || 0).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const hasRate = (m) => Math.abs((parseFloat(m?.rate) || 1) - 1) > 1e-6;
 
     const load = useCallback(async () => {
@@ -59,241 +76,182 @@ export default function JournalMovementsModal({ journalId, bankId, warehouseId, 
     if (!journalId && !bankId) return null;
 
     const totalPages = Math.ceil(total / LIMIT);
+    const saldo = parseFloat(journal?.current_balance ?? 0);
+
+    // Resumen de lo que se está viendo. Con más de una página suma solo la actual, y el
+    // rótulo lo dice: presentarlo como total del período sería falso.
+    const vivos = movements.filter(m => m.status !== "anulado");
+    const ingresos = vivos.filter(m => m.type === "ingreso").reduce((a, m) => a + (parseFloat(m.amount_local) || 0), 0);
+    const egresos = vivos.filter(m => m.type !== "ingreso").reduce((a, m) => a + (parseFloat(m.amount_local) || 0), 0);
+    const neto = ingresos - egresos;
+    const alcance = movements.length < total ? "En esta página"
+        : (dateFrom || dateTo) ? "En el período" : "Todo el historial";
+
+    // Filas con su rótulo de día intercalado.
+    const filas = [];
+    let diaActual = null;
+    movements.forEach((m, idx) => {
+        const dia = fmtDayLabel(m.date);
+        if (dia !== diaActual) {
+            diaActual = dia;
+            filas.push(<DayRow key={`d-${dia}-${idx}`} cols={COLS} label={dia} className="pl-6" />);
+        }
+        filas.push(<Fila key={`${m.type}-${m.id}-${idx}`} m={m} sym={sym} baseSym={baseSym} hasRate={hasRate(m)} />);
+    });
 
     return (
         <>
             {/* Backdrop */}
-            <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm" onClick={onClose} />
+            <div className="fixed inset-0 z-[80] bg-black/40 dark:bg-black/60 backdrop-blur-[2px] overlay-in" onClick={onClose} />
 
             {/* Panel */}
-            <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+            <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 pointer-events-none">
                 <div
-                    className="w-full max-w-5xl max-h-[90vh] bg-white dark:bg-surface-dark-2 border border-border/30 dark:border-white/[0.07] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out"
+                    className="pointer-events-auto w-full max-w-5xl max-h-[90vh] bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] flex flex-col overflow-hidden modal-in"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    {/* ── Header ── */}
-                    <div className="shrink-0 px-6 py-4 border-b border-border/20 dark:border-white/5 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div
-                                className="w-10 h-10 rounded-xl flex items-center justify-center border border-border/40 dark:border-white/10 shadow-inner"
-                                style={{ backgroundColor: (journal?.color || "#14b8a6") + "15" }}
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke={journal?.color || "#14b8a6"} viewBox="0 0 24 24" strokeWidth={2}>
+                    {/* ── Encabezado ── */}
+                    <div className="shrink-0 px-6 pt-5 pb-4 flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
                             </div>
-                            <div>
-                                <h2 className="text-sm font-black text-content dark:text-white uppercase tracking-tight">
-                                    Estado de Cuenta
-                                </h2>
-                                <p className="text-[10px] font-bold text-content-subtle uppercase tracking-widest mt-0.5">
-                                    {journal?.name || "Diario"} {journal?.bank_name ? `· ${journal.bank_name}` : ""}
+                            <div className="min-w-0">
+                                <h2 className="text-[16px] font-semibold tracking-tight text-content dark:text-white">Estado de cuenta</h2>
+                                <p className="text-[13px] text-content-subtle truncate mt-0.5 flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-content-subtle/40" style={journal?.color ? { backgroundColor: journal.color } : undefined} />
+                                    {toNameCase(journal?.name || "Diario")}
+                                    {journal?.bank_name && journal.bank_name !== journal.name ? ` · ${toNameCase(journal.bank_name)}` : ""}
                                 </p>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                            {/* Saldo actual */}
+                        <div className="flex items-start gap-4 shrink-0">
                             <div className="text-right">
-                                <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest">Saldo Actual</div>
-                                <div className="text-lg font-black tabular-nums tracking-tighter" style={{ color: journal?.color || "#14b8a6" }}>
-                                    {fmtLocal(journal?.current_balance ?? 0)}
-                                </div>
+                                <div className="text-[12px] text-content-subtle">Saldo actual</div>
+                                <Amount sym={sym} n={saldo} sign={saldo < 0 ? "−" : ""}
+                                    className={`block mt-0.5 text-[24px] leading-none font-bold tracking-tight ${saldo < 0 ? "text-red-600 dark:text-red-400" : "text-content dark:text-white"}`} />
                             </div>
-                            <button
-                                onClick={onClose}
-                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-surface-2 dark:bg-white/5 border border-border/30 dark:border-white/10 text-content-subtle hover:text-danger hover:bg-danger/10 hover:border-danger/30 transition-all"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            <button onClick={onClose} className="row-icon" title="Cerrar" aria-label="Cerrar">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
                     </div>
 
+                    {/* ── Resumen ── */}
+                    <div className="shrink-0 mx-6 mb-4 grid grid-cols-3 rounded-xl bg-surface-2 dark:bg-white/[0.03] divide-x divide-border/70 dark:divide-white/[0.06]">
+                        {[
+                            { label: "Entró", node: <Amount sym={sym} n={ingresos} sign="+" className="text-emerald-700 dark:text-emerald-400" /> },
+                            { label: "Salió", node: <Amount sym={sym} n={egresos} sign="−" className="text-content dark:text-white" /> },
+                            { label: "Neto", node: <Amount sym={sym} n={neto} sign={neto < 0 ? "−" : "+"} className="text-content dark:text-white" /> },
+                        ].map(k => (
+                            <div key={k.label} className="px-4 py-3 min-w-0">
+                                <div className="text-[12px] text-content-subtle">{k.label}</div>
+                                <div className="mt-1 text-[16px] font-semibold truncate">{k.node}</div>
+                            </div>
+                        ))}
+                    </div>
+
                     {/* ── Filtros ── */}
-                    <div className="shrink-0 px-6 py-2 border-b border-border/20 dark:border-white/5 flex items-center gap-3">
-                        <DateRangePicker
-                            from={dateFrom}
-                            to={dateTo}
-                            setFrom={setDateFrom}
-                            setTo={setDateTo}
-                            className="flex-1 max-w-sm"
-                        />
-                        <div className="ml-auto text-[10px] font-bold text-content-subtle uppercase tracking-widest">
-                            {total} movimientos
+                    <div className="shrink-0 px-6 pb-3 flex items-center gap-3">
+                        <DateRangePicker from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo} className="flex-1 max-w-sm" />
+                        <div className="ml-auto text-[12px] text-content-subtle tabular-nums whitespace-nowrap">
+                            {alcance} · <span className="font-semibold text-content dark:text-white">{total}</span> {total === 1 ? "movimiento" : "movimientos"}
                         </div>
                     </div>
 
-                    {/* ── Tabla de movimientos ── */}
-                    <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
-                        <table className="w-full text-left border-collapse min-w-[680px]">
-                            <thead className="sticky top-0 z-10 bg-surface-2 dark:bg-surface-dark-2">
+                    {/* ── Movimientos ── */}
+                    <div className="flex-1 min-h-0 overflow-auto custom-scrollbar border-t border-border dark:border-border-dark">
+                        <table className="table-ledger min-w-[720px]">
+                            <thead className="sticky top-0 z-10">
                                 <tr>
-                                    {["Fecha", "Tipo", "Referencia", "Concepto", "Monto", "Saldo"].map((h) => (
-                                        <th
-                                            key={h}
-                                            className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest text-content-subtle dark:text-white/30 border-b border-border/40 dark:border-white/5 ${
-                                                ["Monto", "Saldo"].includes(h) ? "text-right" : ""
-                                            }`}
-                                        >
-                                            {h}
-                                        </th>
-                                    ))}
+                                    <th className="pl-6 w-[220px]">Documento</th>
+                                    <th>Concepto</th>
+                                    <th className="text-right w-[190px]">Monto</th>
+                                    <th className="text-right w-[160px] pr-6">Saldo</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-border/10 dark:divide-white/5">
-                                {loading ? (
-                                    <tr>
-                                        <td colSpan={6} className="px-6 py-16 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">
-                                            Cargando movimientos...
-                                        </td>
-                                    </tr>
-                                ) : movements.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={6} className="px-6 py-16 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic">
-                                            Sin movimientos registrados
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    movements.map((m, idx) => {
-                                        const isVoided = m.status === "anulado";
-                                        const isIngreso = m.type === "ingreso";
-
-                                        return (
-                                            <tr
-                                                key={`${m.type}-${m.id}-${idx}`}
-                                                className={`group transition-colors ${
-                                                    isVoided
-                                                        ? "opacity-40 bg-danger/[0.02]"
-                                                        : "hover:bg-brand-500/[0.02]"
-                                                }`}
-                                            >
-                                                {/* Fecha */}
-                                                <td className="px-4 py-2.5">
-                                                    <span className={`text-[11px] font-bold text-content-subtle uppercase ${isVoided ? "line-through" : ""}`}>
-                                                        {fmtDate(m.date)}
-                                                    </span>
-                                                </td>
-
-                                                {/* Tipo */}
-                                                <td className="px-4 py-2.5">
-                                                    <span
-                                                        className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
-                                                            isVoided
-                                                                ? "text-content-subtle border-border/30 bg-surface-2 dark:bg-white/5 line-through"
-                                                                : isIngreso
-                                                                ? "text-success border-success/30 bg-success/5"
-                                                                : "text-danger border-danger/30 bg-danger/5"
-                                                        }`}
-                                                    >
-                                                        {isVoided ? "ANULADO" : isIngreso ? "INGRESO" : "EGRESO"}
-                                                    </span>
-                                                </td>
-
-                                                {/* Referencia */}
-                                                <td className="px-4 py-2.5">
-                                                    <span className={`text-[10px] font-black tracking-tight ${isVoided ? "text-content-subtle line-through" : "text-brand-500"}`}>
-                                                        {m.reference}
-                                                    </span>
-                                                    {/* Un solo monto que saldó varias facturas: la línea es el
-                                                        movimiento de caja, y esto avisa que cubre más de un documento. */}
-                                                    {m.group_count > 1 && (
-                                                        <div className="text-[8px] font-black uppercase tracking-wider text-content-subtle mt-0.5">
-                                                            Cobro conjunto · {m.group_count} facturas
-                                                        </div>
-                                                    )}
-                                                    {m.doc_ref && (
-                                                        <div className="text-[8px] font-bold text-content-subtle mt-0.5">
-                                                            Ref: {m.doc_ref}
-                                                        </div>
-                                                    )}
-                                                </td>
-
-                                                {/* Concepto */}
-                                                <td className="px-4 py-2.5 max-w-[220px]">
-                                                    <span className={`text-[11px] font-bold uppercase tracking-tight truncate block ${isVoided ? "text-content-subtle line-through" : "text-content dark:text-white"}`}>
-                                                        {m.concept}
-                                                    </span>
-                                                    {m.notes && (
-                                                        <div className="text-[8px] font-bold text-content-subtle mt-0.5 truncate">
-                                                            {m.notes}
-                                                        </div>
-                                                    )}
-                                                </td>
-
-                                                {/* Monto — el Tipo ya dice si suma o resta; el signo y el color lo confirman */}
-                                                <td className="px-4 py-2.5 text-right">
-                                                    <span className={`text-[11px] font-black tabular-nums ${
-                                                        isVoided ? "text-content-subtle line-through"
-                                                            : isIngreso ? "text-success" : "text-danger"
-                                                    }`}>
-                                                        {isIngreso ? "+" : "-"}{fmtLocal(m.amount_local)}
-                                                    </span>
-                                                    {hasRate(m) && (
-                                                        <div className="text-[9px] font-bold text-content-subtle dark:text-white/25 tabular-nums mt-0.5">
-                                                            {fmtBaseEq(m.amount_base)} · {Number(m.rate).toFixed(4)}
-                                                        </div>
-                                                    )}
-                                                </td>
-
-                                                {/* Saldo */}
-                                                <td className="px-4 py-2.5 text-right">
-                                                    <span className={`text-[11px] font-black tabular-nums ${
-                                                        m.balance >= 0 ? "text-content dark:text-white" : "text-danger"
-                                                    }`}>
-                                                        {fmtLocal(m.balance)}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
+                            <tbody>
+                                {loading ? <LedgerSkeleton cols={COLS} rows={8} />
+                                    : movements.length === 0 ? (
+                                        <LedgerEmpty cols={COLS} title="Sin movimientos"
+                                            hint={dateFrom || dateTo ? "No hay movimientos en esas fechas." : "Este diario todavía no tiene movimientos."}
+                                            onClear={dateFrom || dateTo ? () => { setDateFrom(""); setDateTo(""); } : undefined} />
+                                    ) : filas}
                             </tbody>
                         </table>
                     </div>
 
-                    {/* ── Footer / Paginación ── */}
-                    <div className="shrink-0 px-6 py-3 border-t border-border/20 dark:border-white/5 flex items-center justify-between bg-surface-2/50 dark:bg-white/[0.01]">
-                        <div className="text-[10px] font-bold text-content-subtle dark:text-white/20 uppercase tracking-widest">
-                            Mostrando <span className="text-content dark:text-white">{movements.length}</span> de <span className="text-content dark:text-white">{total}</span>
-                        </div>
-                        {totalPages > 1 && (
-                            <div className="flex items-center gap-1.5">
-                                <button
-                                    disabled={page === 1}
-                                    onClick={() => setPage(1)}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 dark:border-white/5 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-30"
-                                >
-                                    «
-                                </button>
-                                <button
-                                    disabled={page === 1}
-                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                    className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 dark:border-white/5 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-30"
-                                >
-                                    Anterior
-                                </button>
-                                <div className="px-3 h-7 flex items-center justify-center text-[10px] font-black text-brand-500 bg-brand-500/10 rounded-lg border border-brand-500/20">
-                                    Pág {page}/{totalPages}
-                                </div>
-                                <button
-                                    disabled={page === totalPages}
-                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                    className="h-7 px-3 flex items-center justify-center rounded-lg border border-border/30 dark:border-white/5 text-[10px] font-black uppercase tracking-widest hover:bg-brand-500 hover:text-black transition-all disabled:opacity-30"
-                                >
-                                    Siguiente
-                                </button>
-                                <button
-                                    disabled={page === totalPages}
-                                    onClick={() => setPage(totalPages)}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-border/30 dark:border-white/5 text-[10px] font-black hover:bg-brand-500 hover:text-black transition-all disabled:opacity-30"
-                                >
-                                    »
-                                </button>
-                            </div>
-                        )}
-                    </div>
+                    <Pagination page={page} totalPages={totalPages} total={total} limit={LIMIT} onPageChange={setPage} />
                 </div>
             </div>
         </>
+    );
+}
+
+function Fila({ m, sym, baseSym, hasRate }) {
+    const anulado = m.status === "anulado";
+    const ingreso = m.type === "ingreso";
+    const tachado = anulado ? "line-through decoration-1 text-content-subtle" : "";
+
+    return (
+        <tr className={anulado ? "opacity-60" : undefined}>
+            {/* Documento: dirección del dinero en el icono, el código en tinta. */}
+            <td className="pl-6">
+                <div className="flex items-center gap-3 min-w-0">
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                        anulado ? "bg-surface-3 dark:bg-white/[0.06] text-content-subtle"
+                            : ingreso ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : "bg-surface-3 dark:bg-white/[0.06] text-content-muted dark:text-white/60"
+                    }`} title={anulado ? "Anulado" : ingreso ? "Ingreso" : "Egreso"}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d={anulado ? VOID : ingreso ? ARROW_IN : ARROW_OUT} />
+                        </svg>
+                    </span>
+                    <div className="min-w-0">
+                        <div className={`text-[13px] font-semibold tabular-nums truncate ${tachado || "text-content dark:text-white"}`}>
+                            {m.reference}
+                        </div>
+                        {/* Un solo monto que saldó varias facturas: la línea es el movimiento de
+                            caja, y esto avisa que cubre más de un documento. */}
+                        {m.group_count > 1 ? (
+                            <div className="text-[12px] text-content-subtle truncate">Cobro conjunto · {m.group_count} facturas</div>
+                        ) : m.doc_ref ? (
+                            <div className="text-[12px] text-content-subtle truncate">Ref. {m.doc_ref}</div>
+                        ) : anulado ? (
+                            <div className="text-[12px] text-content-subtle">Anulado</div>
+                        ) : null}
+                    </div>
+                </div>
+            </td>
+
+            {/* Concepto: dos líneas antes de cortar; con una sola, "Cambio entregado (parte) —
+                Factura A…" perdía justo el número de factura. */}
+            <td className="max-w-0">
+                <div className={`text-[13px] leading-snug line-clamp-2 ${tachado || "text-content dark:text-white"}`} title={m.concept}>
+                    {toNameCase(m.concept)}
+                </div>
+                {m.notes && (
+                    <div className="text-[12px] text-content-subtle truncate mt-0.5" title={m.notes}>{m.notes}</div>
+                )}
+            </td>
+
+            <td className="text-right">
+                <Amount sym={sym} n={m.amount_local} sign={ingreso ? "+" : "−"}
+                    className={`text-[14px] font-semibold ${anulado ? "line-through decoration-1 text-content-subtle" : ingreso ? "text-emerald-700 dark:text-emerald-400" : "text-content dark:text-white"}`} />
+                {hasRate && (
+                    <div className="text-[11px] text-content-subtle tabular-nums mt-0.5 whitespace-nowrap">
+                        ≈ {baseSym} {fmtNum(m.amount_base)} · tasa {Number(m.rate).toLocaleString("es-VE", { maximumFractionDigits: 4 })}
+                    </div>
+                )}
+            </td>
+
+            <td className="text-right pr-6">
+                <Amount sym={sym} n={m.balance} sign={m.balance < 0 ? "−" : ""}
+                    className={`text-[13px] font-medium ${m.balance < 0 ? "text-red-600 dark:text-red-400" : "text-content-muted dark:text-white/75"}`} />
+            </td>
+        </tr>
     );
 }

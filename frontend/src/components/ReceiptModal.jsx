@@ -265,63 +265,63 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
 
         @page {
             size: ${printerWidth === 58 ? "58mm" : "80mm"} auto;
-            margin: 0;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Outfit', sans-serif;
+ margin: 0;
+ }
+ * { margin: 0; padding: 0; box-sizing: border-box; }
+ body {
+ font-family: 'Outfit', sans-serif;
             line-height: 1.3;
             color: #000;
             background: white;
             width: ${printerWidth === 58 ? "44mm" : "72mm"};
             margin: ${printerWidth === 58 ? "0" : "0 auto"};
             padding: ${printerWidth === 58 ? "2mm" : "3mm"};
-        }
+ }
 
-        .header { text-align: center; margin-bottom: 2mm; border-bottom: 1px dashed #000; padding-bottom: 2mm; }
-        .logo { max-height: 12mm; margin-bottom: 1mm; }
-        .store-name { font-size: ${printerWidth === 58 ? "10px" : "13px"}; font-weight: 800; text-transform: uppercase; }
-        .store-slogan { font-size: ${printerWidth === 58 ? "6.5px" : "8.5px"}; font-style: italic; margin-top: 0.5mm; }
-        .store-rif { font-size: ${printerWidth === 58 ? "7.5px" : "9.5px"}; margin-top: 0.5mm; }
-        .store-info { font-size: ${printerWidth === 58 ? "7px" : "8.5px"}; color: #000; margin-top: 0.5mm; }
+ .header { text-align: center; margin-bottom: 2mm; border-bottom: 1px dashed #000; padding-bottom: 2mm; }
+ .logo { max-height: 12mm; margin-bottom: 1mm; }
+ .store-name { font-size: ${printerWidth === 58 ? "10px" : "13px"}; font-weight: 800; text-transform: uppercase; }
+ .store-slogan { font-size: ${printerWidth === 58 ? "6.5px" : "8.5px"}; font-style: italic; margin-top: 0.5mm; }
+ .store-rif { font-size: ${printerWidth === 58 ? "7.5px" : "9.5px"}; margin-top: 0.5mm; }
+ .store-info { font-size: ${printerWidth === 58 ? "7px" : "8.5px"}; color: #000; margin-top: 0.5mm; }
 
-        .doc-header { text-align: center; margin-bottom: 2mm; }
-        .doc-title { font-size: ${printerWidth === 58 ? "8.5px" : "10.5px"}; font-weight: 800; text-transform: uppercase; }
-        .doc-warning { font-size: ${printerWidth === 58 ? "6.5px" : "8px"}; font-weight: 700; margin-top: 0.5mm; }
+ .doc-header { text-align: center; margin-bottom: 2mm; }
+ .doc-title { font-size: ${printerWidth === 58 ? "8.5px" : "10.5px"}; font-weight: 800; text-transform: uppercase; }
+ .doc-warning { font-size: ${printerWidth === 58 ? "6.5px" : "8px"}; font-weight: 700; margin-top: 0.5mm; }
 
-        .meta { margin-bottom: 2mm; font-size: ${printerWidth === 58 ? "7.5px" : "9.5px"}; border-bottom: 1px dashed #000; padding-bottom: 2mm; }
-        .meta-row { display: flex; justify-content: space-between; }
-        .meta-label { font-weight: 400; }
-        .meta-value { font-weight: 700; }
+ .meta { margin-bottom: 2mm; font-size: ${printerWidth === 58 ? "7.5px" : "9.5px"}; border-bottom: 1px dashed #000; padding-bottom: 2mm; }
+ .meta-row { display: flex; justify-content: space-between; }
+ .meta-label { font-weight: 400; }
+ .meta-value { font-weight: 700; }
 
-        table { width: 100%; border-collapse: collapse; margin-bottom: 2mm; }
-        th { text-align: left; border-bottom: 1px solid #000; padding: 1mm 0; font-size: ${printerWidth === 58 ? "7.5px" : "9px"}; }
-        td { padding: 1mm 0; font-size: ${printerWidth === 58 ? "7.5px" : "9px"}; vertical-align: top; }
+ table { width: 100%; border-collapse: collapse; margin-bottom: 2mm; }
+ th { text-align: left; border-bottom: 1px solid #000; padding: 1mm 0; font-size: ${printerWidth === 58 ? "7.5px" : "9px"}; }
+ td { padding: 1mm 0; font-size: ${printerWidth === 58 ? "7.5px" : "9px"}; vertical-align: top; }
         /* overflow-wrap y no word-break: word-break parte la palabra en cuanto se acaba el
            renglón, así que en la columna angosta del ticket "CAFE AMANECER" salía cortado en
            pedazos letra a letra ("CAFE / AMA / NECE / R"). Así solo se parte la palabra que de
            verdad no cabe entera. */
         .item-name { max-width: ${printerWidth === 58 ? "20mm" : "32mm"}; overflow-wrap: break-word; font-weight: 600; text-transform: uppercase; }
-        /* Separación entre columnas: sin ella cantidad, P.U. y total se leen como un solo bloque. */
-        .td-center { text-align: center; padding-left: 1.5mm; padding-right: 1.5mm; }
-        .td-right { text-align: right; padding-left: 1.5mm; }
-        /* TODO el texto va en negro puro: la térmica es de 1 bit, no imprime grises. Un #444
-           lo simula con un patrón de puntos disperso y sale lavado, casi ilegible.
-           La jerarquía entre columnas se logra con el grosor y la "x" de la cantidad. */
-        .qty { color: #000; font-weight: 700; white-space: nowrap; }
-        .unit-price { color: #000; font-weight: 700; white-space: nowrap; }
-        .line-total { color: #000; font-weight: 800; white-space: nowrap; }
+ /* Separación entre columnas: sin ella cantidad, P.U. y total se leen como un solo bloque. */
+ .td-center { text-align: center; padding-left: 1.5mm; padding-right: 1.5mm; }
+ .td-right { text-align: right; padding-left: 1.5mm; }
+ /* TODO el texto va en negro puro: la térmica es de 1 bit, no imprime grises. Un #444
+ lo simula con un patrón de puntos disperso y sale lavado, casi ilegible.
+ La jerarquía entre columnas se logra con el grosor y la "x" de la cantidad. */
+ .qty { color: #000; font-weight: 700; white-space: nowrap; }
+ .unit-price { color: #000; font-weight: 700; white-space: nowrap; }
+ .line-total { color: #000; font-weight: 800; white-space: nowrap; }
 
-        .totals { border-top: 1px dashed #000; padding-top: 2mm; margin-bottom: 2mm; }
-        .total-row { display: flex; justify-content: space-between; font-size: ${printerWidth === 58 ? "8px" : "10px"}; margin-bottom: 0.5mm; }
-        .total-row.big { font-size: ${printerWidth === 58 ? "10px" : "12px"}; font-weight: 800; border-top: 1px solid #000; padding-top: 1mm; margin-top: 1mm; }
-        .total-row.discount { color: #000; }
+ .totals { border-top: 1px dashed #000; padding-top: 2mm; margin-bottom: 2mm; }
+ .total-row { display: flex; justify-content: space-between; font-size: ${printerWidth === 58 ? "8px" : "10px"}; margin-bottom: 0.5mm; }
+ .total-row.big { font-size: ${printerWidth === 58 ? "10px" : "12px"}; font-weight: 800; border-top: 1px solid #000; padding-top: 1mm; margin-top: 1mm; }
+ .total-row.discount { color: #000; }
 
-        .footer { text-align: center; font-size: ${printerWidth === 58 ? "7px" : "8.5px"}; border-top: 1px dashed #000; padding-top: 2mm; margin-top: 2mm; }
-    </style>
+ .footer { text-align: center; font-size: ${printerWidth === 58 ? "7px" : "8.5px"}; border-top: 1px dashed #000; padding-top: 2mm; margin-top: 2mm; }
+ </style>
 </head>
 <body>
-    ${companyInfo?.show_header !== false ? `
+ ${companyInfo?.show_header !== false ? `
     <div class="header">
         ${companyInfo?.logo_url ? `<img src="${resolveImageUrl(companyInfo.logo_url)}" class="logo" />` : ""}
         <div class="store-name">${storeName}</div>
@@ -463,26 +463,26 @@ export default function ReceiptModal({ open, onClose, sale }) {
                         {companyInfo?.logo_url && (
                             <img src={resolveImageUrl(companyInfo.logo_url)} alt="logo" className="mx-auto mb-2 max-h-16 w-auto object-contain" />
                         )}
-                        <div className="text-sm font-black text-content dark:text-content-dark tracking-wide">{storeName}</div>
-                        {companyInfo?.rif && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-0.5">RIF: {companyInfo.rif}</div>}
-                        {companyInfo?.slogan && <div className="text-[11px] italic text-content-subtle mt-0.5">{companyInfo.slogan}</div>}
-                        {companyInfo?.address && <div className="text-[11px] text-content-muted dark:text-content-dark-muted mt-1">{companyInfo.address}</div>}
+                        <div className="text-sm font-bold text-content dark:text-content-dark tracking-wide">{storeName}</div>
+                        {companyInfo?.rif && <div className="text-[12px] text-content-muted dark:text-content-dark-muted mt-0.5">RIF: {companyInfo.rif}</div>}
+                        {companyInfo?.slogan && <div className="text-[12px] italic text-content-subtle mt-0.5">{companyInfo.slogan}</div>}
+                        {companyInfo?.address && <div className="text-[12px] text-content-muted dark:text-content-dark-muted mt-1">{companyInfo.address}</div>}
                         {(companyInfo?.city || companyInfo?.phone) && (
-                            <div className="text-[11px] text-content-muted dark:text-content-dark-muted">
+                            <div className="text-[12px] text-content-muted dark:text-content-dark-muted">
                                 {[companyInfo.city, companyInfo.phone, companyInfo.phone2].filter(Boolean).join(" · ")}
                             </div>
                         )}
-                        {companyInfo?.email && <div className="text-[11px] text-content-subtle">{companyInfo.email}</div>}
+                        {companyInfo?.email && <div className="text-[12px] text-content-subtle">{companyInfo.email}</div>}
                     </>
                 )}
-                <div className={`text-[11px] font-black text-content-subtle tracking-wide uppercase ${companyInfo?.show_header !== false ? "mt-2" : ""}`}>Comprobante de Venta</div>
+                <div className={`text-[12px] font-bold text-content-subtle ${companyInfo?.show_header !== false ? "mt-2" : ""}`}>Comprobante de Venta</div>
             </div>
 
             {/* Metadata */}
             <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-3 mb-3 space-y-1">
                 <div className="flex justify-between items-center py-1 text-xs">
                     <span className="text-content-muted dark:text-content-dark-muted">{docLabel} N°</span>
-                    <span className="text-content dark:text-content-dark font-black tracking-tight">{invoiceLabel}</span>
+                    <span className="text-content dark:text-content-dark font-bold tracking-tight">{invoiceLabel}</span>
                 </div>
                 <div className="flex justify-between items-center py-1 text-xs">
                     <span className="text-content-muted dark:text-content-dark-muted">Fecha</span>
@@ -499,8 +499,8 @@ export default function ReceiptModal({ open, onClose, sale }) {
             {/* Cliente */}
             {(s.customer_name || s.customer_rif) && (
                 <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-3 mb-3">
-                    <span className="text-[10px] font-black uppercase text-content-subtle block mb-1">Cliente</span>
-                    <span className="text-xs font-bold text-content dark:text-white uppercase block">
+                    <span className="text-[11px] font-bold uppercase text-content-subtle block mb-1">Cliente</span>
+                    <span className="text-xs font-semibold text-content dark:text-white block">
                         {[s.customer_rif, s.customer_name].filter(Boolean).join(" - ")}
                     </span>
                 </div>
@@ -519,10 +519,10 @@ export default function ReceiptModal({ open, onClose, sale }) {
                 <tbody>
                     {totals.items.map((item, idx) => (
                         <tr key={idx} className="border-b border-dashed border-border dark:border-border-dark">
-                            <td className="px-1.5 py-1.5 text-content dark:text-content-dark uppercase">{item.name}</td>
+                            <td className="px-1.5 py-1.5 text-content dark:text-content-dark">{item.name}</td>
                             <td className="px-1.5 py-1.5 text-center text-content-muted dark:text-content-dark-muted whitespace-nowrap">x {parseFloat(item.quantity) % 1 === 0 ? Math.round(parseFloat(item.quantity)) : item.quantity}</td>
                             <td className="px-1.5 py-1.5 text-right text-content-muted dark:text-content-dark-muted whitespace-nowrap">{item.fmtPrice}</td>
-                            <td className="px-1.5 py-1.5 text-right text-content dark:text-content-dark font-black whitespace-nowrap">{item.fmtSubtotal}</td>
+                            <td className="px-1.5 py-1.5 text-right text-content dark:text-content-dark font-bold whitespace-nowrap">{item.fmtSubtotal}</td>
                         </tr>
                     ))}
                 </tbody>
@@ -537,19 +537,19 @@ export default function ReceiptModal({ open, onClose, sale }) {
                 {s.discount > 0 && (
                     <div className="flex justify-between items-center py-0.5 text-xs text-danger">
                         <span className="font-medium">Descuento</span>
-                        <span className="font-bold">-{totals.fmtDiscount}</span>
+                        <span className="font-semibold">-{totals.fmtDiscount}</span>
                     </div>
                 )}
                 {s.charge > 0 && (
                     <div className="flex justify-between items-center py-0.5 text-xs text-content dark:text-content-dark">
                         <span className="font-medium capitalize">{s.chargeLabel.toLowerCase()}</span>
-                        <span className="font-bold">+{totals.fmtCharge}</span>
+                        <span className="font-semibold">+{totals.fmtCharge}</span>
                     </div>
                 )}
                 <div className="flex justify-between items-center py-1.5 border-t border-border/10 dark:border-white/5 mt-1 pt-1.5">
-                    <span className="text-content dark:text-content-dark font-black text-xs uppercase tracking-tighter">TOTAL</span>
+                    <span className="text-content dark:text-content-dark font-bold text-xs tracking-tighter">TOTAL</span>
                     <div className="text-right">
-                        <div className="text-content dark:text-white font-black text-sm leading-none">{totals.fmtTotal}</div>
+                        <div className="text-content dark:text-white font-bold text-sm leading-none">{totals.fmtTotal}</div>
                     </div>
                 </div>
             </div>
@@ -558,7 +558,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
             <div className="border-t border-border/10 dark:border-white/5 pt-2 mb-3">
                 <div className="flex justify-between items-center py-0.5 text-xs">
                     <span className="text-content-muted dark:text-content-dark-muted">Forma de pago</span>
-                    <span className="text-content dark:text-content-dark font-bold">{pago.metodo}</span>
+                    <span className="text-content dark:text-content-dark font-semibold">{pago.metodo}</span>
                 </div>
                 {/* Con más de un canal se detalla cuánto entró por cada uno: "Combinado" a secas
                     no permite cuadrar el ticket contra las cajas. */}
@@ -585,7 +585,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                 {pago.etiqueta && (
                     <div className="flex justify-between items-center py-0.5 text-xs">
                         <span className="text-content-muted dark:text-content-dark-muted">Estado</span>
-                        <span className={`font-black uppercase tracking-tight ${pago.pendiente ? "text-danger" : "text-success"}`}>
+                        <span className={`font-bold tracking-tight ${pago.pendiente ? "text-danger" : "text-success"}`}>
                             {pago.etiqueta}
                         </span>
                     </div>
@@ -595,7 +595,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                 {s.amount_paid > 0 && pago.pendiente && (
                     <div className="flex justify-between items-center py-0.5 text-xs">
                         <span className="text-content-muted dark:text-content-dark-muted">Abonado</span>
-                        <span className="text-success font-bold">{totals.fmtPaid}</span>
+                        <span className="text-success font-semibold">{totals.fmtPaid}</span>
                     </div>
                 )}
                 {/* Si hay deuda lo decide el backend (s.balance); cuánto es, la pista del
@@ -603,8 +603,8 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     de céntimos sobre una factura que el sistema ya da por saldada. */}
                 {pago.pendiente && s.balance > 0 && totals.balanceBs > 0 && (
                     <div className="flex justify-between items-center py-1 border-t border-border/10 dark:border-white/5 mt-1 pt-1">
-                        <span className="text-content dark:text-content-dark font-black text-xs uppercase tracking-tighter">Queda debiendo</span>
-                        <span className="text-danger font-black text-sm">{totals.fmtBalance}</span>
+                        <span className="text-content dark:text-content-dark font-bold text-xs tracking-tighter">Queda debiendo</span>
+                        <span className="text-danger font-bold text-sm">{totals.fmtBalance}</span>
                     </div>
                 )}
             </div>

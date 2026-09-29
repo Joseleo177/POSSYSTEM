@@ -1,9 +1,10 @@
 const { Expense, ExpenseCategory, PaymentJournal, Employee, Currency, Warehouse, PurchasePayment } = require('../models');
-const { Op } = require('sequelize');
-const { recalcPurchaseStatus } = require('../services/purchasePayments/purchasePaymentService');
+const { Op, literal } = require('sequelize');
+const { recalcPurchaseStatus, recalcBatch } = require('../services/purchasePayments/purchasePaymentService');
 const { toLocalDate, endOfLocalDay } = require('../utils/localDate');
 const { visibleWarehouseIds, assertWarehouseAccess } = require('../middleware/auth');
 const { assertJournalsInWarehouse } = require('../utils/journalWarehouse');
+const { expenseRefSql } = require('../utils/expenseReference');
 
 // ── Listar egresos (paginado + filtros) ──────────────────────
 exports.getAll = async (req, res, next) => {
@@ -34,6 +35,8 @@ exports.getAll = async (req, res, next) => {
     }
 
     const { count, rows } = await Expense.findAndCountAll({
+      // La clave interna de los pagos a proveedor no se muestra (ver utils/expenseReference).
+      attributes: { include: [[literal(expenseRefSql('"Expense"')), 'display_reference']] },
       where,
       include: [
         { model: ExpenseCategory, as: 'category', attributes: ['id', 'name'] },
@@ -49,7 +52,8 @@ exports.getAll = async (req, res, next) => {
 
     const data = rows.map(e => ({
       id:            e.id,
-      reference:     e.reference,
+      // Sin ?? e.reference: nulo es justamente "clave interna, mostrar el número".
+      reference:     e.get('display_reference'),
       description:   e.description,
       amount:        parseFloat(e.amount),
       rate:          parseFloat(e.rate || 1),
@@ -175,6 +179,10 @@ exports.voidExpense = async (req, res, next) => {
       const paymentId = parseInt(expense.reference.split(':')[1]);
       const payment = await PurchasePayment.findByPk(paymentId);
       if (payment) await recalcPurchaseStatus(payment.purchase_id);
+    } else if (expense.reference?.startsWith('purchase_batch:')) {
+      // Pago conjunto: el egreso es de todas las compras del lote, así que vuelven todas a
+      // deber lo que ese pago les había saldado.
+      await recalcBatch(expense.reference.slice('purchase_batch:'.length));
     }
 
     res.json({ ok: true, message: 'Egreso anulado' });

@@ -8,7 +8,7 @@ export default function MobileTab({ t, active, onGo }) {
         <button
             onClick={() => onGo(t.key)}
             className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] py-1.5 px-1 rounded-xl transition-all
-      ${isActive
+ ${isActive
                     ? "text-brand-500"
                     : "text-content-subtle/60 dark:text-content-dark-muted/60"
                 }`}
@@ -17,7 +17,7 @@ export default function MobileTab({ t, active, onGo }) {
                 {TAB_ICONS[t.key]()}
             </span>
             <span
-                className={`text-[11px] font-bold leading-none truncate max-w-[60px] ${isActive ? "font-black" : ""
+                className={`text-[11px] font-medium leading-none truncate max-w-[60px] ${isActive ? "font-semibold" : ""
                     }`}
             >
                 {t.mobileLabel}

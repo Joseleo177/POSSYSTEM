@@ -7,7 +7,7 @@ export default function NotificationToast({ notification }) {
     return (
         <div
             className={`fixed top-4 right-4 z-[9999] flex items-center gap-2 px-4 py-3 rounded-lg shadow-card-lg text-white text-sm font-medium
-      ${notification.type === "err" ? "bg-danger" : "bg-success"}`}
+ ${notification.type === "err" ? "bg-danger" : "bg-success"}`}
         >
             {notification.type === "err" ? (
                 <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">

@@ -4,12 +4,13 @@ import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
 import CustomSelect from "../ui/CustomSelect";
+import { toNameCase } from "../../helpers";
 
 const EMPTY_SERIE = { name: "", prefix: "", padding: 4, type: "factura", warehouse_id: "" };
 
 const SERIE_TYPES = [
-  { value: "factura", label: "Factura / Recibo", color: "brand" },
-  { value: "nc",      label: "Nota de Crédito",  color: "warning" },
+  { value: "factura", label: "Factura / recibo", color: "brand" },
+  { value: "nc",      label: "Nota de crédito",  color: "warning" },
 ];
 const EMPTY_RANGE = { start_number: "", end_number: "" };
 
@@ -96,12 +97,12 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
   return (
     <>
       <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex items-center justify-between gap-3">
-        <span className="text-[11px] font-black text-content-subtle dark:text-white/30 uppercase tracking-wide">
+        <span className="text-[12px] font-bold text-content-subtle dark:text-white/30">
           {allSeries.length} serie{allSeries.length !== 1 ? "s" : ""}
         </span>
         {canConfig && (
-          <Button onClick={() => { setEditSerie(null); setSerieForm(EMPTY_SERIE); setShowModal(true); }} className="h-8 px-3 text-[10px] shadow-none">
-            + Nueva Serie
+          <Button onClick={() => { setEditSerie(null); setSerieForm(EMPTY_SERIE); setShowModal(true); }} className="h-8 px-3 text-[11px] shadow-none">
+            + Nueva serie
           </Button>
         )}
       </div>
@@ -109,7 +110,7 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
       <div className="flex-1 overflow-auto px-4 py-3">
       {allSeries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 opacity-20">
-          <div className="text-xs font-black uppercase tracking-wide">No hay series configuradas</div>
+          <div className="text-xs font-bold">No hay series configuradas</div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -119,21 +120,21 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
               <div className="px-4 py-3 flex items-center justify-between gap-4 bg-surface-1/50 dark:bg-white/[0.02] border-b border-border/20">
                 <div className="flex flex-col">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black text-brand-500 uppercase tracking-widest opacity-60">{serie.prefix}</span>
-                    <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{serie.name}</span>
+                    <span className="text-[11px] font-semibold text-content-subtle uppercase tracking-[0.08em] opacity-60">{serie.prefix}</span>
+                    <span className="text-[12px] font-bold text-content dark:text-white tracking-tight">{serie.name}</span>
                     {serie.type === "nc"
-                      ? <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide bg-warning/10 text-warning border border-warning/20">N/C</span>
-                      : <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide bg-brand-500/10 text-brand-500 border border-brand-500/20">FAC</span>
+                      ? <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-warning/10 text-warning border border-warning/20">N/C</span>
+                      : <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-brand-500/10 text-brand-500 border border-brand-500/20">FAC</span>
                     }
                   </div>
-                  <div className="text-[9px] font-black text-content-subtle uppercase tracking-widest mt-0.5">
+                  <div className="text-[12px] font-medium text-content-subtle mt-0.5">
                     {serie.Warehouse?.name || "Sin sucursal"} · {serie.padding} dígitos · {(serie.SerieRanges || []).filter(r => r.active).length} rangos activos
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="ghost"
-                    className="h-8 px-3 text-[10px] bg-info/10 text-info border border-info/20 hover:bg-info hover:text-black shadow-none"
+                    className="h-8 px-3 text-[11px] bg-info/10 text-info border border-info/20 hover:bg-info hover:text-black shadow-none"
                     onClick={() => setManageSerieId(serie.id)}
                   >
                     Gestionar
@@ -142,7 +143,7 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
                     <>
                       <Button
                         variant="ghost"
-                        className="h-8 px-3 text-[10px] bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black shadow-none"
+                        className="h-8 px-3 text-[11px] bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black shadow-none"
                         onClick={() => { setEditSerie({ ...serie }); setShowModal(true); }}
                       >
                         Editar
@@ -174,16 +175,16 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Rangos */}
             <div>
-              <div className="text-[10px] font-black tracking-wider uppercase text-content-subtle mb-3 opacity-60">Rangos de Correlativos</div>
+              <div className="text-[12px] font-medium text-content-subtle mb-3 opacity-60">Rangos de correlativos</div>
               <div className="space-y-2">
                 {(manageSerie.SerieRanges || []).map(r => (
                   <div key={r.id} className="flex items-center justify-between p-3 bg-surface-2 dark:bg-white/[0.03] rounded-lg border border-border/40">
                     <div className="flex flex-col">
-                      <div className={`text-[11px] font-black ${r.active ? "text-success" : "text-content-subtle"}`}>
+                      <div className={`text-[12px] font-bold ${r.active ? "text-success" : "text-content-subtle"}`}>
                         {manageSerie.prefix}-{String(r.start_number).padStart(manageSerie.padding, "0")} → {manageSerie.prefix}-{String(r.end_number).padStart(manageSerie.padding, "0")}
                       </div>
                       {r.active && (
-                        <div className="text-[10px] font-bold opacity-40 uppercase tracking-widest mt-0.5">
+                        <div className="text-[11px] font-semibold opacity-40 uppercase tracking-widest mt-0.5">
                           Actual: {manageSerie.prefix}-{String(r.current_number).padStart(manageSerie.padding, "0")}
                         </div>
                       )}
@@ -205,17 +206,17 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
                       placeholder="Inicio"
                       value={rangeForm.start_number}
                       onChange={e => setRangeForm(p => ({ ...p, start_number: e.target.value }))}
-                      className="input h-8 text-[11px]"
+                      className="input h-8 text-[12px]"
                     />
                     <input
                       type="number"
                       placeholder="Fin"
                       value={rangeForm.end_number}
                       onChange={e => setRangeForm(p => ({ ...p, end_number: e.target.value }))}
-                      className="input h-8 text-[11px]"
+                      className="input h-8 text-[12px]"
                     />
                     <Button
-                      className="h-8 px-3 text-[10px] bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none shrink-0"
+                      className="h-8 px-3 text-[11px] bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none shrink-0"
                       onClick={() => addRange(manageSerie.id)}
                     >
                       + Añadir
@@ -227,9 +228,9 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
 
             {/* Usuarios */}
             <div>
-              <div className="text-[10px] font-black tracking-wider uppercase text-content-subtle mb-3 opacity-60">Usuarios con Acceso</div>
+              <div className="text-[12px] font-medium text-content-subtle mb-3 opacity-60">Usuarios con acceso</div>
               {allEmployees.length === 0 && (
-                <div className="text-[10px] font-bold text-content-subtle opacity-60 leading-relaxed">
+                <div className="text-[11px] font-semibold text-content-subtle opacity-60 leading-relaxed">
                   No tienes permiso para gestionar usuarios, así que no se puede asignar
                   quién factura con esta serie. Pídeselo a un administrador.
                 </div>
@@ -251,9 +252,9 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
                           daba acceso. El title cubre los que no quepan ni así. */}
                       <span
                         title={emp.full_name}
-                        className={`min-w-0 text-[11px] font-black uppercase leading-tight break-words line-clamp-2 ${assigned ? "text-content dark:text-white" : "text-content-subtle"}`}
+                        className={`min-w-0 text-[12px] font-bold leading-tight break-words line-clamp-2 ${assigned ? "text-content dark:text-white" : "text-content-subtle"}`}
                       >
-                        {emp.full_name}
+                        {toNameCase(emp.full_name)}
                       </span>
                     </div>
                   );
@@ -280,7 +281,7 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
                 type="button"
                 onClick={() => setForm(p => ({ ...p, type: t.value }))}
                 className={[
-                  "flex-1 py-2.5 rounded-xl border-2 text-[11px] font-black uppercase tracking-wide transition-all",
+                  "flex-1 py-2.5 rounded-xl border-2 text-[12px] font-bold transition-all",
                   form.type === t.value
                     ? t.value === "nc"
                       ? "border-warning bg-warning/10 text-warning"
@@ -304,7 +305,7 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
             placeholder="Seleccionar sucursal..."
             className="w-full"
           />
-          <div className="text-[10px] font-bold text-content-subtle mt-1 opacity-60">
+          <div className="text-[11px] font-semibold text-content-subtle mt-1 opacity-60">
             Cada sucursal lleva su propia numeración. No se puede cambiar una vez que la serie emitió documentos.
           </div>
         </div>
@@ -318,7 +319,7 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
               placeholder="Seleccionar serie N/C..."
               className="w-full"
             />
-            <div className="text-[10px] font-bold text-content-subtle mt-1 opacity-60">
+            <div className="text-[11px] font-semibold text-content-subtle mt-1 opacity-60">
               Las devoluciones de esta factura usarán esta serie para numerar la Nota de Crédito.
             </div>
           </div>
@@ -356,7 +357,7 @@ export default function SeriesTab({ notify, can, allSeries, loadAllSeries, allEm
             />
           </div>
         </div>
-        <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
+        <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
           <Button variant="ghost" onClick={closeModal}>Cancelar</Button>
           <Button variant="primary" onClick={saveSerie} disabled={savingSerie}>
             {savingSerie ? "Guardando..." : editSerie ? "Guardar cambios" : "Crear serie"}

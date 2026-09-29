@@ -83,12 +83,12 @@ export default function TransferModal({
     const canExecute = transferForm.from_warehouse_id && transferForm.to_warehouse_id && items.length > 0 && !loadingTransfer;
 
     return (
-        <Modal open={open} onClose={handleClose} title="Nueva Transferencia de Inventario" width={560}>
+        <Modal open={open} onClose={handleClose} title="Nueva transferencia de inventario" width={560}>
             <div className="space-y-4 p-1">
                 {/* ── Origen y Destino ── */}
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="label mb-1.5 opacity-70">Almacén Origen <span className="text-danger">*</span></label>
+                        <label className="label mb-1.5">Almacén origen <span className="text-danger">*</span></label>
                         <CustomSelect
                             value={transferForm.from_warehouse_id}
                             onChange={val => setTransferForm(p => ({
@@ -102,7 +102,7 @@ export default function TransferModal({
                         />
                     </div>
                     <div>
-                        <label className="label mb-1.5 opacity-70">Almacén Destino <span className="text-danger">*</span></label>
+                        <label className="label mb-1.5">Almacén destino <span className="text-danger">*</span></label>
                         <CustomSelect
                             value={transferForm.to_warehouse_id}
                             onChange={val => setTransferForm(p => ({ ...p, to_warehouse_id: val }))}
@@ -115,16 +115,16 @@ export default function TransferModal({
 
                 {/* ── Agregar producto a la lista ── */}
                 {!originSelected ? (
-                    <div className="rounded-xl border border-dashed border-border/40 dark:border-white/10 py-5 text-center text-[11px] font-bold uppercase tracking-widest text-content-subtle">
+                    <div className="rounded-xl border border-dashed border-border/40 dark:border-white/10 py-5 text-center text-[12px] font-semibold text-content-subtle">
                         Selecciona el almacén origen para agregar productos
                     </div>
                 ) : (
                     <div className="grid grid-cols-[1.5fr_1fr_auto] gap-3 items-end">
                         <div className="relative">
-                            <label className="label mb-1.5 opacity-70">Producto</label>
+                            <label className="label mb-1.5">Producto</label>
                             {transferProductSelected ? (
                                 <div className="input h-10 flex items-center justify-between gap-3 border-brand-500 bg-brand-500/5 px-3">
-                                    <span className="text-[11px] font-black uppercase tracking-tight truncate">{transferProductSelected.name}</span>
+                                    <span className="text-[12px] font-bold tracking-tight truncate">{transferProductSelected.name}</span>
                                     <button
                                         onClick={() => { setTransferProductSelected(null); setTransferProductSearch(""); }}
                                         className="w-6 h-6 rounded hover:bg-danger/10 text-content-subtle hover:text-danger transition-all flex items-center justify-center flex-shrink-0"
@@ -152,12 +152,12 @@ export default function TransferModal({
                                     {showDropdown && (
                                         <div
                                             onScroll={handleProductScroll}
-                                            className="absolute top-full left-0 mt-1 min-w-full w-max max-w-[min(420px,calc(100vw-3rem))] bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200 divide-y divide-border/10"
+                                            className="absolute top-full left-0 mt-1 min-w-full w-max max-w-[min(420px,calc(100vw-3rem))] bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] z-50 max-h-56 overflow-y-auto divide-y divide-border/10 modal-in"
                                         >
                                             {loadingTransferProducts && transferProductResults.length === 0 ? (
-                                                <div className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle">Buscando productos...</div>
+                                                <div className="py-6 text-center text-[11px] font-bold text-content-subtle">Buscando productos...</div>
                                             ) : transferProductResults.length === 0 ? (
-                                                <div className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle">Sin productos con stock</div>
+                                                <div className="py-6 text-center text-[11px] font-bold text-content-subtle">Sin productos con stock</div>
                                             ) : (
                                                 transferProductResults.map(p => {
                                                     const added = items.some(x => x.product_id === p.id);
@@ -166,19 +166,19 @@ export default function TransferModal({
                                                             key={p.id}
                                                             onMouseDown={e => e.preventDefault()}
                                                             onClick={() => { setTransferProductSelected(p); setTransferProductSearch(""); setShowDropdown(false); }}
-                                                            className="w-full px-4 py-2.5 text-[11px] font-black uppercase tracking-tight text-left hover:bg-brand-500/[0.03] hover:text-brand-500 transition-all flex items-center justify-between gap-4"
+                                                            className="w-full px-4 py-2.5 text-[12px] font-bold tracking-tight text-left hover:bg-brand-500/[0.03] hover:text-brand-500 transition-all flex items-center justify-between gap-4"
                                                         >
                                                             <span className="min-w-0 truncate">{p.name} {added && <span className="text-brand-500 opacity-70">· en lista</span>}</span>
-                                                            <span className="text-[9px] opacity-40 shrink-0 whitespace-nowrap">Stock: {fmtQtyUnit(p.stock, p.unit)}</span>
+                                                            <span className="text-[10px] opacity-40 shrink-0 whitespace-nowrap">Stock: {fmtQtyUnit(p.stock, p.unit)}</span>
                                                         </button>
                                                     );
                                                 })
                                             )}
                                             {loadingMoreTransferProducts && (
-                                                <div className="py-3 text-center text-[10px] font-black uppercase tracking-widest text-content-subtle">Cargando más...</div>
+                                                <div className="py-3 text-center text-[11px] font-bold text-content-subtle">Cargando más...</div>
                                             )}
                                             {!loadingTransferProducts && !loadingMoreTransferProducts && transferProductResults.length > 0 && transferProductResults.length >= transferProductTotal && (
-                                                <div className="py-2 text-center text-[9px] font-bold uppercase tracking-widest text-content-subtle">{transferProductTotal} producto{transferProductTotal !== 1 ? "s" : ""}</div>
+                                                <div className="py-2 text-center text-[10px] font-semibold text-content-subtle">{transferProductTotal} producto{transferProductTotal !== 1 ? "s" : ""}</div>
                                             )}
                                         </div>
                                     )}
@@ -186,7 +186,7 @@ export default function TransferModal({
                             )}
                         </div>
                         <div>
-                            <label className="label mb-1.5 opacity-70">Cantidad</label>
+                            <label className="label mb-1.5">Cantidad</label>
                             <input
                                 type="number"
                                 min={qtyIsInteger ? "1" : "0.001"}
@@ -199,14 +199,14 @@ export default function TransferModal({
                                 }}
                                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addItem(); } }}
                                 placeholder={qtyIsInteger ? "0" : "0.00"}
-                                className="input h-10 font-black tabular-nums text-brand-500 placeholder:text-content-subtle/30"
+                                className="input h-10 tabular-nums text-brand-500 placeholder:text-content-subtle/30"
                             />
                         </div>
                         <button
                             onClick={addItem}
                             disabled={!canAdd}
                             title="Agregar a la lista"
-                            className={`h-10 px-4 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all ${canAdd ? "bg-brand-500 text-black hover:brightness-110 active:scale-95" : "bg-surface-3 dark:bg-white/5 text-content-subtle cursor-not-allowed"}`}
+                            className={`h-10 px-4 rounded-xl text-[12px] font-bold transition-all ${canAdd ? "btn-accent active:scale-95" : "bg-surface-3 dark:bg-white/5 text-content-subtle cursor-not-allowed"}`}
                         >
                             + Agregar
                         </button>
@@ -217,8 +217,8 @@ export default function TransferModal({
                 {items.length > 0 && (
                     <div className="rounded-xl border border-border/30 dark:border-white/10 overflow-hidden">
                         <div className="px-4 py-2 bg-surface-2/50 dark:bg-white/[0.03] flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-content-subtle">Productos a transferir</span>
-                            <span className="text-[10px] font-black text-brand-500">{items.length}</span>
+                            <span className="text-[12px] font-medium text-content-subtle">Productos a transferir</span>
+                            <span className="text-[11px] font-bold text-brand-500">{items.length}</span>
                         </div>
                         <div className="max-h-52 overflow-y-auto divide-y divide-border/10 dark:divide-white/5">
                             {items.map(it => {
@@ -226,12 +226,12 @@ export default function TransferModal({
                                 return (
                                     <div key={it.product_id} className="px-4 py-2.5 flex items-center gap-3">
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-[11px] font-black uppercase tracking-tight truncate">{it.name}</p>
-                                            <p className={`text-[9px] font-bold ${insufficient ? "text-danger" : "text-content-subtle"}`}>
+                                            <p className="text-[12px] font-bold tracking-tight truncate">{it.name}</p>
+                                            <p className={`text-[10px] font-semibold ${insufficient ? "text-danger" : "text-content-subtle"}`}>
                                                 {insufficient ? `⚠ Excede el stock (disp. ${fmtQtyUnit(it.stock, it.unit)})` : `Disponible: ${fmtQtyUnit(it.stock, it.unit)}`}
                                             </p>
                                         </div>
-                                        <span className={`text-[12px] font-black tabular-nums shrink-0 ${insufficient ? "text-danger" : "text-brand-500"}`}>
+                                        <span className={`text-[12px] font-bold tabular-nums shrink-0 ${insufficient ? "text-danger" : "text-brand-500"}`}>
                                             {fmtQtyUnit(it.qty, it.unit)}
                                         </span>
                                         <button
@@ -249,26 +249,26 @@ export default function TransferModal({
 
                 {/* ── Nota ── */}
                 <div>
-                    <label className="label mb-1.5 opacity-70">Motivo de la transferencia (Opcional)</label>
+                    <label className="label mb-1.5">Motivo de la transferencia (Opcional)</label>
                     <textarea
                         value={transferForm.note}
                         onChange={e => setTransferForm(p => ({ ...p, note: e.target.value }))}
                         placeholder="ej. Reposición de inventario para sucursal principal..."
-                        className="input min-h-[70px] py-3 px-3 resize-none text-[11px] leading-relaxed"
+                        className="input min-h-[70px] py-3 px-3 resize-none text-[12px] leading-relaxed"
                         rows={2}
                     />
                 </div>
             </div>
 
-            <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-border/10 dark:border-white/5">
-                <Button variant="ghost" onClick={handleClose} className="h-10 px-6 font-black tracking-widest text-[10px] uppercase">
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
+                <Button variant="ghost" onClick={handleClose} className="h-10 px-6 font-bold text-[11px]">
                     Cancelar
                 </Button>
                 <Button
                     variant="primary"
                     onClick={() => doTransfer(items)}
                     disabled={!canExecute}
-                    className="h-10 px-8 shadow-lg shadow-brand-500/20 font-black tracking-[0.2em] text-[10px] uppercase"
+                    className="h-10 px-8 shadow-sm font-bold text-[11px]"
                 >
                     {loadingTransfer ? "Procesando..." : `Ejecutar Transferencia${items.length > 0 ? ` (${items.length})` : ""}`}
                 </Button>

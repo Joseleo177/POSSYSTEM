@@ -315,7 +315,7 @@ export default function PriceLabelsView({ products, onClose }) {
                         </svg>
                         Diseño
                     </button>
-                    <button onClick={() => window.print()} className="px-6 py-2 bg-brand-500 text-black text-[11px] font-black uppercase rounded-lg shadow-lg shadow-brand-500/20 active:scale-95 transition-all">
+                    <button onClick={() => window.print()} className="px-6 py-2 bg-brand-500 text-black text-[11px] font-black uppercase rounded-lg shadow-sm active:scale-95 transition-all">
                         Enviar a Impresora
                     </button>
                     <button onClick={onClose} className="px-4 py-2 bg-surface-3 dark:bg-white/10 text-[11px] font-black uppercase rounded-lg">

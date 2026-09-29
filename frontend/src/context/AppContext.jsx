@@ -164,7 +164,7 @@ export function AppProvider({ children }) {
   const outflowCodes    = new Set(paymentMethods.filter(m => m.allows_outflow !== false).map(m => m.code));
   const outflowJournals = activeJournals.filter(j => outflowCodes.has(j.type));
 
-  const storeName    = settings.store_name || "MI TIENDA POS";
+  const storeName    = settings.store_name || "Mi tienda POS";
   const printerWidth = parseInt(settings.printer_width || "80");
   const companyInfo  = {
     name:     settings.store_name    || "",

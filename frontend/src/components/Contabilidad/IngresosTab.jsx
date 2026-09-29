@@ -4,6 +4,9 @@ import FilterPopover from "../ui/FilterPopover";
 import ConfirmModal from "../ui/ConfirmModal";
 import { Button } from "../ui/Button";
 import { fmtDateShort, journalsForWarehouse } from "../../helpers";
+import StatusMark from "../ui/StatusMark";
+import Money from "../ui/Money";
+import { ledgerRow, stopRow, LedgerSkeleton, LedgerEmpty, JournalDot, RowIcon } from "../ui/Ledger";
 import DateRangePicker from "../ui/DateRangePicker";
 import Modal from "../ui/Modal";
 import CustomSelect from "../ui/CustomSelect";
@@ -13,9 +16,10 @@ import { useApp } from "../../context/AppContext";
 import MovementDetailModal from "./MovementDetailModal";
 import JournalPickerButton from "../cobro/JournalPickerButton";
 
-const STATUS_BADGE = {
-    activo:  "badge-success",
-    anulado: "badge-neutral",
+// Registrado es lo normal: va en gris. El color queda para lo que pide atención.
+const MOVEMENT_STATUS = {
+    activo:  { label: "Registrado", tone: "success", quiet: "check" },
+    anulado: { label: "Anulado",    tone: "neutral", quiet: "void" },
 };
 
 export default function IngresosTab({ notify, can, fmtPrice, journals }) {
@@ -45,57 +49,57 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
     const subheader = (
         <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[200px]">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle/70 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
                 <input type="text" placeholder="Buscar por descripción o referencia..." value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)} className="input h-8 pl-8 text-[11px] w-full" />
+                    onChange={e => setSearchTerm(e.target.value)} className="input h-9 pl-9 w-full" />
             </div>
 
             <div className="relative">
                 <button ref={filtrosBtnRef} onClick={() => setShowFilterDrop(p => !p)}
-                    className={["h-8 px-3 rounded-lg text-[11px] font-black uppercase tracking-wide border flex items-center gap-2 transition-all",
-                        hasFilters ? "bg-brand-500/10 text-brand-500 border-brand-500/30"
-                            : "bg-surface-2 dark:bg-white/5 border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"].join(" ")}>
+                    className={["h-9 px-3 rounded-lg text-[13px] font-medium border flex items-center gap-2 transition-colors",
+                        hasFilters ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40"
+                            : "bg-white dark:bg-white/5 border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:text-white"].join(" ")}>
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                     Filtros
-                    {hasFilters && <span className="bg-brand-500 text-black w-4 h-4 rounded flex items-center justify-center text-[9px]">{activeFilters.length + activeCats.length + (histDateFrom || histDateTo ? 1 : 0)}</span>}
+                    {hasFilters && <span className="bg-content text-white dark:bg-white dark:text-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-[10px]">{activeFilters.length + activeCats.length + (histDateFrom || histDateTo ? 1 : 0)}</span>}
                 </button>
                 <FilterPopover open={showFilterDrop} onClose={() => setShowFilterDrop(false)} anchorRef={filtrosBtnRef}>
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Estado</div>
+                                <div className="text-[12px] font-medium text-content-subtle mb-2">Estado</div>
                                 <div className="grid grid-cols-2 gap-1.5">
                                     {[{ id: 'activo', label: 'Activo' }, { id: 'anulado', label: 'Anulado' }].map(f => (
                                         <button key={f.id} onClick={() => toggleFilter(f.id)}
-                                            className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all ${activeFilters.includes(f.id) ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                            className={`h-8 px-2.5 rounded-lg text-[13px] font-medium border transition-all ${activeFilters.includes(f.id) ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:bg-white/5 dark:hover:text-white"}`}>
                                             {f.label}
                                         </button>
                                     ))}
                                 </div>
                             </div>
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Categoría</div>
+                                <div className="text-[12px] font-medium text-content-subtle mb-2">Categoría</div>
                                 <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto custom-scrollbar">
                                     {categories.map(c => (
                                         <button key={c.id} onClick={() => toggleCat(c.id)}
-                                            className={`px-2 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide border transition-all truncate ${activeCats.includes(c.id) ? "bg-brand-500 text-black border-brand-500" : "border-border/30 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                            className={`h-8 px-2.5 rounded-lg text-[13px] font-medium border transition-all truncate ${activeCats.includes(c.id) ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:bg-white/5 dark:hover:text-white"}`}>
                                             {c.name}
                                         </button>
                                     ))}
                                 </div>
                             </div>
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                <div className="text-[10px] font-black uppercase tracking-widest text-content-subtle mb-2">Rango de Fecha</div>
+                                <div className="text-[12px] font-medium text-content-subtle mb-2">Rango de fecha</div>
                                 <DateRangePicker from={histDateFrom} to={histDateTo} setFrom={setHistDateFrom} setTo={setHistDateTo} />
                             </div>
                             <div className="px-4 py-2">
-                                <button onClick={clearFilters} className="w-full py-1.5 text-[10px] font-black uppercase tracking-wide text-danger hover:bg-danger/5 rounded-lg transition-colors">Limpiar todo</button>
+                                <button onClick={clearFilters} className="w-full h-8 text-[13px] font-medium text-content-muted hover:text-content hover:bg-surface-2 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/5 rounded-lg transition-colors">Limpiar todo</button>
                             </div>
                 </FilterPopover>
             </div>
 
             <div className="ml-auto flex items-center gap-2">
-                <Button className="h-8 px-3 text-[10px]" onClick={() => setShowCreate(true)}>+ Nuevo Ingreso</Button>
+                <Button className="h-8 px-3 text-[11px]" onClick={() => setShowCreate(true)}>+ Nuevo ingreso</Button>
             </div>
         </div>
     );
@@ -104,73 +108,70 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
         <div className="h-full flex flex-col overflow-hidden">
             {subheader}
             <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-                <div className="card-premium overflow-auto flex-1 border-none shadow-none rounded-none bg-transparent">
-                    <table className="table-pos min-w-[680px]">
+                <div className="overflow-auto flex-1">
+                    <table className="table-ledger min-w-[820px]">
                         <thead className="sticky top-0 z-10">
                             <tr>
-                                {["Referencia", "Estado", "Descripción", "Categoría", "Diario", "Fecha", "Monto", "Acciones"].map(h => (
-                                    <th key={h} className={h === "Acciones" || h === "Monto" ? "text-right pr-6" : "text-left"}>{h}</th>
-                                ))}
+                                <th className="pl-4">Referencia</th>
+                                <th>Estado</th>
+                                <th>Descripción</th>
+                                <th>Categoría</th>
+                                <th>Diario</th>
+                                <th>Fecha</th>
+                                <th className="text-right">Monto</th>
+                                <th className="pr-4 w-px"><span className="sr-only">Acciones</span></th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={8} className="py-20 text-center text-brand-500 animate-pulse text-xs font-black uppercase tracking-widest">Sincronizando ingresos...</td></tr>
+                                <LedgerSkeleton cols={8} />
                             ) : incomes.length === 0 ? (
-                                <tr><td colSpan={8} className="py-20 text-center text-content-subtle text-xs font-black uppercase tracking-wide italic">Sin ingresos registrados</td></tr>
-                            ) : incomes.map(inc => (
-                                <tr key={inc.id} className="group">
-                                    <td><span className="text-[11px] font-black text-brand-500 tracking-tight">{inc.reference || `#${inc.id}`}</span></td>
-                                    <td><span className={`badge shadow-none ${STATUS_BADGE[inc.status] || 'badge-success'}`}>{inc.status}</span></td>
-                                    <td className="truncate max-w-[200px]">
-                                        <span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight truncate">{inc.description}</span>
-                                        {inc.notes && <div className="text-[9px] font-bold text-content-subtle mt-0.5 truncate">{inc.notes}</div>}
-                                    </td>
-                                    <td><span className="text-[10px] font-black text-content-subtle uppercase tracking-wide">{inc.category_name}</span></td>
-                                    <td><span className="text-[11px] font-black text-content dark:text-white uppercase tracking-tight">{inc.journal_name || "—"}</span></td>
-                                    <td><span className="text-[11px] font-bold text-content-subtle uppercase">{fmtDateShort(inc.date ?? inc.created_at)}</span></td>
-                                    <td className="text-right pr-6">
-                                        <div className="flex flex-col items-end">
+                                <LedgerEmpty cols={8} title="Sin ingresos" hint="No hay ingresos registrados con estos filtros." />
+                            ) : incomes.map(inc => {
+                                const anulado = inc.status === "anulado";
+                                return (
+                                    <tr key={inc.id} {...ledgerRow(() => setDetail(inc))}>
+                                        <td className="pl-4">
+                                            <span className={`text-[13px] font-semibold tabular-nums ${anulado ? "text-content-subtle line-through decoration-1" : "text-brand-700 dark:text-brand-300"}`}>{inc.reference || `#${inc.id}`}</span>
+                                        </td>
+                                        <td><StatusMark status={inc.status} map={MOVEMENT_STATUS} /></td>
+                                        <td className="max-w-0">
+                                            <span className={`block truncate font-semibold ${anulado ? "text-content-subtle" : "text-content dark:text-white"}`}>{inc.description}</span>
+                                            {inc.notes && <div className="text-[12px] text-content-subtle truncate">{inc.notes}</div>}
+                                        </td>
+                                        <td><span className="text-[12px] font-medium text-content-subtle">{inc.category_name || "—"}</span></td>
+                                        <td>{inc.journal_name ? <JournalDot name={inc.journal_name} color={inc.journal_color} /> : <span className="text-content-subtle">—</span>}</td>
+                                        <td><span className="text-[12px] font-medium text-content-subtle tabular-nums whitespace-nowrap">{fmtDateShort(inc.date ?? inc.created_at)}</span></td>
+                                        <td className="text-right">
                                             {inc.rate && inc.rate !== 1 ? (
                                                 <>
-                                                    <span className="text-[11px] font-black text-success tabular-nums pb-0.5">+{inc.currency_symbol} {(inc.amount * inc.rate).toFixed(2)}</span>
-                                                    <span className="text-[9px] font-bold text-content-subtle opacity-60 tabular-nums">+{fmtPrice(inc.amount)}</span>
+                                                    <Money value={`+${inc.currency_symbol} ${(inc.amount * inc.rate).toFixed(2)}`} strike={anulado} className={`text-[14px] font-semibold ${anulado ? "text-content-subtle" : "text-content dark:text-white"}`} />
+                                                    <div><Money value={`+${fmtPrice(inc.amount)}`} className="text-[12px] text-content-subtle" /></div>
                                                 </>
                                             ) : (
-                                                <span className="text-[11px] font-black text-success tabular-nums pb-0.5">+{fmtPrice(inc.amount)}</span>
+                                                <Money value={`+${fmtPrice(inc.amount)}`} strike={anulado} className={`text-[14px] font-semibold ${anulado ? "text-content-subtle" : "text-content dark:text-white"}`} />
                                             )}
-                                        </div>
-                                    </td>
-                                    <td className="text-right pr-6">
-                                        <div className="flex items-center justify-end gap-1">
-                                            <button onClick={() => setDetail(inc)}
-                                                className="h-7 px-3 rounded-lg bg-brand-500/10 text-brand-500 border border-brand-500/20 hover:bg-brand-500 hover:text-black text-[10px] font-black uppercase tracking-wide transition-all">
-                                                Detalle
-                                            </button>
-                                            {can("admin") && inc.status !== 'anulado' && (
-                                                <button onClick={() => setVoidConfirm(inc)}
-                                                    className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90" title="Anular">
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                </button>
-                                            )}
-                                            {can("admin") && inc.status === 'anulado' && (
-                                                <button onClick={() => setDeleteConfirm(inc)}
-                                                    className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90"
-                                                    title="Eliminar permanentemente">
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
+                                        </td>
+                                        <td className="pr-4 whitespace-nowrap cursor-default" onClick={stopRow}>
+                                            <div className="flex items-center justify-end gap-0.5">
+                                                {can("admin") && !anulado && (
+                                                    <RowIcon icon="ban" tone="danger" title="Anular" onClick={() => setVoidConfirm(inc)} />
+                                                )}
+                                                {can("admin") && anulado && (
+                                                    <RowIcon icon="trash" tone="danger" title="Eliminar permanentemente" onClick={() => setDeleteConfirm(inc)} />
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
                 <Pagination page={page} totalPages={totalPages} total={total} limit={LIMIT} onPageChange={setPage} />
             </div>
 
-            <Modal open={showCreate} onClose={() => setShowCreate(false)} title="REGISTRAR INGRESO" width={440}>
+            <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Registrar ingreso" width={440}>
                 <div className="space-y-4">
                     <div>
                         <label className="label">Descripción *</label>
@@ -197,7 +198,7 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                             </div>
                         )}
                         <div>
-                            <label className="label">Fecha del Movimiento</label>
+                            <label className="label">Fecha del movimiento</label>
                             <input type="date" className="input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
                         </div>
                     </div>
@@ -205,13 +206,13 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                         <div>
                             <label className="label">Monto{currentSymbol ? ` (${currentSymbol})` : ""} *</label>
                             <div className="relative">
-                                {currentSymbol && <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[12px] font-black text-content-subtle dark:text-white/30 pointer-events-none whitespace-nowrap">{currentSymbol}</span>}
+                                {currentSymbol && <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[12px] font-bold text-content-subtle dark:text-white/30 pointer-events-none whitespace-nowrap">{currentSymbol}</span>}
                                 <input type="number" step="0.01" min="0" placeholder="0.00"
                                     className={`input ${currentSymbol ? "pl-12" : ""}`}
                                     value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
                             </div>
                             {currentRate !== 1 && (
-                                <p className="text-[10px] font-bold text-content-subtle dark:text-white/30 tabular-nums mt-1">
+                                <p className="text-[11px] font-semibold text-content-subtle dark:text-white/30 tabular-nums mt-1">
                                     ≈ {baseSym}{baseEquivalent.toFixed(2)}
                                 </p>
                             )}
@@ -245,7 +246,7 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                     {/* Tasa del cobro. Solo aparece con diarios en moneda distinta a la base. */}
                     {configuredRate !== 1 && (
                         <div>
-                            <label className="label">Tasa del Cobro</label>
+                            <label className="label">Tasa del cobro</label>
                             <RateField
                                 value={form.rate}
                                 onChange={v => setForm(p => ({ ...p, rate: v }))}
@@ -258,7 +259,7 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
                         <label className="label">Notas</label>
                         <textarea className="input resize-none" rows={1} placeholder="Observaciones..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
                     </div>
-                    <div className="flex gap-2.5 pt-2 border-t border-border/20 dark:border-white/5">
+                    <div className="flex gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
                         <Button variant="ghost" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button>
                         <Button className="flex-[2]" onClick={handleCreate} disabled={saving}>{saving ? "Guardando..." : "Registrar Ingreso"}</Button>
                     </div>

@@ -39,12 +39,12 @@ export default function JournalPickerButton({
                     type="button"
                     disabled={disabled}
                     onClick={() => setOpen(true)}
-                    className={`${height} w-full text-[11px] flex items-center justify-between gap-2 border px-3 rounded-md transition-all duration-200 bg-white dark:bg-[#12141a] border-border/80 dark:border-white/5 hover:border-brand-500/40 disabled:opacity-40 disabled:pointer-events-none ${boxClassName}`}
+                    className={`${height} w-full text-[12px] flex items-center justify-between gap-2 border px-3 rounded-md transition-all duration-200 bg-white dark:bg-[#12141a] border-border/80 dark:border-white/5 hover:border-brand-500/40 disabled:opacity-40 disabled:pointer-events-none ${boxClassName}`}
                 >
                     <span className="flex items-center gap-2 min-w-0 flex-1">
                         {selected && <MethodBankLogo src={method?.image_url} size={22} rounded="rounded" />}
                         <span className={`truncate ${selected
-                            ? "text-content dark:text-content-dark font-bold uppercase tracking-tight"
+                            ? "text-content dark:text-content-dark font-semibold tracking-tight"
                             : "text-content-subtle/50 dark:text-content-dark-muted/30 font-medium"}`}>
                             {selected ? selected.name : placeholder}
                         </span>
@@ -56,7 +56,7 @@ export default function JournalPickerButton({
                     <button
                         type="button"
                         onClick={onClear}
-                        className="self-start text-[9px] font-black uppercase tracking-widest text-content-subtle hover:text-danger transition-colors"
+                        className="self-start text-[12px] font-medium text-content-subtle hover:text-danger transition-colors"
                     >
                         Quitar diario
                     </button>

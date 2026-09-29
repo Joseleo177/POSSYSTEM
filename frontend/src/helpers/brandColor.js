@@ -9,7 +9,7 @@
 // la impone LIGHTNESS_MAP. Es lo que evita que un amarillo claro deje ilegible el texto
 // blanco de los botones: brand-500 siempre cae en 40% de luminosidad, sea cual sea el tono.
 
-export const DEFAULT_BRAND = "#14b8a6"; // teal-500, el verde histórico del sistema
+export const DEFAULT_BRAND = "#06b6d4"; // cyan-500 (antes el teal-500 #14b8a6)
 
 // Luminosidad por escalón, medida sobre la escala teal original de Tailwind para que una
 // marca nueva mantenga el mismo ritmo de claros y oscuros que tenía el verde.
@@ -146,6 +146,17 @@ export function buildBrandScale(hex) {
     );
 }
 
+// Texto para poner encima de brand-500 (el botón principal): blanco o un casi negro del
+// mismo tono, el que más contraste dé. Con cian, turquesa o amarillo gana el oscuro —el
+// blanco sobre esos tonos no llega a 3:1—; con azul, violeta o rojo gana el blanco.
+export function brandInk(rgb500, hue = 0, sat = 0) {
+    const lum = luminance(rgb500);
+    const oscuro = hslToRgbString(hue, Math.min(sat, 80), 12);
+    const conOscuro = (lum + 0.05) / (luminance(oscuro) + 0.05);
+    const conBlanco = 1.05 / (lum + 0.05);
+    return conOscuro > conBlanco ? oscuro : "255 255 255";
+}
+
 // Escribe la escala en el <html>. Se llama al cargar los ajustes de la empresa y cada vez
 // que se cambia el color en Configuración, para que la vista previa sea el sistema entero.
 export function applyBrandColor(hex) {
@@ -154,6 +165,8 @@ export function applyBrandColor(hex) {
     Object.entries(scale).forEach(([step, rgb]) => {
         root.style.setProperty(`--c-brand-${step}`, rgb);
     });
+    const hsl = hexToHsl(hex) || hexToHsl(DEFAULT_BRAND);
+    root.style.setProperty("--c-brand-ink", brandInk(scale[500], hsl.h, hsl.s));
 }
 
 // Quita las variables inline y devuelve el control a index.css, donde vive la escala teal
@@ -166,6 +179,7 @@ export function clearBrandColor() {
     Object.keys(LIGHTNESS_MAP).forEach(step => {
         root.style.removeProperty(`--c-brand-${step}`);
     });
+    root.style.removeProperty("--c-brand-ink");
 }
 
 // El color viaja con los ajustes, que llegan por red. Guardarlo aquí permite pintarlo en el
