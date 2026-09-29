@@ -69,7 +69,7 @@ export default function CartSidebar({
     };
     return (
         <aside className={`w-full h-full lg:w-[360px] bg-white dark:bg-[#0c0c0c] flex-col border-b lg:border-r border-border dark:border-white/5 shadow-[20px_0_60px_rgba(0,0,0,0.03)] z-20 shrink-0 order-2 lg:order-1 relative ${mobileTab === "cart" ? "flex" : "hidden"} lg:flex`}>
-            <div className="p-3 space-y-2 flex-1 flex flex-col overflow-hidden">
+            <div className="p-3 space-y-2 flex-1 min-h-0 flex flex-col overflow-y-auto lg:overflow-hidden scrollbar-hide">
 
                 {/* Mobile toggle */}
                 <div className="lg:hidden flex items-center gap-2">
@@ -154,7 +154,7 @@ export default function CartSidebar({
                     y, sobre todo, no había forma de cerrar la caja desde el teléfono —el resto
                     de acciones vive en el bloque hidden lg:flex de arriba—. */}
                 <div className="lg:hidden flex items-center justify-between gap-2 pb-1">
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-brand-500 truncate min-w-0" title="Sucursal de venta">{activeWarehouse?.name || "Sin sucursal"}</span>
+                    <span className="text-[12px] text-content-subtle truncate min-w-0" title="Sucursal de venta">{activeWarehouse ? <>Sucursal <span className="font-semibold text-content dark:text-white">{toNameCase(activeWarehouse.name)}</span></> : "Sin sucursal"}</span>
                     <div className="flex items-center gap-1.5 shrink-0">
                         {cashSession ? (
                             <>
@@ -178,21 +178,20 @@ export default function CartSidebar({
                                 {/* Botón, no indicador: es el único acceso al cierre de turno en móvil. */}
                                 <button
                                     onClick={() => setShowCierre(true)}
-                                    className="h-9 px-3 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center gap-1.5 active:scale-95 transition-all"
+                                    className="btn-outline h-9 px-3 rounded-xl flex items-center gap-1.5 active:scale-95"
                                     title="Cerrar turno"
                                 >
-                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
-                                    <span className="text-[10px] font-bold uppercase tracking-wide text-green-500 whitespace-nowrap">Cerrar caja</span>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                    <span className="text-[12px] font-medium whitespace-nowrap">Cerrar turno</span>
                                 </button>
                             </>
                         ) : (
                             <button
                                 onClick={() => setShowApertura(true)}
-                                className="h-9 px-3 rounded-xl bg-danger/10 border border-danger/20 flex items-center gap-1.5 active:scale-95 transition-all"
+                                className="btn-accent h-9 px-3.5 rounded-xl flex items-center gap-1.5 active:scale-95"
                                 title="Abrir turno"
                             >
-                                <div className="w-1.5 h-1.5 rounded-full bg-danger shrink-0" />
-                                <span className="text-[10px] font-bold uppercase tracking-wide text-danger whitespace-nowrap">Abrir caja</span>
+                                <span className="text-[12px] font-semibold whitespace-nowrap">Abrir turno</span>
                             </button>
                         )}
                     </div>
@@ -333,7 +332,7 @@ export default function CartSidebar({
             </div>
 
                 {/* Ítems del carrito */}
-                <div className="flex-1 overflow-y-auto space-y-3 scrollbar-hide pt-2">
+                <div className="flex-1 lg:overflow-y-auto space-y-2 lg:space-y-3 scrollbar-hide pt-2">
                     {cart.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center opacity-30 gap-3 py-8">
                             <div className="w-14 h-14 rounded-2xl bg-surface-2 dark:bg-white/5 flex items-center justify-center text-content-subtle opacity-20">
@@ -356,7 +355,7 @@ export default function CartSidebar({
                                 ? round2(convertToSecondary(i.price)) * i.qty * (1 - discountRatio)
                                 : null;
                             return (
-                            <div key={i.id} className="bg-surface-2 dark:bg-white/5 p-3 rounded-[24px] flex items-center gap-3 group transition-all border border-black/5 dark:border-white/5">
+                            <div key={i.id} className="bg-surface-2 dark:bg-white/5 p-2.5 lg:p-3 rounded-2xl flex items-center gap-3 group transition-all border border-black/5 dark:border-white/5">
                                 <div className="w-12 h-12 rounded-xl bg-surface-2 dark:bg-white/5 flex items-center justify-center shrink-0 overflow-hidden relative">
                                     {i.image_url ? <img src={resolveImageUrl(i.image_url)} className="w-full h-full object-cover" alt={i.name} onError={imgRetryOnError} /> :<div className="text-sm opacity-20 dark:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>}
                                     <button onClick={() => removeFromCart(i.id)} className="absolute inset-0 bg-danger/80 text-white opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
@@ -381,8 +380,8 @@ export default function CartSidebar({
                                         })()}
                                     </div>
                                     <div className="flex flex-col mt-0.5">
-                                        <div className="text-[10px] font-bold text-brand-500 uppercase flex items-center gap-1 flex-wrap">
-                                            <span>{fmtQtyUnit(i.qty, i.unit)}</span>
+                                        <div className="text-[11px] text-content-subtle tabular-nums flex items-center gap-1 flex-wrap">
+                                            <span>{fmtQtyUnit(i.qty, i.unit).toLowerCase()}</span>
                                             <span className="opacity-40">×</span>
                                             <span>{fmt(convertToDisplay(i.price), currSym)}</span>
                                             {lineDiscount > 0 && (
@@ -431,13 +430,23 @@ export default function CartSidebar({
                 </div>
 
                 {/* Footer: descuento + totales + botones */}
-                <div className="pt-2 border-t border-border/10 space-y-1.5 pb-1">
-                    <div className="bg-surface-2 dark:bg-white/5 rounded-lg p-2 flex items-center justify-between gap-3 border border-black/5 dark:border-white/5">
+                <div className="sticky bottom-0 z-10 -mx-3 -mb-3 px-3 pb-3 lg:static lg:mx-0 lg:mb-0 lg:px-0 lg:pb-1 bg-white dark:bg-[#0c0c0c] pt-2 border-t border-border/60 dark:border-white/[0.06] space-y-1.5">
+                    {/* Móvil: descuento y recargo en una fila de dos botones; sus controles
+                        aparecen solo al activarlos. Dos franjas fijas se comían la pantalla. */}
+                    <div className="lg:hidden grid grid-cols-2 gap-1.5">
+                        {[["Descuento", discountEnabled, () => setDiscountEnabled(!discountEnabled)], ["Recargo", chargeEnabled, () => setChargeEnabled(!chargeEnabled)]].map(([label, on, fn]) => (
+                            <button key={label} onClick={fn} className={`h-9 rounded-lg text-[13px] font-medium border flex items-center justify-center gap-1.5 transition-colors ${on ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "bg-white dark:bg-white/5 border-border dark:border-white/10 text-content-muted dark:text-white/70"}`}>
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d={on ? "M5 13l4 4L19 7" : "M12 5v14M5 12h14"} /></svg>
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                    <div className={`${discountEnabled ? "flex" : "hidden lg:flex"} bg-surface-2 dark:bg-white/5 rounded-lg p-2 items-center justify-between gap-3 border border-black/5 dark:border-white/5`}>
                         <div className="flex items-center gap-3">
                             <button onClick={() => setDiscountEnabled(!discountEnabled)} className={`w-8 h-5 lg:w-10 lg:h-6 rounded-full transition-all relative ${discountEnabled ? "bg-brand-500" : "bg-surface-3 dark:bg-white/10"}`}>
                                 <div className={`absolute top-0.5 lg:top-1 left-0.5 lg:left-1 w-4 h-4 bg-white rounded-full transition-all ${discountEnabled ? "translate-x-3 lg:translate-x-4" : ""}`} />
                             </button>
-                            <span className="text-[11px] lg:text-[12px] font-bold uppercase tracking-wide opacity-60 dark:text-content-dark-muted">Dto. Global</span>
+                            <span className="text-[13px] font-medium text-content-muted dark:text-white/70">Descuento</span>
                         </div>
                         {discountEnabled && (
                             <div className="flex items-center gap-1.5">
@@ -476,13 +485,13 @@ export default function CartSidebar({
                     {/* Recargo: propina, servicio, delivery. Se carga por MONTO en la moneda
                         que está en pantalla, y los atajos de porcentaje solo rellenan ese
                         monto, que el cajero puede seguir ajustando a mano. */}
-                    <div className="bg-surface-2 dark:bg-white/5 rounded-lg p-2 space-y-2 border border-black/5 dark:border-white/5">
+                    <div className={`${chargeEnabled ? "" : "hidden lg:block"} bg-surface-2 dark:bg-white/5 rounded-lg p-2 space-y-2 border border-black/5 dark:border-white/5`}>
                         <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
                                 <button onClick={() => setChargeEnabled(!chargeEnabled)} className={`w-8 h-5 lg:w-10 lg:h-6 rounded-full transition-all relative ${chargeEnabled ? "bg-brand-500" : "bg-surface-3 dark:bg-white/10"}`}>
                                     <div className={`absolute top-0.5 lg:top-1 left-0.5 lg:left-1 w-4 h-4 bg-white rounded-full transition-all ${chargeEnabled ? "translate-x-3 lg:translate-x-4" : ""}`} />
                                 </button>
-                                <span className="text-[11px] lg:text-[12px] font-bold uppercase tracking-wide opacity-60 dark:text-content-dark-muted">Recargo</span>
+                                <span className="text-[13px] font-medium text-content-muted dark:text-white/70">Recargo</span>
                             </div>
                             {chargeEnabled && (
                                 <div className="flex items-center gap-1.5">
@@ -539,30 +548,30 @@ export default function CartSidebar({
                         )}
                     </div>
                     <div className="bg-surface-2 dark:bg-white/5 p-3 rounded-xl border border-black/5 dark:border-white/10">
-                        <div className="space-y-1 mb-2">
+                        <div className={`${(promoDiscount > 0 || (discountEnabled && discountAmount > 0) || chargeAmountDisplay > 0) ? "" : "hidden lg:block"} space-y-1 mb-2`}>
                             <div className="flex justify-between items-center opacity-60 dark:text-content-dark-muted">
-                                <span className="text-[11px] lg:text-xs font-bold uppercase tracking-wide">Subtotal</span>
+                                <span className="text-[12px] lg:text-[13px] font-medium">Subtotal</span>
                                 <span className="text-[12px] lg:text-sm font-bold tabular-nums">{fmt(subtotalDisplay, currSym)}</span>
                             </div>
                             {promoDiscount > 0 && (
                                 <div className="flex justify-between items-center text-success">
-                                    <span className="text-[11px] lg:text-xs font-bold uppercase tracking-wide">Promociones</span>
+                                    <span className="text-[12px] lg:text-[13px] font-medium">Promociones</span>
                                     <span className="text-[12px] lg:text-sm font-bold tabular-nums">-{fmt(promoDiscountDisplay, currSym)}</span>
                                 </div>
                             )}
                             {discountEnabled && discountAmount > 0 && (
-                                <div className="flex justify-between items-center text-brand-500">
+                                <div className="flex justify-between items-center text-content-muted dark:text-white/70">
                                     {/* Por monto el "%" sobraba: el renglón ya muestra el importe
                                         descontado y repetirlo como porcentaje era falso. */}
-                                    <span className="text-[11px] lg:text-xs font-bold uppercase tracking-wide">
-                                        DESC.{discountMode === "pct" ? ` (${discountPct}%)` : ""}
+                                    <span className="text-[12px] lg:text-[13px] font-medium">
+                                        Descuento{discountMode === "pct" ? ` (${discountPct}%)` : ""}
                                     </span>
                                     <span className="text-[12px] lg:text-sm font-bold tabular-nums">-{fmt(discountAmountDisplay, currSym)}</span>
                                 </div>
                             )}
                             {chargeAmountDisplay > 0 && (
                                 <div className="flex justify-between items-center text-content dark:text-white">
-                                    <span className="text-[11px] lg:text-xs font-bold uppercase tracking-wide truncate pr-2">
+                                    <span className="text-[12px] lg:text-[13px] font-medium truncate pr-2">
                                         {/* Un recargo simbólico frente a un consumo grande da
                                             0.0%: en ese caso no se rotula, en vez de mostrar
                                             un porcentaje que parece un error de cálculo. */}
@@ -573,11 +582,11 @@ export default function CartSidebar({
                             )}
                         </div>
                         <div className="flex justify-between items-end">
-                            <span className="text-[11px] lg:text-xs font-bold text-brand-500 uppercase tracking-wide shrink-0">Total</span>
+                            <span className="text-[13px] font-semibold text-content dark:text-white shrink-0">Total</span>
                             <div className="flex flex-col items-end min-w-0">
                                 <div className="text-2xl lg:text-3xl font-bold tracking-tighter tabular-nums font-display dark:text-white leading-none whitespace-nowrap">{fmt(totalDisplay, currSym)}</div>
                                 {secondaryCurrency && (
-                                    <div className="text-[11px] lg:text-sm font-semibold text-content-subtle dark:text-brand-500/60 tabular-nums mt-1 whitespace-nowrap">
+                                    <div className="text-[12px] lg:text-sm font-medium text-content-subtle dark:text-white/50 tabular-nums mt-1 whitespace-nowrap">
                                         ≈ {fmt(totalSecondary, secondaryCurrency.symbol)}
                                     </div>
                                 )}
