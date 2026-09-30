@@ -28,45 +28,63 @@ export const pctOf = (parte, total) => {
 export const REPORT_CSS = `
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
-        /* El aire va en @page y NO en el padding del body, al revés que la factura o la
-           cotización: el padding solo abre margen al principio y al final del flujo, así que en
-           un documento de varias hojas la segunda arrancaba pegada al borde del papel.
-           Con margen de página el ancho útil ya viene recortado por el navegador, de ahí que el
-           body no lleve el width fijo de 216mm de los documentos de una sola hoja: con los dos
-           a la vez, el contenido se salía por la derecha. */
-        @page { size: letter; margin: 14mm 12mm; }
+        /* Los márgenes NO dependen del diálogo de impresión. En un POS el diálogo casi siempre
+           está en "Márgenes: ninguno" —así se imprimen los tickets térmicos, y Chrome recuerda
+           el último ajuste—, y con eso Chrome ignora el margin de @page: la hoja carta salía
+           pegada al borde y con el título cortado arriba. Así que @page va en 0 y el aire lo
+           pone el propio documento:
+             · a los lados, padding del body, que sí se respeta en todas las hojas;
+             · arriba y abajo, la tabla-marco que monta openPrintFrame: su thead y su tfoot son
+               un espacio en blanco que el navegador repite en cada hoja. Con padding vertical
+               solo se abría margen al principio y al final del flujo, y la segunda hoja
+               arrancaba pegada al papel.
+           Sale igual con márgenes "predeterminados", "ninguno" o "mínimos". */
+        @page { size: letter; margin: 0; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Outfit', system-ui, sans-serif;
             font-size: 10.5px; line-height: 1.5; color: #2b2b2b; background: #fff;
             width: 100%;
+            padding: 0 13mm;
+            -webkit-print-color-adjust: exact; print-color-adjust: exact;
         }
+        .page-frame { width: 100%; border-collapse: collapse; }
+        .page-frame > thead { display: table-header-group; background: none; }
+        .page-frame > tfoot { display: table-footer-group; }
+        .page-frame > thead > tr > td,
+        .page-frame > tfoot > tr > td,
+        .page-frame > tbody > tr > td { padding: 0; border: 0; background: none; font-size: inherit; }
+        .page-frame > tbody > tr { page-break-inside: auto; break-inside: auto; }
+        .page-space { height: 13mm; }
 
+        /* Tipografía en caja de oración, sin mayúsculas espaciadas: la jerarquía la dan el
+           tamaño y el peso, igual que en la pantalla. */
         .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
-        .doc-title { font-size: 19px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #1a1a1a; }
-        .doc-sub { font-size: 8.5px; font-weight: 500; color: #999; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 1px; }
-        .logo { max-height: 62px; max-width: 145px; object-fit: contain; }
+        .doc-title { font-size: 20px; font-weight: 600; letter-spacing: -0.2px; color: #111; line-height: 1.2; }
+        .doc-sub { font-size: 10px; color: #888; margin-top: 3px; }
+        .logo { max-height: 56px; max-width: 140px; object-fit: contain; }
 
-        .issuer { margin-top: 16px; padding-bottom: 12px; border-bottom: 1px solid #ededed; }
-        .issuer-name { font-size: 12.5px; font-weight: 700; color: #1a1a1a; }
-        .issuer-line { font-size: 9.5px; color: #777; margin-top: 1px; }
+        .issuer { margin-top: 14px; padding-bottom: 12px; border-bottom: 1px solid #e6e6e6; }
+        .issuer-name { font-size: 12px; font-weight: 600; color: #1a1a1a; }
+        .issuer-line { font-size: 9.5px; color: #888; margin-top: 1px; }
 
         /* Resumen en tarjetas: es lo primero que se mira al recibir la hoja. */
-        .kpis { display: flex; gap: 8px; margin: 14px 0 18px; }
-        .kpi { flex: 1; border: 1px solid #ededed; border-radius: 6px; padding: 9px 11px; }
-        .kpi-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #999; }
-        .kpi-value { font-size: 14px; font-weight: 700; color: #1a1a1a; margin-top: 2px; white-space: nowrap; }
-        .kpi-sub { font-size: 8.5px; color: #999; }
+        .kpis { display: flex; gap: 8px; margin: 14px 0 20px; }
+        .kpi { flex: 1; border: 1px solid #e6e6e6; border-radius: 8px; padding: 10px 12px; }
+        .kpi-label { font-size: 9.5px; font-weight: 500; color: #888; }
+        .kpi-value { font-size: 15px; font-weight: 700; color: #111; margin-top: 2px; white-space: nowrap; letter-spacing: -0.2px; }
+        .kpi-sub { font-size: 9px; color: #999; margin-top: 1px; }
 
-        .block-label { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #999; margin-bottom: 6px; }
+        .block-label { font-size: 12px; font-weight: 600; color: #1a1a1a; margin-bottom: 7px; }
+        .block-label .muted { font-weight: 400; }
 
         table { width: 100%; border-collapse: collapse; }
         /* La cabecera se repite en cada hoja: un listado largo pasa de página y sin esto no se
            sabe qué es cada columna en la segunda. */
-        thead { background: #e9e9e9; display: table-header-group; }
+        thead { background: #f4f4f4; display: table-header-group; }
         tr { page-break-inside: avoid; }
-        th { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 8px 10px; text-align: left; color: #444; }
-        td { padding: 7px 10px; font-size: 10.5px; vertical-align: middle; border-bottom: 1px solid #ededed; }
+        th { font-size: 9px; font-weight: 600; padding: 7px 10px; text-align: left; color: #666; border-bottom: 1px solid #e0e0e0; }
+        td { padding: 7px 10px; font-size: 10.5px; vertical-align: middle; border-bottom: 1px solid #eee; }
         .item-name { color: #2b2b2b; overflow-wrap: break-word; }
         .td-num, th.td-num { width: 30px; color: #aaa; text-align: right; }
         .td-center, th.td-center { text-align: center; white-space: nowrap; width: 70px; }
@@ -121,10 +139,23 @@ export function reportHeader({ title, subtitle, companyInfo }) {
     </div>`;
 }
 
+// Marco de página: todo el contenido va en la única celda del cuerpo, y el thead y el tfoot
+// —un espacio en blanco cada uno— se repiten en cada hoja. Es lo que da el margen de arriba y
+// de abajo en todas las páginas sin depender de lo que diga el diálogo de impresión (ver
+// .page-frame en REPORT_CSS).
+const MARCO_ABRE = `<table class="page-frame">
+    <thead><tr><td><div class="page-space"></div></td></tr></thead>
+    <tfoot><tr><td><div class="page-space"></div></td></tr></tfoot>
+    <tbody><tr><td>`;
+const MARCO_CIERRA = `</td></tr></tbody></table>`;
+
 /**
  * Manda el reporte a la impresora. Se conserva como nombre propio de los reportes; el cómo
  * —iframe oculto en escritorio, documento montado en la página en iOS— vive en printDocument.
  */
 export function openPrintFrame(html) {
-    printHtml(html);
+    printHtml(
+        html.replace(/<body([^>]*)>/i, `<body$1>${MARCO_ABRE}`)
+            .replace(/<\/body>/i, `${MARCO_CIERRA}</body>`)
+    );
 }

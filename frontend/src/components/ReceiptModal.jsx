@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import Modal from "./ui/Modal";
 import { api } from "../services/api";
 import { useApp } from "../context/AppContext";
-import { fmtMoney, fmtDate, resolveImageUrl, printInvoiceLetter, printHtml } from "../helpers";
+import { fmtMoney, fmtDate, resolveImageUrl, printInvoiceLetter, printHtml, toNameCase } from "../helpers";
+import Money from "./ui/Money";
 
 const fmt = fmtMoney;
 
@@ -455,9 +456,9 @@ export default function ReceiptModal({ open, onClose, sale }) {
     const docLabel = companyInfo?.doc_name || "Documento de Venta";
 
     return (
-        <Modal open={open} onClose={onClose} title={`${docLabel.toUpperCase()} ${invoiceLabel}`} width={380}>
+        <Modal open={open} onClose={onClose} title={`${docLabel} ${invoiceLabel}`} width={400}>
             {/* Encabezado empresa */}
-            <div className="text-center mb-3 pb-3 border-b border-border/10 dark:border-white/5">
+            <div className="text-center mb-4 pb-4 border-b border-border/60 dark:border-white/[0.06]">
                 {companyInfo?.show_header !== false && (
                     <>
                         {companyInfo?.logo_url && (
@@ -475,167 +476,136 @@ export default function ReceiptModal({ open, onClose, sale }) {
                         {companyInfo?.email && <div className="text-[12px] text-content-subtle">{companyInfo.email}</div>}
                     </>
                 )}
-                <div className={`text-[12px] font-bold text-content-subtle ${companyInfo?.show_header !== false ? "mt-2" : ""}`}>Comprobante de Venta</div>
+                <div className={`text-[12px] text-content-subtle ${companyInfo?.show_header !== false ? "mt-2" : ""}`}>Comprobante de venta</div>
             </div>
 
-            {/* Metadata */}
-            <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-3 mb-3 space-y-1">
-                <div className="flex justify-between items-center py-1 text-xs">
-                    <span className="text-content-muted dark:text-content-dark-muted">{docLabel} N°</span>
-                    <span className="text-content dark:text-content-dark font-bold tracking-tight">{invoiceLabel}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 text-xs">
-                    <span className="text-content-muted dark:text-content-dark-muted">Fecha</span>
-                    <span className="text-content dark:text-content-dark font-medium">{dateStr}</span>
-                </div>
-                {s.employee_name && (
-                    <div className="flex justify-between items-center py-1 text-xs">
-                        <span className="text-content-muted dark:text-content-dark-muted">Vendedor</span>
-                        <span className="text-content dark:text-content-dark font-medium">{s.employee_name}</span>
-                    </div>
+            {/* Datos del documento y del cliente, en una sola lista */}
+            <div className="mb-4">
+                <Linea label="N°">{invoiceLabel}</Linea>
+                <Linea label="Fecha">{dateStr}</Linea>
+                {s.employee_name && <Linea label="Vendedor">{toNameCase(s.employee_name)}</Linea>}
+                {(s.customer_name || s.customer_rif) && (
+                    <Linea label="Cliente">
+                        <span className="block truncate">{toNameCase(s.customer_name) || "—"}</span>
+                        {s.customer_rif && <span className="block text-[12px] font-normal text-content-subtle">{s.customer_rif}</span>}
+                    </Linea>
                 )}
             </div>
 
-            {/* Cliente */}
-            {(s.customer_name || s.customer_rif) && (
-                <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-lg p-3 mb-3">
-                    <span className="text-[11px] font-bold uppercase text-content-subtle block mb-1">Cliente</span>
-                    <span className="text-xs font-semibold text-content dark:text-white block">
-                        {[s.customer_rif, s.customer_name].filter(Boolean).join(" - ")}
-                    </span>
-                </div>
-            )}
-
-            {/* Items */}
-            <table className="w-full border-collapse mb-3 text-xs">
-                <thead>
-                    <tr className="border-b border-border dark:border-border-dark text-content-muted dark:text-content-dark-muted text-xs">
-                        <th className="text-left px-1.5 py-1">Producto</th>
-                        <th className="text-center px-1.5 py-1">Cant.</th>
-                        <th className="text-right px-1.5 py-1">P.U.</th>
-                        <th className="text-right px-1.5 py-1">Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {totals.items.map((item, idx) => (
-                        <tr key={idx} className="border-b border-dashed border-border dark:border-border-dark">
-                            <td className="px-1.5 py-1.5 text-content dark:text-content-dark">{item.name}</td>
-                            <td className="px-1.5 py-1.5 text-center text-content-muted dark:text-content-dark-muted whitespace-nowrap">x {parseFloat(item.quantity) % 1 === 0 ? Math.round(parseFloat(item.quantity)) : item.quantity}</td>
-                            <td className="px-1.5 py-1.5 text-right text-content-muted dark:text-content-dark-muted whitespace-nowrap">{item.fmtPrice}</td>
-                            <td className="px-1.5 py-1.5 text-right text-content dark:text-content-dark font-bold whitespace-nowrap">{item.fmtSubtotal}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+            {/* Ítems: dos renglones por producto, que en el teléfono se leen sin tabla. */}
+            <div className="border-y border-border/60 dark:border-white/[0.06] divide-y divide-dashed divide-border/70 dark:divide-white/[0.08] mb-3">
+                {totals.items.map((item, idx) => (
+                    <div key={idx} className="py-2">
+                        <div className="flex items-baseline justify-between gap-3 text-[13px]">
+                            <span className="font-medium text-content dark:text-white min-w-0">{item.name}</span>
+                            <Money value={item.fmtSubtotal} className="font-semibold text-content dark:text-white shrink-0" />
+                        </div>
+                        <div className="text-[12px] text-content-subtle tabular-nums mt-0.5">
+                            {parseFloat(item.quantity) % 1 === 0 ? Math.round(parseFloat(item.quantity)) : item.quantity} × {item.fmtPrice}
+                        </div>
+                    </div>
+                ))}
+            </div>
 
             {/* Totales */}
-            <div className="border-t border-border/10 dark:border-white/5 pt-2 mb-3">
-                <div className="flex justify-between items-center py-0.5 text-xs">
-                    <span className="text-content-muted dark:text-content-dark-muted">Subtotal</span>
-                    <span className="text-content dark:text-content-dark font-medium">{totals.fmtSubtotal}</span>
-                </div>
-                {s.discount > 0 && (
-                    <div className="flex justify-between items-center py-0.5 text-xs text-danger">
-                        <span className="font-medium">Descuento</span>
-                        <span className="font-semibold">-{totals.fmtDiscount}</span>
-                    </div>
+            <div className="mb-3">
+                {(s.discount > 0 || s.charge > 0) && (
+                    <>
+                        <Linea label="Subtotal"><Money value={totals.fmtSubtotal} /></Linea>
+                        {s.discount > 0 && <Linea label="Descuento"><Money value={`-${totals.fmtDiscount}`} /></Linea>}
+                        {s.charge > 0 && <Linea label={s.chargeLabel.charAt(0).toUpperCase() + s.chargeLabel.slice(1).toLowerCase()}><Money value={`+${totals.fmtCharge}`} /></Linea>}
+                    </>
                 )}
-                {s.charge > 0 && (
-                    <div className="flex justify-between items-center py-0.5 text-xs text-content dark:text-content-dark">
-                        <span className="font-medium capitalize">{s.chargeLabel.toLowerCase()}</span>
-                        <span className="font-semibold">+{totals.fmtCharge}</span>
-                    </div>
-                )}
-                <div className="flex justify-between items-center py-1.5 border-t border-border/10 dark:border-white/5 mt-1 pt-1.5">
-                    <span className="text-content dark:text-content-dark font-bold text-xs tracking-tighter">TOTAL</span>
-                    <div className="text-right">
-                        <div className="text-content dark:text-white font-bold text-sm leading-none">{totals.fmtTotal}</div>
-                    </div>
+                <div className="flex items-baseline justify-between gap-3 pt-1.5">
+                    <span className="text-[13px] font-semibold text-content dark:text-white">Total</span>
+                    <Money value={totals.fmtTotal} className="text-[20px] font-bold tracking-tight text-content dark:text-white" />
                 </div>
             </div>
 
             {/* Forma de pago y estado — mismo bloque que se imprime en el papel. */}
-            <div className="border-t border-border/10 dark:border-white/5 pt-2 mb-3">
-                <div className="flex justify-between items-center py-0.5 text-xs">
-                    <span className="text-content-muted dark:text-content-dark-muted">Forma de pago</span>
-                    <span className="text-content dark:text-content-dark font-semibold">{pago.metodo}</span>
-                </div>
+            <div className="border-t border-border/60 dark:border-white/[0.06] pt-2 mb-4">
+                <Linea label="Forma de pago">{pago.metodo}</Linea>
                 {/* Con más de un canal se detalla cuánto entró por cada uno: "Combinado" a secas
                     no permite cuadrar el ticket contra las cajas. */}
                 {pago.canales.length > 1 && pago.canales.map(c => (
-                    <div key={c.journal_name} className="flex justify-between items-center py-0.5 text-xs pl-3">
-                        <span className="text-content-muted dark:text-content-dark-muted">{c.journal_name}</span>
-                        <span className="text-content dark:text-content-dark font-medium tabular-nums">{fmt(c.amount * rate, sym)}</span>
-                    </div>
+                    <Linea key={c.journal_name} label={<span className="pl-3">{toNameCase(c.journal_name)}</span>}>
+                        <Money value={fmt(c.amount * rate, sym)} />
+                    </Linea>
                 ))}
                 {/* Lo que entregó el cliente y lo que se le devolvió: las dos cifras que
                     verifica contra el dinero que tiene en la mano al recibir el ticket. */}
                 {pago.vuelto > 0 && (
                     <>
-                        <div className="flex justify-between items-center py-0.5 text-xs">
-                            <span className="text-content-muted dark:text-content-dark-muted">Recibido</span>
-                            <span className="text-content dark:text-content-dark font-medium tabular-nums">{fmt(pago.recibido * rate, sym)}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-0.5 text-xs">
-                            <span className="text-content-muted dark:text-content-dark-muted">Cambio</span>
-                            <span className="text-content dark:text-content-dark font-medium tabular-nums">{fmt(pago.vuelto * rate, sym)}</span>
-                        </div>
+                        <Linea label="Recibido"><Money value={fmt(pago.recibido * rate, sym)} /></Linea>
+                        <Linea label="Vuelto"><Money value={fmt(pago.vuelto * rate, sym)} /></Linea>
                     </>
                 )}
                 {pago.etiqueta && (
-                    <div className="flex justify-between items-center py-0.5 text-xs">
-                        <span className="text-content-muted dark:text-content-dark-muted">Estado</span>
-                        <span className={`font-bold tracking-tight ${pago.pendiente ? "text-danger" : "text-success"}`}>
-                            {pago.etiqueta}
-                        </span>
-                    </div>
+                    <Linea label="Estado">
+                        {/* Color = señal: rojo si se debe, verde solo con el visto. */}
+                        {pago.pendiente ? (
+                            <span className="text-red-600 dark:text-red-400">{pago.etiqueta}</span>
+                        ) : (
+                            <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                {pago.etiqueta}
+                            </span>
+                        )}
+                    </Linea>
                 )}
                 {/* Mismos importes que el papel: salen de calcReceiptTotals, no de una
                     conversión aparte. Pantalla e impresión no pueden discrepar. */}
                 {s.amount_paid > 0 && pago.pendiente && (
-                    <div className="flex justify-between items-center py-0.5 text-xs">
-                        <span className="text-content-muted dark:text-content-dark-muted">Abonado</span>
-                        <span className="text-success font-semibold">{totals.fmtPaid}</span>
-                    </div>
+                    <Linea label="Abonado"><Money value={totals.fmtPaid} /></Linea>
                 )}
                 {/* Si hay deuda lo decide el backend (s.balance); cuánto es, la pista del
                     papel. Al revés, el residuo de redondeo imprimiría un "queda debiendo"
                     de céntimos sobre una factura que el sistema ya da por saldada. */}
                 {pago.pendiente && s.balance > 0 && totals.balanceBs > 0 && (
-                    <div className="flex justify-between items-center py-1 border-t border-border/10 dark:border-white/5 mt-1 pt-1">
-                        <span className="text-content dark:text-content-dark font-bold text-xs tracking-tighter">Queda debiendo</span>
-                        <span className="text-danger font-bold text-sm">{totals.fmtBalance}</span>
+                    <div className="flex items-baseline justify-between gap-3 mt-1.5 pt-2 border-t border-border/60 dark:border-white/[0.06]">
+                        <span className="text-[13px] font-semibold text-red-600 dark:text-red-400">Queda debiendo</span>
+                        <Money value={totals.fmtBalance} className="text-[16px] font-bold text-red-600 dark:text-red-400" />
                     </div>
                 )}
             </div>
 
             {/* Footer */}
-            <div className="text-center text-xs text-content-muted dark:text-content-dark-muted mb-4">¡Gracias por su compra!</div>
+            <div className="text-center text-[12px] text-content-subtle mb-5">¡Gracias por su compra!</div>
 
-            {/* Botones. IMPRIMIR saca el ticket térmico (rollo); PDF genera la misma factura
+            {/* Botones. Imprimir saca el ticket térmico (rollo); PDF genera la misma factura
                 en tamaño carta, que es la que se le envía al cliente por WhatsApp o correo:
                 el ticket guardado como PDF sale como una tira angosta ilegible. */}
-            <div className="flex gap-2.5">
-                <button onClick={onClose} className="btn-md btn-secondary w-full">
-                    CERRAR
+            <div className="flex gap-2 pt-4 border-t border-border/60 dark:border-white/[0.06]">
+                <button onClick={onClose} className="btn-outline h-11 px-4 rounded-lg text-[13px] font-medium">
+                    Cerrar
                 </button>
                 <button
                     onClick={() => printInvoiceLetter({ sale: s, totals, companyInfo })}
-                    className="btn-md btn-secondary w-full"
+                    className="btn-outline h-11 px-4 rounded-lg text-[13px] font-medium inline-flex items-center justify-center gap-1.5"
                     title="Factura tamaño carta, para enviar al cliente por WhatsApp o correo"
-                    style={{ flex: 1.4 }}
                 >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                     PDF
                 </button>
                 <button
                     onClick={() => printReceipt(effectiveSale, companyInfo, displayCurrency, printerWidth, baseCurrency)}
-                    className="btn-md btn-primary w-full"
+                    className="btn-accent flex-1 h-11 rounded-lg text-[14px] font-semibold inline-flex items-center justify-center gap-2"
                     title="Ticket para la impresora térmica"
-                    style={{ flex: 1.8 }}
                 >
-                    IMPRIMIR
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                    Imprimir
                 </button>
             </div>
         </Modal>
+    );
+}
+
+// Fila de dato de la vista previa: rótulo gris a la izquierda, valor en tinta a la derecha.
+function Linea({ label, children }) {
+    return (
+        <div className="flex items-baseline justify-between gap-3 py-1 text-[13px]">
+            <span className="text-content-subtle shrink-0">{label}</span>
+            <span className="font-medium text-content dark:text-white text-right tabular-nums min-w-0">{children}</span>
+        </div>
     );
 }

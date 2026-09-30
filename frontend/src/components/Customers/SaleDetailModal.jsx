@@ -4,6 +4,8 @@ import { useApp } from "../../context/AppContext";
 import { fmtBase, fmtDateShort, todayISO, toNameCase } from "../../helpers";
 import DatePicker from "../ui/DatePicker";
 import { Spinner } from "../ui/Spinner";
+import StatusMark from "../ui/StatusMark";
+import Money from "../ui/Money";
 
 /**
  * Props:
@@ -47,29 +49,21 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
 
     if (!saleId) return null;
 
-    const items   = sale?.items   ?? [];
+    const items    = sale?.items   ?? [];
     const payments = sale?.Payments ?? [];
+    const balance  = parseFloat(sale?.balance || 0);
+    const credit   = parseFloat(sale?.credit_applied || 0);
+    const forgiven = parseFloat(sale?.forgiven_amount || 0);
+    const discount = parseFloat(sale?.discount_amount || 0);
 
-    const statusLabel = sale?.status === "pagado"   ? "Pagado"
-                      : sale?.status === "exonerado"? "Exonerada"
-                      : sale?.status === "parcial"  ? "Parcial"
-                      : sale?.status === "pendiente"? "Pendiente"
-                      : sale?.status === "borrador" ? "Sin factura"
-                      : sale?.status === "anulado"  ? "Anulado"
-                      : sale?.status === "devuelto" ? "Devuelto"
-                      : sale?.status ?? "—";
-
-    const statusClass = sale?.status === "pagado"   ? "bg-success/10 text-success border-success/20"
-                      : sale?.status === "exonerado"? "bg-violet-500/10 text-violet-400 border-violet-500/20"
-                      : sale?.status === "parcial"  ? "bg-warning/10 text-warning border-warning/20"
-                      : sale?.status === "borrador" ? "bg-surface-3 dark:bg-white/5 text-content-subtle dark:text-white/40 border-border/30 dark:border-white/10"
-                      : sale?.status === "anulado"  ? "bg-surface-3 dark:bg-white/5 text-content-subtle dark:text-white/40 border-border/30 dark:border-white/10"
-                      : "bg-danger/10 text-danger border-danger/20";
+    // Montos de un cobro en la moneda en que entró. Sin separador de miles, como el resto de
+    // la app: "51.473,30" se leía distinto a "Bs. 51473.30" de la caja.
+    const fmtCcy = (n, sym) => `${sym} ${Number(n || 0).toFixed(2)}`;
 
     return (
         /* Backdrop */
         <div
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200"
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] overlay-in"
             onClick={onClose}
         >
             {/* Panel */}
@@ -78,70 +72,83 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="shrink-0 px-5 py-4 border-b border-border/10 dark:border-white/5 flex items-center justify-between gap-3 bg-surface-2/50 dark:bg-white/[0.03]">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-brand-500/10 text-brand-500 flex items-center justify-center shrink-0">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <div className="shrink-0 pl-5 pr-3 pt-4 pb-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-surface-3 dark:bg-white/[0.06] text-content-muted dark:text-white/70 flex items-center justify-center shrink-0">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                         </div>
-                        <div>
-                            <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">
-                                Detalle de venta
-                            </div>
-                            <div className="text-sm font-bold text-content dark:text-white">
+                        <div className="min-w-0">
+                            <div className="text-[12px] text-content-subtle">Detalle de venta</div>
+                            <div className="text-[16px] font-bold tracking-[-0.01em] text-content dark:text-white tabular-nums truncate">
                                 {loading ? "Cargando…" : (sale?.invoice_number ? `Factura ${sale.invoice_number}` : `Orden #${saleId}`)}
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        {!loading && sale && (
-                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border ${statusClass}`}>
-                                {statusLabel}
-                            </span>
-                        )}
+                    <div className="flex items-center gap-3 shrink-0">
+                        {!loading && sale && <StatusMark status={sale.status} />}
                         <button
                             onClick={onClose}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-content-subtle hover:bg-surface-2 dark:hover:bg-white/10 transition-all"
+                            aria-label="Cerrar"
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-content-subtle hover:text-content hover:bg-surface-3 dark:hover:text-white dark:hover:bg-white/[0.06] transition-colors"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
                     </div>
                 </div>
 
                 {/* Body */}
-                <div className="flex-1 overflow-y-auto scrollbar-hide">
+                <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5">
                     {loading ? (
-                        <div className="flex items-center justify-center py-20 gap-3 text-content-subtle dark:text-white/30">
-                            <svg className="w-5 h-5 animate-spin text-brand-500" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
-                            <span className="text-[12px] font-bold animate-pulse">Cargando…</span>
+                        <div className="flex items-center justify-center py-20 gap-2.5 text-[13px] text-content-subtle">
+                            <Spinner />
+                            Cargando…
                         </div>
                     ) : !sale ? (
-                        <div className="flex items-center justify-center py-20 text-danger text-[12px] font-bold">
-                            Error al cargar la venta
+                        <div className="flex items-center justify-center py-20 text-[13px] font-medium text-red-600 dark:text-red-400">
+                            No se pudo cargar la venta
                         </div>
                     ) : (
-                        <>
-                            {/* Meta info */}
-                            <div className="px-5 pt-4 pb-3 grid grid-cols-2 gap-3 border-b border-border/10 dark:border-white/5">
+                        <div className="space-y-5 pt-1">
+                            {/* ── Cabecera: a quién y cuánto ── */}
+                            <div className="rounded-xl bg-surface-2 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] px-4 py-3.5 flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                    <p className="text-[12px] text-content-subtle">Cliente</p>
+                                    <p className="text-[15px] font-semibold text-content dark:text-white truncate">
+                                        {toNameCase(sale.customer_name) || "Sin cliente"}
+                                    </p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                    <p className="text-[12px] text-content-subtle">Total</p>
+                                    <Money value={fmt(sale.total)} className="block text-[24px] font-bold tracking-tight leading-tight text-content dark:text-white" />
+                                    <p className="text-[12px] mt-0.5 tabular-nums">
+                                        {balance > 0
+                                            ? <span className="font-medium text-red-600 dark:text-red-400">Debe <Money value={fmt(balance)} /></span>
+                                            : sale.status === "exonerado"
+                                                ? <span className="text-content-subtle">Saldo exonerado</span>
+                                                : <span className="text-content-subtle">Sin saldo pendiente</span>}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* ── Datos del documento ── */}
+                            <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
                                 {[
-                                    { label: "Fecha",      value: new Date(sale.created_at).toLocaleDateString("es-VE", { day: "2-digit", month: "long", year: "numeric" }) },
-                                    { label: "Empleado",   value: sale.employee_name || "—" },
-                                    { label: "Sucursal",   value: sale.warehouse_name || "—" },
-                                    { label: "Serie",      value: sale.serie_name || "—" },
-                                ].map(({ label, value }) => (
-                                    <div key={label} className="bg-surface-2/50 dark:bg-white/[0.03] rounded-xl p-2.5 border border-border/20 dark:border-white/5">
-                                        <div className="text-[11px] font-bold text-content-subtle dark:text-white/30 uppercase tracking-wide mb-0.5">{label}</div>
-                                        <div className="text-[12px] font-semibold text-content dark:text-white truncate">{value}</div>
+                                    ["Fecha",    fmtDateShort(sale.created_at)],
+                                    ["Vendedor", toNameCase(sale.employee_name) || "—"],
+                                    ["Sucursal", toNameCase(sale.warehouse_name) || "—"],
+                                    ["Serie",    sale.serie_name || "—"],
+                                ].map(([label, value]) => (
+                                    <div key={label} className="min-w-0">
+                                        <dt className="text-[12px] text-content-subtle">{label}</dt>
+                                        <dd className="text-[13px] font-medium text-content dark:text-white tabular-nums truncate">{value}</dd>
                                     </div>
                                 ))}
-                            </div>
+                            </dl>
 
                             {/* Vencimiento: solo mientras se debe algo. El pactado para esta factura
                                 o, si no hay, el de los días de crédito del cliente — la fecha con la
@@ -149,185 +156,134 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                             {["pendiente", "parcial"].includes(sale.status) && sale.effective_due_date && (() => {
                                 const due  = sale.effective_due_date;
                                 const days = Math.round((new Date(todayISO()) - new Date(due)) / 86400000);
+                                const vencida = days > 0;
+                                const pronto  = days <= 0 && days >= -7;
                                 return (
-                                    <div className="px-5 pt-3 pb-3 border-b border-border/10 dark:border-white/5">
-                                        <div className="flex flex-wrap items-center justify-between gap-3 bg-surface-2/50 dark:bg-white/[0.03] rounded-xl p-2.5 border border-border/20 dark:border-white/5">
-                                            <div className="min-w-0">
-                                                <div className="text-[11px] font-bold text-content-subtle dark:text-white/30 uppercase tracking-wide mb-0.5">Vence</div>
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="text-[12px] font-bold text-content dark:text-white tabular-nums">{fmtDateShort(due)}</span>
-                                                    {days > 0 && (
-                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-danger/10 text-danger border border-danger/20">
-                                                            Vencida hace {days} día{days !== 1 ? "s" : ""}
-                                                        </span>
-                                                    )}
-                                                    {days <= 0 && days >= -7 && (
-                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-warning/10 text-warning border border-warning/20">
-                                                            {days === 0 ? "Vence hoy" : `En ${-days} día${days !== -1 ? "s" : ""}`}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="text-[11px] font-medium text-content-subtle dark:text-white/35 mt-0.5">
-                                                    {sale.due_date
-                                                        ? "Fecha pactada para esta factura"
-                                                        : sale.customer_credit_is_default
-                                                            ? (sale.customer_credit_days
-                                                                ? `Plazo general de la empresa: ${sale.customer_credit_days} días`
-                                                                : "De contado: la empresa no tiene plazo general de crédito")
-                                                            : (sale.customer_credit_days
-                                                                ? `Plazo de este cliente: ${sale.customer_credit_days} días`
-                                                                : "De contado: este cliente no tiene crédito")}
-                                                </div>
-                                            </div>
-                                            {canSetDue && (
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    {savingDue && <Spinner />}
-                                                    <DatePicker value={due} onChange={v => v && v !== due && saveDueDate(v)} clearable={false} className="shrink-0" />
-                                                    {sale.due_date && (
-                                                        <button
-                                                            onClick={() => saveDueDate(null)}
-                                                            disabled={savingDue}
-                                                            className="h-8 px-2.5 rounded-lg text-[11px] font-bold text-content-subtle hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/5 transition-all disabled:opacity-40"
-                                                            title="Volver al plazo de crédito del cliente"
-                                                        >
-                                                            Restablecer
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
+                                    // Filete de 3px a la izquierda: lo vencido pide atención.
+                                    <div className={`rounded-lg border border-border/60 dark:border-white/[0.06] border-l-[3px] px-3.5 py-3 flex flex-wrap items-center justify-between gap-3 ${
+                                        vencida ? "border-l-red-500" : pronto ? "border-l-amber-500" : "border-l-border dark:border-l-white/10"
+                                    }`}>
+                                        <div className="min-w-0">
+                                            <p className="text-[12px] text-content-subtle">Vence</p>
+                                            <p className="text-[13px] font-medium text-content dark:text-white tabular-nums whitespace-nowrap">
+                                                {fmtDateShort(due)}
+                                                {vencida && (
+                                                    <span className="ml-2 font-medium text-red-600 dark:text-red-400">
+                                                        Vencida hace {days} día{days !== 1 ? "s" : ""}
+                                                    </span>
+                                                )}
+                                                {pronto && (
+                                                    <span className="ml-2 font-medium text-amber-700 dark:text-amber-400">
+                                                        {days === 0 ? "Vence hoy" : `En ${-days} día${days !== -1 ? "s" : ""}`}
+                                                    </span>
+                                                )}
+                                            </p>
+                                            <p className="text-[12px] text-content-subtle mt-0.5">
+                                                {sale.due_date
+                                                    ? "Fecha pactada para esta factura"
+                                                    : sale.customer_credit_is_default
+                                                        ? (sale.customer_credit_days
+                                                            ? `Plazo general de la empresa: ${sale.customer_credit_days} días`
+                                                            : "De contado: la empresa no tiene plazo general de crédito")
+                                                        : (sale.customer_credit_days
+                                                            ? `Plazo de este cliente: ${sale.customer_credit_days} días`
+                                                            : "De contado: este cliente no tiene crédito")}
+                                            </p>
                                         </div>
+                                        {canSetDue && (
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                {savingDue && <Spinner />}
+                                                <DatePicker value={due} onChange={v => v && v !== due && saveDueDate(v)} clearable={false} className="shrink-0" />
+                                                {sale.due_date && (
+                                                    <button
+                                                        onClick={() => saveDueDate(null)}
+                                                        disabled={savingDue}
+                                                        className="h-9 px-2.5 rounded-lg text-[12px] font-medium text-content-subtle hover:text-content dark:hover:text-white hover:bg-surface-3 dark:hover:bg-white/[0.06] transition-colors disabled:opacity-40"
+                                                        title="Volver al plazo de crédito del cliente"
+                                                    >
+                                                        Restablecer
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })()}
 
-                            {/* Tabla de items */}
-                            <div className="px-5 pt-4 pb-2">
-                                <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-2">
-                                    Productos ({items.length})
-                                </div>
-                                <div className="rounded-xl border border-border/20 dark:border-white/5 overflow-hidden">
-                                    {/* Thead */}
-                                    <div className="grid grid-cols-12 bg-surface-2 dark:bg-white/[0.03] px-3 py-2">
-                                        <span className="col-span-5 text-[11px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/30">Producto</span>
-                                        <span className="col-span-2 text-[11px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/30 text-center">Cant.</span>
-                                        <span className="col-span-2 text-[11px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/30 text-right">P. Unit</span>
-                                        <span className="col-span-3 text-[11px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/30 text-right">Subtotal</span>
-                                    </div>
-
+                            {/* ── Productos: dos renglones por línea, sin tabla ── */}
+                            <div>
+                                <p className="text-[13px] font-semibold text-content dark:text-white mb-2">
+                                    Productos <span className="font-normal text-content-subtle">· {items.length}</span>
+                                </p>
+                                <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
                                     {items.length === 0 ? (
-                                        <div className="px-3 py-6 text-center text-[12px] text-content-subtle dark:text-white/20 font-bold">
-                                            Sin productos
+                                        <p className="px-3.5 py-6 text-center text-[13px] text-content-subtle">Sin productos</p>
+                                    ) : items.map((item, idx) => (
+                                        <div key={idx} className="px-3.5 py-2.5">
+                                            <div className="flex items-baseline justify-between gap-3">
+                                                <span className="text-[13px] font-medium text-content dark:text-white min-w-0 truncate">{item.name}</span>
+                                                <Money value={fmt(item.subtotal)} className="text-[13px] font-semibold text-content dark:text-white shrink-0" />
+                                            </div>
+                                            <div className="flex items-baseline justify-between gap-3 mt-0.5 text-[12px] tabular-nums">
+                                                <span className="text-content-subtle">{parseFloat(item.quantity)} × {fmt(item.price)}</span>
+                                                {item.returned_qty > 0 && (
+                                                    <span className="font-medium text-amber-700 dark:text-amber-400 whitespace-nowrap">
+                                                        {item.returned_qty} devuelto{item.returned_qty > 1 ? "s" : ""}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
-                                    ) : (
-                                        <div className="divide-y divide-border/10 dark:divide-white/5">
-                                            {items.map((item, idx) => (
-                                                <div key={idx} className="grid grid-cols-12 items-center px-3 py-2.5 hover:bg-surface-2/30 dark:hover:bg-white/[0.02] transition-colors">
-                                                    <div className="col-span-5 min-w-0">
-                                                        <div className="text-[12px] font-semibold text-content dark:text-white truncate">{item.name}</div>
-                                                        {item.returned_qty > 0 && (
-                                                            <div className="text-[11px] text-danger font-bold">
-                                                                -{item.returned_qty} devuelto{item.returned_qty > 1 ? "s" : ""}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <div className="col-span-2 text-center text-[12px] font-semibold text-content dark:text-white tabular-nums">
-                                                        {parseFloat(item.quantity)}
-                                                    </div>
-                                                    <div className="col-span-2 text-right text-[12px] font-semibold text-content-subtle dark:text-white/40 tabular-nums">
-                                                        {fmt(item.price)}
-                                                    </div>
-                                                    <div className="col-span-3 text-right text-[12px] font-bold text-content dark:text-white tabular-nums">
-                                                        {fmt(item.subtotal)}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                    ))}
                                 </div>
-                            </div>
 
-                            {/* Totales */}
-                            <div className="px-5 pt-2 pb-4 space-y-1.5 border-t border-border/10 dark:border-white/5 mt-2">
-                                {parseFloat(sale.discount_amount || 0) > 0 && (
-                                    <>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40">Subtotal</span>
-                                            <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40 tabular-nums">
-                                                {fmt(parseFloat(sale.total) + parseFloat(sale.discount_amount))}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-[12px] font-semibold text-danger">Descuento</span>
-                                            <span className="text-[12px] font-semibold text-danger tabular-nums">-{fmt(sale.discount_amount)}</span>
-                                        </div>
-                                    </>
-                                )}
-                                <div className="flex justify-between items-center pt-1 border-t border-border/10 dark:border-white/5">
-                                    <span className="text-[12px] font-bold text-content dark:text-white">Total</span>
-                                    <span className="text-lg font-bold text-brand-500 tabular-nums">{fmt(sale.total)}</span>
+                                {/* Totales */}
+                                <div className="mt-3 space-y-1 text-[13px]">
+                                    {discount > 0 && (
+                                        <>
+                                            <Fila label="Subtotal" value={fmt(parseFloat(sale.total) + discount)} />
+                                            <Fila label="Descuento" value={`-${fmt(discount)}`} />
+                                        </>
+                                    )}
+                                    <Fila label="Total" value={fmt(sale.total)} strong />
+                                    <Fila label="Abonado" value={fmt(sale.amount_paid)} />
+                                    {forgiven > 0 && <Fila label="Exonerado" value={fmt(forgiven)} tone="text-violet-600 dark:text-violet-400" />}
+                                    {balance > 0 && <Fila label="Saldo pendiente" value={fmt(balance)} tone="text-red-600 dark:text-red-400" strong />}
                                 </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40">Abonado</span>
-                                    <span className="text-[12px] font-semibold text-success tabular-nums">{fmt(sale.amount_paid)}</span>
-                                </div>
-                                {parseFloat(sale.forgiven_amount || 0) > 0 && (
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-[12px] font-semibold text-violet-500 dark:text-violet-400">Exonerado</span>
-                                        <span className="text-[12px] font-bold text-violet-500 dark:text-violet-400 tabular-nums">{fmt(sale.forgiven_amount)}</span>
-                                    </div>
-                                )}
-                                {parseFloat(sale.balance || 0) > 0 && (
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-[12px] font-semibold text-danger">Saldo pendiente</span>
-                                        <span className="text-[12px] font-bold text-danger tabular-nums">{fmt(sale.balance)}</span>
-                                    </div>
-                                )}
                             </div>
 
                             {/* Constancia de la exoneración: sin egreso ni nota de crédito, este bloque
                                 es el único rastro visible de por qué la factura se cerró sin cobrarse. */}
-                            {parseFloat(sale.forgiven_amount || 0) > 0 && (
-                                <div className="px-5 pb-4">
-                                    <div className="rounded-xl border border-warning/30 bg-warning/5 p-3.5">
-                                        <div className="flex items-center justify-between mb-1.5">
-                                            <span className="text-[11px] font-bold uppercase tracking-widest text-violet-500 dark:text-violet-400">Saldo exonerado</span>
-                                            <span className="text-[12px] font-bold text-violet-500 dark:text-violet-400 tabular-nums">{fmt(sale.forgiven_amount)}</span>
-                                        </div>
-                                        {sale.forgiven_reason && (
-                                            <p className="text-[12px] font-semibold text-content dark:text-white/70 leading-snug">{sale.forgiven_reason}</p>
-                                        )}
-                                        <p className="text-[11px] font-semibold text-content-subtle dark:text-white/30 mt-1">
-                                            {sale.forgiven_by_name || "—"}
-                                            {sale.forgiven_at && ` · ${new Date(sale.forgiven_at).toLocaleDateString("es-VE", { day: "2-digit", month: "short", year: "numeric" })}`}
-                                        </p>
+                            {forgiven > 0 && (
+                                <div className="rounded-lg border border-border/60 dark:border-white/[0.06] border-l-[3px] border-l-violet-500 px-3.5 py-3">
+                                    <div className="flex items-baseline justify-between gap-3">
+                                        <span className="text-[13px] font-semibold text-content dark:text-white">Saldo exonerado</span>
+                                        <Money value={fmt(forgiven)} className="text-[13px] font-semibold text-violet-600 dark:text-violet-400" />
                                     </div>
+                                    {sale.forgiven_reason && (
+                                        <p className="text-[13px] text-content-muted dark:text-white/70 leading-snug mt-1">{sale.forgiven_reason}</p>
+                                    )}
+                                    <p className="text-[12px] text-content-subtle mt-1">
+                                        {toNameCase(sale.forgiven_by_name) || "—"}
+                                        {sale.forgiven_at && ` · ${fmtDateShort(sale.forgiven_at)}`}
+                                    </p>
                                 </div>
                             )}
 
-                            {/* Pagos registrados */}
-                            {(payments.length > 0 || parseFloat(sale.credit_applied || 0) > 0) && (
-                                <div className="px-5 pb-5 border-t border-border/10 dark:border-white/5">
-                                    <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-2 mt-4">
-                                        Pagos registrados ({payments.length + (parseFloat(sale.credit_applied || 0) > 0 ? 1 : 0)})
-                                    </div>
-                                    <div className="space-y-2">
-                                        {/* Crédito de cliente aplicado */}
-                                        {parseFloat(sale.credit_applied || 0) > 0 && (
-                                            <div className="bg-brand-500/5 rounded-xl px-3 py-2.5 border border-brand-500/20">
-                                                <div className="flex justify-between items-center">
-                                                    <div>
-                                                        <div className="text-[12px] font-semibold text-brand-500 flex items-center gap-1.5">
-                                                            <span className="w-2 h-2 rounded-full inline-block shrink-0 bg-brand-500" />
-                                                            Crédito de cliente
-                                                        </div>
-                                                        <div className="text-[11px] text-content-subtle dark:text-white/30">
-                                                            Aplicado al saldo de la factura
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-[13px] font-bold text-brand-500 tabular-nums">
-                                                        {fmt(parseFloat(sale.credit_applied))}
-                                                    </div>
+                            {/* ── Pagos registrados ── */}
+                            {(payments.length > 0 || credit > 0) && (
+                                <div>
+                                    <p className="text-[13px] font-semibold text-content dark:text-white mb-2">
+                                        Pagos <span className="font-normal text-content-subtle">· {payments.length + (credit > 0 ? 1 : 0)}</span>
+                                    </p>
+                                    <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
+                                        {/* Saldo a favor del cliente aplicado: no generó cobro, pero es con lo que se pagó. */}
+                                        {credit > 0 && (
+                                            <div className="px-3.5 py-2.5 flex items-baseline justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <p className="text-[13px] font-medium text-content dark:text-white">Saldo a favor del cliente</p>
+                                                    <p className="text-[12px] text-content-subtle">Aplicado al saldo de la factura</p>
                                                 </div>
+                                                <Money value={fmt(credit)} className="text-[13px] font-semibold text-content dark:text-white shrink-0" />
                                             </div>
                                         )}
                                         {payments.map((p, idx) => {
@@ -344,51 +300,40 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                                             const payInChangeCcy  = diffCcy ? p.amount * changeRate   : null;
                                             const changeInPayCcy  = diffCcy ? p.change_given * payRate : null;
 
-                                            const fmtCcy = (n, sym) =>
-                                                `${sym}${Number(n).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
                                             return (
-                                                <div key={idx} className="bg-surface-2/50 dark:bg-white/[0.03] rounded-xl px-3 py-2.5 border border-border/10 dark:border-white/5 space-y-1.5">
+                                                <div key={idx} className="px-3.5 py-2.5">
                                                     {/* Cobro */}
-                                                    <div className="flex justify-between items-start">
-                                                        <div>
-                                                            <div className="text-[12px] font-semibold text-content dark:text-white flex items-center gap-1.5">
-                                                                {p.journal_color && (
-                                                                    <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: p.journal_color }} />
-                                                                )}
-                                                                {toNameCase(p.journal_name) || "Pago"}
-                                                            </div>
-                                                            <div className="text-[11px] text-content-subtle dark:text-white/30">
-                                                                {new Date(p.created_at).toLocaleDateString("es-VE")}
-                                                                {p.reference_number && ` · Ref: ${p.reference_number}`}
-                                                            </div>
+                                                    <div className="flex items-baseline justify-between gap-3">
+                                                        <div className="min-w-0">
+                                                            <p className="text-[13px] font-medium text-content dark:text-white flex items-center gap-1.5 min-w-0">
+                                                                <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-content-subtle/40" style={p.journal_color ? { backgroundColor: p.journal_color } : undefined} />
+                                                                <span className="truncate">{toNameCase(p.journal_name) || "Pago"}</span>
+                                                            </p>
+                                                            <p className="text-[12px] text-content-subtle tabular-nums">
+                                                                {fmtDateShort(p.created_at)}
+                                                                {p.reference_number && ` · Ref. ${p.reference_number}`}
+                                                            </p>
                                                         </div>
-                                                        <div className="text-right">
-                                                            <div className="text-[13px] font-bold text-success tabular-nums">{fmtCcy(payNative, paySym)}</div>
+                                                        <div className="text-right shrink-0">
+                                                            <Money value={fmtCcy(payNative, paySym)} className="block text-[13px] font-semibold text-content dark:text-white" />
                                                             {diffCcy && (
-                                                                <div className="text-[11px] font-semibold text-content-subtle dark:text-white/30 tabular-nums">
-                                                                    ≈ {fmtCcy(payInChangeCcy, changeSym)}
-                                                                </div>
+                                                                <Money value={`≈ ${fmtCcy(payInChangeCcy, changeSym)}`} className="block text-[12px] text-content-subtle" />
                                                             )}
                                                         </div>
                                                     </div>
-                                                    {/* Cambio entregado */}
+                                                    {/* Vuelto entregado */}
                                                     {hasChange && changeNative !== null && (
-                                                        <div className="flex justify-between items-start pt-1.5 border-t border-border/10 dark:border-white/5">
-                                                            <div className="flex items-center gap-1.5">
+                                                        <div className="flex items-baseline justify-between gap-3 mt-2 pt-2 border-t border-dashed border-border/70 dark:border-white/[0.08]">
+                                                            <span className="text-[12px] font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1.5 min-w-0">
                                                                 {p.change_journal_color && (
-                                                                    <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: p.change_journal_color }} />
+                                                                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: p.change_journal_color }} />
                                                                 )}
-                                                                <span className="text-[11px] font-semibold text-warning/80 uppercase tracking-wide">
-                                                                    Cambio desde {p.change_journal_name}
-                                                                </span>
-                                                            </div>
-                                                            <div className="text-right">
-                                                                <div className="text-[12px] font-bold text-warning tabular-nums">-{fmtCcy(changeNative, changeSym)}</div>
+                                                                <span className="truncate">Vuelto desde {toNameCase(p.change_journal_name)}</span>
+                                                            </span>
+                                                            <div className="text-right shrink-0">
+                                                                <Money value={`-${fmtCcy(changeNative, changeSym)}`} className="block text-[12px] font-semibold text-amber-700 dark:text-amber-400" />
                                                                 {diffCcy && (
-                                                                    <div className="text-[11px] font-semibold text-content-subtle dark:text-white/30 tabular-nums">
-                                                                        ≈ -{fmtCcy(changeInPayCcy, paySym)}
-                                                                    </div>
+                                                                    <Money value={`≈ -${fmtCcy(changeInPayCcy, paySym)}`} className="block text-[12px] text-content-subtle" />
                                                                 )}
                                                             </div>
                                                         </div>
@@ -399,10 +344,20 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                                     </div>
                                 </div>
                             )}
-                        </>
+                        </div>
                     )}
                 </div>
             </div>
+        </div>
+    );
+}
+
+// Fila de totales: rótulo gris, cifra en tinta; `tone` solo para lo que es señal.
+function Fila({ label, value, tone, strong = false }) {
+    return (
+        <div className="flex items-baseline justify-between gap-3">
+            <span className={tone ? `font-medium ${tone}` : strong ? "font-semibold text-content dark:text-white" : "text-content-subtle"}>{label}</span>
+            <Money value={value} className={`${strong ? "font-semibold" : "font-medium"} ${tone || "text-content dark:text-white"}`} />
         </div>
     );
 }

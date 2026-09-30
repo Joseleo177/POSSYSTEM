@@ -11,6 +11,7 @@ import { api } from "../../services/api";
 import { fmtDateShort, todayISO, toNameCase } from "../../helpers";
 import DatePicker from "../ui/DatePicker";
 import StatusMark from "../ui/StatusMark";
+import Money from "../ui/Money";
 import { fmtTime } from "../../helpers/dates";
 import { useApp } from "../../context/AppContext";
 import { printPurchaseOrderDoc } from "../../helpers/printPurchaseOrder";
@@ -919,39 +920,51 @@ function PayDetailModal({ payment: pd, activeCurrencies, baseCurrency, onClose, 
   const sym    = cur?.symbol || baseCurrency?.symbol || "Ref.";
   const isBase = !cur || cur.is_base;
 
+  const amountBase = parseFloat(pd.amount || 0);
+  const vacio = <span className="text-content-subtle/60">—</span>;
+
   return (
-    <Modal open onClose={onClose} title="Detalle de pago" width={380}>
-      <div className="rounded-xl bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.06] divide-y divide-border/60 dark:divide-white/[0.05]">
-        <DRow label="Diario">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: pd.journal_color || "#22c55e" }} />
-            {toNameCase(pd.journal_name) || "—"}
-          </span>
-        </DRow>
-        <DRow label="Monto abonado">
-          <span className="text-success font-bold">
-            {!isBase
-              ? `${sym}${(parseFloat(pd.amount) * rate).toFixed(2)} · Ref. ${parseFloat(pd.amount).toFixed(2)}`
-              : `Ref. ${parseFloat(pd.amount).toFixed(2)}`}
-          </span>
-        </DRow>
+    <Modal open onClose={onClose} title="Detalle del pago" width={400}>
+      {/* Cifra héroe: lo que salió, en la moneda en que salió. El equivalente en Ref. va
+          debajo, igual que en el resto de la app. */}
+      <div className="rounded-xl bg-surface-2 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] px-4 py-3.5">
+        <p className="flex items-center gap-1.5 text-[12px] text-content-subtle">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: pd.journal_color || "#94a3b8" }} />
+          <span className="truncate">{toNameCase(pd.journal_name) || "Sin caja"}</span>
+        </p>
+        <Money
+          value={isBase ? `Ref. ${amountBase.toFixed(2)}` : `${sym} ${(amountBase * rate).toFixed(2)}`}
+          className="block mt-1 text-[24px] font-bold tracking-tight leading-tight text-content dark:text-white"
+        />
         {!isBase && (
-          <DRow label="Tasa aplicada">
-            <span className="tabular-nums">{rate.toFixed(4)} {cur?.code || ""}</span>
-          </DRow>
+          <p className="mt-0.5 text-[12px] text-content-subtle tabular-nums">
+            <Money value={`≈ Ref. ${amountBase.toFixed(2)}`} /> · tasa {rate.toFixed(4)}
+          </p>
         )}
-        <DRow label="Fecha de referencia">{fmtDateShort(pd.reference_date || pd.created_at)}</DRow>
-        <DRow label="N° Referencia">{pd.reference_number || <span className="opacity-30">—</span>}</DRow>
-        <DRow label="Empleado">{pd.employee_name || <span className="opacity-30">—</span>}</DRow>
-        {pd.notes && <DRow label="Notas"><span className="italic opacity-70">{pd.notes}</span></DRow>}
-        <DRow label="Registrado">{pd.created_at ? new Date(pd.created_at).toLocaleString("es-VE") : "—"}</DRow>
       </div>
-      <div className="mt-4 flex justify-end">
+
+      <dl className="mt-4 divide-y divide-border/60 dark:divide-white/[0.06]">
+        <DRow label="Fecha del pago">{fmtDateShort(pd.reference_date || pd.created_at)}</DRow>
+        <DRow label="N° de referencia">{pd.reference_number || vacio}</DRow>
+        <DRow label="Registró">{toNameCase(pd.employee_name) || vacio}</DRow>
+        <DRow label="Registrado el">
+          {pd.created_at ? `${fmtDateShort(pd.created_at)} · ${fmtTime(pd.created_at)}` : vacio}
+        </DRow>
+        {pd.notes && <DRow label="Notas"><span className="font-normal text-content-muted dark:text-white/70">{pd.notes}</span></DRow>}
+      </dl>
+
+      <div className="mt-5 pt-4 border-t border-border/60 dark:border-white/[0.06] flex items-center justify-between gap-2">
+        {/* Borrar es la excepción, no la salida: va como texto rojo a la izquierda, lejos de
+            Cerrar, para que no se toque por reflejo. */}
         <button
           onClick={onDelete}
-          className="h-8 px-4 rounded-xl border border-danger/30 text-danger text-[11px] font-bold hover:bg-danger/10 transition-all"
+          className="h-10 px-3 -ml-3 rounded-lg inline-flex items-center gap-1.5 text-[13px] font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors"
         >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
           Eliminar pago
+        </button>
+        <button onClick={onClose} className="btn-outline h-10 px-5 rounded-lg text-[13px] font-medium">
+          Cerrar
         </button>
       </div>
     </Modal>
@@ -960,9 +973,9 @@ function PayDetailModal({ payment: pd, activeCurrencies, baseCurrency, onClose, 
 
 function DRow({ label, children }) {
   return (
-    <div className="flex items-start justify-between gap-4 px-4 py-2.5">
-      <span className="text-[12px] font-medium text-content-subtle whitespace-nowrap shrink-0 mt-0.5">{label}</span>
-      <span className="text-[12px] font-semibold text-content dark:text-white text-right">{children}</span>
+    <div className="flex items-baseline justify-between gap-4 py-2.5">
+      <dt className="text-[12px] text-content-subtle whitespace-nowrap shrink-0">{label}</dt>
+      <dd className="text-[13px] font-medium text-content dark:text-white text-right tabular-nums min-w-0 break-words">{children}</dd>
     </div>
   );
 }

@@ -3,7 +3,6 @@ import { usePagos } from "../../hooks/contabilidad/usePagos";
 import FilterPopover from "../ui/FilterPopover";
 import PaymentFormModal from "../PaymentFormModal";
 import Modal from "../ui/Modal";
-import { Button } from "../ui/Button";
 import ConfirmModal from "../ui/ConfirmModal";
 import Pagination from "../ui/Pagination";
 import DateRangePicker from "../ui/DateRangePicker";
@@ -288,72 +287,71 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                 const isBase = !p.currency_code || p.currency_code === baseCurrency?.code;
                 const rate = parseFloat(p.exchange_rate) || 1;
                 const sym = p.currency_symbol || baseCurrency?.symbol || "Ref.";
-                const fmtP = n => `${sym}${(Number(n || 0) * (isBase ? 1 : rate)).toFixed(2)}`;
+                const fmtP = n => `${sym} ${(Number(n || 0) * (isBase ? 1 : rate)).toFixed(2)}`;
                 // El monto grande va en la moneda del diario, pero amount se almacena en base:
                 // sin la tasa y el equivalente no había forma de conciliar este cobro con los
                 // reportes, que suman en base. Se omiten si el cobro ya fue en moneda base.
                 const baseSym = baseCurrency?.symbol || "Ref.";
+                const conjunto = p.items?.length > 1;
                 return (
-                    <Modal open={!!payDetail} onClose={() => setPayDetail(null)} title="Detalle del cobro" width={400}>
+                    <Modal open={!!payDetail} onClose={() => setPayDetail(null)} title="Detalle del cobro" width={420}>
                         <div className="space-y-4">
-                            <div className="p-4 rounded-xl bg-surface-2 dark:bg-white/5 border border-border/20">
-                                <div className="text-[11px] font-semibold text-content-subtle uppercase tracking-[0.08em] mb-1">Monto cobrado</div>
-                                <div className="text-3xl font-bold tabular-nums">{fmtP(p.amount)}</div>
+                            {/* Cifra héroe: la caja por la que entró y cuánto, en su moneda. */}
+                            <div className="rounded-xl bg-surface-2 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] px-4 py-3.5">
+                                <JournalDot name={p.journal_name || "Sin caja"} color={p.journal_color} />
+                                <Money value={fmtP(p.amount)} className="block mt-1 text-[24px] font-bold tracking-tight leading-tight text-content dark:text-white" />
                                 {!isBase && (
-                                    <div className="text-[12px] font-semibold text-content-subtle dark:text-white/40 tabular-nums mt-1">
-                                        ≈ {baseSym}{Number(p.amount || 0).toFixed(2)}
-                                    </div>
+                                    <p className="mt-0.5 text-[12px] text-content-subtle tabular-nums">
+                                        <Money value={`≈ ${baseSym} ${Number(p.amount || 0).toFixed(2)}`} /> · tasa {rate.toFixed(4)}
+                                    </p>
                                 )}
                             </div>
+
                             {/* Esta fila es UN movimiento de caja; si el cobro se hizo con varias
                                 formas de pago, las otras son sus propias filas y se borran juntas. */}
                             {p.batch_journal_count > 1 && (
-                                <div className="rounded-xl border border-warning/30 bg-warning/5 px-3.5 py-2.5">
-                                    <p className="text-[11px] font-semibold text-content-subtle dark:text-white/50 leading-relaxed">
-                                        Parte de un <span className="font-bold text-warning">pago combinado</span> de {p.batch_journal_count} formas
-                                        de pago. Cada una es su propio movimiento de caja; eliminar cualquiera deshace el cobro completo.
+                                <div className="rounded-lg border-l-[3px] border-amber-500 bg-amber-500/[0.06] px-3.5 py-2.5">
+                                    <p className="text-[13px] font-medium text-content dark:text-white">Pago combinado de {p.batch_journal_count} formas de pago</p>
+                                    <p className="text-[12px] text-content-subtle leading-relaxed mt-0.5">
+                                        Cada una es su propio movimiento de caja. Eliminar cualquiera deshace el cobro completo.
                                     </p>
                                 </div>
                             )}
 
                             {/* Desglose del cobro conjunto: cuánto se aplicó a cada factura. */}
-                            {(p.items?.length > 1) && (
+                            {conjunto && (
                                 <div>
-                                    <div className="text-[12px] font-medium text-content-subtle mb-1.5">
+                                    <p className="text-[13px] font-semibold text-content dark:text-white mb-2">
                                         Aplicado a {p.group_count} {p.group_count === 1 ? "factura" : "facturas"}
-                                    </div>
-                                    <div className="rounded-xl border border-border/20 dark:border-white/5 divide-y divide-border/10 dark:divide-white/5">
+                                    </p>
+                                    <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
                                         {(p.items || []).map(it => (
-                                            <div key={it.payment_id} className="px-3 py-2 flex items-center justify-between gap-3">
-                                                <span className="text-[12px] font-bold text-brand-500 truncate">{it.invoice_number || `#${it.sale_id}`}</span>
-                                                <span className="text-[12px] font-bold tabular-nums text-success shrink-0">{fmtP(it.amount)}</span>
+                                            <div key={it.payment_id} className="px-3.5 py-2.5 flex items-baseline justify-between gap-3">
+                                                <span className="text-[13px] font-medium text-content dark:text-white tabular-nums truncate">{it.invoice_number || `#${it.sale_id}`}</span>
+                                                <Money value={fmtP(it.amount)} className="text-[13px] font-semibold text-content dark:text-white shrink-0" />
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             )}
 
-                            <div className="space-y-1">
+                            <dl className="divide-y divide-border/60 dark:divide-white/[0.06]">
                                 {[
-                                    p.group_count > 1
-                                        ? ["Documentos", `${p.group_count} facturas`, "text-brand-500 font-bold"]
-                                        : ["Documento", p.invoice_number || `#${p.sale_id}`, "text-brand-500 font-bold"],
-                                    p.customer_name && ["Cliente", p.customer_name, ""],
-                                    p.journal_name  && ["Caja / Banco", p.journal_name, ""],
-                                    !isBase && ["Tasa", `${rate.toFixed(4)} ${sym}/${baseSym}`, "tabular-nums"],
-                                    !isBase && ["Equivalente", `${baseSym}${Number(p.amount || 0).toFixed(2)}`, "tabular-nums"],
-                                    p.reference_number && ["Referencia", p.reference_number],
+                                    !conjunto && ["Factura", p.invoice_number || `#${p.sale_id}`],
+                                    p.customer_name && ["Cliente", toNameCase(p.customer_name)],
+                                    p.created_at && ["Fecha", fmtDate(p.created_at)],
+                                    p.reference_number && ["N° de referencia", p.reference_number],
                                     p.notes && ["Notas", p.notes],
-                                ].filter(Boolean).map(([label, value, extra]) => (
-                                    <div key={label} className="flex justify-between py-2 border-b border-border/10 dark:border-white/5 last:border-0">
-                                        <span className="text-[12px] font-medium text-content-subtle">{label}</span>
-                                        <span className={`text-[12px] font-semibold ${extra || "text-content dark:text-white"}`}>{value}</span>
+                                ].filter(Boolean).map(([label, value]) => (
+                                    <div key={label} className="flex items-baseline justify-between gap-4 py-2.5">
+                                        <dt className="text-[12px] text-content-subtle whitespace-nowrap shrink-0">{label}</dt>
+                                        <dd className="text-[13px] font-medium text-content dark:text-white text-right tabular-nums min-w-0 break-words">{value}</dd>
                                     </div>
                                 ))}
-                            </div>
+                            </dl>
                         </div>
-                        <div className="flex justify-end pt-6">
-                            <Button variant="ghost" onClick={() => setPayDetail(null)}>Cerrar</Button>
+                        <div className="flex justify-end mt-5 pt-4 border-t border-border/60 dark:border-white/[0.06]">
+                            <button onClick={() => setPayDetail(null)} className="btn-outline h-10 px-5 rounded-lg text-[13px] font-medium">Cerrar</button>
                         </div>
                     </Modal>
                 );

@@ -4,6 +4,9 @@ import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
 import CustomSelect from "../ui/CustomSelect";
+import StatusMark, { ACTIVE_STATUS } from "../ui/StatusMark";
+import { ledgerRow, stopRow, LedgerEmpty, RowIcon } from "../ui/Ledger";
+import { toNameCase } from "../../helpers";
 
 const EMPTY_JOURNAL = { name: "", type: "", color: "#6366f1", active: true, bank_id: null, currency_id: null, warehouse_ids: [] };
 
@@ -66,124 +69,108 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
     catch (e) { notify(e.message, "err"); }
   };
 
-  return (
-    <>
-      <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex items-center justify-between gap-3">
-        <span className="text-[12px] font-bold text-content-subtle dark:text-white/30">
-          {journals.length} diario{journals.length !== 1 ? "s" : ""}
-        </span>
-        {can("journals.manage") && (
-          <Button onClick={() => { setEditJournal(null); setNewJournal(EMPTY_JOURNAL); setShowModal(true); }} className="h-8 px-3 text-[11px] shadow-none">
-            + Nuevo diario
-          </Button>
+  const canManage = can("journals.manage");
+  const abrirNuevo  = () => { setEditJournal(null); setNewJournal(EMPTY_JOURNAL); setShowModal(true); };
+  const abrirEditar = (j) => { setEditJournal({ ...j, warehouse_ids: [...(j.warehouse_ids || [])] }); setShowModal(true); };
+
+  // Textos de la fila, en caja de oración: los nombres venían en mayúsculas y competían.
+  const metodoDe   = (j) => methodByCode[j.type]?.name || j.type || "Sin método";
+  const sucursalDe = (j) => (j.warehouse_ids?.length ?? 0) === 0
+    ? "Todas las sucursales"
+    : j.warehouse_ids.length === 1
+      ? toNameCase(j.warehouse_names?.[0] || j.warehouse_name)
+      : `${j.warehouse_ids.length} sucursales`;
+  const monedaDe   = (j) => j.currency_code ? `${j.currency_symbol} ${j.currency_code}` : "Moneda base";
+  const DUP_TONE   = "#ef4444";
+
+  // Acciones siempre a la vista: en una tablet no hay hover que las descubra.
+  const acciones = (j) => canManage ? (
+    <div className="flex items-center justify-end gap-0.5" onClick={stopRow}>
+      <RowIcon icon="edit" title="Editar diario" onClick={() => abrirEditar(j)} />
+      <RowIcon icon="power" title={j.active ? "Desactivar" : "Activar"} onClick={() => toggleJournal(j)} />
+      <RowIcon icon="trash" tone="danger" title="Eliminar diario" onClick={() => setDeleteConfirm(j)} />
+    </div>
+  ) : null;
+
+  const nombre = (j) => (
+    <div className="flex items-center gap-2.5 min-w-0">
+      <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-white dark:ring-transparent shadow-[0_0_0_1px_rgb(0_0_0/0.08)]" style={{ background: j.color }} />
+      <div className="min-w-0">
+        <div className={`text-[13px] font-semibold truncate ${j.active ? "text-content dark:text-white" : "text-content-subtle"}`}>{toNameCase(j.name)}</div>
+        {dupIds.has(j.id) && (
+          <div className="text-[12px] font-medium text-red-600 dark:text-red-400 truncate" title="Otro diario tiene el mismo método, banco, moneda y sucursales. Desactívalo o elimínalo.">
+            Duplicado de otra caja
+          </div>
         )}
       </div>
+    </div>
+  );
 
-      <div className="card-premium overflow-auto flex-1">
-        {journals.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 opacity-20">
-            <div className="text-xs font-bold">No hay diarios configurados</div>
-          </div>
-        ) : (
-          <table className="table-pos min-w-[680px]">
-            <thead className="sticky top-0 z-10">
-              <tr>
-                <th className="w-12" />
-                {["Nombre del Diario", "Método", "Banco / Entidad", "Sucursal", "Moneda", "Estado", can("journals.manage") && "Acciones"].filter(Boolean).map(h => (
-                  <th key={h} className={h === "Acciones" ? "text-right pr-6" : h === "Moneda" || h === "Estado" ? "text-center" : "text-left"}>
-                    {h}
-                  </th>
-                ))}
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="shrink-0 px-4 py-2.5 border-b border-border/60 dark:border-white/[0.06] flex items-center justify-between gap-3">
+        <span className="text-[13px] text-content-subtle">
+          {journals.length} diario{journals.length !== 1 ? "s" : ""}
+        </span>
+        {canManage && <Button onClick={abrirNuevo}>+ Nuevo diario</Button>}
+      </div>
+
+      {/* ── Libro (escritorio) ── */}
+      <div className="hidden md:block flex-1 overflow-auto">
+        <table className="table-ledger min-w-[820px]">
+          <thead className="sticky top-0 z-10">
+            <tr>
+              <th className="pl-4">Diario</th>
+              <th>Método y banco</th>
+              <th>Sucursal</th>
+              <th>Moneda</th>
+              <th>Estado</th>
+              <th className="pr-4 w-px"><span className="sr-only">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {journals.length === 0 ? (
+              <LedgerEmpty cols={6} title="Sin diarios" hint="Cada caja o cuenta bancaria por la que entra o sale dinero es un diario." />
+            ) : journals.map(j => (
+              <tr key={j.id} {...ledgerRow(canManage ? () => abrirEditar(j) : undefined, dupIds.has(j.id) ? DUP_TONE : undefined)}>
+                <td className="pl-4 max-w-0 w-[26%]">{nombre(j)}</td>
+                <td className="max-w-0">
+                  <div className="text-[13px] text-content dark:text-white truncate">{metodoDe(j)}</div>
+                  <div className="text-[12px] text-content-subtle truncate">{toNameCase(j.bank_name || j.bank) || "Sin banco"}</div>
+                </td>
+                <td>
+                  <span className="text-[13px] text-content-subtle whitespace-nowrap" title={(j.warehouse_names || []).join(", ") || undefined}>{sucursalDe(j)}</span>
+                </td>
+                <td><span className="text-[13px] text-content dark:text-white tabular-nums whitespace-nowrap">{monedaDe(j)}</span></td>
+                <td><StatusMark status={j.active ? "activo" : "inactivo"} map={ACTIVE_STATUS} /></td>
+                <td className="pr-4 whitespace-nowrap cursor-default">{acciones(j)}</td>
               </tr>
-            </thead>
-            <tbody>
-              {journals.map((j) => {
-                const isEdit = editJournal?.id === j.id;
-                return (
-                  <tr key={j.id} className="group">
-                    <td>
-                      <div className="w-4 h-4 rounded-full shadow-sm" style={{ background: j.color }} />
-                    </td>
-                    <td>
-                      {isEdit ? (
-                        <input
-                          autoFocus
-                          value={editJournal.name}
-                          onChange={e => setEditJournal(p => ({ ...p, name: e.target.value }))}
-                          className="input"
-                        />
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="text-[12px] font-bold text-content dark:text-white tracking-tight">{j.name}</span>
-                          {dupIds.has(j.id) && (
-                            <span className="badge badge-danger shadow-none text-[9px]" title="Otro diario tiene el mismo método, banco y moneda. Desactívalo o elimínalo.">
-                              Duplicado
-                            </span>
-                          )}
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      {(() => {
-                        const m = methodByCode[j.type];
-                        return <span className="text-[11px] font-bold text-content-subtle opacity-60 uppercase tracking-wide">{m ? m.name : (j.type || "—")}</span>;
-                      })()}
-                    </td>
-                    <td>
-                      <span className="text-[12px] font-medium text-content-subtle">{j.bank_name || j.bank || "—"}</span>
-                    </td>
-                    <td>
-                      {(j.warehouse_ids?.length ?? 0) === 0
-                        ? <span className="badge badge-neutral shadow-none">Todas</span>
-                        : (j.warehouse_ids.length === 1
-                            ? <span className="text-[12px] font-medium text-content-subtle">{j.warehouse_names?.[0] || j.warehouse_name}</span>
-                            : <span className="text-[12px] font-medium text-content-subtle" title={(j.warehouse_names || []).join(", ")}>{j.warehouse_ids.length} sucursales</span>)}
-                    </td>
-                    <td className="text-center">
-                      {j.currency_code ? (
-                        <span className="badge badge-info shadow-none">
-                          {j.currency_symbol} {j.currency_code}
-                        </span>
-                      ) : <span className="opacity-30 text-[11px]">—</span>}
-                    </td>
-                    <td className="text-center">
-                      <span className={`badge shadow-none ${j.active ? "badge-success" : "badge-danger"}`}>
-                        {j.active ? "Activo" : "Inactivo"}
-                      </span>
-                    </td>
-                    {can("journals.manage") && (
-                      <td className="text-right pr-6">
-                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => { setEditJournal({ ...j, warehouse_ids: [...(j.warehouse_ids || [])] }); setShowModal(true); }}
-                            className="p-2 rounded-xl transition-all text-content-subtle hover:text-warning hover:bg-warning/10 active:scale-90"
-                            title="Editar"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                          </button>
-                          <button
-                            onClick={() => toggleJournal(j)}
-                            className="p-2 rounded-xl transition-all text-content-subtle hover:text-info hover:bg-info/10 active:scale-90"
-                            title={j.active ? "Desactivar" : "Activar"}
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M18.364 5.636a9 9 0 11-12.728 0M12 9v4" /></svg>
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirm(j)}
-                            className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90"
-                            title="Eliminar"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── Tarjetas (teléfono) ── */}
+      <div className="md:hidden flex-1 overflow-y-auto px-3 py-3 space-y-2">
+        {journals.length === 0 ? (
+          <div className="py-16 text-center px-6">
+            <div className="text-[14px] font-semibold text-content dark:text-white">Sin diarios</div>
+            <div className="text-[13px] text-content-subtle mt-1">Cada caja o cuenta bancaria por la que entra o sale dinero es un diario.</div>
+          </div>
+        ) : journals.map(j => (
+          <div key={j.id}
+            style={dupIds.has(j.id) ? { boxShadow: `inset 3px 0 0 ${DUP_TONE}` } : undefined}
+            className="rounded-xl border border-border/70 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] pl-3.5 pr-1.5 py-3">
+            <div className="flex items-center justify-between gap-2">
+              {nombre(j)}
+              {acciones(j)}
+            </div>
+            <div className="mt-1.5 pl-5 text-[12px] text-content-subtle truncate">
+              {metodoDe(j)} · {monedaDe(j)} · {sucursalDe(j)}
+            </div>
+            {!j.active && <div className="mt-1 pl-5"><StatusMark status="inactivo" map={ACTIVE_STATUS} /></div>}
+          </div>
+        ))}
       </div>
 
       {/* Modal: crear / editar */}
@@ -306,6 +293,6 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
         type="danger"
         confirmText="Sí, eliminar"
       />
-    </>
+    </div>
   );
 }

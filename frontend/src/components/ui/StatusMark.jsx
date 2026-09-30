@@ -32,6 +32,13 @@ export const SALE_STATUS = {
     pedido:    { label: "Pedido",    tone: "violet" },
 };
 
+// Configuración (métodos, diarios): activo es lo normal, gris con su visto. El inactivo
+// tampoco es una alarma: solo está apagado.
+export const ACTIVE_STATUS = {
+    activo:   { label: "Activo",   tone: "success", quiet: "check" },
+    inactivo: { label: "Inactivo", tone: "neutral", quiet: "void" },
+};
+
 export const statusTone = (status, map = SALE_STATUS) => {
     const s = map[status];
     return s?.flag ? TONES[s.tone].toneVar : undefined;

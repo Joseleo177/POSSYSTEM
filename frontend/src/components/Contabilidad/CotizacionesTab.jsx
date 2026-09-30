@@ -11,152 +11,148 @@ import { useApp } from "../../context/AppContext";
 import { useCart } from "../../context/CartContext";
 import { api } from "../../services/api";
 
-const STATUS_BADGE = {
-    pendiente:  "bg-amber-500/10 text-amber-500 border-amber-500/20",
-    convertida: "bg-success/10 text-success border-success/20",
-    anulada:    "bg-surface-3 dark:bg-white/5 text-content-subtle dark:text-white/30 border-border/20 dark:border-white/10",
-};
-// Para la tabla. Una cotización pendiente no es una deuda: azul de "en curso", no rojo.
+// Para la tabla y el detalle. Una cotización pendiente no es una deuda: azul de "en curso", no rojo.
 const QUOTE_STATUS = {
     pendiente:  { label: "Pendiente",  tone: "info" },
     convertida: { label: "Convertida", tone: "success", quiet: "check" },
     anulada:    { label: "Anulada",    tone: "neutral", quiet: "void" },
 };
-const STATUS_LABEL = {
-    pendiente:  "Pendiente",
-    convertida: "Convertida",
-    anulada:    "Anulada",
-};
 
 function QuotDetailModal({ quot, onClose, onPrint, onLoadToCart, onCancel, onDelete, can, fmtPrice }) {
 
     if (!quot) return null;
-    const items = quot.items || [];
+    const items    = quot.items || [];
+    const anulada  = quot.status === "anulada";
+    const discount = parseFloat(quot.discount_amount) || 0;
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200" onClick={onClose}>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] overlay-in" onClick={onClose}>
             <div className="w-full max-w-lg bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden flex flex-col max-h-[90vh] modal-in" onClick={e => e.stopPropagation()}>
 
                 {/* Header */}
-                <div className="shrink-0 px-5 py-4 border-b border-border/10 dark:border-white/5 flex items-center justify-between gap-3 bg-brand-500/5">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-brand-500/10 text-brand-500 border border-brand-500/20 flex items-center justify-center shrink-0">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                <div className="shrink-0 pl-5 pr-3 pt-4 pb-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-surface-3 dark:bg-white/[0.06] text-content-muted dark:text-white/70 flex items-center justify-center shrink-0">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                             </svg>
                         </div>
-                        <div>
-                            <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">Cotización</div>
-                            <div className="text-sm font-bold text-content dark:text-white">#{quot.id}</div>
+                        <div className="min-w-0">
+                            <div className="text-[12px] text-content-subtle">Cotización</div>
+                            <div className="text-[16px] font-bold tracking-[-0.01em] text-content dark:text-white tabular-nums">#{quot.id}</div>
                         </div>
-                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border ${STATUS_BADGE[quot.status] || STATUS_BADGE.anulada}`}>
-                            {STATUS_LABEL[quot.status] || quot.status}
-                        </span>
                     </div>
-                    <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-content-subtle hover:bg-surface-2 dark:hover:bg-white/10 transition-all">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
-                    </button>
+                    <div className="flex items-center gap-3 shrink-0">
+                        <StatusMark status={quot.status} map={QUOTE_STATUS} />
+                        <button onClick={onClose} aria-label="Cerrar" className="w-8 h-8 rounded-lg flex items-center justify-center text-content-subtle hover:text-content hover:bg-surface-3 dark:hover:text-white dark:hover:bg-white/[0.06] transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
                 </div>
 
-                {/* Meta */}
-                <div className="shrink-0 px-5 py-3 border-b border-border/10 dark:border-white/5 grid grid-cols-2 gap-x-6 gap-y-2">
-                    {[
-                        ["Fecha",    fmtDate(quot.created_at)],
-                        ["Cliente",  quot.customer_name || "Consumidor Final"],
-                        ["CI/RIF",   quot.customer_rif  || "—"],
-                        ["Empleado", quot.employee_name || "—"],
-                        ...(quot.notes ? [["Notas", quot.notes]] : []),
-                    ].map(([label, val]) => (
-                        <div key={label}>
-                            <p className="text-[12px] font-medium text-content-subtle dark:text-white/50">{label}</p>
-                            <p className="text-[12px] font-semibold text-content dark:text-white truncate">{val}</p>
+                <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5 pt-1 space-y-5">
+                    {/* ── Cabecera: a quién y cuánto ── */}
+                    <div className="rounded-xl bg-surface-2 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] px-4 py-3.5 flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                            <p className="text-[12px] text-content-subtle">Cliente</p>
+                            <p className="text-[15px] font-semibold text-content dark:text-white truncate">{toNameCase(quot.customer_name) || "Consumidor final"}</p>
+                            {quot.customer_rif && <p className="text-[12px] text-content-subtle tabular-nums">{quot.customer_rif}</p>}
                         </div>
-                    ))}
-                </div>
+                        <div className="text-right shrink-0">
+                            <p className="text-[12px] text-content-subtle">Total</p>
+                            <Money value={fmtPrice(quot.total)} strike={anulada} className={`block text-[24px] font-bold tracking-tight leading-tight ${anulada ? "text-content-subtle" : "text-content dark:text-white"}`} />
+                            {discount > 0 && (
+                                <p className="text-[12px] text-content-subtle tabular-nums">Descuento <Money value={`-${fmtPrice(discount)}`} /></p>
+                            )}
+                        </div>
+                    </div>
 
-                {/* Items */}
-                <div className="flex-1 overflow-y-auto px-5 py-3">
-                    <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-2">Productos</div>
-                    <div className="rounded-xl border border-border/20 dark:border-white/5 overflow-hidden">
-                        <div className="grid grid-cols-12 bg-surface-2 dark:bg-white/[0.03] px-3 py-2">
-                            <span className="col-span-5 text-[11px] font-bold uppercase text-content-subtle dark:text-white/30">Producto</span>
-                            <span className="col-span-2 text-[11px] font-bold uppercase text-content-subtle dark:text-white/30 text-center">Cant.</span>
-                            <span className="col-span-2 text-[11px] font-bold uppercase text-content-subtle dark:text-white/30 text-right">P.Unit</span>
-                            <span className="col-span-3 text-[11px] font-bold uppercase text-content-subtle dark:text-white/30 text-right">Subtotal</span>
+                    {/* ── Datos del documento ── */}
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+                        <div className="min-w-0">
+                            <dt className="text-[12px] text-content-subtle">Fecha</dt>
+                            <dd className="text-[13px] font-medium text-content dark:text-white tabular-nums truncate">{fmtDate(quot.created_at)}</dd>
                         </div>
-                        {items.length === 0 ? (
-                            <div className="px-3 py-4 text-center text-[12px] text-content-subtle dark:text-white/30">Sin líneas</div>
-                        ) : items.map((item, idx) => (
-                            <div key={idx} className="grid grid-cols-12 items-center px-3 py-2.5 border-t border-border/10 dark:border-white/5">
-                                <div className="col-span-5 text-[12px] font-semibold text-content dark:text-white truncate">{item.product_name}</div>
-                                <div className="col-span-2 text-center text-[12px] font-semibold text-content dark:text-white tabular-nums">{parseFloat(item.quantity)}</div>
-                                <div className="col-span-2 text-right text-[12px] text-content-subtle dark:text-white/40 tabular-nums">{fmtPrice(item.price)}</div>
-                                <div className="col-span-3 text-right text-[12px] font-bold text-content dark:text-white tabular-nums">{fmtPrice(item.subtotal)}</div>
+                        <div className="min-w-0">
+                            <dt className="text-[12px] text-content-subtle">Vendedor</dt>
+                            <dd className="text-[13px] font-medium text-content dark:text-white truncate">{toNameCase(quot.employee_name) || "—"}</dd>
+                        </div>
+                        {quot.notes && (
+                            <div className="col-span-2">
+                                <dt className="text-[12px] text-content-subtle">Notas</dt>
+                                <dd className="text-[13px] font-medium text-content dark:text-white">{quot.notes}</dd>
                             </div>
-                        ))}
-                    </div>
-                    {parseFloat(quot.discount_amount) > 0 && (
-                        <div className="mt-2 flex justify-end text-[12px] font-semibold text-danger">
-                            Descuento: -{fmtPrice(quot.discount_amount)}
+                        )}
+                    </dl>
+
+                    {/* ── Productos: dos renglones por línea ── */}
+                    <div>
+                        <p className="text-[13px] font-semibold text-content dark:text-white mb-2">
+                            Productos <span className="font-normal text-content-subtle">· {items.length}</span>
+                        </p>
+                        <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
+                            {items.length === 0 ? (
+                                <p className="px-3.5 py-6 text-center text-[13px] text-content-subtle">Sin líneas</p>
+                            ) : items.map((item, idx) => (
+                                <div key={idx} className="px-3.5 py-2.5">
+                                    <div className="flex items-baseline justify-between gap-3">
+                                        <span className="text-[13px] font-medium text-content dark:text-white min-w-0 truncate">{item.product_name}</span>
+                                        <Money value={fmtPrice(item.subtotal)} className="text-[13px] font-semibold text-content dark:text-white shrink-0" />
+                                    </div>
+                                    <div className="text-[12px] text-content-subtle tabular-nums mt-0.5">{parseFloat(item.quantity)} × {fmtPrice(item.price)}</div>
+                                </div>
+                            ))}
                         </div>
-                    )}
+                    </div>
                 </div>
 
-                {/* Footer */}
-                <div className="shrink-0 px-5 py-4 border-t border-border/10 dark:border-white/5">
-                    {/* El pie envuelve: con cuatro acciones (anular, PDF, imprimir, abrir en
-                        caja) no caben en una línea y antes se partían las etiquetas letra a
-                        letra —"ABRIR EN CAJA" salía en tres renglones— y el total se rompía. */}
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="shrink-0">
-                            <p className="text-[12px] font-medium text-content-subtle dark:text-white/50">Total</p>
-                            <p className="text-2xl font-bold text-brand-500 tabular-nums whitespace-nowrap">{fmtPrice(quot.total)}</p>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
-                            {quot.status === "pendiente" && can("admin") && (
-                                <button onClick={() => onCancel(quot)}
-                                    className="h-9 px-3 whitespace-nowrap rounded-xl border border-danger/20 text-danger text-[11px] font-bold hover:bg-danger/10 transition-all">
-                                    Anular
-                                </button>
-                            )}
-                            {quot.status === "anulada" && can("admin") && (
-                                <button onClick={() => onDelete(quot)}
-                                    className="h-9 px-3 whitespace-nowrap rounded-xl border border-danger text-danger text-[11px] font-bold hover:bg-danger hover:text-white transition-all">
-                                    Eliminar
-                                </button>
-                            )}
-                            <button onClick={() => onPrint(quot, true)}
-                                title="Cotización tamaño carta, para enviar al cliente"
-                                className="h-9 px-4 whitespace-nowrap rounded-xl border border-border/30 dark:border-white/10 text-content-subtle text-[11px] font-bold hover:text-brand-500 hover:border-brand-500/30 transition-all flex items-center gap-2">
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                PDF
-                            </button>
-                            <button onClick={() => onPrint(quot)}
-                                title="Cotización en la impresora térmica"
-                                className="h-9 px-4 whitespace-nowrap rounded-xl border border-border/30 dark:border-white/10 text-content-subtle text-[11px] font-bold hover:text-brand-500 hover:border-brand-500/30 transition-all flex items-center gap-2">
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                                </svg>
-                                Imprimir
-                            </button>
-                            {quot.status === "pendiente" && (
-                                <button onClick={() => onLoadToCart(quot)}
-                                    className="h-9 px-4 whitespace-nowrap rounded-xl bg-success/10 text-success border border-success/20 text-[11px] font-bold hover:bg-success hover:text-black transition-all flex items-center gap-1.5">
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                                    </svg>
-                                    Abrir en caja
-                                </button>
-                            )}
-                        </div>
+                {/* Acciones. En el teléfono van apiladas: la principal a todo el ancho y las
+                    que borran al final, lejos de ella. Antes, con cuatro en fila, las etiquetas
+                    se partían letra a letra. */}
+                <div className="shrink-0 px-5 py-4 border-t border-border/60 dark:border-white/[0.06] flex flex-col sm:flex-row sm:items-center gap-2">
+                    {quot.status === "pendiente" && can("admin") && (
+                        <button onClick={() => onCancel(quot)} className={`${BTN_BORRAR} order-last sm:order-none sm:mr-auto`}>
+                            Anular
+                        </button>
+                    )}
+                    {anulada && can("admin") && (
+                        <button onClick={() => onDelete(quot)} className={`${BTN_BORRAR} order-last sm:order-none sm:mr-auto`}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            Eliminar
+                        </button>
+                    )}
+                    <div className={`flex gap-2 ${(quot.status === "pendiente" || anulada) && can("admin") ? "" : "sm:ml-auto"}`}>
+                        <button onClick={() => onPrint(quot, true)} title="Cotización tamaño carta, para enviar al cliente" className={BTN_SECUNDARIO}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            PDF
+                        </button>
+                        <button onClick={() => onPrint(quot)} title="Cotización en la impresora térmica" className={BTN_SECUNDARIO}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                            </svg>
+                            Imprimir
+                        </button>
                     </div>
+                    {quot.status === "pendiente" && (
+                        <button onClick={() => onLoadToCart(quot)}
+                            className="btn-accent h-11 px-5 rounded-lg text-[14px] font-semibold whitespace-nowrap inline-flex items-center justify-center gap-2">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            Abrir en caja
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
     );
 }
+
+const BTN_SECUNDARIO = "btn-outline flex-1 sm:flex-none h-11 px-4 rounded-lg text-[13px] font-medium whitespace-nowrap inline-flex items-center justify-center gap-1.5";
+// Anular y eliminar: texto rojo, sin caja, para que no compitan con la acción principal.
+const BTN_BORRAR = "h-11 px-3 rounded-lg text-[13px] font-medium whitespace-nowrap inline-flex items-center justify-center gap-1.5 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors";
 
 export default function CotizacionesTab({ notify, can, fmtPrice }) {
     const q = useQuotations({ notify });

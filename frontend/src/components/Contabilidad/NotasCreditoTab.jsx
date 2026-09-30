@@ -14,91 +14,99 @@ const LIMIT = 30;
 
 function NCDetailModal({ nc, onClose, onPrint, fmt }) {
   if (!nc) return null;
-  const items = nc.ReturnItems || [];
-  const sale  = nc.Sale || {};
+  const items   = nc.ReturnItems || [];
+  const sale    = nc.Sale || {};
+  const anulada = nc.status === "anulado";
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] overlay-in" onClick={onClose}>
       <div className="w-full max-w-lg bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden flex flex-col max-h-[90vh] modal-in" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="shrink-0 px-5 py-4 border-b border-border/10 dark:border-white/5 flex items-center justify-between gap-3 bg-warning/5">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-warning/10 text-warning border border-warning/20 flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+        <div className="shrink-0 pl-5 pr-3 pt-4 pb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-full bg-surface-3 dark:bg-white/[0.06] text-content-muted dark:text-white/70 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
               </svg>
             </div>
-            <div>
-              <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">Nota de crédito</div>
-              <div className="flex items-center gap-2">
-                <span className={`text-sm font-bold ${nc.status === "anulado" ? "text-content-subtle line-through" : "text-content dark:text-white"}`}>
-                  {nc.nc_number || `NC-${nc.id}`}
-                </span>
-                {nc.status === "anulado" && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-danger/10 text-danger border border-danger/20">
-                    Anulado
-                  </span>
-                )}
+            <div className="min-w-0">
+              <div className="text-[12px] text-content-subtle">Nota de crédito</div>
+              <div className={`text-[16px] font-bold tracking-[-0.01em] tabular-nums truncate ${anulada ? "text-content-subtle line-through decoration-1" : "text-content dark:text-white"}`}>
+                {nc.nc_number || `NC-${nc.id}`}
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-content-subtle hover:bg-surface-2 dark:hover:bg-white/10 transition-all">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            {anulada && <StatusMark status="anulado" />}
+            <button onClick={onClose} aria-label="Cerrar" className="w-8 h-8 rounded-lg flex items-center justify-center text-content-subtle hover:text-content hover:bg-surface-3 dark:hover:text-white dark:hover:bg-white/[0.06] transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
         </div>
 
-        {/* Meta */}
-        <div className="shrink-0 px-5 py-3 border-b border-border/10 dark:border-white/5 grid grid-cols-2 gap-x-6 gap-y-2">
-          {[
-            ["Fecha",    fmtDate(nc.created_at)],
-            ["Factura",  sale.invoice_number || (sale.id ? `#${sale.id}` : "—")],
-            ["Cliente",  sale.Customer?.name || "—"],
-            ["CI/RIF",   sale.Customer?.rif  || "—"],
-            ["Empleado", nc.Employee?.full_name || "—"],
-            ["Motivo",   nc.reason || "—"],
-          ].map(([label, val]) => (
-            <div key={label}>
-              <p className="text-[12px] font-medium text-content-subtle dark:text-white/50">{label}</p>
-              <p className="text-[12px] font-semibold text-content dark:text-white truncate">{val}</p>
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5 pt-1 space-y-5">
+          {/* ── Cabecera: a quién y cuánto se le acreditó ── */}
+          <div className="rounded-xl bg-surface-2 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] px-4 py-3.5 flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[12px] text-content-subtle">Cliente</p>
+              <p className="text-[15px] font-semibold text-content dark:text-white truncate">{toNameCase(sale.Customer?.name) || "Sin cliente"}</p>
+              {sale.Customer?.rif && <p className="text-[12px] text-content-subtle tabular-nums">{sale.Customer.rif}</p>}
             </div>
-          ))}
-        </div>
+            <div className="text-right shrink-0">
+              <p className="text-[12px] text-content-subtle">Total acreditado</p>
+              <Money value={fmt(nc.total)} strike={anulada} className={`block text-[24px] font-bold tracking-tight leading-tight ${anulada ? "text-content-subtle" : "text-content dark:text-white"}`} />
+            </div>
+          </div>
 
-        {/* Items */}
-        <div className="flex-1 overflow-y-auto px-5 py-3">
-          <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-2">Productos devueltos</div>
-          <div className="rounded-xl border border-border/20 dark:border-white/5 overflow-hidden">
-            <div className="grid grid-cols-12 bg-surface-2 dark:bg-white/[0.03] px-3 py-2">
-              <span className="col-span-5 text-[11px] font-bold uppercase text-content-subtle dark:text-white/30">Producto</span>
-              <span className="col-span-2 text-[11px] font-bold uppercase text-content-subtle dark:text-white/30 text-center">Cant.</span>
-              <span className="col-span-2 text-[11px] font-bold uppercase text-content-subtle dark:text-white/30 text-right">P.Unit</span>
-              <span className="col-span-3 text-[11px] font-bold uppercase text-content-subtle dark:text-white/30 text-right">Subtotal</span>
-            </div>
-            {items.length === 0 ? (
-              <div className="px-3 py-4 text-center text-[12px] text-content-subtle dark:text-white/30">Sin líneas</div>
-            ) : items.map((i, idx) => (
-              <div key={idx} className="grid grid-cols-12 items-center px-3 py-2.5 border-t border-border/10 dark:border-white/5">
-                <div className="col-span-5 text-[12px] font-semibold text-content dark:text-white truncate">{i.name}</div>
-                <div className="col-span-2 text-center text-[12px] font-semibold text-content dark:text-white tabular-nums">{parseFloat(i.qty)}</div>
-                <div className="col-span-2 text-right text-[12px] text-content-subtle dark:text-white/40 tabular-nums">{fmt(i.price)}</div>
-                <div className="col-span-3 text-right text-[12px] font-bold text-content dark:text-white tabular-nums">{fmt(i.subtotal)}</div>
+          {/* ── Datos del documento ── */}
+          <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
+            {[
+              ["Fecha",   fmtDate(nc.created_at)],
+              ["Factura", sale.invoice_number || (sale.id ? `#${sale.id}` : "—")],
+              ["Registró", toNameCase(nc.Employee?.full_name) || "—"],
+            ].map(([label, val]) => (
+              <div key={label} className="min-w-0">
+                <dt className="text-[12px] text-content-subtle">{label}</dt>
+                <dd className="text-[13px] font-medium text-content dark:text-white tabular-nums truncate">{val}</dd>
               </div>
             ))}
+            {/* El motivo puede ser una frase: va a lo ancho, sin cortarse. */}
+            <div className="col-span-2 sm:col-span-3">
+              <dt className="text-[12px] text-content-subtle">Motivo</dt>
+              <dd className="text-[13px] font-medium text-content dark:text-white">{nc.reason || <span className="text-content-subtle/60">—</span>}</dd>
+            </div>
+          </dl>
+
+          {/* ── Productos devueltos: dos renglones por línea ── */}
+          <div>
+            <p className="text-[13px] font-semibold text-content dark:text-white mb-2">
+              Productos devueltos <span className="font-normal text-content-subtle">· {items.length}</span>
+            </p>
+            <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
+              {items.length === 0 ? (
+                <p className="px-3.5 py-6 text-center text-[13px] text-content-subtle">Sin líneas</p>
+              ) : items.map((i, idx) => (
+                <div key={idx} className="px-3.5 py-2.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-[13px] font-medium text-content dark:text-white min-w-0 truncate">{i.name}</span>
+                    <Money value={fmt(i.subtotal)} className="text-[13px] font-semibold text-content dark:text-white shrink-0" />
+                  </div>
+                  <div className="text-[12px] text-content-subtle tabular-nums mt-0.5">{parseFloat(i.qty)} × {fmt(i.price)}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Total + footer */}
-        <div className="shrink-0 px-5 py-4 border-t border-border/10 dark:border-white/5 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[12px] font-medium text-content-subtle dark:text-white/50">Total acreditado</p>
-            <p className="text-2xl font-bold text-warning tabular-nums">{fmt(nc.total)}</p>
-          </div>
+        {/* Acciones */}
+        <div className="shrink-0 px-5 py-4 border-t border-border/60 dark:border-white/[0.06] flex gap-2">
+          <button onClick={onClose} className="btn-outline h-11 px-5 rounded-lg text-[13px] font-medium">Cerrar</button>
           <button onClick={() => onPrint(nc)}
-            className="h-9 px-4 rounded-xl border border-brand-500/30 text-brand-500 text-[11px] font-bold hover:bg-brand-500 hover:text-black transition-all flex items-center gap-2">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            className="btn-accent flex-1 h-11 rounded-lg text-[14px] font-semibold inline-flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
-            Imprimir NC
+            Imprimir nota de crédito
           </button>
         </div>
       </div>
@@ -180,7 +188,7 @@ export default function NotasCreditoTab({ notify, fmtPrice }) {
     );
   };
 
-  const fmt = (n) => `${baseCurrency?.symbol || "Ref."}${Number(n || 0).toFixed(2)}`;
+  const fmt = (n) => `${baseCurrency?.symbol || "Ref."} ${Number(n || 0).toFixed(2)}`;
   const clientName = (r) => r.Sale?.Customer?.name || "—";
 
   const subheader = (

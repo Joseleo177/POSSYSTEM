@@ -61,23 +61,38 @@ export function printReceivablesReport(data, companyInfo, baseCurrency, activeCu
             <td class="td-center">${esc(c.invoice_count ?? 0)}</td>
             <td class="td-right td-total">${fmtP(c.balance)}</td>
             ${conBs ? `<td class="td-right td-bs">${fmtBs(c.balance)}</td>` : ""}
-            <td class="td-center ${critica ? "danger strong" : ""}">${dias == null ? "—" : `${dias} d`}</td>
+            <td class="td-right td-dias ${critica ? "danger strong" : ""}">${dias == null ? "—" : `${dias} ${dias === 1 ? "día" : "días"}`}</td>
         </tr>`;
     }).join("")
         : `<tr><td colspan="${conBs ? 7 : 6}" class="empty">Sin cuentas por cobrar pendientes</td></tr>`;
 
+    // Tramos de antigüedad, con la misma lectura que la pantalla: punto de color, monto y una
+    // barra con su parte del saldo. El color es señal y solo aparece si hay deuda en el tramo:
+    // "Más de 60 días: Ref. 0.00" en rojo alarmaba por nada.
+    const saldoCalle = parseFloat(s.total_balance || 0);
     const tramos = [
-        { label: "0 – 30 días",  monto: a.d0_30_amount,   cant: a.d0_30_count,   clase: "" },
-        { label: "31 – 60 días", monto: a.d31_60_amount,  cant: a.d31_60_count,  clase: "" },
-        { label: "Más de 60 días", monto: a.d60_plus_amount, cant: a.d60_plus_count, clase: "danger" },
+        { label: "0 a 30 días",    monto: a.d0_30_amount,    cant: a.d0_30_count,    tono: "neutro" },
+        { label: "31 a 60 días",   monto: a.d31_60_amount,   cant: a.d31_60_count,   tono: "ambar" },
+        { label: "Más de 60 días", monto: a.d60_plus_amount, cant: a.d60_plus_count, tono: "rojo" },
     ];
 
-    const tramosHtml = tramos.map(t => `
+    const tramosHtml = tramos.map(t => {
+        const monto = parseFloat(t.monto || 0);
+        const hay   = monto > 0.001;
+        const pct   = saldoCalle > 0 ? Math.min(100, (monto / saldoCalle) * 100) : 0;
+        const tono  = hay ? t.tono : "neutro";
+        const cant  = parseInt(t.cant || 0, 10);
+        return `
         <div class="kpi">
-            <div class="kpi-label">${esc(t.label)}</div>
-            <div class="kpi-value ${t.clase}">${fmtP(t.monto)}</div>
-            <div class="kpi-sub">${esc(t.cant ?? 0)} facturas${conBs ? ` · ${fmtBs(t.monto)}` : ""}</div>
-        </div>`).join("");
+            <div class="kpi-label"><span class="dot dot-${t.tono}"></span>${esc(t.label)}</div>
+            <div class="kpi-row">
+                <div class="kpi-value ${tono === "rojo" ? "danger" : ""}">${fmtP(monto)}</div>
+                <div class="kpi-pct">${pct.toFixed(1)}%</div>
+            </div>
+            <div class="bar"><div class="bar-fill bar-${tono}" style="width:${pct}%"></div></div>
+            <div class="kpi-sub">${cant} ${cant === 1 ? "factura" : "facturas"}${conBs && hay ? ` · ${fmtBs(monto)}` : ""}</div>
+        </div>`;
+    }).join("");
 
     const corte = fmtDate(new Date());
 
@@ -88,13 +103,23 @@ export function printReceivablesReport(data, companyInfo, baseCurrency, activeCu
     <!-- El navegador propone el título como nombre del archivo al "Guardar como PDF". -->
     <title>Cuentas por cobrar ${esc(corte)} - ${esc(storeName)}</title>
     <style>${REPORT_CSS}
-        .cli-name { font-weight: 700; color: #1a1a1a; }
+        .cli-name { font-weight: 600; color: #1a1a1a; }
         .cli-sub { font-size: 9px; color: #999; }
-        .td-tel, th.td-tel { width: 120px; color: #666; white-space: nowrap; }
-        .td-bs, th.td-bs { width: 120px; color: #555; }
+        .td-tel, th.td-tel { width: 110px; color: #666; white-space: nowrap; }
+        .td-bs, th.td-bs { width: 120px; color: #666; }
+        .td-dias, th.td-dias { width: 72px; color: #666; }
         /* Un fondo muy tenue, no un rojo pleno: la hoja se imprime a menudo en blanco y negro
            y un bloque oscuro dejaría la fila ilegible. */
         .row-critica td { background: #fdf3f3; }
+        .row-critica td:first-child { box-shadow: inset 3px 0 0 #d33; }
+
+        .kpi-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+        .kpi-pct { font-size: 9px; color: #999; }
+        .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+        .dot-neutro { background: #b5b5b5; } .dot-ambar { background: #f59e0b; } .dot-rojo { background: #ef4444; }
+        .bar { height: 4px; border-radius: 4px; background: #eee; margin: 7px 0 5px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 4px; }
+        .bar-neutro { background: #9a9a9a; } .bar-ambar { background: #f59e0b; } .bar-rojo { background: #ef4444; }
     </style>
 </head>
 <body>
@@ -113,7 +138,7 @@ export function printReceivablesReport(data, companyInfo, baseCurrency, activeCu
         </div>
         <div class="kpi">
             <div class="kpi-label">Saldo en calle</div>
-            <div class="kpi-value danger">${fmtP(s.total_balance)}</div>
+            <div class="kpi-value">${fmtP(s.total_balance)}</div>
             <div class="kpi-sub">${conBs ? fmtBs(s.total_balance) : "por cobrar"}</div>
         </div>
         <div class="kpi">
@@ -131,7 +156,7 @@ export function printReceivablesReport(data, companyInfo, baseCurrency, activeCu
     <div class="block-label">Antigüedad de la deuda</div>
     <div class="kpis">${tramosHtml}</div>
 
-    <div class="block-label">Deuda por cliente · ordenado por saldo</div>
+    <div class="block-label">Deuda por cliente <span class="muted">· de mayor a menor saldo</span></div>
     <table>
         <thead>
             <tr>
@@ -140,8 +165,8 @@ export function printReceivablesReport(data, companyInfo, baseCurrency, activeCu
                 <th class="td-tel">Teléfono</th>
                 <th class="td-center">Facturas</th>
                 <th class="td-right">Saldo</th>
-                ${conBs ? `<th class="td-right td-bs">Equivale a</th>` : ""}
-                <th class="td-center">Antigüedad</th>
+                ${conBs ? `<th class="td-right td-bs">En ${esc(symBs)}</th>` : ""}
+                <th class="td-right td-dias">Antigüedad</th>
             </tr>
         </thead>
         <tbody>${filasHtml}</tbody>
@@ -154,7 +179,7 @@ export function printReceivablesReport(data, companyInfo, baseCurrency, activeCu
                 <td class="td-center">${totalFacturas}</td>
                 <td class="td-right">${fmtP(totalSaldo)}</td>
                 ${conBs ? `<td class="td-right td-bs">${fmtBs(totalSaldo)}</td>` : ""}
-                <td class="td-center"></td>
+                <td class="td-right td-dias"></td>
             </tr>
         </tfoot>` : ""}
     </table>

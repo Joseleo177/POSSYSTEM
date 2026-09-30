@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { api } from "../../services/api";
-import { resolveImageUrl } from "../../helpers";
+import { resolveImageUrl, toNameCase } from "../../helpers";
 import { Button } from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
 import MethodBankLogo from "../cobro/MethodBankLogo";
+import StatusMark, { ACTIVE_STATUS } from "../ui/StatusMark";
+import { ledgerRow, stopRow, LedgerEmpty, RowIcon } from "../ui/Ledger";
 
 const EMPTY_BANK = { name: "", code: "" };
 const EMPTY_IMAGE = { file: null, current: null, clearImage: false };
@@ -65,126 +67,91 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
     }
   };
 
+  const canManage = can("journals.manage");
+  const abrirNuevo  = () => { setBankEditId(null); setBankForm(EMPTY_BANK); setImage(EMPTY_IMAGE); setShowModal(true); };
+  const abrirEditar = (b) => {
+    setBankEditId(b.id);
+    setBankForm({ name: b.name, code: b.code || "" });
+    setImage({ file: null, current: b.image_url || null, clearImage: false });
+    setShowModal(true);
+  };
+  const cuentas = (b) => {
+    const n = b.journals_count ?? 0;
+    return n === 0 ? "Sin diarios" : `${n} ${n === 1 ? "diario" : "diarios"}`;
+  };
+
+  // Acciones siempre a la vista: en una tablet no hay hover que las descubra.
+  const acciones = (b) => canManage ? (
+    <div className="flex items-center justify-end gap-0.5" onClick={stopRow}>
+      <RowIcon icon="edit" title="Editar banco" onClick={() => abrirEditar(b)} />
+      <RowIcon icon="power" title={b.active ? "Desactivar" : "Activar"} onClick={() => toggleBank(b)} />
+      <RowIcon icon="trash" tone="danger" title="Eliminar banco" onClick={() => setDeleteConfirm(b)} />
+    </div>
+  ) : null;
+
   return (
-    <>
-      <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex items-center justify-between gap-3">
-        <span className="text-[12px] font-bold text-content-subtle dark:text-white/30">
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="shrink-0 px-4 py-2.5 border-b border-border/60 dark:border-white/[0.06] flex items-center justify-between gap-3">
+        <span className="text-[13px] text-content-subtle">
           {banks.length} banco{banks.length !== 1 ? "s" : ""}
         </span>
-        {can("journals.manage") && (
-          <Button onClick={() => { setBankEditId(null); setBankForm(EMPTY_BANK); setImage(EMPTY_IMAGE); setShowModal(true); }} className="h-8 px-3 text-[11px] shadow-none">
-            + Vincular banco
-          </Button>
-        )}
+        {canManage && <Button onClick={abrirNuevo}>+ Vincular banco</Button>}
       </div>
 
-      <div className="card-premium overflow-auto flex-1">
-      {banks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 opacity-20">
-          <div className="text-xs font-bold">Sin bancos registrados</div>
-        </div>
-      ) : (
-        <table className="table-pos min-w-[680px]">
-            <thead className="sticky top-0 z-10">
-              <tr>
-                <th className="w-12" />
-                {["Nombre del Banco", "Código", "Cuentas / Diarios", "Estado", can("journals.manage") && "Acciones"].filter(Boolean).map(h => (
-                  <th key={h} className={h === "Acciones" ? "text-right pr-6" : h === "Cuentas / Diarios" || h === "Estado" ? "text-center" : "text-left"}>
-                    {h}
-                  </th>
-                ))}
+      {/* ── Libro (escritorio) ── */}
+      <div className="hidden md:block flex-1 overflow-auto">
+        <table className="table-ledger min-w-[640px]">
+          <thead className="sticky top-0 z-10">
+            <tr>
+              <th className="pl-4">Banco</th>
+              <th>Diarios</th>
+              <th>Estado</th>
+              <th className="pr-4 w-px"><span className="sr-only">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {banks.length === 0 ? (
+              <LedgerEmpty cols={4} title="Sin bancos" hint="Vincula los bancos donde la empresa tiene cuentas." />
+            ) : banks.map(b => (
+              <tr key={b.id} {...ledgerRow(canManage ? () => abrirEditar(b) : undefined)}>
+                <td className="pl-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <MethodBankLogo src={b.image_url} size={32} />
+                    <div className="min-w-0">
+                      <div className={`text-[13px] font-semibold truncate ${b.active ? "text-content dark:text-white" : "text-content-subtle"}`}>{toNameCase(b.name)}</div>
+                      <div className="text-[12px] text-content-subtle tabular-nums">{b.code ? `Código ${b.code}` : "Sin código"}</div>
+                    </div>
+                  </div>
+                </td>
+                <td><span className="text-[13px] text-content-subtle tabular-nums">{cuentas(b)}</span></td>
+                <td><StatusMark status={b.active ? "activo" : "inactivo"} map={ACTIVE_STATUS} /></td>
+                <td className="pr-4 whitespace-nowrap cursor-default">{acciones(b)}</td>
               </tr>
-            </thead>
-            <tbody>
-              {banks.map((b) => {
-                const isEdit = bankEditId === b.id;
-                return (
-                  <tr key={b.id} className="group">
-                    <td>
-                      <MethodBankLogo src={b.image_url} size={30} />
-                    </td>
-                    <td>
-                      {isEdit ? (
-                        <input
-                          autoFocus
-                          value={bankForm.name}
-                          onChange={e => setBankForm(p => ({ ...p, name: e.target.value }))}
-                          className="input"
-                          onKeyDown={e => e.key === "Enter" && saveBank()}
-                        />
-                      ) : (
-                        <span className="text-[12px] font-bold text-content dark:text-white tracking-tight">{b.name}</span>
-                      )}
-                    </td>
-                    <td>
-                      {isEdit ? (
-                        <input
-                          value={bankForm.code}
-                          onChange={e => setBankForm(p => ({ ...p, code: e.target.value }))}
-                          placeholder="0102"
-                          className="input w-28"
-                          onKeyDown={e => e.key === "Enter" && saveBank()}
-                        />
-                      ) : (
-                        <span className="badge badge-neutral shadow-none">
-                          {b.code || "—"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="text-center">
-                      <span className="text-brand-500 font-bold text-[12px]">{b.journals_count ?? 0}</span>
-                    </td>
-                    <td className="text-center">
-                      <span className={`badge shadow-none ${b.active ? "badge-success" : "badge-danger"}`}>
-                        {b.active ? "Activo" : "Inactivo"}
-                      </span>
-                    </td>
-                    {can("journals.manage") && (
-                      <td className="text-right pr-6">
-                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {isEdit ? (
-                            <>
-                              <button onClick={saveBank} disabled={bankSaving} className="p-2 rounded-xl transition-all text-content-subtle hover:text-success hover:bg-success/10 active:scale-90" title="Guardar">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-                              </button>
-                              <button onClick={closeForm} className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90" title="Cancelar">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => { setBankEditId(b.id); setBankForm({ name: b.name, code: b.code || "" }); setImage({ file: null, current: b.image_url || null, clearImage: false }); setShowModal(true); }}
-                                className="p-2 rounded-xl transition-all text-content-subtle hover:text-warning hover:bg-warning/10 active:scale-90"
-                                title="Editar"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                              </button>
-                              <button
-                                onClick={() => toggleBank(b)}
-                                className="p-2 rounded-xl transition-all text-content-subtle hover:text-info hover:bg-info/10 active:scale-90"
-                                title={b.active ? "Desactivar" : "Activar"}
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M18.364 5.636a9 9 0 11-12.728 0M12 9v4" /></svg>
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirm(b)}
-                                className="p-2 rounded-xl transition-all text-content-subtle hover:text-danger hover:bg-danger/10 active:scale-90"
-                                title="Eliminar"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-      )}
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── Tarjetas (teléfono) ── */}
+      <div className="md:hidden flex-1 overflow-y-auto px-3 py-3 space-y-2">
+        {banks.length === 0 ? (
+          <div className="py-16 text-center px-6">
+            <div className="text-[14px] font-semibold text-content dark:text-white">Sin bancos</div>
+            <div className="text-[13px] text-content-subtle mt-1">Vincula los bancos donde la empresa tiene cuentas.</div>
+          </div>
+        ) : banks.map(b => (
+          <div key={b.id} className="rounded-xl border border-border/70 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] pl-3.5 pr-1.5 py-3 flex items-center gap-3">
+            <MethodBankLogo src={b.image_url} size={32} />
+            <div className="min-w-0 flex-1">
+              <div className={`text-[14px] font-semibold truncate ${b.active ? "text-content dark:text-white" : "text-content-subtle"}`}>{toNameCase(b.name)}</div>
+              <div className="flex items-center gap-2 text-[12px] text-content-subtle tabular-nums">
+                <span className="truncate">{b.code ? `${b.code} · ` : ""}{cuentas(b)}</span>
+                {!b.active && <StatusMark status="inactivo" map={ACTIVE_STATUS} />}
+              </div>
+            </div>
+            {acciones(b)}
+          </div>
+        ))}
       </div>
 
       {/* Modal: Vincular / editar banco */}
@@ -254,6 +221,6 @@ export default function BancosTab({ notify, can, banks, loadBanks }) {
         type="danger"
         confirmText="Sí, eliminar"
       />
-    </>
+    </div>
   );
 }

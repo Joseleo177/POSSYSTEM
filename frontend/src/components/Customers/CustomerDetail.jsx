@@ -6,6 +6,8 @@ import Money from "../ui/Money";
 import { useApp } from "../../context/AppContext";
 import SaleDetailModal from "./SaleDetailModal";
 import BulkPaymentModal from "./BulkPaymentModal";
+import PurchaseDetailModal from "../Contabilidad/PurchaseDetailModal";
+import PurchasePaymentModal from "../purchases/PurchasePaymentModal";
 import JournalPickerButton from "../cobro/JournalPickerButton";
 import CustomSelect from "../ui/CustomSelect";
 import Modal from "../ui/Modal";
@@ -54,8 +56,11 @@ const Dato = ({ label, value, sub }) => (
 );
 
 export default function CustomerDetail({ detail, pending, paid, paidTotal, paidPage, onPaidPageChange, onClose, onPay, onRefresh }) {
-    const { baseCurrency, notify, activeJournals, activeCurrencies, triggerAction, employee } = useApp();
+    const { baseCurrency, notify, activeJournals, activeCurrencies, employee, can } = useApp();
     const [selectedSaleId, setSelectedSaleId] = useState(null);
+    // Proveedor: la compra que se está viendo y la que se está pagando (una o varias).
+    const [selectedPurchaseId, setSelectedPurchaseId] = useState(null);
+    const [payPurchases, setPayPurchases] = useState(null);
     // Cobro conjunto: el cliente arrastra cuentas viejas, compra hoy y paga todo de una vez.
     // Se marcan las facturas y se cobran con un solo monto (ver BulkPaymentModal).
     const [checkedIds, setCheckedIds] = useState([]);
@@ -145,12 +150,15 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
 
     const pendingSales = pending || [];
     const paidSales    = paid || [];
-    // Las cuentas de un proveedor se pagan desde Compras, no acá.
     const esCliente    = detail.type !== "proveedor";
+    // Las compras se ven y se pagan desde aquí mismo, igual que las facturas de un cliente.
+    // Antes la ficha se cerraba y saltaba al módulo de Compras: se perdía el contexto del
+    // proveedor para algo que es consultar un documento o registrar un pago.
+    const puedeCobrar  = esCliente || can("purchases.pay");
     // Un borrador sin correlativo se puede cobrar suelto (el cobro le asigna el número), pero
     // no entra al cobro conjunto: mezclar la asignación de correlativos con el reparto de un
     // monto es pedirle a la caja que revise dos cosas a la vez.
-    const cobrables    = esCliente ? pendingSales.filter(s => parseFloat(s.balance || 0) > 0.10) : [];
+    const cobrables    = puedeCobrar ? pendingSales.filter(s => parseFloat(s.balance || 0) > 0.10) : [];
     const seleccionadas = cobrables.filter(s => checkedIds.includes(s.id));
     const totalSeleccionado = seleccionadas.reduce((acc, s) => acc + parseFloat(s.balance || 0), 0);
     // El cobro conjunto genera un solo movimiento de caja: mezclar facturas de sucursales
@@ -160,7 +168,9 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
         const sale = cobrables.find(s => s.id === id);
         if (!checkedIds.includes(id) && sale && seleccionadas.length > 0
             && seleccionadas[0].warehouse_id !== sale.warehouse_id) {
-            notify("El cobro conjunto solo admite facturas de la misma sucursal", "err");
+            notify(esCliente
+                ? "El cobro conjunto solo admite facturas de la misma sucursal"
+                : "El pago conjunto solo admite compras de la misma sucursal", "err");
             return;
         }
         setCheckedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
@@ -326,19 +336,20 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                     {seleccionadas.length
                                         ? `${seleccionadas.length} de ${cobrables.length} marcadas`
                                         : cobrables.length > 1
-                                            ? "Marca varias para cobrarlas de una vez"
+                                            ? (esCliente ? "Marca varias para cobrarlas de una vez" : "Marca varias para pagarlas de una vez")
                                             : `${pendingSales.length} ${pendingSales.length === 1 ? "documento abierto" : "documentos abiertos"}`}
                                 </p>
                             </div>
 
-                            {/* Cobro conjunto: el botón aparece al marcar. Vacío y deshabilitado
-                                solo ocupaba la cabecera con un aviso que ya da el subtítulo. */}
+                            {/* Cobro (o pago) conjunto: el botón aparece al marcar. Vacío y
+                                deshabilitado solo ocupaba la cabecera con un aviso que ya da el
+                                subtítulo. */}
                             {seleccionadas.length > 0 && (
                                 <button
-                                    onClick={() => setShowBulk(true)}
+                                    onClick={() => esCliente ? setShowBulk(true) : setPayPurchases(seleccionadas)}
                                     className="h-9 px-3.5 rounded-lg text-[13px] font-semibold btn-accent active:scale-[0.98] print-hidden whitespace-nowrap tabular-nums shrink-0"
                                 >
-                                    Cobrar {fmtPrice(totalSeleccionado)}
+                                    {esCliente ? "Cobrar" : "Pagar"} {fmtPrice(totalSeleccionado)}
                                 </button>
                             )}
                         </div>
@@ -346,14 +357,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             {pendingSales.map(sale => {
                                 const marcada = checkedIds.includes(sale.id);
                                 const dias = diasVencida(sale);
-                                const abrir = () => {
-                                    if (!esCliente) {
-                                        onClose();
-                                        triggerAction("Compras", "compras:abrir:" + sale.id);
-                                    } else {
-                                        setSelectedSaleId(sale.id);
-                                    }
-                                };
+                                const abrir = () => esCliente ? setSelectedSaleId(sale.id) : setSelectedPurchaseId(sale.id);
                                 const enVenta = esCliente ? fmtSale(sale, sale.balance) : fmtPrice(sale.balance);
                                 const enBase  = fmtPrice(sale.balance);
                                 const abonado = parseFloat(sale.amount_paid || 0) > 0.001;
@@ -379,7 +383,9 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                                 checked={marcada}
                                                 disabled={!esCobrable || otraSucursal}
                                                 onChange={() => toggleChecked(sale.id)}
-                                                title={!esCobrable ? "Sin saldo por cobrar" : otraSucursal ? "El cobro conjunto solo admite facturas de la misma sucursal" : "Incluir en el cobro conjunto"}
+                                                title={!esCobrable ? (esCliente ? "Sin saldo por cobrar" : "Sin saldo por pagar")
+                                                    : otraSucursal ? (esCliente ? "El cobro conjunto solo admite facturas de la misma sucursal" : "El pago conjunto solo admite compras de la misma sucursal")
+                                                    : (esCliente ? "Incluir en el cobro conjunto" : "Incluir en el pago conjunto")}
                                             />
                                         );
                                     })()}
@@ -408,20 +414,18 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                         {enVenta !== enBase && <Money value={enBase} className="text-[11px] text-content-subtle shrink-0 leading-[18px]" />}
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={e => {
-                                            e.stopPropagation();
-                                            if (!esCliente) {
-                                                onClose();
-                                                triggerAction("Compras", "compras:abrir:" + sale.id);
-                                            } else {
-                                                onPay(sale);
-                                            }
-                                        }}
-                                        className="h-8 px-3 rounded-lg text-[13px] font-semibold btn-outline active:scale-[0.98] shrink-0 print-hidden"
-                                    >
-                                        {esCliente ? "Cobrar" : "Pagar"}
-                                    </button>
+                                    {puedeCobrar && (
+                                        <button
+                                            onClick={e => {
+                                                e.stopPropagation();
+                                                if (esCliente) onPay(sale);
+                                                else setPayPurchases([sale]);
+                                            }}
+                                            className="h-8 px-3 rounded-lg text-[13px] font-semibold btn-outline active:scale-[0.98] shrink-0 print-hidden"
+                                        >
+                                            {esCliente ? "Cobrar" : "Pagar"}
+                                        </button>
+                                    )}
                                 </div>
                                 );
                             })}
@@ -452,14 +456,8 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                     ) : (
                         <div className={`divide-y divide-border/50 dark:divide-white/[0.05] ${SCROLL_LIST}`}>
                             {paidSales.map(sale => (
-                                <div key={sale.id} className="px-5 py-3 flex items-center gap-3 hover:bg-surface-2/70 dark:hover:bg-white/[0.02] transition-colors cursor-pointer" onClick={() => {
-                                    if (!esCliente) {
-                                        onClose();
-                                        triggerAction("Compras", "compras:abrir:" + sale.id);
-                                    } else {
-                                        setSelectedSaleId(sale.id);
-                                    }
-                                }}>
+                                <div key={sale.id} className="px-5 py-3 flex items-center gap-3 hover:bg-surface-2/70 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
+                                    onClick={() => esCliente ? setSelectedSaleId(sale.id) : setSelectedPurchaseId(sale.id)}>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-[13px] font-semibold text-content dark:text-white tabular-nums leading-tight truncate">
                                             {!esCliente ? `Compra #${sale.id}` : (sale.invoice_number || `Factura #${sale.id}`)}
@@ -498,6 +496,24 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
 
         {selectedSaleId && (
             <SaleDetailModal saleId={selectedSaleId} onClose={() => setSelectedSaleId(null)} />
+        )}
+
+        {/* Proveedor: detalle de la compra (con su propio botón de pago) y el pago directo,
+            suelto o conjunto. Al pagar se recarga la ficha para que el saldo cuadre. */}
+        {selectedPurchaseId && (
+            <PurchaseDetailModal
+                purchaseId={selectedPurchaseId}
+                onClose={() => setSelectedPurchaseId(null)}
+                onChanged={() => onRefresh?.()}
+            />
+        )}
+
+        {payPurchases?.length > 0 && (
+            <PurchasePaymentModal
+                purchases={payPurchases.map(p => ({ ...p, supplier_name: detail.name }))}
+                onClose={() => setPayPurchases(null)}
+                onSuccess={() => { setPayPurchases(null); setCheckedIds([]); onRefresh?.(); }}
+            />
         )}
 
         {showBulk && seleccionadas.length > 0 && (
