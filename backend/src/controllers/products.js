@@ -48,6 +48,7 @@ module.exports = {
         rows: req.body?.rows,
         warehouse_id: wid,
         company_id: req.employee?.company_id ?? null,
+        employee_id: req.employee?.id ?? null,
       });
       broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
       res.json({ ok: true, ...result });

@@ -25,7 +25,7 @@ async function getReceivables({ warehouse_id, customer_id, search }, req) {
   const rep = {};
   const where = [];
 
-  if (company_id && !req.is_superuser) { where.push('s.company_id = :cid'); rep.cid = company_id; }
+  if (company_id) { where.push('s.company_id = :cid'); rep.cid = company_id; }
 
   // Mismo recorte que el resto de las ventas: las de sus sucursales; con una elegida, esa.
   if (warehouse_id) {

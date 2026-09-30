@@ -9,8 +9,7 @@ const getSupabaseStorage = () => require("../config/supabase");
 const getAll = async (req, res) => {
   try {
     const company_id = req.employee?.company_id ?? null;
-    const isSuperuser = !!req.is_superuser;
-    const where = (!isSuperuser && company_id) ? { company_id } : {};
+    const where = company_id ? { company_id } : {};
     const rows = await Setting.findAll({ where, order: [['key', 'ASC']] });
     const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
     if (settings.logo_filename) {

@@ -13,7 +13,7 @@ async function getPayables({ warehouse_id, supplier_id, search }, req) {
   const where = [];
 
   // SQL crudo: el filtro por empresa de los hooks no llega hasta acá.
-  if (company_id && !req.is_superuser) { where.push('p.company_id = :cid'); rep.cid = company_id; }
+  if (company_id) { where.push('p.company_id = :cid'); rep.cid = company_id; }
 
   // Mismo recorte que el listado de compras: las de sus almacenes, más las órdenes sin
   // destino todavía, que no son de ninguna sucursal. Con sucursal elegida, solo esa.

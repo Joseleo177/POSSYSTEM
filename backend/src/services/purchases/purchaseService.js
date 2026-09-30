@@ -10,8 +10,7 @@ const { Op } = Sequelize;
 
 async function getAll({ limit = 50, offset = 0, search, status, order_status, date_from, date_to, warehouse_id }, req) {
   const company_id  = req.employee?.company_id ?? null;
-  const isSuperuser = !!req.is_superuser;
-  const where = (!isSuperuser && company_id) ? { company_id } : {};
+  const where = company_id ? { company_id } : {};
 
   // Cada quien ve las órdenes dirigidas a sus almacenes. Los borradores sin destino elegido
   // quedan visibles: todavía no pertenecen a ninguna sucursal.

@@ -1,16 +1,20 @@
 import { useState } from "react";
 import ReceiptInfo from "./ReceiptInfo";
 import ProductSelectorModal from "./ProductSelectorModal";
-import EditablePriceInput from "../ui/EditablePriceInput";
+import PurchaseItemsTable from "./PurchaseItemsTable";
 import { useApp } from "../../context/AppContext";
 
 const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
+// Orden de compra nueva. La tabla es la misma del detalle (PurchaseItemsTable): una orden
+// recién creada y una en borrador se editan igual, con los mismos campos y el mismo lápiz
+// para reabrir la línea en el selector.
 export default function PurchaseForm({ state }) {
     const { items, removeItem, updateItem, grandTotal, savePurchase, loading, editingDraftId, selectedWarehouseId,
             receivingMode, setReceivingMode } = state;
     const { baseCurrency } = useApp();
     const [modalOpen, setModalOpen] = useState(false);
+    const [editing, setEditing] = useState(null);
 
     // Moneda y tasa con las que se CARGA la factura del proveedor. Viven en el hook porque se
     // guardan con la orden (columnas currency_id/exchange_rate) y se eligen en la cabecera,
@@ -19,230 +23,164 @@ export default function PurchaseForm({ state }) {
     const { invoiceCurrency, invoiceRate } = state;
     const invoiceSym   = invoiceCurrency ? (invoiceCurrency.symbol || invoiceCurrency.code) : (baseCurrency?.symbol || "Ref.");
     const inInvoiceCur = invoiceRate > 1;
-    // Los montos de los ítems viven en base; para pintarlos en la moneda de la factura se
-    // multiplican, y lo que se teclea se divide antes de guardarlo.
-    const toInvoice = (base) => (parseFloat(base) || 0) * invoiceRate;
-    const fmtInvoice = (base) => `${invoiceSym} ${fmt2(toInvoice(base))}`;
 
-    const handleAdd = (item) => {
-        state.addItemFromModal(item);
+    // La tabla compartida lee los datos planos (como vienen del servidor); las líneas de la
+    // orden nueva los traen dentro de `product`.
+    const filas = items.map(i => ({
+        ...i,
+        product_name: i.product_name ?? i.product?.name,
+        unit: i.unit ?? i.product?.unit,
+        sellable: i.sellable ?? i.product?.sellable,
+    }));
+
+    const abrirEdicion = (key) => {
+        const it = items.find(i => i.key === key);
+        if (!it) return;
+        // El selector espera la línea con los datos del producto planos.
+        setEditing({ ...it, product_id: it.product?.id, product_name: it.product?.name, unit: it.product?.unit, stock: it.product?.stock, sellable: it.product?.sellable });
     };
 
+    const handleAdd = (item) => {
+        if (editing) {
+            updateItem(editing.key, { ...item, key: editing.key, product: { ...editing.product, ...item.product } });
+            setEditing(null);
+        } else {
+            state.addItemFromModal(item);
+        }
+    };
+
+    const sinAlmacen = !selectedWarehouseId;
+
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
             <ReceiptInfo state={state} />
 
-            {/* Items de la orden */}
-            <div className="card-premium !p-0 overflow-hidden">
-                <div className="px-4 py-3 bg-surface-2/50 dark:bg-white/[0.03] border-b border-border/10 dark:border-white/5 flex items-center justify-between gap-3">
-                    <div>
-                        <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">Productos</div>
-                        {items.length > 0 && (
-                            <div className="text-[11px] font-semibold text-content-subtle dark:text-white/40 mt-0.5">{items.length} {items.length === 1 ? "producto" : "productos"} en la orden</div>
-                        )}
+            <div className="bg-surface dark:bg-white/[0.04] rounded-2xl border border-border/60 dark:border-white/[0.06] shadow-card dark:shadow-none overflow-hidden">
+                <div className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <p className="text-[14px] font-semibold text-content dark:text-white">Productos de la orden</p>
+                        <p className="text-[12px] text-content-subtle">
+                            {items.length ? `${items.length} ${items.length === 1 ? "producto" : "productos"}` : "Todavía no hay productos"}
+                        </p>
                     </div>
-                    <button
-                        onClick={() => selectedWarehouseId && setModalOpen(true)}
-                        disabled={!selectedWarehouseId}
-                        title={!selectedWarehouseId ? "Selecciona primero el almacén destino" : undefined}
-                        className={`h-8 px-4 rounded-xl border text-[12px] font-bold flex items-center gap-2 transition-all active:scale-95 ${
-                            selectedWarehouseId
-                                ? "bg-brand-500/10 text-brand-500 border-brand-500/20 hover:bg-brand-500/20"
-                                : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/30 dark:border-white/10 cursor-not-allowed"
-                        }`}
-                    >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Agregar producto
-                    </button>
+                    {items.length > 0 && (
+                        <button
+                            onClick={() => !sinAlmacen && setModalOpen(true)}
+                            disabled={sinAlmacen}
+                            title={sinAlmacen ? "Selecciona primero el almacén destino" : undefined}
+                            className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5 whitespace-nowrap shrink-0 active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4" /></svg>
+                            Agregar<span className="hidden sm:inline"> producto</span>
+                        </button>
+                    )}
                 </div>
 
                 {items.length > 0 ? (
-                    <div className="overflow-x-auto">
-                        <table className="table-pos min-w-[720px]">
-                            <thead>
-                                <tr>
-                                    <th className="text-left">Producto</th>
-                                    <th className="text-left">Presentación</th>
-                                    <th className="text-center">Cant.</th>
-                                    <th className="text-center">
-                                        Costo×Emb.{inInvoiceCur && <span className="ml-1 text-brand-500/70">({invoiceSym})</span>}
-                                    </th>
-                                    <th className="text-right">P.Venta</th>
-                                    <th className="text-right">Subtotal</th>
-                                    <th className="w-12"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/20 dark:divide-white/5">
-                                {items.map(item => (
-                                    <tr key={item.key} className="group hover:bg-surface-2/30 dark:hover:bg-white/[0.02] transition-colors">
-                                        <td>
-                                            <div className="font-medium text-xs text-content dark:text-white tracking-tight">{item.product?.name}</div>
-                                            {item.lot_number && (
-                                                <div className="text-[10px] font-semibold text-warning/70 uppercase mt-0.5">L: {item.lot_number}</div>
-                                            )}
-                                        </td>
-                                        <td className="text-[11px] text-content-subtle dark:text-white/40 font-medium uppercase whitespace-nowrap">
-                                            {item.package_unit} × {item.package_unit?.toLowerCase() === "unidad" ? "1" : item.package_size}
-                                        </td>
-                                        <td className="text-center">
-                                            <div className="flex justify-center">
-                                                <input
-                                                    type="text"
-                                                    inputMode="numeric"
-                                                    value={item.package_qty}
-                                                    onChange={e => updateItem(item.key, { package_qty: e.target.value })}
-                                                    className="w-14 text-center text-xs font-semibold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-content dark:text-white"
-                                                />
-                                            </div>
-                                        </td>
-                                        <td className="text-center">
-                                            <div className="flex flex-col items-center gap-0.5">
-                                                {/* Lo tecleado está en la moneda de la factura; al guardar se
-                                                    divide por la tasa, porque la orden vive en moneda base. */}
-                                                <EditablePriceInput
-                                                    value={inInvoiceCur ? toInvoice(item.package_price) : (parseFloat(item.package_price) || 0)}
-                                                    decimals={inInvoiceCur ? 2 : 5}
-                                                    onChange={raw => updateItem(item.key, {
-                                                        package_price: inInvoiceCur ? (parseFloat(raw) || 0) / invoiceRate : raw,
-                                                    })}
-                                                    className="w-28 p-0 text-center text-xs font-semibold tabular-nums bg-transparent border-b border-border/30 dark:border-white/10 focus:border-brand-500 dark:focus:border-brand-500 focus:outline-none text-info"
-                                                />
-                                                {inInvoiceCur && parseFloat(item.package_price) > 0 && (
-                                                    <span className="text-[12px] font-semibold tabular-nums text-content-subtle dark:text-white/45">
-                                                        ≈ Ref. {fmt2(item.package_price)}
-                                                    </span>
-                                                )}
-                                                {item.unit_cost > 0 && (
-                                                    <span className="text-[12px] font-semibold tabular-nums text-content-subtle dark:text-white/45">
-                                                        unit: Ref. {fmt2(item.unit_cost)}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="text-right text-[11px] font-semibold tabular-nums text-success">
-                                            {item.sale_price > 0
-                                                ? (inInvoiceCur ? fmtInvoice(item.sale_price) : `Ref. ${fmt2(item.sale_price)}`)
-                                                : "—"}
-                                        </td>
-                                        <td className="text-right text-xs font-bold tabular-nums text-warning">
-                                            {item.subtotal > 0 ? (
-                                                inInvoiceCur ? (
-                                                    <>
-                                                        <div>{fmtInvoice(item.subtotal)}</div>
-                                                        <div className="text-[12px] font-semibold text-content-subtle dark:text-white/45">≈ Ref. {fmt2(item.subtotal)}</div>
-                                                    </>
-                                                ) : `Ref. ${fmt2(item.subtotal)}`
-                                            ) : "—"}
-                                        </td>
-                                        <td className="text-center">
-                                            <button
-                                                onClick={() => removeItem(item.key)}
-                                                className="p-1.5 rounded-lg text-danger opacity-0 group-hover:opacity-100 hover:bg-danger/10 transition-all active:scale-95"
-                                            >
-                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                                                </svg>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                    <PurchaseItemsTable
+                        items={filas}
+                        orderStatus="borrador"
+                        onUpdate={updateItem}
+                        onDelete={removeItem}
+                        onEdit={abrirEdicion}
+                        invoiceRate={invoiceRate}
+                        invoiceSym={invoiceSym}
+                    />
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-10 gap-3 text-content-subtle dark:text-white/20">
-                        <svg className="w-10 h-10 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                        </svg>
-                        <div className="text-[12px] font-bold text-center opacity-40">
-                            Sin productos.<br />Usa el botón para agregar.
+                    // Vacío: el botón de agregar va al centro, que es lo único que se puede hacer.
+                    <div className="border-t border-border/60 dark:border-white/[0.06] py-14 px-6 flex flex-col items-center text-center">
+                        <div className="w-12 h-12 rounded-2xl bg-surface-2 dark:bg-white/[0.04] border border-border/70 dark:border-white/[0.08] flex items-center justify-center text-content-subtle">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                         </div>
+                        <p className="mt-4 text-[15px] font-semibold text-content dark:text-white">Agrega lo que vas a comprar</p>
+                        <p className="mt-1 text-[13px] text-content-subtle max-w-sm">
+                            {sinAlmacen
+                                ? "Primero elige el almacén al que va a llegar la mercancía."
+                                : "Busca cada producto, indica cómo viene (bulto, caja…) y a cuánto lo compraste."}
+                        </p>
+                        <button
+                            onClick={() => setModalOpen(true)}
+                            disabled={sinAlmacen}
+                            className="mt-5 btn-accent h-10 px-5 rounded-lg text-[13px] font-semibold flex items-center gap-2 active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4" /></svg>
+                            Agregar producto
+                        </button>
                     </div>
                 )}
 
-                {/* Modo recepción. Va pegado al botón de guardar porque cambia lo que ese
-                    botón hace: con el interruptor puesto, guardar mete la mercancía al
-                    inventario en vez de solo anotarla. Para cuando el producto está en cero
-                    en el estante y no hay tiempo de teclear la factura completa. */}
+                {/* Pie: modo recepción, total y guardar. El modo va pegado al botón porque cambia
+                    lo que ese botón hace: con el interruptor puesto, guardar mete la mercancía al
+                    inventario en vez de solo anotarla. */}
                 {items.length > 0 && (
-                    <div className={`px-5 py-3 border-t transition-colors ${receivingMode
-                        ? "border-brand-500/20 bg-brand-500/[0.06]"
-                        : "border-border/20 dark:border-white/5 bg-surface-2/30 dark:bg-white/[0.02]"}`}>
-                        <button
-                            type="button"
-                            onClick={() => setReceivingMode?.(!receivingMode)}
-                            className="w-full flex items-start gap-3 text-left group"
-                        >
-                            <span className={`mt-0.5 w-9 h-5 shrink-0 rounded-full p-0.5 transition-colors ${receivingMode ? "bg-brand-500" : "bg-content-subtle/30 dark:bg-white/15"}`}>
-                                <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${receivingMode ? "translate-x-4" : ""}`} />
-                            </span>
-                            <span className="min-w-0">
-                                <span className={`block text-[12px] font-bold ${receivingMode ? "text-brand-500" : "text-content-subtle dark:text-white/40 group-hover:text-content dark:group-hover:text-white/70"}`}>
-                                    Ir recibiendo
+                    <div className="px-5 py-4 border-t border-border/60 dark:border-white/[0.06] bg-surface-2/60 dark:bg-white/[0.015] flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div className="min-w-0 max-w-xl">
+                            <button
+                                type="button"
+                                onClick={() => setReceivingMode?.(!receivingMode)}
+                                aria-pressed={receivingMode}
+                                className="flex items-start gap-3 text-left"
+                            >
+                                <span className={`mt-0.5 w-9 h-5 shrink-0 rounded-full p-0.5 transition-colors ${receivingMode ? "bg-brand-500" : "bg-content-subtle/30 dark:bg-white/15"}`}>
+                                    <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${receivingMode ? "translate-x-4" : ""}`} />
                                 </span>
-                                <span className="block text-[11px] font-semibold text-content-subtle dark:text-white/35 mt-0.5 leading-snug">
-                                    {receivingMode
-                                        ? "Al guardar, cada producto entra al stock de una vez. La orden queda abierta para seguir cargándola."
-                                        : "La mercancía entra al stock solo cuando le des a “Recibir mercancía”."}
+                                <span className="min-w-0">
+                                    <span className="block text-[13px] font-semibold text-content dark:text-white">Ir recibiendo{receivingMode ? " · activado" : ""}</span>
+                                    <span className="block text-[12px] text-content-subtle mt-0.5 leading-snug">
+                                        {receivingMode
+                                            ? "Al guardar, cada producto entra al stock de una vez. La orden queda abierta para seguir cargándola."
+                                            : "La mercancía entra al stock solo cuando le des a “Recibir mercancía”."}
+                                    </span>
                                 </span>
-                            </span>
-                        </button>
-                        {receivingMode && !selectedWarehouseId && (
-                            <p className="text-[11px] font-bold uppercase tracking-wide text-danger mt-2 pl-12">
-                                Elige el almacén de destino y el proveedor: sin eso la mercancía no puede entrar.
-                            </p>
-                        )}
-                    </div>
-                )}
-
-                {/* Footer con total y guardar */}
-                {items.length > 0 && (
-                    <div className="px-5 py-4 border-t border-border/20 dark:border-white/5 bg-surface-2/30 dark:bg-white/[0.02] flex items-center justify-between gap-4">
-                        <div>
-                            <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-0.5">Total estimado</div>
-                            {inInvoiceCur ? (
-                                <>
-                                    <div className="text-xl font-bold text-brand-500 tabular-nums">{fmtInvoice(grandTotal)}</div>
-                                    <div className="text-[12px] font-semibold text-content-subtle dark:text-white/45 tabular-nums mt-0.5">≈ Ref. {fmt2(grandTotal)}</div>
-                                </>
-                            ) : (
-                                <div className="text-xl font-bold text-brand-500 tabular-nums">Ref. {fmt2(grandTotal)}</div>
+                            </button>
+                            {receivingMode && sinAlmacen && (
+                                <p className="text-[12px] font-medium text-red-600 dark:text-red-400 mt-2 pl-12">
+                                    Elige el almacén de destino y el proveedor: sin eso la mercancía no puede entrar.
+                                </p>
                             )}
                         </div>
-                        <button
-                            onClick={savePurchase}
-                            disabled={loading}
-                            className={[
-                                "h-9 px-6 rounded-xl text-[12px] font-bold flex items-center gap-2 transition-all active:scale-[0.99]",
-                                loading
-                                    ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed"
-                                    : "bg-brand-500 text-white hover:brightness-105 shadow-sm"
-                            ].join(" ")}
-                        >
-                            {loading ? (
-                                <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                            ) : (
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                                </svg>
-                            )}
-                            {loading
-                                ? "Guardando…"
-                                : receivingMode
-                                    ? "Guardar y cargar al stock"
-                                    : editingDraftId ? "Actualizar Borrador" : "Guardar Borrador"}
-                        </button>
+
+                        <div className="flex items-center justify-between lg:justify-end gap-5 shrink-0">
+                            <div className="lg:text-right">
+                                <div className="text-[12px] text-content-subtle">Total de la orden</div>
+                                {inInvoiceCur ? (
+                                    <>
+                                        <div className="text-[22px] font-bold tracking-tight text-content dark:text-white tabular-nums leading-tight">{invoiceSym} {fmt2(grandTotal * invoiceRate)}</div>
+                                        <div className="text-[12px] text-content-subtle tabular-nums">≈ Ref. {fmt2(grandTotal)}</div>
+                                    </>
+                                ) : (
+                                    <div className="text-[22px] font-bold tracking-tight text-content dark:text-white tabular-nums leading-tight">Ref. {fmt2(grandTotal)}</div>
+                                )}
+                            </div>
+                            <button
+                                onClick={savePurchase}
+                                disabled={loading}
+                                className="btn-accent h-11 px-5 rounded-xl text-[14px] font-semibold flex items-center gap-2 active:scale-[0.99] disabled:opacity-50"
+                            >
+                                {loading ? (
+                                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                    </svg>
+                                )}
+                                {loading
+                                    ? "Guardando…"
+                                    : receivingMode
+                                        ? "Guardar y cargar al stock"
+                                        : editingDraftId ? "Actualizar borrador" : "Guardar borrador"}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
 
             <ProductSelectorModal
-                open={modalOpen}
-                onClose={() => setModalOpen(false)}
+                open={modalOpen || !!editing}
+                onClose={() => { setModalOpen(false); setEditing(null); }}
                 onAdd={handleAdd}
                 existingItems={items}
+                editItem={editing}
                 warehouseId={selectedWarehouseId || null}
                 invoiceRate={invoiceRate}
                 invoiceSym={invoiceSym}

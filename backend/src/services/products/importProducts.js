@@ -1,6 +1,7 @@
 'use strict';
 
-const { Product, Category, ProductStock, sequelize, Sequelize } = require("../../models");
+const { Product, Category, ProductStock, StockSessionLine, sequelize, Sequelize } = require("../../models");
+const { ensureOpenSession } = require("../warehouses/sessionService");
 const { inheritImageByBarcode } = require("./productService");
 const Op = Sequelize.Op;
 
@@ -42,7 +43,7 @@ function derivarMargen(price, cost) {
  *
  * Todo ocurre en una sola transacción: si una fila revienta no queda medio catálogo cargado.
  */
-async function importProducts({ rows, warehouse_id, company_id }) {
+async function importProducts({ rows, warehouse_id, company_id, employee_id = null }) {
   if (!Array.isArray(rows) || rows.length === 0) {
     const e = new Error("No hay filas para importar"); e.status = 400; e.isOperational = true; throw e;
   }
@@ -320,7 +321,30 @@ async function importProducts({ rows, warehouse_id, company_id }) {
           if (m !== undefined) cambios.min_stock = m;
         }
 
+        const antes = parseFloat(ficha.qty || 0);
         if (Object.keys(cambios).length) await ficha.update(cambios, { transaction: t });
+
+        // La columna Existencia FIJA la cantidad: es un ajuste, y como tal deja su línea en
+        // la sesión de ajustes. Sin esto el historial del producto no tenía cómo explicar el
+        // salto y la existencia inicial reconstruida salía negativa.
+        if (cambios.qty != null) {
+          const delta = parseFloat((parseFloat(cambios.qty) - antes).toFixed(4));
+          if (delta !== 0) {
+            const sesion = await ensureOpenSession({ warehouseId: warehouse_id, employeeId: employee_id, companyId: company_id }, t);
+            await StockSessionLine.create({
+              session_id:   sesion.id,
+              warehouse_id,
+              product_id:   producto.id,
+              product_name: producto.name,
+              qty_before:   antes,
+              qty_adjusted: delta,
+              qty_after:    parseFloat(parseFloat(cambios.qty).toFixed(4)),
+              type:         delta > 0 ? "in" : "out",
+              reason:       "importacion",
+              notes:        null,
+            }, { transaction: t });
+          }
+        }
       }
 
       // `products.stock` es el consolidado de todas las sucursales; se recalcula igual que

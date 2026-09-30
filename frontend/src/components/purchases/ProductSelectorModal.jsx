@@ -5,6 +5,12 @@ import { fmtQtyUnit, isIntegerUnit } from "../../helpers/unitFormatter";
 import { PKG_UNITS } from "../../constants/pkg";
 import CustomSelect from "../ui/CustomSelect";
 import ProductModal from "../ProductModal";
+import Segmented from "../ui/Segmented";
+import DatePicker from "../ui/DatePicker";
+import StockQty, { splitQty, stockLevel } from "../ui/StockQty";
+import { toNameCase } from "../../helpers";
+import { resolveImageUrl, imgRetryOnError } from "../../helpers/image";
+import { unidadCorta } from "../warehouses/movementMeta";
 
 const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
@@ -40,24 +46,21 @@ const EMPTY_FORM = {
     expiration_date: "",
 };
 
-function stockColor(qty) {
-    if (qty <= 0)  return "text-danger bg-danger/10 border-danger/20";
-    if (qty <= 10) return "text-warning bg-warning/10 border-warning/20";
-    return "text-success bg-success/10 border-success/20";
-}
-
+// Filtro por existencia con el mismo criterio que el resto de la app: "bajo" usa el mínimo
+// del producto cuando lo tiene (ui/StockQty), no un 10 fijo.
 const STOCK_FILTERS = [
     { key: "todos", label: "Todos" },
     { key: "con",   label: "Con stock" },
     { key: "bajo",  label: "Stock bajo" },
-    { key: "sin",   label: "Sin stock" },
+    { key: "sin",   label: "Agotados" },
 ];
 
-function matchesStockFilter(stock, filter) {
-    const s = parseFloat(stock) || 0;
-    if (filter === "con")  return s > 10;
-    if (filter === "bajo") return s > 0 && s <= 10;
-    if (filter === "sin")  return s <= 0;
+function matchesStockFilter(p, filter) {
+    if (filter === "todos") return true;
+    const lvl = stockLevel(p.stock, p.min_stock);
+    if (filter === "con")  return lvl === "ok";
+    if (filter === "bajo") return lvl === "low";
+    if (filter === "sin")  return lvl === "out";
     return true;
 }
 
@@ -77,7 +80,6 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     const listRef   = useRef(null);
     const [form, setForm]           = useState(EMPTY_FORM);
     const [stockFilter, setStockFilter]         = useState("todos");
-    const [showStockFilter, setShowStockFilter] = useState(false);
     const [showProductModal, setShowProductModal] = useState(false);
     const [categories, setCategories]             = useState([]);
     const [savingNew, setSavingNew]               = useState(false);
@@ -112,7 +114,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         } else {
             setStep(1); setSearch(""); setSelected(null); setForm(EMPTY_FORM);
         }
-        setStockFilter("todos"); setShowStockFilter(false);
+        setStockFilter("todos");
         setShowProductModal(false);
     }, [open]);
 
@@ -270,68 +272,62 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     if (!open) return null;
 
     const alreadyInOrder = (id) => existingItems.some(i => i.product?.id === id || i.product_id === id);
-    const visibleResults = results.filter(p => matchesStockFilter(p.stock, stockFilter));
+    const visibleResults = results.filter(p => matchesStockFilter(p, stockFilter));
+    const pkgNombre   = toNameCase(pkgSingular).toLowerCase();
+    const pkgNombres  = toNameCase(pkgPlural).toLowerCase();
+    const unidades    = unidadCorta(selected?.unit);
+    const precioAntes = parseFloat(selected?.price) || 0;
+    const precioNuevo = calc && !calc.keepsPrice ? parseFloat(calc.sale_price) || 0 : 0;
+    const cambiaPrecio = selected?.sellable !== false && precioNuevo > 0 && precioAntes > 0 && Math.abs(precioNuevo - precioAntes) >= 0.005;
+    const totalLinea  = (parseFloat(form.package_qty) || 0) * (parseFloat(form.package_price) || 0);
 
     return (
         <div
-            className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200"
+            className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center sm:p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] overlay-in"
             onClick={onClose}
         >
             <div
-                className="relative w-full max-w-xl bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden flex flex-col max-h-[85vh] modal-in"
+                className="relative w-full sm:max-w-xl bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-t-2xl sm:rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden flex flex-col h-[90vh] sm:h-auto sm:max-h-[85vh] modal-in"
                 onClick={e => e.stopPropagation()}
             >
-                {/* Header */}
-                <div className="shrink-0 px-5 py-4 border-b border-border/10 dark:border-white/5 flex items-center justify-between gap-3 bg-surface-2/50 dark:bg-white/[0.03]">
-                    <div className="flex items-center gap-3">
-                        {step === 2 && (
-                            <button
-                                onClick={() => setStep(1)}
-                                className="w-7 h-7 rounded-lg flex items-center justify-center text-content-subtle hover:bg-surface-2 dark:hover:bg-white/10 transition-all"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-                                </svg>
+                {/* Cabecera */}
+                <div className="shrink-0 px-5 pt-4 pb-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                        {step === 2 && !editItem && (
+                            <button onClick={() => setStep(1)} className="row-icon -ml-2" title="Volver a la lista" aria-label="Volver a la lista">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M15 19l-7-7 7-7" /></svg>
                             </button>
                         )}
-                        <div className="w-9 h-9 rounded-xl bg-brand-500/10 text-brand-500 flex items-center justify-center shrink-0">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                            </svg>
-                        </div>
-                        <div>
-                            <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">
-                                {step === 1 ? "Paso 1 de 2" : "Paso 2 de 2"}
+                        <div className="min-w-0">
+                            <div className="text-[12px] text-content-subtle">
+                                {editItem ? "Editar línea" : step === 1 ? "Agregar producto · paso 1 de 2" : "Agregar producto · paso 2 de 2"}
                             </div>
-                            <div className="text-sm font-bold text-content dark:text-white">
-                                {step === 1 ? "Seleccionar Producto" : selected?.name}
+                            <div className="text-[16px] font-semibold tracking-tight text-content dark:text-white truncate">
+                                {step === 1 ? "¿Qué vas a comprar?" : "¿Cómo viene y a cuánto?"}
                             </div>
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-content-subtle hover:bg-surface-2 dark:hover:bg-white/10 transition-all"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                    <button onClick={onClose} className="row-icon -mr-2" title="Cerrar" aria-label="Cerrar">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
 
-                {/* Step 1 — Lista de productos */}
+                {/* Paso 1 — Lista de productos */}
                 {step === 1 && (
                     <div className="flex-1 min-h-0 flex flex-col">
-                        <div className="shrink-0 px-4 pt-4 pb-3 flex items-center gap-2">
-                            <div className="relative flex-1">
-                                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        <div className="shrink-0 px-5 pb-3 space-y-2.5">
+                            <div className="relative">
+                                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
                                 <input
                                     autoFocus
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}
-                                    placeholder="Filtrar por nombre o código..."
-                                    className="input h-10 pl-10 font-medium"
+                                    placeholder="Buscar por nombre o código…"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    className="input h-10 pl-10 pr-9 text-[14px]"
                                 />
                                 {searching && (
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -339,96 +335,64 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     </div>
                                 )}
                             </div>
-                            <div className="relative shrink-0">
-                                <button
-                                    onClick={() => setShowStockFilter(v => !v)}
-                                    className={`h-10 px-3 flex items-center gap-1.5 rounded-md border text-[11px] font-bold transition-all ${stockFilter !== "todos"
-                                        ? "bg-brand-500/10 border-brand-500/30 text-brand-500"
-                                        : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}
-                                >
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.879a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                                    </svg>
-                                    {STOCK_FILTERS.find(f => f.key === stockFilter)?.label}
-                                </button>
-                                {showStockFilter && (
-                                    <>
-                                        <div className="fixed inset-0 z-40" onClick={() => setShowStockFilter(false)} />
-                                        <div className="absolute right-0 z-50 mt-1 w-40 bg-white dark:bg-surface-dark-2 border border-border/40 dark:border-white/10 rounded-xl shadow-2xl p-1">
-                                            {STOCK_FILTERS.map(f => (
-                                                <button
-                                                    key={f.key}
-                                                    onClick={() => { setStockFilter(f.key); setShowStockFilter(false); }}
-                                                    className={`w-full text-left px-3 py-2 rounded-lg text-[12px] font-semibold transition-all ${stockFilter === f.key
-                                                        ? "bg-brand-500 text-white"
-                                                        : "hover:bg-brand-500/10 text-content-subtle hover:text-brand-500"}`}
-                                                >
-                                                    {f.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </>
-                                )}
+                            {/* Filtro a la vista en vez de escondido en un menú: son cuatro
+                                opciones y la de "sin stock" es la que más se usa al reponer. */}
+                            <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+                                <Segmented options={STOCK_FILTERS} value={stockFilter} onChange={setStockFilter} />
                             </div>
                         </div>
 
-                        <div ref={listRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 pb-4">
+                        <div ref={listRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar border-t border-border/60 dark:border-white/[0.06]">
                             {searching && results.length === 0 && (
                                 <div className="flex items-center justify-center py-12">
                                     <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
                                 </div>
                             )}
                             {!searching && visibleResults.length === 0 && (
-                                <div className="py-6 space-y-3">
-                                    <p className="text-center text-[12px] font-semibold text-content-subtle dark:text-white/30">
-                                        {search.trim() ? `Sin resultados para "${search}"` : stockFilter !== "todos" ? `Sin productos · ${STOCK_FILTERS.find(f => f.key === stockFilter)?.label}` : "Sin productos"}
+                                <div className="py-10 px-6 text-center">
+                                    <p className="text-[14px] font-semibold text-content dark:text-white">
+                                        {search.trim() ? `Nada coincide con "${search.trim()}"` : "Sin productos con ese filtro"}
                                     </p>
-                                    <div className="flex justify-center">
-                                        <button
-                                            onClick={openProductModal}
-                                            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-500 text-[12px] font-bold hover:bg-brand-500 hover:text-black transition-all"
-                                        >
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4"/></svg>
-                                            Crear producto{search.trim() ? ` "${search.trim()}"` : ""}
-                                        </button>
-                                    </div>
+                                    <p className="text-[13px] text-content-subtle mt-1">Si es un producto nuevo, créalo aquí mismo y sigue con la compra.</p>
+                                    <button onClick={openProductModal}
+                                        className="mt-4 btn-accent h-9 px-4 rounded-lg text-[13px] font-semibold inline-flex items-center gap-1.5 active:scale-95">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4"/></svg>
+                                        Crear producto{search.trim() ? ` "${search.trim()}"` : ""}
+                                    </button>
                                 </div>
                             )}
-                            <div className="grid grid-cols-1 gap-2">
+                            <div className="divide-y divide-border/50 dark:divide-white/[0.04]">
                                 {visibleResults.map(p => {
                                     const inOrder = alreadyInOrder(p.id);
+                                    const [n, u] = splitQty(p.stock, p.unit);
                                     return (
                                         <button
                                             key={p.id}
                                             onClick={() => !inOrder && handleSelectProduct(p)}
-                                            className={[
-                                                "w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all",
-                                                inOrder
-                                                    ? "border-brand-500/30 bg-brand-500/5 cursor-default"
-                                                    : "border-border/20 dark:border-white/5 hover:border-brand-500/40 hover:bg-brand-500/5 active:scale-[0.99] cursor-pointer"
-                                            ].join(" ")}
+                                            disabled={inOrder}
+                                            className={`w-full flex items-center gap-3 px-5 py-2.5 text-left transition-colors ${inOrder ? "opacity-60 cursor-default" : "hover:bg-surface-2/70 dark:hover:bg-white/[0.03] active:bg-surface-2"}`}
                                         >
+                                            <div className="w-10 h-10 rounded-lg bg-surface-2 dark:bg-white/5 overflow-hidden shrink-0 relative">
+                                                {p.image_url ? (
+                                                    <img src={resolveImageUrl(p.image_url)} alt="" loading="lazy" onError={imgRetryOnError} className="absolute inset-0 w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="absolute inset-0 flex items-center justify-center text-[13px] font-bold text-content-subtle/40">{p.name?.charAt(0)}</div>
+                                                )}
+                                            </div>
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-bold text-content dark:text-white tracking-tight truncate">{p.name}</span>
-                                                    {inOrder && (
-                                                        <span className="shrink-0 text-[10px] font-bold bg-brand-500/10 text-brand-500 px-1.5 py-0.5 rounded-md">Ya en orden</span>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-3 mt-0.5">
-                                                    {p.cost_price > 0 && (
-                                                        <span className="text-[11px] font-semibold text-content-subtle dark:text-white/30">
-                                                            Último costo: Ref. {fmt2(p.cost_price)}
-                                                        </span>
-                                                    )}
-                                                    {p.category_name && (
-                                                        <span className="text-[11px] font-semibold text-content-subtle dark:text-white/30 border-l border-border/20 pl-3">{p.category_name}</span>
-                                                    )}
+                                                <div className="text-[13px] font-semibold text-content dark:text-white truncate">{p.name}</div>
+                                                <div className="text-[12px] text-content-subtle truncate tabular-nums">
+                                                    {inOrder ? "Ya está en la orden" : [
+                                                        toNameCase(p.category_name || "General"),
+                                                        p.cost_price > 0 ? `último costo Ref. ${fmt2(p.cost_price)}` : "sin costo registrado",
+                                                    ].join(" · ")}
                                                 </div>
                                             </div>
-                                            <div className={`shrink-0 text-[12px] font-bold px-2.5 py-1 rounded-lg border tabular-nums ${stockColor(p.stock)}`}>
-                                                {fmtQtyUnit(p.stock, p.unit)}
-                                            </div>
+                                            {inOrder ? (
+                                                <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                            ) : (
+                                                <StockQty qty={p.stock} value={n} unit={u} min={p.min_stock} size="text-[13px]" />
+                                            )}
                                         </button>
                                     );
                                 })}
@@ -441,7 +405,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 </div>
                             )}
                             {!searching && !loadingMore && results.length > 0 && results.length >= total && (
-                                <p className="text-center text-[11px] font-semibold text-content-subtle dark:text-white/20 py-3">
+                                <p className="text-center text-[12px] text-content-subtle py-3">
                                     {total} producto{total !== 1 ? "s" : ""}
                                 </p>
                             )}
@@ -449,221 +413,211 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                     </div>
                 )}
 
-                {/* Step 2 — Formulario de empaque */}
+                {/* Paso 2 — Presentación, costo y resumen */}
                 {step === 2 && selected && (
-                    <div className="flex-1 overflow-y-auto">
-                        {/* Info del producto */}
-                        <div className="px-5 pt-4 pb-3 border-b border-border/10 dark:border-white/5">
-                            <div className="flex items-center justify-between gap-3 bg-surface-2/50 dark:bg-white/[0.03] rounded-xl px-3 py-2.5 border border-border/20 dark:border-white/5">
-                                <div>
-                                    <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-0.5">Stock actual</div>
-                                    {selected.stock != null ? (
-                                        <div className={`text-sm font-bold tabular-nums ${stockColor(selected.stock).split(" ")[0]}`}>
-                                            {fmtQtyUnit(selected.stock, selected.unit)}
-                                        </div>
-                                    ) : (
-                                        <div className="text-sm font-bold text-content-subtle">—</div>
-                                    )}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        {/* Producto elegido */}
+                        <div className="mx-5 flex items-center gap-3 rounded-xl bg-surface-2 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] px-3.5 py-3">
+                            <div className="min-w-0 flex-1">
+                                <div className="text-[14px] font-semibold text-content dark:text-white truncate">{selected.name}</div>
+                                <div className="text-[12px] text-content-subtle tabular-nums">
+                                    {selected.cost_price > 0
+                                        ? <>Último costo Ref. {fmt2(selected.cost_price)} por {unidadCorta(selected.unit, 1)}{invoiceRate > 1 ? ` (${invoiceSym} ${fmt2(selected.cost_price * invoiceRate)})` : ""}</>
+                                        : "Primera compra de este producto"}
                                 </div>
-                                {selected.cost_price > 0 && (
-                                    <div className="text-right">
-                                        <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-0.5">Último costo unit.</div>
-                                        <div className="text-sm font-bold text-brand-500 tabular-nums">Ref. {fmt2(selected.cost_price)}</div>
-                                        {invoiceRate > 1 && (
-                                            <div className="text-[12px] font-semibold text-content-subtle dark:text-white/45 tabular-nums mt-0.5">{invoiceSym} {fmt2(selected.cost_price * invoiceRate)}</div>
-                                        )}
-                                    </div>
-                                )}
                             </div>
+                            {selected.stock != null && (
+                                <div className="text-right shrink-0">
+                                    <div className="text-[11px] text-content-subtle">Existencia</div>
+                                    <StockQty qty={selected.stock} value={splitQty(selected.stock, selected.unit)[0]} unit={splitQty(selected.stock, selected.unit)[1]} min={selected.min_stock} size="text-[14px]" />
+                                </div>
+                            )}
                         </div>
 
-                        <div className="px-5 pt-4 pb-5 space-y-4">
-                            {/* Los rótulos nombran la presentación elegida: "Cant. de CAJAS" en vez
-                                de "Cant. a Pedir", que no decía de qué y se leía igual pidiendo
-                                una caja que una unidad. El "×" tampoco ayudaba: se lee como una
-                                multiplicación cuando lo que dice es "cuántas trae cada uno". */}
-                            {/* En móvil cada una de 3 columnas medía ~100 px: los rótulos largos
-                                ("Sin presentación", "Cant. de unidades") partían en dos líneas y
-                                el corto no, así que los campos quedaban a alturas distintas. Ahí
-                                la presentación va sola arriba; y en cualquier ancho los campos se
-                                alinean abajo, para que un rótulo de dos líneas no los desfase. */}
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                <div className="col-span-2 sm:col-span-1 flex flex-col justify-end gap-1.5">
-                                    <label className="text-[12px] font-medium leading-tight text-content-subtle dark:text-white/50">Presentación</label>
-                                    <CustomSelect
-                                        value={form.package_unit}
-                                        onChange={val => setF("package_unit", val)}
-                                        options={[
-                                            ...PKG_UNITS,
-                                            ...(form.package_unit && !PKG_UNITS.some(u => u.toLowerCase() === form.package_unit.toLowerCase()) ? [form.package_unit] : [])
-                                        ].map(u => ({ value: u, label: u }))}
-                                        placeholder="Tipo..."
-                                        className="w-full"
-                                        height="h-9"
-                                    />
-                                </div>
-                                <div className="flex flex-col justify-end gap-1.5">
-                                    <label className="text-[12px] font-medium leading-tight text-content-subtle dark:text-white/50">
-                                        {/* Comprando suelto no hay envase del que hablar, y el
-                                            campo va deshabilitado en 1: el rótulo lo explica. */}
-                                        {esSuelto ? "Sin presentación" : `${selected?.unit || "Unidad"} por ${pkgSingular}`}
-                                    </label>
-                                    <input
-                                        type="text" inputMode="decimal"
-                                        value={form.package_size}
-                                        onChange={e => setQtyField("package_size", e.target.value)}
-                                        disabled={esSuelto}
-                                        className={`input h-9 text-center tabular-nums ${esSuelto ? "opacity-30 cursor-not-allowed" : ""}`}
-                                    />
-                                </div>
-                                <div className="flex flex-col justify-end gap-1.5">
-                                    <label className="text-[12px] font-medium leading-tight text-content-subtle dark:text-white/50">
-                                        Cant. de {pkgPlural}
-                                    </label>
-                                    <input
-                                        type="text" inputMode="decimal"
-                                        value={form.package_qty}
-                                        onChange={e => setQtyField("package_qty", e.target.value)}
-                                        className="input h-9 text-center tabular-nums"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Precio estimado y margen. Sin margen, el costo ocupa la fila
-                                entera en vez de dejar media columna vacía. */}
-                            <div className={selected.sellable === false ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
-                                <div className="space-y-1.5">
-                                    <label className="text-[12px] font-medium text-content-subtle dark:text-white/50">
-                                        Costo por {pkgSingular}{invoiceRate > 1 ? <span className="ml-1 text-brand-500/70 normal-case font-semibold">({invoiceSym})</span> : ""}
-                                    </label>
-                                    <input
-                                        type="text" inputMode="decimal"
-                                        value={form.package_price}
-                                        onChange={e => setF("package_price", sanitizeDecimal(e.target.value, true))}
-                                        placeholder="0.00"
-                                        className="input h-9 tabular-nums text-brand-500"
-                                    />
-                                    {invoiceRate > 1 && pkgPriceBase > 0 && (
-                                        <p className="text-[12px] font-semibold text-content-subtle dark:text-white/45 tabular-nums">≈ Ref. {fmt2(pkgPriceBase)}</p>
-                                    )}
-                                </div>
-                                {/* Un insumo no se vende, así que no hay margen que fijar:
-                                    comprarlo solo actualiza su costo. */}
-                                {selected.sellable !== false && (
-                                    <div className="space-y-1.5">
-                                        <label className="text-[12px] font-medium text-content-subtle dark:text-white/50">Margen (%)</label>
+                        <div className="px-5 pt-5 pb-5 space-y-5">
+                            {/* ¿Cómo viene? Los rótulos nombran la presentación elegida ("Cajas"
+                                y no "Cant. a pedir"), y los campos se alinean abajo para que un
+                                rótulo de dos líneas no los desfase. */}
+                            <section>
+                                <p className="text-[13px] font-semibold text-content dark:text-white mb-2.5">Cómo viene</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    <div className="col-span-2 sm:col-span-1 flex flex-col justify-end gap-1.5">
+                                        <label className="text-[12px] text-content-subtle">Presentación</label>
+                                        <CustomSelect
+                                            value={form.package_unit}
+                                            onChange={val => setF("package_unit", val)}
+                                            options={[
+                                                ...PKG_UNITS,
+                                                ...(form.package_unit && !PKG_UNITS.some(u => u.toLowerCase() === form.package_unit.toLowerCase()) ? [form.package_unit] : [])
+                                            ].map(u => ({ value: u, label: toNameCase(u) }))}
+                                            placeholder="Tipo…"
+                                            className="w-full"
+                                            height="h-10"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col justify-end gap-1.5">
+                                        <label className="text-[12px] text-content-subtle leading-tight">
+                                            {/* Comprando suelto no hay envase del que hablar, y el
+                                                campo va deshabilitado en 1: el rótulo lo explica. */}
+                                            {esSuelto ? "Se compra suelto" : `${unidades.charAt(0).toUpperCase()}${unidades.slice(1)} por ${pkgNombre}`}
+                                        </label>
                                         <input
                                             type="text" inputMode="decimal"
-                                            value={form.profit_margin}
-                                            onChange={e => setF("profit_margin", sanitizeDecimal(e.target.value, true))}
-                                            placeholder="Sin cambio"
-                                            className="input h-9 tabular-nums"
+                                            value={form.package_size}
+                                            onChange={e => setQtyField("package_size", e.target.value)}
+                                            disabled={esSuelto}
+                                            className="input h-10 text-right text-[14px] font-semibold tabular-nums disabled:opacity-40"
                                         />
-                                        {/* Vaciarlo es una decisión válida, no un olvido: hay
-                                            productos con precio puesto a mano. */}
-                                        {calc?.keepsPrice && (
-                                            <p className="text-[11px] font-semibold text-content-subtle dark:text-white/40 leading-snug">
-                                                Vacío: se actualiza el costo y el precio de venta queda como está.
-                                            </p>
+                                    </div>
+                                    <div className="flex flex-col justify-end gap-1.5">
+                                        <label className="text-[12px] text-content-subtle leading-tight">Cantidad de {pkgNombres}</label>
+                                        <input
+                                            type="text" inputMode="decimal"
+                                            value={form.package_qty}
+                                            onChange={e => setQtyField("package_qty", e.target.value)}
+                                            data-autofocus
+                                            className="input h-10 text-right text-[14px] font-semibold tabular-nums"
+                                        />
+                                    </div>
+                                </div>
+                            </section>
+
+                            {/* Costo y precio. Sin margen (insumo), el costo ocupa la fila entera. */}
+                            <section>
+                                <p className="text-[13px] font-semibold text-content dark:text-white mb-2.5">Costo y precio</p>
+                                <div className={selected.sellable === false ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[12px] text-content-subtle">Costo por {pkgNombre}</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">{invoiceSym}</span>
+                                            <input
+                                                type="text" inputMode="decimal"
+                                                value={form.package_price}
+                                                onChange={e => setF("package_price", sanitizeDecimal(e.target.value, true))}
+                                                placeholder="0.00"
+                                                className="input h-10 pl-11 text-right text-[14px] font-semibold tabular-nums"
+                                            />
+                                        </div>
+                                        {invoiceRate > 1 && pkgPriceBase > 0 && (
+                                            <p className="text-[12px] text-content-subtle tabular-nums">≈ Ref. {fmt2(pkgPriceBase)}</p>
                                         )}
                                     </div>
-                                )}
-                            </div>
+                                    {/* Un insumo no se vende, así que no hay margen que fijar:
+                                        comprarlo solo actualiza su costo. */}
+                                    {selected.sellable !== false && (
+                                        <div className="space-y-1.5">
+                                            <label className="text-[12px] text-content-subtle">Margen de ganancia</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text" inputMode="decimal"
+                                                    value={form.profit_margin}
+                                                    onChange={e => setF("profit_margin", sanitizeDecimal(e.target.value, true))}
+                                                    placeholder="Sin cambio"
+                                                    className="input h-10 pr-8 text-right text-[14px] font-semibold tabular-nums"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">%</span>
+                                            </div>
+                                            {/* Vaciarlo es una decisión válida, no un olvido: hay
+                                                productos con precio puesto a mano. */}
+                                            {calc?.keepsPrice && (
+                                                <p className="text-[12px] text-content-subtle leading-snug">Vacío: se actualiza el costo y el precio de venta queda como está.</p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
 
-                            {/* Cálculos — solo si hay precio */}
+                            {/* Resumen de la línea, como un recibo: lo que entra, lo que cuesta cada
+                                una y a cuánto se va a vender. Antes eran tres cajitas de colores. */}
                             {calc && parseFloat(form.package_price) > 0 && (
-                                <div className={selected.sellable === false ? "grid grid-cols-2 gap-2" : "grid grid-cols-3 gap-2"}>
+                                <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
                                     {[
-                                        { label: "Costo unit.", value: `Ref. ${fmt2(calc.unit_cost)}`, color: "text-info" },
-                                        // El precio de venta se omite en los insumos: la compra
-                                        // no se lo va a escribir al producto.
-                                        ...(selected.sellable === false
-                                            ? []
-                                            : [{
-                                                label: "Precio venta",
-                                                // Sin margen la compra no toca el precio, y decirlo
-                                                // evita que parezca que va a quedar en 0.
-                                                value: calc.keepsPrice ? "Sin cambio" : `Ref. ${fmt2(calc.sale_price)}`,
-                                                color: calc.keepsPrice ? "text-content-subtle dark:text-white/40" : "text-success",
-                                            }]),
-                                        { label: "Total unids.", value: fmtQtyUnit(calc.total_units, selected.unit), color: "text-warning" },
-                                    ].map(({ label, value, color }) => (
-                                        <div key={label} className="bg-surface-2/50 dark:bg-white/[0.03] rounded-xl p-2.5 border border-border/20 dark:border-white/5 text-center">
-                                            <div className="text-[10px] font-bold text-content-subtle dark:text-white/30 uppercase tracking-wide mb-0.5">{label}</div>
-                                            <div className={`text-xs font-bold tabular-nums ${color}`}>{value}</div>
+                                        ["Entran al stock", `${fmtQtyUnit(calc.total_units, selected.unit).toLowerCase()}`],
+                                        ["Costo por " + unidadCorta(selected.unit, 1), `Ref. ${fmt2(calc.unit_cost)}`],
+                                        // El precio de venta se omite en los insumos: la compra no
+                                        // se lo va a escribir al producto.
+                                        ...(selected.sellable === false ? [] : [[
+                                            "Precio de venta",
+                                            calc.keepsPrice ? "Sin cambio" : (
+                                                <span key="p">
+                                                    {cambiaPrecio && <span className="text-content-subtle font-normal line-through decoration-1 mr-2">Ref. {fmt2(precioAntes)}</span>}
+                                                    Ref. {fmt2(calc.sale_price)}
+                                                </span>
+                                            ),
+                                        ]]),
+                                    ].map(([k, v]) => (
+                                        <div key={k} className="px-4 py-2.5 flex items-center justify-between gap-3 text-[13px]">
+                                            <span className="text-content-subtle">{k}</span>
+                                            <span className="font-medium text-content dark:text-white tabular-nums text-right">{v}</span>
                                         </div>
                                     ))}
+                                    <div className="px-4 py-3 flex items-center justify-between gap-3 bg-surface-2/60 dark:bg-white/[0.02] rounded-b-xl">
+                                        <span className="text-[13px] font-semibold text-content dark:text-white">Total de la línea</span>
+                                        <span className="text-[16px] font-bold text-content dark:text-white tabular-nums">{invoiceSym} {fmt2(totalLinea)}</span>
+                                    </div>
                                 </div>
                             )}
 
-                            {/* Lote y vencimiento — solo en pendiente */}
+                            {/* Lote y vencimiento — cuando la mercancía está entrando de verdad */}
                             {showLotFields ? (
-                                <div className="grid grid-cols-2 gap-3 pt-1">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[12px] font-medium text-content-subtle dark:text-white/50">N° de Lote</label>
-                                        <input
-                                            type="text"
-                                            value={form.lot_number || ""}
-                                            onChange={e => setF("lot_number", e.target.value)}
-                                            placeholder="Ej. LOT-2026-001"
-                                            className="input h-9 text-xs"
-                                        />
+                                <section>
+                                    <p className="text-[13px] font-semibold text-content dark:text-white mb-2.5">Lote <span className="font-normal text-content-subtle">· opcional</span></p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[12px] text-content-subtle">Número de lote</label>
+                                            <input
+                                                type="text"
+                                                value={form.lot_number || ""}
+                                                onChange={e => setF("lot_number", e.target.value)}
+                                                placeholder="Ej: L-2026-001"
+                                                autoComplete="off"
+                                                className="input h-10 text-[13px]"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[12px] text-content-subtle">Vence</label>
+                                            <DatePicker value={form.expiration_date || ""} onChange={v => setF("expiration_date", v || "")} placeholder="Sin vencimiento" />
+                                        </div>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[12px] font-medium text-content-subtle dark:text-white/50">Fecha vencimiento</label>
-                                        <input
-                                            type="date"
-                                            value={form.expiration_date || ""}
-                                            onChange={e => setF("expiration_date", e.target.value)}
-                                            className="input h-9 text-xs"
-                                        />
-                                    </div>
-                                </div>
+                                </section>
                             ) : (
-                                <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-info/5 border border-info/10">
-                                    <svg className="w-3.5 h-3.5 text-info/60 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <p className="text-[11px] font-medium text-info/60">
-                                        Lote y fecha de vencimiento se registran al <strong>confirmar</strong> la orden.
-                                    </p>
-                                </div>
+                                <p className="text-[12px] text-content-subtle flex items-start gap-2">
+                                    <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    El lote y el vencimiento se cargan al recibir la mercancía.
+                                </p>
                             )}
                         </div>
                     </div>
                 )}
 
-                {/* Footer */}
-                <div className="shrink-0 px-5 py-4 border-t border-border/10 dark:border-white/5 flex gap-2 bg-surface-2/30 dark:bg-white/[0.02]">
-                    <button
-                        onClick={onClose}
-                        className="flex-1 h-9 rounded-xl border border-border/30 dark:border-white/10 text-[12px] font-bold text-content-subtle hover:bg-surface-2 dark:hover:bg-white/10 transition-all"
-                    >
-                        Cancelar
-                    </button>
-                    {step === 2 && (
-                        <button
-                            onClick={handleAdd}
-                            disabled={!lineaValida}
-                            title={!lineaValida ? "Falta la cantidad de empaques o el costo" : undefined}
-                            className={[
-                                "flex-[2] h-9 rounded-xl text-[12px] font-bold transition-all flex items-center justify-center gap-2",
-                                !lineaValida
-                                    ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed"
-                                    : "bg-brand-500 text-white hover:brightness-105 active:scale-[0.99] shadow-sm"
-                            ].join(" ")}
-                        >
-                            {editItem ? (
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                {/* Pie */}
+                <div className="shrink-0 px-5 py-3.5 border-t border-border/60 dark:border-white/[0.06] flex items-center gap-2 safe-area-bottom">
+                    {step === 1 ? (
+                        <>
+                            <button onClick={openProductModal}
+                                className="h-10 px-3 rounded-lg text-[13px] font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-500/10 flex items-center gap-1.5 transition-colors">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4"/></svg>
+                                Producto nuevo
+                            </button>
+                            <button onClick={onClose} className="ml-auto btn-outline h-10 px-5 rounded-lg text-[13px] font-medium">Cancelar</button>
+                        </>
+                    ) : (
+                        <>
+                            <button onClick={onClose} className="btn-outline h-10 px-5 rounded-lg text-[13px] font-medium">Cancelar</button>
+                            <button
+                                onClick={handleAdd}
+                                disabled={!lineaValida}
+                                title={!lineaValida ? "Falta la cantidad o el costo" : undefined}
+                                className="flex-1 btn-accent h-10 rounded-lg text-[13px] font-semibold flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-40 disabled:pointer-events-none"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d={editItem ? "M5 13l4 4L19 7" : "M12 4v16m8-8H4"} />
                                 </svg>
-                            ) : (
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                                </svg>
-                            )}
-                            {editItem ? "Guardar Cambios" : "Agregar a la Orden"}
-                        </button>
+                                {!lineaValida
+                                    ? (parseFloat(form.package_price) > 0 ? "Indica la cantidad" : "Indica el costo")
+                                    : `${editItem ? "Guardar cambios" : "Agregar a la orden"} · ${invoiceSym} ${fmt2(totalLinea)}`}
+                            </button>
+                        </>
                     )}
                 </div>
             </div>

@@ -143,9 +143,13 @@ export function usePurchasesForm({
             const pkgSize  = parseFloat(next.package_size)  || 1;
             const pkgQty   = parseFloat(next.package_qty)   || 0;
             const pkgPrice = parseFloat(next.package_price) || 0;
-            const margin   = parseFloat(next.profit_margin) || 0;
+            // Margen vacío = no se toca el precio de venta (mismo criterio que el detalle de la
+            // orden y calcPurchaseItem). Con 0 implícito, editar la línea de un producto con
+            // precio puesto a mano lo dejaba vendiéndose al costo.
+            const marginRaw   = String(next.profit_margin ?? "").trim();
+            const hasMargin   = marginRaw !== "" && !isNaN(parseFloat(marginRaw));
             const unit_cost   = pkgPrice > 0 ? pkgPrice / pkgSize : 0;
-            const sale_price  = unit_cost * (1 + margin / 100);
+            const sale_price  = hasMargin ? unit_cost * (1 + parseFloat(marginRaw) / 100) : (parseFloat(next.sale_price) || 0);
             const total_units = pkgQty * pkgSize;
             const subtotal    = pkgQty * pkgPrice;
             return { ...next, unit_cost, sale_price, total_units, subtotal };

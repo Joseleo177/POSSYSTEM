@@ -31,6 +31,7 @@ export const REASON_LABELS = {
     ajuste_directo: "Ajuste directo",
     carga_inicial:  "Carga inicial",
     retiro:         "Retiro del almacén",
+    importacion:    "Importación desde Excel",
     compra_anulada: "Compra anulada",
 };
 export const reasonLabel = (r) => REASON_LABELS[r] || (r ? toNameCase(String(r).replace(/_/g, " ")) : "Ajuste");
