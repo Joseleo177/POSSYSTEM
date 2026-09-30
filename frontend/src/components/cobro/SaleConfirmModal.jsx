@@ -14,7 +14,7 @@ import Kbd from "../ui/Kbd";
 // y no como parte del texto de la acción.
 function KeyHint({ n }) {
     return (
-        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-[4px] ring-1 ring-inset ring-current text-[11px] font-semibold tabular-nums opacity-45 shrink-0">
+        <span className="hidden sm:inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-[4px] ring-1 ring-inset ring-current text-[11px] font-semibold tabular-nums opacity-45 shrink-0">
             {n}
         </span>
     );
@@ -279,8 +279,11 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] overlay-in">
-            <div className="w-full max-w-[400px] bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden modal-in" onKeyDown={e => e.stopPropagation()}>
+            <div className="w-full max-w-[400px] bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden modal-in flex flex-col max-h-[90vh]" onKeyDown={e => e.stopPropagation()}>
 
+                {/* Todo el contenido scrollea junto: en un teléfono bajo, con venta parcial o
+                    con descuento, el modal crecía más que la pantalla y dejaba botones fuera. */}
+                <div className="flex-1 min-h-0 overflow-y-auto">
                 {/* Cabecera */}
                 <div className="px-6 pt-6">
                     <div className="flex items-start justify-between gap-3">
@@ -370,7 +373,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             <Button
                                 variant={principal === "pay" ? "primary" : "ghost"}
                                 onClick={() => setShowPicker(true)}
-                                className="flex-1 min-w-0 h-10"
+                                className="flex-1 min-w-0 h-12 sm:h-10"
                             >
                                 <KeyHint n={numOf("pay")} />
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
@@ -437,10 +440,13 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                         </p>
                     )}
                 </div>
+                </div>
+                {/* ── fin del contenido scrolleable ── */}
 
                 {/* Los atajos se anuncian: el cajero no tiene por qué adivinar que Enter y Esc
-                    hacen lo mismo que el último botón. */}
-                <div className="px-6 py-3 border-t border-border/60 dark:border-white/[0.06] bg-surface-2/60 dark:bg-white/[0.02] flex items-center justify-center gap-4 text-[12px] text-content-subtle">
+                    hacen lo mismo que el último botón. En un teléfono táctil no hay teclado, así
+                    que esta fila —y los chips numerados de los botones— no aparecen. */}
+                <div className="shrink-0 hidden sm:flex px-6 py-3 border-t border-border/60 dark:border-white/[0.06] bg-surface-2/60 dark:bg-white/[0.02] items-center justify-center gap-4 text-[12px] text-content-subtle">
                     <span className="inline-flex items-center gap-1.5"><Kbd>1</Kbd>–<Kbd>{actionKeys.length}</Kbd> elegir</span>
                     <span className="inline-flex items-center gap-1.5"><Kbd>Enter</Kbd><Kbd>Esc</Kbd> {isUnresolved ? "dejar a crédito" : "siguiente venta"}</span>
                 </div>

@@ -177,7 +177,7 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa"
       {/* Trigger Button - Mimics .input class for perfect alignment */}
       <div
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center w-full gap-2 px-3.5 h-10 rounded-xl border border-border/20 dark:border-white/[0.08] bg-white/[0.02] dark:bg-white/[0.04] text-content dark:text-white transition-all cursor-pointer group select-none hover:border-brand-500/40 dark:hover:border-brand-500/40"
+        className="flex items-center w-full gap-2 px-3.5 h-10 rounded-xl border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-content dark:text-white transition-all cursor-pointer group select-none hover:border-brand-500/40 dark:hover:border-brand-500/40"
       >
         <svg className="w-3.5 h-3.5 text-content-subtle opacity-50 group-hover:text-brand-500 group-hover:opacity-100 transition-all shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />

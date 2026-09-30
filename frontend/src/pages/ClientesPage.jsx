@@ -48,7 +48,7 @@ export default function ClientesPage() {
     return (
         <Page
             module="Contactos"
-            title={detail ? `Detalle: ${detail.name}` : "Contactos"}
+            title={detail ? (detail.type === "proveedor" ? "Ficha del proveedor" : "Ficha del cliente") : "Contactos"}
             actions={pageActions}
         >
             {!detail ? (

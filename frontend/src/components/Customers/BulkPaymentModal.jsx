@@ -4,7 +4,9 @@ import DatePicker from "../ui/DatePicker";
 import JournalPickerButton from "../cobro/JournalPickerButton";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
-import { fmtBase, todayISO, saleTotalAtRate, journalsForSales } from "../../helpers";
+import { fmtBase, todayISO, saleTotalAtRate, journalsForSales, fmtDateShort } from "../../helpers";
+import Money from "../ui/Money";
+import Segmented from "../ui/Segmented";
 import RateField, { resolveRate } from "../ui/RateField";
 import { Spinner } from "../ui/Spinner";
 
@@ -94,7 +96,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
 
   const fmtP = (n) => fmtBase(n, baseCurrency);
   // Montos en la moneda con la que se está cobrando: es la que el cajero cuenta.
-  const fmtPago = (n) => `${sym}${(parseFloat(n) || 0).toFixed(2)}`;
+  const fmtPago = (n) => `${sym} ${(parseFloat(n) || 0).toFixed(2)}`;
   const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
 
   // Saldo de una factura en la moneda del cobro.
@@ -255,70 +257,86 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
     setLoading(false);
   };
 
-  // Resumen: al lateral en escritorio, arriba del todo en móvil.
-  const resumenBulk = (
-    <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 space-y-1.5">
-      <Row label="Cliente" value={customer?.name || "—"} />
-      <Row label="Facturas" value={String(ordenadas.length)} />
-      <div className="border-t border-border/20 dark:border-white/5 pt-1.5 mt-1.5">
-        <Row
-          label="Deuda seleccionada"
-          value={rate > 1 ? `${sym}${deudaEnPago.toFixed(2)}` : fmtP(deudaTotal)}
-          valueClass="text-danger font-bold"
-        />
-        {rate > 1 && (
-          <Row label="Equivalente" value={fmtP(deudaTotal)} valueClass="text-content-subtle dark:text-white/40" />
-        )}
-      </div>
-    </div>
-  );
+  // Lo que ya se va a cubrir con lo tecleado, para el pie del reparto.
+  const aplicadoTotal = round2(reparto.reduce((a, r) => a + r.aplica, 0));
+  // El botón dice cuánto se cobra: es lo último que el cajero lee antes de confirmar.
+  const montoBoton = combinado ? (recibidoComb > 0 ? fmtP(recibidoComb) : "") : (amountLocal > 0 ? fmtPago(amountLocal) : "");
 
   // Reparto: qué se salda y qué queda debiendo (contexto de solo lectura → lateral).
   const repartoBulk = (
     <div>
-      <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">
-        Cómo se aplica · de la más antigua a la más reciente
-      </p>
-      <div className="rounded-xl border border-border/20 dark:border-white/[0.08] divide-y divide-border/10 dark:divide-white/5 max-h-48 overflow-y-auto">
-        {reparto.map(({ sale, saldo, aplica, queda, salda }) => (
-          <div key={sale.id} className="px-3.5 py-2.5 flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="text-[12px] font-semibold text-content dark:text-white truncate">
-                {sale.invoice_number || `#${sale.id}`}
+      <p className="text-[13px] font-semibold text-content dark:text-white">Cómo se reparte</p>
+      <p className="text-[12px] text-content-subtle mb-2">De la más antigua a la más reciente</p>
+      <div className="rounded-xl border border-border/70 dark:border-white/[0.08] overflow-hidden">
+        <div className="divide-y divide-border/60 dark:divide-white/[0.06] lg:max-h-64 lg:overflow-y-auto">
+          {reparto.map(({ sale, saldo, aplica, queda, salda }) => {
+            const pct = saldo > 0 ? Math.min(100, (aplica / saldo) * 100) : 0;
+            return (
+              <div key={sale.id} className="px-3.5 py-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-[13px] font-semibold text-content dark:text-white tabular-nums truncate">
+                    {sale.invoice_number || `#${sale.id}`}
+                  </span>
+                  <Money value={fmtPago(saldo)} className="text-[13px] font-semibold text-content dark:text-white shrink-0" />
+                </div>
+                <div className="flex items-center justify-between gap-3 mt-0.5 text-[12px] tabular-nums">
+                  <span className="text-content-subtle">{fmtDateShort(sale.created_at)}</span>
+                  {salda ? (
+                    <span className="inline-flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                      Queda saldada
+                    </span>
+                  ) : aplica > 0 ? (
+                    <span className="font-medium text-amber-700 dark:text-amber-400">Queda debiendo {fmtPago(queda)}</span>
+                  ) : (
+                    <span className="text-content-subtle">Sin cubrir</span>
+                  )}
+                </div>
+                {/* Cuánto de su saldo cubre este cobro. */}
+                <div className="mt-2 h-1 rounded-full bg-surface-3 dark:bg-white/[0.08] overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${salda ? "bg-emerald-500" : "bg-amber-500"}`} style={{ width: `${pct}%` }} />
+                </div>
               </div>
-              <div className="text-[11px] font-semibold text-content-subtle dark:text-white/30">
-                {new Date(sale.created_at).toLocaleDateString("es-VE")} · debe {fmtPago(saldo)}
-              </div>
-            </div>
-            <div className="text-right shrink-0">
-              <div className={`text-[12px] font-bold tabular-nums ${aplica > 0 ? "text-success" : "text-content-subtle dark:text-white/20"}`}>
-                {aplica > 0 ? fmtPago(aplica) : "—"}
-              </div>
-              <div className={`text-[10px] font-bold uppercase tracking-wide ${salda ? "text-success" : queda > 0 ? "text-warning" : "text-content-subtle dark:text-white/20"}`}>
-                {salda ? "Salda" : aplica > 0 ? `Queda ${fmtPago(queda)}` : "Sin cubrir"}
-              </div>
-            </div>
-          </div>
-        ))}
+            );
+          })}
+        </div>
+        <div className="px-3.5 py-2.5 border-t border-border/60 dark:border-white/[0.06] bg-surface-2/60 dark:bg-white/[0.02] flex items-center justify-between text-[12px] tabular-nums">
+          <span className="text-content-subtle">Se aplica</span>
+          <span className="font-semibold text-content dark:text-white">{fmtPago(aplicadoTotal)} <span className="font-normal text-content-subtle">de {fmtPago(deudaEnPago)}</span></span>
+        </div>
       </div>
     </div>
   );
 
   return (
-    <Modal open={!!sales?.length} onClose={onClose} title="Cobrar varias facturas" width={860}>
-      <div className="flex flex-col lg:flex-row lg:gap-6">
+    <Modal open={!!sales?.length} onClose={onClose} title={`Cobrar ${ordenadas.length} ${ordenadas.length === 1 ? "factura" : "facturas"}`} width={880}>
+
+      {/* ── Cabecera: a quién y cuánto ── */}
+      <div className="rounded-xl bg-surface-2 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] px-4 py-3 flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[12px] text-content-subtle">Cliente</p>
+          <p className="text-[15px] font-semibold text-content dark:text-white truncate">{customer?.name || "—"}</p>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-[12px] text-content-subtle">Total a cobrar</p>
+          <Money value={rate > 1 ? fmtPago(deudaEnPago) : fmtP(deudaTotal)} className="block text-[22px] font-bold tracking-tight text-content dark:text-white leading-tight" />
+          {rate > 1 && <Money value={`≈ ${fmtP(deudaTotal)}`} className="block text-[12px] text-content-subtle" />}
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
 
         {/* ── Columna principal: lo que se teclea ── */}
-        <div className="flex-1 min-w-0 space-y-4">
+        <div className="min-w-0 space-y-4">
 
         {/* ── Pago combinado: varias formas de pago para el lote ── */}
         {combinado && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[12px] font-medium text-content-subtle dark:text-white/50">Formas de pago *</p>
+              <p className={LABEL}>Formas de pago</p>
               <button type="button" onClick={() => setForm(p => ({ ...p, pay_parts: [] }))}
-                className="text-[11px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/40 hover:text-danger transition-colors">
-                Pago simple
+                className="h-7 px-2 -mr-2 rounded-md text-[12px] font-medium text-content-subtle hover:text-content dark:hover:text-white transition-colors">
+                Volver a pago simple
               </button>
             </div>
             <div className="space-y-2.5">
@@ -330,6 +348,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                         value={s.journal_id || ""}
                         journals={activeJournals}
                         placeholder="Forma de pago…"
+                        boxClassName="rounded-lg"
                         methodPrompt={{ tag: "Cobro conjunto", title: "¿Cómo paga esta parte?" }}
                         onSelect={(j) => setForm(p => {
                           const parts = [...p.pay_parts];
@@ -349,17 +368,18 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                         })}
                       />
                     </div>
-                    <div className="w-28 shrink-0">
+                    <div className="w-28 sm:w-32 shrink-0 relative">
+                      <Prefijo>{s.sym}</Prefijo>
                       <input
                         type="text" inputMode="decimal"
                         value={s.amount}
-                        placeholder={s.sym}
+                        placeholder="0.00"
                         onChange={e => setForm(p => {
                           const parts = [...p.pay_parts];
                           parts[idx] = { ...parts[idx], amount: e.target.value.replace(/[^\d.,]/g, "") };
                           return { ...p, pay_parts: parts };
                         })}
-                        className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all tabular-nums"
+                        className={`${INPUT} pl-11 text-right font-semibold tabular-nums`}
                       />
                     </div>
                     {partesComb.length >= 2 && (
@@ -378,14 +398,14 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                             change_parts: [{ journal_id: "", amount: "" }],
                           };
                         })}
-                        className="w-10 h-10 shrink-0 rounded-xl border border-border/30 dark:border-white/10 text-content-subtle hover:text-danger hover:border-danger/40 transition-all flex items-center justify-center"
-                        title="Quitar esta forma de pago">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        className={QUITAR}
+                        title="Quitar esta forma de pago" aria-label="Quitar esta forma de pago">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
                     )}
                   </div>
                   {s.cur && !s.cur.is_base && s.base > 0 && (
-                    <p className="text-[11px] font-semibold text-success">≈ {fmtP(s.base)} {baseCurrency?.code} · tasa {s.rate}</p>
+                    <p className="text-[12px] text-content-subtle tabular-nums">≈ {fmtP(s.base)} · tasa {s.rate}</p>
                   )}
                   {s.journal_id && !s.isCash && (
                     <input
@@ -397,34 +417,34 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                         return { ...p, pay_parts: parts };
                       })}
                       placeholder="N° de referencia (opcional)"
-                      className="w-full h-9 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[12px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
+                      className={`${INPUT} !h-9`}
                     />
                   )}
                 </div>
               ))}
             </div>
             {combNoUltimoExcede && (
-              <p className="text-[11px] font-bold text-danger mt-1.5">Solo la última forma de pago puede exceder la deuda</p>
+              <p className="text-[12px] font-medium text-red-600 dark:text-red-400 mt-1.5">Solo la última forma de pago puede pasarse de la deuda</p>
             )}
             <button type="button"
               onClick={() => setForm(p => ({ ...p, pay_parts: [...p.pay_parts, { journal_id: "", amount: "", reference: "" }] }))}
-              className="w-full h-9 mt-2.5 rounded-xl border border-dashed border-border/40 dark:border-white/15 text-content-subtle dark:text-white/40 text-[11px] font-bold hover:border-brand-500/50 hover:text-brand-500 transition-all">
+              className={`${AGREGAR} mt-2.5`}>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4" /></svg>
               Otra forma de pago
             </button>
-            <div className="flex items-center justify-between gap-2 mt-2.5 pt-2.5 border-t border-border/20 dark:border-white/5">
-              <span className="text-[12px] font-medium tabular-nums text-content-subtle dark:text-white/40">
-                Recibido {fmtP(recibidoComb)} de {fmtP(deudaTotal)}
-              </span>
-            </div>
+            <p className="mt-2.5 pt-2.5 border-t border-border/60 dark:border-white/[0.06] text-[12px] text-content-subtle tabular-nums">
+              Recibido <span className="font-semibold text-content dark:text-white">{fmtP(recibidoComb)}</span> de {fmtP(deudaTotal)}
+            </p>
           </div>
         )}
 
         {!combinado && (<>
-        <Field label="MÉTODO DE PAGO *">
+        <Field label="Cómo paga">
           <JournalPickerButton
             value={form.journal_id}
             journals={activeJournals}
-            placeholder="Seleccionar método..."
+            placeholder="Elegir método de pago…"
+            boxClassName="rounded-lg"
             methodPrompt={{ tag: "Cobro conjunto", title: "¿Cómo paga el cliente?" }}
             onSelect={(j) => {
               const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
@@ -447,20 +467,27 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label={`MONTO RECIBIDO * (${sym})`}>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={form.amount}
-              onChange={e => setForm(p => ({ ...p, amount: e.target.value.replace(/[^\d.,]/g, "") }))}
-              placeholder={deudaEnPago.toFixed(2)}
-              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
-            />
+          <Field label="Monto recibido">
+            <div className="relative">
+              <Prefijo>{sym}</Prefijo>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={form.amount}
+                onChange={e => setForm(p => ({ ...p, amount: e.target.value.replace(/[^\d.,]/g, "") }))}
+                placeholder={deudaEnPago.toFixed(2)}
+                className={`${INPUT} pl-11 text-[14px] font-semibold tabular-nums`}
+              />
+            </div>
+            {rate !== 1 && amountLocal > 0 && (
+              <p className="text-[12px] text-content-subtle tabular-nums mt-1">≈ {fmtP(amountBase)}</p>
+            )}
           </Field>
-          <Field label="FECHA DE REFERENCIA *">
+          <Field label="Fecha del cobro">
             <DatePicker
               value={form.reference_date}
               onChange={v => setForm(p => ({ ...p, reference_date: v }))}
+              clearable={false}
               className="w-full"
             />
           </Field>
@@ -486,20 +513,14 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
           </Field>
         )}
 
-        {rate !== 1 && amountLocal > 0 && (
-          <p className="text-[11px] font-semibold text-content-subtle dark:text-white/30 tabular-nums -mt-1">
-            ≈ {fmtP(amountBase)} a la tasa del sistema
-          </p>
-        )}
-
         {journal?.type !== "efectivo" && (
-          <Field label="N° REFERENCIA">
+          <Field label="N° de referencia" hint="Opcional">
             <input
               type="text"
               value={form.reference_number}
               onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))}
               placeholder="Ej: 000123456"
-              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
+              className={INPUT}
             />
           </Field>
         )}
@@ -520,18 +541,20 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                 ],
               };
             })}
-            className="w-full h-9 -mt-1 rounded-xl border border-dashed border-brand-500/40 text-brand-500 text-[11px] font-bold hover:bg-brand-500/10 transition-all"
+            className={AGREGAR}
           >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4" /></svg>
             Combinar con otra forma de pago
           </button>
         )}
         </>)}
 
         {combinado && (
-          <Field label="FECHA DE REFERENCIA *">
+          <Field label="Fecha del cobro">
             <DatePicker
               value={form.reference_date}
               onChange={v => setForm(p => ({ ...p, reference_date: v }))}
+              clearable={false}
               className="w-full"
             />
           </Field>
@@ -539,38 +562,28 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
 
         {/* Sobrante: el cliente entregó de más y hay que decir qué se hace con eso. */}
         {haySobrante && (
-          <div className="rounded-xl border-2 border-warning/30 bg-warning/5 p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-widest text-warning">Sobrante</span>
-              <span className="text-sm font-bold text-warning tabular-nums">{fmtP(sobrante)}</span>
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[13px] font-semibold text-content dark:text-white">Sobran {fmtP(sobrante)}</p>
+                <p className="text-[12px] text-content-subtle">El cliente entregó más de lo que debe</p>
+              </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5">
-              {[
-                ["devolver", "Dar vuelto"],
-                ["caja",     "Queda en caja"],
-                ["credito",  "A su crédito"],
-              ].map(([modo, etiqueta]) => (
-                <button
-                  key={modo}
-                  type="button"
-                  onClick={() => setForm(p => ({ ...p, surplus_mode: modo }))}
-                  className={`h-9 rounded-xl border text-[11px] font-bold transition-all ${
-                    form.surplus_mode === modo
-                      ? "border-warning bg-warning text-black"
-                      : "border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 dark:hover:bg-white/5"
-                  }`}
-                >
-                  {etiqueta}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              className="w-full [&>button]:flex-1 [&>button]:justify-center"
+              value={form.surplus_mode}
+              onChange={modo => setForm(p => ({ ...p, surplus_mode: modo }))}
+              options={[
+                { key: "devolver", label: "Dar vuelto" },
+                { key: "caja",     label: "Queda en caja" },
+                { key: "credito",  label: "A su crédito" },
+              ]}
+            />
 
             {form.surplus_mode === "devolver" && (
               <div className="space-y-2">
-                <p className="text-[12px] font-medium text-content-subtle dark:text-white/50">
-                  Sale de *
-                </p>
+                <p className={LABEL}>Sale de</p>
 
                 {salidas.map((salida, idx) => (
                   <div key={idx} className="flex gap-2 items-start">
@@ -579,7 +592,8 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                         value={salida.journal_id}
                         journals={activeJournals}
                         outflowOnly
-                        placeholder="Caja del vuelto..."
+                        boxClassName="rounded-lg"
+                        placeholder="Caja del vuelto…"
                         methodPrompt={{ tag: "Dar cambio", title: "¿De qué caja sale el vuelto?" }}
                         onSelect={(j) => setForm(p => {
                           const partes = [...p.change_parts];
@@ -600,7 +614,8 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                         })}
                       />
                     </div>
-                    <div className="w-32 shrink-0">
+                    <div className="w-28 sm:w-32 shrink-0 relative">
+                      <Prefijo>{salida.sym}</Prefijo>
                       <input
                         type="text"
                         inputMode="decimal"
@@ -610,18 +625,18 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                           partes[idx] = { ...partes[idx], amount: e.target.value.replace(/[^\d.,]/g, "") };
                           return { ...p, change_parts: partes };
                         })}
-                        placeholder={salida.sym}
-                        className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-warning/60 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20 tabular-nums"
+                        placeholder="0.00"
+                        className={`${INPUT} pl-11 text-right font-semibold tabular-nums`}
                       />
                     </div>
                     {salidas.length > 1 && (
                       <button
                         type="button"
                         onClick={() => setForm(p => ({ ...p, change_parts: p.change_parts.filter((_, i) => i !== idx) }))}
-                        className="w-10 h-10 shrink-0 rounded-xl border border-border/30 dark:border-white/10 text-content-subtle hover:text-danger hover:border-danger/40 transition-all flex items-center justify-center"
-                        title="Quitar esta salida"
+                        className={QUITAR}
+                        title="Quitar esta salida" aria-label="Quitar esta salida"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
                     )}
                   </div>
@@ -632,28 +647,25 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                   <button
                     type="button"
                     onClick={() => setForm(p => ({ ...p, change_parts: [...p.change_parts, { journal_id: "", amount: "" }] }))}
-                    className="w-full h-9 rounded-xl border border-dashed border-warning/40 text-warning text-[11px] font-bold hover:bg-warning/10 transition-all"
+                    className={AGREGAR}
                   >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4" /></svg>
                     Devolver el resto desde otra caja
                   </button>
                 )}
 
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-semibold text-content-subtle dark:text-white/30 tabular-nums">
-                    Entregado: {fmtP(vueltoBase)} de {fmtP(sobrante)}
-                  </span>
+                <div className="flex items-center justify-between gap-2 text-[12px] tabular-nums">
+                  <span className="text-content-subtle">Entregado {fmtP(vueltoBase)} de {fmtP(sobrante)}</span>
                   {vueltoExcedido ? (
-                    <span className="text-[11px] font-bold text-danger">Supera el sobrante</span>
+                    <span className="font-medium text-red-600 dark:text-red-400">Supera el sobrante</span>
                   ) : restoEnCaja > 0.0001 ? (
-                    <span className="text-[11px] font-bold text-warning tabular-nums">
-                      Quedan {fmtP(restoEnCaja)} en caja
-                    </span>
+                    <span className="font-medium text-amber-700 dark:text-amber-400">Quedan {fmtP(restoEnCaja)} en caja</span>
                   ) : null}
                 </div>
               </div>
             )}
 
-            <p className="text-[11px] font-semibold text-content-subtle dark:text-white/40 leading-relaxed">
+            <p className="text-[12px] text-content-subtle leading-relaxed">
               {form.surplus_mode === "devolver"
                 ? "Entra el monto completo y sale el vuelto: la caja queda con lo que cubre las facturas."
                 : form.surplus_mode === "caja"
@@ -663,34 +675,33 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
           </div>
         )}
 
+        <Field label="Notas" hint="Opcional">
+          <input
+            type="text"
+            value={form.notes}
+            onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+            placeholder="Observaciones…"
+            className={INPUT}
+          />
+        </Field>
+
         </div>
         {/* ── fin columna principal ── */}
 
         {/* ── Columna lateral: contexto de solo lectura ── */}
-        <aside className="lg:w-[300px] shrink-0 space-y-4 mt-5 lg:mt-0 lg:border-l lg:border-border/20 dark:lg:border-white/5 lg:pl-6">
-          {resumenBulk}
+        <aside className="min-w-0 lg:border-l lg:border-border/60 dark:lg:border-white/[0.06] lg:pl-6">
           {repartoBulk}
-          <Field label="NOTAS">
-            <input
-              type="text"
-              value={form.notes}
-              onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-              placeholder="Observaciones..."
-              className="w-full h-10 bg-white/[0.02] dark:bg-white/[0.04] border border-border/20 dark:border-white/[0.08] rounded-xl px-3.5 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 dark:focus:border-brand-500/50 transition-all placeholder:text-content-subtle/40 dark:placeholder:text-white/20"
-            />
-          </Field>
         </aside>
       </div>
 
       <div className="flex gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
-        <button onClick={onClose}
-          className="flex-1 h-10 rounded-xl border border-border/40 dark:border-white/10 text-[12px] font-bold text-content-subtle dark:text-white/40 hover:text-content dark:hover:text-white hover:border-border dark:hover:border-white/20 transition-all">
+        <button onClick={onClose} className="btn-outline h-11 px-5 rounded-lg text-[13px] font-medium">
           Cancelar
         </button>
         <button onClick={submit} disabled={!canSubmit}
-          className="flex-[2] h-10 rounded-xl bg-success text-black text-[12px] font-bold transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+          className="btn-accent flex-1 h-11 rounded-lg text-[14px] font-semibold active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 tabular-nums">
           {loading && <Spinner />}
-          {loading ? "Registrando..." : "Confirmar cobro"}
+          {loading ? "Registrando…" : montoBoton ? `Cobrar ${montoBoton}` : "Confirmar cobro"}
         </button>
       </div>
     </Modal>
@@ -698,19 +709,23 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-function Row({ label, value, valueClass = "text-content dark:text-white" }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40">{label}</span>
-      <span className={`text-[12px] font-bold tabular-nums ${valueClass}`}>{value}</span>
-    </div>
-  );
-}
+const LABEL   = "text-[12px] font-medium text-content-subtle";
+const INPUT   = "w-full h-10 px-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] font-medium text-content dark:text-white placeholder:text-content-subtle/50 dark:placeholder:text-white/25 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-colors";
+const AGREGAR = "w-full h-9 rounded-lg border border-dashed border-border dark:border-white/15 text-[12px] font-medium text-content-subtle hover:text-content hover:border-content-subtle/60 dark:hover:text-white dark:hover:border-white/30 transition-colors flex items-center justify-center gap-1.5";
+const QUITAR  = "w-10 h-10 shrink-0 rounded-lg border border-border dark:border-white/10 text-content-subtle hover:text-red-600 hover:border-red-500/40 dark:hover:text-red-400 transition-colors flex items-center justify-center";
 
-function Field({ label, children }) {
+// Símbolo de la moneda dentro del campo, a la izquierda: la cifra queda sola y se lee mejor.
+const Prefijo = ({ children }) => (
+  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">{children}</span>
+);
+
+function Field({ label, hint, children }) {
   return (
     <div>
-      <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">{label}</p>
+      <p className="mb-1.5 flex items-baseline justify-between gap-2">
+        <span className={LABEL}>{label}</span>
+        {hint && <span className="text-[11px] text-content-subtle/70">{hint}</span>}
+      </p>
       {children}
     </div>
   );

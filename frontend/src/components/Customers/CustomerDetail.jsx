@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Button } from "../ui/Button";
 import { exportToCSV } from "../../utils/exportUtils";
 import { fmtBase, fmtSale as fmtSaleHelper, todayISO, journalsForWarehouse, fmtDateShort } from "../../helpers";
 import Check from "../ui/Check";
@@ -13,6 +12,8 @@ import Modal from "../ui/Modal";
 import Pagination from "../ui/Pagination";
 import { api } from "../../services/api";
 import { Spinner } from "../ui/Spinner";
+import StatusMark from "../ui/StatusMark";
+import { ICONS } from "../ui/Ledger";
 
 // Debe coincidir con LIMIT del hook useCustomers (tamaño de página del historial)
 const PAID_LIMIT = 50;
@@ -22,11 +23,35 @@ const PAID_LIMIT = 50;
 // flotando sin recuadro. El borde al 10% tampoco alcanzaba para separarlas. En oscuro se
 // mantiene tal cual estaba, que ahí el velo blanco sí contrasta contra el fondo.
 const SECTION = "bg-white dark:bg-white/[0.04] rounded-2xl border border-border/60 dark:border-white/[0.06] shadow-card dark:shadow-none";
-const LABEL   = "text-[12px] font-medium text-content-subtle";
 
 // Cuerpo scrolleable de cada lista: rellena el alto disponible de su sección y desplaza dentro.
 // En impresión se desactiva para que salgan todas las filas.
-const SCROLL_LIST = "flex-1 min-h-0 overflow-y-auto print:min-h-0 print:overflow-visible";
+const SCROLL_LIST = "lg:flex-1 lg:min-h-0 lg:overflow-y-auto print:min-h-0 print:overflow-visible";
+
+const DIA = 86400000;
+const aMedianoche = (v) => {
+    if (!v) return null;
+    const [y, m, d] = String(v).slice(0, 10).split("-").map(Number);
+    return y ? new Date(y, m - 1, d).getTime() : null;
+};
+
+// Vencimiento en palabras, con el mismo criterio que Contabilidad → Cuentas.
+function Vence({ dias }) {
+    if (dias === null) return <span>Sin vencimiento</span>;
+    if (dias > 0)   return <span className="font-medium text-red-600 dark:text-red-400 whitespace-nowrap">Vencida {dias} {dias === 1 ? "día" : "días"}</span>;
+    if (dias === 0) return <span className="font-medium text-amber-700 dark:text-amber-400">Vence hoy</span>;
+    if (dias >= -3) return <span className="font-medium text-amber-700 dark:text-amber-400">Vence en {-dias} {dias === -1 ? "día" : "días"}</span>;
+    return <span>Vence en {-dias} días</span>;
+}
+
+// Celda de la ficha: rótulo, cifra y una línea de contexto.
+const Dato = ({ label, value, sub }) => (
+    <div className="px-5 py-3.5 min-w-0 border-border/60 dark:border-white/[0.06] [&:nth-child(2n)]:border-l lg:[&:not(:first-child)]:border-l [&:nth-child(n+3)]:border-t lg:[&:nth-child(n+3)]:border-t-0">
+        <dt className="text-[12px] text-content-subtle">{label}</dt>
+        <dd className="mt-0.5 text-[15px] font-semibold text-content dark:text-white tabular-nums truncate">{value}</dd>
+        {sub && <dd className="text-[12px] text-content-subtle mt-0.5">{sub}</dd>}
+    </div>
+);
 
 export default function CustomerDetail({ detail, pending, paid, paidTotal, paidPage, onPaidPageChange, onClose, onPay, onRefresh }) {
     const { baseCurrency, notify, activeJournals, activeCurrencies, triggerAction, employee } = useApp();
@@ -141,6 +166,24 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
         setCheckedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
     };
     const hasPending   = parseFloat(detail.total_debt || 0) > 0;
+    // La fila del listado no trae la fecha de la última compra: sale de los documentos cargados,
+    // que llegan del más reciente al más viejo.
+    const ultima       = detail.last_purchase_at
+        || [pendingSales[0]?.created_at, paidPage === 1 ? paidSales[0]?.created_at : null].filter(Boolean).sort().pop();
+    const tieneCredito = parseFloat(detail.credit_balance || 0) > 0.001;
+    const iniciales    = (detail.name || "?").trim().split(/\s+/).slice(0, 2).map(p => p[0]).join("").toUpperCase();
+
+    // Días desde el vencimiento (negativo: faltan). Vence en la fecha pactada o, si no hay,
+    // a los días de crédito del contacto contados desde el documento; de contado, ese mismo día.
+    const hoy = aMedianoche(todayISO());
+    const diasVencida = (s) => {
+        const pactada = aMedianoche(s.due_date);
+        const doc     = s.created_at ? aMedianoche(new Date(s.created_at).toLocaleDateString("en-CA")) : null;
+        const vence   = pactada ?? (doc !== null ? doc + (parseInt(detail.credit_days) || 0) * DIA : null);
+        return vence === null ? null : Math.round((hoy - vence) / DIA);
+    };
+    const vencidas     = pendingSales.filter(s => (diasVencida(s) ?? 0) > 0);
+    const montoVencido = vencidas.reduce((acc, s) => acc + parseFloat(s.balance || 0), 0);
     const paidTotalPages = Math.ceil((paidTotal || 0) / PAID_LIMIT);
 
     const handleExportStatement = () => {
@@ -161,22 +204,26 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
         <div className="h-full flex flex-col animate-in fade-in duration-300">
 
             {/* ── Barra superior ── */}
-            <div className="shrink-0 px-4 pt-3 pb-2 flex justify-between items-center border-b border-border/10 dark:border-white/[0.06] print-hidden">
-                <button onClick={onClose} className="flex items-center gap-1.5 text-[12px] font-semibold text-content-subtle dark:text-white/40 hover:text-brand-500 dark:hover:text-brand-500 transition-colors">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
-                    Volver
+            <div className="shrink-0 px-4 sm:px-5 pt-3 pb-2 flex justify-between items-center print-hidden">
+                <button onClick={onClose} className="flex items-center gap-1.5 h-8 -ml-1 px-1 text-[13px] font-medium text-content-subtle hover:text-content dark:hover:text-white transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M15 19l-7-7 7-7"/></svg>
+                    Contactos
                 </button>
                 <div className="flex gap-2">
-                    <button onClick={handleExportStatement} className="h-8 px-3 rounded-xl border border-border/20 dark:border-white/10 text-[11px] font-bold text-content-subtle dark:text-white/40 hover:border-border dark:hover:border-white/20 hover:text-content dark:hover:text-white transition-all">
+                    <button onClick={handleExportStatement} title="Descargar estado de cuenta (CSV)" className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                         CSV
                     </button>
-                    <button onClick={() => window.print()} className="h-8 px-4 rounded-xl btn-accent text-[11px] font-bold transition-all active:scale-95">
+                    <button onClick={() => window.print()} className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={ICONS.print}/></svg>
                         Imprimir
                     </button>
                 </div>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-hidden print:overflow-visible print:block px-4 py-4 flex flex-col gap-4">
+            {/* En escritorio la página no se desplaza: cada lista lo hace dentro de su panel. En
+                móvil es al revés, scroll de página y listas enteras (como en los reportes). */}
+            <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden print:overflow-visible print:block px-4 sm:px-5 pb-4 pt-1 flex flex-col gap-3">
 
                 {/* Print header */}
                 <div className="hidden print-force-break mb-4 text-center text-black">
@@ -185,97 +232,84 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                     <p className="text-[12px] font-bold opacity-50 mt-1">Fecha: {new Date().toLocaleDateString("es-VE")}</p>
                 </div>
 
-                {/* ── Card resumen de cliente ── */}
-                <div className={`${SECTION} p-5 shrink-0`}>
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-
-                        {/* Identidad */}
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[13px] font-bold shrink-0 border border-white/10 ${detail.type === "proveedor" ? "bg-violet-500/10 text-violet-400" : "bg-info/10 text-info"}`}>
-                                {detail.name.charAt(0).toUpperCase()}
+                {/* ── Ficha: quién es y cuánto debe ── */}
+                <div className={`${SECTION} shrink-0`}>
+                    <div className="px-5 pt-5 pb-4 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div className="flex items-start gap-3.5 min-w-0">
+                            <div className="w-11 h-11 rounded-xl bg-surface-2 dark:bg-white/[0.06] border border-border/70 dark:border-white/[0.08] flex items-center justify-center text-[15px] font-semibold text-content dark:text-white shrink-0">
+                                {iniciales}
                             </div>
                             <div className="min-w-0">
-                                <p className="text-[13px] font-semibold text-content dark:text-white tracking-tight leading-none">{detail.name}</p>
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                    {detail.rif   && <span className="text-[11px] font-semibold bg-surface-3 dark:bg-white/5 px-1.5 py-0.5 rounded border border-border/40 dark:border-white/10 text-content-subtle">RIF: {detail.rif}</span>}
-                                    {detail.phone && <span className="text-[11px] font-semibold bg-surface-3 dark:bg-white/5 px-1.5 py-0.5 rounded border border-border/40 dark:border-white/10 text-content-subtle tracking-wide">{detail.phone}</span>}
+                                <p className="text-[12px] text-content-subtle">{esCliente ? "Cliente" : "Proveedor"}</p>
+                                <h2 className="text-[20px] font-semibold tracking-tight text-content dark:text-white leading-tight break-words">{detail.name}</h2>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[12px] text-content-subtle">
+                                    {detail.rif && <span className="tabular-nums">{detail.rif}</span>}
+                                    {detail.phone && <a href={`tel:${detail.phone}`} className="tabular-nums hover:text-content dark:hover:text-white">{detail.phone}</a>}
+                                    {detail.email && <span className="truncate max-w-[220px]">{detail.email}</span>}
+                                    {!detail.rif && !detail.phone && !detail.email && <span>Sin datos de contacto</span>}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="h-7 w-px bg-border/20 dark:bg-white/[0.06] hidden sm:block" />
-
-                        {/* Transacciones */}
-                        <div>
-                            <p className={`${LABEL} mb-0.5`}>Transacciones</p>
-                            <p className="text-[13px] font-bold text-warning tabular-nums">{detail.total_purchases}</p>
-                        </div>
-
-                        <div className="h-7 w-px bg-border/20 dark:bg-white/[0.06] hidden sm:block" />
-
-                        {/* Facturación */}
-                        <div>
-                            <p className={`${LABEL} mb-0.5`}>Facturación</p>
-                            <p className="text-[13px] font-bold text-success tabular-nums">{fmtPrice(detail.total_spent)}</p>
-                        </div>
-
-                        {/* Crédito disponible */}
-                        {parseFloat(detail.credit_balance || 0) > 0.001 && (
-                            <div className="flex-1">
-                                <p className={`${LABEL} mb-0.5`}>Crédito disponible</p>
-                                {confirmClear ? (
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="text-[11px] text-content-subtle dark:text-white/40">¿Anular todo?</span>
-                                        <button onClick={handleClearCredit} disabled={clearingCredit}
-                                            className="h-6 px-2 rounded-lg bg-danger text-white text-[11px] font-bold transition-all hover:brightness-110 disabled:opacity-50">
-                                            {clearingCredit ? "…" : "Sí"}
-                                        </button>
-                                        <button onClick={() => setConfirmClear(false)}
-                                            className="h-6 px-2 rounded-lg border border-border/30 dark:border-white/10 text-[11px] font-bold text-content-subtle hover:text-content dark:hover:text-white transition-all">
-                                            No
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-[15px] font-bold text-brand-500 tabular-nums">{fmtPrice(detail.credit_balance)}</p>
-                                        <button onClick={() => { setShowRefund(true); setConfirmClear(false); }}
-                                            title="Devolver crédito en efectivo"
-                                            className="h-6 px-2 rounded-lg border border-brand-500/30 text-brand-500 text-[11px] font-bold hover:bg-brand-500/10 transition-all">
-                                            Devolver
-                                        </button>
-                                        <button onClick={() => setConfirmClear(true)}
-                                            title="Anular crédito"
-                                            className="w-5 h-5 rounded-md flex items-center justify-center text-content-subtle/40 hover:text-danger hover:bg-danger/10 transition-all">
-                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
-                                            </svg>
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Saldo — empujado a la derecha solo cuando la fila es una sola línea.
-                            En móvil el flex-wrap lo baja a su propio renglón, y ahí el ml-auto lo
-                            dejaba pegado al borde derecho con un hueco delante, desalineado de
-                            Transacciones y Facturación. */}
-                        <div className="sm:ml-auto sm:text-right">
-                            <p className={`${LABEL} mb-0.5`}>Saldo pendiente</p>
-                            {hasPending
-                                ? <p className="text-[15px] font-bold text-danger tabular-nums">{fmtPrice(detail.total_debt)}</p>
-                                : <div className="flex items-center sm:justify-end gap-1 text-[12px] font-bold text-success">
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
+                        <div className="sm:text-right shrink-0 pl-[58px] sm:pl-0">
+                            <p className="text-[12px] text-content-subtle">{esCliente ? "Te debe" : "Le debes"}</p>
+                            {hasPending ? (
+                                <>
+                                    <Money value={fmtPrice(detail.total_debt)} className="block text-[26px] font-bold tracking-tight text-content dark:text-white leading-tight" />
+                                    <p className={`text-[12px] mt-0.5 tabular-nums ${vencidas.length ? "font-medium text-red-600 dark:text-red-400" : "text-content-subtle"}`}>
+                                        {vencidas.length
+                                            ? `${vencidas.length} ${vencidas.length === 1 ? "vencida" : "vencidas"} · ${fmtPrice(montoVencido)}`
+                                            : `${pendingSales.length} ${pendingSales.length === 1 ? "documento abierto" : "documentos abiertos"}`}
+                                    </p>
+                                </>
+                            ) : (
+                                <p className="flex items-center sm:justify-end gap-1.5 text-[20px] font-semibold tracking-tight text-content dark:text-white leading-tight">
+                                    <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
                                     Al día
-                                </div>
-                            }
+                                </p>
+                            )}
                         </div>
                     </div>
+
+                    <dl className="border-t border-border/60 dark:border-white/[0.06] grid grid-cols-2 lg:grid-cols-4">
+                        <Dato label={esCliente ? "Compras" : "Órdenes"} value={detail.total_purchases ?? 0}
+                              sub={ultima ? `Última: ${fmtDateShort(ultima)}` : detail.total_purchases ? null : "Ninguna todavía"} />
+                        <Dato label={esCliente ? "Total cobrado" : "Total pagado"} value={<Money value={fmtPrice(detail.total_spent)} />}
+                              sub={esCliente ? "Facturas ya saldadas" : "Órdenes ya pagadas"} />
+                        <Dato label="Plazo de pago" value={detail.credit_days ? `${detail.credit_days} días` : "De contado"}
+                              sub={detail.credit_days ? "Desde la fecha del documento" : "Vence el mismo día"} />
+                        <Dato label="Crédito a favor"
+                              value={tieneCredito ? <Money value={fmtPrice(detail.credit_balance)} /> : <span className="text-content-subtle font-medium">Sin crédito</span>}
+                              sub={tieneCredito && (confirmClear ? (
+                                  <span className="flex flex-wrap items-center gap-1.5 mt-1">
+                                      <span>¿Anularlo todo?</span>
+                                      <button onClick={handleClearCredit} disabled={clearingCredit}
+                                          className="h-7 px-2.5 rounded-md bg-red-600 text-white text-[12px] font-semibold disabled:opacity-50">
+                                          {clearingCredit ? "Anulando…" : "Sí, anular"}
+                                      </button>
+                                      <button onClick={() => setConfirmClear(false)} className="h-7 px-2 rounded-md text-[12px] font-medium hover:text-content dark:hover:text-white">No</button>
+                                  </span>
+                              ) : (
+                                  <span className="flex items-center gap-1 mt-1 print-hidden">
+                                      <button onClick={() => { setShowRefund(true); setConfirmClear(false); }}
+                                          className="h-7 px-2.5 rounded-md btn-outline text-[12px] font-medium">
+                                          Devolver
+                                      </button>
+                                      <button onClick={() => setConfirmClear(true)}
+                                          className="h-7 px-2 rounded-md text-[12px] font-medium text-content-subtle hover:text-red-600 hover:bg-red-500/10 transition-colors">
+                                          Anular
+                                      </button>
+                                  </span>
+                              ))} />
+                    </dl>
                 </div>
 
-                {/* ── Cuentas por Cobrar ── */}
+                {/* ── Por cobrar e historial: lado a lado en escritorio ── */}
+                <div className={`lg:flex-1 lg:min-h-0 grid gap-3 print:block ${pendingSales.length ? "lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]" : ""}`}>
+
                 {pendingSales.length > 0 && (
-                    <div className={`${SECTION} overflow-hidden flex-1 min-h-0 flex flex-col print:flex-none print:min-h-0 print:overflow-visible`}>
-                        <div className="shrink-0 px-5 py-3 border-b border-border/60 dark:border-white/[0.06] flex items-center gap-3 min-h-[56px]">
+                    <div className={`${SECTION} overflow-hidden lg:min-h-0 flex flex-col print:overflow-visible print:mb-4`}>
+                        <div className="shrink-0 px-5 py-3 border-b border-border/60 dark:border-white/[0.06] flex items-center gap-3 min-h-[60px]">
                             {/* Casilla de "todas": solo si hay cobro conjunto, alineada con las de cada fila. */}
                             {cobrables.length > 1 && (
                                 <Check
@@ -284,46 +318,55 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                     title={seleccionadas.length === cobrables.length ? "Quitar todas" : "Marcar todas"}
                                 />
                             )}
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                                 <p className="text-[14px] font-semibold text-content dark:text-white leading-tight">
-                                    {detail.type === 'proveedor' ? 'Cuentas por pagar' : 'Cuentas por cobrar'}
+                                    {esCliente ? "Por cobrar" : "Por pagar"}
                                 </p>
-                                <p className="text-[12px] text-content-subtle tabular-nums">
-                                    {pendingSales.length} {pendingSales.length === 1 ? "documento abierto" : "documentos abiertos"}
+                                <p className="text-[12px] text-content-subtle tabular-nums truncate">
+                                    {seleccionadas.length
+                                        ? `${seleccionadas.length} de ${cobrables.length} marcadas`
+                                        : cobrables.length > 1
+                                            ? "Marca varias para cobrarlas de una vez"
+                                            : `${pendingSales.length} ${pendingSales.length === 1 ? "documento abierto" : "documentos abiertos"}`}
                                 </p>
                             </div>
 
-                            {/* Cobro conjunto: con una sola factura no aporta nada, así que la
-                                selección solo aparece cuando hay más de una que cobrar. */}
-                            {cobrables.length > 1 && (
+                            {/* Cobro conjunto: el botón aparece al marcar. Vacío y deshabilitado
+                                solo ocupaba la cabecera con un aviso que ya da el subtítulo. */}
+                            {seleccionadas.length > 0 && (
                                 <button
                                     onClick={() => setShowBulk(true)}
-                                    disabled={!seleccionadas.length}
-                                    className="ml-auto h-9 px-4 rounded-lg text-[13px] font-semibold btn-accent active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed print-hidden whitespace-nowrap tabular-nums"
+                                    className="h-9 px-3.5 rounded-lg text-[13px] font-semibold btn-accent active:scale-[0.98] print-hidden whitespace-nowrap tabular-nums shrink-0"
                                 >
-                                    {seleccionadas.length
-                                        ? `Cobrar ${seleccionadas.length} · ${fmtPrice(totalSeleccionado)}`
-                                        : "Marca las que vas a cobrar"}
+                                    Cobrar {fmtPrice(totalSeleccionado)}
                                 </button>
                             )}
                         </div>
                         <div className={`divide-y divide-border/50 dark:divide-white/[0.05] ${SCROLL_LIST}`}>
                             {pendingSales.map(sale => {
                                 const marcada = checkedIds.includes(sale.id);
+                                const dias = diasVencida(sale);
                                 const abrir = () => {
-                                    if (detail.type === "proveedor") {
+                                    if (!esCliente) {
                                         onClose();
                                         triggerAction("Compras", "compras:abrir:" + sale.id);
                                     } else {
                                         setSelectedSaleId(sale.id);
                                     }
                                 };
+                                const enVenta = esCliente ? fmtSale(sale, sale.balance) : fmtPrice(sale.balance);
+                                const enBase  = fmtPrice(sale.balance);
+                                const abonado = parseFloat(sale.amount_paid || 0) > 0.001;
                                 return (
                                 <div
                                     key={sale.id}
                                     onClick={abrir}
-                                    className={`px-5 h-[60px] flex items-center gap-3 transition-colors cursor-pointer ${marcada ? "bg-brand-500/[0.05] dark:bg-brand-500/[0.08]" : "hover:bg-surface-2/70 dark:hover:bg-white/[0.02]"}`}
+                                    className={`relative px-5 py-3 flex items-center gap-3 transition-colors cursor-pointer ${marcada ? "bg-brand-500/[0.05] dark:bg-brand-500/[0.08]" : "hover:bg-surface-2/70 dark:hover:bg-white/[0.02]"}`}
                                 >
+                                    {/* Filete: rojo si ya venció, ámbar si vence en tres días o menos. */}
+                                    {dias !== null && dias >= -3 && (
+                                        <span className={`absolute left-0 top-2 bottom-2 w-[3px] rounded-r ${dias > 0 ? "bg-red-500" : "bg-amber-500"}`} aria-hidden="true" />
+                                    )}
                                     {/* Casilla del cobro conjunto. Check detiene el clic: marcar una
                                         factura no es querer verla. */}
                                     {cobrables.length > 1 && (() => {
@@ -340,28 +383,35 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                             />
                                         );
                                     })()}
+                                    {/* Dos renglones que se leen en paralelo: documento y saldo
+                                        arriba; fecha, vencimiento y el saldo en base abajo. Así en
+                                        móvil el monto no le roba el ancho a la fecha. */}
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[14px] font-semibold text-content dark:text-white tabular-nums leading-tight truncate">
-                                            {detail.type === "proveedor" ? `Compra #${sale.id}` : (sale.invoice_number || `Factura #${sale.id}`)}
-                                        </p>
-                                        {/* Fecha y estado en una línea gris. Todas las filas de esta
-                                            lista deben algo, así que "Pendiente" no lleva color; solo
-                                            se marca lo que difiere: a medio pagar o sin facturar. */}
-                                        <div className="flex items-center gap-1.5 text-[12px] text-content-subtle tabular-nums mt-0.5">
-                                            <span>{fmtDateShort(sale.created_at)}</span>
-                                            <span aria-hidden="true">·</span>
-                                            {sale.status === "parcial"
-                                                ? <span className="font-medium text-amber-700 dark:text-amber-400">Abonada en parte</span>
-                                                : sale.status === "borrador"
-                                                    ? <span>Sin factura</span>
-                                                    : <span>Pendiente</span>}
+                                        <div className="flex items-baseline justify-between gap-3">
+                                            <p className="text-[14px] font-semibold text-content dark:text-white tabular-nums leading-tight truncate">
+                                                {!esCliente ? `Compra #${sale.id}` : (sale.invoice_number || `Factura #${sale.id}`)}
+                                            </p>
+                                            <Money value={enVenta} className="text-[14px] font-semibold text-content dark:text-white shrink-0" />
+                                        </div>
+                                        <div className="flex items-start justify-between gap-3 mt-0.5">
+                                        {/* Fecha, vencimiento y, si hubo abonos, cuánto va. Todas
+                                            deben algo: el color queda para lo vencido. */}
+                                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-content-subtle tabular-nums min-w-0">
+                                            <span className="hidden sm:inline">{fmtDateShort(sale.created_at)}</span>
+                                            <span aria-hidden="true" className="hidden sm:inline">·</span>
+                                            <Vence dias={dias} />
+                                            {sale.status === "borrador" && <><span aria-hidden="true">·</span><span>Sin factura</span></>}
+                                            {abonado && <><span aria-hidden="true">·</span><span>Abonado {fmtPrice(sale.amount_paid)} de {fmtPrice(sale.total)}</span></>}
+                                        </div>
+                                        {/* Factura hecha en bolívares: debajo, lo mismo en la moneda
+                                            base, que es en la que se suma el saldo de arriba. */}
+                                        {enVenta !== enBase && <Money value={enBase} className="text-[11px] text-content-subtle shrink-0 leading-[18px]" />}
                                         </div>
                                     </div>
-                                    <Money value={fmtSale(sale, sale.balance)} className="text-[14px] font-semibold text-content dark:text-white shrink-0" />
                                     <button
                                         onClick={e => {
                                             e.stopPropagation();
-                                            if (detail.type === "proveedor") {
+                                            if (!esCliente) {
                                                 onClose();
                                                 triggerAction("Compras", "compras:abrir:" + sale.id);
                                             } else {
@@ -370,7 +420,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                         }}
                                         className="h-8 px-3 rounded-lg text-[13px] font-semibold btn-outline active:scale-[0.98] shrink-0 print-hidden"
                                     >
-                                        {detail.type === "proveedor" ? "Pagar" : "Cobrar"}
+                                        {esCliente ? "Cobrar" : "Pagar"}
                                     </button>
                                 </div>
                                 );
@@ -379,25 +429,31 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                     </div>
                 )}
 
-                {/* ── Historial de Pagos ── */}
-                <div className={`${SECTION} overflow-hidden flex-1 min-h-0 flex flex-col print:flex-none print:min-h-0 print:overflow-visible`}>
-                    <div className="shrink-0 px-5 py-3 border-b border-border/10 dark:border-white/[0.06] flex items-center justify-between">
-                        <p className={LABEL}>Historial de pagos</p>
-                        {paidTotal > 0 && (
-                            <p className="text-[11px] font-semibold text-content-subtle dark:text-white/20 tabular-nums">{paidTotal} en total</p>
-                        )}
+                {/* ── Documentos cerrados ── */}
+                <div className={`${SECTION} overflow-hidden lg:min-h-0 flex flex-col print:overflow-visible`}>
+                    <div className="shrink-0 px-5 py-3 border-b border-border/60 dark:border-white/[0.06] flex items-center justify-between gap-3 min-h-[60px]">
+                        <div className="min-w-0">
+                            <p className="text-[14px] font-semibold text-content dark:text-white leading-tight">
+                                {esCliente ? "Facturas saldadas" : "Órdenes pagadas"}
+                            </p>
+                            <p className="text-[12px] text-content-subtle tabular-nums">
+                                {paidTotal > 0 ? `${paidTotal} en total` : "Todavía ninguna"}
+                            </p>
+                        </div>
                     </div>
-                    {/* opacity-20 se calibró contra el fondo oscuro; sobre el panel blanco dejaba
-                        el texto casi invisible, así que el tema claro necesita bastante más. */}
                     {paidTotal === 0 ? (
-                        <div className="flex flex-col items-center justify-center p-10 opacity-60 dark:opacity-20">
-                            <p className={LABEL}>Sin pagos finalizados</p>
+                        <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-10">
+                            <div className="w-10 h-10 rounded-xl bg-surface-2 dark:bg-white/[0.04] border border-border/70 dark:border-white/[0.08] flex items-center justify-center text-content-subtle">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={ICONS.doc}/></svg>
+                            </div>
+                            <p className="mt-3 text-[13px] font-medium text-content dark:text-white">Sin documentos cerrados</p>
+                            <p className="mt-0.5 text-[12px] text-content-subtle">Aparecen aquí cuando {esCliente ? "se cobran" : "se pagan"} por completo.</p>
                         </div>
                     ) : (
-                        <div className={`divide-y divide-border/10 dark:divide-white/[0.05] ${SCROLL_LIST}`}>
+                        <div className={`divide-y divide-border/50 dark:divide-white/[0.05] ${SCROLL_LIST}`}>
                             {paidSales.map(sale => (
-                                <div key={sale.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-surface-2 dark:hover:bg-white/[0.02] transition-colors cursor-pointer group" onClick={() => {
-                                    if (detail.type === "proveedor") {
+                                <div key={sale.id} className="px-5 py-3 flex items-center gap-3 hover:bg-surface-2/70 dark:hover:bg-white/[0.02] transition-colors cursor-pointer" onClick={() => {
+                                    if (!esCliente) {
                                         onClose();
                                         triggerAction("Compras", "compras:abrir:" + sale.id);
                                     } else {
@@ -405,33 +461,22 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                     }
                                 }}>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[12px] font-semibold text-content dark:text-white">#{sale.id}</span>
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
-                                                sale.status === 'anulado' ? 'bg-danger/10 text-danger border-danger/20' :
-                                                sale.status === 'devuelto' ? 'bg-warning/10 text-warning border-warning/20' :
-                                                'bg-success/10 text-success border-success/20'
-                                            }`}>
-                                                {sale.status === 'anulado' ? 'Anulado' : sale.status === 'devuelto' ? 'Devuelto' : 'Pagado'}
-                                            </span>
+                                        <p className="text-[13px] font-semibold text-content dark:text-white tabular-nums leading-tight truncate">
+                                            {!esCliente ? `Compra #${sale.id}` : (sale.invoice_number || `Factura #${sale.id}`)}
+                                        </p>
+                                        <div className="flex items-center gap-1.5 text-[12px] text-content-subtle tabular-nums mt-0.5 min-w-0">
+                                            <span className="shrink-0">{fmtDateShort(sale.created_at)}</span>
+                                            {sale.paid_journals && <><span aria-hidden="true">·</span><span className="truncate">{sale.paid_journals}</span></>}
                                         </div>
-                                        <p className={`${LABEL} mt-0.5 normal-case`}>{new Date(sale.created_at).toLocaleDateString("es-VE")}</p>
                                     </div>
+                                    {/* En moneda base, no en la de la venta: sale.currency_id solo
+                                        dice cómo estaba puesta la pantalla al crearla, así que la
+                                        lista mezclaba Bs. y Ref. sin poder compararse. */}
                                     <div className="text-right shrink-0">
-                                        {/* En moneda base, no en la de la venta: sale.currency_id
-                                            solo dice cómo estaba puesta la pantalla al crearla, así
-                                            que la lista mezclaba Bs. y Ref. sin poder compararse ni
-                                            sumarse de un vistazo. Debajo, por dónde entró el dinero. */}
-                                        <p className="text-[13px] font-bold text-success tabular-nums">{fmtPrice(sale.total)}</p>
-                                        {sale.paid_journals && (
-                                            <p className="text-[11px] font-semibold text-content-subtle dark:text-white/30 truncate max-w-[140px]">
-                                                {sale.paid_journals}
-                                            </p>
-                                        )}
+                                        <Money value={fmtPrice(sale.total)} className="block text-[13px] font-semibold text-content dark:text-white" />
+                                        <span className="inline-block mt-0.5"><StatusMark status={sale.status} /></span>
                                     </div>
-                                    <span className="text-[12px] font-medium text-content-subtle dark:text-white/20 group-hover:text-brand-500 transition-colors shrink-0">
-                                        Ver →
-                                    </span>
+                                    <svg className="w-4 h-4 text-content-subtle/50 shrink-0 print-hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
                                 </div>
                             ))}
                         </div>
@@ -447,6 +492,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                     </div>
                 </div>
 
+                </div>
             </div>
         </div>
 
