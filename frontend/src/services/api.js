@@ -362,6 +362,9 @@ export const api = {
     resolveTransfer: (id, body)  => request(`/warehouses/transfers/${id}/resolve`, { method: "POST", body: JSON.stringify(body) }),
     cancelTransfer:  (id, body)  => request(`/warehouses/transfers/${id}/cancel`,  { method: "POST", body: JSON.stringify(body) }),
     getProducts: (id, params = {}) => request(`/warehouses/${id}/products?` + new URLSearchParams(params)),
+    // Kardex: historial de un producto y el buscador de productos que lo alimenta.
+    movements:        (params = {}) => request("/warehouses/movements?" + new URLSearchParams(params)),
+    movementProducts: (params = {}) => request("/warehouses/movements/products?" + new URLSearchParams(params)),
     sessions: {
       getActive:  (id)                  => request(`/warehouses/${id}/sessions/active`),
       open:       (id)                  => request(`/warehouses/${id}/sessions`,                       { method: "POST" }),

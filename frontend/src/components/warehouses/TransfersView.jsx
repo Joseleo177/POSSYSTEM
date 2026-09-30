@@ -1,18 +1,40 @@
 import { useState, useRef } from "react";
 import CustomSelect from "../ui/CustomSelect";
-import { fmtDate, toNameCase } from "../../helpers";
+import { toNameCase } from "../../helpers";
 import { fmtQtyUnit } from "../../helpers/unitFormatter";
 import { STATUS_FILTERS } from "../../hooks/useTransfers";
 import FilterPopover from "../ui/FilterPopover";
+import DatePicker from "../ui/DatePicker";
+import StatusMark, { statusTone } from "../ui/StatusMark";
+import { LedgerSkeleton, LedgerEmpty, ledgerRow, stopRow, RowIcon, RowCta } from "../ui/Ledger";
+import { fmtDateShort, fmtTime } from "../../helpers/dates";
 
 // Cómo se ve cada estado del documento. `sent` es el estado nuevo: la mercancía salió del
 // origen y todavía no la ha contado nadie en el destino.
-export const STATUS_META = {
-    sent:                      { label: "En tránsito",   badge: "badge-warning" },
-    received:                  { label: "Recibida",      badge: "badge-success" },
-    received_with_differences: { label: "Con faltantes", badge: "badge-danger"  },
-    cancelled:                 { label: "Anulada",       badge: "badge-neutral" },
+//
+// Mismo criterio que las facturas: lo que terminó bien va en gris con su marca, y solo lo
+// que pide que alguien actúe lleva color y filete en la fila (en tránsito, con faltantes).
+export const TRANSFER_STATUS = {
+    sent:                      { label: "En tránsito",   tone: "warning", flag: true },
+    received:                  { label: "Recibida",      tone: "success", quiet: "check" },
+    received_with_differences: { label: "Con faltantes", tone: "danger",  flag: true },
+    cancelled:                 { label: "Anulada",       tone: "neutral", quiet: "void" },
 };
+
+const SWAP = "M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4";
+
+// "4 productos · 25 despachadas" o el producto y su cantidad cuando es uno solo.
+export function resumenItems(t) {
+    const items = t.items || [];
+    if (items.length === 1) {
+        return { title: items[0].product_name, sub: fmtQtyUnit(items[0].qty_sent, items[0].unit).toLowerCase() };
+    }
+    const nombres = items.slice(0, 2).map(i => i.product_name).join(", ");
+    return {
+        title: items.length > 2 ? `${nombres} y ${items.length - 2} más` : nombres,
+        sub: `${t.item_count ?? items.length} productos · ${Number(t.total_sent || 0).toLocaleString("es-VE", { maximumFractionDigits: 3 })} despachadas`,
+    };
+}
 
 const ArrowIcon = ({ className = "w-3.5 h-3.5" }) => (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -20,23 +42,22 @@ const ArrowIcon = ({ className = "w-3.5 h-3.5" }) => (
     </svg>
 );
 
+// Origen → destino. El origen en gris, el destino en tinta: es a donde va la mercancía.
+export function Ruta({ t, className = "" }) {
+    return (
+        <span className={`inline-flex items-center gap-1.5 min-w-0 text-[13px] ${className}`}>
+            <span className="text-content-muted dark:text-white/60 truncate">{t.from_warehouse_name ? toNameCase(t.from_warehouse_name) : "Externo"}</span>
+            <ArrowIcon className="w-3.5 h-3.5 text-content-subtle/70 shrink-0" />
+            <span className="font-semibold text-content dark:text-white truncate">{toNameCase(t.to_warehouse_name)}</span>
+        </span>
+    );
+}
+
 // Direcciones relativas al almacén filtrado (o a los del usuario, si no eligió ninguno).
 const DIRECTIONS = [
     { value: "",    label: "Todas" },
     { value: "in",  label: "Entradas" },
     { value: "out", label: "Salidas" },
-];
-
-// Reparto de la tabla. Sin anchos declarados el navegador dimensiona por el texto de cada
-// cabecera y amontona todo a la izquierda, dejando un hueco muerto a la derecha en pantallas
-// anchas —y peor aún con la lista vacía, donde no hay contenido que reparta el espacio—.
-const COLUMNS = [
-    { label: "Documento",    width: "w-[15%]" },
-    { label: "Ruta",         width: "w-[23%]" },
-    { label: "Productos",    width: "w-[20%]" },
-    { label: "Estado",       width: "w-[14%]" },
-    { label: "Responsables", width: "w-[14%]" },
-    { label: "",             width: "w-[14%]" },
 ];
 
 export default function TransfersView({
@@ -52,6 +73,15 @@ export default function TransfersView({
     const receivable = (t) =>
         t.status === "sent" && canReceive && (isAdmin || t.employee_id !== currentEmployeeId);
 
+    // Quitar filtros también borra la búsqueda: la lista vacía puede venir de cualquiera de los dos.
+    const quitarFiltros = () => { clearFilters(); setSearch(""); };
+
+    const vacio = search || activeFilterCount > 1
+        ? { title: "Nada coincide", hint: "Prueba con otro documento, producto o filtro." }
+        : filters.status === "pending"
+        ? { title: "Nada pendiente", hint: "No hay mercancía en tránsito ni faltantes por resolver." }
+        : { title: "Sin transferencias", hint: "Cuando despaches mercancía entre almacenes aparecerá aquí." };
+
     return (
         <div className="flex-1 overflow-hidden flex flex-col">
             {/* ── Barra: buscador, filtros y el estado de la mercancía en la calle ── */}
@@ -65,8 +95,10 @@ export default function TransfersView({
                     <input
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        className="input h-9 pl-9 text-[12px] w-full"
-                        placeholder="Buscar por documento o producto..."
+                        className="input h-9 pl-9 text-[13px] w-full"
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="Buscar por documento o producto…"
                     />
                 </div>
 
@@ -133,20 +165,8 @@ export default function TransfersView({
                                 <div>
                                     <div className="text-[12px] font-medium text-content-subtle mb-1.5">Fecha</div>
                                     <div className="grid grid-cols-2 gap-2">
-                                        <input
-                                            type="date"
-                                            value={filters.dateFrom}
-                                            onChange={e => setFilter("dateFrom", e.target.value)}
-                                            className="input h-9 text-[11px] px-2"
-                                            title="Desde"
-                                        />
-                                        <input
-                                            type="date"
-                                            value={filters.dateTo}
-                                            onChange={e => setFilter("dateTo", e.target.value)}
-                                            className="input h-9 text-[11px] px-2"
-                                            title="Hasta"
-                                        />
+                                        <DatePicker value={filters.dateFrom} onChange={v => setFilter("dateFrom", v)} placeholder="Desde" />
+                                        <DatePicker value={filters.dateTo} onChange={v => setFilter("dateTo", v)} placeholder="Hasta" />
                                     </div>
                                 </div>
                                 {activeFilterCount > 0 && (
@@ -187,115 +207,113 @@ export default function TransfersView({
                 </div>
             </div>
 
-            <div className="flex-1 overflow-hidden flex flex-col py-3 px-4">
+            {/* ── Libro (escritorio) ── */}
+            <div className="hidden md:flex flex-1 overflow-hidden flex-col py-3 px-4">
                 <div className="card-premium overflow-auto flex-1">
-                    <table className="table-pos table-fixed min-w-[980px]">
-                        <thead>
+                    <table className="table-ledger min-w-[900px]">
+                        <thead className="sticky top-0 z-10">
                             <tr>
-                                {COLUMNS.map((c, i) => (
-                                    <th key={i} className={`text-left ${c.width}`}>{c.label}</th>
-                                ))}
+                                <th className="pl-4 w-[200px]">Documento</th>
+                                <th className="w-[220px]">Ruta</th>
+                                <th>Productos</th>
+                                <th className="w-[170px]">Estado</th>
+                                <th className="w-[200px]">Responsables</th>
+                                <th className="w-[120px] pr-4" />
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-border/40 dark:divide-white/5">
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={6} className="py-20 text-center text-[12px] font-bold text-content-subtle opacity-50">
-                                        Cargando transferencias...
-                                    </td>
-                                </tr>
-                            ) : transfers.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="py-20 text-center">
-                                        <div className="flex flex-col items-center gap-3 opacity-40">
-                                            <svg className="w-10 h-10 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                                            <div className="text-[12px] font-bold text-content-subtle">
-                                                {search || activeFilterCount > 1
-                                                    ? "Nada coincide con la búsqueda"
-                                                    : filters.status === "pending"
-                                                    ? "No hay transferencias pendientes"
-                                                    : "No hay transferencias registradas"}
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : transfers.map(t => {
-                                const meta = STATUS_META[t.status] || STATUS_META.sent;
-                                const pendingDiff = t.difference_status === "pending";
-                                return (
-                                    <tr key={t.id} className="group transition-colors">
-                                        <td>
-                                            <div className="font-bold text-content dark:text-white text-xs tracking-tight tabular-nums truncate">
-                                                {t.code || `#${t.id}`}
-                                            </div>
-                                            <div className="text-[11px] font-semibold text-content-subtle tabular-nums uppercase opacity-70 truncate">
-                                                {fmtDate(t.dispatched_at || t.created_at)}
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div className="flex items-center gap-1.5 min-w-0">
-                                                {t.from_warehouse_name ? (
-                                                    <span className="text-[13px] font-medium text-content dark:text-white truncate">{t.from_warehouse_name}</span>
-                                                ) : (
-                                                    <span className="text-[11px] text-content-subtle uppercase italic">Externo</span>
-                                                )}
-                                                <ArrowIcon className="w-3 h-3 text-content-subtle opacity-50 shrink-0" />
-                                                <span className="text-[13px] font-medium text-content dark:text-white truncate">{t.to_warehouse_name}</span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div className="text-[12px] font-bold text-content dark:text-white tracking-tight truncate">
-                                                {t.item_count === 1
-                                                    ? t.items[0]?.product_name
-                                                    : `${t.item_count} productos`}
-                                            </div>
-                                            <div className="text-[10px] font-semibold text-content-subtle tabular-nums truncate">
-                                                {t.item_count === 1
-                                                    ? fmtQtyUnit(t.items[0]?.qty_sent, t.items[0]?.unit)
-                                                    : `${t.total_sent} despachadas`}
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <span className={`badge ${meta.badge} shadow-none text-[11px]`}>{meta.label}</span>
-                                            {pendingDiff && (
-                                                <div className="text-[10px] font-bold uppercase tracking-wide text-danger mt-0.5 truncate">
-                                                    Faltante sin resolver
+                        <tbody>
+                            {loading ? <LedgerSkeleton cols={6} rows={6} />
+                                : transfers.length === 0 ? (
+                                    <LedgerEmpty cols={6} title={vacio.title} hint={vacio.hint}
+                                        onClear={activeFilterCount > 0 || search ? quitarFiltros : undefined} />
+                                ) : transfers.map(t => {
+                                    const r = resumenItems(t);
+                                    const pendingDiff = t.difference_status === "pending";
+                                    return (
+                                        <tr key={t.id} {...ledgerRow(() => onOpenDetail(t), statusTone(t.status, TRANSFER_STATUS))}>
+                                            <td className="pl-4">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <span className="w-8 h-8 rounded-full bg-surface-3 dark:bg-white/[0.06] text-content-muted dark:text-white/60 flex items-center justify-center shrink-0">
+                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={SWAP} /></svg>
+                                                    </span>
+                                                    <div className="min-w-0">
+                                                        <div className="text-[13px] font-semibold text-content dark:text-white tabular-nums truncate">{t.code || `#${t.id}`}</div>
+                                                        <div className="text-[12px] text-content-subtle tabular-nums truncate">
+                                                            {fmtDateShort(t.dispatched_at || t.created_at)} · {fmtTime(t.dispatched_at || t.created_at)}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            )}
-                                        </td>
-                                        <td>
-                                            <div className="text-[11px] font-bold text-content dark:text-white uppercase tracking-tighter truncate">
-                                                {toNameCase(t.employee_name) || "Sistema"}
-                                            </div>
-                                            <div className="text-[10px] font-semibold text-content-subtle uppercase truncate opacity-70">
-                                                {t.received_by_name ? `Recibió: ${t.received_by_name}` : "Sin recibir"}
-                                            </div>
-                                        </td>
-                                        <td>
-                                            {/* Botones siempre visibles: en tablet no hay hover que valga. */}
-                                            <div className="flex items-center justify-end gap-2">
-                                                {receivable(t) && (
-                                                    <button
-                                                        onClick={() => onOpenReceive(t)}
-                                                        className="h-8 px-3 rounded-lg btn-accent text-[11px] font-bold active:scale-95 transition-all"
-                                                    >
-                                                        Recibir
-                                                    </button>
-                                                )}
-                                                <button
-                                                    onClick={() => onOpenDetail(t)}
-                                                    className="h-8 px-3 rounded-lg border border-border/40 dark:border-white/10 text-[11px] font-bold text-content-subtle hover:text-content dark:hover:text-white hover:bg-surface-2/60 dark:hover:bg-white/5 active:scale-95 transition-all"
-                                                >
-                                                    Ver
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                                            </td>
+                                            <td className="max-w-0"><Ruta t={t} className="max-w-full" /></td>
+                                            <td className="max-w-0">
+                                                <div className="text-[13px] font-medium text-content dark:text-white truncate" title={r.title}>{r.title}</div>
+                                                <div className="text-[12px] text-content-subtle tabular-nums truncate">{r.sub}</div>
+                                            </td>
+                                            <td>
+                                                <StatusMark status={t.status} map={TRANSFER_STATUS} />
+                                                {pendingDiff && <div className="text-[12px] text-red-600 dark:text-red-400 mt-0.5 truncate">Faltante sin resolver</div>}
+                                            </td>
+                                            <td className="max-w-0">
+                                                <div className="text-[13px] text-content dark:text-white truncate">{toNameCase(t.employee_name) || "Sistema"}</div>
+                                                <div className="text-[12px] text-content-subtle truncate">
+                                                    {t.received_by_name ? `Recibió ${toNameCase(t.received_by_name)}` : t.status === "cancelled" ? "No se recibió" : "Por recibir"}
+                                                </div>
+                                            </td>
+                                            <td className="pr-4" onClick={stopRow}>
+                                                <div className="flex items-center justify-end">
+                                                    {receivable(t) && <RowCta onClick={() => onOpenReceive(t)}>Recibir</RowCta>}
+                                                    <RowIcon icon="eye" title="Ver detalle" onClick={() => onOpenDetail(t)} />
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            {/* ── Tarjetas (teléfono) ── */}
+            <div className="md:hidden flex-1 overflow-y-auto px-3 py-3 space-y-2">
+                {loading ? (
+                    <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
+                ) : transfers.length === 0 ? (
+                    <div className="py-16 text-center px-6">
+                        <div className="text-[14px] font-semibold text-content dark:text-white">{vacio.title}</div>
+                        <div className="text-[13px] text-content-subtle mt-1">{vacio.hint}</div>
+                    </div>
+                ) : transfers.map(t => {
+                    const r = resumenItems(t);
+                    const pendingDiff = t.difference_status === "pending";
+                    const tone = statusTone(t.status, TRANSFER_STATUS);
+                    return (
+                        <div key={t.id} role="button" tabIndex={0} onClick={() => onOpenDetail(t)}
+                            onKeyDown={e => { if (e.key === "Enter") onOpenDetail(t); }}
+                            style={tone ? { boxShadow: `inset 3px 0 0 ${tone}` } : undefined}
+                            className="rounded-xl border border-border/70 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] px-3.5 py-3 active:scale-[0.99] transition-transform">
+                            <div className="flex items-center justify-between gap-3">
+                                <span className="text-[14px] font-semibold text-content dark:text-white tabular-nums">{t.code || `#${t.id}`}</span>
+                                <StatusMark status={t.status} map={TRANSFER_STATUS} />
+                            </div>
+                            <Ruta t={t} className="mt-1.5 max-w-full" />
+                            <div className="mt-2 flex items-end justify-between gap-3">
+                                <div className="min-w-0">
+                                    <div className="text-[13px] text-content dark:text-white truncate">{r.title}</div>
+                                    <div className="text-[12px] text-content-subtle truncate">
+                                        {r.sub} · {fmtDateShort(t.dispatched_at || t.created_at)}
+                                    </div>
+                                    {pendingDiff && <div className="text-[12px] text-red-600 dark:text-red-400">Faltante sin resolver</div>}
+                                </div>
+                                {receivable(t) && (
+                                    <button onClick={e => { e.stopPropagation(); onOpenReceive(t); }}
+                                        className="btn-accent h-9 px-4 rounded-lg text-[13px] font-semibold shrink-0 active:scale-95">
+                                        Recibir
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );

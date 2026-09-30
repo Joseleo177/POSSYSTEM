@@ -4,6 +4,7 @@ import { api } from "../../services/api";
 import Pagination from "../ui/Pagination";
 import StockQty, { StockBand, splitQty } from "../ui/StockQty";
 import FilterPopover from "../ui/FilterPopover";
+import ProductMovementsModal from "./ProductMovementsModal";
 
 export default function StockView({
     selectedWarehouse, stockSearch, setStockSearch, loadingStock, filteredStock,
@@ -12,6 +13,8 @@ export default function StockView({
     stockCategory, setStockCategory, notify,
 }) {
     const [categories, setCategories] = useState([]);
+    // Producto cuyo historial está abierto (ventana de movimientos).
+    const [historyOf, setHistoryOf] = useState(null);
 
     // Editar el stock directo exige una sesión de ajustes abierta: cada cambio se registra
     // como una línea de esa sesión (mismo rastro que Movimiento Manual). Se consulta acá para
@@ -252,6 +255,11 @@ export default function StockView({
                                                         title={session ? "Ajustar existencias" : "Abre una sesión de ajustes primero"}>
                                                         Ajustar
                                                     </button>
+                                                    <button onClick={() => setHistoryOf(s.product_id)}
+                                                        className="w-7 h-7 rounded-lg text-content-subtle hover:text-content hover:bg-surface-3 dark:hover:bg-white/[0.06] dark:hover:text-white transition-colors flex items-center justify-center shrink-0"
+                                                        title="Movimientos" aria-label="Movimientos">
+                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                    </button>
                                                     <button onClick={() => handleDeleteStock(s)}
                                                         className="w-7 h-7 rounded-lg text-content-subtle hover:text-red-600 hover:bg-red-500/10 dark:hover:text-red-400 transition-colors flex items-center justify-center shrink-0"
                                                         title="Retirar">
@@ -338,6 +346,14 @@ export default function StockView({
                                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                                 </button>
                                                 <button
+                                                    onClick={() => setHistoryOf(s.product_id)}
+                                                    className="row-icon"
+                                                    title="Movimientos"
+                                                    aria-label="Movimientos"
+                                                >
+                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                </button>
+                                                <button
                                                     onClick={() => handleDeleteStock(s)}
                                                     className="row-icon hover:!text-red-600 dark:hover:!text-red-400"
                                                     title="Retirar"
@@ -361,6 +377,7 @@ export default function StockView({
                         onPageChange={(p) => loadStock(selectedWarehouse.id, p)}
                     />
             </>
+            <ProductMovementsModal productId={historyOf} warehouseId={selectedWarehouse?.id ? String(selectedWarehouse.id) : ""} onClose={() => setHistoryOf(null)} />
         </div>
     );
 }

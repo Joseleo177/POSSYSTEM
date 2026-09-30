@@ -7,6 +7,21 @@ const { broadcast } = require("../services/sseService");
 // productos, que es el que la caja ya escucha para refrescar precios y promociones.
 const avisarCajas = (req) => broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
 
+// La pantalla manda días del calendario ("2026-09-30"). Guardados tal cual quedaban a
+// medianoche UTC, que en Caracas son las 20:00 del día ANTERIOR: una promo "hasta el 30"
+// dejaba de aplicarse en caja el 29 a las 8 de la noche, y una "desde el 1" arrancaba el
+// 30 a esa hora. Aquí "desde" es el primer instante de ese día y "hasta" el último, en la
+// hora de la empresa. Un valor que ya trae hora (no solo fecha) se respeta tal cual.
+const TZ = process.env.DB_TIMEZONE || 'America/Caracas';
+const offsetDe = (dia) => {
+  const v = new Intl.DateTimeFormat('en-US', { timeZone: TZ, timeZoneName: 'longOffset' })
+    .formatToParts(new Date(`${dia}T12:00:00Z`)).find(p => p.type === 'timeZoneName')?.value || '';
+  return v.match(/GMT([+-]d{2}:d{2})/)?.[1] || '+00:00';
+};
+const soloFecha = (s) => typeof s === 'string' && /^d{4}-d{2}-d{2}$/.test(s);
+const inicioDelDia = (s) => soloFecha(s) ? new Date(`${s}T00:00:00${offsetDe(s)}`) : s;
+const finDelDia = (s) => soloFecha(s) ? new Date(`${s}T23:59:59.999${offsetDe(s)}`) : s;
+
 const getAll = async (req, res) => {
   try {
     const promos = await Promotion.findAll({
@@ -77,8 +92,8 @@ const create = async (req, res) => {
       discount_pct: discount_pct || null,
       buy_qty: buy_qty || null,
       get_qty: get_qty || null,
-      starts_at,
-      ends_at: ends_at || null,
+      starts_at: inicioDelDia(starts_at),
+      ends_at: ends_at ? finDelDia(ends_at) : null,
       active: active !== false,
       // Sin sucursal, corre en todas. Es el caso normal, así que la pantalla manda vacío.
       warehouse_id: parseInt(warehouse_id, 10) || null,
@@ -116,8 +131,8 @@ const update = async (req, res) => {
       discount_pct: discount_pct || null,
       buy_qty: buy_qty || null,
       get_qty: get_qty || null,
-      starts_at,
-      ends_at: ends_at || null,
+      starts_at: inicioDelDia(starts_at),
+      ends_at: ends_at ? finDelDia(ends_at) : null,
       active,
       // `undefined` deja la sucursal como estaba; vacío o 0 la devuelve a "todas".
       warehouse_id: warehouse_id === undefined ? promo.warehouse_id : (parseInt(warehouse_id, 10) || null),

@@ -1,7 +1,7 @@
 export default function WarehousesHeader({ subTab, setSubTab }) {
     return (
         <div className="shrink-0 px-4 flex items-center gap-1 border-b border-border/20 dark:border-white/5 bg-white/[0.02]">
-            {[["almacenes", "Almacenes"], ["transferencias", "Transferencias"]].map(([key, label]) => (
+            {[["almacenes", "Almacenes"], ["transferencias", "Transferencias"], ["movimientos", "Movimientos"]].map(([key, label]) => (
                 <button
                     key={key}
                     onClick={() => setSubTab(key)}

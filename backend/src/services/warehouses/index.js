@@ -3,4 +3,5 @@ module.exports = {
   ...require("./stockService"),
   ...require("./transferService"),
   ...require("./sessionService"),
+  ...require("./movementService"),
 };

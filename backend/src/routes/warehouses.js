@@ -17,6 +17,13 @@ router.post  ("/",                   permit("admin"), wh.create);
 router.put   ("/:id",                permit("admin"), wh.update);
 router.delete("/:id",                permit("admin"), wh.remove);
 
+// ── Movimientos por producto (kardex) ─────────────────────────
+// Solo lectura. El almacén es opcional (sin él, todos los que el usuario ve) y el servicio
+// valida el acceso cuando viene. Antes que las rutas con `:id` para que "movements" no se
+// lea como id de almacén.
+router.get("/movements",          permit("inventory.view"), wh.movements);
+router.get("/movements/products", permit("inventory.view"), wh.movementProducts);
+
 // ── Stock ─────────────────────────────────────────────────────
 router.get  ("/:id/stock", permit("inventory.view"),           ownWarehouse, wh.getStock);
 router.post ("/:id/stock",           permit("inventory.adjust"), ownWarehouse, wh.addStock);

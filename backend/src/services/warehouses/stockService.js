@@ -1,5 +1,30 @@
 const { Product, ProductStock, StockSession, StockSessionLine, Sequelize, sequelize } = require("../../models");
 const { floorToUnit } = require("../../utils/units");
+const { ensureOpenSession } = require("./sessionService");
+
+// Deja constancia de una entrada o salida que no pasa por Movimiento manual (alta con stock
+// inicial, retiro del almacén). Sin esta línea el kardex del producto no tenía cómo explicar
+// esas existencias y el saldo reconstruido quedaba descuadrado.
+async function registrarLinea(req, { warehouseId, product, qtyBefore, delta, reason, notes }, transaction) {
+  if (!delta) return;
+  const session = await ensureOpenSession({
+    warehouseId,
+    employeeId: req.employee?.id ?? null,
+    companyId:  req.employee?.company_id ?? null,
+  }, transaction);
+  await StockSessionLine.create({
+    session_id:   session.id,
+    warehouse_id: warehouseId,
+    product_id:   product.id,
+    product_name: product.name,
+    qty_before:   qtyBefore,
+    qty_adjusted: delta,
+    qty_after:    parseFloat((qtyBefore + delta).toFixed(4)),
+    type:         delta > 0 ? "in" : "out",
+    reason,
+    notes:        notes || null,
+  }, { transaction });
+}
 
 function buildTcp(req) {
   const company_id = req.employee?.company_id ?? null;
@@ -348,7 +373,11 @@ async function addStock(req) {
       }
     }
 
+    const qtyBefore = parseFloat(stockEntry.qty || 0);
     await stockEntry.increment('qty', { by: parsedQty, transaction });
+    await registrarLinea(req, {
+      warehouseId, product, qtyBefore, delta: parsedQty, reason: "carga_inicial",
+    }, transaction);
 
     const totalStock = await ProductStock.sum('qty', { where: { product_id }, transaction });
     await product.update({ stock: totalStock }, { transaction });
@@ -436,8 +465,18 @@ async function removeStock(req) {
 
   const transaction = await sequelize.transaction();
   try {
-    const stockEntry = await ProductStock.findOne({ where: { warehouse_id: warehouseId, product_id: productId } });
+    const stockEntry = await ProductStock.findOne({ where: { warehouse_id: warehouseId, product_id: productId }, transaction, lock: true });
     if (!stockEntry) { const e = new Error("El producto no está en este almacén"); e.status = 404; throw e; }
+
+    // Retirar con existencias es una salida: se anota antes de borrar la ficha.
+    const qtyBefore = parseFloat(stockEntry.qty || 0);
+    if (qtyBefore !== 0) {
+      const product = await Product.findByPk(productId, { transaction });
+      await registrarLinea(req, {
+        warehouseId, product, qtyBefore, delta: -qtyBefore, reason: "retiro",
+        notes: "Retirado del almacén",
+      }, transaction);
+    }
 
     await stockEntry.destroy({ transaction });
 

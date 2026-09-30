@@ -4,6 +4,7 @@ const {
   createTransfer, getTransfers, getTransfer, getTransferSummary,
   receiveTransfer, resolveDifferences, cancelTransfer,
   getActiveSession, openSession, addLine, closeSession, getSessions,
+  getProductMovements, searchMovementProducts,
 } = require("../services/warehouses");
 const { broadcast } = require("../services/sseService");
 
@@ -28,6 +29,8 @@ module.exports = {
   remove:           wrap(req => deleteWarehouse(req.params.id)),
   assignEmployees:  wrap(req => assignEmployees(req.params.id, req.body.employee_ids)),
   getStock:         wrap(req => getStock(req)),
+  movements:        wrap(req => getProductMovements(req)),
+  movementProducts: wrap(req => searchMovementProducts(req)),
   getProducts:      wrap(req => getProducts(req)),
   addStock:         wrap(async req => { const r = await addStock(req);    stockBroadcast(req); return r; }),
   setStock:         wrap(async req => { const r = await setStock(req);    stockBroadcast(req); return r; }),

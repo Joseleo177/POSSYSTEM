@@ -19,6 +19,7 @@ import TransferDetailModal from "./TransferDetailModal";
 import AssignEmployeesModal from "./AssignEmployeesModal";
 import EditStockModal from "./EditStockModal";
 import AdjustmentsView from "./AdjustmentsView";
+import MovementsView from "./MovementsView";
 
 export default function WarehousesTab({ notify, currentEmployee }) {
     const [subTab, setSubTab] = useState("almacenes");
@@ -126,6 +127,8 @@ export default function WarehousesTab({ notify, currentEmployee }) {
     // ── Título dinámico ───────────────────────────────────────
     const pageTitle = subTab === "transferencias"
         ? "Transferencias"
+        : subTab === "movimientos"
+        ? "Movimientos"
         : subTab === "ajustes"
         ? `Movimiento manual · ${selectedWarehouse?.name || ""}`
         : subTab === "stock"
@@ -190,6 +193,10 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                     currentEmployeeId={currentEmployee?.id}
                     isAdmin={esAdmin}
                 />
+            )}
+
+            {subTab === "movimientos" && (
+                <MovementsView warehouses={warehouses} />
             )}
 
             {subTab === "ajustes" && (
