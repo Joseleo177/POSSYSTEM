@@ -7,7 +7,7 @@ import { toLocalISO } from "../../helpers";
  * Custom calendar interface with Dark/Light mode support and quick shortcuts.
  * Uses React Portal to float above modals and avoid clipping/scrolling issues.
  */
-export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa", className = "" }) {
+export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa", className = "", clearable = true }) {
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const [viewDate, setViewDate] = useState(() => {
@@ -183,14 +183,15 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/aaaa"
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
         
-        <span className={`text-[12px] font-medium tracking-tight truncate ${value ? "" : "opacity-30"}`}>
+        <span className={`text-[12px] font-medium tracking-tight whitespace-nowrap truncate ${value ? "" : "opacity-30"}`}>
           {fmt(value)}
         </span>
 
-        {value && (
+        {value && clearable && (
           <button
             onClick={(e) => { e.stopPropagation(); onChange?.(""); }}
-            className="ml-auto w-5 h-5 rounded-md flex items-center justify-center hover:bg-danger/10 text-content-subtle hover:text-danger transition-all opacity-0 group-hover:opacity-100"
+            aria-label="Quitar fecha"
+            className="ml-auto -mr-1.5 w-6 h-6 shrink-0 rounded-md flex items-center justify-center hover:bg-danger/10 text-content-subtle/60 hover:text-danger transition-all"
           >
             <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>

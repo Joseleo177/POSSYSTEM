@@ -752,7 +752,7 @@ export default function PurchaseDetails({ state }) {
                 {canSetDue && payStatus !== "pagado" && (
                   <div className="flex items-center gap-2 shrink-0">
                     {savingDue && <Spinner />}
-                    <DatePicker value={dueDate} onChange={v => v && v !== dueDate && saveDueDate(v)} className="w-[150px]" />
+                    <DatePicker value={dueDate} onChange={v => v && v !== dueDate && saveDueDate(v)} clearable={false} className="shrink-0" />
                     {detail.due_date && (
                       <button
                         onClick={() => saveDueDate(null)}

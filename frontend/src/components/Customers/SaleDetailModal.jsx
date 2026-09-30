@@ -182,7 +182,7 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                                             {canSetDue && (
                                                 <div className="flex items-center gap-2 shrink-0">
                                                     {savingDue && <Spinner />}
-                                                    <DatePicker value={due} onChange={v => v && v !== due && saveDueDate(v)} className="w-[150px]" />
+                                                    <DatePicker value={due} onChange={v => v && v !== due && saveDueDate(v)} clearable={false} className="shrink-0" />
                                                     {sale.due_date && (
                                                         <button
                                                             onClick={() => saveDueDate(null)}
