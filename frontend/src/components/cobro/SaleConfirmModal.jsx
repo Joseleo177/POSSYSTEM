@@ -367,13 +367,15 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     la etiqueta visible el atajo no existe para quien no lo memorizó. */}
                 <div className="px-6 pt-5 pb-5 flex flex-col gap-2">
                     {/* En teléfono van uno debajo del otro: los botones no se encogen (llevan
-                        whitespace-nowrap) y en fila estiraban el modal más allá de la pantalla. */}
+                        whitespace-nowrap) y en fila estiraban el modal más allá de la pantalla.
+                        El flex-1 va solo desde sm: en columna fija la base del alto en 0 y el
+                        botón se aplastaba a la altura del texto, más bajo que "Imprimir". */}
                     {canSettle && (
                         <div className="flex flex-col sm:flex-row gap-2">
                             <Button
                                 variant={principal === "pay" ? "primary" : "ghost"}
                                 onClick={() => setShowPicker(true)}
-                                className="flex-1 min-w-0 h-12 sm:h-10"
+                                className="sm:flex-1 min-w-0 h-12 sm:h-10"
                             >
                                 <KeyHint n={numOf("pay")} />
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
@@ -386,7 +388,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                                     variant="ghost"
                                     onClick={confirmCredit}
                                     disabled={creditLoading}
-                                    className="flex-1 min-w-0 h-10"
+                                    className="sm:flex-1 min-w-0 h-12 sm:h-10"
                                     title="Entregar a crédito: emite la factura y queda por cobrar"
                                 >
                                     <KeyHint n={numOf("credit")} />
@@ -402,7 +404,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                         variant="ghost"
                         onClick={printDirect}
                         disabled={printing}
-                        className="h-10"
+                        className="h-12 sm:h-10"
                         title="Imprime el ticket en la impresora térmica, sin abrir la vista previa"
                     >
                         <KeyHint n={numOf("print")} />
@@ -411,7 +413,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     </Button>
 
                     <div className="flex flex-col sm:flex-row gap-2">
-                        <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="flex-1 min-w-0 h-10">
+                        <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="sm:flex-1 min-w-0 h-12 sm:h-10">
                             <KeyHint n={numOf("ticket")} />
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                             Ver ticket
@@ -425,7 +427,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             variant={principal === "next" ? "primary" : "ghost"}
                             onClick={isUnresolved ? salirComoCredito : onNext}
                             disabled={creditLoading}
-                            className="flex-1 min-w-0 h-10"
+                            className="sm:flex-1 min-w-0 h-12 sm:h-10"
                             title={isUnresolved ? "Emite la factura y la deja por cobrar" : undefined}
                         >
                             <KeyHint n={numOf("next")} />
