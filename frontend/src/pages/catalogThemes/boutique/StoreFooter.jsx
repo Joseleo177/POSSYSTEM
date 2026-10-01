@@ -1,5 +1,6 @@
 import StoreLogo from "./StoreLogo";
 import { getSocialLinks } from "./socialLinks";
+import { toNameCase } from "../../../helpers";
 
 // Pie de tienda: identidad, contacto, categorías y redes. Es la última pantalla que ve quien
 // bajó del todo sin decidirse, así que repite las dos cosas que hacen falta para comprar —cómo
@@ -21,7 +22,7 @@ const Icono = ({ d }) => (
 );
 
 const Titulo = ({ children }) => (
-    <h3 className="text-[11px] font-black uppercase tracking-[0.18em] text-content dark:text-white mb-4">{children}</h3>
+    <h3 className="text-[14px] font-semibold text-content dark:text-white mb-3">{children}</h3>
 );
 
 // `pegado`: cuando justo encima va el carrusel de destacados, que ya cierra la página a todo
@@ -43,7 +44,7 @@ export default function StoreFooter({ store, categories, onPickCategory, pegado 
                         {store?.logo_url ? (
                             <StoreLogo store={store} className="h-14 w-auto max-w-[240px]" />
                         ) : (
-                            <div className="text-[20px] font-black text-content dark:text-white">{store?.name}</div>
+                            <div className="text-[20px] font-bold tracking-tight text-content dark:text-white">{store?.name}</div>
                         )}
                         {store?.slogan && (
                             <p className="mt-4 text-[13px] font-medium text-content-muted leading-relaxed max-w-sm">{store.slogan}</p>
@@ -79,9 +80,9 @@ export default function StoreFooter({ store, categories, onPickCategory, pegado 
                                         key={c.id}
                                         type="button"
                                         onClick={() => { onPickCategory(String(c.id)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                                        className="h-8 px-3.5 rounded-full border border-border/70 dark:border-white/10 text-[11px] font-bold uppercase tracking-wide text-content-muted hover:border-brand-500 hover:text-brand-500 transition-colors"
+                                        className="h-8 px-3.5 rounded-full border border-border/70 dark:border-white/10 text-[13px] font-medium text-content-muted hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
                                     >
-                                        {c.name}
+                                        {toNameCase(c.name)}
                                     </button>
                                 ))}
                             </div>
@@ -111,7 +112,7 @@ export default function StoreFooter({ store, categories, onPickCategory, pegado 
                                     href={`https://wa.me/${store.whatsapp}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="mt-5 inline-flex items-center gap-2 h-10 px-5 rounded-full bg-brand-500 text-white text-[11px] font-black uppercase tracking-widest hover:brightness-110 transition active:scale-95"
+                                    className="mt-5 inline-flex items-center gap-2 h-10 px-5 rounded-full bg-brand-500 text-white text-[14px] font-semibold hover:brightness-110 transition active:scale-95"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                                     Escríbenos
@@ -124,13 +125,13 @@ export default function StoreFooter({ store, categories, onPickCategory, pegado 
 
             <div className="border-t border-border/60 dark:border-white/[0.06]">
                 <div className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
-                    <p className="text-[11px] font-medium text-content-subtle truncate">
+                    <p className="text-[12px] text-content-subtle truncate">
                         © {anio} {store?.name}
                     </p>
                     <button
                         type="button"
                         onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                        className="shrink-0 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-content-muted hover:text-brand-500 transition-colors"
+                        className="shrink-0 inline-flex items-center gap-1.5 text-[13px] font-medium text-content-muted hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
                     >
                         Volver arriba
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>

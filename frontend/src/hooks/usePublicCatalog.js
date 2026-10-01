@@ -246,7 +246,10 @@ export function usePublicCatalog(token, initialProductId = null) {
     const fmt = (amount, cur) => {
         if (!cur) return "";
         const value = parseFloat(amount) * (cur.is_base ? 1 : cur.exchange_rate);
-        return `${cur.symbol}${value.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        // Mismo formato que el resto del sistema ("Ref. 36.00", "Bs. 30926.26"): con espacio y
+        // sin separador de miles. El cliente ve el mismo número que le dirá la caja y el del
+        // ticket; con el formato local convivían dos convenciones para el mismo precio.
+        return `${cur.symbol} ${value.toFixed(2)}`;
     };
 
     const ordersEnabled = !!store?.orders_enabled;

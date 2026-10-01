@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { getSocialLinks } from "./socialLinks";
 import StoreLogo from "./StoreLogo";
+import { toNameCase } from "../../../helpers";
 
 // Cabecera de tienda de marca: franja de anuncio, logo centrado, iconos de cliente y una
 // barra de menú con las categorías que la tienda destacó.
@@ -22,7 +23,7 @@ const IconBtn = ({ onClick, label, badge, children }) => (
     >
         {children}
         {badge > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-500 text-white text-[10px] font-black flex items-center justify-center tabular-nums">
+            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-500 text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
                 {badge}
             </span>
         )}
@@ -61,11 +62,11 @@ export default function StorefrontHeader({
                         <div className="flex-1 min-w-0 text-center">
                             {store?.announcement?.text && (
                                 store.announcement.link ? (
-                                    <a href={store.announcement.link} className="text-[11px] font-bold hover:underline truncate inline-block max-w-full align-middle">
+                                    <a href={store.announcement.link} className="text-[12px] font-semibold hover:underline truncate inline-block max-w-full align-middle">
                                         {store.announcement.text}
                                     </a>
                                 ) : (
-                                    <span className="text-[11px] font-bold truncate inline-block max-w-full align-middle">
+                                    <span className="text-[12px] font-semibold truncate inline-block max-w-full align-middle">
                                         {store.announcement.text}
                                     </span>
                                 )
@@ -122,7 +123,7 @@ export default function StorefrontHeader({
                             {store?.logo_url ? (
                                 <StoreLogo store={store} className="h-11 md:h-12 w-auto max-w-full" />
                             ) : (
-                                <span className="text-[15px] md:text-[18px] font-black text-content dark:text-white tracking-tight">
+                                <span className="text-[15px] md:text-[18px] font-bold text-content dark:text-white tracking-tight">
                                     {store?.name}
                                 </span>
                             )}
@@ -146,12 +147,12 @@ export default function StorefrontHeader({
                                     <span className="relative">
                                         <svg className="w-[18px] h-[18px] text-content dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17M17 17a2 2 0 100 4 2 2 0 000-4zM9 19a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                                         {cartCount > 0 && (
-                                            <span className="absolute -top-1.5 -right-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-brand-500 text-white text-[9px] font-black flex items-center justify-center tabular-nums">
+                                            <span className="absolute -top-1.5 -right-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-brand-500 text-white text-[9px] font-semibold flex items-center justify-center tabular-nums">
                                                 {cartCount}
                                             </span>
                                         )}
                                     </span>
-                                    <span className="hidden sm:block text-[12px] font-black text-content dark:text-white tabular-nums">
+                                    <span className="hidden sm:block text-[13px] font-semibold text-content dark:text-white tabular-nums">
                                         {fmt(cartTotal, baseCur)}
                                     </span>
                                 </button>
@@ -186,7 +187,7 @@ export default function StorefrontHeader({
                             <button
                                 type="button"
                                 onClick={() => setCategory("")}
-                                className={`shrink-0 h-11 px-3 text-[12px] font-black uppercase tracking-wide transition-colors border-b-2 ${!category
+                                className={`shrink-0 h-11 px-3 text-[13px] font-semibold transition-colors border-b-2 ${!category
                                     ? "text-brand-500 border-brand-500"
                                     : "text-content-muted border-transparent hover:text-content dark:hover:text-white"}`}
                             >
@@ -197,13 +198,13 @@ export default function StorefrontHeader({
                                     key={e.category_id}
                                     type="button"
                                     onClick={() => setCategory(String(e.category_id))}
-                                    className={`relative shrink-0 h-11 px-3 text-[12px] font-black uppercase tracking-wide transition-colors border-b-2 ${String(category) === String(e.category_id)
+                                    className={`relative shrink-0 h-11 px-3 text-[13px] font-semibold transition-colors border-b-2 ${String(category) === String(e.category_id)
                                         ? "text-brand-500 border-brand-500"
                                         : "text-content-muted border-transparent hover:text-content dark:hover:text-white"}`}
                                 >
-                                    {e.label}
+                                    {toNameCase(e.label)}
                                     {e.badge && (
-                                        <span className="absolute -top-0.5 right-0 px-1.5 py-px rounded-full bg-brand-500 text-white text-[8px] font-black uppercase tracking-wider whitespace-nowrap">
+                                        <span className="absolute -top-0.5 right-0 px-1.5 py-px rounded-full bg-brand-500 text-white text-[9px] font-semibold whitespace-nowrap">
                                             {e.badge}
                                         </span>
                                     )}

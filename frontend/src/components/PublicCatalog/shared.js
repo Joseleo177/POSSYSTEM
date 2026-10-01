@@ -13,15 +13,19 @@ export const round3 = (n) => Math.round(n * 1000) / 1000;
 export const DOC_PREFIXES = ["V", "E", "J", "G", "P"];
 export const docMaxLen = (prefix) => (["J", "G"].includes(prefix) ? 9 : 8);
 
-// Colores del estado. "rechazado" no viene del servidor: lo deduce el navegador cuando un
-// pedido que envió ya no aparece en la lista (ver rejectedIds).
-export const STAGE_STYLES = {
-    enviado:    "bg-warning/15 text-warning border-warning/30",
-    confirmado: "bg-info/15 text-info border-info/30",
-    facturado:  "bg-brand-500/15 text-brand-500 border-brand-500/30",
-    pagado:     "bg-success/15 text-success border-success/30",
-    anulado:    "bg-danger/15 text-danger border-danger/30",
-    rechazado:  "bg-danger/15 text-danger border-danger/30",
+// Tono de cada estado, con la misma lectura que el resto del sistema (ui/StatusMark): un punto
+// y el texto, sin pastilla. El color es señal: azul lo que está en curso, ámbar lo que espera
+// el pago, verde con su visto lo pagado, gris lo anulado y rojo lo que la tienda no procesó.
+// Antes "facturado" iba en el color de la tienda, que no le decía al cliente nada.
+// "rechazado" no viene del servidor: lo deduce el navegador cuando un pedido que envió ya no
+// aparece en la lista (ver rejectedIds).
+export const STAGE_TONE = {
+    enviado:    { dot: "bg-sky-500",   text: "text-sky-700 dark:text-sky-400" },
+    confirmado: { dot: "bg-sky-500",   text: "text-sky-700 dark:text-sky-400" },
+    facturado:  { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" },
+    pagado:     { check: true,         text: "text-emerald-700 dark:text-emerald-400" },
+    anulado:    { dot: "bg-content-subtle/60", text: "text-content-subtle" },
+    rechazado:  { dot: "bg-red-500",   text: "text-red-600 dark:text-red-400" },
 };
 
 // Cantidades: enteras para unidades contables, 3 decimales para peso y volumen. Aquí no

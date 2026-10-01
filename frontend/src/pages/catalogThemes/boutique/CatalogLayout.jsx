@@ -6,6 +6,7 @@ import CartBar from "./CartBar";
 import MyOrdersModal from "../../../components/PublicCatalog/MyOrdersModal";
 import ProfileModal from "../../../components/PublicCatalog/ProfileModal";
 import StoreWhatsAppButton from "../../../components/PublicCatalog/StoreWhatsAppButton";
+import { toNameCase } from "../../../helpers";
 
 import CartDrawer from "./CartDrawer";
 import StorefrontHeader from "./StorefrontHeader";
@@ -80,7 +81,7 @@ export default function CatalogLayout({ catalog, token }) {
     // vista justo cuando son lo único que importa.
     const enPortada = !search && !category;
     const tituloListado = category
-        ? (categories.find(c => String(c.id) === String(category))?.name || "Productos")
+        ? (toNameCase(categories.find(c => String(c.id) === String(category))?.name) || "Productos")
         : (search ? `Resultados de "${search}"` : "Todos los productos");
 
     return (

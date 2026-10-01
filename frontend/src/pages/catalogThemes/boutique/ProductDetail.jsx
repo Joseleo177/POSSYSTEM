@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
+import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../../helpers";
+import Money from "../../../components/ui/Money";
 import { fmtQtyUnit } from "../../../helpers/unitFormatter";
 
 // Página propia del producto: /catalogo/<tienda>/p/<id>. Es lo que la tienda comparte por
@@ -44,7 +45,7 @@ export default function ProductDetail({
                     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </div>
                 <p className="text-[14px] font-bold text-content dark:text-white">{error || "Producto no disponible"}</p>
-                <button onClick={() => onBack()} className="mt-4 text-[11px] font-bold uppercase tracking-widest text-brand-500 hover:underline">
+                <button onClick={() => onBack()} className="mt-4 text-[13px] font-medium text-brand-600 dark:text-brand-400 hover:underline">
                     Volver a la tienda
                 </button>
             </main>
@@ -84,9 +85,9 @@ export default function ProductDetail({
                     <button
                         type="button"
                         onClick={() => onBack(String(p.category.id))}
-                        className="min-w-0 inline-flex items-center gap-1 text-[12px] font-bold text-brand-500 hover:underline"
+                        className="min-w-0 inline-flex items-center gap-1 text-[13px] font-medium text-brand-600 dark:text-brand-400 hover:underline"
                     >
-                        <span className="truncate">Ver más de {p.category.name}</span>
+                        <span className="truncate">Ver más de {toNameCase(p.category.name)}</span>
                         <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                     </button>
                 )}
@@ -108,11 +109,6 @@ export default function ProductDetail({
                             <span className="text-6xl font-black text-brand-500/25 select-none">{p.name.charAt(0)}</span>
                         </div>
                     )}
-                    {!p.available && (
-                        <span className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-danger/90 backdrop-blur text-white text-[11px] font-bold uppercase tracking-wide shadow-sm">
-                            Agotado
-                        </span>
-                    )}
                 </div>
 
                 {/* Orden de la columna: primero lo que decide la compra (qué es, cuánto
@@ -122,12 +118,12 @@ export default function ProductDetail({
                 <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                         {p.brand && (
-                            <span className="px-2.5 py-1 rounded-full bg-content/[0.06] dark:bg-white/[0.08] text-[10px] font-black uppercase tracking-[0.14em] text-content dark:text-white">
+                            <span className="px-2.5 py-1 rounded-full bg-content/[0.06] dark:bg-white/[0.08] text-[12px] font-semibold text-content dark:text-white">
                                 {p.brand}
                             </span>
                         )}
                         {p.includes?.length > 0 && (
-                            <span className="px-2.5 py-1 rounded-full bg-brand-500/10 text-[10px] font-black uppercase tracking-[0.14em] text-brand-500">
+                            <span className="px-2.5 py-1 rounded-full bg-brand-500/10 text-[12px] font-semibold text-brand-600 dark:text-brand-400">
                                 {/* Un combo de una sola pieza es una caja o paquete (12 latas),
                                     no un kit: "Kit · 1 producto" no decía nada útil. */}
                                 {p.includes.length === 1
@@ -137,8 +133,8 @@ export default function ProductDetail({
                         )}
                     </div>
 
-                    <h1 className="mt-3 text-[26px] md:text-[34px] font-black text-content dark:text-white leading-[1.1] tracking-tight">
-                        {p.name}
+                    <h1 className="mt-3 text-[26px] md:text-[32px] font-bold text-content dark:text-white leading-[1.15] tracking-tight">
+                        {toNameCase(p.name)}
                     </h1>
 
                     {p.short_description && (
@@ -163,40 +159,38 @@ export default function ProductDetail({
                                 {hasPrice ? (
                                     <>
                                         <div className="flex items-baseline gap-2.5 flex-wrap">
-                                            <span className="text-[30px] font-black text-content dark:text-white tabular-nums leading-none">
-                                                {fmt(p.price, baseCur)}
-                                            </span>
+                                            <Money value={fmt(p.price, baseCur)} className="text-[30px] font-bold tracking-tight text-content dark:text-white leading-none" />
                                             {enOferta && (
-                                                <span className="text-[15px] font-bold text-content-subtle line-through tabular-nums leading-none">
+                                                <span className="text-[15px] font-medium text-content-subtle line-through tabular-nums leading-none">
                                                     {fmt(p.price_before, baseCur)}
                                                 </span>
                                             )}
                                         </div>
                                         {altCur && (
-                                            <div className="text-[13px] font-semibold text-content-muted tabular-nums mt-1.5">
+                                            <div className="text-[13px] text-content-subtle tabular-nums mt-1.5">
                                                 {fmt(p.price, altCur)}
                                             </div>
                                         )}
                                     </>
                                 ) : (
-                                    <div className="text-[16px] font-black text-content dark:text-white">Consultar precio</div>
+                                    <div className="text-[16px] font-semibold text-content dark:text-white">Consultar precio</div>
                                 )}
                             </div>
 
                             <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${p.available
-                                    ? "bg-success/10 text-success"
-                                    : "bg-danger/10 text-danger"}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${p.available ? "bg-success" : "bg-danger"}`} />
+                                <span className={`inline-flex items-center gap-1.5 text-[13px] font-semibold ${p.available
+                                    ? "text-emerald-700 dark:text-emerald-400"
+                                    : "text-red-600 dark:text-red-400"}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ring-4 ${p.available ? "bg-emerald-500 ring-emerald-500/20" : "bg-red-500 ring-red-500/20"}`} />
                                     {p.available ? "Disponible" : "Agotado"}
                                 </span>
                                 {enOferta && (
-                                    <span className="px-2.5 py-1 rounded-full bg-brand-500 text-white text-[10px] font-black tabular-nums">
+                                    <span className="px-2.5 py-1 rounded-full bg-brand-500 text-white text-[12px] font-semibold tabular-nums">
                                         −{Math.round(p.discount_pct)}%
                                     </span>
                                 )}
                                 {p.promo_label && (
-                                    <span className="px-2.5 py-1 rounded-full bg-brand-500 text-white text-[10px] font-black uppercase tracking-wider">
+                                    <span className="px-2.5 py-1 rounded-full bg-brand-500 text-white text-[12px] font-semibold">
                                         Promo {p.promo_label}
                                     </span>
                                 )}
@@ -213,12 +207,12 @@ export default function ProductDetail({
                                             // flex-1 solo en fila (sm): en la columna del
                                             // teléfono reparte el ALTO y aplastaba el botón.
                                             "w-full sm:w-auto sm:flex-1 shrink-0 h-12 px-6 rounded-full",
-                                            "text-[12px] font-black uppercase tracking-widest",
+                                            "text-[14px] font-semibold",
                                             "flex items-center justify-center gap-2",
                                             "transition-all duration-200 enabled:active:scale-[0.98]",
                                             !p.available || !hasPrice
-                                                ? "bg-surface-2 dark:bg-white/[0.05] text-content-subtle cursor-not-allowed"
-                                                : "bg-brand-500 text-white hover:brightness-110 shadow-lg shadow-brand-500/25",
+                                                ? "border border-border/70 dark:border-white/10 text-content-subtle cursor-not-allowed"
+                                                : "bg-brand-500 text-white hover:brightness-110",
                                         ].join(" ")}
                                     >
                                         {p.available && hasPrice && (
@@ -236,7 +230,7 @@ export default function ProductDetail({
                                         href={waHref}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className={`${canOrder ? "sm:flex-none" : "sm:flex-1"} w-full sm:w-auto shrink-0 h-12 px-5 rounded-full border border-border dark:border-white/15 text-[12px] font-black uppercase tracking-widest text-content dark:text-white flex items-center justify-center gap-2 hover:border-brand-500 hover:text-brand-500 transition-colors`}
+                                        className={`${canOrder ? "sm:flex-none" : "sm:flex-1"} w-full sm:w-auto shrink-0 h-12 px-5 rounded-full border border-border dark:border-white/15 text-[14px] font-semibold text-content dark:text-white flex items-center justify-center gap-2 hover:border-brand-500 hover:text-brand-500 transition-colors`}
                                     >
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                                         Preguntar
@@ -256,7 +250,7 @@ export default function ProductDetail({
                     {/* ── Qué incluye (kits) ── */}
                     {p.includes?.length > 0 && (
                         <section className="mt-8">
-                            <h2 className="text-[11px] font-black uppercase tracking-[0.16em] text-content dark:text-white mb-3">Incluye</h2>
+                            <h2 className="text-[17px] font-bold tracking-tight text-content dark:text-white mb-3">Incluye</h2>
                             <ul className="space-y-2">
                                 {p.includes.map((it, idx) => {
                                     const Tag = it.id && onOpenProduct ? "button" : "div";
@@ -272,8 +266,8 @@ export default function ProductDetail({
                                                         : <span className="text-[18px] font-black text-brand-500/30">{it.name.charAt(0)}</span>}
                                                 </span>
                                                 <span className="flex-1 min-w-0">
-                                                    <span className="block text-[13px] font-bold text-content dark:text-white leading-snug">{it.name}</span>
-                                                    <span className="block text-[11px] font-semibold text-content-muted mt-0.5 tabular-nums">
+                                                    <span className="block text-[14px] font-semibold text-content dark:text-white leading-snug">{toNameCase(it.name)}</span>
+                                                    <span className="block text-[12px] text-content-subtle mt-0.5 tabular-nums">
                                                         {fmtQtyUnit(it.quantity, it.unit)}
                                                     </span>
                                                 </span>
@@ -291,7 +285,7 @@ export default function ProductDetail({
                     {/* ── Descripción ── */}
                     {p.description_paragraphs?.length > 0 && (
                         <section className="mt-8">
-                            <h2 className="text-[11px] font-black uppercase tracking-[0.16em] text-content dark:text-white mb-3">Descripción</h2>
+                            <h2 className="text-[17px] font-bold tracking-tight text-content dark:text-white mb-3">Descripción</h2>
                             <div className={`relative space-y-3 ${largo && !verTodo ? "max-h-[132px] overflow-hidden" : ""}`}>
                                 {p.description_paragraphs.map((par, i) => (
                                     <p key={i} className="text-[14px] font-medium text-content-muted leading-relaxed">{par}</p>
@@ -304,7 +298,7 @@ export default function ProductDetail({
                                 <button
                                     type="button"
                                     onClick={() => setVerTodo(v => !v)}
-                                    className="mt-2 inline-flex items-center gap-1 text-[12px] font-black uppercase tracking-widest text-brand-500 hover:underline"
+                                    className="mt-2 inline-flex items-center gap-1 text-[13px] font-medium text-brand-600 dark:text-brand-400 hover:underline"
                                 >
                                     {verTodo ? "Ver menos" : "Leer más"}
                                     <svg className={`w-3.5 h-3.5 transition-transform ${verTodo ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>

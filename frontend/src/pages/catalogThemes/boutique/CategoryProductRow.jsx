@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { publicApi } from "../../../services/api";
 import { Card } from "./BoutiqueGrid";
+import { toNameCase } from "../../../helpers";
 
 // Carril corto de UNA categoría en la portada, con scroll horizontal — como "Kits Poción" o
 // "Duos Perfectos" en las tiendas de referencia. Reemplaza el volcado de "Todos los
@@ -72,12 +73,12 @@ export default function CategoryProductRow({
     return (
         <section className="max-w-6xl mx-auto px-4 pt-8 md:pt-14">
             <div className="flex items-baseline justify-between mb-3">
-                <h2 className="text-[20px] font-black text-content dark:text-white">{category.name}</h2>
+                <h2 className="text-[20px] font-bold tracking-tight text-content dark:text-white">{toNameCase(category.name)}</h2>
                 {total > LIMITE && (
                     <button
                         type="button"
                         onClick={() => onSeeAll(String(category.id))}
-                        className="text-[11px] font-bold uppercase tracking-wide text-brand-500 hover:underline shrink-0"
+                        className="text-[13px] font-medium text-brand-600 dark:text-brand-400 hover:underline shrink-0"
                     >
                         Ver todos ({total})
                     </button>
@@ -123,7 +124,7 @@ export default function CategoryProductRow({
                 <div ref={scrollerRef} className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth snap-x snap-mandatory pb-1">
                     {products === null
                         ? Array.from({ length: 4 }).map((_, i) => (
-                            <div key={i} className="w-[42vw] max-w-[168px] sm:w-[190px] sm:max-w-none shrink-0 snap-start">
+                            <div key={i} className="w-[42vw] max-w-[180px] sm:max-w-none sm:w-[calc((100%_-_2rem)/3)] md:w-[calc((100%_-_3rem)/4)] lg:w-[calc((100%_-_4rem)/5)] shrink-0 snap-start">
                                 <div className="aspect-square rounded-2xl bg-surface-2 dark:bg-white/[0.04] animate-pulse" />
                                 <div className="pt-3 space-y-2">
                                     <div className="h-2.5 w-1/3 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
@@ -133,7 +134,7 @@ export default function CategoryProductRow({
                             </div>
                         ))
                         : products.map((p, i) => (
-                            <div key={p.id} className="w-[42vw] max-w-[168px] sm:w-[190px] sm:max-w-none shrink-0 snap-start">
+                            <div key={p.id} className="w-[42vw] max-w-[180px] sm:max-w-none sm:w-[calc((100%_-_2rem)/3)] md:w-[calc((100%_-_3rem)/4)] lg:w-[calc((100%_-_4rem)/5)] shrink-0 snap-start">
                                 <Card
                                     p={p}
                                     index={i}

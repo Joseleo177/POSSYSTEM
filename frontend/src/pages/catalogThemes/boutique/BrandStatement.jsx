@@ -26,7 +26,7 @@ export default function BrandStatement({ slogan, highlights }) {
                 // ese problema porque no ocupan una celda del flex.
                 <div className={`flex flex-wrap items-center justify-center divide-x divide-border dark:divide-white/15 ${slogan ? "mt-3" : ""}`}>
                     {frases.map((f) => (
-                        <span key={f} className="px-3 py-0.5 text-[11px] font-black uppercase tracking-widest text-brand-500">
+                        <span key={f} className="px-3 py-0.5 text-[13px] font-medium text-brand-600 dark:text-brand-400">
                             {f}
                         </span>
                     ))}

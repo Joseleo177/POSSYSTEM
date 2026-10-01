@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { publicApi } from "../../../services/api";
 import { Card } from "./BoutiqueGrid";
+import { toNameCase } from "../../../helpers";
 
 // Cierre de la portada: pestañas por categoría sobre UN carril horizontal, igual que los de
 // arriba — no una rejilla completa. La primera versión de esto era una parrilla paginada de
@@ -69,7 +70,7 @@ export default function AllProductsSection({
     return (
         <section className="max-w-6xl mx-auto px-4 pt-8 md:pt-14 pb-4">
             <div className="flex items-center justify-between gap-4 mb-4">
-                <h2 className="text-[20px] font-black text-content dark:text-white shrink-0">Nuestros productos</h2>
+                <h2 className="text-[20px] font-bold tracking-tight text-content dark:text-white shrink-0">Nuestros productos</h2>
 
                 {/* Pestañas EN LA MISMA LÍNEA que el título, no debajo — así lo tienen las
                     referencias. Solo la activa lleva píldora de color; las demás son texto
@@ -79,8 +80,8 @@ export default function AllProductsSection({
                         type="button"
                         onClick={() => setCategoryId("")}
                         className={!categoryId
-                            ? "shrink-0 h-8 px-4 rounded-full bg-brand-500 text-white text-[11px] font-black uppercase tracking-wide"
-                            : "shrink-0 text-[12px] font-bold uppercase tracking-wide text-content-subtle hover:text-content dark:hover:text-white transition-colors"}
+                            ? "shrink-0 h-8 px-4 rounded-full bg-brand-500 text-white text-[13px] font-semibold"
+                            : "shrink-0 text-[13px] font-medium text-content-subtle hover:text-content dark:hover:text-white transition-colors"}
                     >
                         Todos
                     </button>
@@ -90,10 +91,10 @@ export default function AllProductsSection({
                             type="button"
                             onClick={() => setCategoryId(String(c.id))}
                             className={String(categoryId) === String(c.id)
-                                ? "shrink-0 h-8 px-4 rounded-full bg-brand-500 text-white text-[11px] font-black uppercase tracking-wide"
-                                : "shrink-0 text-[12px] font-bold uppercase tracking-wide text-content-subtle hover:text-content dark:hover:text-white transition-colors"}
+                                ? "shrink-0 h-8 px-4 rounded-full bg-brand-500 text-white text-[13px] font-semibold"
+                                : "shrink-0 text-[13px] font-medium text-content-subtle hover:text-content dark:hover:text-white transition-colors"}
                         >
-                            {c.name}
+                            {toNameCase(c.name)}
                         </button>
                     ))}
                 </div>
@@ -107,7 +108,7 @@ export default function AllProductsSection({
                     <button
                         type="button"
                         onClick={() => onSeeAll(categoryId)}
-                        className="text-[11px] font-bold uppercase tracking-wide text-brand-500 hover:underline"
+                        className="text-[13px] font-medium text-brand-600 dark:text-brand-400 hover:underline"
                     >
                         Ver todos ({total})
                     </button>
@@ -156,7 +157,7 @@ export default function AllProductsSection({
                     >
                         {products === null
                             ? Array.from({ length: 4 }).map((_, i) => (
-                                <div key={i} className="w-[42vw] max-w-[168px] sm:w-[190px] sm:max-w-none shrink-0 snap-start">
+                                <div key={i} className="w-[42vw] max-w-[180px] sm:max-w-none sm:w-[calc((100%_-_2rem)/3)] md:w-[calc((100%_-_3rem)/4)] lg:w-[calc((100%_-_4rem)/5)] shrink-0 snap-start">
                                     <div className="aspect-square rounded-2xl bg-surface-2 dark:bg-white/[0.04] animate-pulse" />
                                     <div className="pt-3 space-y-2">
                                         <div className="h-2.5 w-1/3 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
@@ -174,7 +175,7 @@ export default function AllProductsSection({
                                 // la animación: la mezcla se veía como que "algunas caen de
                                 // golpe". Con la categoría en la key, cada cambio de pestaña
                                 // rehace TODAS las tarjetas, así que animan siempre parejo.
-                                <div key={`${categoryId}-${p.id}`} className="w-[42vw] max-w-[168px] sm:w-[190px] sm:max-w-none shrink-0 snap-start">
+                                <div key={`${categoryId}-${p.id}`} className="w-[42vw] max-w-[180px] sm:max-w-none sm:w-[calc((100%_-_2rem)/3)] md:w-[calc((100%_-_3rem)/4)] lg:w-[calc((100%_-_4rem)/5)] shrink-0 snap-start">
                                     <Card
                                         p={p}
                                         index={i}

@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
 import { fmtQtyUnit } from "../../../helpers/unitFormatter";
+import { toNameCase } from "../../../helpers";
+import Money from "../../../components/ui/Money";
 
 // Rejilla de la vitrina de marca. Misma paginación por scroll que la estándar; lo que cambia
 // es la tarjeta, que aquí muestra lo que muestran las tiendas de marca: la línea del producto
@@ -85,7 +87,7 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
                 )}
 
                 {enOferta && p.available && (
-                    <span className="absolute top-2.5 left-2.5 px-2 py-1 rounded-full bg-brand-500 text-white text-[10px] font-black shadow-sm tabular-nums">
+                    <span className="absolute top-2.5 left-2.5 px-2 py-1 rounded-full bg-brand-500 text-white text-[11px] font-semibold shadow-sm tabular-nums">
                         −{Math.round(p.discount_pct)}%
                     </span>
                 )}
@@ -95,13 +97,16 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
                     descuentosVigentes en publicCatalogService)—, así que aquí solo es un
                     aviso: mismo lugar que el listón de %, nunca junto con él. */}
                 {showPromo && !enOferta && p.promo_label && p.available && (
-                    <span className="absolute top-2.5 left-2.5 px-2 py-1 rounded-full bg-brand-500 text-white text-[10px] font-black shadow-sm tabular-nums">
+                    <span className="absolute top-2.5 left-2.5 px-2 py-1 rounded-full bg-brand-500 text-white text-[11px] font-semibold shadow-sm tabular-nums">
                         {p.promo_label}
                     </span>
                 )}
 
-                {!p.available && (
-                    <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full bg-danger/90 backdrop-blur text-white text-[9px] font-bold uppercase tracking-wide shadow-sm">
+                {/* Agotado se dice una sola vez. Con pedidos lo dice el botón (y la foto
+                    apagada); la etiqueta sobre la foto queda para la vitrina sin pedidos,
+                    donde no hay botón. Antes salía dos veces en la misma ficha. */}
+                {!p.available && !canOrder && (
+                    <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-red-600/90 text-white text-[11px] font-semibold shadow-sm">
                         Agotado
                     </span>
                 )}
@@ -122,18 +127,19 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
                 {/* La marca sustituye a la categoría cuando existe: en una tienda,
                     "Poción Kids" dice más que "CAPILAR", y poner las dos llena la ficha de
                     texto pequeño antes de llegar al nombre. */}
-                <span className="block h-[14px] text-[10px] font-semibold uppercase tracking-wide text-content-muted truncate">
-                    {p.brand || p.category_name || ""}
+                <span className="block h-[15px] text-[11px] font-medium text-content-subtle truncate">
+                    {toNameCase(p.brand || p.category_name || "")}
                 </span>
 
-                {/* El nombre en el color de la tienda, como en las referencias: es lo que le
-                    da carácter a la rejilla ahora que no hay tarjetas de por medio. También
-                    es enlace, para que el nombre —no solo la foto— lleve a la ficha. */}
+                {/* El nombre va en tinta: en el color de la tienda competía con el precio y
+                    con el botón, que es donde ese color sí tiene que llamar la atención. Toma
+                    el color al pasar el cursor, y es enlace, para que el nombre —no solo la
+                    foto— lleve a la ficha. */}
                 {/* Alto fijo de exactamente dos líneas (2 × leading-snug) y sin `block`: esa
                     clase pisaba el display de line-clamp, el recorte nunca se aplicaba y un
                     nombre de tres líneas empujaba el precio y el botón fuera de la fila. */}
-                <a href={href} onClick={abrir} title={p.name} className="mt-1 h-[2.75em] text-[14px] font-bold text-brand-500 leading-snug line-clamp-2 hover:underline">
-                    {p.name}
+                <a href={href} onClick={abrir} title={p.name} className="mt-1 h-[2.75em] text-[14px] font-semibold text-content dark:text-white leading-snug line-clamp-2 hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
+                    {toNameCase(p.name)}
                 </a>
 
                 {/* Altura reservada como la marca y el nombre de arriba: si solo se dibuja
@@ -148,23 +154,21 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
                     {hasPrice ? (
                         <>
                             <div className="flex items-baseline gap-2 flex-wrap">
-                                <span className="text-[17px] font-black text-content dark:text-white tabular-nums leading-none">
-                                    {fmt(p.price, baseCur)}
-                                </span>
+                                <Money value={fmt(p.price, baseCur)} className="text-[17px] font-bold tracking-tight text-content dark:text-white leading-none" />
                                 {enOferta && (
-                                    <span className="text-[12px] font-bold text-content-subtle line-through tabular-nums leading-none">
+                                    <span className="text-[12px] font-medium text-content-subtle line-through tabular-nums leading-none">
                                         {fmt(p.price_before, baseCur)}
                                     </span>
                                 )}
                             </div>
                             {altCur && (
-                                <div className="text-[11px] font-medium text-content-muted tabular-nums mt-1">
+                                <div className="text-[11px] text-content-subtle tabular-nums mt-1">
                                     {fmt(p.price, altCur)}
                                 </div>
                             )}
                         </>
                     ) : (
-                        <div className="text-[11px] font-bold text-content-muted">Consultar precio</div>
+                        <div className="text-[12px] font-medium text-content-subtle">Consultar precio</div>
                     )}
                 </div>
 
@@ -176,11 +180,11 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
                         onClick={() => onAdd(p, showPromo)}
                         disabled={!p.available || !hasPrice}
                         className={[
-                            "mt-3 h-10 rounded-full text-[10px] font-bold uppercase tracking-widest",
+                            "mt-3 h-10 rounded-full text-[13px] font-semibold",
                             "flex items-center justify-center gap-1.5",
                             "transition-all duration-200 enabled:active:scale-[0.97]",
                             !p.available || !hasPrice
-                                ? "bg-surface-2 dark:bg-white/[0.05] text-content-subtle cursor-not-allowed"
+                                ? "border border-border/70 dark:border-white/10 text-content-subtle cursor-not-allowed"
                                 : inCart
                                     ? "bg-brand-500/10 text-brand-500 border border-brand-500/30 hover:bg-brand-500/15"
                                     : "bg-brand-500 text-white hover:brightness-110",
@@ -220,7 +224,7 @@ export default function BoutiqueGrid({
         <main className="max-w-6xl mx-auto px-4 pt-8 pb-4">
             {title && (
                 <div className="flex items-baseline justify-between mb-3">
-                    <h2 className="text-[15px] font-black text-content dark:text-white">{title}</h2>
+                    <h2 className="text-[18px] font-bold tracking-tight text-content dark:text-white">{title}</h2>
                     {/* Con el número solo, en la esquina se leía un "7" suelto que no se
                         entendía de qué era. */}
                     {!loading && total > 0 && (
@@ -279,7 +283,7 @@ export default function BoutiqueGrid({
                     <div ref={sentinelRef} className="h-8" />
 
                     {loadingMore && (
-                        <div className="py-4 text-center text-[11px] font-bold uppercase tracking-widest text-content-subtle animate-pulse">
+                        <div className="py-4 text-center text-[13px] text-content-subtle animate-pulse">
                             Cargando más
                         </div>
                     )}
