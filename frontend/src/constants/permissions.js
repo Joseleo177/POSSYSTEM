@@ -9,7 +9,7 @@
 // PUEDE es el backend, y lo hace con el mismo mapa.
 export const LEGACY_MAP = {
   sales: [
-    "sales.view", "sales.create", "sales.edit", "sales.void", "sales.credit", "sales.return", "sales.cash",
+    "sales.view", "sales.pending", "sales.create", "sales.edit", "sales.void", "sales.credit", "sales.return", "sales.cash",
     "customers.view", "customers.create", "customers.edit", "customers.credit",
   ],
   products: [
@@ -25,7 +25,7 @@ export const LEGACY_MAP = {
   inventory_view: ["inventory.view"],
   purchases: ["purchases.view", "purchases.create", "purchases.edit", "purchases.receive", "purchases.pay"],
   accounting: ["accounting.view", "accounting.income", "accounting.expense", "accounting.void"],
-  reports: ["reports.view", "sales.view", "accounting.view"],
+  reports: ["reports.view", "sales.view", "sales.pending", "accounting.view"],
   employees: ["employees.view", "employees.create", "employees.edit", "employees.delete"],
   config: [
     "config.view", "config.edit",
@@ -34,7 +34,7 @@ export const LEGACY_MAP = {
     "currencies.view", "currencies.manage",
     "reports.view", "reports.audit",
     "accounting.view", "accounting.income", "accounting.expense", "accounting.void", "accounting.delete",
-    "sales.view", "sales.create", "sales.edit", "sales.void", "sales.credit", "sales.cash",
+    "sales.view", "sales.pending", "sales.create", "sales.edit", "sales.void", "sales.credit", "sales.cash",
     "products.view", "products.create", "products.edit",
     "customers.view", "customers.create", "customers.edit", "customers.credit",
     "inventory.view", "inventory.adjust", "inventory.transfer", "inventory.receive",

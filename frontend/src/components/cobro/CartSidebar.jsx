@@ -37,6 +37,7 @@ export default function CartSidebar({
     // tipo V- o J-), lo llevamos al campo cédula/RIF del alta en vez de al nombre.
     // Edición del cliente ya elegido, sin abandonar la venta.
     const { can, notify } = useApp();
+    const canPending = can("sales.pending");
     const [editandoCliente, setEditandoCliente] = useState(false);
     const [guardandoCliente, setGuardandoCliente] = useState(false);
 
@@ -87,18 +88,21 @@ export default function CartSidebar({
                 {/* Acciones de sesión (escritorio). Sin título "POS · Punto de venta": el
                     módulo ya se nombra en la barra superior, y el título le quitaba ancho a estos
                     tres botones hasta montarlos unos sobre otros. Ahora van en una fila pareja. */}
-                <div className="hidden lg:grid grid-cols-3 gap-1.5">
+                <div className={`hidden lg:grid ${canPending ? "grid-cols-3" : "grid-cols-2"} gap-1.5`}>
                     {cashSession ? (
                         <>
-                            {/* Facturas pendientes */}
-                            <button
-                                onClick={() => setShowPendingSales(true)}
-                                className="btn-outline h-10 px-2 rounded-lg flex items-center justify-center gap-1.5 text-[12px] font-semibold active:scale-[0.98] min-w-0"
-                                title="Facturas pendientes (F5)"
-                            >
-                                <svg className="w-4 h-4 shrink-0 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-                                <span className="truncate">Pendientes</span>
-                            </button>
+                            {/* Facturas pendientes: con permiso propio (sales.pending). Sin él
+                                la fila queda en dos botones en vez de dejar un hueco. */}
+                            {canPending && (
+                                <button
+                                    onClick={() => setShowPendingSales(true)}
+                                    className="btn-outline h-10 px-2 rounded-lg flex items-center justify-center gap-1.5 text-[12px] font-semibold active:scale-[0.98] min-w-0"
+                                    title="Facturas pendientes (F5)"
+                                >
+                                    <svg className="w-4 h-4 shrink-0 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                    <span className="truncate">Pendientes</span>
+                                </button>
+                            )}
 
                             {/* Cuentas en espera */}
                             <button
@@ -133,7 +137,7 @@ export default function CartSidebar({
                         /* Caja cerrada → apertura: es lo único que se puede hacer, ocupa la fila. */
                         <button
                             onClick={() => setShowApertura(true)}
-                            className="col-span-3 btn-accent h-10 rounded-lg flex items-center justify-center gap-2 text-[13px] font-semibold active:scale-[0.98]"
+                            className="col-span-full btn-accent h-10 rounded-lg flex items-center justify-center gap-2 text-[13px] font-semibold active:scale-[0.98]"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
                             Abrir turno
@@ -158,13 +162,15 @@ export default function CartSidebar({
                     <div className="flex items-center gap-1.5 shrink-0">
                         {cashSession ? (
                             <>
-                                <button
-                                    onClick={() => setShowPendingSales(true)}
-                                    className="h-9 px-4 rounded-xl bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 flex items-center justify-center active:scale-90 transition-all"
-                                    title="Facturas pendientes"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-                                </button>
+                                {canPending && (
+                                    <button
+                                        onClick={() => setShowPendingSales(true)}
+                                        className="h-9 px-4 rounded-xl bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 flex items-center justify-center active:scale-90 transition-all"
+                                        title="Facturas pendientes"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                    </button>
+                                )}
 
                                 <button
                                     onClick={() => setShowHeldModal(true)}

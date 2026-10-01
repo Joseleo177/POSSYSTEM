@@ -135,7 +135,9 @@ export default function CobroPage() {
         // de fondo.
         modalOpen: !!qtyModalItem || !!customer.debtAlert || showHeldModal,
         notify,
-        setShowHeldModal, setShowPendingSales,
+        setShowHeldModal,
+        // Sin sales.pending el F5 queda mudo: el hook lo llama con ?. y no abre nada.
+        setShowPendingSales: can("sales.pending") ? setShowPendingSales : undefined,
     });
 
     // ── Sin almacén asignado ───────────────────────────────────

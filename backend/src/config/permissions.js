@@ -20,6 +20,9 @@ const MODULES = [
     label: 'Ventas (POS)',
     actions: [
       { key: 'view',     label: 'Ver ventas' },
+      // Solo gobierna el botón (y el F5) del POS. El listado sale de GET /sales, que sigue
+      // bajo sales.view porque es el mismo que usa la pantalla de Ventas.
+      { key: 'pending',  label: 'Ver facturas pendientes en el POS' },
       { key: 'create',   label: 'Cobrar / facturar' },
       { key: 'edit',     label: 'Editar cuenta abierta' },
       { key: 'void',     label: 'Anular venta' },
@@ -158,7 +161,7 @@ const LEGACY_MAP = {
   // permit("sales", ...) aparecía en: cobrar, anular, crédito, devoluciones, caja, y además
   // en crear/editar clientes, ajustar su crédito y registrar cobros.
   sales: [
-    'sales.view', 'sales.create', 'sales.edit', 'sales.void', 'sales.credit', 'sales.return', 'sales.cash',
+    'sales.view', 'sales.pending', 'sales.create', 'sales.edit', 'sales.void', 'sales.credit', 'sales.return', 'sales.cash',
     'customers.view', 'customers.create', 'customers.edit', 'customers.credit',
   ],
 
@@ -191,7 +194,7 @@ const LEGACY_MAP = {
   accounting: ['accounting.view', 'accounting.income', 'accounting.expense', 'accounting.void'],
 
   // permit("sales", "reports", "config") en pagos y estadísticas de venta.
-  reports: ['reports.view', 'sales.view', 'accounting.view'],
+  reports: ['reports.view', 'sales.view', 'sales.pending', 'accounting.view'],
 
   employees: ['employees.view', 'employees.create', 'employees.edit', 'employees.delete'],
 
@@ -205,7 +208,7 @@ const LEGACY_MAP = {
     'currencies.view', 'currencies.manage',
     'reports.view', 'reports.audit',
     'accounting.view', 'accounting.income', 'accounting.expense', 'accounting.void', 'accounting.delete',
-    'sales.view', 'sales.create', 'sales.edit', 'sales.void', 'sales.credit', 'sales.cash',
+    'sales.view', 'sales.pending', 'sales.create', 'sales.edit', 'sales.void', 'sales.credit', 'sales.cash',
     'products.view', 'products.create', 'products.edit',
     'customers.view', 'customers.create', 'customers.edit', 'customers.credit',
     'inventory.view', 'inventory.adjust', 'inventory.transfer', 'inventory.receive',

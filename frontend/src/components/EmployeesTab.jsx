@@ -4,7 +4,10 @@ import Page from "./ui/Page";
 import { Button } from "./ui/Button";
 import Modal from "./ui/Modal";
 import ConfirmModal from "./ui/ConfirmModal";
-import { PERM_LABELS } from "../constants/tabs";
+import CustomSelect from "./ui/CustomSelect";
+import Check from "./ui/Check";
+import StatusMark, { ACTIVE_STATUS } from "./ui/StatusMark";
+import { ledgerRow, stopRow, LedgerEmpty, RowIcon, ICONS } from "./ui/Ledger";
 import { useApp } from "../context/AppContext";
 import { toNameCase } from "../helpers";
 
@@ -140,7 +143,8 @@ export default function EmployeesTab({ notify }) {
             await api.employees.updateRole(role.id, { permissions: soloNuevos });
             notify(`Permisos de "${role.label}" actualizados`);
             await load();
-        } catch (e) { notify(e.message, "err"); }
+            return true;
+        } catch (e) { notify(e.message, "err"); return false; }
         finally { setSavingRole(null); }
     };
 
@@ -164,87 +168,120 @@ export default function EmployeesTab({ notify }) {
         </div>
     );
 
+    const iniciales = (nombre) => (nombre || "?").trim().split(/\s+/).slice(0, 2).map(p => p[0]).join("").toUpperCase();
+    const sucursalesDe = (e) => {
+        const ws = e.warehouses || [];
+        if (ws.length === 0) return "—";
+        if (ws.length <= 2) return ws.map(w => toNameCase(w.name)).join(", ");
+        return `${ws.length} sucursales`;
+    };
+    const toggleWarehouse = (id) => setForm(p => {
+        const cur = p.warehouse_ids || [];
+        return { ...p, warehouse_ids: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] };
+    });
+
+    const avatar = (e) => (
+        <span className="w-9 h-9 rounded-full bg-surface-3 dark:bg-white/[0.06] text-content-muted dark:text-white/70 text-[12px] font-semibold flex items-center justify-center shrink-0">
+            {iniciales(e.full_name)}
+        </span>
+    );
+    // Acciones siempre a la vista: en una tablet no hay hover que las descubra.
+    const acciones = (e) => (
+        <div className="flex items-center justify-end gap-0.5" onClick={stopRow}>
+            <RowIcon icon="edit" title="Editar empleado" onClick={() => openEdit(e)} />
+            <RowIcon icon="trash" tone="danger" title="Eliminar empleado" onClick={() => setDeleteConfirm(e)} />
+        </div>
+    );
+
     return (
         <Page
             module="Personal"
             title="Empleados"
             subheader={subheader}
             actions={activeTab === "employees" ? (
-                <Button onClick={openNew} className="h-8 px-2.5 sm:px-3 text-[11px] font-bold">
+                <Button onClick={openNew}>
                     + <span className="hidden sm:inline">Nuevo empleado</span><span className="sm:hidden">Nuevo</span>
                 </Button>
             ) : null}
         >
             {/* ── Sección Empleados ── */}
             {activeTab === "employees" && (
-                <div className="card-premium overflow-auto flex-1">
-                    <table className="table-pos min-w-[680px]">
-                        <thead>
-                            <tr>
-                                <th className="text-left">Identificación</th>
-                                <th className="text-left">Rol</th>
-                                <th className="text-left">Contacto</th>
-                                <th className="text-center">Estado</th>
-                                <th className="text-right w-[140px] pr-6">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/10 dark:divide-white/5">
-                            {employees.length === 0 ? (
+                <>
+                    {/* Libro (escritorio) */}
+                    <div className="hidden md:block card-premium overflow-auto flex-1">
+                        <table className="table-ledger min-w-[760px]">
+                            <thead className="sticky top-0 z-10">
                                 <tr>
-                                    <td colSpan={5} className="py-20 text-center">
-                                        <div className="flex flex-col items-center gap-3 opacity-30">
-                                            <svg className="w-10 h-10 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                            <div className="text-[12px] font-bold text-content-subtle">No se han registrado empleados</div>
-                                        </div>
-                                    </td>
+                                    <th className="pl-4">Empleado</th>
+                                    <th>Rol</th>
+                                    <th>Sucursales</th>
+                                    <th>Contacto</th>
+                                    <th>Estado</th>
+                                    <th className="pr-4 w-px"><span className="sr-only">Acciones</span></th>
                                 </tr>
-                            ) : employees.map(e => (
-                                <tr key={e.id} className="group hover:bg-brand-500/[0.02] transition-colors">
-                                    <td>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center text-[12px] font-bold text-brand-500 shrink-0">
-                                                {e.full_name?.charAt(0)}
+                            </thead>
+                            <tbody>
+                                {employees.length === 0 ? (
+                                    <LedgerEmpty cols={6} title="Sin empleados" hint="Agrega a las personas que van a usar el sistema." />
+                                ) : employees.map(e => (
+                                    <tr key={e.id} {...ledgerRow(() => openEdit(e))}>
+                                        <td className="pl-4">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                {avatar(e)}
+                                                <div className="min-w-0">
+                                                    <div className={`text-[13px] font-semibold truncate ${e.active ? "text-content dark:text-white" : "text-content-subtle"}`}>{toNameCase(e.full_name)}</div>
+                                                    <div className="text-[12px] text-content-subtle truncate">@{e.username}</div>
+                                                </div>
                                             </div>
-                                            <div className="flex flex-col">
-                                                <span className="text-xs font-bold text-content dark:text-white tracking-tight group-hover:text-brand-500 transition-colors">{toNameCase(e.full_name)}</span>
-                                                <span className="text-[11px] font-semibold text-content-subtle mt-0.5">@{e.username}</span>
+                                        </td>
+                                        <td><span className="text-[13px] text-content dark:text-white whitespace-nowrap">{e.role_label || "—"}</span></td>
+                                        <td className="max-w-0">
+                                            <span className="block text-[13px] text-content-subtle truncate" title={(e.warehouses || []).map(w => w.name).join(", ") || undefined}>
+                                                {sucursalesDe(e)}
+                                            </span>
+                                        </td>
+                                        <td className="max-w-0">
+                                            <div className="text-[13px] text-content dark:text-white truncate">
+                                                {e.email || <span className="text-content-subtle">Sin correo</span>}
                                             </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span className="badge badge-info shadow-none">{e.role_label}</span>
-                                    </td>
-                                    <td>
-                                        <div className="flex flex-col gap-0.5">
-                                            <span className="text-[12px] font-semibold text-content dark:text-content-dark">{e.email || "—"}</span>
-                                            {e.phone && <span className="text-[11px] font-semibold text-content-subtle tabular-nums">{e.phone}</span>}
-                                        </div>
-                                    </td>
-                                    <td className="text-center">
-                                        <span className={`badge shadow-none ${e.active ? "badge-success" : "badge-danger"}`}>
-                                            {e.active ? "En Servicio" : "Inactivo"}
-                                        </span>
-                                    </td>
-                                    <td className="text-right pr-6">
-                                        <div className="flex items-center justify-end gap-1">
-                                            <button onClick={() => openEdit(e)} className="p-2 hover:bg-warning/10 rounded-xl transition-all text-content-subtle hover:text-warning active:scale-90" title="Editar">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                            </button>
-                                            <button onClick={() => setDeleteConfirm(e)} className="p-2 hover:bg-danger/10 rounded-xl transition-all text-content-subtle hover:text-danger active:scale-90" title="Eliminar">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                                            {e.phone && <div className="text-[12px] text-content-subtle tabular-nums truncate">{e.phone}</div>}
+                                        </td>
+                                        <td><StatusMark status={e.active ? "activo" : "inactivo"} map={ACTIVE_STATUS} /></td>
+                                        <td className="pr-4 whitespace-nowrap cursor-default">{acciones(e)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Tarjetas (teléfono) */}
+                    <div className="md:hidden space-y-2 py-1">
+                        {employees.length === 0 ? (
+                            <div className="py-16 text-center px-6">
+                                <div className="text-[14px] font-semibold text-content dark:text-white">Sin empleados</div>
+                                <div className="text-[13px] text-content-subtle mt-1">Agrega a las personas que van a usar el sistema.</div>
+                            </div>
+                        ) : employees.map(e => (
+                            <div key={e.id} role="button" tabIndex={0}
+                                onClick={() => openEdit(e)}
+                                onKeyDown={ev => { if (ev.key === "Enter") openEdit(e); }}
+                                className="rounded-xl border border-border/70 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] pl-3.5 pr-1.5 py-3 flex items-center gap-3 active:scale-[0.99] transition-transform">
+                                {avatar(e)}
+                                <div className="min-w-0 flex-1">
+                                    <div className={`text-[14px] font-semibold truncate ${e.active ? "text-content dark:text-white" : "text-content-subtle"}`}>{toNameCase(e.full_name)}</div>
+                                    <div className="text-[12px] text-content-subtle truncate">{e.role_label || "Sin rol"} · @{e.username}</div>
+                                    {!e.active && <div className="mt-0.5"><StatusMark status="inactivo" map={ACTIVE_STATUS} /></div>}
+                                </div>
+                                {acciones(e)}
+                            </div>
+                        ))}
+                    </div>
+                </>
             )}
 
             {/* ── Sección Roles y Permisos ── */}
             {activeTab === "roles" && (
-                <div className="flex-1 overflow-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 content-start py-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 content-start py-2">
                     {roles.map(role => {
                         const isAdmin = role.name === "admin";
                         const perms   = rolePerms[role.id] ?? {};
@@ -258,54 +295,57 @@ export default function EmployeesTab({ notify }) {
                         }));
                         const concedidas = resumen.reduce((a, m) => a + m.dadas, 0);
                         const totales    = resumen.reduce((a, m) => a + m.total, 0);
+                        const pct        = totales ? Math.min(100, (concedidas / totales) * 100) : 0;
+                        // Solo los módulos con algo concedido: lo que importa de un vistazo es qué SÍ puede.
+                        const conAcceso  = resumen.filter(m => m.dadas > 0);
 
                         return (
-                            <div key={role.id} className="card-premium p-4 flex flex-col gap-3">
+                            <div key={role.id} className="bg-white dark:bg-white/[0.04] rounded-2xl border border-border/60 dark:border-white/[0.06] shadow-card dark:shadow-none p-4 flex flex-col">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
-                                        <div className="text-[13px] font-bold text-content dark:text-white tracking-tight truncate">{role.label}</div>
-                                        <div className="text-[11px] font-semibold text-content-subtle font-mono mt-0.5">{role.name}</div>
+                                        <div className="text-[15px] font-semibold text-content dark:text-white truncate">{role.label}</div>
+                                        <div className="text-[12px] text-content-subtle tabular-nums">
+                                            {isAdmin ? "Todos los permisos" : `${concedidas} de ${totales} permisos`}
+                                        </div>
                                     </div>
-                                    {isAdmin
-                                        ? <span className="badge badge-success shadow-none shrink-0">Acceso total</span>
-                                        : <span className="text-[11px] font-bold tabular-nums text-brand-500 shrink-0">{concedidas}/{totales}</span>}
+                                    {isAdmin && <StatusMark status="total" map={{ total: { label: "Acceso total", tone: "success", quiet: "check" } }} />}
                                 </div>
 
                                 {isAdmin ? (
-                                    <p className="text-[12px] font-semibold text-content-subtle leading-relaxed flex-1">
-                                        Tiene acceso total al sistema y no puede modificarse.
+                                    <p className="mt-3 text-[13px] text-content-subtle leading-relaxed flex-1">
+                                        Puede hacer todo en el sistema. Este rol no se edita.
                                     </p>
                                 ) : (
                                     <>
-                                        {/* Un renglón por módulo con algo concedido. Los que están en cero
-                                            no se listan: lo que importa de un vistazo es qué SÍ puede. */}
-                                        <div className="flex-1 flex flex-wrap gap-1.5 content-start">
-                                            {resumen.filter(m => m.dadas > 0).map(m => (
-                                                <span
-                                                    key={m.key}
-                                                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${
-                                                        m.dadas === m.total
-                                                            ? "bg-brand-500/10 text-brand-500 border-brand-500/25"
-                                                            : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/40 dark:border-white/10"
-                                                    }`}
-                                                    title={`${m.label}: ${m.dadas} de ${m.total}`}
-                                                >
-                                                    {m.label} {m.dadas}/{m.total}
-                                                </span>
-                                            ))}
-                                            {concedidas === 0 && (
-                                                <span className="text-[12px] font-semibold text-content-subtle opacity-60">Sin permisos asignados</span>
-                                            )}
+                                        <div className="mt-3 h-1 rounded-full bg-surface-3 dark:bg-white/[0.08] overflow-hidden">
+                                            <div className="h-full rounded-full bg-content-subtle/50" style={{ width: `${pct}%` }} />
                                         </div>
 
-                                        <Button
-                                            variant="ghost"
+                                        <ul className="mt-2 flex-1 divide-y divide-border/50 dark:divide-white/[0.05]">
+                                            {conAcceso.length === 0 ? (
+                                                <li className="py-2 text-[13px] text-content-subtle">Sin permisos asignados</li>
+                                            ) : conAcceso.map(m => (
+                                                <li key={m.key} className="py-1.5 flex items-center justify-between gap-3 text-[13px]">
+                                                    <span className="text-content dark:text-white truncate">{m.label}</span>
+                                                    {m.dadas === m.total ? (
+                                                        <span className="shrink-0 inline-flex items-center gap-1 text-[12px] text-content-subtle">
+                                                            <svg className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                                            Completo
+                                                        </span>
+                                                    ) : (
+                                                        <span className="shrink-0 text-[12px] text-content-subtle tabular-nums">{m.dadas} de {m.total}</span>
+                                                    )}
+                                                </li>
+                                            ))}
+                                        </ul>
+
+                                        <button
                                             onClick={() => openPerms(role)}
-                                            className="h-8 w-full text-[11px] border border-border/30 dark:border-white/10"
+                                            className="btn-outline mt-4 h-10 w-full rounded-lg text-[13px] font-medium inline-flex items-center justify-center gap-1.5"
                                         >
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={ICONS.edit} /></svg>
                                             Editar permisos
-                                        </Button>
+                                        </button>
                                     </>
                                 )}
                             </div>
@@ -314,84 +354,80 @@ export default function EmployeesTab({ notify }) {
                 </div>
             )}
 
-            {/* ── Modal: matriz de permisos de un rol ── */}
+            {/* ── Modal: matriz de permisos de un rol ──
+                Cerrar con la X o con Escape descarta, igual que Cancelar: antes se cerraba sin
+                restaurar y la tarjeta del rol quedaba mostrando permisos que no se guardaron. */}
             <Modal
                 open={!!permRole}
-                onClose={() => setPermRole(null)}
+                onClose={cancelPerms}
                 title={permRole ? `Permisos · ${permRole.label}` : ""}
                 width={720}
             >
                 {permRole && (() => {
                     const perms = rolePerms[permRole.id] ?? {};
                     const concedidas = catalog.reduce((a, m) => a + m.actions.filter(x => perms[`${m.key}.${x.key}`]).length, 0);
+                    const totales    = catalog.reduce((a, m) => a + m.actions.length, 0);
                     return (
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between gap-3 pb-1">
-                                <p className="text-[12px] font-semibold text-content-subtle leading-relaxed">
-                                    Lo que este rol puede hacer en cada módulo.
-                                </p>
-                                <span className="text-[11px] font-bold tabular-nums text-brand-500 shrink-0">{concedidas} activos</span>
+                        <div>
+                            <div className="flex items-baseline justify-between gap-3">
+                                <p className="text-[13px] text-content-subtle">Qué puede hacer este rol en cada módulo.</p>
+                                <span className="text-[13px] font-semibold text-content dark:text-white tabular-nums shrink-0">
+                                    {concedidas} <span className="font-normal text-content-subtle">de {totales}</span>
+                                </span>
+                            </div>
+                            <div className="mt-2 h-1 rounded-full bg-surface-3 dark:bg-white/[0.08] overflow-hidden">
+                                <div className="h-full rounded-full bg-content-subtle/50 transition-all" style={{ width: `${totales ? (concedidas / totales) * 100 : 0}%` }} />
                             </div>
 
-                            {/* La matriz vive dentro de un contenedor con scroll propio: son 46
-                                casillas y el modal no debe crecer más que la pantalla. */}
-                            <div className="max-h-[55vh] overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+                            {/* Sin scroll propio: el cuerpo del modal ya desplaza, y dos scrolls
+                                anidados en el teléfono no se manejan. El pie queda fijo abajo. */}
+                            <div className="mt-4 space-y-3">
                                 {catalog.map(mod => {
                                     const keys  = mod.actions.map(a => `${mod.key}.${a.key}`);
                                     const dadas = keys.filter(k => perms[k]).length;
+                                    const todas = dadas === keys.length;
                                     return (
-                                        <div key={mod.key} className="rounded-xl border border-border/30 dark:border-white/5 overflow-hidden">
-                                            <div className="px-3 py-2 flex items-center justify-between gap-3 bg-surface-2/60 dark:bg-white/[0.03] border-b border-border/20 dark:border-white/5">
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <span className="text-[12px] font-bold tracking-tight text-content dark:text-white truncate">{mod.label}</span>
-                                                    <span className={`text-[10px] font-bold uppercase tracking-widest ${dadas ? "text-brand-500" : "text-content-subtle opacity-50"}`}>
-                                                        {dadas}/{keys.length}
-                                                    </span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => toggleModule(permRole.id, mod)}
-                                                    className="text-[10px] font-bold uppercase tracking-widest text-brand-500 hover:underline shrink-0"
-                                                >
-                                                    {dadas === keys.length ? "Quitar todo" : "Dar todo"}
-                                                </button>
+                                        <section key={mod.key} className="rounded-xl border border-border/70 dark:border-white/[0.08] overflow-hidden">
+                                            {/* La casilla del módulo marca o quita todas sus acciones de una
+                                                vez: con 46 casillas, ir una por una es donde se cometen errores. */}
+                                            <div
+                                                role="presentation"
+                                                onClick={() => toggleModule(permRole.id, mod)}
+                                                className="px-3.5 py-2.5 flex items-center gap-3 bg-surface-2/60 dark:bg-white/[0.02] border-b border-border/60 dark:border-white/[0.06] cursor-pointer"
+                                            >
+                                                <Check checked={todas} onChange={() => toggleModule(permRole.id, mod)} title={todas ? "Quitar todo el módulo" : "Dar todo el módulo"} />
+                                                <span className="flex-1 min-w-0 text-[13px] font-semibold text-content dark:text-white truncate">{mod.label}</span>
+                                                <span className="shrink-0 text-[12px] text-content-subtle tabular-nums">{dadas} de {keys.length}</span>
                                             </div>
-                                            <div className="p-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 py-1">
                                                 {mod.actions.map(act => {
                                                     const k = `${mod.key}.${act.key}`;
                                                     return (
-                                                        <label
+                                                        <div
                                                             key={k}
-                                                            className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border cursor-pointer transition-colors ${
-                                                                perms[k]
-                                                                    ? "bg-brand-500/10 border-brand-500/30"
-                                                                    : "bg-surface-2 dark:bg-surface-dark-2 border-border/30 dark:border-white/5 hover:border-brand-500/20"
-                                                            }`}
+                                                            role="presentation"
+                                                            onClick={() => togglePerm(permRole.id, k)}
+                                                            className="flex items-center gap-2.5 px-3.5 py-2 cursor-pointer hover:bg-surface-2/70 dark:hover:bg-white/[0.025] transition-colors"
                                                         >
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={!!perms[k]}
-                                                                onChange={() => togglePerm(permRole.id, k)}
-                                                                className="accent-brand-500 w-4 h-4 shrink-0"
-                                                            />
-                                                            <span className={`text-[11px] font-semibold leading-tight ${perms[k] ? "text-brand-600 dark:text-brand-400" : "text-content-subtle"}`}>
+                                                            <Check checked={!!perms[k]} onChange={() => togglePerm(permRole.id, k)} title={act.label} />
+                                                            <span className={`text-[13px] leading-tight ${perms[k] ? "text-content dark:text-white" : "text-content-subtle"}`}>
                                                                 {act.label}
                                                             </span>
-                                                        </label>
+                                                        </div>
                                                     );
                                                 })}
                                             </div>
-                                        </div>
+                                        </section>
                                     );
                                 })}
                             </div>
 
-                            <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
-                                <Button variant="ghost" onClick={() => { cancelPerms(); }}>Cancelar</Button>
+                            <div className="sticky bottom-0 -mx-6 -mb-6 mt-5 px-6 py-4 bg-white dark:bg-surface-dark-2 border-t border-border/60 dark:border-white/[0.06] flex justify-end gap-2">
+                                <button onClick={cancelPerms} className="btn-outline h-10 px-5 rounded-lg text-[13px] font-medium">Cancelar</button>
                                 <Button
                                     variant="primary"
                                     loading={savingRole === permRole.id}
-                                    onClick={async () => { await saveRole(permRole); setPermRole(null); }}
+                                    onClick={async () => { if (await saveRole(permRole)) setPermRole(null); }}
                                 >
                                     Guardar permisos
                                 </Button>
@@ -403,79 +439,76 @@ export default function EmployeesTab({ notify }) {
 
 
             {/* ── Modal crear / editar empleado ── */}
-            <Modal open={modal} onClose={closeModal} title={editId ? "Editar empleado" : "Nuevo empleado"} width={520}>
+            <Modal open={modal} onClose={closeModal} title={editId ? "Editar empleado" : "Nuevo empleado"} width={540}>
                 <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="col-span-2 sm:col-span-1">
-                            <label className="label mb-1.5">Nombre completo <span className="text-danger">*</span></label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Campo label="Nombre completo">
                             <input
                                 ref={nameRef}
                                 value={form.full_name}
                                 onChange={set("full_name")}
                                 onKeyDown={e => { if (e.key === "Enter") save(); }}
                                 autoComplete="name"
-                                className="input h-10"
-                                placeholder="Ej: JUAN PÉREZ"
+                                className={INPUT}
+                                placeholder="Ej: Juan Pérez"
                             />
-                        </div>
-                        <div className="col-span-2 sm:col-span-1">
-                            <label className="label mb-1.5">Usuario <span className="text-danger">*</span></label>
+                        </Campo>
+                        <Campo label="Usuario">
                             <input
                                 value={form.username}
                                 onChange={set("username")}
                                 onKeyDown={e => { if (e.key === "Enter") save(); }}
                                 autoComplete="username"
-                                className="input h-10"
+                                autoCapitalize="none"
+                                className={INPUT}
                                 placeholder="Ej: jperez"
                             />
-                        </div>
+                        </Campo>
                     </div>
 
-                    <div>
-                        <label className="label mb-1.5">
-                            {editId ? "Contraseña (vacío = no cambiar)" : <>Contraseña <span className="text-danger">*</span></>}
-                        </label>
+                    <Campo label="Contraseña" hint={editId ? "Vacía, no se cambia" : "Mínimo 6 caracteres"}>
                         <input
                             value={form.password}
                             onChange={set("password")}
                             type="password"
-                            autoComplete={editId ? "new-password" : "new-password"}
-                            className="input h-10"
-                            placeholder={editId ? "••••••••" : "Mínimo 6 caracteres"}
+                            autoComplete="new-password"
+                            className={INPUT}
+                            placeholder={editId ? "••••••••" : ""}
                         />
-                    </div>
+                    </Campo>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div>
-                            <label className="label mb-1.5">Rol <span className="text-danger">*</span></label>
-                            <select value={form.role_id} onChange={set("role_id")} className="input h-10 cursor-pointer">
-                                <option value="">Seleccionar</option>
-                                {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="label mb-1.5">Teléfono</label>
+                    <Campo label="Rol">
+                        <CustomSelect
+                            value={form.role_id ?? ""}
+                            onChange={v => setForm(p => ({ ...p, role_id: v }))}
+                            options={roles.map(r => ({ value: r.id, label: r.label }))}
+                            placeholder="Elegir rol…"
+                            className="w-full"
+                        />
+                    </Campo>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Campo label="Teléfono" hint="Opcional">
                             <input
                                 value={form.phone}
                                 onChange={e => setForm(p => ({ ...p, phone: e.target.value.replace(/[^\d\s+\-()]/g, "") }))}
                                 inputMode="tel"
                                 autoComplete="tel"
-                                className="input h-10 tabular-nums"
-                                placeholder="+58 412..."
+                                className={`${INPUT} tabular-nums`}
+                                placeholder="+58 412…"
                             />
-                        </div>
-                        <div>
-                            <label className="label mb-1.5">Correo</label>
+                        </Campo>
+                        <Campo label="Correo" hint="Opcional">
                             <input
                                 value={form.email}
                                 onChange={e => setForm(p => ({ ...p, email: e.target.value.toLowerCase() }))}
                                 type="email"
                                 inputMode="email"
                                 autoComplete="email"
-                                className="input h-10"
-                                placeholder="email@..."
+                                className={INPUT}
+                                placeholder="correo@…"
                             />
-                        </div>
+                        </Campo>
                     </div>
 
                     {/* Sucursales del empleado. Con una sola disponible no se pregunta: el
@@ -483,62 +516,56 @@ export default function EmployeesTab({ notify }) {
                         la única que hay. */}
                     {warehouses.length > 1 && (
                         <div>
-                            <label className="label mb-1.5">Sucursales con acceso</label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <p className="mb-1.5 flex items-baseline justify-between gap-2">
+                                <span className={LABEL}>Sucursales con acceso</span>
+                                <span className="text-[11px] text-content-subtle/70 tabular-nums">
+                                    {(form.warehouse_ids || []).length} de {warehouses.length}
+                                </span>
+                            </p>
+                            <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
                                 {warehouses.map(w => {
                                     const on = (form.warehouse_ids || []).includes(w.id);
                                     return (
                                         <div
                                             key={w.id}
-                                            onClick={() => setForm(p => ({
-                                                ...p,
-                                                warehouse_ids: on
-                                                    ? (p.warehouse_ids || []).filter(id => id !== w.id)
-                                                    : [...(p.warehouse_ids || []), w.id],
-                                            }))}
-                                            className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${on ? "bg-success/5 border-success/30" : "bg-surface-2 dark:bg-white/[0.03] border-border/40"}`}
+                                            role="presentation"
+                                            onClick={() => toggleWarehouse(w.id)}
+                                            className="flex items-center gap-3 px-3.5 py-2.5 cursor-pointer hover:bg-surface-2/70 dark:hover:bg-white/[0.025] transition-colors"
                                         >
-                                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${on ? "bg-success border-success" : "border-border/60"}`}>
-                                                {on && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                            </div>
-                                            <span className={`text-[12px] font-bold truncate ${on ? "text-content dark:text-white" : "text-content-subtle"}`}>
-                                                {w.name}
+                                            <Check checked={on} onChange={() => toggleWarehouse(w.id)} title={w.name} />
+                                            <span className={`text-[13px] truncate ${on ? "font-medium text-content dark:text-white" : "text-content-muted dark:text-white/70"}`}>
+                                                {toNameCase(w.name)}
                                             </span>
                                         </div>
                                     );
                                 })}
                             </div>
-                            <div className="text-[11px] font-semibold text-content-subtle mt-1.5 opacity-60">
+                            <p className="text-[12px] text-content-subtle mt-1.5">
                                 Sin ninguna marcada, el empleado hereda las sucursales de quien lo crea.
-                            </div>
+                            </p>
                         </div>
                     )}
 
                     {editId && (
-                        <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${form.active ? "bg-success/5 border-success/20" : "bg-surface-2 dark:bg-surface-dark-2 border-border/30 dark:border-white/5"}`}>
-                            <input
-                                type="checkbox"
-                                checked={form.active ?? true}
-                                onChange={e => setForm(p => ({ ...p, active: e.target.checked }))}
-                                className="accent-brand-500 w-4 h-4 shrink-0"
-                            />
-                            <div>
-                                <div className={`text-[12px] font-bold ${form.active ? "text-success" : "text-content-subtle"}`}>
-                                    {form.active ? "Empleado activo" : "Empleado inactivo"}
-                                </div>
-                                <div className="text-[11px] text-content-subtle opacity-60 mt-0.5">
-                                    {form.active ? "Puede iniciar sesión en el sistema" : "No puede acceder al sistema"}
-                                </div>
+                        <div
+                            role="presentation"
+                            onClick={() => setForm(p => ({ ...p, active: !(p.active ?? true) }))}
+                            className="flex items-start gap-3 rounded-xl border border-border/70 dark:border-white/[0.08] px-3.5 py-3 cursor-pointer hover:bg-surface-2/70 dark:hover:bg-white/[0.025] transition-colors"
+                        >
+                            <Check checked={form.active ?? true} onChange={v => setForm(p => ({ ...p, active: v }))} title="Empleado activo" className="mt-0.5" />
+                            <div className="min-w-0">
+                                <p className="text-[13px] font-medium text-content dark:text-white">Empleado activo</p>
+                                <p className="text-[12px] text-content-subtle">
+                                    {(form.active ?? true) ? "Puede iniciar sesión con su usuario." : "No puede iniciar sesión hasta que se reactive."}
+                                </p>
                             </div>
-                        </label>
+                        </div>
                     )}
                 </div>
 
                 <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
-                    <Button variant="ghost" onClick={closeModal} className="h-10 px-6 font-bold text-[11px]">
-                        Cancelar
-                    </Button>
-                    <Button onClick={save} loading={loading} className="h-10 px-8 shadow-xl font-bold text-[11px]">
+                    <button onClick={closeModal} className="btn-outline h-10 px-5 rounded-lg text-[13px] font-medium">Cancelar</button>
+                    <Button onClick={save} loading={loading}>
                         {editId ? "Guardar cambios" : "Crear empleado"}
                     </Button>
                 </div>
@@ -547,12 +574,29 @@ export default function EmployeesTab({ notify }) {
             <ConfirmModal
                 isOpen={!!deleteConfirm}
                 title="¿Eliminar empleado?"
-                message={`¿Estás seguro de que deseas eliminar a ${deleteConfirm?.full_name}? Esta acción no se puede deshacer.`}
+                message={`¿Estás seguro de que deseas eliminar a ${toNameCase(deleteConfirm?.full_name)}? Esta acción no se puede deshacer.`}
                 onConfirm={async () => { await del(deleteConfirm.id); setDeleteConfirm(null); }}
                 onCancel={() => setDeleteConfirm(null)}
                 type="danger"
                 confirmText="Sí, eliminar"
             />
         </Page>
+    );
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+const LABEL = "text-[12px] font-medium text-content-subtle";
+const INPUT = "w-full h-10 px-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] font-medium text-content dark:text-white placeholder:text-content-subtle/50 dark:placeholder:text-white/25 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-colors";
+
+// Rótulo en caja de oración; lo opcional se dice a la derecha, sin asteriscos en lo obligatorio.
+function Campo({ label, hint, children }) {
+    return (
+        <div className="min-w-0">
+            <p className="mb-1.5 flex items-baseline justify-between gap-2">
+                <span className={LABEL}>{label}</span>
+                {hint && <span className="text-[11px] text-content-subtle/70">{hint}</span>}
+            </p>
+            {children}
+        </div>
     );
 }
