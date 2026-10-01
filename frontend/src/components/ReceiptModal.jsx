@@ -227,6 +227,71 @@ function calcReceiptTotals(s, rate, sym) {
     };
 }
 
+// Tasa única con la que el papel de una factura abonada a varias tasas suma exactamente los
+// bolívares que entraron.
+//
+// El promedio a secas (Bs cobrados ÷ Ref cubiertos) no basta: el total en bolívares se arma
+// línea por línea —precio convertido y redondeado, por cantidad—, y con cantidades como 10,51
+// kg ese redondeo cae distinto a cada tasa. En la A-0001794 el promedio daba un total 1,72 Bs
+// por encima de lo cobrado. Se parte del promedio y se busca por bisección la tasa con la que
+// ese mismo cálculo da lo cobrado; el total es creciente con la tasa, así que converge.
+//
+// Si además entró algo en divisas, esa parte se lleva a bolívares con la misma tasa buscada.
+function tasaPromedio(s, enBs) {
+    const round2 = n => Math.round(n * 100) / 100;
+    const baseBs = enBs.reduce((a, p) => a + parseFloat(p.amount), 0);
+    const cobradoBs = enBs.reduce((a, p) => a + round2(parseFloat(p.amount) * parseFloat(p.exchange_rate)), 0);
+    const enRef = (s.payments || [])
+        .filter(p => parseFloat(p.amount) > 0 && !(parseFloat(p.exchange_rate) > 1))
+        .reduce((a, p) => a + parseFloat(p.amount), 0);
+    const promedio = cobradoBs / baseBs;
+    const conObjetivo = (rate) => ({ rate, objetivoBs: round2(cobradoBs + round2(enRef * rate)) });
+    if (!s.items?.length) return conObjetivo(promedio);
+
+    const exceso = (r) => calcReceiptTotals(s, r, "").totalBs - round2(enRef * r) - cobradoBs;
+    // La búsqueda no sale del rango de las tasas cobradas: en una factura de céntimos el
+    // redondeo pesa tanto que la tasa "exacta" podía quedar en 866 cuando se cobró a 849 y 853,
+    // y el papel diría una tasa promedio que nadie usó. Lo que no cuadre lo cubre el redondeo.
+    const tasas = enBs.map(p => parseFloat(p.exchange_rate));
+    let lo = Math.min(...tasas), hi = Math.max(...tasas);
+    const masCercana = (a, b) => (Math.abs(exceso(a)) <= Math.abs(exceso(b)) ? a : b);
+    if (exceso(lo) >= 0 || exceso(hi) <= 0) return conObjetivo(masCercana(lo, masCercana(promedio, hi)));
+    for (let i = 0; i < 60 && hi - lo > 1e-9; i++) {
+        const mid = (lo + hi) / 2;
+        if (exceso(mid) < 0) lo = mid; else hi = mid;
+    }
+    // hi es la menor tasa que ya alcanza lo cobrado; si por el redondeo ninguna lo da exacto,
+    // se queda con la más cercana de las dos.
+    return conObjetivo(masCercana(hi, lo));
+}
+
+// Céntimos entre el total armado línea por línea y los bolívares que de verdad entraron, en
+// una factura abonada a varias tasas. Ninguna tasa única cuadra siempre al céntimo (el total
+// avanza a saltos con cantidades como 10,51 kg), y el papel tiene que terminar en lo pagado:
+// el resto va en una línea "Redondeo" a la vista. Más del 1 % del total no es redondeo —son
+// cobros que no corresponden a la factura, como un sobrepago— y no se toca.
+function ajusteRedondeo(totals, cur) {
+    if (!cur?.promedio) return 0;
+    const ajuste = Math.round((cur.objetivoBs - totals.totalBs) * 100) / 100;
+    return Math.abs(ajuste) >= 0.01 && Math.abs(ajuste) <= totals.totalBs * 0.01 ? ajuste : 0;
+}
+
+// Totales del papel con el redondeo ya aplicado al TOTAL. Lo usan la impresión y la vista
+// previa, que tienen que decir exactamente lo mismo.
+function totalesDelPapel(s, cur) {
+    const calc = calcReceiptTotals(s, cur.rate, cur.sym);
+    const ajuste = ajusteRedondeo(calc, cur);
+    if (!ajuste) return { ...calc, ajuste: 0 };
+    const totalBs = Math.round((calc.totalBs + ajuste) * 100) / 100;
+    return {
+        ...calc,
+        ajuste,
+        fmtAjuste: fmt(Math.abs(ajuste), cur.sym),
+        totalBs,
+        fmtTotal: fmt(totalBs, cur.sym),
+    };
+}
+
 /**
  * En qué moneda se imprime el papel.
  *
@@ -250,10 +315,16 @@ export function receiptCurrency(s, displayCurrency, baseCurrency) {
     const huboBolivares = pagos.some(p => parseFloat(p.exchange_rate) > 1);
     const saldada = ["pagado", "exonerado"].includes(String(s.status || "").toLowerCase());
 
-    // Abonada a tasas distintas, no hay un monto en bolívares que describa la factura: va en
-    // divisas, que es en lo que se pactó la deuda, y cada abono se detalla con su propia tasa
-    // en la forma de pago (paymentSummary → cobros).
-    if (!huboBolivares || !saldada || tasasEnBs(pagos).size > 1) return enDivisas;
+    if (!huboBolivares || !saldada) return enDivisas;
+
+    // Abonada a tasas distintas (una parte hoy, el resto otra semana): el papel va igual en
+    // bolívares, a la tasa PROMEDIO de lo cobrado en bolívares —los Bs que entraron entre los
+    // Ref. que cubrieron—. Es la única tasa con la que el total impreso da lo que el cliente
+    // pagó en total; cada abono se detalla además con su propia tasa (paymentSummary → cobros).
+    const enBs = pagos.filter(p => parseFloat(p.exchange_rate) > 1);
+    if (tasasEnBs(pagos).size > 1) {
+        return { ...tasaPromedio(s, enBs), sym: displayCurrency?.symbol || "Ref.", promedio: true };
+    }
 
     // Saldada con bolívares: se imprime a la tasa del pago que cerró la deuda, que es la que
     // convierte el papel en los bolívares que de verdad se contaron.
@@ -264,8 +335,7 @@ export function receiptCurrency(s, displayCurrency, baseCurrency) {
     // factura de hace días cobrada hoy salía impresa con los bolívares de entonces (A-0008:
     // Bs 29.000,40 a 845 cuando entraron 29.483,02 a 859,06), un monto que nadie pagó.
     // huboBolivares garantiza que ese cobro existe.
-    const ultimoEnBs = [...pagos].reverse().find(p => parseFloat(p.exchange_rate) > 1);
-    const rate = parseFloat(ultimoEnBs.exchange_rate);
+    const rate = parseFloat(enBs[enBs.length - 1].exchange_rate);
     return { rate, sym: displayCurrency?.symbol || "Ref." };
 }
 
@@ -282,10 +352,12 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
     // que lo es. Sale de Configuración para que el día que se homologue baste cambiarlo ahí.
     const docName = companyInfo?.doc_name || "Documento de Venta";
     const s = normalizeSale(sale);
-    const { rate, sym } = receiptCurrency(s, displayCurrency, baseCurrency);
-    const totals = calcReceiptTotals(s, rate, sym);
+    const cur = receiptCurrency(s, displayCurrency, baseCurrency);
+    const { rate, sym, promedio } = cur;
+    const totals = totalesDelPapel(s, cur);
     const pago = paymentSummary(s);
     const bsSym = displayCurrency?.symbol || "Bs.";
+    const refSym = baseCurrency?.symbol || "Ref.";
     const dateStr = fmtDate(s.created_at);
 
     const fmtQty  = q => { const n = parseFloat(q); return n % 1 === 0 ? String(Math.round(n)) : n; };
@@ -413,14 +485,16 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
         <div class="total-row"><span>SUBTOTAL</span><span>${totals.fmtSubtotal}</span></div>
         ${s.discount > 0 ? `<div class="total-row discount"><span>DESCUENTO</span><span>-${totals.fmtDiscount}</span></div>` : ""}
         ${s.charge > 0 ? `<div class="total-row"><span>${s.chargeLabel}</span><span>+${totals.fmtCharge}</span></div>` : ""}
+        ${totals.ajuste ? `<div class="total-row"><span>REDONDEO</span><span>${totals.ajuste > 0 ? "+" : "-"}${totals.fmtAjuste}</span></div>` : ""}
         <div class="total-row big"><span>TOTAL</span><span>${totals.fmtTotal}</span></div>
+        ${promedio ? `<div class="total-row"><span>TASA PROMEDIO</span><span>${fmtTasa(rate)}</span></div>` : ""}
     </div>
 
     <div class="totals">
         <div class="total-row"><span>FORMA DE PAGO</span><span>${pago.metodo}</span></div>
         ${pago.multiTasa
             ? pago.cobros.map(c => `
-        <div class="total-row"><span>&nbsp;&nbsp;${c.journal_name}${c.fecha ? ` ${c.fecha}` : ""}</span><span>${fmt(c.monto, c.enBs ? bsSym : sym)}</span></div>
+        <div class="total-row"><span>&nbsp;&nbsp;${c.journal_name}${c.fecha ? ` ${c.fecha}` : ""}</span><span>${fmt(c.monto, c.enBs ? bsSym : refSym)}</span></div>
         ${c.enBs ? `<div class="total-row"><span>&nbsp;&nbsp;&nbsp;&nbsp;Tasa ${fmtTasa(c.tasa)}</span><span></span></div>` : ""}`).join("")
             : pago.canales.length > 1
             ? pago.canales.map(c => `<div class="total-row"><span>&nbsp;&nbsp;${c.journal_name}</span><span>${fmt(c.amount * rate, sym)}</span></div>`).join("")
@@ -492,10 +566,11 @@ export default function ReceiptModal({ open, onClose, sale }) {
     const isBase = !displayCurrency || displayCurrency.is_base;
     // La vista previa tiene que mostrar EXACTAMENTE el papel que va a salir, así que decide la
     // moneda con la misma regla que la impresión.
-    const { rate, sym } = isBase
+    const cur = isBase
         ? { rate: 1, sym: baseCurrency?.symbol || "Ref." }
         : receiptCurrency(s, displayCurrency, baseCurrency);
-    const totals = calcReceiptTotals(s, rate, sym);
+    const { rate, sym, promedio } = cur;
+    const totals = totalesDelPapel(s, cur);
     const pago = paymentSummary(s);
 
     const dateStr = fmtDate(s.created_at);
@@ -565,10 +640,14 @@ export default function ReceiptModal({ open, onClose, sale }) {
                         {s.charge > 0 && <Linea label={s.chargeLabel.charAt(0).toUpperCase() + s.chargeLabel.slice(1).toLowerCase()}><Money value={`+${totals.fmtCharge}`} /></Linea>}
                     </>
                 )}
+                {totals.ajuste !== 0 && (
+                    <Linea label="Redondeo"><Money value={`${totals.ajuste > 0 ? "+" : "-"}${totals.fmtAjuste}`} /></Linea>
+                )}
                 <div className="flex items-baseline justify-between gap-3 pt-1.5">
                     <span className="text-[13px] font-semibold text-content dark:text-white">Total</span>
                     <Money value={totals.fmtTotal} className="text-[20px] font-bold tracking-tight text-content dark:text-white" />
                 </div>
+                {promedio && <Linea label="Tasa promedio">{fmtTasa(rate)}</Linea>}
             </div>
 
             {/* Forma de pago y estado — mismo bloque que se imprime en el papel. */}
@@ -587,7 +666,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                             </span>
                         }
                     >
-                        <Money value={fmt(c.monto, c.enBs ? (displayCurrency?.symbol || "Bs.") : sym)} />
+                        <Money value={fmt(c.monto, c.enBs ? (displayCurrency?.symbol || "Bs.") : (baseCurrency?.symbol || "Ref."))} />
                     </Linea>
                 ))}
                 {!pago.multiTasa && pago.canales.length > 1 && pago.canales.map(c => (
