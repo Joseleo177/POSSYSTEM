@@ -214,6 +214,7 @@ function calcReceiptTotals(s, rate, sym) {
 
     return {
         items,
+        subtotalBs,
         fmtSubtotal: fmt(subtotalBs, sym),
         fmtDiscount: fmt(discountBs, sym),
         chargeBs,
@@ -251,7 +252,8 @@ function tasaPromedio(s, enBs) {
     const exceso = (r) => calcReceiptTotals(s, r, "").totalBs - round2(enRef * r) - cobradoBs;
     // La búsqueda no sale del rango de las tasas cobradas: en una factura de céntimos el
     // redondeo pesa tanto que la tasa "exacta" podía quedar en 866 cuando se cobró a 849 y 853,
-    // y el papel diría una tasa promedio que nadie usó. Lo que no cuadre lo cubre el redondeo.
+    // y los precios del papel saldrían inflados. Lo que no cuadre lo cubre ajusteRedondeo.
+    // La tasa no se imprime: el usuario no la quiere en el comprobante (01-10-2026).
     const tasas = enBs.map(p => parseFloat(p.exchange_rate));
     let lo = Math.min(...tasas), hi = Math.max(...tasas);
     const masCercana = (a, b) => (Math.abs(exceso(a)) <= Math.abs(exceso(b)) ? a : b);
@@ -267,26 +269,32 @@ function tasaPromedio(s, enBs) {
 
 // Céntimos entre el total armado línea por línea y los bolívares que de verdad entraron, en
 // una factura abonada a varias tasas. Ninguna tasa única cuadra siempre al céntimo (el total
-// avanza a saltos con cantidades como 10,51 kg), y el papel tiene que terminar en lo pagado:
-// el resto va en una línea "Redondeo" a la vista. Más del 1 % del total no es redondeo —son
-// cobros que no corresponden a la factura, como un sobrepago— y no se toca.
+// avanza a saltos con cantidades como 10,51 kg), y el papel tiene que terminar en lo pagado.
+// Más del 1 % del total no es redondeo —son cobros que no corresponden a la factura, como un
+// sobrepago— y no se toca.
 function ajusteRedondeo(totals, cur) {
     if (!cur?.promedio) return 0;
     const ajuste = Math.round((cur.objetivoBs - totals.totalBs) * 100) / 100;
     return Math.abs(ajuste) >= 0.01 && Math.abs(ajuste) <= totals.totalBs * 0.01 ? ajuste : 0;
 }
 
-// Totales del papel con el redondeo ya aplicado al TOTAL. Lo usan la impresión y la vista
-// previa, que tienen que decir exactamente lo mismo.
+// Totales del papel con el redondeo ya aplicado. Lo usan la impresión, la vista previa y el
+// PDF, que tienen que decir exactamente lo mismo.
+//
+// Los céntimos van dentro del SUBTOTAL y del TOTAL, sin una línea propia: el usuario no quiere
+// un renglón "Redondeo" en el comprobante (01-10-2026). Así el total sigue siendo lo pagado y
+// subtotal − descuento + recargo sigue dando el total.
 function totalesDelPapel(s, cur) {
     const calc = calcReceiptTotals(s, cur.rate, cur.sym);
     const ajuste = ajusteRedondeo(calc, cur);
-    if (!ajuste) return { ...calc, ajuste: 0 };
-    const totalBs = Math.round((calc.totalBs + ajuste) * 100) / 100;
+    if (!ajuste) return calc;
+    const r2 = n => Math.round(n * 100) / 100;
+    const subtotalBs = r2(calc.subtotalBs + ajuste);
+    const totalBs    = r2(calc.totalBs + ajuste);
     return {
         ...calc,
-        ajuste,
-        fmtAjuste: fmt(Math.abs(ajuste), cur.sym),
+        subtotalBs,
+        fmtSubtotal: fmt(subtotalBs, cur.sym),
         totalBs,
         fmtTotal: fmt(totalBs, cur.sym),
     };
@@ -353,7 +361,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
     const docName = companyInfo?.doc_name || "Documento de Venta";
     const s = normalizeSale(sale);
     const cur = receiptCurrency(s, displayCurrency, baseCurrency);
-    const { rate, sym, promedio } = cur;
+    const { rate, sym } = cur;
     const totals = totalesDelPapel(s, cur);
     const pago = paymentSummary(s);
     const bsSym = displayCurrency?.symbol || "Bs.";
@@ -485,9 +493,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
         <div class="total-row"><span>SUBTOTAL</span><span>${totals.fmtSubtotal}</span></div>
         ${s.discount > 0 ? `<div class="total-row discount"><span>DESCUENTO</span><span>-${totals.fmtDiscount}</span></div>` : ""}
         ${s.charge > 0 ? `<div class="total-row"><span>${s.chargeLabel}</span><span>+${totals.fmtCharge}</span></div>` : ""}
-        ${totals.ajuste ? `<div class="total-row"><span>REDONDEO</span><span>${totals.ajuste > 0 ? "+" : "-"}${totals.fmtAjuste}</span></div>` : ""}
         <div class="total-row big"><span>TOTAL</span><span>${totals.fmtTotal}</span></div>
-        ${promedio ? `<div class="total-row"><span>TASA PROMEDIO</span><span>${fmtTasa(rate)}</span></div>` : ""}
     </div>
 
     <div class="totals">
@@ -569,7 +575,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
     const cur = isBase
         ? { rate: 1, sym: baseCurrency?.symbol || "Ref." }
         : receiptCurrency(s, displayCurrency, baseCurrency);
-    const { rate, sym, promedio } = cur;
+    const { rate, sym } = cur;
     const totals = totalesDelPapel(s, cur);
     const pago = paymentSummary(s);
 
@@ -640,14 +646,10 @@ export default function ReceiptModal({ open, onClose, sale }) {
                         {s.charge > 0 && <Linea label={s.chargeLabel.charAt(0).toUpperCase() + s.chargeLabel.slice(1).toLowerCase()}><Money value={`+${totals.fmtCharge}`} /></Linea>}
                     </>
                 )}
-                {totals.ajuste !== 0 && (
-                    <Linea label="Redondeo"><Money value={`${totals.ajuste > 0 ? "+" : "-"}${totals.fmtAjuste}`} /></Linea>
-                )}
                 <div className="flex items-baseline justify-between gap-3 pt-1.5">
                     <span className="text-[13px] font-semibold text-content dark:text-white">Total</span>
                     <Money value={totals.fmtTotal} className="text-[20px] font-bold tracking-tight text-content dark:text-white" />
                 </div>
-                {promedio && <Linea label="Tasa promedio">{fmtTasa(rate)}</Linea>}
             </div>
 
             {/* Forma de pago y estado — mismo bloque que se imprime en el papel. */}

@@ -170,7 +170,6 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
         <div class="total-row sub"><span>Subtotal:</span><span>${totals.fmtSubtotal}</span></div>
         ${s.discount > 0 ? `<div class="total-row sub discount"><span>Descuento:</span><span>-${totals.fmtDiscount}</span></div>` : ""}
         ${s.charge > 0 ? `<div class="total-row sub"><span>${esc(s.chargeLabel || "Servicio")}:</span><span>+${totals.fmtCharge}</span></div>` : ""}
-        ${totals.ajuste ? `<div class="total-row sub"><span>Redondeo:</span><span>${totals.ajuste > 0 ? "+" : "-"}${totals.fmtAjuste}</span></div>` : ""}
         <div class="total-row big"><span>TOTAL:</span><span>${totals.fmtTotal}</span></div>
     </div>
 
