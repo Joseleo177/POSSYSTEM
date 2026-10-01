@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="420.5 438.5 640 640">
+  <!-- Favicon de Nexus ERP: la X del logo oficial sobre un cuadro oscuro. El ángulo va en blanco
+       (en el logo es negro) para que se lea igual en pestañas claras y oscuras. -->
+  <rect x="420.5" y="438.5" width="640" height="640" rx="140" fill="#0E1116"/>
+  <polygon points="510,578 613,578 738,760 601,941 500,941 635,760" fill="#FFFFFF"/>
+  <polygon points="872,576 976,576 903,680 853,680" fill="#00E5FF"/>
+  <polygon points="852,621 788,712 832,712 815,781 881,690 836,690" fill="#00E5FF"/>
+  <polygon points="769,724 821,723 797,828 846,760 981,940 880,940 744,760" fill="#00E5FF"/>
+</svg>
