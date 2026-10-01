@@ -72,15 +72,18 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     category_id: editData.category_id || "",
                     unit: editData.unit || "unidad",
                     qty_step: editData.qty_step || "1",
-                    package_unit: editData.package_unit ? editData.package_unit.toUpperCase() : "",
+                    // Los combos no tienen presentación ni precio por bulto: esos campos les
+                    // quedan de cuando el producto todavía no era combo y no aplican.
+                    // Se limpian al abrir la ficha para que no aparezca "Precio por CAJA" en Costos.
+                    package_unit: editData.is_combo ? "" : (editData.package_unit ? editData.package_unit.toUpperCase() : ""),
                     // Una presentación "UNIDAD" contiene una unidad. Los productos guardados
                     // antes de que el campo se bloqueara pueden traer otra cosa (UNIDAD × 4,
                     // que además infla las órdenes de compra): se corrige al abrir la ficha,
                     // y guardar deja el dato sano.
-                    package_size: (editData.package_unit || "").toUpperCase() === "UNIDAD"
+                    package_size: editData.is_combo ? "" : ((editData.package_unit || "").toUpperCase() === "UNIDAD"
                         ? 1
-                        : (editData.package_size != null && editData.package_size !== "" ? parseFloat(editData.package_size) : ""),
-                    bulk_price: initialBulkPrice,
+                        : (editData.package_size != null && editData.package_size !== "" ? parseFloat(editData.package_size) : "")),
+                    bulk_price: editData.is_combo ? "" : initialBulkPrice,
                     cost_price: editData.cost_price || "",
                     profit_margin: editData.profit_margin || "",
                     min_stock: editData.min_stock != null ? parseFloat(editData.min_stock) : 0,

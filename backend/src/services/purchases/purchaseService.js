@@ -6,6 +6,7 @@ const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware
 const { toLocalDate, endOfLocalDay } = require("../../utils/localDate");
 const { ensureOpenSession } = require("../warehouses/sessionService");
 const { effectiveDueDate } = require("./payablesService");
+const { updateComboPricesForProduct } = require("../products/productService");
 const { Op } = Sequelize;
 
 async function getAll({ limit = 50, offset = 0, search, status, order_status, date_from, date_to, warehouse_id }, req) {
@@ -173,6 +174,7 @@ async function _applyStockAndPrices(purchase, items, transaction, ctx = {}) {
     return _session;
   };
   const purchaseRef = purchase.invoice_number ? `Compra ${purchase.invoice_number}` : `Compra #${purchase.id}`;
+  const costoCambiado = [];
 
   for (const item of items) {
     const {
@@ -269,11 +271,25 @@ async function _applyStockAndPrices(purchase, items, transaction, ctx = {}) {
 
     await product.update(productChanges, { transaction });
 
+    // El costo siempre se escribe (línea 226 + 259), así que el recálculo del combo
+    // también debe correr siempre que haya costo — no solo cuando además se actualiza el
+    // precio del propio producto. Sin esto, recibir mercancía con el switch de precio
+    // apagado cambiaba el costo del ingrediente pero el combo seguía valiendo el precio viejo.
+    if (unit_cost != null) costoCambiado.push(product_id);
 
     if (!product.is_service) {
       const totalStock = await ProductStock.sum('qty', { where: { product_id }, transaction });
       await Product.update({ stock: totalStock || 0 }, { where: { id: product_id }, transaction });
     }
+  }
+
+  // El costo nuevo sube también el precio de los combos que llevan estos productos y tienen
+  // margen guardado (general y de cada sucursal con precio propio). Va al final, con todos los
+  // costos ya escritos: un combo con dos componentes de la misma factura se calcula una sola
+  // vez y con ambos al día. La línea con "actualizar precio" apagado no mueve precios de nadie.
+  const visitados = new Set();
+  for (const id of costoCambiado) {
+    await updateComboPricesForProduct(id, transaction, visitados);
   }
 }
 

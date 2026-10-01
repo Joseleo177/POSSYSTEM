@@ -32,11 +32,15 @@ function calculateComboStockAndCost(comboItems, comboUnit) {
   let totalCost = 0;
   for (const item of comboItems) {
     if (!item.ingredient) return { stock: 0, cost: 0 };
-    const ingCost = parseFloat(item.ingredient.cost_price) || 0;
+    // Si el ingrediente tiene ficha de almacén con costo propio, ese manda sobre el del
+    // producto base: es el costo real en esa sucursal, no el global.
+    const stockModel = item.ingredient.stocks?.[0];
+    const ingCost = stockModel?.cost_price != null
+      ? parseFloat(stockModel.cost_price)
+      : (parseFloat(item.ingredient.cost_price) || 0);
     const reqQty = parseFloat(item.quantity) || 1;
     totalCost += ingCost * reqQty;
     if (item.ingredient.is_service) continue; // services don't limit combo stock
-    const stockModel = item.ingredient.stocks?.[0];
     const ingStock = stockModel ? parseFloat(stockModel.qty) : parseFloat(item.ingredient.stock || 0);
     const possible = Number((ingStock / reqQty).toFixed(4));
     if (possible < minStock) minStock = possible;
@@ -328,7 +332,9 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
           as: 'stocks',
           where: { warehouse_id: parseInt(warehouse_id, 10) },
           required: false,
-          attributes: ['qty']
+          // cost_price incluido: si el ingrediente tiene costo propio en esta sucursal,
+          // calculateComboStockAndCost lo usa en vez del costo global del producto.
+          attributes: ['qty', 'cost_price']
         }] : []
       }]
     });
@@ -915,26 +921,58 @@ async function setCatalogVisibility({ ids, visible, company_id }) {
   return { data: { updated } };
 }
 
-async function calculateComboCost(comboId, t) {
+// Costo de un combo sumando el de sus componentes. Con `warehouseId`, cada componente aporta el
+// costo de esa sucursal si tiene uno propio, y si no el general.
+//
+// Devuelve null si algún componente físico no tiene costo: con un faltante la suma sale baja
+// —o en cero— y el precio que se derive de ella vendería el combo regalado. Un servicio sin
+// costo sí es válido (mano de obra que no se compra).
+async function calculateComboCost(comboId, t, warehouseId = null, path = new Set()) {
+  if (path.has(comboId)) return null; // un combo que se contiene a sí mismo no tiene costo
+  path.add(comboId);
+
   const items = await ProductComboItem.findAll({
     where: { combo_id: comboId },
-    include: [{ model: Product, as: 'ingredient', attributes: ['cost_price', 'is_combo'] }],
+    include: [{
+      model: Product, as: 'ingredient', attributes: ['cost_price', 'is_combo', 'is_service'],
+      include: warehouseId ? [{
+        model: ProductStock, as: 'stocks', where: { warehouse_id: warehouseId },
+        required: false, attributes: ['cost_price'],
+      }] : [],
+    }],
     transaction: t
   });
+  if (!items.length) return null;
+
   let totalCost = 0;
   for (const item of items) {
-    if (!item.ingredient) continue;
-    let c = 0;
+    if (!item.ingredient) return null;
+    let c;
     if (item.ingredient.is_combo) {
-      c = await calculateComboCost(item.product_id, t);
+      c = await calculateComboCost(item.product_id, t, warehouseId, new Set(path));
+      if (c == null) return null;
     } else {
-      c = parseFloat(item.ingredient.cost_price || 0);
+      const propio = item.ingredient.stocks?.[0]?.cost_price;
+      c = parseFloat(propio ?? item.ingredient.cost_price ?? 0) || 0;
+      if (c <= 0 && !item.ingredient.is_service) return null;
     }
     totalCost += c * parseFloat(item.quantity);
   }
   return totalCost;
 }
 
+const precioPorMargen = (costo, margen) => parseFloat((costo * (1 + parseFloat(margen) / 100)).toFixed(2));
+
+// Cuando cambia el costo de un producto, los combos que lo usan y tienen margen guardado
+// recalculan su precio: costo de los componentes × (1 + margen). Sin margen, el precio del
+// combo es puesto a mano y no se toca.
+//
+// Se recalcula el precio general y también el de cada sucursal que tenga precio y margen
+// propios en su ficha —ese precio le gana al general, así que sin esto la sucursal seguía
+// vendiendo al precio viejo—, con el costo de esa sucursal.
+//
+// Sigue hacia arriba siempre, no solo si el precio cambió: el costo de un combo que contiene
+// a otro sale de los componentes, así que le llega el cambio aunque el del medio no tenga margen.
 async function updateComboPricesForProduct(productId, t, visited = new Set()) {
   if (visited.has(productId)) return; // Previene bucles infinitos
   visited.add(productId);
@@ -946,23 +984,33 @@ async function updateComboPricesForProduct(productId, t, visited = new Set()) {
     const combo = await Product.findByPk(comboId, { transaction: t });
     if (!combo) continue;
 
-    const totalCost = await calculateComboCost(comboId, t);
-
-    // Solo se actualiza automáticamente si tiene un margen de ganancia configurado
-    if (combo.profit_margin !== null && combo.profit_margin !== undefined) {
-      const margin = parseFloat(combo.profit_margin) || 0;
-      const newPrice = totalCost * (1 + margin / 100);
-      const roundedPrice = parseFloat(newPrice.toFixed(2));
-      
-      if (parseFloat(combo.price) !== roundedPrice) {
-         await combo.update({ price: roundedPrice }, { transaction: t });
-         // Recursividad: actualiza combos que contengan a este combo
-         await updateComboPricesForProduct(comboId, t, visited);
+    if (combo.profit_margin != null) {
+      const costo = await calculateComboCost(comboId, t);
+      if (costo != null && costo > 0) {
+        const nuevo = precioPorMargen(costo, combo.profit_margin);
+        if (Math.abs(parseFloat(combo.price) - nuevo) > 1e-9) {
+          await combo.update({ price: nuevo }, { transaction: t });
+        }
       }
     }
+
+    const fichas = await ProductStock.findAll({
+      where: { product_id: comboId, price: { [Op.ne]: null }, profit_margin: { [Op.ne]: null } },
+      transaction: t,
+    });
+    for (const ficha of fichas) {
+      const costo = await calculateComboCost(comboId, t, ficha.warehouse_id);
+      if (costo == null || costo <= 0) continue;
+      const nuevo = precioPorMargen(costo, ficha.profit_margin);
+      if (Math.abs(parseFloat(ficha.price) - nuevo) > 1e-9) {
+        await ficha.update({ price: nuevo }, { transaction: t });
+      }
+    }
+
+    await updateComboPricesForProduct(comboId, t, visited);
   }
 }
 
 // calculateComboStockAndCost se exporta para que el catálogo público calcule la
 // disponibilidad de un combo con la misma regla que el POS, en vez de duplicarla.
-module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, calculateComboStockAndCost, inheritImageByBarcode, backfillImagesByBarcode };
+module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, calculateComboStockAndCost, updateComboPricesForProduct, inheritImageByBarcode, backfillImagesByBarcode };
