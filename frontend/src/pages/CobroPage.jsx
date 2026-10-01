@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
 import { fmtMoney } from "../helpers";
+import { api } from "../services/api";
 
 // Hooks de capa
 import { useCobroProducts }  from "../hooks/cobro/useCobroProducts";
@@ -219,6 +220,7 @@ export default function CobroPage() {
                 activeCurrencies={activeCurrencies}
                 selectedSerieId={selectedSerieId} selectSerie={selectSerie} mySeries={mySeries}
                 activeWarehouse={activeWarehouse}
+                employeeWarehouses={employeeWarehouses} switchWarehouse={switchWarehouse}
                 selectedCustomer={selectedCustomer} setSelectedCustomer={setSelectedCustomer}
                 custSearch={customer.custSearch} setCustSearch={customer.setCustSearch}
                 customers={customer.customers} setCustomers={customer.setCustomers}
@@ -300,6 +302,20 @@ export default function CobroPage() {
                         balance:     parseFloat(sale.balance ?? sale.total),
                         status:      sale.status,
                     });
+                    // Los abonos anteriores de esta factura. Sin ellos el ticket de la caja solo
+                    // veía el cobro de hoy: una factura abonada la semana pasada a otra tasa salía
+                    // impresa entera en bolívares a la tasa de hoy, un monto que nadie pagó. Se
+                    // mezclan por id con los que se registren mientras llega la respuesta.
+                    if (parseFloat(sale.amount_paid || 0) > 0) {
+                        api.sales.getOne(sale.id).then(r => {
+                            const previos = r.data?.Payments || [];
+                            setSaleBalance(prev => {
+                                if (!prev) return prev;
+                                const ids = new Set((prev.payments || []).map(p => p?.id).filter(Boolean));
+                                return { ...prev, payments: [...previos.filter(p => !ids.has(p.id)), ...(prev.payments || [])] };
+                            });
+                        }).catch(() => { /* el ticket completa los cobros con getOne al imprimir */ });
+                    }
                 }}
             />
             <HeldCartsModal

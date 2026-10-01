@@ -19,7 +19,7 @@ export default function CartSidebar({
     convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt,
     currentCurrency, setSelectedCurrency, activeCurrencies,
     selectedSerieId, selectSerie, mySeries,
-    activeWarehouse,
+    activeWarehouse, employeeWarehouses = [], switchWarehouse,
     selectedCustomer, setSelectedCustomer,
     custSearch, setCustSearch, customers, setCustomers, pickCustomer,
     selectedCustIdx, setSelectedCustIdx,
@@ -52,6 +52,20 @@ export default function CartSidebar({
             setEditandoCliente(false);
         } catch (e) { notify(e.message, "err"); }
         setGuardandoCliente(false);
+    };
+
+    // Cambiar de sucursal vacía el carrito (los precios y el stock son de la otra tienda), así
+    // que con productos cargados no se cambia: primero se cobra o se pone en espera.
+    const puedeCambiarSucursal = employeeWarehouses.length > 1 && !!switchWarehouse;
+    const opcionesSucursal = employeeWarehouses.map(w => ({ value: String(w.id), label: toNameCase(w.name) }));
+    const cambiarSucursal = (val) => {
+        const wh = employeeWarehouses.find(w => w.id === parseInt(val, 10));
+        if (!wh || wh.id === activeWarehouse?.id) return;
+        if (cart.length > 0) {
+            notify("Cobra o pon en espera la venta actual antes de cambiar de sucursal", "err");
+            return;
+        }
+        switchWarehouse(wh);
     };
 
     const buildNewCustomer = (q) => {
@@ -145,12 +159,25 @@ export default function CartSidebar({
                     )}
                 </div>
 
-                {/* Almacén activo: solo informativo, se elige al abrir caja (AperturaCajaModal).
-                    Línea de ancho completo para que el nombre no se corte. */}
+                {/* Almacén activo. Con más de uno asignado se cambia desde aquí: cada sucursal
+                    lleva su propio turno, así que al cambiar se retoma el que esté abierto allá o
+                    se pide abrirlo (useCobroSession). Línea de ancho completo para que el nombre
+                    no se corte. */}
                 <div className="hidden lg:flex items-center gap-1.5 min-w-0 text-[12px]">
                     <svg className="w-3.5 h-3.5 text-content-subtle shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                     <span className="text-content-subtle shrink-0">Sucursal</span>
-                    <span className="font-semibold text-content dark:text-white truncate">{toNameCase(activeWarehouse?.name) || "Sin sucursal"}</span>
+                    {puedeCambiarSucursal ? (
+                        <CustomSelect
+                            value={activeWarehouse ? String(activeWarehouse.id) : ""}
+                            onChange={cambiarSucursal}
+                            options={opcionesSucursal}
+                            placeholder="Elegir sucursal"
+                            className="flex-1 min-w-0"
+                            height="h-8"
+                        />
+                    ) : (
+                        <span className="font-semibold text-content dark:text-white truncate">{toNameCase(activeWarehouse?.name) || "Sin sucursal"}</span>
+                    )}
                 </div>
 
                 {/* Acciones de sesión en móvil. Antes esta barra solo tenía "en espera" y un
@@ -158,7 +185,19 @@ export default function CartSidebar({
                     y, sobre todo, no había forma de cerrar la caja desde el teléfono —el resto
                     de acciones vive en el bloque hidden lg:flex de arriba—. */}
                 <div className="lg:hidden flex items-center justify-between gap-2 pb-1">
-                    <span className="text-[12px] text-content-subtle truncate min-w-0" title="Sucursal de venta">{activeWarehouse ? <>Sucursal <span className="font-semibold text-content dark:text-white">{toNameCase(activeWarehouse.name)}</span></> : "Sin sucursal"}</span>
+                    {puedeCambiarSucursal ? (
+                        <CustomSelect
+                            value={activeWarehouse ? String(activeWarehouse.id) : ""}
+                            onChange={cambiarSucursal}
+                            options={opcionesSucursal}
+                            placeholder="Elegir sucursal"
+                            className="flex-1 min-w-0"
+                            height="h-9"
+                            menuMinWidth={200}
+                        />
+                    ) : (
+                        <span className="text-[12px] text-content-subtle truncate min-w-0" title="Sucursal de venta">{activeWarehouse ? <>Sucursal <span className="font-semibold text-content dark:text-white">{toNameCase(activeWarehouse.name)}</span></> : "Sin sucursal"}</span>
+                    )}
                     <div className="flex items-center gap-1.5 shrink-0">
                         {cashSession ? (
                             <>

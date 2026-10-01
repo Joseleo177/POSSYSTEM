@@ -140,6 +140,9 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // diario que no estuviera en ella dejaba el pago sin nombre, que es como el ticket
     // terminaba diciendo PAGADO con la forma de pago en blanco.
     const receiptPayments = (saleBalance?.payments || []).map(p => ({
+        id: p?.id ?? null,
+        // La fecha distingue en el papel los abonos hechos a tasas distintas.
+        created_at: p?.created_at || null,
         journal_name: p?.journal_name
             || (activeJournals || []).find(j => j.id === p?.payment_journal_id)?.name
             || null,
@@ -185,7 +188,11 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
             // para que el papel diga la forma de pago, y consultarlo cuesta menos que sacar
             // un ticket que dice PAGADO sin decir con qué.
             const pagosSinCaja = receiptPayments.some(p => !p.journal_name);
-            const yaCompleto = receiptPayments.length > 0 && !pagosSinCaja
+            // Tampoco cuenta si los cobros en pantalla no suman lo abonado: faltan abonos de
+            // otro día, y cada uno puede llevar su propia tasa.
+            const sumaCobros = receiptPayments.reduce((a, p) => a + p.amount, 0) + currentCredit;
+            const faltanCobros = sumaCobros + 0.01 < paidBase;
+            const yaCompleto = receiptPayments.length > 0 && !pagosSinCaja && !faltanCobros
                 && Array.isArray(receipt?.items) && receipt.items.length > 0;
 
             let full = receipt;
@@ -200,7 +207,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
             // base. Y si la consulta no devolvió ninguno, se vuelve a los de pantalla antes
             // que imprimir sin forma de pago.
             const delServidor = full?.Payments ?? full?.payments ?? [];
-            const payments = (receiptPayments.length && !pagosSinCaja)
+            const payments = (receiptPayments.length && !pagosSinCaja && !faltanCobros)
                 ? receiptPayments
                 : (delServidor.length ? delServidor : receiptPayments);
 

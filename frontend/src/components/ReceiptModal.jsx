@@ -55,9 +55,24 @@ function normalizeSale(sale) {
             // que se devolvió—, así que sin esto el papel no puede decir cuánto entregó el
             // cliente ni cuánto se le regresó: las dos cifras que mira al recibir el ticket.
             change_given: parseFloat(p.change_given || 0),
+            created_at: p.created_at || null,
         })),
     };
 }
+
+// Tasas distintas con que entraron bolívares a esta venta. Con más de una, ninguna tasa sola
+// convierte la factura en lo que el cliente pagó: abonó una parte a la tasa de un día y el
+// resto a la de otro.
+const tasasEnBs = (payments) => new Set(
+    (payments || [])
+        .filter(p => parseFloat(p.amount) > 0 && parseFloat(p.exchange_rate) > 1)
+        .map(p => parseFloat(p.exchange_rate).toFixed(4))
+);
+
+const fechaCorta = (d) => d
+    ? new Date(d).toLocaleDateString("es-VE", { day: "2-digit", month: "2-digit" })
+    : "";
+const fmtTasa = (r) => parseFloat(r).toFixed(4).replace(/\.?0+$/, "");
 
 // Cómo quedó la venta al emitir el ticket. Se imprime siempre —incluso pagada— porque el
 // papel es el comprobante que se llevan cliente y tienda: si no dice cómo se pagó, una venta
@@ -93,8 +108,24 @@ function paymentSummary(s) {
     const recibido = (s.payments || []).reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
     const vuelto   = (s.payments || []).reduce((acc, p) => acc + parseFloat(p.change_given || 0), 0);
 
+    // Abonos a tasas distintas: cada cobro se detalla por separado y en SU moneda, con su tasa
+    // y su fecha. Agruparlos por caja sumaría bolívares de días distintos como si valieran lo
+    // mismo; es la única forma de que el papel diga exactamente lo que el cliente entregó.
+    const multiTasa = tasasEnBs(s.payments).size > 1;
+    const cobros = multiTasa
+        ? (s.payments || []).filter(p => p.amount > 0).map(p => ({
+            journal_name: p.journal_name || "Cobro",
+            fecha: fechaCorta(p.created_at),
+            enBs: p.exchange_rate > 1,
+            monto: Math.round(p.amount * (p.exchange_rate > 1 ? p.exchange_rate : 1) * 100) / 100,
+            tasa: p.exchange_rate,
+        }))
+        : [];
+
     return {
         pendiente,
+        multiTasa,
+        cobros,
         canales: porDiario,
         recibido,
         vuelto,
@@ -219,14 +250,22 @@ export function receiptCurrency(s, displayCurrency, baseCurrency) {
     const huboBolivares = pagos.some(p => parseFloat(p.exchange_rate) > 1);
     const saldada = ["pagado", "exonerado"].includes(String(s.status || "").toLowerCase());
 
-    if (!huboBolivares || !saldada) return enDivisas;
+    // Abonada a tasas distintas, no hay un monto en bolívares que describa la factura: va en
+    // divisas, que es en lo que se pactó la deuda, y cada abono se detalla con su propia tasa
+    // en la forma de pago (paymentSummary → cobros).
+    if (!huboBolivares || !saldada || tasasEnBs(pagos).size > 1) return enDivisas;
 
     // Saldada con bolívares: se imprime a la tasa del pago que cerró la deuda, que es la que
     // convierte el papel en los bolívares que de verdad se contaron.
-    const effectiveRate = parseFloat(s.final_payment_rate) > 1
-        ? parseFloat(s.final_payment_rate)
-        : parseFloat(s.exchange_rate || 1);
-    const rate = (effectiveRate > 1) ? effectiveRate : parseFloat(displayCurrency?.exchange_rate || 1);
+    //
+    // Esa tasa sale de los propios cobros (llegan en orden de registro), del último que entró
+    // en bolívares. Antes se leía final_payment_rate, que solo trae el listado de facturas:
+    // desde la caja y desde getOneSale se caía a la tasa con que se emitió la factura, y una
+    // factura de hace días cobrada hoy salía impresa con los bolívares de entonces (A-0008:
+    // Bs 29.000,40 a 845 cuando entraron 29.483,02 a 859,06), un monto que nadie pagó.
+    // huboBolivares garantiza que ese cobro existe.
+    const ultimoEnBs = [...pagos].reverse().find(p => parseFloat(p.exchange_rate) > 1);
+    const rate = parseFloat(ultimoEnBs.exchange_rate);
     return { rate, sym: displayCurrency?.symbol || "Ref." };
 }
 
@@ -246,6 +285,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
     const { rate, sym } = receiptCurrency(s, displayCurrency, baseCurrency);
     const totals = calcReceiptTotals(s, rate, sym);
     const pago = paymentSummary(s);
+    const bsSym = displayCurrency?.symbol || "Bs.";
     const dateStr = fmtDate(s.created_at);
 
     const fmtQty  = q => { const n = parseFloat(q); return n % 1 === 0 ? String(Math.round(n)) : n; };
@@ -378,7 +418,11 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
 
     <div class="totals">
         <div class="total-row"><span>FORMA DE PAGO</span><span>${pago.metodo}</span></div>
-        ${pago.canales.length > 1
+        ${pago.multiTasa
+            ? pago.cobros.map(c => `
+        <div class="total-row"><span>&nbsp;&nbsp;${c.journal_name}${c.fecha ? ` ${c.fecha}` : ""}</span><span>${fmt(c.monto, c.enBs ? bsSym : sym)}</span></div>
+        ${c.enBs ? `<div class="total-row"><span>&nbsp;&nbsp;&nbsp;&nbsp;Tasa ${fmtTasa(c.tasa)}</span><span></span></div>` : ""}`).join("")
+            : pago.canales.length > 1
             ? pago.canales.map(c => `<div class="total-row"><span>&nbsp;&nbsp;${c.journal_name}</span><span>${fmt(c.amount * rate, sym)}</span></div>`).join("")
             : ""}
         ${pago.vuelto > 0 ? `
@@ -411,7 +455,12 @@ export default function ReceiptModal({ open, onClose, sale }) {
     // Un cobro sin nombre de caja deja el comprobante sin forma de pago, así que la venta no
     // está "completa" mientras le falte: se consulta igual, que es de donde sale el nombre.
     const pagosRecibidos = sale?.Payments || sale?.payments || [];
+    // Y si los cobros recibidos no suman lo abonado, faltan abonos de otro día (cada uno con su
+    // tasa): la caja solo conoce los que se registraron en esa pantalla.
+    const sumaCobros = pagosRecibidos.reduce((a, p) => a + (parseFloat(p?.amount) || 0), 0)
+        + (parseFloat(sale?.credit_applied) || 0);
     const yaCompleto = pagosRecibidos.length > 0
+        && sumaCobros + 0.01 >= (parseFloat(sale?.amount_paid) || 0)
         && pagosRecibidos.every(p => p?.journal_name)
         && Array.isArray(sale?.items) && sale.items.length > 0;
 
@@ -527,7 +576,21 @@ export default function ReceiptModal({ open, onClose, sale }) {
                 <Linea label="Forma de pago">{pago.metodo}</Linea>
                 {/* Con más de un canal se detalla cuánto entró por cada uno: "Combinado" a secas
                     no permite cuadrar el ticket contra las cajas. */}
-                {pago.canales.length > 1 && pago.canales.map(c => (
+                {/* Abonos a tasas distintas: cada uno en su moneda, con fecha y tasa. */}
+                {pago.multiTasa && pago.cobros.map((c, i) => (
+                    <Linea
+                        key={i}
+                        label={
+                            <span className="pl-3 block">
+                                {toNameCase(c.journal_name)}{c.fecha ? ` · ${c.fecha}` : ""}
+                                {c.enBs && <span className="block text-[12px]">Tasa {fmtTasa(c.tasa)}</span>}
+                            </span>
+                        }
+                    >
+                        <Money value={fmt(c.monto, c.enBs ? (displayCurrency?.symbol || "Bs.") : sym)} />
+                    </Linea>
+                ))}
+                {!pago.multiTasa && pago.canales.length > 1 && pago.canales.map(c => (
                     <Linea key={c.journal_name} label={<span className="pl-3">{toNameCase(c.journal_name)}</span>}>
                         <Money value={fmt(c.amount * rate, sym)} />
                     </Linea>
