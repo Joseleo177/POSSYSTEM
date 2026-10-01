@@ -75,7 +75,14 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     const receiptRate   = parseFloat(receipt?.exchange_rate || 1);
     const receiptIsBase = !receipt?.currency || receipt.currency.is_base;
     const receiptSym    = receiptIsBase ? (baseCurrency?.symbol || "Ref.") : (receipt?.currency?.symbol || "Ref.");
-    const mainRate      = receiptIsBase ? 1 : receiptRate;
+    // La deuda se lleva en moneda base y se cobra a la tasa del día (ver PaymentFormModal), así
+    // que los bolívares se pintan con la tasa actual de la moneda, no con la guardada en la
+    // venta. Con la guardada, una factura retomada días después mostraba aquí un total y
+    // "Registrar pago" pedía otro. La tasa de la factura queda solo como dato informativo.
+    const receiptCurId  = receipt?.currency?.id ?? receipt?.currency_id;
+    const liveRate      = parseFloat(activeCurrencies?.find(c => c.id === receiptCurId)?.exchange_rate || 0);
+    const mainRate      = receiptIsBase ? 1 : (liveRate > 0 ? liveRate : receiptRate);
+    const rateChanged   = !receiptIsBase && receiptRate > 1 && Math.abs(mainRate - receiptRate) > 0.000001;
 
     // Equivalente en la otra moneda. El cajero cobra en bolívares pero la factura se lleva en
     // la moneda base (o al revés), y tener que hacer la cuenta aparte con el cliente delante
@@ -358,6 +365,11 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                                         <Money value={fmtTotal(pendingAt(totalAlt, altRate), altCurrency?.symbol || "")} className="block mt-1.5 text-[13px] font-medium text-amber-700/80 dark:text-amber-400/80" />
                                     )}
                                 </div>
+                            </div>
+                        )}
+                        {rateChanged && (
+                            <div className="pt-1 text-right text-[11px] text-content-subtle tabular-nums">
+                                Tasa de hoy {mainRate.toFixed(4).replace(/\.?0+$/, "")} · facturada a {receiptRate.toFixed(4).replace(/\.?0+$/, "")}
                             </div>
                         )}
                     </div>
