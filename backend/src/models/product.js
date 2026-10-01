@@ -38,6 +38,14 @@ module.exports = (sequelize, DataTypes) => {
     // false = insumo: entra por compras y se consume en combos, pero no se vende en caja ni
     // se publica. Sigue siendo un producto normal para inventario y transferencias.
     sellable: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    // Variantes (talla, color): la variante es un producto con parent_id hacia su modelo. El
+    // modelo (is_variant_parent) es la plantilla: no se vende ni lleva existencias. variant_key
+    // son los ids de sus valores ordenados, únicos por modelo. own_price = no sigue el precio
+    // del modelo. Ver la migración 20261001120000-product-variants.
+    parent_id: { type: DataTypes.INTEGER, allowNull: true },
+    is_variant_parent: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    variant_key: { type: DataTypes.STRING(100), allowNull: true },
+    own_price: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

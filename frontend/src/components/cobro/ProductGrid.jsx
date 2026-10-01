@@ -165,7 +165,10 @@ export default function ProductGrid({
                                     })()}
                                 </div>
                                 <div className="p-1 lg:p-3 flex flex-col gap-0.5 lg:gap-1">
-                                    <div className="text-[8px] lg:text-[12px] text-content-subtle truncate">{toNameCase(p.category_name || "Sin categoría")}</div>
+                                    <div className="text-[8px] lg:text-[12px] text-content-subtle truncate">
+                                        {toNameCase(p.category_name || "Sin categoría")}
+                                        {p.is_variant_parent && ` · ${p.variant_count} ${p.variant_count === 1 ? "opción" : "opciones"}`}
+                                    </div>
                                     <div className="text-[9px] lg:text-xs font-bold uppercase line-clamp-2 dark:text-white tracking-tight leading-none h-4 lg:h-8">{p.name}</div>
                                     <div className="mt-0.5">
                                         <div className="text-[10px] lg:text-lg font-bold dark:text-white font-display tabular-nums leading-none">{fmt(convertToDisplay(p.price), currSym)}</div>

@@ -41,6 +41,7 @@ const tenantModels = [
   'ProductStock', 'EmployeeWarehouse', 'UserSerie', 'ProductComboItem', 'CashSessionJournal',
   'Quotation', 'Promotion', 'Income', 'IncomeCategory',
   'StockSession', 'CatalogBanner', 'BenefitTag', 'CustomerCreditMovement', 'PaymentJournalWarehouse',
+  'ProductAttribute', 'ProductAttributeValue',
 ];
 
 const applyTenantFilter = (modelName, options) => {
@@ -344,6 +345,19 @@ if (Promotion && PromotionProduct && Product) {
 if (BenefitTag && ProductBenefitTag && Product) {
   BenefitTag.belongsToMany(Product, { through: ProductBenefitTag, foreignKey: 'benefit_tag_id', otherKey: 'product_id' });
   Product.belongsToMany(BenefitTag, { through: ProductBenefitTag, foreignKey: 'product_id',      otherKey: 'benefit_tag_id' });
+}
+
+// Variantes: el modelo y sus variantes son productos; los atributos y valores, listas por empresa.
+const { ProductAttribute, ProductAttributeValue, ProductVariantValue } = db;
+if (Product && ProductAttribute && ProductAttributeValue && ProductVariantValue) {
+  Product.belongsTo(Product, { as: 'parent', foreignKey: 'parent_id' });
+  Product.hasMany(Product, { as: 'variants', foreignKey: 'parent_id' });
+  ProductAttribute.hasMany(ProductAttributeValue, { as: 'values', foreignKey: 'attribute_id' });
+  ProductAttributeValue.belongsTo(ProductAttribute, { as: 'attribute', foreignKey: 'attribute_id' });
+  Product.hasMany(ProductVariantValue, { as: 'variantValues', foreignKey: 'product_id' });
+  ProductVariantValue.belongsTo(Product, { foreignKey: 'product_id' });
+  ProductVariantValue.belongsTo(ProductAttribute, { as: 'attribute', foreignKey: 'attribute_id' });
+  ProductVariantValue.belongsTo(ProductAttributeValue, { as: 'value', foreignKey: 'attribute_value_id' });
 }
 
 db.sequelize = sequelize;

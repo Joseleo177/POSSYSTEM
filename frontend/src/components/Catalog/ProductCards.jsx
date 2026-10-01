@@ -124,6 +124,7 @@ export default function ProductCards({
                                     {toNameCase(p.category_name || "General")}
                                     {p.is_combo && " · Combo"}
                                     {p.is_service && " · Servicio"}
+                                    {p.is_variant_parent && ` · ${p.variant_count ?? 0} ${p.variant_count === 1 ? "variante" : "variantes"}`}
                                 </span>
                                 {(puedePublicar || puedeBorrar) && (
                                     <div className="flex items-center -mr-1.5 shrink-0">

@@ -67,7 +67,8 @@ async function getStock(req) {
 
   const productsRaw = await sequelize.query(`
     SELECT
-      p.id AS product_id, p.name AS product_name, p.unit, p.image_filename,
+      p.id AS product_id, p.name AS product_name, p.unit,
+      COALESCE(p.image_filename, (SELECT pp.image_filename FROM products pp WHERE pp.id = p.parent_id)) AS image_filename,
       p.is_combo, p.is_service, p.barcode,
       -- Lo que rige en esta sucursal, más el valor de empresa aparte: la pantalla necesita
       -- los dos para mostrar el vigente y ofrecer "heredado" como referencia.
@@ -159,15 +160,33 @@ async function getStock(req) {
 }
 
 async function getProducts(req) {
-  const { search, category, category_id, simple_only, sellable_only, ids, limit = 30, offset = 0 } = req.query;
+  const { search, category, category_id, simple_only, sellable_only, ids, group_variants, limit = 30, offset = 0 } = req.query;
   const warehouseId = parseInt(req.params.id);
   const tcp = buildTcp(req);
+
+  // La caja agrupa las variantes bajo su modelo: una tarjeta "Franela Básica" que abre la
+  // grilla talla × color, en vez de doce tarjetas casi iguales. La variante suelta solo sale
+  // cuando se escanea su código exacto, para que el escáner la meta directo al carrito. Al
+  // pedir por ids (rehidratar una cuenta en espera) no se agrupa: esas líneas son variantes.
+  // Inventario, ajustes y transferencias no lo piden: ahí se cuenta y se mueve cada variante.
+  const agrupar = group_variants === 'true' && !ids;
 
   const filters = [];
   const replacements = { wid: warehouseId, limit: parseInt(limit), offset: parseInt(offset) };
   if (search?.trim()) {
-    filters.push(`(p.name ILIKE :search OR c.name ILIKE :search OR p.barcode ILIKE :search)`);
+    filters.push(agrupar
+      ? `(p.name ILIKE :search OR c.name ILIKE :search OR p.barcode ILIKE :search
+          OR (p.is_variant_parent = true AND EXISTS (
+            SELECT 1 FROM products v WHERE v.parent_id = p.id
+              -- Con el código exacto de una talla sale solo esa variante, sin su modelo al lado:
+              -- un único resultado es lo que hace que la caja la abra sola al escanear.
+              AND (v.name ILIKE :search OR (v.barcode ILIKE :search AND v.barcode <> :exact)))))`
+      : `(p.name ILIKE :search OR c.name ILIKE :search OR p.barcode ILIKE :search)`);
     replacements.search = `%${search.trim()}%`;
+  }
+  if (agrupar) {
+    filters.push(search?.trim() ? `(p.parent_id IS NULL OR p.barcode = :exact)` : `p.parent_id IS NULL`);
+    if (search?.trim()) replacements.exact = search.trim();
   }
   if (category && category !== 'all') {
     filters.push(`c.name = :category`);
@@ -206,7 +225,10 @@ async function getProducts(req) {
     LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = :wid
     ${countJoin}
     WHERE (
-      ps.product_id IS NOT NULL 
+      ps.product_id IS NOT NULL
+      ${agrupar ? `OR (p.is_variant_parent = true AND EXISTS (
+        SELECT 1 FROM products v JOIN product_stock vps ON vps.product_id = v.id
+         WHERE v.parent_id = p.id AND vps.warehouse_id = :wid))` : ''} 
       OR 
       ( (p.is_service = true OR p.is_combo = true) AND NOT EXISTS (SELECT 1 FROM product_stock WHERE product_id = p.id) )
     ) ${tcp}
@@ -217,8 +239,14 @@ async function getProducts(req) {
 
   const productsRaw = await sequelize.query(`
     SELECT
-      p.id, p.name, p.unit, p.qty_step, p.image_filename,
-      p.is_combo, p.is_service, p.barcode,
+      p.id, p.name, p.unit, p.qty_step,
+      -- La variante sin foto propia muestra la del modelo.
+      -- Y el modelo sin foto muestra la del primer color que tenga una.
+      COALESCE(p.image_filename,
+        (SELECT pp.image_filename FROM products pp WHERE pp.id = p.parent_id),
+        CASE WHEN p.is_variant_parent THEN (SELECT v.image_filename FROM products v
+          WHERE v.parent_id = p.id AND v.image_filename IS NOT NULL ORDER BY v.id LIMIT 1) END) AS image_filename,
+      p.is_combo, p.is_service, p.barcode, p.is_variant_parent, p.parent_id,
       COALESCE(ps.cost_price, p.cost_price) AS cost_price,
       -- Precio y mínimo son los de esta sucursal si los definió. De acá come la caja, así que
       -- con esto el POS cobra el precio de la tienda sin saber que existe una herencia detrás.
@@ -237,13 +265,17 @@ async function getProducts(req) {
     -- —todas las empresas— en cada página; acotado a las ventas del almacén son unas pocas
     -- miles de filas por índice (sales.warehouse_id, sale_items.sale_id).
     LEFT JOIN (
-      SELECT si.product_id, SUM(si.quantity) AS total_sold
+      SELECT ${agrupar ? 'COALESCE(sp.parent_id, si.product_id)' : 'si.product_id'} AS product_id, SUM(si.quantity) AS total_sold
       FROM sale_items si
       JOIN sales s ON s.id = si.sale_id AND s.warehouse_id = :wid
-      GROUP BY si.product_id
+      ${agrupar ? 'JOIN products sp ON sp.id = si.product_id' : ''}
+      GROUP BY 1
     ) si_agg ON si_agg.product_id = p.id
     WHERE (
       ps.product_id IS NOT NULL
+      ${agrupar ? `OR (p.is_variant_parent = true AND EXISTS (
+        SELECT 1 FROM products v JOIN product_stock vps ON vps.product_id = v.id
+         WHERE v.parent_id = p.id AND vps.warehouse_id = :wid))` : ''}
       OR
       ( (p.is_service = true OR p.is_combo = true) AND NOT EXISTS (SELECT 1 FROM product_stock WHERE product_id = p.id) )
     ) ${tcp}
@@ -253,6 +285,20 @@ async function getProducts(req) {
   `, { replacements, type: Sequelize.QueryTypes.SELECT });
 
   if (!productsRaw.length) return { data: [] };
+
+  // Existencia de cada modelo = la suma de sus variantes en esta sucursal.
+  const modelIds = productsRaw.filter(p => p.is_variant_parent).map(p => p.id);
+  const modelStock = {};
+  if (modelIds.length) {
+    const rows = await sequelize.query(`
+      SELECT v.parent_id, COUNT(*)::int AS variant_count, COALESCE(SUM(vps.qty), 0) AS qty
+        FROM products v
+        JOIN product_stock vps ON vps.product_id = v.id AND vps.warehouse_id = :wid
+       WHERE v.parent_id IN (:mids)
+       GROUP BY v.parent_id
+    `, { replacements: { wid: warehouseId, mids: modelIds }, type: Sequelize.QueryTypes.SELECT });
+    rows.forEach(r => { modelStock[r.parent_id] = r; });
+  }
 
   const comboIds = productsRaw.filter(p => p.is_combo).map(p => p.id);
   const ingredientStockMap = {};
@@ -329,7 +375,12 @@ async function getProducts(req) {
     // (combo de puros servicios).
     stock:        p.is_combo
       ? (ingredientStockMap[p.id] === Infinity ? null : floorToUnit(ingredientStockMap[p.id] ?? 0, p.unit))
-      : (parseFloat(p.qty) || 0),
+      : p.is_variant_parent
+        ? parseFloat(modelStock[p.id]?.qty || 0)
+        : (parseFloat(p.qty) || 0),
+    is_variant_parent: !!p.is_variant_parent,
+    variant_count: p.is_variant_parent ? (modelStock[p.id]?.variant_count ?? 0) : undefined,
+    parent_id:    p.parent_id ?? null,
     sales:        parseFloat(p.total_sold || 0),
     category_name: p.category_name,
     category_id:  p.category_id,

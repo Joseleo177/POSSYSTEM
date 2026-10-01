@@ -1,4 +1,4 @@
-const { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, backfillImagesByBarcode } = require("../services/products");
+const { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, backfillImagesByBarcode, setVariantImage } = require("../services/products");
 const { importProducts } = require("../services/products/importProducts");
 const { broadcast } = require("../services/sseService");
 const { assertWarehouseAccess } = require("../middleware/auth");
@@ -14,6 +14,18 @@ const wrap = (fn, status = 200) => async (req, res) => {
 };
 
 module.exports = {
+  // Foto por color de un modelo con variantes (multer: company_id a mano).
+  variantImage: wrap(async req => {
+    const result = await setVariantImage({
+      modelId: req.params.id,
+      attribute_value_id: req.body?.attribute_value_id,
+      remove: req.body?.remove,
+      file: req.file,
+      company_id: req.employee?.company_id ?? null,
+    });
+    broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
+    return result;
+  }),
   getAll:  wrap(req => getAll({ ...req.query, company_id: req.employee?.company_id ?? null })),
   getOne:  wrap(req => getOne(req.params.id, req.employee?.company_id ?? null)),
   create:  wrap(async req => {

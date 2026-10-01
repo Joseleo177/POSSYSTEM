@@ -9,7 +9,9 @@ const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select
 const conTecladoFisico = () =>
   typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
 
-export default function Modal({ open, onClose, title, children, width = 560 }) {
+// footer: acciones fijas al pie, FUERA de la zona que se desplaza. Un pie "sticky" dentro del
+// cuerpo quedaba flotando por encima del relleno inferior y dejaba ver contenido debajo.
+export default function Modal({ open, onClose, title, children, footer = null, width = 560 }) {
   const modalRef = useRef(null);
   const previousFocus = useRef(null);
   const wasOpen = useRef(false);
@@ -123,9 +125,15 @@ export default function Modal({ open, onClose, title, children, width = 560 }) {
         </div>
 
         {/* Body */}
-        <div className="px-6 pt-2 pb-6 flex-1 min-h-0 overflow-y-auto">
+        <div className={`px-6 pt-2 flex-1 min-h-0 overflow-y-auto ${footer ? "pb-5" : "pb-6"}`}>
           {children}
         </div>
+
+        {footer && (
+          <div className="shrink-0 px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-border/60 dark:border-white/[0.06]">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

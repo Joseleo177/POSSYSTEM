@@ -10,6 +10,10 @@ router.patch("/catalog-visibility", auth, permit("products.edit"), ctrl.setCatal
 router.post("/backfill-images", auth, permit("products.edit"), ctrl.backfillImages);
 // Importar crea productos y además pisa los que ya existen, así que exige las dos cosas.
 router.post("/import", auth, permit("products.create"), permit("products.edit"), ctrl.importar);
+// Variantes de un modelo (talla × color). También la caja, que arma la grilla con esto.
+router.get("/:id/variants", auth, permit("products.view", "sales.create"), require("../controllers/productAttributes").variants);
+// Foto por color de un modelo con variantes.
+router.put("/:id/variant-image", auth, permit("products.edit"), upload.single("image"), ctrl.variantImage);
 router.get("/:id",    auth, permit("products.view"), ctrl.getOne);
 router.post("/",      auth, permit("products.create"), upload.single("image"), ctrl.create);
 router.put("/:id",    auth, permit("products.edit"), upload.single("image"), ctrl.update);

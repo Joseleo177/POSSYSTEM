@@ -192,6 +192,15 @@ export const api = {
     create:  (body, imageFile)     => request("/products",      { method: "POST", body: buildProductForm(body, imageFile) }),
     update:  (id, body, imageFile, removeImage) => request(`/products/${id}`,{ method: "PUT",  body: buildProductForm(body, imageFile, removeImage) }),
     remove:  (id)                  => request(`/products/${id}`,{ method: "DELETE" }),
+    // Variantes de un modelo; con warehouse_id, existencias y precio de esa sucursal.
+    variants: (id, params = {}) => request(`/products/${id}/variants?` + new URLSearchParams(params)),
+    // Foto de todas las variantes que llevan ese valor (la de "Negro" para Negro/S, M, L).
+    setVariantImage: (id, attributeValueId, imageFile) => {
+      const fd = new FormData();
+      fd.append("attribute_value_id", attributeValueId);
+      if (imageFile) fd.append("image", imageFile); else fd.append("remove", "true");
+      return request(`/products/${id}/variant-image`, { method: "PUT", body: fd });
+    },
     // Publica u oculta varios productos del catálogo público en una sola llamada
     setCatalogVisibility: (ids, visible) =>
       request("/products/catalog-visibility", { method: "PATCH", body: JSON.stringify({ ids, visible }) }),
@@ -206,6 +215,17 @@ export const api = {
   },
   // Etiquetas de beneficio reusables para la ficha pública del producto ("Repara y
   // fortalece"). JSON simple, sin archivos.
+  // Atributos de variante (Talla, Color) y sus valores, por empresa.
+  productAttributes: {
+    getAll:      () => request("/product-attributes"),
+    create:      (name, values = []) => request("/product-attributes", { method: "POST", body: JSON.stringify({ name, values }) }),
+    rename:      (id, name) => request(`/product-attributes/${id}`, { method: "PUT", body: JSON.stringify({ name }) }),
+    remove:      (id) => request(`/product-attributes/${id}`, { method: "DELETE" }),
+    addValues:   (id, values) => request(`/product-attributes/${id}/values`, { method: "POST", body: JSON.stringify({ values }) }),
+    renameValue: (id, valueId, value) => request(`/product-attributes/${id}/values/${valueId}`, { method: "PUT", body: JSON.stringify({ value }) }),
+    removeValue: (id, valueId) => request(`/product-attributes/${id}/values/${valueId}`, { method: "DELETE" }),
+    reorder:     (id, ids) => request(`/product-attributes/${id}/values/order`, { method: "PUT", body: JSON.stringify({ ids }) }),
+  },
   benefitTags: {
     getAll: () => request("/benefit-tags"),
     create: (name) => request("/benefit-tags", { method: "POST", body: JSON.stringify({ name }) }),

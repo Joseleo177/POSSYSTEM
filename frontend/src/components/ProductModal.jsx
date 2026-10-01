@@ -6,6 +6,7 @@ import CustomSelect from "./ui/CustomSelect";
 import { calcSalePrice as calcSalePriceHelper, resolveImageUrl } from "../helpers";
 import ComboItemsEditor from "./ComboItemsEditor";
 import BenefitTagPicker from "./BenefitTagPicker";
+import VariantsEditor from "./VariantsEditor";
 import { PKG_UNITS } from "../constants/pkg";
 import { fmtQtyUnit } from "../helpers/unitFormatter";
 
@@ -15,7 +16,7 @@ const EMPTY = {
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
     is_combo: false, combo_items: [], is_service: false, barcode: "", bulk_price: "",
     brand: "", short_description: "", description: "", benefit_tag_ids: [],
-    visible_in_catalog: false, sellable: true
+    visible_in_catalog: false, sellable: true, has_variants: false
 };
 
 export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName, warehouseCount = 1, initialName = "" }) {
@@ -43,6 +44,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     // categoría y el precio quedan arriba, fuera de las pestañas, porque son lo que se mira
     // primero sea cual sea la tarea.
     const [tab, setTab] = useState("general");
+    // Lo que arma la pestaña Variantes: { attribute_ids, variants }. Vive fuera de `form`
+    // porque el editor lo recalcula entero en cada cambio.
+    const [variantData, setVariantData] = useState(null);
 
     // Nombrar la sucursal solo tiene sentido para quien maneja varias y necesita saber cuál
     // está tocando. A quien atiende una sola, "Precio en CENTRO" no le aclara nada: le cuenta
@@ -53,6 +57,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     useEffect(() => {
         if (open) {
             setTab("general");
+            setVariantData(null);
             if (editData) {
                 let initialBulkPrice = editData.bulk_price || "";
                 if (!initialBulkPrice && editData.cost_price && editData.package_size) {
@@ -98,6 +103,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     // Los productos creados antes de que existiera la marca vienen sin el
                     // campo: se asumen vendibles, que es como se comportaban.
                     sellable: editData.sellable !== false,
+                    has_variants: !!editData.is_variant_parent,
                     combo_items: editData.comboItems ? editData.comboItems.map(c => ({
                         product_id: c.ingredient.id,
                         name: c.ingredient.name,
@@ -107,7 +113,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         cost_price: parseFloat(c.ingredient.cost_price || 0)
                     })) : []
                 });
-                setImagePreview(resolveImageUrl(editData.image_url) || null);
+                // Un modelo sin foto se lista con la de un color (image_from_variant); esa no es
+                // suya y no se ofrece para cambiar ni quitar aquí.
+                setImagePreview(editData.image_from_variant ? null : (resolveImageUrl(editData.image_url) || null));
             } else {
                 // initialName: lo que el usuario ya escribió en el buscador que lo trajo hasta
                 // acá. Volver a teclear el mismo nombre es trabajo repetido y una oportunidad
@@ -296,6 +304,24 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         }
         if (form.cost_price !== "" && parseFloat(form.cost_price) < 0) return notify("El costo unitario no puede ser negativo", "err");
         const submissionForm = { ...form };
+        if (form.has_variants) {
+            // Sin abrir la pestaña no hay nada que mandar: el servidor deja las variantes como
+            // están y solo les pasa lo que cambió en el modelo (nombre, precio, categoría).
+            const tocadas = variantData !== null;
+            const vs = variantData?.variants || [];
+            if (!vs.length && (tocadas || !editData?.is_variant_parent)) {
+                setTab("variantes");
+                return notify("Arma al menos una variante en la pestaña Variantes", "err");
+            }
+            if (tocadas) {
+                submissionForm.variant_attribute_ids = variantData.attribute_ids;
+                submissionForm.variants = vs;
+            }
+            // El modelo no lleva código propio: se escanea la variante.
+            submissionForm.barcode = "";
+            submissionForm.is_combo = false;
+            submissionForm.is_service = false;
+        }
         if (!form.sellable) {
             submissionForm.price = 0;
             submissionForm.profit_margin = "";
@@ -400,12 +426,30 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
     // La existencia solo se muestra al editar un producto que la lleva: un combo descuenta la
     // de sus ingredientes y un servicio no tiene.
-    const conStock = !!editData?.id && !form.is_combo && !form.is_service;
+    const conStock = !!editData?.id && !form.is_combo && !form.is_service && !form.has_variants;
     // Unidades en caja de oración ("Unidad", "Kg") y no en mayúsculas.
     const unidadLabel = (u) => u === "KG" ? "Kg" : u.charAt(0) + u.slice(1).toLowerCase();
 
+    // Acciones fijas al pie del modal: el formulario es largo (y con variantes, mucho) y había
+    // que bajar hasta el final para guardar.
+    const pieAcciones = (
+        <div className="flex gap-2 sm:justify-end">
+            <button onClick={onClose} disabled={saving}
+                className="btn-outline h-11 sm:h-10 px-5 rounded-lg text-[13px] font-medium disabled:opacity-50">
+                Cancelar
+            </button>
+            <Button
+                onClick={handleSave} loading={busy}
+                variant="primary"
+                className="flex-1 sm:flex-none sm:min-w-[160px] h-11 sm:h-10"
+            >
+                {busy ? "Guardando…" : (isEdit ? "Guardar cambios" : "Crear producto")}
+            </Button>
+        </div>
+    );
+
     return (
-        <Modal open={open} onClose={onClose} title={isEdit ? "Editar producto" : "Nuevo producto"} width={720}>
+        <Modal open={open} onClose={onClose} title={isEdit ? "Editar producto" : "Nuevo producto"} width={720} footer={pieAcciones}>
             <div className="flex flex-col gap-4">
 
                 {/* ── Foto + datos principales ──
@@ -482,7 +526,13 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             </div>
                             <div className="order-3 md:order-2 col-span-2 md:col-span-1 min-w-0">
                                 <label className="label">Código de barras</label>
-                                <input value={form.barcode} onChange={e => set("barcode", e.target.value)} className="input" inputMode="numeric" placeholder="Ej. 7591234567890" />
+                                {form.has_variants ? (
+                                    <div className="h-10 px-3 rounded-lg bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.06] flex items-center text-[13px] text-content-subtle truncate">
+                                        En cada variante
+                                    </div>
+                                ) : (
+                                    <input value={form.barcode} onChange={e => set("barcode", e.target.value)} className="input" inputMode="numeric" placeholder="Ej. 7591234567890" />
+                                )}
                             </div>
                             {form.sellable && (
                             <div className="order-4 md:order-3 col-span-2 md:col-span-1 min-w-0">
@@ -548,6 +598,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     {[
                         ["general", "General"],
                         ["receta", "Receta"],
+                        ["variantes", "Variantes"],
                         ["costos", "Costos"],
                         // El extra del catálogo público lo enciende el superusuario por
                         // empresa (ver CompanyModal): sin él, esta pestaña no tendría nada
@@ -574,13 +625,15 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     encenderse y competían con el botón de guardar. */}
                 {tab === "general" && (
                     <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06] overflow-hidden">
+                        {!form.has_variants && (
                         <Interruptor
                             titulo="Servicio"
                             detalle="No lleva inventario: no se cuenta ni se descuenta."
                             checked={form.is_service}
                             onChange={handleIsServiceChange}
                         />
-                        {!form.is_service && (
+                        )}
+                        {!form.is_service && !form.has_variants && (
                             <Interruptor
                                 titulo="Producto compuesto"
                                 detalle={isEdit && form.combo_items.length > 0
@@ -589,6 +642,20 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 checked={form.is_combo}
                                 onChange={handleIsComboChange}
                                 disabled={isEdit && form.combo_items.length > 0}
+                            />
+                        )}
+                        {/* Ropa y calzado: un mismo producto en varias tallas o colores, cada uno
+                            con su código y su existencia. Se apaga solo sin variantes: el modelo
+                            no tiene inventario propio que devolverle. */}
+                        {!form.is_service && !form.is_combo && (
+                            <Interruptor
+                                titulo="Tiene variantes"
+                                detalle={isEdit && editData?.is_variant_parent && (editData?.variant_count ?? 1) > 0
+                                    ? "Tiene variantes creadas: quítalas en la pestaña Variantes para apagarlo."
+                                    : "Tallas, colores u otra opción: cada una con su código y su existencia."}
+                                checked={form.has_variants}
+                                disabled={isEdit && editData?.is_variant_parent && (editData?.variant_count ?? 1) > 0}
+                                onChange={e => setForm(p => ({ ...p, has_variants: e.target.checked, ...(e.target.checked ? { is_combo: false, is_service: false } : {}) }))}
                             />
                         )}
                         {/* Van juntos porque se leen juntos: el primero decide si el producto se
@@ -606,7 +673,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             <Interruptor
                                 titulo="Mostrar en catálogo público"
                                 detalle={form.sellable
-                                    ? "Los clientes ven foto, categoría y precio. Nunca el stock ni el costo."
+                                    ? (form.has_variants
+                                        ? "Se publica el producto y el cliente elige talla o color. Nunca el stock ni el costo."
+                                        : "Los clientes ven foto, categoría y precio. Nunca el stock ni el costo.")
                                     : "Los insumos no se publican."}
                                 checked={form.visible_in_catalog && form.sellable}
                                 disabled={!form.sellable}
@@ -632,6 +701,30 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             </p>
                         </div>
                     )
+                )}
+
+                {/* El editor queda montado mientras haya variantes, aunque se mire otra
+                    pestaña: desmontarlo perdía lo tecleado al ir a General y volver. */}
+                {form.has_variants && (
+                    <div className={tab === "variantes" ? "" : "hidden"}>
+                        <VariantsEditor
+                            productId={editData?.is_variant_parent ? editData.id : null}
+                            modelPrice={form.price}
+                            onChange={setVariantData}
+                            notify={notify}
+                            warehouseId={warehouseId}
+                        />
+                    </div>
+                )}
+                {tab === "variantes" && !form.has_variants && (
+                        <div className="p-4 rounded-lg border border-border/40 dark:border-white/5 bg-surface-2 dark:bg-white/5 text-center mt-1">
+                            <p className="text-xs font-semibold text-content dark:text-content-dark">Este producto no tiene variantes</p>
+                            <p className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-1">
+                                {form.is_combo || form.is_service
+                                    ? "Un combo o un servicio no lleva tallas ni colores."
+                                    : 'Activa "Tiene variantes" en General para venderlo por talla o color.'}
+                            </p>
+                        </div>
                 )}
 
                 {tab === "vitrina" && (
@@ -841,22 +934,6 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     </div>
                 )}
 
-                {/* ── Pie fijo ──
-                    El formulario es largo y en el teléfono había que bajar hasta el final para
-                    guardar: el pie queda pegado abajo del modal mientras se desplaza. */}
-                <div className="sticky bottom-0 z-10 -mx-6 -mb-6 mt-1 px-6 py-4 bg-white dark:bg-surface-dark-2 border-t border-border/60 dark:border-white/[0.06] flex gap-2 sm:justify-end">
-                    <button onClick={onClose} disabled={saving}
-                        className="btn-outline h-11 sm:h-10 px-5 rounded-lg text-[13px] font-medium disabled:opacity-50">
-                        Cancelar
-                    </button>
-                    <Button
-                        onClick={handleSave} loading={busy}
-                        variant="primary"
-                        className="flex-1 sm:flex-none sm:min-w-[160px] h-11 sm:h-10"
-                    >
-                        {busy ? "Guardando…" : (isEdit ? "Guardar cambios" : "Crear producto")}
-                    </Button>
-                </div>
 
             </div>
         </Modal>

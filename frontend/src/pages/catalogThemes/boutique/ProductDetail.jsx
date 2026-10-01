@@ -2,25 +2,27 @@ import { useState, useEffect } from "react";
 import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../../helpers";
 import Money from "../../../components/ui/Money";
 import { fmtQtyUnit } from "../../../helpers/unitFormatter";
+import VariantOptions, { useVariantSelection, lineaDeVariante } from "../../../components/PublicCatalog/VariantOptions";
 
 // Página propia del producto: /catalogo/<tienda>/p/<id>. Es lo que la tienda comparte por
 // WhatsApp o Instagram — el enlace de un producto suelto, no de la vitrina entera — así que
 // tiene que poder verse sin haber pasado antes por la rejilla.
 //
 // No hay estrellas ni número de reseñas: el sistema no tiene reseñas. No hay cuotas de
-// Mercado Pago: no hay pasarela. No hay selector de "Tamaño": en este sistema cada
-// presentación (450ml, 900ml) es un producto distinto, con su propio precio y su propio
-// stock — no una variante de uno solo. Ofrecer un selector que no cambia nada sería peor que
-// no tenerlo.
+// Mercado Pago: no hay pasarela. Las presentaciones (450ml, 900ml) son productos distintos;
+// lo que sí se elige aquí, en la misma ficha, son las variantes de talla y color: antes solo
+// aparecían al tocar "Agregar al carrito" y el cliente no podía ver qué había sin intentarlo.
 export default function ProductDetail({
     p, loading, error, onBack,
-    inCart, fmt, baseCur, altCur, canOrder, onAdd,
+    inCart, cart = [], fmt, baseCur, altCur, canOrder, onAdd,
     store, onOpenProduct,
 }) {
     // La descripción larga arranca recortada. Vuelve a recortarse al pasar a otro producto
     // (por ejemplo, desde una pieza del kit).
     const [verTodo, setVerTodo] = useState(false);
     useEffect(() => { setVerTodo(false); }, [p?.id]);
+    // Talla y color en línea. Los datos ya vienen con la ficha (p.variants): no hay otra consulta.
+    const v = useVariantSelection(p?.variants, p?.id);
 
     if (loading) {
         return (
@@ -52,9 +54,21 @@ export default function ProductDetail({
         );
     }
 
-    const price = parseFloat(p.price);
+    const conVariantes = !!p.has_variants && v.hayVariantes;
+    const elegida = conVariantes ? v.elegida : null;
+    const precioDe = elegida || p;
+    const price = parseFloat(precioDe.price);
     const hasPrice = price > 0;
-    const enOferta = hasPrice && p.price_before != null;
+    const enOferta = hasPrice && precioDe.price_before != null;
+    const disponible = elegida ? elegida.available : p.available;
+    const foto = (conVariantes && v.foto) || p.image_url;
+    // Con variantes, "en el carrito" es esa talla y color, no el modelo.
+    const enCarrito = conVariantes ? (elegida ? cart.find(it => it.id === elegida.id) : null) : inCart;
+    const listoParaAgregar = disponible && hasPrice && (!conVariantes || !!elegida);
+    const agregar = () => {
+        if (!listoParaAgregar) return;
+        onAdd(conVariantes ? lineaDeVariante(p, elegida, foto) : p);
+    };
     // Unas cinco líneas en escritorio: por debajo de eso, recortar solo añade un clic.
     const largo = (p.description_paragraphs || []).join(" ").length > 320;
     // Con el nombre del producto ya escrito: el cliente no tiene que explicar de cuál habla.
@@ -97,12 +111,13 @@ export default function ProductDetail({
                 {/* Fija en escritorio mientras se baja por la descripción y el kit: la foto
                     sigue a la vista junto al texto que la describe. */}
                 <div className={`md:sticky md:top-40 aspect-square rounded-2xl bg-surface-2 dark:bg-white/[0.04] border border-border/40 dark:border-white/[0.06] relative overflow-hidden ${!p.available ? "opacity-60" : ""}`}>
-                    {p.image_url ? (
+                    {foto ? (
                         <img
-                            src={resolveImageUrl(p.image_url)}
+                            key={foto}
+                            src={resolveImageUrl(foto)}
                             alt={p.name}
                             onError={imgRetryOnError}
-                            className="absolute inset-0 w-full h-full object-cover"
+                            className="absolute inset-0 w-full h-full object-cover modal-in"
                         />
                     ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
@@ -159,16 +174,16 @@ export default function ProductDetail({
                                 {hasPrice ? (
                                     <>
                                         <div className="flex items-baseline gap-2.5 flex-wrap">
-                                            <Money value={fmt(p.price, baseCur)} className="text-[30px] font-bold tracking-tight text-content dark:text-white leading-none" />
+                                            <Money value={fmt(precioDe.price, baseCur)} className="text-[30px] font-bold tracking-tight text-content dark:text-white leading-none" />
                                             {enOferta && (
                                                 <span className="text-[15px] font-medium text-content-subtle line-through tabular-nums leading-none">
-                                                    {fmt(p.price_before, baseCur)}
+                                                    {fmt(precioDe.price_before, baseCur)}
                                                 </span>
                                             )}
                                         </div>
                                         {altCur && (
                                             <div className="text-[13px] text-content-subtle tabular-nums mt-1.5">
-                                                {fmt(p.price, altCur)}
+                                                {fmt(precioDe.price, altCur)}
                                             </div>
                                         )}
                                     </>
@@ -178,15 +193,15 @@ export default function ProductDetail({
                             </div>
 
                             <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                <span className={`inline-flex items-center gap-1.5 text-[13px] font-semibold ${p.available
+                                <span className={`inline-flex items-center gap-1.5 text-[13px] font-semibold ${disponible
                                     ? "text-emerald-700 dark:text-emerald-400"
                                     : "text-red-600 dark:text-red-400"}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ring-4 ${p.available ? "bg-emerald-500 ring-emerald-500/20" : "bg-red-500 ring-red-500/20"}`} />
-                                    {p.available ? "Disponible" : "Agotado"}
+                                    <span className={`w-1.5 h-1.5 rounded-full ring-4 ${disponible ? "bg-emerald-500 ring-emerald-500/20" : "bg-red-500 ring-red-500/20"}`} />
+                                    {disponible ? "Disponible" : "Agotado"}
                                 </span>
                                 {enOferta && (
                                     <span className="px-2.5 py-1 rounded-full bg-brand-500 text-white text-[12px] font-semibold tabular-nums">
-                                        −{Math.round(p.discount_pct)}%
+                                        −{Math.round(precioDe.discount_pct)}%
                                     </span>
                                 )}
                                 {p.promo_label && (
@@ -197,12 +212,18 @@ export default function ProductDetail({
                             </div>
                         </div>
 
+                        {conVariantes && (
+                            <div className="mt-5 pt-5 border-t border-border/50 dark:border-white/[0.06]">
+                                <VariantOptions v={v} />
+                            </div>
+                        )}
+
                         {(canOrder || waHref) && (
                             <div className="mt-5 flex flex-col sm:flex-row gap-2">
                                 {canOrder && (
                                     <button
-                                        onClick={() => onAdd(p)}
-                                        disabled={!p.available || !hasPrice}
+                                        onClick={agregar}
+                                        disabled={!listoParaAgregar}
                                         className={[
                                             // flex-1 solo en fila (sm): en la columna del
                                             // teléfono reparte el ALTO y aplastaba el botón.
@@ -210,17 +231,19 @@ export default function ProductDetail({
                                             "text-[14px] font-semibold",
                                             "flex items-center justify-center gap-2",
                                             "transition-all duration-200 enabled:active:scale-[0.98]",
-                                            !p.available || !hasPrice
+                                            !listoParaAgregar
                                                 ? "border border-border/70 dark:border-white/10 text-content-subtle cursor-not-allowed"
                                                 : "bg-brand-500 text-white hover:brightness-110",
                                         ].join(" ")}
                                     >
-                                        {p.available && hasPrice && (
+                                        {listoParaAgregar && (
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17M17 17a2 2 0 100 4 2 2 0 000-4zM9 19a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                                         )}
-                                        {!p.available ? "Agotado" : !hasPrice ? "Consultar precio" : inCart
-                                            ? `En tu carrito · ${fmtQtyUnit(inCart.qty, p.unit)}`
-                                            : "Agregar al carrito"}
+                                        {conVariantes && !elegida && v.falta
+                                            ? `Elige ${v.falta.name.toLowerCase()}`
+                                            : !disponible ? "Agotado" : !hasPrice ? "Consultar precio" : enCarrito
+                                                ? `En tu carrito · ${fmtQtyUnit(enCarrito.qty, p.unit)}`
+                                                : "Agregar al carrito"}
                                     </button>
                                 )}
                                 {/* Preguntar antes de comprar: sobre todo si está agotado o

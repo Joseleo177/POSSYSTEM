@@ -337,7 +337,12 @@ export function usePublicCatalog(token, initialProductId = null) {
     // sección es justo para comprar la promoción, así que "Agregar otro" ahí significa "otra
     // promoción", no "una lata más" — dos toques arman 24, tres 36. Fuera de esa sección
     // "Agregar otro" sigue siendo la unidad de siempre.
+    // Producto con variantes en el que se tocó "Agregar": se elige talla o color en el
+    // selector (VariantChooserModal, montado en PublicCatalogPage) y entra la variante.
+    const [variantPick, setVariantPick] = useState(null);
+
     const addToCart = (p, honorPromo = false) => {
+        if (p?.has_variants) { setVariantPick(p); return; }
         const grupo = (p.promo_buy_qty && p.promo_get_qty) ? p.promo_buy_qty + p.promo_get_qty : null;
         setCart(prev => {
             const found = prev.find(it => it.id === p.id);
@@ -361,6 +366,7 @@ export function usePublicCatalog(token, initialProductId = null) {
     // carrito reemplaza cantidad y nota en vez de sumar una línea aparte: es la misma línea,
     // solo que el cliente decidió pedir más o cambiar lo que había escrito.
     const setCartItem = (p, qty, rawNote) => {
+        if (p?.has_variants) { setVariantPick(p); return; }
         const note = String(rawNote || "").trim().slice(0, 200) || null;
         const cantidad = parseFloat(qty);
         setCart(prev => {
@@ -544,7 +550,8 @@ export function usePublicCatalog(token, initialProductId = null) {
         productId, productDetail, productLoading, productError, openProduct, closeProduct,
         // carrito
         cart, cartTotal, cartOpen, setCartOpen,
-        addToCart, setCartItem, changeQty, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,
+        addToCart, setCartItem, changeQty,
+        variantPick, setVariantPick, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,
         showCats, setShowCats, delivery, setDelivery,
         // identidad y perfil
         identity, saveIdentity, forgetIdentity,

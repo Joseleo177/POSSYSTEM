@@ -125,6 +125,7 @@ app.use("/api/backup",           require("./routes/backup"));             // aut
 app.use("/api/catalog-link",     require("./routes/publicCatalog").adminRouter); // auth+config dentro
 app.use("/api/catalog-banners",  require("./routes/catalogBanners"));       // auth+config dentro
 app.use("/api/benefit-tags",     require("./routes/benefitTags"));          // auth dentro
+app.use("/api/product-attributes", require("./routes/productAttributes"));   // auth dentro
 
 app.use("/api/events",           require("./routes/events"));             // SSE stream
 

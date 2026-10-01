@@ -7,6 +7,7 @@ const { toLocalDate, endOfLocalDay } = require("../../utils/localDate");
 const { ensureOpenSession } = require("../warehouses/sessionService");
 const { effectiveDueDate } = require("./payablesService");
 const { updateComboPricesForProduct } = require("../products/productService");
+const { propagateModelToVariants } = require("../products/variantService");
 const { Op } = Sequelize;
 
 async function getAll({ limit = 50, offset = 0, search, status, order_status, date_from, date_to, warehouse_id }, req) {
@@ -255,6 +256,7 @@ async function _applyStockAndPrices(purchase, items, transaction, ctx = {}) {
 
     // El costo siempre se actualiza (es lo que realmente se pagó);
     // el precio de venta solo si la línea tiene update_price activo
+    let modeloAActualizar = null;
     const productChanges = {
       cost_price: unit_cost,
       package_size,
@@ -267,9 +269,24 @@ async function _applyStockAndPrices(purchase, items, transaction, ctx = {}) {
     if (update_price !== false && product.sellable !== false) {
       productChanges.price = sale_price;
       productChanges.profit_margin = profit_margin;
+      // Una talla que sigue el precio de su modelo no se aparta sola: el precio nuevo es el de
+      // toda la línea, así que va al modelo y de ahí a todas las tallas que no tienen uno
+      // propio. Si no, cada línea de una curva de tallas dejaba a su talla con precio propio
+      // y la siguiente subida del modelo ya no les llegaba.
+      if (product.parent_id && !product.own_price && sale_price != null) {
+        modeloAActualizar = { id: product.parent_id, price: sale_price, profit_margin };
+      }
     }
 
     await product.update(productChanges, { transaction });
+
+    if (modeloAActualizar) {
+      const modelo = await Product.findByPk(modeloAActualizar.id, { transaction });
+      if (modelo) {
+        await modelo.update({ price: modeloAActualizar.price, profit_margin: (modeloAActualizar.profit_margin != null && modeloAActualizar.profit_margin !== '') ? modeloAActualizar.profit_margin : modelo.profit_margin }, { transaction });
+        await propagateModelToVariants(modelo, transaction);
+      }
+    }
 
     // El costo siempre se escribe (línea 226 + 259), así que el recálculo del combo
     // también debe correr siempre que haya costo — no solo cuando además se actualiza el

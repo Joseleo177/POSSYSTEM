@@ -11,6 +11,7 @@ import StockQty, { splitQty, stockLevel } from "../ui/StockQty";
 import { toNameCase } from "../../helpers";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers/image";
 import { unidadCorta } from "../warehouses/movementMeta";
+import VariantCurve from "./VariantCurve";
 
 const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
@@ -124,7 +125,9 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         const myReq = append ? reqRef.current : ++reqRef.current; // una carga nueva invalida las anteriores
         if (append) setLoadingMore(true); else setSearching(true);
         try {
-            const params = { is_combo: false, is_service: false, limit: PAGE_SIZE, offset: off };
+            // grouped: el modelo con variantes sale una vez y abre la curva de tallas; la talla
+            // suelta solo aparece si se escanea su código.
+            const params = { is_combo: false, is_service: false, limit: PAGE_SIZE, offset: off, variant_view: "grouped" };
             if (searchVal.trim()) params.search = searchVal.trim();
             // Sin esto la lista mostraba el stock global de la empresa: un producto en 0 en
             // esta sucursal aparecía "con 36 unidades" porque las tenía otra. `for_purchase`
@@ -193,6 +196,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
 
     const handleSelectProduct = (p) => {
         setSelected(p);
+        if (p.is_variant_parent) { setStep(3); return; }
         const isUnidad = !p.package_unit || p.package_unit.toLowerCase() === "unidad";
         const rawSize  = isUnidad ? 1 : (parseFloat(p.package_size) || 1);
         // Productos por unidad → tamaño de empaque entero (no admite 12.502)
@@ -293,7 +297,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                 {/* Cabecera */}
                 <div className="shrink-0 px-5 pt-4 pb-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 min-w-0">
-                        {step === 2 && !editItem && (
+                        {step !== 1 && !editItem && (
                             <button onClick={() => setStep(1)} className="row-icon -ml-2" title="Volver a la lista" aria-label="Volver a la lista">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M15 19l-7-7 7-7" /></svg>
                             </button>
@@ -303,7 +307,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 {editItem ? "Editar línea" : step === 1 ? "Agregar producto · paso 1 de 2" : "Agregar producto · paso 2 de 2"}
                             </div>
                             <div className="text-[16px] font-semibold tracking-tight text-content dark:text-white truncate">
-                                {step === 1 ? "¿Qué vas a comprar?" : "¿Cómo viene y a cuánto?"}
+                                {step === 1 ? "¿Qué vas a comprar?" : step === 3 ? "¿Cuántas de cada una?" : "¿Cómo viene y a cuánto?"}
                             </div>
                         </div>
                     </div>
@@ -363,7 +367,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                             )}
                             <div className="divide-y divide-border/50 dark:divide-white/[0.04]">
                                 {visibleResults.map(p => {
-                                    const inOrder = alreadyInOrder(p.id);
+                                    const inOrder = !p.is_variant_parent && alreadyInOrder(p.id);
                                     const [n, u] = splitQty(p.stock, p.unit);
                                     return (
                                         <button
@@ -384,7 +388,9 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                                 <div className="text-[12px] text-content-subtle truncate tabular-nums">
                                                     {inOrder ? "Ya está en la orden" : [
                                                         toNameCase(p.category_name || "General"),
-                                                        p.cost_price > 0 ? `último costo Ref. ${fmt2(p.cost_price)}` : "sin costo registrado",
+                                                        p.is_variant_parent
+                                                            ? `${p.variant_count ?? 0} ${p.variant_count === 1 ? "variante" : "variantes"}`
+                                                            : p.cost_price > 0 ? `último costo Ref. ${fmt2(p.cost_price)}` : "sin costo registrado",
                                                     ].join(" · ")}
                                                 </div>
                                             </div>
@@ -590,8 +596,22 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                     </div>
                 )}
 
+                {/* Paso 2 de un modelo con variantes: la curva de tallas, con su propio pie. */}
+                {step === 3 && selected && (
+                    <VariantCurve
+                        model={selected}
+                        warehouseId={warehouseId}
+                        invoiceRate={invoiceRate}
+                        invoiceSym={invoiceSym}
+                        existingItems={existingItems}
+                        onCancel={onClose}
+                        onAddMany={(items) => { items.forEach(it => onAdd(it)); onClose(); }}
+                    />
+                )}
+
                 {/* Pie */}
-                <div className="shrink-0 px-5 py-3.5 border-t border-border/60 dark:border-white/[0.06] flex items-center gap-2 safe-area-bottom">
+                {step !== 3 && (
+                <div className="shrink-0 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-border/60 dark:border-white/[0.06] flex items-center gap-2">
                     {step === 1 ? (
                         <>
                             <button onClick={openProductModal}
@@ -620,6 +640,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                         </>
                     )}
                 </div>
+                )}
             </div>
 
             {showProductModal && (

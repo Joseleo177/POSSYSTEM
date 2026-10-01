@@ -75,6 +75,11 @@ export default function ProductTable({
                                         Servicio
                                     </span>
                                 )}
+                                {p.is_variant_parent && (
+                                    <span className="text-[11px] text-content-subtle whitespace-nowrap">
+                                        {p.variant_count ?? 0} {p.variant_count === 1 ? "variante" : "variantes"}
+                                    </span>
+                                )}
                             </div>
                         </td>
                         <td>

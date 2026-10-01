@@ -17,6 +17,9 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
 /* Mobile app utilities */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+/* Solo para contenedores SIN relleno inferior propio: esta regla lo reemplaza, y fuera del
+   iPhone vale 0. Con py-* o pb-* usar pb-[max(<relleno>,env(safe-area-inset-bottom))]; si no,
+   el pie queda pegado al borde (pasó en el selector de productos de Compras). */
 .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
 /* Entrada del carrito lateral de la vitrina pública.

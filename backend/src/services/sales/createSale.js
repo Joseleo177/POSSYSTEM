@@ -133,6 +133,11 @@ module.exports = async function createSale(body) {
       if (product.sellable === false) {
         throw new Error(`"${product.name}" es un insumo y no está disponible para la venta`);
       }
+      // El modelo de unas variantes es una plantilla: lo que se vende es "Negro / L", no la
+      // franela en abstracto. La caja abre el selector antes de llegar aquí.
+      if (product.is_variant_parent) {
+        throw new Error(`"${product.name}" tiene variantes: elige talla o color`);
+      }
 
       // El precio que rige es el de la sucursal, si lo fijó. Sale de la misma fila que más
       // abajo descuenta las existencias —con lock—, así que no cuesta una consulta extra.

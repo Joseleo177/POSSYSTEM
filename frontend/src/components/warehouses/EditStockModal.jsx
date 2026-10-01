@@ -1,13 +1,24 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
+import { Spinner } from "../ui/Spinner";
 import Modal from "../ui/Modal";
-import { resolveImageUrl, imgRetryOnError } from "../../helpers";
+import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import { isIntegerUnit, fmtQtyUnit } from "../../helpers/unitFormatter";
 
-// Mismo lenguaje visual que QuantityModal del POS: cabecera con foto, chips de unidad y
-// existencia, y control grande con -/+. Aquí el resumen no es un subtotal sino la
-// diferencia contra lo que había, que es el dato que importa al cuadrar inventario.
+// Ajuste de existencia de un producto. Lo que importa al cuadrar inventario no es el número
+// nuevo sino la diferencia contra lo registrado: cuánto entra o sale con este ajuste.
+//
+// Color = señal: la existencia actual va en tinta (antes era un semáforo rojo/naranja/verde
+// que gritaba aunque no hubiera nada que hacer), y solo la diferencia lleva tono — ámbar si
+// salen unidades, que es una pérdida a explicar.
+
+const FORM_ID = "form-ajuste-existencia";
+const MENOS = "M20 12H4";
+const MAS = "M12 4v16m8-8H4";
+
 export default function EditStockModal({ editStockModal, onClose, editStockValue, setEditStockValue, submitEditStock }) {
     const inputRef = useRef(null);
+    // Bloquea el botón mientras guarda: un segundo toque mandaba el mismo ajuste dos veces.
+    const [saving, setSaving] = useState(false);
     const intUnit = isIntegerUnit(editStockModal?.unit);
 
     useEffect(() => {
@@ -21,11 +32,12 @@ export default function EditStockModal({ editStockModal, onClose, editStockValue
 
     if (!editStockModal) return null;
 
-    const unit = (editStockModal.unit || "UNIDAD").toUpperCase();
     const current = parseFloat(editStockModal.qty) || 0;
     const parsed = parseFloat(String(editStockValue).replace(",", "."));
     const next = isNaN(parsed) || parsed < 0 ? 0 : parsed;
     const diff = parseFloat((next - current).toFixed(3));
+    const qty = (n) => fmtQtyUnit(n, editStockModal.unit).toLowerCase();
+    const unidad = qty(next).replace(/^[\d.,\s]+/, "") || "unidades";
 
     // La coma se normaliza a punto al guardar el valor: submitEditStock hace parseFloat
     // directo, y "6,5" se habría truncado a 6. En unidades contables no hay decimales.
@@ -40,130 +52,109 @@ export default function EditStockModal({ editStockModal, onClose, editStockValue
         setEditStockValue(v);
     };
 
+    const enviar = async (e) => {
+        e.preventDefault();
+        if (saving || diff === 0) return;
+        setSaving(true);
+        try { await submitEditStock(e); } finally { setSaving(false); }
+    };
+
     const adjust = (amount) => {
         let n = Math.max(0, next + amount);
         if (intUnit) n = Math.floor(n);
         setEditStockValue(String(parseFloat(n.toFixed(3))));
     };
 
+    // Acciones al pie, fuera de la zona que se desplaza. El botón envía el formulario por su
+    // id: el pie del Modal vive fuera del <form>.
+    const pie = (
+        <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="btn-outline h-11 px-5 rounded-lg text-[13px] font-medium">
+                Cancelar
+            </button>
+            <button type="submit" form={FORM_ID} disabled={diff === 0 || saving}
+                className="btn-accent flex-1 h-11 rounded-lg text-[14px] font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99] transition">
+                {saving && <Spinner />}
+                {diff === 0 ? "Sin cambios" : saving ? "Guardando…" : "Guardar existencia"}
+            </button>
+        </div>
+    );
+
+    const btnPaso = "w-12 h-12 shrink-0 rounded-xl border border-border dark:border-white/15 bg-white dark:bg-white/[0.04] text-content dark:text-white flex items-center justify-center hover:bg-surface-2 dark:hover:bg-white/[0.08] active:scale-95 transition disabled:opacity-40";
+
     return (
-        <Modal open={!!editStockModal} onClose={onClose} title={`Ajustar: ${editStockModal.product_name}`} width={440}>
-            <form onSubmit={submitEditStock}>
-                <div className="flex flex-col gap-4 py-1">
+        <Modal open={!!editStockModal} onClose={onClose} title="Ajustar existencia" width={440} footer={pie}>
+            <form id={FORM_ID} onSubmit={enviar} className="space-y-5">
 
-                    {/* Cabecera del producto */}
-                    <div className="flex gap-4 items-center bg-surface-2 dark:bg-white/5 rounded-xl p-3 border border-border/30 dark:border-white/5">
-                        <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-surface-3 dark:bg-black/20 border border-border/20 dark:border-white/5 relative">
-                            {editStockModal.image_url ? (
-                                <img
-                                    src={resolveImageUrl(editStockModal.image_url)}
-                                    alt={editStockModal.product_name}
-                                    onError={imgRetryOnError}
-                                    className="absolute inset-0 w-full h-full object-cover"
-                                />
-                            ) : (
-                                <div className="absolute inset-0 flex items-center justify-center text-2xl font-bold text-brand-500/30">
-                                    {editStockModal.product_name?.charAt(0)}
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex flex-col gap-1 min-w-0">
-                            {editStockModal.category_name && (
-                                <div className="text-[10px] font-semibold text-content-subtle uppercase tracking-[0.08em] truncate">
-                                    {editStockModal.category_name}
-                                </div>
-                            )}
-                            <div className="text-sm font-bold dark:text-white leading-tight line-clamp-2">
-                                {editStockModal.product_name}
+                {/* Producto */}
+                <div className="flex gap-3.5 items-center">
+                    <div className="w-14 h-14 shrink-0 rounded-xl overflow-hidden bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.06] relative">
+                        {editStockModal.image_url ? (
+                            <img src={resolveImageUrl(editStockModal.image_url)} alt="" onError={imgRetryOnError}
+                                className="absolute inset-0 w-full h-full object-cover" />
+                        ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-[18px] font-semibold text-content-subtle/50">
+                                {editStockModal.product_name?.charAt(0)}
                             </div>
-                        </div>
+                        )}
                     </div>
-
-                    {/* Unidad y existencia actual */}
-                    <div className="flex justify-center items-center gap-2">
-                        <div className="px-3 py-1 rounded-md bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 text-[10px] font-bold border border-border/40 dark:border-white/5">
-                            {unit}
-                        </div>
-                        <div className={`px-3 py-1 rounded-md text-[10px] font-bold border ${
-                            current <= 0 ? "bg-danger/10 text-danger border-danger/30"
-                            : current <= 5 ? "bg-orange-500/10 text-orange-500 border-orange-500/30"
-                            : "bg-success/10 text-success border-success/30"
-                        }`}>
-                            En sistema: {fmtQtyUnit(current, editStockModal.unit)}
-                        </div>
+                    <div className="min-w-0">
+                        <p className="text-[15px] font-semibold text-content dark:text-white leading-snug line-clamp-2">
+                            {toNameCase(editStockModal.product_name)}
+                        </p>
+                        <p className="text-[12px] text-content-subtle truncate">
+                            {[toNameCase(editStockModal.category_name), `Hay ${qty(current)}`].filter(Boolean).join(" · ")}
+                        </p>
                     </div>
+                </div>
 
-                    {/* Control principal */}
-                    <div className="flex items-center justify-between gap-4 px-1">
-                        <button
-                            type="button"
-                            onClick={() => adjust(-1)}
-                            className="w-12 h-12 rounded-lg bg-surface-2 dark:bg-white/5 flex items-center justify-center text-xl font-bold text-content dark:text-white active:scale-95 transition-all border border-border/40 dark:border-white/5 shadow-sm hover:bg-surface-3 dark:hover:bg-white/10"
-                        >
-                            -
+                {/* Existencia nueva */}
+                <div>
+                    <label htmlFor="ajuste-cantidad" className="block text-[12px] font-medium text-content-subtle mb-1.5">
+                        Existencia real (lo que contaste)
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => adjust(-1)} disabled={next <= 0} aria-label="Restar uno" className={btnPaso}>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={MENOS} /></svg>
                         </button>
-
-                        <div className="flex-1 relative group">
+                        <div className="flex-1 relative">
                             <input
+                                id="ajuste-cantidad"
                                 ref={inputRef}
                                 type="text"
                                 inputMode="decimal"
+                                autoComplete="off"
                                 value={editStockValue}
                                 onChange={e => handleChange(e.target.value)}
                                 onFocus={e => e.target.select()}
-                                className="w-full bg-transparent text-center text-4xl font-display font-bold dark:text-white border-none outline-none focus:ring-0 placeholder:opacity-20 tabular-nums"
                                 placeholder="0"
+                                className="w-full h-12 rounded-xl border border-border dark:border-white/15 bg-white dark:bg-white/[0.04] text-center text-[24px] font-bold tracking-tight tabular-nums text-content dark:text-white placeholder:text-content-subtle/40 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition-colors"
                             />
-                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-12 h-0.5 bg-brand-500 rounded-full opacity-40 group-focus-within:opacity-100 transition-all" />
                         </div>
-
-                        <button
-                            type="button"
-                            onClick={() => adjust(1)}
-                            className="w-12 h-12 rounded-lg btn-accent flex items-center justify-center text-xl font-bold active:scale-95 transition-all shadow-sm"
-                        >
-                            +
+                        <button type="button" onClick={() => adjust(1)} aria-label="Sumar uno" className={btnPaso}>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={MAS} /></svg>
                         </button>
                     </div>
+                    <p className="mt-1.5 text-center text-[12px] text-content-subtle">
+                        En {unidad}{intUnit ? "" : " · hasta 3 decimales"}
+                    </p>
+                </div>
 
-                    {/* Diferencia contra lo registrado: evita tener que restar de cabeza
-                        para saber cuánto sobra o falta respecto al conteo físico. */}
-                    <div className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border ${
-                        diff === 0 ? "border-border/40 dark:border-white/10 bg-surface-2 dark:bg-white/[0.03]"
-                        : diff > 0 ? "border-success/30 bg-success/5"
-                        : "border-danger/30 bg-danger/5"
-                    }`}>
-                        <div className="flex flex-col">
-                            <span className="text-[12px] font-medium text-content-subtle dark:text-white/40">
-                                Diferencia
-                            </span>
-                            <span className="text-[11px] font-bold uppercase text-content-muted tabular-nums">
-                                {fmtQtyUnit(current, editStockModal.unit)} <span className="opacity-40">→</span> {fmtQtyUnit(next, editStockModal.unit)}
-                            </span>
-                        </div>
-                        <span className={`text-lg font-bold font-display tabular-nums leading-none ${
-                            diff === 0 ? "text-content-subtle" : diff > 0 ? "text-success" : "text-danger"
-                        }`}>
-                            {diff === 0 ? "Sin cambios" : `${diff > 0 ? "+" : ""}${diff}`}
-                        </span>
+                {/* Diferencia contra lo registrado: evita restar de cabeza para saber cuánto
+                    sobra o falta respecto al conteo físico. */}
+                <div className="rounded-xl bg-surface-2 dark:bg-white/[0.04] px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <p className="text-[12px] text-content-subtle">
+                            {diff === 0 ? "Sin diferencia" : diff > 0 ? "Entran al inventario" : "Salen del inventario"}
+                        </p>
+                        <p className="text-[13px] font-medium text-content-muted dark:text-white/70 tabular-nums">
+                            {qty(current)} <span className="text-content-subtle/60">→</span> {qty(next)}
+                        </p>
                     </div>
-
-                    <div className="flex flex-col gap-2 pt-1">
-                        <button
-                            type="submit"
-                            className="w-full h-11 btn-accent rounded-lg font-bold text-[12px] shadow-sm active:scale-98 transition-all flex items-center justify-center gap-2"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                            Guardar existencia
-                        </button>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="w-full h-8 text-content-subtle dark:text-content-dark-muted rounded-lg font-bold text-[10px] hover:bg-surface-2 dark:hover:bg-white/5 transition-all"
-                        >
-                            Cancelar (ESC)
-                        </button>
-                    </div>
+                    <span className={`text-[22px] font-bold tracking-tight tabular-nums ${
+                        diff === 0 ? "text-content-subtle" : diff > 0 ? "text-content dark:text-white" : "text-amber-700 dark:text-amber-400"}`}>
+                        {diff === 0 ? "0" : `${diff > 0 ? "+" : "−"}${Math.abs(diff)}`}
+                    </span>
                 </div>
             </form>
         </Modal>

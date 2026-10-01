@@ -2,6 +2,7 @@ const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductC
 const { tenantStorage } = require("../utils/tenantStorage");
 const { imageUrl } = require("../utils/imageStorage");
 const { calculateComboStockAndCost } = require("./products/productService");
+const { getVariants } = require("./products/variantService");
 
 const Op = Sequelize.Op;
 
@@ -453,6 +454,23 @@ async function comboAvailability(comboIds, warehouseId) {
 // la del punto de venta: la primera del listado ordenado por más reciente (ver
 // controllers/promotions.js y promoLineDiscountUsd en CartContext). Si las dos pantallas
 // eligieran distinto, el catálogo anunciaría un precio y la caja cobraría otro.
+// Disponibilidad de una página de modelos con variantes, en una consulta: disponible si le
+// queda alguna talla (en la sucursal, o en total sin sucursal). También la foto del primer
+// color que tenga una, para el modelo que no tiene la suya.
+async function modelosDisponibles(ids, whId) {
+  if (!ids.length) return {};
+  const filas = await sequelize.query(`
+    SELECT v.parent_id,
+           BOOL_OR(${whId ? 'vps.qty' : 'v.stock'} > 0) AS available,
+           (ARRAY_AGG(v.image_filename ORDER BY v.id) FILTER (WHERE v.image_filename IS NOT NULL))[1] AS image
+      FROM products v
+      ${whId ? 'JOIN product_stock vps ON vps.product_id = v.id AND vps.warehouse_id = :wid' : ''}
+     WHERE v.parent_id IN (:ids)
+     GROUP BY v.parent_id
+  `, { replacements: { ids, wid: whId }, type: Sequelize.QueryTypes.SELECT });
+  return Object.fromEntries(filas.map((r) => [r.parent_id, { available: !!r.available, image: r.image }]));
+}
+
 async function descuentosVigentes(warehouseId) {
   const now = new Date();
   const alcance = warehouseId
@@ -547,10 +565,16 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
     // devolvía el catálogo entero de la empresa con doce AGOTADO que allí nunca se
     // vendieron. Vale para todo, incluidos servicios y combos: el alta de producto les
     // crea ficha igual, así que no hace falta exceptuarlos.
+    //
+    // Un modelo con variantes ("Franela Básica") no tiene ficha propia: es de la sucursal si
+    // alguna de sus tallas la tiene. Las variantes en sí no se publican sueltas.
     if (whId) {
       where[Op.and] = [
         Sequelize.literal(
-          `EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${whId})`
+          `(EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${whId})
+            OR ("Product"."is_variant_parent" = true AND EXISTS (
+              SELECT 1 FROM products v JOIN product_stock vps ON vps.product_id = v.id
+               WHERE v.parent_id = "Product"."id" AND vps.warehouse_id = ${whId})))`
         ),
       ];
     }
@@ -563,6 +587,12 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
     // sección de destacados (para filtrar por ellas) y después, para el precio de cada
     // fila — es la misma cuenta, se calcula una sola vez y se reusa para las dos cosas.
     const descuentos = await descuentosVigentes(whId);
+
+    // ¿Le queda alguna talla? Es lo que hace disponible a un modelo con variantes.
+    const tallaDisponible = whId
+      ? `EXISTS (SELECT 1 FROM products v JOIN product_stock vps ON vps.product_id = v.id
+           WHERE v.parent_id = "Product"."id" AND vps.warehouse_id = ${whId} AND vps.qty > 0)`
+      : `EXISTS (SELECT 1 FROM products v WHERE v.parent_id = "Product"."id" AND v.stock > 0)`;
 
     // "Destacados" = lo que la propia tienda ya decidió resaltar: un combo (siempre es
     // una oferta armada), un producto con descuento de porcentaje, o uno con una promo
@@ -584,7 +614,7 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
       // Se seleccionan solo columnas de vitrina. cost_price, profit_margin, barcode y
       // min_stock quedan fuera a propósito: son datos internos del negocio.
       attributes: [
-        "id", "name", "unit", "image_filename", "is_service", "is_combo",
+        "id", "name", "unit", "image_filename", "is_service", "is_combo", "is_variant_parent",
         // Campos de vitrina: la marca sobre el nombre y la frase de beneficio debajo.
         // description también: el tema de menú abre su modal de "personalizar" (nota +
         // cantidad) directo desde esta fila, sin pasar por getProduct, así que si un
@@ -605,7 +635,8 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
       // comboAvailability). Se muestra correctamente como agotado y no se puede pedir, pero
       // no baja al final de la lista. Corregirlo exige mover ese cálculo a una subconsulta.
       order: [
-        [Sequelize.literal(`(CASE WHEN "Product"."is_service" OR "Product"."is_combo" OR ${stockExpr} > 0 THEN 0 ELSE 1 END)`), "ASC"],
+        [Sequelize.literal(`(CASE WHEN "Product"."is_service" OR "Product"."is_combo" OR ${stockExpr} > 0
+          OR ("Product"."is_variant_parent" AND ${tallaDisponible}) THEN 0 ELSE 1 END)`), "ASC"],
         ["name", "ASC"],
       ],
       limit: Math.min(parseInt(limit, 10) || 40, 60),
@@ -618,6 +649,7 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
     // descuento de stock fallaba. Se resuelve para los combos de esta página con dos
     // consultas, no una por producto.
     const comboStock = await comboAvailability(rows.filter((r) => r.is_combo).map((r) => r.id), whId);
+    const modelos = await modelosDisponibles(rows.filter((r) => r.is_variant_parent).map((r) => r.id), whId);
 
     return {
       total: count,
@@ -629,8 +661,11 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
           ? true
           : j.is_combo
             ? (comboStock[j.id] === null || comboStock[j.id] > 0)
-            : parseFloat(j.stock || 0) > 0;
+            : j.is_variant_parent
+              ? !!modelos[j.id]?.available
+              : parseFloat(j.stock || 0) > 0;
         const precio = aplicarDescuento(parseFloat(j.price), descuentos.pct[j.id]);
+        const foto = j.image_filename || (j.is_variant_parent ? modelos[j.id]?.image : null);
         // Aviso de "compra y lleva", NUNCA cambia price/price_before: ver la nota en
         // descuentosVigentes sobre por qué esta promo no se puede tachar como precio.
         const bxg = descuentos.bxg[j.id];
@@ -658,11 +693,13 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
           short_description: j.short_description || null,
           description_paragraphs: splitParagraphs(j.description),
           category_name: j.Category?.name || null,
-          image_url: j.image_filename
-            ? (j.image_filename.startsWith("http") ? j.image_filename : `/uploads/${j.image_filename}`)
+          image_url: foto
+            ? (foto.startsWith("http") ? foto : `/uploads/${foto}`)
             : null,
           // Se publica el booleano, nunca la cantidad: el inventario real no sale de casa.
           available,
+          // Con variantes, "Agregar" abre el selector de talla y color en vez de sumarlo.
+          has_variants: !!j.is_variant_parent,
         };
       }),
     };
@@ -685,7 +722,7 @@ async function getProduct(token, productId, { warehouse_id } = {}) {
       where: { id, visible_in_catalog: true, sellable: true },
       // Mismo criterio de vitrina que el listado, más los textos largos de la ficha.
       attributes: [
-        "id", "name", "unit", "image_filename", "is_service", "is_combo",
+        "id", "name", "unit", "image_filename", "is_service", "is_combo", "is_variant_parent",
         "brand", "short_description", "description",
         "stock", "price", "category_id",
       ],
@@ -716,7 +753,7 @@ async function getProduct(token, productId, { warehouse_id } = {}) {
       });
       // Sin ficha en esa sucursal, el producto no es de su surtido: el mismo criterio con
       // que el listado lo excluye. El enlace compartido desde otra sucursal da 404 aquí.
-      if (!ficha && !p.is_service && !p.is_combo) return null;
+      if (!ficha && !p.is_service && !p.is_combo && !p.is_variant_parent) return null;
       if (ficha) {
         stock = parseFloat(ficha.qty);
         if (ficha.price != null) basePrice = parseFloat(ficha.price);
@@ -724,13 +761,43 @@ async function getProduct(token, productId, { warehouse_id } = {}) {
     }
 
     const comboStock = p.is_combo ? (await comboAvailability([p.id], tienda?.id || null))[p.id] : null;
+    const descuentos = await descuentosVigentes(tienda ? tienda.id : null);
+
+    // Tallas y colores. Al cliente solo le llega si cada una está disponible, nunca cuántas
+    // quedan, y su precio con el mismo descuento que el resto de la vitrina. La variante sin
+    // ficha en esta sucursal no se ofrece.
+    let variants = null;
+    if (p.is_variant_parent) {
+      const v = (await getVariants(p.id, { warehouse_id: tienda?.id || null, company_id })).data;
+      const items = v.variants
+        .filter((x) => !tienda || x.in_warehouse)
+        .map((x) => {
+          const pr = aplicarDescuento(x.price, descuentos.pct[x.id]);
+          return {
+            id: x.id, label: x.label, value_ids: x.value_ids,
+            price: pr.price, price_before: pr.price_before, discount_pct: pr.discount_pct,
+            image_url: x.image_url || null,
+            available: x.qty > 0,
+          };
+        });
+      if (tienda && !items.length) return null;
+      const usados = new Set(items.flatMap((x) => Object.values(x.value_ids)));
+      variants = {
+        attributes: v.attributes
+          .map((a) => ({ id: a.id, name: a.name, values: a.values.filter((val) => usados.has(val.id)).map((val) => ({ id: val.id, value: val.value })) }))
+          .filter((a) => a.values.length),
+        items,
+      };
+    }
+
     const available = p.is_service
       ? true
       : p.is_combo
         ? (comboStock === null || comboStock > 0)
-        : stock > 0;
+        : p.is_variant_parent
+          ? variants.items.some((x) => x.available)
+          : stock > 0;
 
-    const descuentos = await descuentosVigentes(tienda ? tienda.id : null);
     const precio = aplicarDescuento(basePrice, descuentos.pct[p.id]);
     const bxg = descuentos.bxg[p.id];
 
@@ -787,6 +854,8 @@ async function getProduct(token, productId, { warehouse_id } = {}) {
         : null,
       // El booleano, nunca la cantidad: mismo trato que el listado.
       available,
+      has_variants: !!p.is_variant_parent,
+      variants,
     };
   });
 }
@@ -930,7 +999,15 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
     // solo una intención. Si el cliente dejó la pestaña abierta una semana, el pedido se
     // registra con el precio de hoy, no con el que tenía guardado en pantalla.
     const ids = [...new Set(lines.map((l) => parseInt(l.product_id, 10)).filter(Number.isInteger))];
-    const products = await Product.findAll({ where: { id: { [Op.in]: ids }, visible_in_catalog: true, sellable: true } });
+    // Se pide lo publicado, o la talla de un modelo publicado (las variantes no se publican
+    // sueltas: va publicado el modelo). El modelo en sí nunca: es una plantilla.
+    const products = await Product.findAll({ where: {
+      id: { [Op.in]: ids }, sellable: true, is_variant_parent: false,
+      [Op.or]: [
+        { visible_in_catalog: true },
+        { parent_id: { [Op.in]: Sequelize.literal(`(SELECT id FROM products WHERE is_variant_parent = true AND visible_in_catalog = true AND sellable = true)`) } },
+      ],
+    } });
     const byId = Object.fromEntries(products.map((p) => [p.id, p]));
 
     // La sucursal donde compra el cliente. Se revalida acá: el pedido puede llegar con

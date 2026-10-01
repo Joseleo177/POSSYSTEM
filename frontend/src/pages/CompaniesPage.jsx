@@ -6,31 +6,50 @@ import CompanyModal from "../components/Companies/CompanyModal";
 import SubscriptionRenewModal from "../components/Companies/SubscriptionRenewModal";
 import Modal from "../components/ui/Modal";
 import ConfirmModal from "../components/ui/ConfirmModal";
+import Segmented from "../components/ui/Segmented";
+import StatusMark, { statusTone } from "../components/ui/StatusMark";
+import { ledgerRow, stopRow, LedgerSkeleton, LedgerEmpty, RowIcon, RowCta } from "../components/ui/Ledger";
+import {
+    LICENSE_STATUS, estadoLicencia, vencimientoRelativo, fmtFecha, TONO_TEXTO, usuariosTexto,
+} from "../components/Companies/license";
+
+// Empresas y licencias (solo superusuario).
+//
+// Antes eran dos pestañas que listaban las mismas empresas con columnas distintas, más cuatro
+// tarjetas de colores con los conteos. Ahora es una lista: el estado de la licencia, el
+// vencimiento y las acciones van en la misma fila, y los conteos viven en el filtro, que es
+// donde se usan ("3 por vencer" → tocarlo y verlas).
+const FILTROS = [
+    { key: "todas",      label: "Todas" },
+    { key: "activa",     label: "Activas" },
+    { key: "demo",       label: "Demo" },
+    { key: "por_vencer", label: "Por vencer" },
+    { key: "vencida",    label: "Vencidas" },
+    { key: "suspendida", label: "Suspendidas" },
+];
+
+// La empresa principal (id 1) es la del propio operador de la plataforma: no se borra ni se
+// suspende, que sería dejar fuera a sus propios usuarios.
+const esPrincipal = (c) => c.id === 1;
 
 export default function CompaniesPage() {
     const { notify } = useApp();
     const [companies, setCompanies] = useState([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState("");
-    const [activeTab, setActiveTab] = useState("general"); // "general" | "subscriptions"
-    const [subFilter, setSubFilter] = useState("all"); // "all" | "active" | "demo" | "expiring" | "expired" | "suspended"
-    
-    // Modal states
+    const [filtro, setFiltro] = useState("todas");
+
     const [modalOpen, setModalOpen] = useState(false);
     const [editData, setEditData] = useState(null);
     const [saving, setSaving] = useState(false);
-    
-    // Renew Modal state
-    const [renewModalOpen, setRenewModalOpen] = useState(false);
+
     const [renewCompany, setRenewCompany] = useState(null);
     const [renewing, setRenewing] = useState(false);
 
-    // Credentials modal state
     const [credentialsModal, setCredentialsModal] = useState(null);
-    
-    // Delete dialog state
     const [deleteDialog, setDeleteDialog] = useState(null);
-    const [deleting, setDeleting] = useState(false);
+    const [suspendDialog, setSuspendDialog] = useState(null);
+    const [reactivating, setReactivating] = useState(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -51,17 +70,14 @@ export default function CompaniesPage() {
         try {
             if (editData) {
                 await api.companies.update(editData.id, form);
-                notify("Empresa actualizada con éxito");
+                notify("Empresa actualizada");
                 setModalOpen(false);
             } else {
                 const res = await api.companies.create(form);
-                notify("Empresa creada con éxito");
+                notify("Empresa creada");
                 setModalOpen(false);
                 if (res.company?.default_credentials) {
-                    setCredentialsModal({
-                        ...res.company.default_credentials,
-                        companyName: form.name
-                    });
+                    setCredentialsModal({ ...res.company.default_credentials, companyName: form.name });
                 }
             }
             load();
@@ -72,12 +88,11 @@ export default function CompaniesPage() {
         }
     };
 
-    const handleRenewSave = async (updatedData) => {
+    const handleRenewSave = async (updated) => {
         setRenewing(true);
         try {
-            await api.companies.update(updatedData.id, updatedData);
-            notify(`Suscripción de "${updatedData.name}" actualizada con éxito`);
-            setRenewModalOpen(false);
+            await api.companies.update(updated.id, updated);
+            notify(`Suscripción de "${updated.name}" actualizada`);
             setRenewCompany(null);
             load();
         } catch (e) {
@@ -87,483 +102,206 @@ export default function CompaniesPage() {
         }
     };
 
-    const handleToggleStatus = async (company) => {
-        const newStatus = company.subscription_status === 'Suspendida' ? 'Activa' : 'Suspendida';
+    const setStatus = async (company, status) => {
         try {
-            await api.companies.update(company.id, {
-                ...company,
-                subscription_status: newStatus
-            });
-            notify(`Empresa "${company.name}" ${newStatus === 'Activa' ? 'reactivada' : 'suspendida'}`);
+            await api.companies.update(company.id, { ...company, subscription_status: status });
+            notify(`"${company.name}" ${status === "Activa" ? "reactivada" : "suspendida"}`);
             load();
         } catch (e) {
             notify(e.message, "err");
         }
     };
 
+    // Reactivar no pide confirmación (devuelve el acceso, que es ir hacia el lado seguro);
+    // suspender sí, porque deja fuera en el acto a todos los usuarios de esa empresa.
+    const reactivate = async (c) => {
+        setReactivating(c.id);
+        try { await setStatus(c, "Activa"); } finally { setReactivating(null); }
+    };
+
     const handleDeleteCompany = async () => {
         if (!deleteDialog) return;
-        setDeleting(true);
         try {
             await api.companies.remove(deleteDialog.id);
-            notify(`Empresa "${deleteDialog.name}" eliminada por completo`, "success");
+            notify(`Empresa "${deleteDialog.name}" eliminada`);
             setDeleteDialog(null);
             load();
         } catch (e) {
             notify(e.message, "err");
-        } finally {
-            setDeleting(false);
         }
     };
 
     const openCreate = () => { setEditData(null); setModalOpen(true); };
     const openEdit = (c) => { setEditData(c); setModalOpen(true); };
-    const openRenew = (c) => { setRenewCompany(c); setRenewModalOpen(true); };
 
-    // Helper de cálculo de vencimiento y días restantes
-    const getRemainingDaysInfo = (c) => {
-        if (!c.expires_at) {
-            return {
-                label: "Ilimitado",
-                days: Infinity,
-                badgeClass: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
-                statusText: "Vigencia Ilimitada"
-            };
-        }
+    const conEstado = useMemo(() => companies.map(c => ({ ...c, _estado: estadoLicencia(c) })), [companies]);
 
-        const now = new Date();
-        const exp = new Date(c.expires_at);
-        // Reset hours for clean date math
-        now.setHours(0, 0, 0, 0);
-        const expClean = new Date(exp);
-        expClean.setHours(0, 0, 0, 0);
+    const conteos = useMemo(() => {
+        const n = { todas: conEstado.length };
+        for (const c of conEstado) n[c._estado] = (n[c._estado] || 0) + 1;
+        return n;
+    }, [conEstado]);
 
-        const diffTime = expClean.getTime() - now.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const filtered = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return conEstado.filter(c => {
+            if (filtro !== "todas" && c._estado !== filtro) return false;
+            if (!q) return true;
+            return c.name?.toLowerCase().includes(q) || c.tax_id?.toLowerCase().includes(q);
+        });
+    }, [conEstado, search, filtro]);
 
-        if (c.subscription_status === 'Suspendida') {
-            return {
-                label: "Suspendida",
-                days: diffDays,
-                badgeClass: "bg-red-500/10 text-red-500 border-red-500/30",
-                statusText: "Cuenta Suspendida"
-            };
-        }
+    // Lo que pide renovar: vencida, por vencer o en demo. Ahí "Renovar" es el botón con peso de
+    // la fila; en el resto queda como icono, para no llenar la lista de botones iguales.
+    const pideRenovar = (c) => ["vencida", "por_vencer", "demo"].includes(c._estado);
 
-        if (diffDays < 0) {
-            return {
-                label: `Vencida (${Math.abs(diffDays)}d)`,
-                days: diffDays,
-                badgeClass: "bg-red-500/10 text-red-500 border-red-500/30",
-                statusText: `Vencida hace ${Math.abs(diffDays)} día${Math.abs(diffDays) !== 1 ? 's' : ''}`
-            };
-        }
-        if (diffDays === 0) {
-            return {
-                label: "¡Vence hoy!",
-                days: 0,
-                badgeClass: "bg-amber-500/10 text-amber-500 border-amber-500/30 animate-pulse",
-                statusText: "¡Vence el día de hoy!"
-            };
-        }
-        if (diffDays <= 7) {
-            return {
-                label: `${diffDays} día${diffDays !== 1 ? 's' : ''} rest.`,
-                days: diffDays,
-                badgeClass: "bg-amber-500/10 text-amber-500 border-amber-500/30",
-                statusText: `Vence en ${diffDays} día${diffDays !== 1 ? 's' : ''}`
-            };
-        }
-        return {
-            label: `${diffDays} días rest.`,
-            days: diffDays,
-            badgeClass: "bg-blue-500/10 text-blue-500 border-blue-500/30",
-            statusText: `Vence el ${exp.toLocaleDateString()}`
-        };
+    const plan = (c) => (
+        <>
+            <div className="text-[13px] text-content dark:text-white">{c.plan_name || "Básico"}</div>
+            <div className="text-[12px] text-content-subtle">
+                {usuariosTexto(c.max_users)}{c.catalog_enabled ? " · Con catálogo" : ""}
+            </div>
+        </>
+    );
+
+    const vence = (c) => {
+        if (!c.expires_at) return <div className="text-[13px] text-content-subtle">Sin vencimiento</div>;
+        const rel = vencimientoRelativo(c.expires_at);
+        return (
+            <>
+                <div className="text-[13px] text-content dark:text-white">{fmtFecha(c.expires_at)}</div>
+                <div className={`text-[12px] ${rel.tone ? TONO_TEXTO[rel.tone] : "text-content-subtle"}`}>{rel.text}</div>
+            </>
+        );
     };
 
-    // Métricas KPI de Suscripciones
-    const kpis = useMemo(() => {
-        let activeCount = 0;
-        let demoCount = 0;
-        let expiringCount = 0;
-        let expiredOrSuspendedCount = 0;
-
-        companies.forEach(c => {
-            const info = getRemainingDaysInfo(c);
-            if (c.subscription_status === 'Suspendida' || c.subscription_status === 'Vencida' || info.days < 0) {
-                expiredOrSuspendedCount++;
-            } else if (c.subscription_status === 'Demo') {
-                demoCount++;
-                if (info.days >= 0 && info.days <= 7) expiringCount++;
-            } else if (c.subscription_status === 'Activa' || c.subscription_status === 'Ilimitado') {
-                activeCount++;
-                if (info.days >= 0 && info.days <= 7) expiringCount++;
-            }
-        });
-
-        return { activeCount, demoCount, expiringCount, expiredOrSuspendedCount };
-    }, [companies]);
-
-    // Filtrado de la lista
-    const filtered = useMemo(() => {
-        return companies.filter(c => {
-            const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) || 
-                                  c.tax_id?.toLowerCase().includes(search.toLowerCase());
-            if (!matchesSearch) return false;
-
-            if (activeTab === "subscriptions") {
-                const info = getRemainingDaysInfo(c);
-                if (subFilter === "active") return c.subscription_status === "Activa" || c.subscription_status === "Ilimitado";
-                if (subFilter === "demo") return c.subscription_status === "Demo";
-                if (subFilter === "expiring") return info.days >= 0 && info.days <= 7 && c.subscription_status !== "Suspendida";
-                if (subFilter === "expired") return info.days < 0 || c.subscription_status === "Vencida";
-                if (subFilter === "suspended") return c.subscription_status === "Suspendida";
-            }
-            return true;
-        });
-    }, [companies, search, activeTab, subFilter]);
+    const acciones = (c) => (
+        <div className="flex items-center justify-end gap-0.5" onClick={stopRow}>
+            {pideRenovar(c) && <RowCta onClick={() => setRenewCompany(c)}>Renovar</RowCta>}
+            {!pideRenovar(c) && (
+                <RowIcon icon="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    title="Renovar o cambiar plan" onClick={() => setRenewCompany(c)} />
+            )}
+            <RowIcon icon="edit" title="Editar datos" onClick={() => openEdit(c)} />
+            {c._estado === "suspendida" ? (
+                <RowIcon icon="power" title="Reactivar" busy={reactivating === c.id} onClick={() => reactivate(c)} />
+            ) : !esPrincipal(c) && (
+                <RowIcon icon="ban" title="Suspender acceso" tone="danger" onClick={() => setSuspendDialog(c)} />
+            )}
+            {!esPrincipal(c) && <RowIcon icon="trash" title="Eliminar empresa" tone="danger" onClick={() => setDeleteDialog(c)} />}
+        </div>
+    );
 
     return (
-        <div className="h-full flex flex-col bg-transparent animate-in fade-in duration-500">
-            {/* Header / Tabs */}
-            <div className="shrink-0 px-4 pt-3 pb-0 border-b border-border/30 dark:border-white/5">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <div className="text-[11px] sm:text-[12px] font-semibold text-brand-600 dark:text-brand-400 leading-none mb-1">Administración</div>
-                        <h1 className="text-[15px] sm:text-[17px] font-bold tracking-[-0.015em] leading-tight text-content dark:text-white">Gestión de empresas y licencias</h1>
-                    </div>
-                    <Button onClick={openCreate} className="h-8 px-3 text-[11px] shadow-none">
-                        + Nueva empresa
-                    </Button>
+        <div className="h-full flex flex-col overflow-y-auto lg:overflow-hidden">
+            {/* Cabecera */}
+            <div className="shrink-0 px-4 pt-3 pb-3 flex items-center justify-between gap-3 border-b border-border/30 dark:border-white/5">
+                <div className="min-w-0">
+                    <div className="text-[12px] font-semibold text-brand-600 dark:text-brand-400 leading-none mb-1">Administración</div>
+                    <h1 className="text-[17px] font-bold tracking-[-0.015em] leading-tight text-content dark:text-white truncate">Empresas y licencias</h1>
                 </div>
-
-                <div className="flex gap-1">
-                    <button
-                        onClick={() => setActiveTab("general")}
-                        className={`px-4 py-2 text-[13px] font-semibold border-b-2 transition-all ${
-                            activeTab === "general"
-                                ? "border-brand-500 text-brand-700 dark:text-brand-300"
-                                : "border-transparent text-content-subtle hover:text-content"
-                        }`}
-                    >
-                        Listado general
-                    </button>
-                    <button
-                        onClick={() => setActiveTab("subscriptions")}
-                        className={`px-4 py-2 text-[13px] font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
-                            activeTab === "subscriptions"
-                                ? "border-brand-500 text-brand-700 dark:text-brand-300"
-                                : "border-transparent text-content-subtle hover:text-content"
-                        }`}
-                    >
-                        <span>Suscripciones</span>
-                        {kpis.expiringCount > 0 && (
-                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-                        )}
-                    </button>
-                </div>
+                <Button onClick={openCreate} className="h-9 px-3.5 text-[13px] shadow-none shrink-0">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4" /></svg>
+                    <span className="hidden sm:inline">Nueva empresa</span><span className="sm:hidden">Nueva</span>
+                </Button>
             </div>
 
-            {/* Sub-header métricas para Pestaña de Suscripciones */}
-            {activeTab === "subscriptions" && (
-                <div className="shrink-0 p-4 border-b border-border/20 dark:border-white/5 bg-surface-2/40 dark:bg-white/[0.01]">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div className="card-premium p-3 border border-emerald-500/20 bg-emerald-500/[0.02]">
-                            <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-500">Empresas activas</div>
-                            <div className="text-xl font-bold tabular-nums text-content dark:text-white mt-1">{kpis.activeCount}</div>
-                        </div>
-                        <div className="card-premium p-3 border border-amber-500/20 bg-amber-500/[0.02]">
-                            <div className="text-[10px] font-bold uppercase tracking-widest text-amber-500">En período demo</div>
-                            <div className="text-xl font-bold tabular-nums text-content dark:text-white mt-1">{kpis.demoCount}</div>
-                        </div>
-                        <div className="card-premium p-3 border border-amber-500/30 bg-amber-500/[0.04]">
-                            <div className="text-[10px] font-bold uppercase tracking-widest text-amber-500 flex items-center justify-between">
-                                <span>Por Vencer (≤7d)</span>
-                                {kpis.expiringCount > 0 && <span className="w-2 h-2 rounded-full bg-amber-500"></span>}
-                            </div>
-                            <div className="text-xl font-bold tabular-nums text-content dark:text-white mt-1">{kpis.expiringCount}</div>
-                        </div>
-                        <div className="card-premium p-3 border border-red-500/20 bg-red-500/[0.02]">
-                            <div className="text-[10px] font-bold uppercase tracking-widest text-red-500">Vencidas / suspendidas</div>
-                            <div className="text-xl font-bold tabular-nums text-content dark:text-white mt-1">{kpis.expiredOrSuspendedCount}</div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Barra de Filtros & Búsqueda */}
-            <div className="shrink-0 px-4 py-3 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center justify-between gap-3">
-                <div className="relative flex-1 max-w-xs">
+            {/* Buscador y estado */}
+            <div className="shrink-0 px-4 py-2.5 flex flex-col lg:flex-row lg:items-center gap-2 border-b border-border/20 dark:border-white/5">
+                <div className="relative lg:w-72 shrink-0">
                     <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle/70 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                     <input
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        className="input h-9 pl-9 text-[12px] w-full"
-                        placeholder="Filtrar por nombre o RIF..."
+                        className="input h-9 pl-9 text-[13px] w-full"
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="Buscar por nombre o RIF…"
                     />
                 </div>
-
-                {activeTab === "subscriptions" && (
-                    <div className="flex items-center gap-1 overflow-x-auto">
-                        <button
-                            onClick={() => setSubFilter("all")}
-                            className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all ${
-                                subFilter === "all" ? "bg-brand-500 text-white border-brand-500" : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/40"
-                            }`}
-                        >
-                            Todas
-                        </button>
-                        <button
-                            onClick={() => setSubFilter("active")}
-                            className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all ${
-                                subFilter === "active" ? "bg-emerald-500 text-white border-emerald-500" : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/40"
-                            }`}
-                        >
-                            Activas
-                        </button>
-                        <button
-                            onClick={() => setSubFilter("demo")}
-                            className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all ${
-                                subFilter === "demo" ? "bg-amber-500 text-white border-amber-500" : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/40"
-                            }`}
-                        >
-                            Demo
-                        </button>
-                        <button
-                            onClick={() => setSubFilter("expiring")}
-                            className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all ${
-                                subFilter === "expiring" ? "bg-amber-600 text-white border-amber-600" : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/40"
-                            }`}
-                        >
-                            Por vencer
-                        </button>
-                        <button
-                            onClick={() => setSubFilter("expired")}
-                            className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all ${
-                                subFilter === "expired" ? "bg-red-500 text-white border-red-500" : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/40"
-                            }`}
-                        >
-                            Vencidas
-                        </button>
-                        <button
-                            onClick={() => setSubFilter("suspended")}
-                            className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all ${
-                                subFilter === "suspended" ? "bg-purple-600 text-white border-purple-600" : "bg-surface-2 dark:bg-white/5 text-content-subtle border-border/40"
-                            }`}
-                        >
-                            Suspendidas
-                        </button>
-                    </div>
-                )}
-
-                <div className="shrink-0 text-[12px] font-bold text-content-subtle dark:text-white/30">
-                    {filtered.length} empresa{filtered.length !== 1 ? 's' : ''}
+                <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+                    <Segmented
+                        options={FILTROS.map(f => ({ ...f, count: conteos[f.key] || 0 }))}
+                        value={filtro}
+                        onChange={setFiltro}
+                    />
                 </div>
             </div>
 
-            {/* Contenido / Tabla */}
-            <div className="flex-1 overflow-auto p-4 content-scrollbar">
-                {loading ? (
-                    <div className="flex items-center justify-center py-20 text-[12px] font-bold text-content-subtle dark:text-white/20 animate-pulse">
-                        Sincronizando con el servidor…
-                    </div>
-                ) : filtered.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 opacity-40">
-                        <div className="text-[12px] font-bold text-content-subtle dark:text-white/20">
-                            No se encontraron resultados
-                        </div>
-                    </div>
-                ) : activeTab === "general" ? (
-                    /* VISTA LISTADO GENERAL */
-                    <div className="card-premium overflow-auto">
-                        <table className="table-pos min-w-[680px]">
-                            <thead>
-                                <tr>
-                                    <th className="text-left w-16">#</th>
-                                    <th className="text-left">Empresa / RIF</th>
-                                    <th className="text-left">Plan / vencimiento</th>
-                                    <th className="text-center">Estado</th>
-                                    <th className="text-right w-[120px] pr-6">Acción</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/10 dark:divide-white/5">
-                                {filtered.map(c => (
-                                    <tr key={c.id} className="group hover:bg-brand-500/[0.02] transition-colors">
-                                        <td>
-                                            <span className="text-[11px] font-bold font-mono text-content-subtle tabular-nums">#{String(c.id).padStart(3, '0')}</span>
+            {/* ── Libro (escritorio) ── */}
+            <div className="hidden md:flex lg:flex-1 lg:min-h-0 flex-col py-3 px-4">
+                <div className="card-premium overflow-auto lg:flex-1">
+                    <table className="table-ledger min-w-[820px]">
+                        <thead className="sticky top-0 z-10">
+                            <tr>
+                                <th className="pl-4">Empresa</th>
+                                <th className="w-[210px]">Plan</th>
+                                <th className="w-[150px]">Licencia</th>
+                                <th className="w-[170px]">Vence</th>
+                                <th className="w-[200px] pr-4" />
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loading && companies.length === 0 ? <LedgerSkeleton cols={5} rows={4} />
+                                : filtered.length === 0 ? (
+                                    <LedgerEmpty cols={5}
+                                        title={companies.length ? "Ninguna empresa coincide" : "Todavía no hay empresas"}
+                                        hint={companies.length ? "Prueba con otro nombre o con otro estado." : "Crea la primera con Nueva empresa."}
+                                        onClear={search || filtro !== "todas" ? () => { setSearch(""); setFiltro("todas"); } : undefined} />
+                                ) : filtered.map(c => (
+                                    <tr key={c.id} {...ledgerRow(() => openEdit(c), statusTone(c._estado, LICENSE_STATUS))}>
+                                        <td className="pl-4">
+                                            <div className="text-[13px] font-semibold text-content dark:text-white">{c.name}</div>
+                                            <div className="text-[12px] text-content-subtle">{c.tax_id ? `RIF ${c.tax_id}` : "Sin RIF"}</div>
                                         </td>
-                                        <td>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center text-[12px] font-bold text-brand-500 shrink-0">
-                                                    {c.name?.charAt(0)}
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs font-bold text-content dark:text-white tracking-tight group-hover:text-brand-500 transition-colors">{c.name}</span>
-                                                    <span className="text-[12px] font-medium text-content-subtle tabular-nums mt-0.5">RIF: {c.tax_id || "N/A"}</span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div className="flex flex-col gap-1">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="badge badge-info shadow-none w-fit">
-                                                        {c.plan_name || "Básico"}
-                                                    </span>
-                                                    {c.catalog_enabled && (
-                                                        <span className="badge shadow-none w-fit bg-violet-500/10 text-violet-500 border border-violet-500/20" title="Tiene el extra de catálogo público">
-                                                            Catálogo
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <span className="text-[11px] font-semibold text-content-subtle tabular-nums">
-                                                    Vence: {c.expires_at ? new Date(c.expires_at).toLocaleDateString() : "Ilimitado"}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="text-center">
-                                            <span className={`badge shadow-none ${c.subscription_status === 'Activa' || c.subscription_status === 'Ilimitado' ? 'badge-success' : c.subscription_status === 'Demo' ? 'badge-warning' : 'badge-danger'}`}>
-                                                {c.subscription_status || 'Demo'}
-                                            </span>
-                                        </td>
-                                        <td className="text-right pr-6">
-                                            <div className="flex justify-end gap-1">
-                                                <button
-                                                    onClick={() => openRenew(c)}
-                                                    className="p-1.5 hover:bg-brand-500/10 rounded-xl transition-all text-content-subtle hover:text-brand-500 active:scale-90"
-                                                    title="Renovar / gestionar suscripción"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                                </button>
-                                                <button
-                                                    onClick={() => openEdit(c)}
-                                                    className="p-1.5 hover:bg-warning/10 rounded-xl transition-all text-content-subtle hover:text-warning active:scale-90"
-                                                    title="Editar datos"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                                </button>
-                                                {c.id !== 1 && (
-                                                    <button
-                                                        onClick={() => setDeleteDialog(c)}
-                                                        className="p-1.5 hover:bg-red-500/10 rounded-xl transition-all text-content-subtle hover:text-red-500 active:scale-90"
-                                                        title="Eliminar empresa"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </td>
+                                        <td>{plan(c)}</td>
+                                        <td><StatusMark status={c._estado} map={LICENSE_STATUS} /></td>
+                                        <td>{vence(c)}</td>
+                                        <td className="pr-4">{acciones(c)}</td>
                                     </tr>
                                 ))}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : (
-                    /* VISTA PANEL DE SUSCRIPCIONES Y VENCIMIENTOS */
-                    <div className="card-premium overflow-auto">
-                        <table className="table-pos min-w-[760px]">
-                            <thead>
-                                <tr>
-                                    <th className="text-left w-12">#</th>
-                                    <th className="text-left">Empresa</th>
-                                    <th className="text-left">Plan / límite</th>
-                                    <th className="text-center">Estado licencia</th>
-                                    <th className="text-left">Días restantes / vencimiento</th>
-                                    <th className="text-right pr-6">Acción rápida</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/10 dark:divide-white/5">
-                                {filtered.map(c => {
-                                    const info = getRemainingDaysInfo(c);
-                                    return (
-                                        <tr key={c.id} className="group hover:bg-brand-500/[0.02] transition-colors">
-                                            <td>
-                                                <span className="text-[11px] font-bold font-mono text-content-subtle tabular-nums">#{String(c.id).padStart(3, '0')}</span>
-                                            </td>
-                                            <td>
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center text-[12px] font-bold text-brand-500 shrink-0">
-                                                        {c.name?.charAt(0)}
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <span className="text-xs font-bold text-content dark:text-white tracking-tight group-hover:text-brand-500 transition-colors">{c.name}</span>
-                                                        <span className="text-[12px] font-medium text-content-subtle tabular-nums mt-0.5">RIF: {c.tax_id || "N/A"}</span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className="flex flex-col gap-0.5">
-                                                    <span className="text-xs font-bold text-content dark:text-white">
-                                                        {c.plan_name || "Básico"}
-                                                    </span>
-                                                    <span className="text-[11px] font-semibold text-content-subtle tabular-nums">
-                                                        {c.max_users === 0 ? "Usuarios Ilimitados" : `Hasta ${c.max_users || 5} usuarios`}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="text-center">
-                                                <span className={`inline-block px-2 py-0.5 text-[11px] font-extrabold rounded-full ${
-                                                    c.subscription_status === 'Activa' || c.subscription_status === 'Ilimitado'
-                                                        ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                                                        : c.subscription_status === 'Demo'
-                                                        ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                                                        : 'bg-red-500/10 text-red-500 border border-red-500/20'
-                                                }`}>
-                                                    {c.subscription_status || 'Demo'}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`px-2 py-0.5 text-[11px] font-bold rounded-lg border tabular-nums ${info.badgeClass}`}>
-                                                        {info.label}
-                                                    </span>
-                                                    <span className="text-[11px] font-semibold text-content-subtle hidden sm:inline">
-                                                        {info.statusText}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="text-right pr-6">
-                                                <div className="flex justify-end items-center gap-2">
-                                                    <button
-                                                        onClick={() => handleToggleStatus(c)}
-                                                        className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all border ${
-                                                            c.subscription_status === 'Suspendida'
-                                                                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500 hover:text-white'
-                                                                : 'bg-red-500/10 text-red-500 border-red-500/30 hover:bg-red-500 hover:text-white'
-                                                        }`}
-                                                        title={c.subscription_status === 'Suspendida' ? 'Reactivar Empresa' : 'Suspender Acceso'}
-                                                    >
-                                                        {c.subscription_status === 'Suspendida' ? 'Reactivar' : 'Suspender'}
-                                                    </button>
-                                                    <Button
-                                                        onClick={() => openRenew(c)}
-                                                        className="h-7 px-2.5 text-[11px] shadow-none"
-                                                    >
-                                                        Renovar +
-                                                    </Button>
-                                                    {c.id !== 1 && (
-                                                        <button
-                                                            onClick={() => setDeleteDialog(c)}
-                                                            className="p-1 hover:bg-red-500/10 rounded-xl transition-all text-content-subtle hover:text-red-500 active:scale-90"
-                                                            title="Eliminar empresa"
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            
-            {/* Modal Crear / Editar General */}
+
+            {/* ── Tarjetas (móvil) ── */}
+            <div className="md:hidden px-4 py-3 space-y-2">
+                {loading && companies.length === 0 ? (
+                    <p className="py-10 text-center text-[13px] text-content-subtle">Cargando…</p>
+                ) : filtered.length === 0 ? (
+                    <div className="py-12 text-center">
+                        <p className="text-[14px] font-semibold text-content dark:text-white">
+                            {companies.length ? "Ninguna empresa coincide" : "Todavía no hay empresas"}
+                        </p>
+                        <p className="text-[12px] text-content-subtle mt-1">
+                            {companies.length ? "Prueba con otro nombre o con otro estado." : "Crea la primera con Nueva."}
+                        </p>
+                    </div>
+                ) : filtered.map(c => {
+                    const tone = statusTone(c._estado, LICENSE_STATUS);
+                    const rel = vencimientoRelativo(c.expires_at);
+                    return (
+                        <div key={c.id} role="button" tabIndex={0} onClick={() => openEdit(c)}
+                            onKeyDown={e => { if (e.key === "Enter") openEdit(c); }}
+                            style={tone ? { boxShadow: `inset 3px 0 0 ${tone}` } : undefined}
+                            className="rounded-xl border border-border/70 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] px-3.5 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                                <span className="text-[14px] font-semibold text-content dark:text-white truncate">{c.name}</span>
+                                <StatusMark status={c._estado} map={LICENSE_STATUS} />
+                            </div>
+                            <div className="mt-1 flex items-center justify-between gap-3 text-[12px]">
+                                <span className="text-content-subtle truncate">{c.plan_name || "Básico"} · {usuariosTexto(c.max_users)}</span>
+                                <span className={`whitespace-nowrap ${rel.tone ? TONO_TEXTO[rel.tone] : "text-content-subtle"}`}>{rel.text}</span>
+                            </div>
+                            <div className="mt-2.5 flex items-center justify-end">{acciones(c)}</div>
+                        </div>
+                    );
+                })}
+            </div>
+
             <CompanyModal
                 open={modalOpen}
                 onClose={() => setModalOpen(false)}
@@ -572,78 +310,67 @@ export default function CompaniesPage() {
                 loading={saving}
             />
 
-            {/* Modal Renovar Suscripción */}
             <SubscriptionRenewModal
-                open={renewModalOpen}
-                onClose={() => { setRenewModalOpen(false); setRenewCompany(null); }}
+                open={!!renewCompany}
+                onClose={() => setRenewCompany(null)}
                 onSave={handleRenewSave}
                 company={renewCompany}
                 loading={renewing}
             />
 
-            {/* Modal de Credenciales */}
-            <Modal open={!!credentialsModal} onClose={() => setCredentialsModal(null)} title="¡Empresa creada exitosamente!" width={400}>
+            {/* Credenciales del administrador recién creado: se muestran una sola vez. */}
+            <Modal open={!!credentialsModal} onClose={() => setCredentialsModal(null)} title="Empresa creada" width={420}>
                 {credentialsModal && (
-                    <div className="space-y-4 py-2">
-                        <p className="text-[12px] text-content-subtle dark:text-white/70">
-                            Se ha generado un usuario administrador asociado a <strong>{credentialsModal.companyName}</strong>.
-                            Por favor, copia estas credenciales y envíaselas al propietario.
+                    <div className="space-y-4">
+                        <p className="text-[13px] text-content-subtle leading-relaxed">
+                            Se creó el usuario administrador de <span className="font-semibold text-content dark:text-white">{credentialsModal.companyName}</span>.
+                            Cópialo ahora y envíaselo al dueño: la contraseña no se vuelve a mostrar.
                         </p>
-                        
-                        <div className="bg-surface-2 dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl p-4 space-y-3">
-                            <div>
-                                <label className="text-[11px] font-bold uppercase tracking-widest text-brand-500 mb-1 block">Usuario / email</label>
-                                <div className="font-mono text-[13px] font-semibold bg-white dark:bg-black/20 p-2 rounded-lg border border-border/50 dark:border-white/5 select-all">
-                                    {credentialsModal.username}
+                        <dl className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
+                            {[["Usuario", credentialsModal.username], ["Contraseña", credentialsModal.password]].map(([k, v]) => (
+                                <div key={k} className="px-4 py-3 flex items-center justify-between gap-3">
+                                    <dt className="text-[12px] text-content-subtle">{k}</dt>
+                                    <dd className="text-[14px] font-semibold text-content dark:text-white select-all break-all text-right">{v}</dd>
                                 </div>
-                            </div>
-                            <div>
-                                <label className="text-[11px] font-bold uppercase tracking-widest text-brand-500 mb-1 block">Contraseña</label>
-                                <div className="font-mono text-[13px] font-semibold bg-white dark:bg-black/20 p-2 rounded-lg border border-border/50 dark:border-white/5 select-all">
-                                    {credentialsModal.password}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="pt-4 flex justify-between items-center">
+                            ))}
+                        </dl>
+                        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
                             <button
                                 type="button"
                                 onClick={() => {
                                     navigator.clipboard.writeText(`Empresa: ${credentialsModal.companyName}\nUsuario: ${credentialsModal.username}\nContraseña: ${credentialsModal.password}`);
-                                    notify("Credenciales copiadas al portapapeles", "success");
+                                    notify("Credenciales copiadas");
                                 }}
-                                className="text-[11px] font-bold uppercase text-brand-500 hover:underline flex items-center gap-1"
+                                className="btn-outline h-12 sm:h-10 px-4 rounded-lg text-[13px] font-medium inline-flex items-center justify-center gap-2"
                             >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                Copiar credenciales
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                Copiar
                             </button>
-                            <Button onClick={() => setCredentialsModal(null)}>Entendido</Button>
+                            <Button onClick={() => setCredentialsModal(null)} className="h-12 sm:h-10 px-5 text-[13px]">Listo</Button>
                         </div>
                     </div>
                 )}
             </Modal>
 
-            {/* Modal Confirmar Eliminación */}
-            {/* Las props son isOpen/onCancel/type, no open/onClose/variant: con los nombres
-                equivocados el diálogo recibía isOpen=undefined y no llegaba a montarse, así
-                que la papelera parecía no hacer nada. */}
+            <ConfirmModal
+                isOpen={!!suspendDialog}
+                onCancel={() => setSuspendDialog(null)}
+                onConfirm={async () => { await setStatus(suspendDialog, "Suspendida"); setSuspendDialog(null); }}
+                title="¿Suspender el acceso?"
+                message={`Todos los usuarios de "${suspendDialog?.name}" quedarán fuera del sistema hasta que la reactives. No se borra nada.`}
+                confirmText="Suspender"
+                type="danger"
+            />
+
             <ConfirmModal
                 isOpen={!!deleteDialog}
                 onCancel={() => setDeleteDialog(null)}
                 onConfirm={handleDeleteCompany}
-                title="¿Eliminar empresa permanentemente?"
-                message={`Esta acción eliminará por completo la empresa "${deleteDialog?.name}" junto con todos sus empleados, productos, ventas, inventario y registros asociados. Esta acción NO se puede deshacer.`}
-                confirmText={deleting ? "Eliminando..." : "Sí, Eliminar Empresa"}
+                title="¿Eliminar la empresa?"
+                message={`Se borra "${deleteDialog?.name}" con todos sus empleados, productos, ventas, inventario y registros. No se puede deshacer.`}
+                confirmText="Eliminar empresa"
                 type="danger"
             />
-
-            <div className="shrink-0 px-6 py-3 border-t border-border/20 dark:border-white/5 bg-surface-2 dark:bg-white/[0.02] flex justify-end items-center">
-                <span className="text-[10px] font-bold text-content-subtle dark:text-white/20 uppercase tracking-[0.2em]">
-                    Control de Acceso SuperUsuario v1.0
-                </span>
-            </div>
-
         </div>
     );
 }
-

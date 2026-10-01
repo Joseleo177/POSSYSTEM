@@ -94,6 +94,7 @@ export default function CatalogLayout({ catalog, token }) {
                     p={productDetail} loading={productLoading} error={productError}
                     onBack={(categoryId) => { closeProduct(); if (categoryId) setCategory(categoryId); }}
                     inCart={cart.find(it => it.id === productId)}
+                    cart={cart}
                     fmt={fmt} baseCur={baseCur} altCur={altCur}
                     canOrder={ordersEnabled} onAdd={setAddingProduct}
                 />

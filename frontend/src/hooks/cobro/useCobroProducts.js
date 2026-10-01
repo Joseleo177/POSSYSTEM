@@ -36,7 +36,9 @@ export function useCobroProducts(activeWarehouse, notify) {
         try {
             // sellable_only: la caja no ofrece insumos. Inventario, ajustes y transferencias
             // no mandan el filtro, porque ahí sí hay que poder contarlos y moverlos.
-            const params = { search: q, limit: pageSize, offset: off, sellable_only: true };
+            // group_variants: la franela sale una vez, con la grilla de tallas detrás, y no
+            // como doce tarjetas casi iguales. Escanear el código de una talla la trae suelta.
+            const params = { search: q, limit: pageSize, offset: off, sellable_only: true, group_variants: true };
             if (cat && cat !== "all") params.category = cat;
             const r = await api.warehouses.getProducts(activeWarehouse.id, params);
             setTotal(r.total ?? 0);

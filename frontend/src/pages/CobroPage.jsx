@@ -23,6 +23,7 @@ import CheckoutTypeModal       from "../components/cobro/CheckoutTypeModal";
 import QuotationConfirmModal  from "../components/cobro/QuotationConfirmModal";
 import QuantityModal          from "../components/cobro/QuantityModal";
 import CustomerDebtAlert      from "../components/cobro/CustomerDebtAlert";
+import VariantPickerModal     from "../components/cobro/VariantPickerModal";
 
 const fmt = fmtMoney;
 
@@ -59,6 +60,10 @@ export default function CobroPage() {
     const [saleBalance, setSaleBalance]            = useState(null);
     const [savedQuotation, setSavedQuotation]      = useState(null);
     const [qtyModalItem, setQtyModalItem]          = useState(null);
+    // Modelo con variantes elegido en la grilla: primero se elige talla o color, y recién
+    // esa variante pasa al modal de cantidad.
+    const [variantModel, setVariantModel]          = useState(null);
+    const openProduct = (p) => (p?.is_variant_parent ? setVariantModel(p) : setQtyModalItem(p));
     const [showPendingSales, setShowPendingSales]  = useState(false);
     const searchInputRef                           = useRef(null);
     const scanPendingRef                           = useRef(false);
@@ -74,7 +79,21 @@ export default function CobroPage() {
     // Cada vez que la caja recibe productos frescos (aviso en vivo, refresco periódico o una
     // búsqueda nueva), las líneas que ya están en el carrito se ponen al día. Sin esto el
     // cajero cobraba leyendo un precio que el servidor ya había dejado atrás.
-    useEffect(() => { syncCartPrices(products.products); }, [products.products, syncCartPrices]);
+    //
+    // Las variantes en el carrito no vienen en esa lista —la grilla trae el modelo, no cada
+    // talla—, así que se piden aparte por id; si no, una variante quedaba con el precio de
+    // cuando se agregó.
+    useEffect(() => {
+        const lista = products.products;
+        const enLista = new Set(lista.map(p => p.id));
+        const faltan = cart.filter(i => i.parent_id && !enLista.has(i.id)).map(i => i.id);
+        if (!faltan.length || !activeWarehouse) { syncCartPrices(lista); return; }
+        let vivo = true;
+        api.warehouses.getProducts(activeWarehouse.id, { ids: faltan.join(","), limit: faltan.length })
+            .then(r => { if (vivo) syncCartPrices([...lista, ...(r.data || [])]); })
+            .catch(() => { if (vivo) syncCartPrices(lista); });
+        return () => { vivo = false; };
+    }, [products.products, syncCartPrices]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const currSym = currentCurrency?.symbol || baseCurrency?.symbol || "Ref.";
 
@@ -88,8 +107,8 @@ export default function CobroPage() {
     useEffect(() => { if (conTecladoFisico()) requestAnimationFrame(() => searchInputRef.current?.focus()); }, []);
     // Al cerrar el modal de cantidad
     useEffect(() => {
-        if (!qtyModalItem && conTecladoFisico()) requestAnimationFrame(() => searchInputRef.current?.focus());
-    }, [qtyModalItem]);
+        if (!qtyModalItem && !variantModel && conTecladoFisico()) requestAnimationFrame(() => searchInputRef.current?.focus());
+    }, [qtyModalItem, variantModel]);
 
     // ── Auto-apertura: coincidencia exacta de barcode o Enter pendiente del scanner ──
     useEffect(() => {
@@ -108,7 +127,7 @@ export default function CobroPage() {
             notify("Este producto no tiene existencias en el inventario", "error");
         } else {
             products.setSearch("");
-            setQtyModalItem(p);
+            openProduct(p);
         }
     }, [products.filteredProducts]); // eslint-disable-line
 
@@ -126,7 +145,7 @@ export default function CobroPage() {
         selectedCustIdx: customer.selectedCustIdx,
         setSelectedCustIdx: customer.setSelectedCustIdx,
         pickCustomer: customer.pickCustomer,
-        openQtyModal: setQtyModalItem,
+        openQtyModal: openProduct,
         setScanPending: (v) => { scanPendingRef.current = v; },
         // Con un modal encima, las teclas no deben desviarse al buscador de productos:
         // un escaneo mientras está el aviso de deuda escribiría en la pantalla de atrás.
@@ -134,7 +153,7 @@ export default function CobroPage() {
         // buscador de productos: lo que se teclea es para su propio buscador de clientes, y
         // si el foco se perdió (un clic en una tarjeta) las letras se colaban en la grilla
         // de fondo.
-        modalOpen: !!qtyModalItem || !!customer.debtAlert || showHeldModal,
+        modalOpen: !!qtyModalItem || !!variantModel || !!customer.debtAlert || showHeldModal,
         notify,
         setShowHeldModal,
         // Sin sales.pending el F5 queda mudo: el hook lo llama con ?. y no abre nada.
@@ -256,7 +275,7 @@ export default function CobroPage() {
                 filteredProducts={products.filteredProducts}
                 selectedIndex={products.selectedIndex}
                 addToCart={addToCart}
-                openQtyModal={setQtyModalItem}
+                openQtyModal={openProduct}
                 convertToDisplay={convertToDisplay} convertToSecondary={convertToSecondary}
                 currSym={currSym} secondaryCurrency={secondaryCurrency} fmt={fmt}
                 loadMore={products.loadMore}
@@ -391,6 +410,18 @@ export default function CobroPage() {
                     session={session.cashSession}
                     onClosed={() => { session.setCashSession(null); session.setShowCierre(false); session.setShowApertura(true); }}
                     onCancel={() => session.setShowCierre(false)}
+                />
+            )}
+            {variantModel && (
+                <VariantPickerModal
+                    model={variantModel}
+                    warehouseId={activeWarehouse?.id}
+                    onClose={() => setVariantModel(null)}
+                    onPick={(v) => { setVariantModel(null); setQtyModalItem(v); }}
+                    notify={notify}
+                    fmt={fmt}
+                    convertToDisplay={convertToDisplay}
+                    currSym={currSym}
                 />
             )}
             <QuantityModal

@@ -4,6 +4,10 @@ const logger = require("../../middleware/logger");
 const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, Sequelize, ProductComboItem, BenefitTag, ProductBenefitTag, sequelize } = require("../../models");
 const { runWithoutTenant } = require("../../utils/tenantStorage");
 const { floorToUnit } = require("../../utils/units");
+const { syncVariants, propagateModelToVariants, assertCanBecomeModel } = require("./variantService");
+
+// Los arrays del formulario multipart llegan como texto JSON (ver buildProductForm).
+const parseJson = (v) => (typeof v === 'string' ? (v ? JSON.parse(v) : null) : v);
 const Op = Sequelize.Op;
 
 const isSupabase = () => !!process.env.SUPABASE_URL;
@@ -205,7 +209,60 @@ async function handleImageDelete(imageValue, exceptProductId = null) {
   }
 }
 
-async function getAll({ search, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, for_purchase, limit = 100, offset = 0, company_id }) {
+// Completa las filas de variantes y modelos de un listado, en dos consultas para toda la página:
+//  - el modelo no tiene existencias propias: muestra la suma de sus variantes (en la sucursal,
+//    si se está mirando una) y cuántas tiene;
+//  - la variante sin foto propia muestra la del modelo. No se copia el archivo a cada variante:
+//    al cambiar la foto del modelo, el borrado del archivo viejo las dejaría rotas.
+async function anotarVariantes(rows, warehouseId) {
+  const modelos = rows.filter(p => p.is_variant_parent);
+  if (modelos.length) {
+    const ids = modelos.map(p => p.id);
+    const agg = await sequelize.query(`
+      SELECT v.parent_id,
+             COUNT(*)::int AS variant_count,
+             COALESCE(SUM(${warehouseId ? 'ps.qty' : 'v.stock'}), 0) AS qty
+        FROM products v
+        ${warehouseId ? 'LEFT JOIN product_stock ps ON ps.product_id = v.id AND ps.warehouse_id = :wid' : ''}
+       WHERE v.parent_id IN (:ids)
+       GROUP BY v.parent_id
+    `, { replacements: { ids, wid: warehouseId }, type: Sequelize.QueryTypes.SELECT });
+    const porModelo = new Map(agg.map(r => [r.parent_id, r]));
+    // El modelo sin foto propia muestra la del primer color que tenga una.
+    const sinFotoModelo = modelos.filter(p => !p.image_filename).map(p => p.id);
+    const fotoColor = new Map();
+    if (sinFotoModelo.length) {
+      const filas = await Product.findAll({
+        where: { parent_id: { [Op.in]: sinFotoModelo }, image_filename: { [Op.ne]: null } },
+        attributes: ['parent_id', 'image_filename'], order: [['id', 'ASC']],
+      });
+      for (const f of filas) if (!fotoColor.has(f.parent_id)) fotoColor.set(f.parent_id, f.image_filename);
+    }
+    for (const p of modelos) {
+      const r = porModelo.get(p.id);
+      p.variant_count = r?.variant_count ?? 0;
+      p.stock = parseFloat(r?.qty ?? 0);
+      if (warehouseId) p.warehouse_stock = p.stock;
+      // Marcada: la ficha del modelo no debe tomarla como su foto propia.
+      if (fotoColor.has(p.id)) { p.image_url = imageUrl(fotoColor.get(p.id)); p.image_from_variant = true; }
+    }
+  }
+
+  const sinFoto = rows.filter(p => p.parent_id && !p.image_filename);
+  if (sinFoto.length) {
+    const padres = await Product.findAll({
+      where: { id: { [Op.in]: [...new Set(sinFoto.map(p => p.parent_id))] } },
+      attributes: ['id', 'image_filename'],
+    });
+    const foto = new Map(padres.map(p => [p.id, p.image_filename]));
+    for (const p of sinFoto) {
+      const f = foto.get(p.parent_id);
+      if (f) p.image_url = imageUrl(f);
+    }
+  }
+}
+
+async function getAll({ search, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, for_purchase, variant_view, limit = 100, offset = 0, company_id }) {
   // Catálogo, POS y promociones usan warehouse_id para acotar a lo que ESA sucursal
   // vende: un producto que nunca tuvo ficha de stock ahí queda afuera, con razón. Una
   // compra es justo lo contrario — comprar es cómo un producto entra por primera vez a un
@@ -221,11 +278,25 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
   // El buscador de venta pide sellable=true; compras, inventario y transferencias no filtran,
   // porque un insumo se compra y se mueve igual que cualquier otro producto.
   if (sellable !== undefined) where.sellable = sellable === 'true' || sellable === true;
+  const andClauses0 = [];
+  // Variantes. El catálogo pide 'models': ve el modelo ("Franela Básica") y no sus doce
+  // variantes sueltas, que se editan desde la ficha del modelo. Todo lo demás —compras,
+  // combos, promociones, devoluciones— trabaja con lo que de verdad se compra y se vende: la
+  // variante, y nunca el modelo, que es solo una plantilla.
+  //
+  // 'grouped' es el de compras: el modelo, para cargar la curva de tallas de una vez, y la
+  // variante suelta solo cuando se escanea su código exacto.
+  if (variant_view === 'models') where.parent_id = null;
+  else if (variant_view === 'grouped') {
+    const exacto = String(search || '').trim();
+    andClauses0.push(exacto ? { [Op.or]: [{ parent_id: null }, { barcode: exacto }] } : { parent_id: null });
+  }
+  else where.is_variant_parent = false;
 
   // Los filtros de almacén van como subconsultas EXISTS dentro de la misma consulta, en vez
   // de traer antes todos los product_id a Node y devolverlos en un IN (...) gigante: con
   // miles de fichas eso eran varias idas y vueltas por request y agotaba el pooler.
-  const andClauses = [];
+  const andClauses = [...andClauses0];
 
   if (not_in_warehouse_id) {
     andClauses.push(Sequelize.literal(`NOT EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${parseInt(not_in_warehouse_id, 10)})`));
@@ -240,8 +311,12 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
       EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${wid})
       OR NOT EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id")
     )`;
+    const varianteAqui = (cond = '') => `("Product"."is_variant_parent" = true AND EXISTS (
+      SELECT 1 FROM products v JOIN product_stock vps ON vps.product_id = v.id
+       WHERE v.parent_id = "Product"."id" AND vps.warehouse_id = ${wid} ${cond}))`;
     if (stock_filter === 'with') {
       andClauses.push(Sequelize.literal(`(
+        ${varianteAqui('AND vps.qty > 0')} OR
         (${fisico} AND EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${wid} AND ps.qty > 0))
         OR (("Product"."is_combo" = true OR "Product"."is_service" = true) AND ${deLaSucursal})
       )`));
@@ -249,12 +324,14 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
       // Los servicios no se agotan: nunca salen en "sin stock". El stock real de los combos
       // se calcula después, sobre sus ingredientes.
       andClauses.push(Sequelize.literal(`(
+        (${varianteAqui()} AND NOT ${varianteAqui('AND vps.qty > 0')}) OR
         (${fisico} AND EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${wid} AND ps.qty <= 0))
         OR ("Product"."is_combo" = true AND ${deLaSucursal})
       )`));
     } else {
       andClauses.push(Sequelize.literal(`(
-        EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${wid})
+        ${varianteAqui()}
+        OR EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${wid})
         OR (("Product"."is_service" = true OR "Product"."is_combo" = true) AND NOT EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id"))
       )`));
     }
@@ -407,6 +484,8 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
     return prod;
   });
 
+  await anotarVariantes(data, warehouse_id ? parseInt(warehouse_id, 10) : null);
+
   // Post-filtrar combos por su stock calculado real
   let finalData = data;
   if (stock_filter === 'no') {
@@ -464,7 +543,8 @@ async function createProduct({ body, file, company_id }) {
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
     is_combo, combo_items, is_service, barcode, warehouse_id, bulk_price,
-    visible_in_catalog, sellable, brand, short_description, description, benefit_tag_ids } = body;
+    visible_in_catalog, sellable, brand, short_description, description, benefit_tag_ids,
+    has_variants, variants, variant_attribute_ids } = body;
 
   if (!name || price == null) {
     const e = new Error("name y price son requeridos"); e.status = 400; throw e;
@@ -484,8 +564,14 @@ async function createProduct({ body, file, company_id }) {
     }
   }
 
-  const isComboBool = is_combo === 'true' || is_combo === true;
-  const isServiceBool = is_service === 'true' || is_service === true;
+  // Un modelo con variantes no es combo ni servicio, ni lleva código propio: lo que se escanea
+  // es la variante.
+  const esModelo = has_variants === 'true' || has_variants === true;
+  const isComboBool = !esModelo && (is_combo === 'true' || is_combo === true);
+  const isServiceBool = !esModelo && (is_service === 'true' || is_service === true);
+  if (esModelo && barcode) {
+    const e = new Error("Un producto con variantes no lleva código de barras: cada variante tiene el suyo"); e.status = 400; e.isOperational = true; throw e;
+  }
 
   // La foto subida manda; si no vino ninguna, se hereda de otra tienda que ya venda este
   // código de barras (los combos no llevan foto de artículo, así que quedan fuera).
@@ -509,6 +595,7 @@ async function createProduct({ body, file, company_id }) {
       min_stock: parseFloat(min_stock) || 0,
       is_combo: isComboBool,
       is_service: isServiceBool,
+      is_variant_parent: esModelo,
       barcode: barcode || null,
       brand: brand || null,
       short_description: short_description || null,
@@ -519,13 +606,21 @@ async function createProduct({ body, file, company_id }) {
       company_id,
     }, { transaction: t });
 
-    if (warehouse_id) {
+    // El modelo no tiene ficha: las existencias son de sus variantes, que nacen con la suya.
+    if (warehouse_id && !esModelo) {
       await ProductStock.create({
         product_id: product.id,
         warehouse_id: parseInt(warehouse_id),
         qty: 0,
         company_id
       }, { transaction: t });
+    }
+
+    if (esModelo) {
+      await syncVariants(product, {
+        attribute_ids: parseJson(variant_attribute_ids),
+        variants: parseJson(variants),
+      }, { company_id, warehouse_id }, t);
     }
 
     if (isComboBool && combo_items) {
@@ -554,7 +649,8 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
     is_combo, combo_items, is_service, barcode, bulk_price,
-    visible_in_catalog, sellable, brand, short_description, description, benefit_tag_ids } = body;
+    visible_in_catalog, sellable, brand, short_description, description, benefit_tag_ids,
+    has_variants, variants, variant_attribute_ids } = body;
 
   // Editar el catálogo parado en una sucursal cambia el precio DE ESA SUCURSAL, no el de
   // todas. Un encargado de área maneja su tienda y no debería mover —ni enterarse de— las
@@ -591,8 +687,24 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
       currentImageValue = null;
     }
 
-    const isComboBool = is_combo === 'true' || is_combo === true || (is_combo === undefined ? product.is_combo : false);
-    const isServiceBool = is_service === 'true' || is_service === true || (is_service === undefined ? product.is_service : false);
+    // Sin el campo se conserva lo que era. Encender las variantes solo se puede en un producto
+    // que nunca se movió; apagarlas, solo cuando ya no le queda ninguna.
+    const esModelo = has_variants === undefined
+      ? product.is_variant_parent
+      : (has_variants === 'true' || has_variants === true);
+    if (esModelo && !product.is_variant_parent) {
+      await assertCanBecomeModel(product, t);
+    }
+    if (!esModelo && product.is_variant_parent) {
+      const quedan = await Product.count({ where: { parent_id: product.id }, transaction: t });
+      if (quedan > 0) { const e = new Error("Quítale las variantes antes de apagarlas"); e.status = 400; e.isOperational = true; throw e; }
+    }
+    if (esModelo && barcode) {
+      const e = new Error("Un producto con variantes no lleva código de barras: cada variante tiene el suyo"); e.status = 400; e.isOperational = true; throw e;
+    }
+
+    const isComboBool = !esModelo && (is_combo === 'true' || is_combo === true || (is_combo === undefined ? product.is_combo : false));
+    const isServiceBool = !esModelo && (is_service === 'true' || is_service === true || (is_service === undefined ? product.is_service : false));
 
     // Campo ausente = no se toca; campo presente pero vacío = se vacía a propósito.
     //
@@ -649,6 +761,9 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
       if (!ficha && (isComboBool || isServiceBool)) {
         esGlobalSinFicha = (await ProductStock.count({ where: { product_id: product.id }, transaction: t })) === 0;
       }
+      // El modelo nunca tiene ficha: su precio es el general, el que siguen las variantes.
+      // Una ficha de sucursal lo metería en la caja y en el inventario de esa tienda.
+      if (esModelo) esGlobalSinFicha = true;
 
       // Solo se escribe lo que de verdad cambió. Sin esta comparación, guardar el producto
       // para corregirle el nombre convertía en propio un precio que venía heredado, y esa
@@ -711,7 +826,8 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
         : (min_stock === undefined ? product.min_stock : (parseFloat(min_stock) || 0)),
       is_combo: isComboBool,
       is_service: isServiceBool,
-      barcode: opt(barcode, product.barcode),
+      is_variant_parent: esModelo,
+      barcode: esModelo ? null : opt(barcode, product.barcode),
       // Campos de vitrina. Con `opt` para que un guardado que no los mande —una edición
       // rápida desde otra pantalla— no borre lo que la tienda ya escribió.
       brand: opt(brand, product.brand),
@@ -762,6 +878,19 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
       await syncBenefitTags(product.id, benefit_tag_ids, company_id, t);
     }
 
+    // Las variantes siguen al modelo: nombre, categoría, unidad y el precio de las que no
+    // tienen uno propio. Si la ficha mandó la lista de variantes, se guarda completa.
+    if (esModelo) {
+      if (variants !== undefined) {
+        await syncVariants(product, {
+          attribute_ids: parseJson(variant_attribute_ids),
+          variants: parseJson(variants),
+        }, { company_id, warehouse_id }, t);
+      } else {
+        await propagateModelToVariants(product, t);
+      }
+    }
+
     // Actualiza en cascada el precio de venta de los combos que contengan este producto
     await updateComboPricesForProduct(product.id, t);
 
@@ -776,6 +905,13 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
 async function deleteProduct(id, company_id) {
   const product = await Product.findOne({ where: { id, ...(company_id ? { company_id } : {}) } });
   if (!product) { const e = new Error("Producto no encontrado"); e.status = 404; throw e; }
+
+  if (product.is_variant_parent) {
+    const variantes = await Product.count({ where: { parent_id: product.id } });
+    if (variantes > 0) {
+      const e = new Error(`No se puede eliminar: tiene ${variantes} variante(s). Quítalas desde su ficha primero`); e.status = 400; throw e;
+    }
+  }
 
   const stockQty = await ProductStock.sum('qty', { where: { product_id: id } });
   if (parseFloat(stockQty || 0) > 0) {
@@ -1011,6 +1147,37 @@ async function updateComboPricesForProduct(productId, t, visited = new Set()) {
   }
 }
 
+// Foto de las variantes que comparten un valor: la de "Negro" la toman Negro/S, Negro/M y
+// Negro/L. Se sube un solo archivo y las variantes apuntan a él; la que no tenga foto propia
+// sigue mostrando la del modelo. El archivo viejo solo se borra si ya nadie lo usa (en la
+// nube handleImageDelete lo cuenta; en disco local nunca se borra).
+//
+// Va por multer: el company_id se filtra a mano.
+async function setVariantImage({ modelId, attribute_value_id, file, remove, company_id }) {
+  const modelo = await Product.findOne({ where: { id: modelId, is_variant_parent: true, ...(company_id ? { company_id } : {}) } });
+  if (!modelo) { const e = new Error("Producto no encontrado"); e.status = 404; throw e; }
+  const valueId = parseInt(attribute_value_id, 10);
+  if (!valueId) { const e = new Error("Falta el valor (color) de la foto"); e.status = 400; throw e; }
+  const quitar = remove === true || remove === 'true';
+  if (!quitar && !file) { const e = new Error("Falta la imagen"); e.status = 400; throw e; }
+
+  const variantes = await Product.findAll({
+    where: {
+      parent_id: modelo.id,
+      id: { [Op.in]: Sequelize.literal(`(SELECT product_id FROM product_variant_values WHERE attribute_value_id = ${valueId})`) },
+    },
+    attributes: ['id', 'image_filename'],
+  });
+  if (!variantes.length) { const e = new Error("Ninguna variante guardada lleva ese valor"); e.status = 400; throw e; }
+
+  const nueva = quitar ? null : await handleImageUpload(file);
+  const viejas = [...new Set(variantes.map(v => v.image_filename).filter(Boolean))];
+  await Product.update({ image_filename: nueva }, { where: { id: { [Op.in]: variantes.map(v => v.id) } } });
+  for (const vieja of viejas) await handleImageDelete(vieja);
+
+  return { data: { image_url: imageUrl(nueva), variant_ids: variantes.map(v => v.id) } };
+}
+
 // calculateComboStockAndCost se exporta para que el catálogo público calcule la
 // disponibilidad de un combo con la misma regla que el POS, en vez de duplicarla.
-module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, calculateComboStockAndCost, updateComboPricesForProduct, inheritImageByBarcode, backfillImagesByBarcode };
+module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, calculateComboStockAndCost, updateComboPricesForProduct, setVariantImage, inheritImageByBarcode, backfillImagesByBarcode };

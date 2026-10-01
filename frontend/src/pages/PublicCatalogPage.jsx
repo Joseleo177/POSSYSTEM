@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { usePublicCatalog } from "../hooks/usePublicCatalog";
 import { resolveTheme } from "./catalogThemes";
+import VariantChooserModal from "../components/PublicCatalog/VariantChooserModal";
 
 // Página que ve el cliente final. Vive fuera de AppProvider/CartProvider: no hay sesión
 // ni permisos, y el carrito de aquí no es el del punto de venta — es una lista que solo
@@ -39,5 +40,23 @@ export default function PublicCatalogPage({ token, initialProductId = null }) {
 
     const Layout = resolveTheme(nombreTema);
 
-    return <Layout catalog={catalog} token={token} />;
+    // El selector de talla y color va fuera del tema: así sirve igual en todos, que agregan
+    // por el mismo addToCart.
+    return (
+        <>
+            <Layout catalog={catalog} token={token} />
+            {catalog.variantPick && (
+                <VariantChooserModal
+                    token={token}
+                    branchId={catalog.branch?.id}
+                    product={catalog.variantPick}
+                    onClose={() => catalog.setVariantPick(null)}
+                    onPick={(v) => { catalog.addToCart(v); catalog.setVariantPick(null); }}
+                    fmt={catalog.fmt}
+                    baseCur={catalog.baseCur}
+                    altCur={catalog.altCur}
+                />
+            )}
+        </>
+    );
 }
