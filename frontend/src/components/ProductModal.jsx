@@ -395,123 +395,135 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         });
     };
 
-    return (
-        <Modal open={open} onClose={onClose} title={isEdit ? "Edición de Producto" : "Nuevo Producto"} width={720}>
-            <div className="flex flex-col gap-3">
+    // La existencia solo se muestra al editar un producto que la lleva: un combo descuenta la
+    // de sus ingredientes y un servicio no tiene.
+    const conStock = !!editData?.id && !form.is_combo && !form.is_service;
+    // Unidades en caja de oración ("Unidad", "Kg") y no en mayúsculas.
+    const unidadLabel = (u) => u === "KG" ? "Kg" : u.charAt(0) + u.slice(1).toLowerCase();
 
-                {/* ── Sección Principal: Imagen + Datos ── */}
+    return (
+        <Modal open={open} onClose={onClose} title={isEdit ? "Editar producto" : "Nuevo producto"} width={720}>
+            <div className="flex flex-col gap-4">
+
+                {/* ── Foto + datos principales ──
+                    En el teléfono la foto va a la izquierda, chica, con sus acciones al lado:
+                    centrada y sola en su fila se llevaba media pantalla antes del primer campo. */}
                 <div className="flex flex-col lg:flex-row gap-4">
-                    {/* Imagen Subida */}
-                    <div className="flex-shrink-0 flex flex-col items-center">
-                        <label className="block cursor-pointer relative group">
-                            <div className="w-[100px] h-[100px] rounded-xl overflow-hidden bg-surface-2 dark:bg-surface-dark-2 border border-dashed border-border/60 dark:border-white/10 flex items-center justify-center hover:border-brand-500/50 transition-all shadow-sm">
+                    <div className="flex lg:flex-col items-center gap-3 lg:gap-1.5 shrink-0">
+                        <label className="block cursor-pointer relative group shrink-0" title={imagePreview ? "Cambiar foto" : "Subir foto"}>
+                            <div className="w-[72px] h-[72px] lg:w-[104px] lg:h-[104px] rounded-xl overflow-hidden bg-surface-2 dark:bg-white/[0.04] border border-dashed border-border dark:border-white/15 flex items-center justify-center hover:border-content-subtle/60 transition-colors">
                                 {imagePreview ? (
                                     <>
-                                        <img src={imagePreview} alt="preview" className="w-full h-full object-cover group-hover:opacity-60 transition-opacity" />
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center">
-                                            <svg className="w-6 h-6 text-white mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                        <img src={imagePreview} alt="Foto del producto" className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="text-center flex flex-col items-center text-content-subtle dark:text-content-dark-muted group-hover:text-brand-500 transition-colors">
-                                        <svg className="w-6 h-6 mb-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                                        <div className="text-[11px] font-semibold uppercase tracking-wide">Imagen</div>
+                                    <div className="flex flex-col items-center text-content-subtle">
+                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                        <div className="text-[11px] font-medium mt-1">Foto</div>
                                     </div>
                                 )}
                             </div>
                             <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
                         </label>
-                        {imagePreview && (
-                            <button
-                                onClick={(e) => { e.preventDefault(); setImageFile(null); setImagePreview(null); setRemoveImage(true); }}
-                                className="mt-3 text-[12px] font-bold text-danger opacity-60 hover:opacity-100 transition-opacity flex items-center gap-1.5"
-                            >
-                                <span className="text-xs">×</span> Eliminar
-                            </button>
-                        )}
+                        <div className="min-w-0 lg:text-center">
+                            <p className="lg:hidden text-[13px] font-medium text-content dark:text-white">Foto del producto</p>
+                            <p className="lg:hidden text-[12px] text-content-subtle">
+                                {imagePreview ? "Toca la foto para cambiarla." : "Toca el recuadro para subir una."}
+                            </p>
+                            {imagePreview && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.preventDefault(); setImageFile(null); setImagePreview(null); setRemoveImage(true); }}
+                                    className="mt-0.5 h-8 px-2 -ml-2 lg:ml-0 rounded-lg text-[12px] font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors"
+                                >
+                                    Quitar foto
+                                </button>
+                            )}
+                        </div>
                     </div>
 
-                    {/* Información Principal */}
-                    {/* Información Principal */}
-                    <div className="flex-1 space-y-3">
-                        {/* Fila 1 */}
+                    {/* Información principal */}
+                    <div className="flex-1 min-w-0 space-y-3">
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                            <div className="col-span-12 md:col-span-8">
-                                <label className="label">Nombre del artículo / referencia</label>
-                                <input value={form.name} onChange={e => set("name", e.target.value)} autoFocus className="input " placeholder="Ej. Computadora Portátil Gamer X-1..." />
+                            <div className="md:col-span-8">
+                                <label className="label">Nombre</label>
+                                <input value={form.name} onChange={e => set("name", e.target.value)} autoFocus className="input" placeholder="Ej. Harina de maíz 1 kg" />
                             </div>
-                            <div className="col-span-12 md:col-span-4">
+                            <div className="md:col-span-4">
                                 <label className="label">Categoría</label>
-                                <div className="relative group">
-                                    <CustomSelect
-                                        value={form.category_id}
-                                        onChange={val => set("category_id", val)}
-                                        options={[{ value: "", label: "Sin categoría" }, ...categories.map(c => ({ value: String(c.id), label: c.name }))]}
-                                        placeholder="Sin categoría"
-                                        className="w-full"
-                                    />
-                                </div>
+                                <CustomSelect
+                                    value={form.category_id}
+                                    onChange={val => set("category_id", val)}
+                                    options={[{ value: "", label: "Sin categoría" }, ...categories.map(c => ({ value: String(c.id), label: c.name }))]}
+                                    placeholder="Sin categoría"
+                                    className="w-full"
+                                />
                             </div>
                         </div>
 
-                        {/* Fila 2 */}
-                        <div className={`grid grid-cols-1 gap-3 items-end ${editData?.id && !form.is_combo && !form.is_service ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
-                            <div>
+                        {/* En el teléfono, unidad y existencia comparten fila (son cortas) y el
+                            código y el precio van a lo ancho; en escritorio, todo en una línea. */}
+                        <div className={`grid grid-cols-2 gap-3 items-end ${conStock ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
+                            <div className={`order-1 min-w-0 ${conStock ? "" : "col-span-2 md:col-span-1"}`}>
                                 <label className="label">Unidad de medida</label>
-                                <div className="relative">
-                                    <CustomSelect
-                                        value={form.unit}
-                                        onChange={val => set("unit", val)}
-                                        options={UNITS.map(u => ({ value: u, label: u.toUpperCase() }))}
-                                        placeholder="Unidad de medida"
-                                        className="w-full"
-                                    />
-                                </div>
+                                <CustomSelect
+                                    value={form.unit}
+                                    onChange={val => set("unit", val)}
+                                    options={UNITS.map(u => ({ value: u, label: unidadLabel(u) }))}
+                                    placeholder="Unidad de medida"
+                                    className="w-full"
+                                />
                             </div>
-                            <div>
+                            <div className="order-3 md:order-2 col-span-2 md:col-span-1 min-w-0">
                                 <label className="label">Código de barras</label>
-                                <input value={form.barcode} onChange={e => set("barcode", e.target.value)} className="input" placeholder="Ej. 123456789012" />
+                                <input value={form.barcode} onChange={e => set("barcode", e.target.value)} className="input" inputMode="numeric" placeholder="Ej. 7591234567890" />
                             </div>
                             {form.sellable && (
-                            <div>
-                                <label className="label flex items-center justify-between">
-                                    {/* Mismo criterio que el stock de abajo: se nombra la sucursal
-                                        en la que se está trabajando, porque es la que se cambia. */}
-                                    {sucursal ? `Precio en ${sucursal}` : "Precio de Venta"}
+                            <div className="order-4 md:order-3 col-span-2 md:col-span-1 min-w-0">
+                                <label className="label flex items-center justify-between gap-2">
+                                    {/* Mismo criterio que la existencia: se nombra la sucursal en
+                                        la que se está trabajando, porque es la que se cambia. */}
+                                    <span className="truncate">{sucursal ? `Precio en ${sucursal}` : "Precio de venta"}</span>
                                     {localCurrency && (
-                                        <div className="flex text-[10px] font-bold rounded overflow-hidden border border-border/30 dark:border-white/10">
-                                            <button type="button" onClick={() => setPriceCurrency("base")}
-                                                className={`px-2 py-0.5 transition-colors ${priceCurrency === "base" ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40" : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content"}`}>
-                                                $
-                                            </button>
-                                            <button type="button" onClick={() => setPriceCurrency("local")}
-                                                className={`px-2 py-0.5 transition-colors ${priceCurrency === "local" ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40" : "bg-surface-2 dark:bg-white/5 text-content-subtle hover:text-content"}`}>
-                                                {localCurrency.symbol || "Bs."}
-                                            </button>
-                                        </div>
+                                        <span className="inline-flex shrink-0 rounded-md bg-surface-3 dark:bg-white/[0.06] p-0.5">
+                                            {[["base", "$"], ["local", localCurrency.symbol || "Bs."]].map(([k, l]) => (
+                                                <button key={k} type="button" onClick={() => setPriceCurrency(k)}
+                                                    className={`px-2 h-5 rounded text-[11px] font-semibold transition-colors ${priceCurrency === k
+                                                        ? "bg-white dark:bg-white/15 text-content dark:text-white shadow-sm"
+                                                        : "text-content-subtle hover:text-content dark:hover:text-white"}`}>
+                                                    {l}
+                                                </button>
+                                            ))}
+                                        </span>
                                     )}
                                 </label>
                                 {priceCurrency === "base" || !localCurrency ? (
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle font-semibold text-xs">$</span>
-                                        <input value={form.price} onChange={e => handlePriceChange(e.target.value.replace(/[^0-9.]/g, ""))} type="text" inputMode="decimal" className="input !pl-7" placeholder="0.00000" />
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle font-medium text-[12px]">$</span>
+                                        <input value={form.price} onChange={e => handlePriceChange(e.target.value.replace(/[^0-9.]/g, ""))} type="text" inputMode="decimal" className="input !pl-7 tabular-nums" placeholder="0.00" />
                                     </div>
                                 ) : (
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-[12px] font-semibold">{localCurrency.symbol || "Bs."}</span>
-                                        <input value={priceInBs} onChange={e => handlePriceInBsChange(e.target.value)} type="number" step="0.01" min="0" className="input !pl-9" placeholder="0.00" />
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-[12px] font-medium">{localCurrency.symbol || "Bs."}</span>
+                                        <input value={priceInBs} onChange={e => handlePriceInBsChange(e.target.value)} type="number" step="0.01" min="0" inputMode="decimal" className="input !pl-9 tabular-nums" placeholder="0.00" />
                                     </div>
                                 )}
                             </div>
                             )}
-                            {editData?.id && !form.is_combo && !form.is_service && (
-                                <div>
-                                    <label className="label">
-                                        {sucursal ? `Stock en ${sucursal}` : "Stock Actual"}
-                                    </label>
-                                    <div className="bg-surface-2 dark:bg-surface-dark-3 text-content-subtle border border-border/40 rounded-lg px-3 flex justify-between items-center gap-2 cursor-not-allowed opacity-80 h-10 min-w-0 overflow-hidden" title={`${fmtQtyUnit(form.stock ?? 0, form.unit)} (solo lectura)`}>
-                                        <span className="text-sm font-semibold truncate min-w-0 tabular-nums">{fmtQtyUnit(form.stock ?? 0, form.unit)}</span>
-                                        <svg className="w-3.5 h-3.5 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {conStock && (
+                                <div className="order-2 md:order-4 min-w-0">
+                                    <label className="label truncate">{sucursal ? `Existencia en ${sucursal}` : "Existencia"}</label>
+                                    {/* Solo lectura: la existencia se mueve con compras, ventas y
+                                        ajustes de Inventario, nunca escribiendo un número aquí. */}
+                                    <div className="h-10 px-3 rounded-lg bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.06] flex justify-between items-center gap-2 min-w-0"
+                                        title="Se ajusta desde Inventario">
+                                        <span className="text-[13px] font-semibold text-content dark:text-white truncate min-w-0 tabular-nums">
+                                            {fmtQtyUnit(form.stock ?? 0, form.unit).toLowerCase()}
+                                        </span>
+                                        <svg className="w-3.5 h-3.5 shrink-0 text-content-subtle/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                         </svg>
                                     </div>
@@ -553,86 +565,52 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     ))}
                 </div>
 
+                {/* ── Tipo y disponibilidad ──
+                    Una lista agrupada, como los ajustes del teléfono: cada fila entera se toca
+                    para cambiarla. Antes eran cuatro cajas sueltas que se teñían de color al
+                    encenderse y competían con el botón de guardar. */}
                 {tab === "general" && (
-                <>
-                {/* ── Toggles de Tipo (Servicio / Combo) ── */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
-                    {/* Toggle Servicio */}
-                    <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${form.is_service ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
-                        <div>
-                            <div className="text-xs font-semibold text-content dark:text-content-dark">Servicio</div>
-                            <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-0.5">No afecta inventario.</div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" className="sr-only peer" checked={form.is_service} onChange={handleIsServiceChange} />
-                            <div className="w-9 h-5 bg-border/50 peer-focus:outline-none dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
-                        </label>
-                    </div>
-
-                    {/* Toggle Combo */}
-                    {!form.is_service && (
-                        <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${form.is_combo ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
-                            <div>
-                                <div className="text-xs font-semibold text-content dark:text-content-dark">Producto compuesto</div>
-                                <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-0.5">Compuesto por otros ítems.</div>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" className="sr-only peer" checked={form.is_combo} onChange={handleIsComboChange} disabled={isEdit && form.combo_items.length > 0} />
-                                <div className="w-9 h-5 bg-border/50 peer-focus:outline-none dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
-                            </label>
-                        </div>
-                    )}
-                </div>
-
-                {/* Van juntos porque se leen juntos: el primero decide si el producto se
-                    vende, y el segundo solo tiene sentido si la respuesta es que sí. */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
-                {/* ── Insumo: entra al inventario pero no se vende ── */}
-                <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${!form.sellable ? "bg-warning/5 border-warning/30" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
-                    <div>
-                        <div className="text-xs font-semibold text-content dark:text-content-dark">No disponible para venta</div>
-                        <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-0.5">
-                            Insumo de producción: se compra y se inventaría, pero no se cobra en caja.
-                        </div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                        {/* Marcarlo lo baja del catálogo en el mismo gesto: un insumo publicado
-                            sería algo que el cliente puede pedir y la caja no puede cobrar. */}
-                        <input
-                            type="checkbox"
-                            className="sr-only peer"
+                    <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06] overflow-hidden">
+                        <Interruptor
+                            titulo="Servicio"
+                            detalle="No lleva inventario: no se cuenta ni se descuenta."
+                            checked={form.is_service}
+                            onChange={handleIsServiceChange}
+                        />
+                        {!form.is_service && (
+                            <Interruptor
+                                titulo="Producto compuesto"
+                                detalle={isEdit && form.combo_items.length > 0
+                                    ? "Tiene receta: quítale los ítems para apagarlo."
+                                    : "Se arma con otros productos (pestaña Receta)."}
+                                checked={form.is_combo}
+                                onChange={handleIsComboChange}
+                                disabled={isEdit && form.combo_items.length > 0}
+                            />
+                        )}
+                        {/* Van juntos porque se leen juntos: el primero decide si el producto se
+                            vende, y el segundo solo tiene sentido si la respuesta es que sí.
+                            Marcarlo como insumo lo baja del catálogo en el mismo gesto: un insumo
+                            publicado sería algo que el cliente puede pedir y la caja no puede cobrar. */}
+                        <Interruptor
+                            titulo="No disponible para venta"
+                            detalle="Insumo de producción: se compra y se inventaría, pero no se cobra en caja."
                             checked={!form.sellable}
+                            tono="ambar"
                             onChange={e => setForm(p => ({ ...p, sellable: !e.target.checked, visible_in_catalog: e.target.checked ? false : p.visible_in_catalog }))}
                         />
-                        <div className="w-9 h-5 bg-border/50 peer-focus:outline-none dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-warning"></div>
-                    </label>
-                </div>
-
-                {/* ── Catálogo público ── */}
-                {catalogEnabled && (
-                <div className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${!form.sellable ? "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5 opacity-50" : form.visible_in_catalog ? "bg-brand-50/50 border-brand-200 dark:bg-brand-500/10 dark:border-brand-500/20" : "bg-surface-2 dark:bg-white/5 border-border/40 dark:border-white/5"}`}>
-                    <div>
-                        <div className="text-xs font-semibold text-content dark:text-content-dark">Mostrar en catálogo público</div>
-                        <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-0.5">
-                            {form.sellable
-                                ? "Los clientes verán foto, categoría y precio. Nunca el stock ni el costo."
-                                : "No disponible: los insumos no se publican."}
-                        </div>
+                        {catalogEnabled && (
+                            <Interruptor
+                                titulo="Mostrar en catálogo público"
+                                detalle={form.sellable
+                                    ? "Los clientes ven foto, categoría y precio. Nunca el stock ni el costo."
+                                    : "Los insumos no se publican."}
+                                checked={form.visible_in_catalog && form.sellable}
+                                disabled={!form.sellable}
+                                onChange={e => set("visible_in_catalog", e.target.checked)}
+                            />
+                        )}
                     </div>
-                    <label className={`relative inline-flex items-center ${form.sellable ? "cursor-pointer" : "cursor-not-allowed"}`}>
-                        <input
-                            type="checkbox"
-                            className="sr-only peer"
-                            checked={form.visible_in_catalog && form.sellable}
-                            disabled={!form.sellable}
-                            onChange={e => set("visible_in_catalog", e.target.checked)}
-                        />
-                        <div className="w-9 h-5 bg-border/50 peer-focus:outline-none dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
-                    </label>
-                </div>
-                )}
-                </div>
-                </>
                 )}
 
                 {tab === "receta" && (
@@ -647,7 +625,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         <div className="p-4 rounded-lg border border-border/40 dark:border-white/5 bg-surface-2 dark:bg-white/5 text-center mt-1">
                             <p className="text-xs font-semibold text-content dark:text-content-dark">Este producto no es compuesto</p>
                             <p className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-1">
-                                Activa "Producto Compuesto" en General para armarlo con otros ítems.
+                                Activa "Producto compuesto" en General para armarlo con otros ítems.
                             </p>
                         </div>
                     )
@@ -720,11 +698,11 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     que solo mide lo que tiene costo conocido. Lo que sí se les oculta es el
                     presentación y el stock mínimo, que no aplican. */}
                 {tab === "costos" && (
-                    <div className="space-y-3 animate-in fade-in duration-300 mt-2">
+                    <div className="space-y-3">
                         {/* ── Rentabilidad ── */}
-                        <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
-                            <h3 className="text-xs font-semibold text-content-subtle dark:text-content-dark-muted mb-3">
-                                {form.sellable ? "Costos y Rentabilidad" : "Costo del insumo"}
+                        <div className="rounded-xl p-4 border border-border/70 dark:border-white/[0.08]">
+                            <h3 className="text-[13px] font-semibold text-content dark:text-white mb-3">
+                                {form.sellable ? "Costos y rentabilidad" : "Costo del insumo"}
                             </h3>
                             {/* Sin precio de venta no hay rentabilidad que mostrar: el bloque
                                 queda con el costo solo, a ancho completo. */}
@@ -768,7 +746,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                                     />
                                                 </div>
                                                 {form.bulk_price && parseFloat(form.package_size) > 0 && (
-                                                    <span className="text-[12px] text-brand-500 font-semibold whitespace-nowrap">
+                                                    <span className="text-[12px] text-content-subtle font-medium whitespace-nowrap tabular-nums">
                                                         = $ {(parseFloat(form.bulk_price) / parseFloat(form.package_size)).toFixed(4)} c/u
                                                     </span>
                                                 )}
@@ -777,17 +755,20 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                     ) : null}
                                 </div>
                                 {form.sellable && (
-                                <div
-                                    className={`flex flex-col justify-center p-3 px-4 rounded-lg border transition-all cursor-pointer ${suggestedPrice ? "bg-green-500/5 border-green-500/20 hover:bg-green-500/10" : "bg-surface-2 dark:bg-white/5 border-border/40 opacity-60"}`}
-                                    onClick={() => { if (suggestedPrice) handlePriceChange(suggestedPrice); }}
-                                >
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-green-600 dark:text-green-400">PVP Sugerido</span>
-                                        {suggestedPrice && <span className="text-[11px] bg-green-500 text-white px-1.5 py-0.5 rounded font-semibold transition-all">Aplicar</span>}
+                                <div className="flex items-center justify-between gap-3 p-3 px-4 rounded-lg bg-surface-2 dark:bg-white/[0.04]">
+                                    <div className="min-w-0">
+                                        <p className="text-[12px] text-content-subtle">Precio sugerido</p>
+                                        <p className="text-[17px] font-semibold tracking-tight text-content dark:text-white tabular-nums">
+                                            {suggestedPrice ? `Ref. ${suggestedPrice}` : "—"}
+                                        </p>
+                                        <p className="text-[11px] text-content-subtle">{suggestedPrice ? "Costo más el margen" : "Carga costo y margen"}</p>
                                     </div>
-                                    <div className="text-lg font-semibold text-green-600 dark:text-green-400 tabular-nums">
-                                        {suggestedPrice ? `Ref. ${suggestedPrice}` : "—"}
-                                    </div>
+                                    {suggestedPrice && (
+                                        <button type="button" onClick={() => handlePriceChange(suggestedPrice)}
+                                            className="btn-outline h-9 px-3.5 rounded-lg text-[13px] font-medium shrink-0">
+                                            Aplicar
+                                        </button>
+                                    )}
                                 </div>
                                 )}
                             </div>
@@ -796,19 +777,19 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         {/* ── Configuración Avanzada ── */}
                         {!form.is_combo && !form.is_service && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
-                                <h3 className="text-xs font-semibold text-content-subtle dark:text-content-dark-muted mb-3">Presentación de compra</h3>
+                            <div className="rounded-xl p-4 border border-border/70 dark:border-white/[0.08]">
+                                <h3 className="text-[13px] font-semibold text-content dark:text-white mb-3">Presentación de compra</h3>
                                 <div className="flex gap-2">
                                     <div className="flex-1">
                                         <CustomSelect
                                             value={form.package_unit}
                                             onChange={handlePackageUnitChange}
                                             options={[
-                                                { value: "", label: "NINGUNO" },
+                                                { value: "", label: "Ninguno" },
                                                 ...Array.from(new Set([
                                                     ...PKG_UNITS,
                                                     ...(form.package_unit && !PKG_UNITS.includes(form.package_unit.toUpperCase()) ? [form.package_unit.toUpperCase()] : [])
-                                                ])).map(u => ({ value: u, label: u }))
+                                                ])).map(u => ({ value: u, label: u.charAt(0) + u.slice(1).toLowerCase() }))
                                             ]}
                                             placeholder="Presentación"
                                             className="w-full"
@@ -827,10 +808,10 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                             title={form.package_unit === "UNIDAD" ? "Una unidad contiene una unidad" : undefined}
                                             className="input text-center !pr-9 disabled:opacity-45 disabled:cursor-not-allowed"
                                         />
-                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-content-subtle font-semibold uppercase pointer-events-none">{form.unit || "uds"}</span>
+                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-content-subtle pointer-events-none">{(form.unit || "uds").toLowerCase()}</span>
                                     </div>
                                 </div>
-                                <p className="mt-2 text-[11px] font-semibold text-content-muted leading-tight">
+                                <p className="mt-2 text-[12px] text-content-subtle leading-snug">
                                     {!form.package_unit
                                         ? "Este producto se compra suelto, sin bulto."
                                         : form.package_unit === "UNIDAD"
@@ -839,16 +820,16 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 </p>
                             </div>
 
-                            <div className="bg-surface-1 dark:bg-surface-dark-2 rounded-xl p-4 border border-border/40 dark:border-white/5">
-                                <h3 className="text-xs font-semibold text-content-subtle dark:text-content-dark-muted mb-3">
-                                    {sucursal ? `Alerta de Reposición en ${sucursal}` : "Alerta de Reposición"}
+                            <div className="rounded-xl p-4 border border-border/70 dark:border-white/[0.08]">
+                                <h3 className="text-[13px] font-semibold text-content dark:text-white mb-3">
+                                    {sucursal ? `Alerta de reposición en ${sucursal}` : "Alerta de reposición"}
                                 </h3>
                                 <div className="relative">
                                     <input value={form.min_stock} onChange={e => set("min_stock", e.target.value)} type="number" className="input" placeholder="Min. para notificar..." />
                                 </div>
                                 {/* El aviso se mide sucursal por sucursal, no sobre la suma de
                                     todas: una tienda en cero tiene que avisar aunque otra esté llena. */}
-                                <p className="mt-2 text-[11px] font-semibold text-content-muted leading-tight">
+                                <p className="mt-2 text-[12px] text-content-subtle leading-snug">
                                     Avisa cuando esta sucursal baje de aquí.
                                 </p>
                             </div>
@@ -857,21 +838,42 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     </div>
                 )}
 
-                {/* ── Footer de Acción ── */}
-                <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
-                    <Button onClick={onClose} disabled={saving} variant="ghost" className="border border-border/40 dark:border-white/10 min-w-[100px]">
+                {/* ── Pie fijo ──
+                    El formulario es largo y en el teléfono había que bajar hasta el final para
+                    guardar: el pie queda pegado abajo del modal mientras se desplaza. */}
+                <div className="sticky bottom-0 z-10 -mx-6 -mb-6 mt-1 px-6 py-4 bg-white dark:bg-surface-dark-2 border-t border-border/60 dark:border-white/[0.06] flex gap-2 sm:justify-end">
+                    <button onClick={onClose} disabled={saving}
+                        className="btn-outline h-11 sm:h-10 px-5 rounded-lg text-[13px] font-medium disabled:opacity-50">
                         Cancelar
-                    </Button>
+                    </button>
                     <Button
                         onClick={handleSave} loading={busy}
                         variant="primary"
-                        className="min-w-[160px]"
+                        className="flex-1 sm:flex-none sm:min-w-[160px] h-11 sm:h-10"
                     >
-                        {busy ? "Guardando..." : (isEdit ? "Guardar Cambios" : "Registrar Producto")}
+                        {busy ? "Guardando…" : (isEdit ? "Guardar cambios" : "Crear producto")}
                     </Button>
                 </div>
 
             </div>
         </Modal>
+    );
+}
+
+// Fila de interruptor de la lista agrupada: título, una línea que explica qué implica y el
+// switch a la derecha. La fila entera es la etiqueta, así que se toca en cualquier parte.
+// `tono="ambar"` para el que marca una excepción (insumo), no un estado normal.
+function Interruptor({ titulo, detalle, checked, onChange, disabled = false, tono }) {
+    return (
+        <label className={`flex items-center justify-between gap-4 px-4 py-3 transition-colors ${disabled ? "opacity-55 cursor-not-allowed" : "cursor-pointer hover:bg-surface-2/60 dark:hover:bg-white/[0.02]"}`}>
+            <span className="min-w-0">
+                <span className="block text-[13px] font-medium text-content dark:text-white">{titulo}</span>
+                <span className="block text-[12px] text-content-subtle mt-0.5 leading-snug">{detalle}</span>
+            </span>
+            <span className="relative inline-flex items-center shrink-0">
+                <input type="checkbox" className="sr-only peer" checked={!!checked} disabled={disabled} onChange={onChange} />
+                <span className={`block w-10 h-6 rounded-full bg-border dark:bg-white/15 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500/40 ${tono === "ambar" ? "peer-checked:bg-amber-500" : "peer-checked:bg-brand-600 dark:peer-checked:bg-brand-500"} after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-4`} />
+            </span>
+        </label>
     );
 }
