@@ -17,6 +17,8 @@ const SECTIONS = [
     ["empresa", "Empresa"],
     ["suscripcion", "Mi suscripción"],
     ["factura", "Factura"],
+    // Reglas de cuentas por cobrar (plazo de crédito, tope de exoneración): no son del papel.
+    ["credito", "Crédito y cobranza"],
     // Contenido del catálogo público: banners, anuncio y menú destacado. Va aquí y no en el
     // módulo Catálogo porque es configuración de la tienda, no gestión de productos.
     ["vitrina", "Vitrina"],
@@ -29,6 +31,7 @@ const FIELDS_IDENTIDAD = [
     ["store_name", "Nombre o razón social", "text", "Ej: Distribuidora El Sol C.A."],
     ["store_rif", "RIF", "text", "Ej: J-12345678-9"],
     ["store_slogan", "Slogan", "text", "Ej: Calidad garantizada", true],
+    ["store_website", "Sitio web", "text", "www.mitienda.com", true],
 ];
 const FIELDS_CONTACTO = [
     ["store_address", "Dirección fiscal", "text", "Av. Principal, Local 1"],
@@ -36,19 +39,8 @@ const FIELDS_CONTACTO = [
     ["store_phone", "Teléfono", "tel", "0212-555-0000"],
     ["store_phone2", "Teléfono 2", "tel", "", true],
     ["store_email", "Correo electrónico", "email", "contacto@mitienda.com", true],
-    ["store_website", "Sitio web", "text", "www.mitienda.com", true],
 ];
 
-const FIELDS_FACTURA = [
-    // Cómo se llama el papel que se entrega al cliente. Va primero porque es lo que el cliente
-    // lee: mientras el sistema no esté homologado ante el SENIAT lo que emite no es una
-    // factura fiscal, y decir que lo es en el documento es afirmar algo que no corresponde.
-    // El día de la homologación se cambia acá y queda parejo en el ticket y en el carta.
-    ["sales_doc_name", "Nombre del documento de venta", "text", "Documento de Venta"],
-    ["tax_name", "Nombre del impuesto", "text", "Ej: IVA"],
-    ["tax_rate", "Tasa de impuesto (%)", "number", "16"],
-    ["receipt_footer", "Mensaje al pie del ticket", "text", "¡Gracias por su compra!"],
-];
 
 const SECTION = "bg-white dark:bg-white/[0.04] rounded-2xl border border-border/60 dark:border-white/[0.06] shadow-card dark:shadow-none";
 const INPUT = "w-full h-10 px-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] font-medium text-content dark:text-white placeholder:text-content-subtle/50 dark:placeholder:text-white/25 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-colors";
@@ -220,122 +212,115 @@ export default function SettingsTab({ notify }) {
         <Page module="Sistema" title="Configuración general" subheader={subheader}>
             <div className="flex-1 min-h-0 overflow-auto custom-scrollbar p-4">
 
-                {/* ── Empresa ── */}
+                {/* ── Empresa ──
+                    Todo a la vista sin bajar: los dos formularios lado a lado y, debajo, la imagen
+                    de la marca en tres tarjetas. Apilado en una columna angosta sobraba media
+                    pantalla a la derecha y había que desplazarse para llegar al final. */}
                 {section === "empresa" && (
-                    <div className="max-w-6xl">
-                        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-4 items-start">
-                            <div className="space-y-4 min-w-0">
-                                <Seccion titulo="Identidad legal" detalle="Sale en el encabezado de tickets, facturas y del catálogo público.">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {campo(FIELDS_IDENTIDAD[0], "md:col-span-2")}
-                                        {campo(FIELDS_IDENTIDAD[1])}
-                                        {campo(FIELDS_IDENTIDAD[2])}
+                    <div>
+                        <div className="grid gap-4 lg:grid-cols-2">
+                            <Seccion titulo="Identidad legal" detalle="Sale en el encabezado de tickets, facturas y del catálogo público." className="h-full">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {campo(FIELDS_IDENTIDAD[0], "sm:col-span-2")}
+                                    {campo(FIELDS_IDENTIDAD[1])}
+                                    {campo(FIELDS_IDENTIDAD[3])}
+                                    {campo(FIELDS_IDENTIDAD[2], "sm:col-span-2")}
+                                </div>
+                            </Seccion>
+
+                            <Seccion titulo="Contacto y ubicación" detalle="La dirección fiscal y los teléfonos que ven tus clientes." className="h-full">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {campo(FIELDS_CONTACTO[0], "sm:col-span-2")}
+                                    {FIELDS_CONTACTO.slice(1).map(f => campo(f))}
+                                </div>
+                            </Seccion>
+                        </div>
+
+                        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            {/* Logo: la imagen y su acción en una sola fila. */}
+                            <Seccion titulo="Logotipo" detalle="PNG, JPG o WebP, hasta 2 MB. Se guarda al elegirlo." className="h-full">
+                                <label className="cursor-pointer group flex items-center gap-4">
+                                    <div className="w-32 h-20 shrink-0 bg-surface-2 dark:bg-white/[0.04] border border-dashed border-border dark:border-white/15 rounded-xl flex items-center justify-center overflow-hidden group-hover:border-content-subtle/60 transition-colors">
+                                        {settings.logo_url
+                                            ? <img src={resolveImageUrl(settings.logo_url)} alt="Logotipo" className="max-w-full max-h-full object-contain p-2" />
+                                            : <svg className="w-6 h-6 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>}
                                     </div>
-                                </Seccion>
+                                    <span className="min-w-0">
+                                        <span className="block text-[13px] font-medium text-content dark:text-white group-hover:underline">
+                                            {settings.logo_url ? "Cambiar logotipo" : "Subir logotipo"}
+                                        </span>
+                                        <span className="block text-[12px] text-content-subtle">Toca para elegir una imagen.</span>
+                                    </span>
+                                    <input type="file" accept="image/*" onChange={uploadLogo} className="hidden" />
+                                </label>
+                            </Seccion>
 
-                                <Seccion titulo="Contacto y ubicación" detalle="La dirección fiscal y los teléfonos que ven tus clientes.">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {campo(FIELDS_CONTACTO[0], "md:col-span-2")}
-                                        {FIELDS_CONTACTO.slice(1).map(f => campo(f))}
-                                    </div>
-                                </Seccion>
-                            </div>
-
-                            <div className="space-y-4 min-w-0">
-                                {/* Logo */}
-                                <Seccion titulo="Logotipo" detalle="PNG, JPG o WebP, hasta 2 MB. Se guarda al elegirlo.">
-                                    <label className="cursor-pointer group block">
-                                        <div className="w-full h-28 bg-surface-2 dark:bg-white/[0.04] border border-dashed border-border dark:border-white/15 rounded-xl flex flex-col items-center justify-center overflow-hidden group-hover:border-content-subtle/60 transition-colors">
-                                            {settings.logo_url
-                                                ? <img src={resolveImageUrl(settings.logo_url)} alt="Logotipo" className="max-w-full max-h-full object-contain p-3" />
-                                                : <div className="text-center text-content-subtle">
-                                                    <svg className="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                                                    <div className="text-[13px] font-medium">Subir imagen</div>
-                                                </div>
-                                            }
-                                        </div>
-                                        <input type="file" accept="image/*" onChange={uploadLogo} className="hidden" />
-                                        {settings.logo_url && (
-                                            <span className="mt-2 block text-center text-[12px] font-medium text-content-subtle group-hover:text-content dark:group-hover:text-white transition-colors">
-                                                Cambiar logotipo
-                                            </span>
-                                        )}
-                                    </label>
-                                </Seccion>
-
-                                {/* Color de marca */}
-                                <Seccion titulo="Color de la marca" detalle="Se aplica a todo el sistema y al catálogo público.">
-                                    <div className="flex items-center gap-2.5">
-                                        <label className="relative shrink-0 cursor-pointer" title="Elegir color">
-                                            <span
-                                                className="block w-10 h-10 rounded-lg border border-black/10 dark:border-white/15"
-                                                style={{ backgroundColor: settings.brand_color || DEFAULT_BRAND }}
-                                            />
-                                            <input
-                                                type="color"
-                                                value={settings.brand_color || DEFAULT_BRAND}
-                                                onChange={e => previewBrand(e.target.value)}
-                                                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                                            />
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={settings.brand_color || ""}
-                                            placeholder={DEFAULT_BRAND}
-                                            onChange={e => {
-                                                const v = e.target.value.trim();
-                                                // Se escribe siempre para no bloquear el tecleo, pero solo se pinta
-                                                // cuando el hex ya está completo.
-                                                setSettings(p => ({ ...p, brand_color: v }));
-                                                if (/^#?[0-9a-fA-F]{6}$/.test(v)) applyBrandColor(v);
-                                            }}
-                                            className={`${INPUT} flex-1 tabular-nums uppercase`}
+                            {/* Color de marca */}
+                            <Seccion titulo="Color de la marca" detalle="Se aplica a todo el sistema y al catálogo público." className="h-full">
+                                <div className="flex items-center gap-2.5">
+                                    <label className="relative shrink-0 cursor-pointer" title="Elegir color">
+                                        <span
+                                            className="block w-10 h-10 rounded-lg border border-black/10 dark:border-white/15"
+                                            style={{ backgroundColor: settings.brand_color || DEFAULT_BRAND }}
                                         />
-                                    </div>
-
+                                        <input
+                                            type="color"
+                                            value={settings.brand_color || DEFAULT_BRAND}
+                                            onChange={e => previewBrand(e.target.value)}
+                                            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                                        />
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={settings.brand_color || ""}
+                                        placeholder={DEFAULT_BRAND}
+                                        onChange={e => {
+                                            const v = e.target.value.trim();
+                                            // Se escribe siempre para no bloquear el tecleo, pero solo se pinta
+                                            // cuando el hex ya está completo.
+                                            setSettings(p => ({ ...p, brand_color: v }));
+                                            if (/^#?[0-9a-fA-F]{6}$/.test(v)) applyBrandColor(v);
+                                        }}
+                                        className={`${INPUT} flex-1 min-w-0 tabular-nums uppercase`}
+                                    />
                                     {/* Muestra en vivo: así se ven un botón y un enlace con este color. */}
-                                    <div className="mt-3 flex items-center gap-3 rounded-lg bg-surface-2 dark:bg-white/[0.03] p-2.5">
-                                        <span className="btn-accent flex-1 h-9 rounded-lg text-[13px] font-semibold inline-flex items-center justify-center pointer-events-none">Botón</span>
-                                        <span className="text-[13px] font-medium text-brand-600 dark:text-brand-400 underline underline-offset-2">Enlace</span>
-                                    </div>
+                                    <span className="btn-accent shrink-0 h-10 px-4 rounded-lg text-[13px] font-semibold inline-flex items-center pointer-events-none">Botón</span>
+                                </div>
 
+                                <div className="mt-3 flex items-center justify-between gap-3">
+                                    <span className="text-[12px] text-content-subtle">
+                                        Los tonos claros y oscuros se derivan solos.
+                                    </span>
                                     {settings.brand_color && (
                                         <button
                                             type="button"
                                             onClick={() => previewBrand("")}
-                                            className="mt-3 h-9 px-3 -ml-3 rounded-lg inline-flex items-center gap-1.5 text-[13px] font-medium text-content-subtle hover:text-content dark:hover:text-white hover:bg-surface-2 dark:hover:bg-white/[0.05] transition-colors"
+                                            className="shrink-0 h-8 px-2.5 -mr-2.5 rounded-lg inline-flex items-center gap-1.5 text-[12px] font-medium text-content-subtle hover:text-content dark:hover:text-white hover:bg-surface-2 dark:hover:bg-white/[0.05] transition-colors"
                                         >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-                                            Volver al color original
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                                            Color original
                                         </button>
                                     )}
+                                </div>
+                            </Seccion>
 
-                                    <p className="mt-2 text-[12px] text-content-subtle leading-relaxed">
-                                        Los tonos claros y oscuros se derivan solos. Si el color es muy claro se
-                                        oscurece, para que el texto blanco de los botones siga leyéndose.
-                                    </p>
-                                </Seccion>
-
-                                {/* Vista previa del encabezado del ticket. Imita el papel: centrado y
-                                    con la dirección en mayúsculas, como sale impreso. */}
-                                <Seccion titulo="Así sale en el ticket">
-                                    <div className="bg-surface-2 dark:bg-black/30 rounded-xl p-4 text-center">
-                                        <div className="flex flex-col items-center">
-                                            {settings.logo_url ? (
-                                                <img src={resolveImageUrl(settings.logo_url)} alt="" className="h-8 w-auto mb-2 object-contain" />
-                                            ) : (
-                                                <div className="w-8 h-8 rounded-full border border-dashed border-border mb-2" />
-                                            )}
-                                            <div className="text-[13px] font-semibold text-content dark:text-white leading-tight">{settings.store_name || "Mi tienda C.A."}</div>
-                                            <div className="text-[12px] text-content-subtle tabular-nums">{settings.store_rif ? `RIF: ${settings.store_rif}` : "RIF: J-00000000-0"}</div>
-                                            {settings.store_slogan && <div className="text-[11px] text-content-subtle italic mt-0.5">"{settings.store_slogan}"</div>}
-                                            <div className="w-8 h-px bg-border dark:bg-white/15 my-2" />
-                                            <div className="text-[11px] text-content-subtle uppercase leading-tight">{settings.store_address || "Calle Principal #1"}</div>
-                                            <div className="text-[11px] text-content-subtle tabular-nums">{settings.store_phone || "0412-0000000"}</div>
-                                        </div>
+                            {/* Vista previa del encabezado del ticket. Imita el papel: centrado y con
+                                la dirección en mayúsculas, como sale impreso. */}
+                            <Seccion titulo="Así sale en el ticket" className="h-full md:col-span-2 xl:col-span-1">
+                                <div className="bg-surface-2 dark:bg-black/30 rounded-xl px-4 py-3 text-center flex flex-col items-center">
+                                    {settings.logo_url ? (
+                                        <img src={resolveImageUrl(settings.logo_url)} alt="" className="h-7 w-auto mb-1.5 object-contain" />
+                                    ) : (
+                                        <div className="w-7 h-7 rounded-full border border-dashed border-border mb-1.5" />
+                                    )}
+                                    <div className="text-[13px] font-semibold text-content dark:text-white leading-tight">{settings.store_name || "Mi tienda C.A."}</div>
+                                    <div className="text-[12px] text-content-subtle tabular-nums">{settings.store_rif ? `RIF: ${settings.store_rif}` : "RIF: J-00000000-0"}</div>
+                                    {settings.store_slogan && <div className="text-[11px] text-content-subtle italic">"{settings.store_slogan}"</div>}
+                                    <div className="mt-1 text-[11px] text-content-subtle uppercase leading-tight">
+                                        {settings.store_address || "Calle Principal #1"} · <span className="tabular-nums">{settings.store_phone || "0412-0000000"}</span>
                                     </div>
-                                </Seccion>
-                            </div>
+                                </div>
+                            </Seccion>
                         </div>
                         {barraGuardar}
                     </div>
@@ -391,72 +376,94 @@ export default function SettingsTab({ notify }) {
                     </div>
                 )}
 
-                {/* ── Factura ── */}
+                {/* ── Factura ──
+                    Solo lo que define el papel: cómo se llama, qué impuesto lleva y cómo se
+                    imprime. Las reglas de crédito tienen su propia pestaña. */}
                 {section === "factura" && (
-                    <div className="max-w-2xl">
-                        <div className="space-y-4">
-                            <Seccion titulo="Documento y ticket" detalle="Cómo se llama y qué dice el papel que recibe el cliente.">
-                                <div className="space-y-3">
-                                    {FIELDS_FACTURA.map(([key, label, type, placeholder]) => (
-                                        <Campo key={key} label={label}>
-                                            {key === "receipt_footer" ? (
-                                                <textarea
-                                                    rows={2}
-                                                    placeholder={placeholder}
-                                                    value={settings[key] || ""}
-                                                    onChange={set(key)}
-                                                    className={`${INPUT} !h-auto py-2.5 resize-none`}
-                                                />
-                                            ) : (
-                                                <input type={type} placeholder={placeholder} value={settings[key] || ""} onChange={set(key)} className={INPUT} />
-                                            )}
-                                        </Campo>
-                                    ))}
-
-                                    <Campo label="Ancho de la impresora térmica">
-                                        <Segmented
-                                            value={settings.printer_width || "80"}
-                                            onChange={v => setSettings(p => ({ ...p, printer_width: v }))}
-                                            options={[
-                                                { key: "80", label: "80 mm · estándar" },
-                                                { key: "58", label: "58 mm · compacta" },
-                                            ]}
+                    <div>
+                        <div className="grid gap-4 lg:grid-cols-2">
+                            <Seccion titulo="Documento" detalle="Cómo se llama y qué dice el papel que recibe el cliente." className="h-full">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {/* Cómo se llama el papel que se entrega al cliente. Va primero porque
+                                        es lo que el cliente lee: mientras el sistema no esté homologado
+                                        ante el SENIAT lo que emite no es una factura fiscal, y decir que
+                                        lo es en el documento es afirmar algo que no corresponde. El día
+                                        de la homologación se cambia acá y queda parejo en el ticket y en
+                                        el carta. */}
+                                    <Campo label="Nombre del documento de venta" className="sm:col-span-2">
+                                        <input type="text" placeholder="Documento de Venta" value={settings.sales_doc_name || ""} onChange={set("sales_doc_name")} className={INPUT} />
+                                    </Campo>
+                                    <Campo label="Nombre del impuesto">
+                                        <input type="text" placeholder="Ej: IVA" value={settings.tax_name || ""} onChange={set("tax_name")} className={INPUT} />
+                                    </Campo>
+                                    <Campo label="Tasa de impuesto (%)">
+                                        <input type="number" placeholder="16" value={settings.tax_rate || ""} onChange={set("tax_rate")} className={`${INPUT} tabular-nums`} />
+                                    </Campo>
+                                    <Campo label="Mensaje al pie del ticket" className="sm:col-span-2">
+                                        <textarea
+                                            rows={2}
+                                            placeholder="¡Gracias por su compra!"
+                                            value={settings.receipt_footer || ""}
+                                            onChange={set("receipt_footer")}
+                                            className={`${INPUT} !h-auto py-2.5 resize-none`}
                                         />
                                     </Campo>
                                 </div>
+                            </Seccion>
+
+                            <Seccion titulo="Impresión del ticket" detalle="Cómo sale en la impresora térmica de la caja." className="h-full">
+                                <Campo label="Ancho de la impresora">
+                                    <Segmented
+                                        value={settings.printer_width || "80"}
+                                        onChange={v => setSettings(p => ({ ...p, printer_width: v }))}
+                                        options={[
+                                            { key: "80", label: "80 mm · estándar" },
+                                            { key: "58", label: "58 mm · compacta" },
+                                        ]}
+                                    />
+                                </Campo>
 
                                 <div className="mt-4 rounded-xl border border-border/70 dark:border-white/[0.08]">
                                     <Interruptor
-                                        titulo="Encabezado de la empresa en el ticket"
-                                        detalle="Logo, nombre, RIF, dirección y teléfonos al inicio. Apágalo si imprimes en papel membretado."
+                                        titulo="Encabezado de la empresa"
+                                        detalle="Logo, nombre, RIF, dirección y teléfonos al inicio del ticket. Apágalo si imprimes en papel membretado."
                                         checked={headerOn}
                                         onChange={() => setSettings(p => ({ ...p, receipt_show_header: headerOn ? "false" : "true" }))}
                                     />
                                 </div>
                             </Seccion>
+                        </div>
+                        {barraGuardar}
+                    </div>
+                )}
 
-                            <Seccion titulo="Crédito y cobranza">
-                                <div className="space-y-4">
-                                    {/* Tope de exoneración. Solo limita a quien tenga el permiso
-                                        "Exonerar saldo por cobrar" sin ser administrador: el admin no
-                                        tiene tope. */}
-                                    <Campo label={`Tope para exonerar saldo (${baseCurrency?.symbol || "Ref."})`}
-                                        ayuda="Monto máximo que puede perdonar por factura un usuario que no es administrador. Con 0 o vacío no hay límite.">
-                                        <input type="number" step="0.01" min="0" placeholder="0 = sin límite"
-                                            value={settings.forgive_limit || ""} onChange={set("forgive_limit")}
-                                            className={`${INPUT} tabular-nums`} />
-                                    </Campo>
+                {/* ── Crédito y cobranza ──
+                    Reglas de cuentas por cobrar: quién puede perdonar deuda y cuándo vence una
+                    factura a crédito. Vivían en Factura, pero no tienen que ver con el papel. */}
+                {section === "credito" && (
+                    <div>
+                        <div className="grid gap-4 lg:grid-cols-2">
+                            {/* Plazo general de crédito a clientes. La ficha de cada cliente puede
+                                tener su excepción; si está vacía, manda este. */}
+                            <Seccion titulo="Plazo de crédito" detalle="Cuándo una factura a crédito pasa a estar vencida." className="h-full">
+                                <Campo label="Días para pagar"
+                                    ayuda="Vale para todos los clientes. Para darle otro plazo a uno en particular, cárgalo en su ficha de Contactos.">
+                                    <input type="text" inputMode="numeric" placeholder="0 = de contado"
+                                        value={settings.customer_credit_days || ""}
+                                        onChange={e => setSettings(p => ({ ...p, customer_credit_days: e.target.value.replace(/\D/g, "").slice(0, 3) }))}
+                                        className={`${INPUT} tabular-nums sm:max-w-[200px]`} />
+                                </Campo>
+                            </Seccion>
 
-                                    {/* Plazo general de crédito a clientes. La ficha de cada cliente
-                                        puede tener su excepción; si está vacía, manda este. */}
-                                    <Campo label="Plazo de crédito a clientes (días)"
-                                        ayuda="Días que tiene cualquier cliente para pagar una factura a crédito antes de figurar como vencida en Cuentas por cobrar. Para darle otro plazo a un cliente, cárgalo en su ficha de Contactos.">
-                                        <input type="text" inputMode="numeric" placeholder="0 = de contado"
-                                            value={settings.customer_credit_days || ""}
-                                            onChange={e => setSettings(p => ({ ...p, customer_credit_days: e.target.value.replace(/\D/g, "").slice(0, 3) }))}
-                                            className={`${INPUT} tabular-nums`} />
-                                    </Campo>
-                                </div>
+                            {/* Tope de exoneración. Solo limita a quien tenga el permiso "Exonerar
+                                saldo por cobrar" sin ser administrador: el admin no tiene tope. */}
+                            <Seccion titulo="Exoneración de saldos" detalle="Cuánta deuda puede perdonar un empleado por factura." className="h-full">
+                                <Campo label={`Tope por factura (${baseCurrency?.symbol || "Ref."})`}
+                                    ayuda="Aplica a quien tiene el permiso de exonerar sin ser administrador. El administrador no tiene tope. Con 0 o vacío no hay límite.">
+                                    <input type="number" step="0.01" min="0" placeholder="0 = sin límite"
+                                        value={settings.forgive_limit || ""} onChange={set("forgive_limit")}
+                                        className={`${INPUT} tabular-nums sm:max-w-[200px]`} />
+                                </Campo>
                             </Seccion>
                         </div>
                         {barraGuardar}
@@ -539,9 +546,9 @@ export default function SettingsTab({ notify }) {
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 // Tarjeta de sección: título en caja de oración y una línea que explica para qué sirve.
-function Seccion({ titulo, detalle, children }) {
+function Seccion({ titulo, detalle, className = "", children }) {
     return (
-        <section className={`${SECTION} p-5`}>
+        <section className={`${SECTION} p-5 ${className}`}>
             <div className="mb-4">
                 <h3 className="text-[14px] font-semibold text-content dark:text-white">{titulo}</h3>
                 {detalle && <p className="text-[12px] text-content-subtle mt-0.5">{detalle}</p>}

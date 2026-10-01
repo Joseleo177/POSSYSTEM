@@ -2,6 +2,12 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "../services/api";
 import { useTheme } from "../hooks/useTheme";
 import { NexusLogo, NexusMark } from "./ui/NexusLogo";
+import LandingDemo from "./landing/LandingDemo";
+import LandingTour from "./landing/LandingTour";
+import LandingAntesDespues from "./landing/LandingAntesDespues";
+import LandingRubros from "./landing/LandingRubros";
+import LandingPreguntas from "./landing/LandingPreguntas";
+import LandingTestimonios from "./landing/LandingTestimonios";
 
 // Pantalla de entrada con forma de portada informativa: quien llega por primera vez entiende
 // qué es el sistema, y quien entra a trabajar tiene el formulario a la vista sin bajar.
@@ -205,8 +211,8 @@ export default function LoginScreen({ onLogin }) {
             <header className="sticky top-0 z-40 bg-surface-2/80 dark:bg-surface-dark/80 backdrop-blur-md border-b border-border/50 dark:border-white/[0.06]">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
                     <Logo />
-                    <nav className="hidden md:flex items-center gap-1 ml-6">
-                        {[["#funciones", "Funciones"], ["#como-funciona", "Cómo funciona"]].map(([href, label]) => (
+                    <nav className="hidden lg:flex items-center gap-1 ml-6">
+                        {[["#demo", "Pruébalo"], ["#funciones", "Funciones"], ["#recorrido", "Recorrido"], ["#rubros", "Para tu negocio"], ["#preguntas", "Preguntas"]].map(([href, label]) => (
                             <a key={href} href={href}
                                 className="h-9 px-3 rounded-lg inline-flex items-center text-[14px] font-medium text-content-muted dark:text-white/70 hover:text-content dark:hover:text-white hover:bg-surface-3/60 dark:hover:bg-white/[0.06] transition-colors">
                                 {label}
@@ -277,9 +283,9 @@ export default function LoginScreen({ onLogin }) {
                                 Iniciar sesión
                                 <Icono d={IC.arrow} className="w-4 h-4" />
                             </button>
-                            <a href="#funciones"
+                            <a href="#demo"
                                 className="h-12 px-5 rounded-full border border-border dark:border-white/15 bg-white/70 dark:bg-white/[0.04] inline-flex items-center text-[15px] font-semibold text-content dark:text-white hover:bg-white dark:hover:bg-white/[0.08] transition-colors">
-                                Ver todo lo que hace
+                                Probar una venta
                             </a>
                         </div>
                     </div>
@@ -287,6 +293,12 @@ export default function LoginScreen({ onLogin }) {
                     <Vista />
                 </div>
             </section>
+
+            {/* ── Antes y con Nexus (franja oscura) ── */}
+            <LandingAntesDespues />
+
+            {/* ── Pruébalo: caja de demostración ── */}
+            <LandingDemo />
 
             {/* ── Funciones ── */}
             <section id="funciones" className="scroll-mt-16 border-t border-border/50 dark:border-white/[0.06] bg-white dark:bg-white/[0.02]">
@@ -316,6 +328,12 @@ export default function LoginScreen({ onLogin }) {
                 </div>
             </section>
 
+            {/* ── Recorrido por los módulos ── */}
+            <LandingTour />
+
+            {/* ── Para tu tipo de negocio ── */}
+            <LandingRubros />
+
             {/* ── Cómo funciona ── */}
             <section id="como-funciona" className="scroll-mt-16">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 lg:py-24">
@@ -338,6 +356,10 @@ export default function LoginScreen({ onLogin }) {
                     </ol>
                 </div>
             </section>
+
+            {/* ── Preguntas frecuentes y testimonios (estos últimos, solo si hay reales) ── */}
+            <LandingPreguntas />
+            <LandingTestimonios />
 
             {/* ── Cierre ── */}
             <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-16 lg:pb-24">
