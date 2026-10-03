@@ -58,7 +58,9 @@ async function getReceivables({ warehouse_id, customer_id, search }, req) {
                 ${CREDIT_SQL} AS credit_days,
                 (c.credit_days IS NULL) AS credit_is_default,
                 w.name AS warehouse_name,
-                (COALESCE((SELECT SUM(py.amount) FROM payments py WHERE py.sale_id = s.id), 0)
+                -- Neto del vuelto, con la misma regla de getSaleBalance
+                (COALESCE((SELECT SUM(py.amount) - COALESCE(SUM(py.change_given) FILTER (WHERE py.change_journal_id IS NOT NULL), 0)
+                             FROM payments py WHERE py.sale_id = s.id), 0)
                   + COALESCE(s.credit_applied, 0))::float AS amount_paid,
                 COALESCE((SELECT SUM(r.total) FROM returns r WHERE r.sale_id = s.id AND r.status <> 'anulado'), 0)::float AS total_returned,
                 -- Como texto: un DATE crudo puede volver de pg como Date a medianoche UTC.

@@ -86,7 +86,9 @@ module.exports = async function getAllSales(query, tenant = {}) {
     order: [["created_at", "DESC"]],
     attributes: {
       include: [
-        [Sequelize.literal('(SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id = "Sale"."id")'), "amount_paid"],
+        // Neto del vuelto, con la misma regla de getSaleBalance: si no, un cobro de 5 con 1 de
+        // vuelto sobre 4,12 se veía pagado mientras el estado seguía en 'parcial'.
+        [Sequelize.literal('(SELECT COALESCE(SUM(amount),0) - COALESCE(SUM(change_given) FILTER (WHERE change_journal_id IS NOT NULL),0) FROM payments WHERE sale_id = "Sale"."id")'), "amount_paid"],
         [Sequelize.literal(`(SELECT COALESCE(SUM(total),0) FROM returns WHERE sale_id = "Sale"."id" AND status <> 'anulado')`), "total_returned"],
         [Sequelize.literal('(SELECT exchange_rate FROM payments WHERE sale_id = "Sale"."id" ORDER BY created_at DESC LIMIT 1)'), "final_payment_rate"],
         // Suma precisa de líneas (sin truncar a 2 dec). El frontend la usa para convertir a Bs.

@@ -91,7 +91,12 @@ module.exports = async function getOneSale(id, req) {
   // Totales financieros
   const creditApplied = parseFloat(item.credit_applied || 0);
   item.credit_applied = creditApplied;
-  item.amount_paid = parseFloat(await Payment.sum('amount', { where: { sale_id: id } }) || 0) + creditApplied;
+  // Neto del vuelto, con la misma regla de getSaleBalance
+  const changeGiven = parseFloat(await Payment.sum('change_given', {
+    where: { sale_id: id, change_journal_id: { [Op.not]: null } },
+  }) || 0);
+  item.amount_paid = parseFloat(await Payment.sum('amount', { where: { sale_id: id } }) || 0)
+    - changeGiven + creditApplied;
   item.total_returned = parseFloat(await Return.sum('total', { where: { sale_id: id } }) || 0);
   // El saldo perdonado cierra la factura pero no es un cobro: se resta aparte de amount_paid
   // para que la ficha pueda mostrarlo con su motivo en vez de disfrazarlo de pago.

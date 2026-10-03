@@ -8,13 +8,14 @@ import LoginScreen from "../components/LoginScreen";
 import NotificationToast from "../layout/NotificationToast";
 import HeaderMobile from "../layout/HeaderMobile";
 import TopBar from "../layout/TopBar";
+import SubscriptionBanner from "../layout/SubscriptionBanner";
 import AppLauncher from "../layout/AppLauncher";
 import CommandPalette from "../components/ui/CommandPalette";
 import BottomTabs from "../layout/BottomTabs";
 import MainContent from "../layout/MainContent";
 
 export default function PosApp() {
-    const { employee, authChecked, login, logout, can, notification, storeName, settings, currencies, pendingNav, setPendingNav, pendingAction, setPendingAction, triggerAction } = useApp();
+    const { employee, authChecked, login, logout, can, notification, storeName, settings, company, currencies, pendingNav, setPendingNav, pendingAction, setPendingAction, triggerAction } = useApp();
     const { setReceipt, clearCart } = useCart();
     const { dark, toggle } = useTheme();
 
@@ -80,6 +81,8 @@ export default function PosApp() {
                 safeTab={safeTab}
                 goTab={goTab}
             />
+
+            <SubscriptionBanner company={company} employee={employee} />
 
             <HeaderMobile
                 settings={settings}
