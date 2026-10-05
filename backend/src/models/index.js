@@ -41,7 +41,7 @@ const tenantModels = [
   'ProductStock', 'EmployeeWarehouse', 'UserSerie', 'ProductComboItem', 'CashSessionJournal',
   'Quotation', 'Promotion', 'Income', 'IncomeCategory',
   'StockSession', 'CatalogBanner', 'BenefitTag', 'CustomerCreditMovement', 'PaymentJournalWarehouse',
-  'ProductAttribute', 'ProductAttributeValue',
+  'ProductAttribute', 'ProductAttributeValue', 'Role',
 ];
 
 const applyTenantFilter = (modelName, options) => {

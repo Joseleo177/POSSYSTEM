@@ -85,8 +85,22 @@ const create = async (req, res) => {
         catalog_enabled: !!catalog_enabled
       }, { transaction });
 
-      const adminRole = await Role.findOne({ where: { name: 'admin' }, transaction });
-      const roleId = adminRole ? adminRole.id : 1;
+      // Los roles son de cada empresa: la nueva recibe su copia de las plantillas (los roles
+      // sin empresa). El bypass hace falta para leerlas —el filtro de tenant las ocultaría
+      // detrás de la empresa del superusuario— y el `company_id` va explícito por lo mismo.
+      const plantillas = await runWithoutTenant(() =>
+        Role.findAll({ where: { company_id: null }, order: [['id', 'ASC']], transaction })
+      );
+      const semillas = plantillas.length
+        ? plantillas.map(t => ({ name: t.name, label: t.label, permissions: t.permissions }))
+        : [{ name: 'admin', label: 'Administrador', permissions: { all: true } }];
+      const roles = await Role.bulkCreate(
+        semillas.map(r => ({ ...r, company_id: company.id })),
+        { transaction, returning: true }
+      );
+      const adminRole = roles.find(r => r.permissions?.all)
+        || await Role.create({ name: 'admin', label: 'Administrador', permissions: { all: true }, company_id: company.id }, { transaction });
+      const roleId = adminRole.id;
 
       // Seed default currencies for this specific company
       await Currency.bulkCreate([
@@ -204,6 +218,7 @@ const DELETE_ORDER = [
   'ExpenseCategory', 'IncomeCategory',
   'Currency', 'Setting',
   'Employee',
+  'Role',                                        // después de employees, que la referencian
 ];
 
 // DELETE /api/companies/:id
