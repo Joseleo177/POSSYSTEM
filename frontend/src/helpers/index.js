@@ -5,6 +5,7 @@ export * from "./prices";
 export * from "./stock";
 export * from "./image";
 export * from "./barcode";
+export * from "./qrcode";
 export * from "./printQuotation";
 export * from "./printNotaCredito";
 export * from "./printDocument";

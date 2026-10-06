@@ -4,6 +4,7 @@ import { Button } from "../ui/Button";
 import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
 import { Spinner } from "../ui/Spinner";
+import CatalogQrCard from "./CatalogQrCard";
 
 // Genera, muestra y desactiva el enlace público del catálogo. Vive en `settings`, clave
 // public_catalog_slug.
@@ -137,6 +138,8 @@ export default function PublicLinkModal({ open, onClose }) {
                                 </Button>
                             </div>
                         </div>
+
+                        <CatalogQrCard url={url} slug={token} />
 
                         {outdated && (
                             <div className="rounded-xl border border-warning/40 bg-warning/5 p-3 space-y-2">
