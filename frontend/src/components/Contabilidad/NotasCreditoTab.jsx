@@ -243,11 +243,22 @@ export default function NotasCreditoTab({ notify, fmtPrice }) {
     </div>
   );
 
+  // Imprimir y, si se puede, anular. Las mismas en la tabla y en la tarjeta del teléfono.
+  const acciones = (r) => (
+    <div className="flex items-center justify-end gap-0.5">
+      <RowIcon icon="print" title="Imprimir nota de crédito" onClick={() => handlePrint(r)} />
+      {r.status !== "anulado" && canAnnul && (
+        <RowIcon icon="ban" tone="danger" title="Anular esta nota de crédito" onClick={() => setToAnnul(r)} />
+      )}
+    </div>
+  );
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {subheader}
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-        <div className="overflow-auto flex-1">
+        {/* Tablet y escritorio: tabla. En el teléfono, tarjetas. */}
+        <div className="hidden md:block overflow-auto flex-1">
           <table className="table-ledger min-w-[760px]">
             <thead className="sticky top-0 z-10">
               <tr>
@@ -306,18 +317,51 @@ export default function NotasCreditoTab({ notify, fmtPrice }) {
                       <span className="block truncate text-[12px] font-medium text-content-subtle">{toNameCase(r.Employee?.full_name) || "—"}</span>
                     </td>
                     <td className="pr-4 whitespace-nowrap cursor-default" onClick={stopRow}>
-                      <div className="flex items-center justify-end gap-0.5">
-                        <RowIcon icon="print" title="Imprimir nota de crédito" onClick={() => handlePrint(r)} />
-                        {!anulada && canAnnul && (
-                          <RowIcon icon="ban" tone="danger" title="Anular esta nota de crédito" onClick={() => setToAnnul(r)} />
-                        )}
-                      </div>
+                      {acciones(r)}
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Teléfono: número y monto arriba; el cliente a todo el ancho; factura, fecha y
+            acciones abajo, siempre visibles. */}
+        <div className="md:hidden flex-1 overflow-y-auto px-4 py-3 space-y-2">
+          {loading ? (
+            <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
+          ) : items.length === 0 ? (
+            <div className="py-16 px-6 text-center">
+              <div className="text-[14px] font-semibold text-content dark:text-white">Sin notas de crédito</div>
+              <div className="text-[13px] text-content-subtle mt-1">Las devoluciones facturadas aparecerán aquí.</div>
+            </div>
+          ) : items.map(r => {
+            const anulada = r.status === "anulado";
+            const lineas = (r.ReturnItems || []).length;
+            return (
+              <div key={r.id} role="button" tabIndex={0} onClick={() => setSelectedNC(r)}
+                className="rounded-xl border border-border/70 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] pl-3.5 pr-2.5 py-3 active:scale-[0.99] transition-transform">
+                <div className="flex items-baseline justify-between gap-3 pr-1">
+                  {r.nc_number
+                    ? <span className={`text-[14px] font-semibold tabular-nums ${anulada ? "text-content-subtle line-through decoration-1" : "text-brand-700 dark:text-brand-300"}`}>{r.nc_number}</span>
+                    : <StatusMark status="sin_serie" map={{ sin_serie: { label: "Sin serie", tone: "warning" } }} />}
+                  <Money value={`-${fmt(r.total)}`} strike={anulada}
+                    className={`text-[15px] font-semibold ${anulada ? "text-content-subtle" : "text-red-600 dark:text-red-400"}`} />
+                </div>
+                <div className="mt-1 flex items-center justify-between gap-3 pr-1">
+                  <span className={`min-w-0 truncate text-[14px] font-semibold ${anulada ? "text-content-subtle" : "text-content dark:text-white"}`}>{toNameCase(clientName(r))}</span>
+                  {anulada && <span className="shrink-0"><StatusMark status="anulado" /></span>}
+                </div>
+                <div className="mt-1.5 flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate text-[12px] text-content-subtle tabular-nums">
+                    {[r.Sale?.invoice_number || (r.Sale ? `#${r.Sale.id}` : null), fmtDateShort(r.created_at), `${lineas} ${lineas === 1 ? "línea" : "líneas"}`].filter(Boolean).join(" · ")}
+                  </span>
+                  <div className="shrink-0" onClick={stopRow}>{acciones(r)}</div>
+                </div>
+              </div>
+            );
+          })}
         </div>
         <Pagination page={page} totalPages={pages} total={total} limit={LIMIT} onPageChange={load} />
       </div>

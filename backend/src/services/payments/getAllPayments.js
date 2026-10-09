@@ -1,4 +1,4 @@
-const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Warehouse, Sequelize, Op } = require("./shared");
+const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Warehouse, Sequelize, sequelize, Op } = require("./shared");
 
 module.exports = async function getAllPayments(query, tenant = {}) {
   const { date_from, date_to, limit = 100, offset = 0, search, warehouse_id } = query;
@@ -30,6 +30,12 @@ module.exports = async function getAllPayments(query, tenant = {}) {
   // Va en andClauses, así que el pie totaliza lo de ese empleado y no lo de toda la caja.
   const emp = parseInt(query.employee_id, 10);
   if (Number.isInteger(emp)) andClauses.push({ employee_id: emp });
+
+  // Verificado = casado con una línea del extracto del banco (Conciliación). "no" sirve para
+  // ver qué cobros siguen dependiendo de la palabra del cajero.
+  const conciliado = `EXISTS (SELECT 1 FROM bank_reconciliation_matches m WHERE m.source_type = 'payment' AND m.source_id = "Payment"."id")`;
+  if (query.verified === "yes") andClauses.push(Sequelize.literal(conciliado));
+  if (query.verified === "no")  andClauses.push(Sequelize.literal(`NOT ${conciliado}`));
 
   const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;
   const safeFrom = sd(date_from);
@@ -141,6 +147,13 @@ module.exports = async function getAllPayments(query, tenant = {}) {
 
   const porId = new Map(rows.map(p => [p.id, aItem(p)]));
 
+  // Cobros de la página ya casados con el extracto del banco.
+  const verificados = new Set(idsPagina.length ? (await sequelize.query(
+    `SELECT source_id FROM bank_reconciliation_matches WHERE source_type = 'payment' AND source_id IN (:ids)`,
+    { replacements: { ids: idsPagina }, type: Sequelize.QueryTypes.SELECT },
+  )).map(r => r.source_id) : []);
+  for (const [id, item] of porId) item.verified = verificados.has(id);
+
   const data = pagina.map(unidad => {
     const partes = unidad.ids.map(id => porId.get(id)).filter(Boolean);
     if (!partes.length) return null;
@@ -160,13 +173,14 @@ module.exports = async function getAllPayments(query, tenant = {}) {
       group_count: facturas.length,
       part_count: partes.length,
       is_batch: true,
+      verified: partes.every(p => p.verified),
       // Cuántas formas de pago tuvo el cobro completo: si son varias, esta fila es una parte
       // y borrarla deshace el cobro entero.
       batch_journal_count: unidad.batch_journal_count || 1,
       invoice_number: facturas.map(id => {
         const p = partes.find(x => x.sale_id === id);
         return p.invoice_number || `#${id}`;
-      }).join(" · "),
+      }).sort((a, b) => a.localeCompare(b, "es", { numeric: true })).join(" · "),
       items: partes.map(p => ({
         payment_id: p.id,
         sale_id: p.sale_id,

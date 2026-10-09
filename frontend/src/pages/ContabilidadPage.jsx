@@ -20,8 +20,9 @@ import CotizacionesTab from "../components/Contabilidad/CotizacionesTab";
 import NotasCreditoTab from "../components/Contabilidad/NotasCreditoTab";
 import CuentasPorPagarTab from "../components/Contabilidad/CuentasPorPagarTab";
 import CuentasPorCobrarTab from "../components/Contabilidad/CuentasPorCobrarTab";
+import ConciliacionTab from "../components/Contabilidad/conciliacion/ConciliacionTab";
 
-const SUB_PAGES = ["Estado de Cuenta", "Ingresos", "Egresos", "Facturas", "Notas de Crédito", "Cotizaciones", "Por Cobrar", "Por Pagar", "Pagos", "Series", "Diarios", "Tipos de pago", "Bancos"];
+const SUB_PAGES = ["Estado de Cuenta", "Ingresos", "Egresos", "Facturas", "Notas de Crédito", "Cotizaciones", "Por Cobrar", "Por Pagar", "Pagos", "Conciliación", "Series", "Diarios", "Tipos de pago", "Bancos"];
 
 export default function ContabilidadPage() {
  const {
@@ -78,6 +79,7 @@ export default function ContabilidadPage() {
  const canManageUsers = can("employees.view");
  const canPayables    = can("purchases.view");
  const canReceivables = can("sales.view") || can("accounting.view");
+ const canReconcile   = can("accounting.reconcile");
 
  useEffect(() => {
  if (!canConfig) return;
@@ -121,6 +123,8 @@ export default function ContabilidadPage() {
      ...(canPayables    ? ["Por Pagar"]  : []),
    ] }] : []),
    { label: "Pagos",       items: null },
+   // Casar el extracto del banco con los cobros: lo que verifica que el dinero llegó.
+   ...(canReconcile ? [{ label: "Conciliación", items: null }] : []),
    // Solo se listan las pantallas que el rol puede abrir de verdad: ofrecer "Series" a quien
    // no tiene el permiso lo llevaba a una pantalla que el servidor le niega.
    ...(canConfig ? [{ label: "Configuración", items: [
@@ -201,6 +205,8 @@ export default function ContabilidadPage() {
  journals={journals}
  />
  );
+ case "Conciliación":
+ return <ConciliacionTab notify={notify} />;
  case "Series":
  return (
  <SeriesTab

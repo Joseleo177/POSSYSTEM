@@ -1,4 +1,4 @@
-const { Payment, Sale, Return, Sequelize, sequelize, Op } = require("./shared");
+const { Payment, Sale, Return, Sequelize, sequelize, Op, getSaleBalance } = require("./shared");
 const { resolveSaleStatus } = require("../../utils/saleBalance");
 
 /**
@@ -31,7 +31,8 @@ module.exports = async function removeBatchPayment(batchId) {
       const sale = await Sale.findByPk(saleId, { transaction: t, lock: true });
       if (!sale) continue;
 
-      const cobrado = parseFloat(await Payment.sum("amount", { where: { sale_id: saleId }, transaction: t }) || 0);
+      // Misma cuenta que el cobro: descuenta el vuelto y suma el crédito; lo exonerado va aparte.
+      const cobrado = (await getSaleBalance(saleId, t)) - parseFloat(sale.forgiven_amount || 0);
       const devuelto = parseFloat(await Return.sum("total", {
         where: { sale_id: saleId, status: { [Op.ne]: "anulado" } },
         transaction: t,

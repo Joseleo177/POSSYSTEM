@@ -1,6 +1,7 @@
 const { Income, IncomeCategory, PaymentJournal, Employee, Currency, Warehouse } = require('../models');
-const { Op } = require('sequelize');
+const { Op, literal } = require('sequelize');
 const { toLocalDate, endOfLocalDay } = require('../utils/localDate');
+const { resolveMethod } = require("../utils/journalMethod");
 const { visibleWarehouseIds, assertWarehouseAccess } = require('../middleware/auth');
 const { assertJournalsInWarehouse } = require('../utils/journalWarehouse');
 
@@ -31,6 +32,8 @@ exports.getAll = async (req, res, next) => {
     }
 
     const { count, rows } = await Income.findAndCountAll({
+      // Casado con una línea del extracto del banco (Conciliación).
+      attributes: { include: [[literal(`EXISTS (SELECT 1 FROM bank_reconciliation_matches m WHERE m.source_type = 'income' AND m.source_id = "Income"."id")`), 'reconciled']] },
       where,
       include: [
         { model: IncomeCategory, as: 'category', attributes: ['id', 'name'] },
@@ -51,6 +54,7 @@ exports.getAll = async (req, res, next) => {
       amount:          parseFloat(e.amount),
       rate:            parseFloat(e.rate || 1),
       status:          e.status,
+      reconciled:      !!e.get('reconciled'),
       notes:           e.notes,
       date:            e.date ?? null,
       created_at:      e.created_at,
@@ -95,7 +99,7 @@ exports.upsertCategory = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
-    const { description, amount, category_id, payment_journal_id, reference, notes, currency_id, rate, date, warehouse_id } = req.body;
+    const { description, amount, category_id, payment_journal_id, payment_method, reference, notes, currency_id, rate, date, warehouse_id } = req.body;
     if (!description || !amount || !category_id)
       return res.status(400).json({ ok: false, message: 'Descripción, monto y categoría son obligatorios' });
     if (!warehouse_id)
@@ -115,6 +119,8 @@ exports.create = async (req, res, next) => {
       amount,
       category_id,
       payment_journal_id: payment_journal_id || null,
+      // Por qué método salió/entró: la cuenta acepta varios (ver utils/journalMethod).
+      payment_method: await resolveMethod(payment_journal_id, payment_method, "in"),
       reference: reference || null,
       notes: notes || null,
       currency_id: currency_id || null,

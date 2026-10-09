@@ -29,6 +29,8 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // desplegable de método.
     const [showPicker, setShowPicker] = useState(false);
     const [lockedJournalId, setLockedJournalId] = useState(null);
+    // Método elegido en la botonera junto con la cuenta (pago móvil, punto…).
+    const [lockedMethod, setLockedMethod] = useState(null);
     const [creditLoading, setCreditLoading] = useState(false);
     const [printing, setPrinting] = useState(false);
 
@@ -497,6 +499,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     onClose={() => setShowPicker(false)}
                     onPick={(journal) => {
                         setLockedJournalId(journal?.id ?? null);
+                        setLockedMethod(journal?.payment_method ?? null);
                         setShowPicker(false);
                         setShowPayModal(true);
                     }}
@@ -507,6 +510,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                 <PaymentFormModal
                     sale={{ ...receipt, balance: currentBalance, amount_paid: paidBase }}
                     lockedJournalId={lockedJournalId}
+                    lockedMethod={lockedMethod}
                     onClose={() => { setShowPayModal(false); setLockedJournalId(null); }}
                     onSuccess={(res) => { onPay(res); setShowPayModal(false); setLockedJournalId(null); }}
                 />

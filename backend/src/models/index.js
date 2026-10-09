@@ -42,6 +42,7 @@ const tenantModels = [
   'Quotation', 'Promotion', 'Income', 'IncomeCategory',
   'StockSession', 'CatalogBanner', 'BenefitTag', 'CustomerCreditMovement', 'PaymentJournalWarehouse',
   'ProductAttribute', 'ProductAttributeValue', 'Role',
+  'BankStatement', 'BankStatementLine', 'BankReconciliationMatch', 'PaymentJournalMethod',
 ];
 
 const applyTenantFilter = (modelName, options) => {
@@ -291,6 +292,14 @@ if (PaymentJournal && Warehouse && PaymentJournalWarehouse) {
   PaymentJournalWarehouse.belongsTo(PaymentJournal, { foreignKey: 'journal_id' });
 }
 
+// ── Diario = cuenta, con sus métodos ────────────────────────────────────
+const { PaymentJournalMethod } = db;
+if (PaymentJournal && PaymentJournalMethod) {
+  PaymentJournal.hasMany(PaymentJournalMethod, { as: 'methods', foreignKey: 'journal_id' });
+  PaymentJournalMethod.belongsTo(PaymentJournal, { foreignKey: 'journal_id' });
+  // El método de cada movimiento lo completan los hooks de utils/journalMethod.js (al final).
+}
+
 // ── Relación padre-hijo entre almacenes ─────────────────────────────────
 // Un depósito (sells=false) se vincula a su almacén principal / sucursal.
 if (Warehouse) {
@@ -362,5 +371,8 @@ if (Product && ProductAttribute && ProductAttributeValue && ProductVariantValue)
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
+
+// Todo movimiento de dinero guarda su método (ver utils/journalMethod.js).
+require('../utils/journalMethod').installMethodHooks(db);
 
 module.exports = db;

@@ -1,4 +1,5 @@
 const { Sequelize, sequelize, Customer, Sale, SaleItem, Purchase, Payment, Currency, Expense, ExpenseCategory, PaymentJournal, CustomerCreditMovement } = require("../../models");
+const { resolveMethod } = require("../../utils/journalMethod");
 const { assertWarehouseAccess, employeeWarehouseIds, visibleWarehouseIds } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
 const { SETTLED_SQL, SETTLED_STATUSES, RECEIVABLE_STATUSES } = require("../../utils/saleBalance");
@@ -416,7 +417,7 @@ async function adjustCredit(id, amount, req) {
   }
 }
 
-async function creditRefund(id, { amount, journal_id, reference_date, notes, employee_id, warehouse_id }, req) {
+async function creditRefund(id, { amount, journal_id, payment_method, reference_date, notes, employee_id, warehouse_id }, req) {
   if (!amount || isNaN(amount) || parseFloat(amount) <= 0)
     { const e = new Error("El monto debe ser mayor a cero"); e.status = 400; throw e; }
   if (!journal_id)
@@ -473,6 +474,8 @@ async function creditRefund(id, { amount, journal_id, reference_date, notes, emp
       rate,
       category_id:        cat.id,
       payment_journal_id: journal_id,
+      // Por qué método de la cuenta sale (uno que pague).
+      payment_method:     await resolveMethod(journal_id, payment_method, "out", { transaction: t }),
       currency_id:        currencyId,
       employee_id:        employee_id || null,
       warehouse_id:       refundWarehouseId,

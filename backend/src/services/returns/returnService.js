@@ -8,6 +8,7 @@ const { excludeAnnulledReturns } = require("./shared");
 const { addCreditMovement } = require("../customers/creditLedger");
 const { toLocalDate } = require("../../utils/localDate");
 const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
+const { resolveMethod } = require("../../utils/journalMethod");
 
 async function createReturn({ saleId, items, reason, employee_id, refund }, req) {
   if (!items?.length) { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
@@ -221,7 +222,9 @@ async function createReturn({ saleId, items, reason, employee_id, refund }, req)
           transaction,
         });
         if (!journal) { const e = new Error("Método de reembolso no encontrado"); e.status = 400; throw e; }
-        if (journal.type !== "efectivo" && !String(part.reference || "").trim()) {
+        // El método del tramo (la cuenta puede tener varios); sin él, el principal de la cuenta.
+        const metodo = await resolveMethod(part.journal_id, part.payment_method, "out", { transaction });
+        if (metodo !== "efectivo" && !String(part.reference || "").trim()) {
           const e = new Error("El número de referencia es obligatorio para este método de reembolso"); e.status = 400; throw e;
         }
 
@@ -237,6 +240,7 @@ async function createReturn({ saleId, items, reason, employee_id, refund }, req)
           rate,
           category_id:        cat.id,
           payment_journal_id: parseInt(part.journal_id),
+          payment_method:     metodo,
           currency_id:        journal.currency_id || null,
           reference:          String(part.reference || "").trim() || null,
           notes:              String(refund.notes || "").trim() || null,

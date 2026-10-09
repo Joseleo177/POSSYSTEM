@@ -4,10 +4,12 @@ import StatusMark from "../ui/StatusMark";
 import Money from "../ui/Money";
 import { JournalDot } from "../ui/Ledger";
 
-// Un movimiento vigente es lo normal: gris con su visto. Solo el anulado se distingue.
+// Un movimiento vigente es lo normal: gris con su visto. Conciliado (casado con el extracto del
+// banco) lleva el visto en verde; el anulado se distingue por su marca.
 const MOVEMENT_STATUS = {
-    activo:  { label: "Activo",  tone: "success", quiet: "check" },
-    anulado: { label: "Anulado", tone: "neutral", quiet: "void" },
+    activo:     { label: "Registrado", tone: "neutral", quiet: "check" },
+    conciliado: { label: "Conciliado con el banco", tone: "success", quiet: "check" },
+    anulado:    { label: "Anulado", tone: "neutral", quiet: "void" },
 };
 
 /**
@@ -44,7 +46,7 @@ export default function MovementDetailModal({ movement, type, baseSym = "Ref.", 
         movement.category_name && ["Categoría", movement.category_name],
         ["Fecha", fmtDateShort(movement.date || movement.created_at)],
         movement.employee_name && ["Registró", toNameCase(movement.employee_name)],
-        movement.status && ["Estado", <StatusMark key="st" status={movement.status} map={MOVEMENT_STATUS} />],
+        movement.status && ["Estado", <StatusMark key="st" status={movement.status === "activo" && movement.reconciled ? "conciliado" : movement.status} map={MOVEMENT_STATUS} />],
         movement.notes && ["Notas", movement.notes],
     ].filter(Boolean);
 

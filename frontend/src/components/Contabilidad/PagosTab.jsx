@@ -10,8 +10,13 @@ import CustomSelect from "../ui/CustomSelect";
 import { useApp } from "../../context/AppContext";
 import StatusMark, { statusTone } from "../ui/StatusMark";
 import Money from "../ui/Money";
+import Segmented from "../ui/Segmented";
 import { ledgerRow, stopRow, LedgerSkeleton, LedgerEmpty, JournalDot, RowIcon, RowCta } from "../ui/Ledger";
 import { journalsForWarehouse, fmtDate, toNameCase } from "../../helpers";
+
+// Cobro casado con una línea del extracto del banco (Conciliación). Es la confirmación de que
+// el dinero llegó: lo normal, así que va en gris con su visto.
+const VERIFIED = { ok: { label: "Conciliado", tone: "success", quiet: "check" } };
 
 export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayment, setReceiptSale, journals = [] }) {
     const {
@@ -23,6 +28,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
         journalFilter, setJournalFilter,
         employeeFilter, setEmployeeFilter, employees,
         warehouseFilter, setWarehouseFilter, warehouses,
+        verifiedFilter, setVerifiedFilter,
         showFilterDrop, setShowFilterDrop,
         payDetail, setPayDetail,
         payModal, setPayModal,
@@ -130,6 +136,20 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                     />
                                 </div>
                             )}
+                            {/* Verificado = casado con el extracto del banco en Conciliación. */}
+                            <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                <div className="text-[12px] font-medium text-content-subtle mb-2">Banco</div>
+                                <Segmented
+                                    value={verifiedFilter}
+                                    onChange={setVerifiedFilter}
+                                    className="w-full [&>button]:flex-1 [&>button]:justify-center [&>button]:px-2"
+                                    options={[
+                                        { key: "", label: "Todos" },
+                                        { key: "yes", label: "Conciliados" },
+                                        { key: "no", label: "Sin conciliar" },
+                                    ]}
+                                />
+                            </div>
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[12px] font-medium text-content-subtle mb-2">Rango de fechas</div>
                                 <DateRangePicker compact from={payDateFrom} to={payDateTo} setFrom={setPayDateFrom} setTo={setPayDateTo} />
@@ -149,7 +169,8 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
         <div className="h-full flex flex-col overflow-hidden">
             {subheader}
             <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-                <div className="overflow-auto flex-1">
+                {/* Tablet y escritorio: tabla. En el teléfono no cabía: el cliente quedaba en "Jose …". */}
+                <div className="hidden md:block overflow-auto flex-1">
                     <table className="table-ledger min-w-[720px]">
                         <thead className="sticky top-0 z-10">
                             <tr>
@@ -206,7 +227,12 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                                     ? <StatusMark status="borrador" map={{ borrador: { label: "Sin factura", tone: "neutral" } }} />
                                                     : <StatusMark status={item.status === "parcial" ? "parcial" : "pendiente"} />
                                             ) : item.journal_name ? (
-                                                <JournalDot name={item.journal_name} color={item.journal_color} />
+                                                <>
+                                                    <JournalDot name={item.journal_name} color={item.journal_color} />
+                                                    {item.verified && (
+                                                        <div className="mt-0.5"><StatusMark status="ok" map={VERIFIED} /></div>
+                                                    )}
+                                                </>
                                             ) : (
                                                 <span className="text-[12px] font-medium text-content-subtle">Devolución</span>
                                             )}
@@ -275,6 +301,84 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                     </table>
                 </div>
 
+                {/* Teléfono: tarjetas. Referencia y monto arriba; el cliente a todo el ancho; el
+                    diario con su marca de conciliado y la fecha debajo. El borrado (solo admin)
+                    queda a la vista: en táctil no hay hover. */}
+                <div className="md:hidden flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                    {loading ? (
+                        <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
+                    ) : data.length === 0 ? (
+                        <div className="py-16 px-6 text-center">
+                            <div className="text-[14px] font-semibold text-content dark:text-white">{viewType === "pendientes" ? "Nada pendiente por cobrar" : "Sin cobros"}</div>
+                            <div className="text-[13px] text-content-subtle mt-1">No hay movimientos en esta vista.</div>
+                        </div>
+                    ) : data.map(item => {
+                        const isInvoice = viewType === "pendientes";
+                        const tone = isInvoice ? statusTone(item.status) : undefined;
+                        const detalle = [
+                            item.group_count > 1 ? `Cobro conjunto · ${item.group_count} facturas` : null,
+                            !isInvoice && item.reference_number ? `Ref. ${item.reference_number}` : null,
+                            warehouses.length > 1 && item.warehouse_name ? toNameCase(item.warehouse_name) : null,
+                        ].filter(Boolean).join(" · ");
+                        return (
+                            <div key={`m-${viewType}-${item.id}`} role="button" tabIndex={0}
+                                onClick={isInvoice ? undefined : () => setPayDetail(item)}
+                                className="relative rounded-xl border border-border/70 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] pl-3.5 pr-2.5 py-3 overflow-hidden active:scale-[0.99] transition-transform">
+                                {tone && <span aria-hidden="true" className="absolute left-0 inset-y-0 w-[3px]" style={{ backgroundColor: tone }} />}
+                                <div className="flex items-start justify-between gap-3 pr-1">
+                                    <span className="min-w-0 text-[14px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums break-words">
+                                        {item.invoice_number || (isInvoice ? `Factura #${item.id}` : `Cobro #${item.id}`)}
+                                    </span>
+                                    <Money value={isInvoice ? fmtPrice(item.total) : fmtPayment(item)} className="shrink-0 text-[15px] font-semibold text-content dark:text-white" />
+                                </div>
+                                <div className="mt-1 pr-1 flex items-baseline justify-between gap-3">
+                                    <span className="min-w-0 text-[14px] font-semibold text-content dark:text-white truncate">{toNameCase(item.customer_name) || "Consumidor final"}</span>
+                                    <span className="shrink-0 text-[12px] text-content-subtle tabular-nums whitespace-nowrap">{fmtDate(item.created_at)}</span>
+                                </div>
+                                {detalle && <div className="pr-1 text-[12px] text-content-subtle truncate">{detalle}</div>}
+                                {item.batch_journal_count > 1 && (
+                                    <div className="pr-1 text-[12px] font-medium text-amber-700 dark:text-amber-400">Pago combinado · {item.batch_journal_count} formas</div>
+                                )}
+                                <div className="mt-1.5 flex items-center justify-between gap-3">
+                                    <div className="min-w-0 flex items-center gap-2.5">
+                                        {isInvoice
+                                            ? <StatusMark status={item.status === "parcial" ? "parcial" : "pendiente"} />
+                                            : item.journal_name
+                                                ? <JournalDot name={item.journal_name} color={item.journal_color} />
+                                                : <span className="text-[12px] font-medium text-content-subtle">Devolución</span>}
+                                        {!isInvoice && item.verified && <StatusMark status="ok" map={VERIFIED} />}
+                                    </div>
+                                    <div className="shrink-0 flex items-center gap-1" onClick={stopRow}>
+                                        {isInvoice ? (
+                                            <RowCta onClick={() => setPayModal(item)} className="ml-1.5 !mr-0">Cobrar</RowCta>
+                                        ) : can("admin") && (
+                                            <RowIcon icon="trash" tone="danger" title={item.group_count > 1 ? "Eliminar el cobro completo" : "Eliminar"} onClick={() => setDeleteDialog(item)} />
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Total del filtro en el teléfono: el pie de la tabla no se ve sin ella. */}
+                {!loading && data.length > 0 && viewType !== "pendientes" && (
+                    <div className="md:hidden shrink-0 px-4 py-2.5 border-t border-border/60 dark:border-white/[0.06] bg-white dark:bg-surface-dark-2 flex items-start justify-between gap-3">
+                        <div>
+                            <div className="text-[13px] font-semibold text-content dark:text-white">Total del filtro</div>
+                            <div className="text-[12px] text-content-subtle tabular-nums">{total.toLocaleString("es-VE")} {total === 1 ? "cobro" : "cobros"}</div>
+                        </div>
+                        <div className="text-right">
+                            <Money value={fmtPrice(sumBase)} className="text-[15px] font-semibold text-content dark:text-white" />
+                            {currencyCount === 1 && filterCurrency && !filterCurrency.is_base && (
+                                <div className="text-[12px] font-medium tabular-nums text-content-subtle">
+                                    {filterCurrency.symbol}{sumLocal.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 <Pagination page={page} totalPages={totalPages} total={total} limit={LIMIT} onPageChange={setPage} />
             </div>
 
@@ -341,6 +445,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                     p.customer_name && ["Cliente", toNameCase(p.customer_name)],
                                     p.created_at && ["Fecha", fmtDate(p.created_at)],
                                     p.reference_number && ["N° de referencia", p.reference_number],
+                                    p.journal_name && ["Banco", p.verified ? "Conciliado con el extracto" : "Sin conciliar"],
                                     p.notes && ["Notas", p.notes],
                                 ].filter(Boolean).map(([label, value]) => (
                                     <div key={label} className="flex items-baseline justify-between gap-4 py-2.5">

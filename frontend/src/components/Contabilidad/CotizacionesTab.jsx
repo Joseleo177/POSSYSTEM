@@ -262,11 +262,25 @@ export default function CotizacionesTab({ notify, can, fmtPrice }) {
         </div>
     );
 
+    // Imprimir, anular o eliminar. Las mismas en la tabla y en la tarjeta del teléfono.
+    const acciones = (quot) => (
+        <div className="flex items-center justify-end gap-0.5">
+            <RowIcon icon="print" title="Imprimir cotización" onClick={() => handlePrint(quot)} />
+            {quot.status === "pendiente" && can("admin") && (
+                <RowIcon icon="ban" tone="danger" title="Anular cotización" onClick={() => handleCancel(quot)} />
+            )}
+            {quot.status === "anulada" && can("admin") && (
+                <RowIcon icon="trash" tone="danger" title="Eliminar cotización" onClick={() => handleDelete(quot)} />
+            )}
+        </div>
+    );
+
     return (
         <div className="h-full flex flex-col overflow-hidden">
             {subheader}
             <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-                <div className="overflow-auto flex-1">
+                {/* Tablet y escritorio: tabla. En el teléfono, tarjetas. */}
+                <div className="hidden md:block overflow-auto flex-1">
                     <table className="table-ledger min-w-[720px]">
                         <thead className="sticky top-0 z-10">
                             <tr>
@@ -311,21 +325,50 @@ export default function CotizacionesTab({ notify, can, fmtPrice }) {
                                             <Money value={fmtPrice(quot.total)} strike={anulada} className={`text-[14px] font-semibold ${anulada ? "text-content-subtle" : "text-content dark:text-white"}`} />
                                         </td>
                                         <td className="pr-4 whitespace-nowrap cursor-default" onClick={stopRow}>
-                                            <div className="flex items-center justify-end gap-0.5">
-                                                <RowIcon icon="print" title="Imprimir cotización" onClick={() => handlePrint(quot)} />
-                                                {quot.status === "pendiente" && can("admin") && (
-                                                    <RowIcon icon="ban" tone="danger" title="Anular cotización" onClick={() => handleCancel(quot)} />
-                                                )}
-                                                {anulada && can("admin") && (
-                                                    <RowIcon icon="trash" tone="danger" title="Eliminar cotización" onClick={() => handleDelete(quot)} />
-                                                )}
-                                            </div>
+                                            {acciones(quot)}
                                         </td>
                                     </tr>
                                 );
                             })}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Teléfono: número y total arriba; el cliente a todo el ancho con su estado;
+                    fecha y líneas abajo, con las acciones siempre visibles. */}
+                <div className="md:hidden flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                    {q.loading ? (
+                        <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
+                    ) : q.quotations.length === 0 ? (
+                        <div className="py-16 px-6 text-center">
+                            <div className="text-[14px] font-semibold text-content dark:text-white">Sin cotizaciones</div>
+                            <div className="text-[13px] text-content-subtle mt-1">Las cotizaciones hechas desde el punto de venta aparecerán aquí.</div>
+                        </div>
+                    ) : q.quotations.map(quot => {
+                        const anulada = quot.status === "anulada";
+                        const lineas = (quot.items || []).length;
+                        return (
+                            <div key={quot.id} role="button" tabIndex={0} onClick={() => q.setSelectedQuot(quot)}
+                                className="rounded-xl border border-border/70 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] pl-3.5 pr-2.5 py-3 active:scale-[0.99] transition-transform">
+                                <div className="flex items-baseline justify-between gap-3 pr-1">
+                                    <span className={`text-[14px] font-semibold tabular-nums ${anulada ? "text-content-subtle line-through decoration-1" : "text-brand-700 dark:text-brand-300"}`}>#{quot.id}</span>
+                                    <Money value={fmtPrice(quot.total)} strike={anulada} className={`text-[15px] font-semibold ${anulada ? "text-content-subtle" : "text-content dark:text-white"}`} />
+                                </div>
+                                <div className="mt-1 flex items-center justify-between gap-3 pr-1">
+                                    <span className={`min-w-0 truncate text-[14px] font-semibold ${anulada ? "text-content-subtle" : "text-content dark:text-white"}`}>
+                                        {toNameCase(quot.customer_name) || "Consumidor final"}
+                                    </span>
+                                    <span className="shrink-0"><StatusMark status={quot.status} map={QUOTE_STATUS} /></span>
+                                </div>
+                                <div className="mt-1.5 flex items-center justify-between gap-3">
+                                    <span className="min-w-0 truncate text-[12px] text-content-subtle tabular-nums">
+                                        {fmtDateShort(quot.created_at)} · {lineas} {lineas === 1 ? "línea" : "líneas"}
+                                    </span>
+                                    <div className="shrink-0" onClick={stopRow}>{acciones(quot)}</div>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
 
                 <Pagination page={q.page} totalPages={q.totalPages} total={q.total} limit={q.LIMIT} onPageChange={q.setPage} />

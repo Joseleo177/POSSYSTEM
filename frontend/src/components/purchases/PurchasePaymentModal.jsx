@@ -17,6 +17,7 @@ const getEmpty = () => ({
   reference_number: "",
   notes: "",
   payment_journal_id: "",
+  payment_method: "",
   pay_currency_id: "",
 });
 
@@ -76,6 +77,7 @@ export default function PurchasePaymentModal({ purchase: single, purchases, onCl
         currency_id:        payCur?.id || null,
         exchange_rate:      payRate,
         payment_journal_id: parseInt(form.payment_journal_id),
+        payment_method:     form.payment_method || null,
         reference_date:     form.reference_date,
         reference_number:   form.reference_number?.trim() || null,
         notes:              form.notes?.trim() || null,
@@ -229,6 +231,7 @@ export default function PurchasePaymentModal({ purchase: single, purchases, onCl
           <JournalPickerButton
             value={form.payment_journal_id}
             journals={outflowJournals}
+            outflowOnly
             placeholder="Elegir caja o banco…"
             boxClassName="rounded-lg"
             methodPrompt={{ tag: "Pago a proveedor", title: "¿De qué caja sale el pago?" }}
@@ -240,6 +243,7 @@ export default function PurchasePaymentModal({ purchase: single, purchases, onCl
               setForm(p => ({
                 ...p,
                 payment_journal_id: j.id,
+                payment_method:     j.payment_method || "",
                 pay_currency_id:    newCurId || p.pay_currency_id,
                 // Otra moneda, otra tasa: la escrita para la anterior no aplica.
                 exchange_rate:      "",

@@ -87,6 +87,66 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
         setLoadingReturn(null);
     };
 
+    // Acciones de una factura. Las mismas en la tabla y en las tarjetas del teléfono: Cobrar es la
+    // única con peso; el resto, iconos en gris siempre visibles (en una tablet no hay hover).
+    const saleActions = (sale) => {
+        const anulada = sale.status === "anulado";
+        return (
+            <div className="flex items-center justify-end gap-0.5">
+                {(sale.status === "borrador" || sale.status === "pendiente" || sale.status === "parcial") && (
+                    <button
+                        onClick={() => setPayModal(sale)}
+                        className="h-8 px-3 mr-1.5 rounded-lg text-[12px] font-semibold btn-accent active:scale-95 transition-all"
+                    >
+                        Cobrar
+                    </button>
+                )}
+                {sale.status === "borrador" && (
+                    <button onClick={() => setEditModal(sale)} className="row-icon" title="Editar borrador" aria-label="Editar borrador">
+                        <Icon d={ICON_EDIT} />
+                    </button>
+                )}
+                <button onClick={() => setReceiptSale(sale)} className="row-icon" title="Ver recibo" aria-label="Ver recibo">
+                    <Icon d={ICON_RECEIPT} />
+                </button>
+                {(sale.status === "pagado" || sale.status === "parcial") && (
+                    <button onClick={() => openReturnModal(sale)} disabled={loadingReturn === sale.id} className="row-icon hover:!text-amber-600 dark:hover:!text-amber-400" title="Devolver" aria-label="Devolver">
+                        {loadingReturn === sale.id
+                            ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                            : <Icon d={ICON_RETURN} />
+                        }
+                    </button>
+                )}
+                {sale.status === "exonerado" && can("sales.forgive") && (
+                    <button onClick={() => unforgive(sale)} className="row-icon hover:!text-violet-600 dark:hover:!text-violet-400" title="Deshacer exoneración: la factura vuelve a deberse" aria-label="Deshacer exoneración">
+                        <Icon d={ICON_RETURN} />
+                    </button>
+                )}
+                {can("admin") && !anulada && (
+                    <button onClick={() => setCancelConfirm(sale)} className="row-icon hover:!text-red-600 hover:!bg-red-500/10 dark:hover:!text-red-400" title="Anular" aria-label="Anular">
+                        <Icon d={ICON_TRASH} />
+                    </button>
+                )}
+            </div>
+        );
+    };
+
+    // Lo que acompaña al total cuando la factura no está saldada del todo.
+    const saleBalanceNotes = (sale) => (
+        <>
+            {sale.status === "parcial" && (
+                <div className="text-[11px] text-red-600 dark:text-red-400">
+                    Saldo <Money value={fmtPrice(sale.balance)} className="text-[11px]" />
+                </div>
+            )}
+            {sale.forgiven_amount > 0.001 && (
+                <div className="text-[11px] text-violet-600 dark:text-violet-400">
+                    Exonerado <Money value={fmtPrice(sale.forgiven_amount)} className="text-[11px]" />
+                </div>
+            )}
+        </>
+    );
+
     const subheader = (
         <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[200px]">
@@ -199,7 +259,8 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                 {/* Tabla libro: la fila entera abre el detalle (antes, un botón "Detalles"
                     repetido en cada fila). Las acciones siguen visibles —hay tablets— pero en
                     gris: el único botón con peso es "Cobrar", y solo sale donde hay deuda. */}
-                <div className="overflow-auto flex-1">
+                {/* Tablet y escritorio: tabla. En el teléfono no cabía: el cliente quedaba en "Jose …". */}
+                <div className="hidden md:block overflow-auto flex-1">
                     <table className="table-ledger min-w-[760px]">
                         <colgroup>
                             <col className="w-[76px]" />
@@ -300,55 +361,11 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                                 strike={anulada}
                                                 className={`text-[14px] font-semibold ${anulada ? "text-content-subtle" : "text-content dark:text-white"}`}
                                             />
-                                            {sale.status === "parcial" && (
-                                                <div className="text-[11px] text-red-600 dark:text-red-400">
-                                                    Saldo <Money value={fmtPrice(sale.balance)} className="text-[11px]" />
-                                                </div>
-                                            )}
-                                            {sale.forgiven_amount > 0.001 && (
-                                                <div className="text-[11px] text-violet-600 dark:text-violet-400">
-                                                    Exonerado <Money value={fmtPrice(sale.forgiven_amount)} className="text-[11px]" />
-                                                </div>
-                                            )}
+                                            {saleBalanceNotes(sale)}
                                         </td>
                                         {/* El clic en una acción no debe abrir además el detalle. */}
                                         <td className="pr-4 whitespace-nowrap cursor-default" onClick={e => e.stopPropagation()}>
-                                            <div className="flex items-center justify-end gap-0.5">
-                                                {(sale.status === "borrador" || sale.status === "pendiente" || sale.status === "parcial") && (
-                                                    <button
-                                                        onClick={() => setPayModal(sale)}
-                                                        className="h-8 px-3 mr-1.5 rounded-lg text-[12px] font-semibold btn-accent active:scale-95 transition-all"
-                                                    >
-                                                        Cobrar
-                                                    </button>
-                                                )}
-                                                {sale.status === "borrador" && (
-                                                    <button onClick={() => setEditModal(sale)} className="row-icon" title="Editar borrador" aria-label="Editar borrador">
-                                                        <Icon d={ICON_EDIT} />
-                                                    </button>
-                                                )}
-                                                <button onClick={() => setReceiptSale(sale)} className="row-icon" title="Ver recibo" aria-label="Ver recibo">
-                                                    <Icon d={ICON_RECEIPT} />
-                                                </button>
-                                                {(sale.status === "pagado" || sale.status === "parcial") && (
-                                                    <button onClick={() => openReturnModal(sale)} disabled={loadingReturn === sale.id} className="row-icon hover:!text-amber-600 dark:hover:!text-amber-400" title="Devolver" aria-label="Devolver">
-                                                        {loadingReturn === sale.id
-                                                            ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-                                                            : <Icon d={ICON_RETURN} />
-                                                        }
-                                                    </button>
-                                                )}
-                                                {sale.status === "exonerado" && can("sales.forgive") && (
-                                                    <button onClick={() => unforgive(sale)} className="row-icon hover:!text-violet-600 dark:hover:!text-violet-400" title="Deshacer exoneración: la factura vuelve a deberse" aria-label="Deshacer exoneración">
-                                                        <Icon d={ICON_RETURN} />
-                                                    </button>
-                                                )}
-                                                {can("admin") && !anulada && (
-                                                    <button onClick={() => setCancelConfirm(sale)} className="row-icon hover:!text-red-600 hover:!bg-red-500/10 dark:hover:!text-red-400" title="Anular" aria-label="Anular">
-                                                        <Icon d={ICON_TRASH} />
-                                                    </button>
-                                                )}
-                                            </div>
+                                            {saleActions(sale)}
                                         </td>
                                     </tr>
                                 );
@@ -392,6 +409,88 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                         )}
                     </table>
                 </div>
+
+                {/* Teléfono: tarjetas agrupadas por día. Factura y total arriba; el cliente a todo el
+                    ancho con su estado; sucursal y diario debajo; las acciones, siempre visibles. */}
+                <div className="md:hidden flex-1 overflow-y-auto">
+                    {loading ? (
+                        <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
+                    ) : sales.length === 0 ? (
+                        <div className="py-16 px-6 text-center">
+                            <div className="text-[14px] font-semibold text-content dark:text-white">Sin facturas</div>
+                            <div className="text-[13px] text-content-subtle mt-1">
+                                {hasFilters ? "Ninguna coincide con los filtros aplicados." : "Aquí aparecerán las ventas facturadas."}
+                            </div>
+                            {hasFilters && (
+                                <button onClick={clearFilters} className="mt-4 h-10 px-4 rounded-lg text-[13px] font-semibold text-content dark:text-white border border-border dark:border-white/10">
+                                    Quitar filtros
+                                </button>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="px-4 pb-3">
+                            {groupByDay(sales).map(row => row.day ? (
+                                <div key={`d-${row.day}`} className="pt-4 pb-2 flex items-baseline gap-2.5">
+                                    <span className="text-[14px] font-bold tracking-[-0.01em] text-content dark:text-white">{fmtDayLabel(row.at)}</span>
+                                    <span className="text-[12px] font-medium text-content-subtle tabular-nums">{fmtDateShort(row.at)}</span>
+                                </div>
+                            ) : (() => {
+                                const sale = row.sale;
+                                const anulada = sale.status === "anulado";
+                                const tone = statusTone(sale.status);
+                                const extra = [
+                                    fmtTime(sale.created_at),
+                                    warehouses.length > 1 && sale.warehouse_name ? toNameCase(sale.warehouse_name) : null,
+                                    sale.journal_name ? toNameCase(sale.journal_name) : null,
+                                ].filter(Boolean).join(" · ");
+                                return (
+                                    <div key={sale.id} role="button" tabIndex={0} onClick={() => setSaleDetail(sale)}
+                                        className="relative mb-2 rounded-xl border border-border/70 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] pl-3.5 pr-2.5 py-3 overflow-hidden active:scale-[0.99] transition-transform">
+                                        {tone && <span aria-hidden="true" className="absolute left-0 inset-y-0 w-[3px]" style={{ backgroundColor: tone }} />}
+                                        <div className="flex items-baseline justify-between gap-3 pr-1">
+                                            <span className={`text-[14px] font-semibold tabular-nums ${anulada ? "text-content-subtle line-through decoration-1" : "text-brand-700 dark:text-brand-300"}`}>
+                                                {sale.invoice_number || `#${sale.id}`}
+                                            </span>
+                                            <Money value={fmtPrice(sale.total)} strike={anulada}
+                                                className={`text-[15px] font-semibold ${anulada ? "text-content-subtle" : "text-content dark:text-white"}`} />
+                                        </div>
+                                        <div className="mt-1 flex items-center justify-between gap-3 pr-1">
+                                            <span className={`min-w-0 truncate text-[14px] font-semibold ${anulada ? "text-content-subtle" : "text-content dark:text-white"}`}>
+                                                {toNameCase(sale.customer_name) || "Consumidor final"}
+                                            </span>
+                                            <span className="shrink-0"><StatusMark status={sale.status} /></span>
+                                        </div>
+                                        <div className="mt-0.5 flex items-start justify-between gap-3 pr-1">
+                                            <span className="min-w-0 truncate text-[12px] text-content-subtle tabular-nums">{extra}</span>
+                                            <div className="shrink-0 text-right">{saleBalanceNotes(sale)}</div>
+                                        </div>
+                                        <div className="mt-2 pt-2 border-t border-border/60 dark:border-white/[0.06] cursor-default" onClick={e => e.stopPropagation()}>
+                                            {saleActions(sale)}
+                                        </div>
+                                    </div>
+                                );
+                            })())}
+                        </div>
+                    )}
+                </div>
+
+                {/* Total del filtro en el teléfono: el pie de la tabla no se ve sin ella. */}
+                {!loading && sales.length > 0 && (
+                    <div className="md:hidden shrink-0 px-4 py-2.5 border-t border-border/60 dark:border-white/[0.06] bg-white dark:bg-surface-dark-2 flex items-start justify-between gap-3">
+                        <div>
+                            <div className="text-[13px] font-semibold text-content dark:text-white">Total del filtro</div>
+                            <div className="text-[12px] text-content-subtle tabular-nums">{total.toLocaleString("es-VE")} {total === 1 ? "factura" : "facturas"}</div>
+                        </div>
+                        <div className="text-right">
+                            <Money value={fmtPrice(sumTotal)} className="text-[15px] font-semibold text-content dark:text-white" />
+                            {sumPending > 0.001 && (
+                                <div className="text-[11px] font-semibold text-red-600 dark:text-red-400">
+                                    Pendiente <Money value={fmtPrice(sumPending)} className="text-[11px]" />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 <Pagination page={page} totalPages={totalPages} total={total} limit={LIMIT} onPageChange={setPage} />
             </div>

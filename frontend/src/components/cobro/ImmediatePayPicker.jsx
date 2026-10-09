@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "../../context/AppContext";
 import { journalsForWarehouse } from "../../helpers";
@@ -10,9 +10,11 @@ import MethodBankLogo from "./MethodBankLogo";
 //
 //   1. Método de pago  (Efectivo, Punto de venta, Pago móvil, Transferencia…)
 //   2. Banco           — o moneda, cuando el método no lleva banco (Efectivo)
-//   3. Caja            — solo si el banco/moneda tiene más de una caja para ese método
+//   3. Cuenta          — solo si ese banco/moneda tiene más de una cuenta con ese método
 //
-// Al llegar a una sola caja se cierra y devuelve el diario por `onPick`. Se usa en el cobro
+// El diario es la cuenta y acepta varios métodos, cada uno con su sentido. Al llegar a una
+// sola cuenta se cierra y devuelve por `onPick` el diario con el método elegido en
+// `payment_method`: quien lo usa lo guarda junto al diario, para saber por dónde entró. Se usa en el cobro
 // ("Pago Inmediato" y el vuelto), y en ingresos, egresos, devoluciones, cobro conjunto y
 // pagos a proveedores (a través de JournalPickerButton).
 //
@@ -46,28 +48,29 @@ function BotonGrande({ n, name, image, onClick }) {
 const PROMPT_COBRO = { tag: "Cobro inmediato", title: "¿Cómo paga el cliente?" };
 
 export default function ImmediatePayPicker({ journals: journalsProp, warehouseId, onPick, onClose, outflowOnly = false, methodPrompt = PROMPT_COBRO }) {
-    const { activePaymentMethods, activeJournals, activeBanks, activeCurrencies, baseCurrency } = useApp();
+    const { activePaymentMethods, activeJournals, activeBanks, activeCurrencies, baseCurrency, journalPays, journalReceives } = useApp();
 
     // Mientras está abierto, los Modal de detrás no se cierran con Escape: este overlay
     // maneja su propio Escape (retrocede un paso o cierra).
     useEffect(() => enterTopOverlay(), []);
 
-    // Métodos que permiten sacar dinero (efectivo, transferencia…). Para egresos, vuelto o
-    // pagos a proveedores no tiene sentido ofrecer un Punto de Venta.
-    const outflowCodes = useMemo(
-        () => new Set((activePaymentMethods || []).filter(m => m.allows_outflow !== false).map(m => m.code)),
-        [activePaymentMethods],
-    );
-
+    // Cada diario dice si recibe, paga o ambas (ver Diarios). Para pagar (egresos, vuelto,
+    // proveedores) solo se ofrecen los que pagan; para cobrar, solo los que reciben. Todos los
+    // selectores de caja pasan por aquí, así que la regla vive en un solo sitio.
     const journals = useMemo(
         () => {
             const js = journalsProp || journalsForWarehouse(activeJournals, warehouseId);
-            return outflowOnly ? js.filter(j => outflowCodes.has(j.type)) : js;
+            return js.filter(outflowOnly ? journalPays : journalReceives);
         },
-        [journalsProp, activeJournals, warehouseId, outflowOnly, outflowCodes],
+        [journalsProp, activeJournals, warehouseId, outflowOnly, journalPays, journalReceives],
     );
 
-    const journalsOfMethod = (code) => journals.filter(j => j.type === code).sort(ordenar);
+    // Métodos de una cuenta que sirven en este sentido. Sin lista (respuesta vieja), su tipo.
+    const metodosDe = (j) => (j.methods?.length ? j.methods : [{ method_code: j.type, allows_inflow: true, allows_outflow: true }])
+        .filter(m => outflowOnly ? m.allows_outflow : m.allows_inflow);
+    const journalsOfMethod = (code) => journals.filter(j => metodosDe(j).some(m => m.method_code === code)).sort(ordenar);
+    const pickMethod = useRef(null);
+    const pick = (j) => onPick({ ...j, payment_method: pickMethod.current || j.type });
 
     // Agrupa los diarios de un método: por banco si lo tienen, si no por moneda. Una caja de
     // efectivo no tiene banco pero sí moneda (Bs / divisa), que es la decisión que importa ahí.
@@ -112,7 +115,7 @@ export default function ImmediatePayPicker({ journals: journalsProp, warehouseId
 
     const methods = useMemo(
         () => (activePaymentMethods || [])
-            .filter(m => journals.some(j => j.type === m.code))
+            .filter(m => journals.some(j => metodosDe(j).some(x => x.method_code === m.code)))
             .sort(ordenar),
         [activePaymentMethods, journals],
     );
@@ -128,20 +131,24 @@ export default function ImmediatePayPicker({ journals: journalsProp, warehouseId
     // Baja tantos niveles como se pueda sin preguntar: método con una sola caja, o banco con
     // una sola caja, entran directo al cobro.
     const elegirMetodo = (m) => {
+        pickMethod.current = m.code;
         const js = journalsOfMethod(m.code);
-        if (js.length === 1) return onPick(js[0]);
+        if (js.length === 1) return pick(js[0]);
         const gs = grupos(js);
         if (gs.length === 1) {
-            if (gs[0].journals.length === 1) return onPick(gs[0].journals[0]);
+            if (gs[0].journals.length === 1) return pick(gs[0].journals[0]);
             return setSel({ method: m.code, group: gs[0].key });
         }
         setSel({ method: m.code, group: null });
     };
 
     const elegirGrupo = (g) => {
-        if (g.journals.length === 1) return onPick(g.journals[0]);
+        if (g.journals.length === 1) return pick(g.journals[0]);
         setSel(s => ({ ...s, group: g.key }));
     };
+
+    // Dos cuentas del mismo banco se distinguen por su número: se muestran los últimos dígitos.
+    const nombreCuenta = (j) => j.account_number ? `${j.name} ·${String(j.account_number).replace(/\D/g, "").slice(-4)}` : j.name;
 
     const step = !sel.method ? "method" : !sel.group ? "group" : "journal";
 
@@ -151,7 +158,7 @@ export default function ImmediatePayPicker({ journals: journalsProp, warehouseId
         ? methods.map(m => ({ key: m.code, name: m.name, image: m.image_url, run: () => elegirMetodo(m) }))
         : step === "group"
             ? groups.map(g => ({ key: g.key, name: g.name, image: g.image || method?.image_url, run: () => elegirGrupo(g) }))
-            : (group?.journals || []).map(j => ({ key: j.id, name: j.name, image: group?.image || method?.image_url, run: () => onPick(j) }));
+            : (group?.journals || []).map(j => ({ key: j.id, name: nombreCuenta(j), image: group?.image || method?.image_url, run: () => pick(j) }));
 
     const volver = () => {
         if (step === "journal") return setSel(s => ({ ...s, group: null }));
@@ -163,7 +170,7 @@ export default function ImmediatePayPicker({ journals: journalsProp, warehouseId
         ? methodPrompt
         : step === "group"
             ? { tag: groups[0]?.kind === "bank" ? "Elige el banco" : "Elige la moneda", title: method?.name || "" }
-            : { tag: "Elige la caja", title: group?.name || "" };
+            : { tag: group?.kind === "bank" ? "Elige la cuenta" : "Elige la caja", title: group?.name || "" };
 
     // Atajos: dígitos disparan el botón de esa posición, Escape retrocede un paso (y desde el
     // primero, cierra). En captura para adelantarse al handler de SaleConfirmModal, que además

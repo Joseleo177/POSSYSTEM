@@ -4,6 +4,7 @@ const { effectiveDueDate } = require("../purchases/payablesService");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
 const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
+const { resolveMethod } = require("../../utils/journalMethod");
 
 async function getPurchaseAmountPaid(purchase_id, t) {
   // Solo cuenta pagos cuyo Expense vinculado sigue activo (o no tiene Expense). Un pago
@@ -64,6 +65,8 @@ async function getPayments(purchaseId, req) {
 
 async function createPayment(purchaseId, body, employeeId, companyId, req) {
   const { amount, currency_id, exchange_rate, payment_journal_id, reference_date, reference_number, notes } = body;
+  // Por qué método se pagó: la cuenta acepta varios, y solo los que pagan sirven acá.
+  const metodo = await resolveMethod(payment_journal_id, body.payment_method, "out");
 
   const payAmt = parseFloat(amount);
   if (!payAmt || payAmt <= 0)            { const e = new Error("El monto debe ser mayor a 0"); e.status = 400; throw e; }
@@ -92,6 +95,7 @@ async function createPayment(purchaseId, body, employeeId, companyId, req) {
       currency_id:        currency_id || null,
       exchange_rate:      parseFloat(exchange_rate) || 1,
       payment_journal_id: payment_journal_id || null,
+      payment_method:     metodo,
       employee_id:        employeeId || null,
       company_id:         companyId || null,
       reference_date,
@@ -120,6 +124,7 @@ async function createPayment(purchaseId, body, employeeId, companyId, req) {
       // el resto de los movimientos, que van a la medianoche de su día.
       date:               toLocalDate(reference_date),
       payment_journal_id: payment_journal_id || null,
+      payment_method:     metodo,
       employee_id:        employeeId || null,
       company_id:         companyId || null,
       // El egreso pertenece a la sucursal que recibió la compra.
@@ -157,6 +162,7 @@ async function createPayment(purchaseId, body, employeeId, companyId, req) {
  */
 async function createBulkPayment(body, employeeId, companyId, req) {
   const { purchase_ids, amount, currency_id, exchange_rate, payment_journal_id, reference_date, reference_number, notes } = body;
+  const metodo = await resolveMethod(payment_journal_id, body.payment_method, "out");
 
   const ids = [...new Set((purchase_ids || []).map(n => parseInt(n, 10)).filter(Number.isInteger))];
   const payAmt = parseFloat(amount);
@@ -221,6 +227,7 @@ async function createBulkPayment(body, employeeId, companyId, req) {
         currency_id:        currency_id || null,
         exchange_rate:      rate,
         payment_journal_id: payment_journal_id,
+        payment_method:     metodo,
         employee_id:        employeeId || null,
         company_id:         cid,
         reference_date,
@@ -254,6 +261,7 @@ async function createBulkPayment(body, employeeId, companyId, req) {
       category_id:        supplierCat.id,
       date:               toLocalDate(reference_date),
       payment_journal_id: payment_journal_id,
+      payment_method:     metodo,
       employee_id:        employeeId || null,
       company_id:         cid,
       warehouse_id:       first.warehouse_id || null,

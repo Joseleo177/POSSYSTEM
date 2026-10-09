@@ -161,7 +161,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
 
     // Elegir la caja de un tramo: sugiere lo que falta por reembolsar, convertido a la moneda
     // de esa caja — el total entero en el primero, solo el resto en los siguientes.
-    const asignarCajaReembolso = (idx, id) => setRefund(p => {
+    const asignarCajaReembolso = (idx, id, method = null) => setRefund(p => {
         const parts = [...p.parts];
         const { rate } = datosCajaReembolso(id);
         const yaAsignado = parts.reduce((acc, q, i) => {
@@ -171,7 +171,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
             return acc + (isNaN(n) ? 0 : n / rr);
         }, 0);
         const falta = Math.max(0, totalReturn - yaAsignado);
-        parts[idx] = { ...parts[idx], journal_id: id, amount: (Math.round(falta * rate * 100) / 100).toFixed(2) };
+        parts[idx] = { ...parts[idx], journal_id: id, payment_method: method, amount: (Math.round(falta * rate * 100) / 100).toFixed(2) };
         return { ...p, parts };
     });
 
@@ -214,6 +214,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                 .filter(s => s.journal_id && !isNaN(s.num) && s.num > 0)
                 .map(s => ({
                     journal_id: parseInt(s.journal_id),
+                    payment_method: s.payment_method || null,
                     amount: String(s.amount || '').replace(',', '.'),
                     reference: String(s.reference || '').trim() || null,
                 }));
@@ -577,7 +578,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                                                 value={s.journal_id || ''}
                                                                 journals={activeJournals}
                                                                 outflowOnly
-                                                                onSelect={j => asignarCajaReembolso(idx, j.id)}
+                                                                onSelect={j => asignarCajaReembolso(idx, j.id, j.payment_method || null)}
                                                                 placeholder="Elegir caja…"
                                                                 methodPrompt={{ tag: "Reembolso", title: "¿De qué caja sale el reembolso?" }}
                                                             />

@@ -32,6 +32,10 @@ function Amount({ sym, n, sign = "", className = "" }) {
 const ARROW_IN = "M17 7L7 17m0 0h8m-8 0V9";
 const ARROW_OUT = "M7 17L17 7m0 0H9m8 0v8";
 const VOID = "M18.364 5.636L5.636 18.364M21 12a9 9 0 11-18 0 9 9 0 0118 0z";
+const FLAG = "M3 21V4m0 0h13l-2 4 2 4H3";
+
+// Signo del monto: entra (+), sale (−). El saldo inicial lleva el suyo propio (puede ser negativo).
+const signo = (m) => m.type === "apertura" ? (parseFloat(m.amount_local) < 0 ? "−" : "") : m.type === "ingreso" ? "+" : "−";
 
 export default function JournalMovementsModal({ journalId, bankId, warehouseId, onClose }) {
     const [movements, setMovements] = useState([]);
@@ -84,7 +88,8 @@ export default function JournalMovementsModal({ journalId, bankId, warehouseId, 
     // rótulo lo dice: presentarlo como total del período sería falso.
     const vivos = movements.filter(m => m.status !== "anulado");
     const ingresos = vivos.filter(m => m.type === "ingreso").reduce((a, m) => a + (parseFloat(m.amount_local) || 0), 0);
-    const egresos = vivos.filter(m => m.type !== "ingreso").reduce((a, m) => a + (parseFloat(m.amount_local) || 0), 0);
+    // El saldo inicial no es un ingreso ni un egreso del período: no entra en ninguno de los dos.
+    const egresos = vivos.filter(m => m.type === "egreso").reduce((a, m) => a + (parseFloat(m.amount_local) || 0), 0);
     const neto = ingresos - egresos;
     const alcance = movements.length < total ? "En esta página"
         : (dateFrom || dateTo) ? "En el período" : "Todo el historial";
@@ -240,14 +245,15 @@ export default function JournalMovementsModal({ journalId, bankId, warehouseId, 
 function Icono({ m }) {
     const anulado = m.status === "anulado";
     const ingreso = m.type === "ingreso";
+    const apertura = m.type === "apertura";
     return (
         <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
             anulado ? "bg-surface-3 dark:bg-white/[0.06] text-content-subtle"
                 : ingreso ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                 : "bg-surface-3 dark:bg-white/[0.06] text-content-muted dark:text-white/60"
-        }`} title={anulado ? "Anulado" : ingreso ? "Ingreso" : "Egreso"}>
+        }`} title={anulado ? "Anulado" : apertura ? "Saldo inicial" : ingreso ? "Ingreso" : "Egreso"}>
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d={anulado ? VOID : ingreso ? ARROW_IN : ARROW_OUT} />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d={anulado ? VOID : apertura ? FLAG : ingreso ? ARROW_IN : ARROW_OUT} />
             </svg>
         </span>
     );
@@ -268,7 +274,7 @@ function Tarjeta({ m, sym, baseSym, hasRate }) {
             <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-3">
                     <span className={`text-[14px] font-semibold tabular-nums truncate ${tachado || "text-content dark:text-white"}`}>{m.reference}</span>
-                    <Amount sym={sym} n={m.amount_local} sign={ingreso ? "+" : "−"}
+                    <Amount sym={sym} n={m.amount_local} sign={signo(m)}
                         className={`text-[14px] font-semibold shrink-0 ${anulado ? "line-through decoration-1 text-content-subtle" : ingreso ? "text-emerald-700 dark:text-emerald-400" : "text-content dark:text-white"}`} />
                 </div>
                 <div className="flex items-start justify-between gap-3 mt-0.5">
@@ -338,7 +344,7 @@ function Fila({ m, sym, baseSym, hasRate }) {
             </td>
 
             <td className="text-right">
-                <Amount sym={sym} n={m.amount_local} sign={ingreso ? "+" : "−"}
+                <Amount sym={sym} n={m.amount_local} sign={signo(m)}
                     className={`text-[14px] font-semibold ${anulado ? "line-through decoration-1 text-content-subtle" : ingreso ? "text-emerald-700 dark:text-emerald-400" : "text-content dark:text-white"}`} />
                 {hasRate && (
                     <div className="text-[11px] text-content-subtle tabular-nums mt-0.5 whitespace-nowrap">

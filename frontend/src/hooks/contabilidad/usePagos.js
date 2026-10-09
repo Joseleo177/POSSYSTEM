@@ -27,6 +27,8 @@ export function usePagos({ notify }) {
     // Sucursal. "" = todas las que el empleado tiene permitidas (o toda la empresa, si es admin).
     const [warehouseFilter, setWarehouseFilter] = useState("");
     const [warehouses, setWarehouses] = useState([]);
+    // Verificado contra el extracto del banco (Conciliación). "" = todos, "yes" o "no".
+    const [verifiedFilter, setVerifiedFilter] = useState("");
     const [showFilterDrop, setShowFilterDrop] = useState(false);
 
     useEffect(() => {
@@ -56,7 +58,7 @@ export function usePagos({ notify }) {
     const [deleteDialog, setDeleteDialog] = useState(null);
 
     // Query unificado — cualquier cambio recarga desde página 1
-    const [query, setQuery] = useState({ viewType: "historial", search: "", dateFrom: "", dateTo: "", journalId: "", employeeId: "", warehouseId: "", page: 1, refresh: 0 });
+    const [query, setQuery] = useState({ viewType: "historial", search: "", dateFrom: "", dateTo: "", journalId: "", employeeId: "", warehouseId: "", verified: "", page: 1, refresh: 0 });
 
     useEffect(() => {
         const timer = setTimeout(() => setQuery(q => {
@@ -68,10 +70,10 @@ export function usePagos({ notify }) {
 
     useEffect(() => {
         setQuery(q => {
-            if (q.viewType === viewType && q.dateFrom === payDateFrom && q.dateTo === payDateTo && q.journalId === journalFilter && q.employeeId === employeeFilter && q.warehouseId === warehouseFilter) return q;
-            return { ...q, viewType, dateFrom: payDateFrom, dateTo: payDateTo, journalId: journalFilter, employeeId: employeeFilter, warehouseId: warehouseFilter, page: 1 };
+            if (q.viewType === viewType && q.dateFrom === payDateFrom && q.dateTo === payDateTo && q.journalId === journalFilter && q.employeeId === employeeFilter && q.warehouseId === warehouseFilter && q.verified === verifiedFilter) return q;
+            return { ...q, viewType, dateFrom: payDateFrom, dateTo: payDateTo, journalId: journalFilter, employeeId: employeeFilter, warehouseId: warehouseFilter, verified: verifiedFilter, page: 1 };
         });
-    }, [viewType, payDateFrom, payDateTo, journalFilter, employeeFilter, warehouseFilter]); // eslint-disable-line
+    }, [viewType, payDateFrom, payDateTo, journalFilter, employeeFilter, warehouseFilter, verifiedFilter]); // eslint-disable-line
 
     useEffect(() => {
         let cancelled = false;
@@ -85,6 +87,7 @@ export function usePagos({ notify }) {
                 if (query.journalId) params.payment_journal_id = query.journalId;
                 if (query.employeeId) params.employee_id = query.employeeId;
                 if (query.warehouseId) params.warehouse_id = query.warehouseId;
+                if (query.verified) params.verified = query.verified;
                 const res = query.viewType === "pendientes"
                     ? await api.payments.getPending(params)
                     : await api.payments.getAll(params);
@@ -110,6 +113,7 @@ export function usePagos({ notify }) {
         setJournalFilter("");
         setEmployeeFilter("");
         setWarehouseFilter("");
+        setVerifiedFilter("");
         setShowFilterDrop(false);
     };
 
@@ -133,7 +137,7 @@ export function usePagos({ notify }) {
     };
 
     const totalPages = Math.ceil(total / LIMIT);
-    const filterCount = (viewType !== "historial" ? 1 : 0) + (payDateFrom || payDateTo ? 1 : 0) + (journalFilter ? 1 : 0) + (employeeFilter ? 1 : 0) + (warehouseFilter ? 1 : 0);
+    const filterCount = (viewType !== "historial" ? 1 : 0) + (payDateFrom || payDateTo ? 1 : 0) + (journalFilter ? 1 : 0) + (employeeFilter ? 1 : 0) + (warehouseFilter ? 1 : 0) + (verifiedFilter ? 1 : 0);
     const hasFilters = filterCount > 0;
 
     return {
@@ -145,6 +149,7 @@ export function usePagos({ notify }) {
         journalFilter, setJournalFilter,
         employeeFilter, setEmployeeFilter, employees,
         warehouseFilter, setWarehouseFilter, warehouses,
+        verifiedFilter, setVerifiedFilter,
         showFilterDrop, setShowFilterDrop,
         payDetail, setPayDetail,
         payModal, setPayModal,

@@ -6,6 +6,7 @@ const { assertWarehouseAccess } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
 const { addCreditMovement } = require("../customers/creditLedger");
 const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
+const { resolveMethod } = require("../../utils/journalMethod");
 
 const err = (message, status = 400) =>
   Object.assign(new Error(message), { status, isOperational: true });
@@ -32,6 +33,7 @@ module.exports = async function createBulkPayment(body, req) {
     currency_id,
     exchange_rate,
     payment_journal_id,
+    payment_method,     // por qué método entró: la cuenta acepta varios (ver utils/journalMethod)
     employee_id,
     reference_date,
     reference_number,
@@ -46,6 +48,7 @@ module.exports = async function createBulkPayment(body, req) {
     // sencillo, y cada tramo tiene que salir de la caja por la que salió de verdad: cargarlo
     // todo a una deja esa gaveta corta y la otra larga.
     change_parts,
+    change_payment_method,
     surplus_kept,       // sobrante que se queda en la caja
     change_to_credit,   // sobrante que va al crédito del cliente
     // Pago combinado: varias formas de pago para el lote, cada una con su caja/monto (ya en
@@ -65,6 +68,7 @@ module.exports = async function createBulkPayment(body, req) {
     currency_id: p?.currency_id ?? null,
     exchange_rate: parseFloat(p?.exchange_rate) || 1,
     reference_number: p?.reference_number?.trim() || null,
+    payment_method: p?.payment_method || null,
   })) : null;
   if (parts) {
     for (const p of partsNorm) {
@@ -83,10 +87,10 @@ module.exports = async function createBulkPayment(body, req) {
   // Un vuelto de una sola caja se expresa igual que uno repartido: una parte.
   const partesVuelto = (Array.isArray(change_parts) && change_parts.length)
     ? change_parts
-        .map(p => ({ journal_id: p?.journal_id, amount: parseFloat(p?.amount || 0) }))
+        .map(p => ({ journal_id: p?.journal_id, amount: parseFloat(p?.amount || 0), payment_method: p?.payment_method || null }))
         .filter(p => p.amount > 0)
     : (parseFloat(change_given || 0) > 0
-        ? [{ journal_id: change_journal_id, amount: parseFloat(change_given) }]
+        ? [{ journal_id: change_journal_id, amount: parseFloat(change_given), payment_method: change_payment_method || null }]
         : []);
 
   if (partesVuelto.some(p => !p.journal_id)) throw err("Debes indicar de qué caja sale cada vuelto");
@@ -125,6 +129,11 @@ module.exports = async function createBulkPayment(body, req) {
 
   const yaEntro = await loteYaRegistrado();
   if (yaEntro) return yaEntro;
+
+  // Método de cada forma de pago y de cada caja del vuelto, validado contra su cuenta.
+  const metodoSimple = parts ? null : await resolveMethod(payment_journal_id, payment_method, "in");
+  if (parts) for (const p of partsNorm) p.payment_method = await resolveMethod(p.journal_id, p.payment_method, "in");
+  for (const parte of partesVuelto) parte.payment_method = await resolveMethod(parte.journal_id, parte.payment_method, "out");
 
   // Marca de lote: ata entre sí los cobros que entraron en un solo acto para que la caja los
   // vea como el único movimiento que fueron. Se deriva de la clave de idempotencia cuando la
@@ -232,7 +241,7 @@ module.exports = async function createBulkPayment(body, req) {
       for (const item of conSaldo) {
         if (restante <= 0.000001) break;
         const aplicar = parseFloat(Math.min(restante, item.saldo).toFixed(6));
-        chunks.push({ item, aplicar, journal_id: payment_journal_id, currency_id: currency_id || null, exchange_rate: parseFloat(exchange_rate) || null, reference_number: reference_number?.trim() || null, mIdx: 0 });
+        chunks.push({ item, aplicar, journal_id: payment_journal_id, payment_method: metodoSimple, currency_id: currency_id || null, exchange_rate: parseFloat(exchange_rate) || null, reference_number: reference_number?.trim() || null, mIdx: 0 });
         restante = parseFloat((restante - aplicar).toFixed(6));
       }
       // El resto por debajo de la tolerancia (redondeo al billete) se lo lleva el último chunk.
@@ -256,7 +265,7 @@ module.exports = async function createBulkPayment(body, req) {
           if (restanteM <= 0.000001) break;
           if (rf.rest <= 0.000001) continue;
           const aplicar = parseFloat(Math.min(restanteM, rf.rest).toFixed(6));
-          chunks.push({ item: rf.item, aplicar, journal_id: p.journal_id, currency_id: p.currency_id, exchange_rate: p.exchange_rate, reference_number: p.reference_number, mIdx });
+          chunks.push({ item: rf.item, aplicar, journal_id: p.journal_id, payment_method: p.payment_method, currency_id: p.currency_id, exchange_rate: p.exchange_rate, reference_number: p.reference_number, mIdx });
           rf.rest = parseFloat((rf.rest - aplicar).toFixed(6));
           restanteM = parseFloat((restanteM - aplicar).toFixed(6));
         }
@@ -297,6 +306,7 @@ module.exports = async function createBulkPayment(body, req) {
           currency_id: c.currency_id || venta.currency_id || null,
           exchange_rate: c.exchange_rate || venta.exchange_rate || 1,
           payment_journal_id: c.journal_id,
+          payment_method: c.payment_method,
           employee_id: employee_id || null,
           reference_date,
           reference_number: c.reference_number,
@@ -388,6 +398,7 @@ module.exports = async function createBulkPayment(body, req) {
           date: toLocalDate(reference_date),
           category_id: catCambio.id,
           payment_journal_id: parte.journal_id,
+          payment_method: parte.payment_method,
           employee_id: employee_id || null,
           currency_id: diarioCambio?.currency_id || null,
           warehouse_id: conSaldo[0].venta.warehouse_id || null,

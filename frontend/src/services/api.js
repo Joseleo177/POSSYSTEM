@@ -485,6 +485,22 @@ export const api = {
     void:           (id)        => request(`/expenses/${id}`,           { method: "DELETE" }),
     delete:         (id)        => request(`/expenses/${id}/permanent`, { method: "DELETE" }),
   },
+
+  // ── Conciliación bancaria ────────────────────────────────────
+  reconciliation: {
+    accounts:   ()                 => request("/bank-reconciliations/accounts"),
+    getAll:     (params={})        => request("/bank-reconciliations?" + new URLSearchParams(params)),
+    getOne:     (id)               => request(`/bank-reconciliations/${id}`),
+    create:     (body)             => request("/bank-reconciliations", { method: "POST", body: JSON.stringify(body) }),
+    remove:     (id)               => request(`/bank-reconciliations/${id}`, { method: "DELETE" }),
+    auto:       (id)               => request(`/bank-reconciliations/${id}/auto`, { method: "POST" }),
+    charges:    (id, body={})      => request(`/bank-reconciliations/${id}/charges`, { method: "POST", body: JSON.stringify(body) }),
+    candidates: (id, lineId, params={}) => request(`/bank-reconciliations/${id}/lines/${lineId}/candidates?` + new URLSearchParams(params)),
+    match:      (id, lineId, body) => request(`/bank-reconciliations/${id}/lines/${lineId}/match`,    { method: "POST", body: JSON.stringify(body) }),
+    register:   (id, lineId, body) => request(`/bank-reconciliations/${id}/lines/${lineId}/register`, { method: "POST", body: JSON.stringify(body) }),
+    ignore:     (id, lineId, body={}) => request(`/bank-reconciliations/${id}/lines/${lineId}/ignore`, { method: "POST", body: JSON.stringify(body) }),
+    unmatch:    (id, lineId)       => request(`/bank-reconciliations/${id}/lines/${lineId}/unmatch`,  { method: "POST" }),
+  },
   companies: {
     getAll: ()          => request("/companies"),
     create: (body)      => request("/companies",       { method: "POST",   body: JSON.stringify(body) }),

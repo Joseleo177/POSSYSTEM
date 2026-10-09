@@ -14,12 +14,16 @@ module.exports = (sequelize, DataTypes) => {
     currency_id:        { type: DataTypes.INTEGER },
     exchange_rate:      { type: DataTypes.DECIMAL(12, 6), allowNull: false, defaultValue: 1.0 },
     payment_journal_id: { type: DataTypes.INTEGER },
+    // Por qué método de la cuenta entró o salió el dinero (pago móvil, punto...). El diario
+    // es la cuenta; el método se completa y se valida en el hook de models/index.js.
+    payment_method: { type: DataTypes.STRING(30), allowNull: true },
     employee_id:        { type: DataTypes.INTEGER },
     reference_date:     { type: DataTypes.DATEONLY },
     reference_number:   { type: DataTypes.STRING(100) },
     notes:              { type: DataTypes.TEXT },
     change_given:       { type: DataTypes.DECIMAL(14, 4), allowNull: true },
     change_journal_id:  { type: DataTypes.INTEGER, allowNull: true },
+    change_payment_method: { type: DataTypes.STRING(30), allowNull: true },
     // Clave que genera la caja una vez por cobro y repite en los reintentos: con el índice
     // único de la base, un abono parcial reenviado tras un corte de red no se registra dos
     // veces. Null en los pagos anteriores a la migración.

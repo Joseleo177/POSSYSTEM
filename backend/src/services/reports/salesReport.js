@@ -104,8 +104,10 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
     // —no a la de hoy, que es lo que descuadraba el pie del listado de pagos—.
     sequelize.query(
       `SELECT
-         COALESCE(pj.name, 'Sin diario') AS method_name,
-         COALESCE(pj.type, 'otro') AS method_type,
+         COALESCE(pj.name, 'Sin diario')
+           || CASE WHEN COUNT(*) OVER (PARTITION BY pj.id) > 1
+                   THEN ' · ' || COALESCE(MIN(pm.name), MIN(COALESCE(p.payment_method, pj.type))) ELSE '' END AS method_name,
+         COALESCE(p.payment_method, pj.type, 'otro') AS method_type,
          COALESCE(c.symbol, 'Ref.') AS currency_symbol,
          COALESCE(c.is_base, true) AS is_base,
          COUNT(p.id)::int AS count,
@@ -114,8 +116,14 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
        FROM payments p
        LEFT JOIN payment_journals pj ON p.payment_journal_id = pj.id
        LEFT JOIN currencies c ON c.id = pj.currency_id
+       LEFT JOIN LATERAL (
+         SELECT m.name FROM payment_methods m
+          WHERE m.code = COALESCE(p.payment_method, pj.type)
+            AND (m.company_id = pj.company_id OR m.company_id IS NULL)
+          ORDER BY m.company_id NULLS LAST LIMIT 1
+       ) pm ON TRUE
        WHERE p.payment_journal_id IS NOT NULL ${tcP} ${whPay} ${sePay} ${dP}
-       GROUP BY pj.id, pj.name, pj.type, c.symbol, c.is_base
+       GROUP BY pj.id, pj.name, COALESCE(p.payment_method, pj.type, 'otro'), c.symbol, c.is_base
        ORDER BY total DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),

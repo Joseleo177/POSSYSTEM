@@ -1,4 +1,4 @@
-const { PaymentJournal, PaymentJournalWarehouse, Currency, Bank, Sale, Warehouse, Sequelize, sequelize } = require("../../models");
+const { PaymentJournal, PaymentJournalWarehouse, PaymentJournalMethod, Currency, Bank, Sale, Warehouse, Sequelize, sequelize } = require("../../models");
 const { localDate, TZ } = require("../reports/shared");
 const { visibleWarehouseIds, isAdmin, assertWarehouseAccess } = require("../../middleware/auth");
 const { expenseRefSql } = require("../../utils/expenseReference");
@@ -17,6 +17,12 @@ function flattenJournal(j) {
   // Fuente de verdad de a qué sucursales atiende. Array vacío = todas (compartido).
   jj.warehouse_ids    = Array.isArray(jj.Sucursales) ? jj.Sucursales.map(w => w.id) : [];
   jj.warehouse_names  = Array.isArray(jj.Sucursales) ? jj.Sucursales.map(w => w.name) : [];
+  // Métodos de la cuenta, en su orden. El primero es el principal (`type`).
+  jj.methods = (jj.methods || [])
+    .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+    .map(m => ({ method_code: m.method_code, allows_inflow: m.allows_inflow, allows_outflow: m.allows_outflow }));
+  if (!jj.methods.length && jj.type) jj.methods = [{ method_code: jj.type, allows_inflow: true, allows_outflow: true }];
+  jj.opening_balance  = parseFloat(jj.opening_balance || 0);
   delete jj.Currency; delete jj.Bank; delete jj.Warehouse; delete jj.Sucursales;
   return jj;
 }
@@ -155,8 +161,11 @@ async function resolveJournalWarehouses(req, warehouseIds) {
 async function getAll(req) {
   const { tenantWhere } = tenantFilter(req);
   const journals = await PaymentJournal.findAll({
-    where: { ...tenantWhere, ...(await journalScope(req)) },
+    // Los absorbidos al fusionar cuentas ya no existen para el usuario: su historia está en
+    // la cuenta que los absorbió.
+    where: { ...tenantWhere, merged_into_id: null, ...(await journalScope(req)) },
     include: [
+      { model: PaymentJournalMethod, as: 'methods', attributes: ['id', 'method_code', 'allows_inflow', 'allows_outflow', 'sort_order'], required: false },
       { model: Currency, attributes: ['code', 'symbol', 'is_base', 'exchange_rate'], required: false },
       { model: Bank,     attributes: ['name'],                                        required: false },
       { model: Warehouse, attributes: ['id', 'name'],                                 required: false },
@@ -167,26 +176,32 @@ async function getAll(req) {
   return { data: journals.map(flattenJournal) };
 }
 
-// Dos diarios con el mismo método + banco + moneda + MISMO juego de sucursales son la misma
-// caja: en la botonera salen como dos opciones idénticas. El modelo no tiene "número de
-// cuenta", así que esa combinación lo identifica de forma única. Los NULL cuentan como valor.
+// El diario es la cuenta. Dos diarios del mismo banco, moneda y sucursales son la misma
+// cuenta, salvo que el número de cuenta los distinga (Venezuela 1 y Venezuela 2): un método
+// nuevo se agrega a la cuenta existente, no se abre otro diario. Los NULL cuentan como valor.
 const widKey = (ids) => [...new Set((ids || []).map(Number))].sort((a, b) => a - b).join(",");
+const cuentaKey = (n) => String(n || "").replace(/\D/g, "");
 
-async function assertNoDuplicate({ type, bank_id, currency_id, warehouse_ids }, excludeId = null) {
+async function assertNoDuplicate({ type, bank_id, currency_id, warehouse_ids, account_number }, excludeId = null) {
   const where = {
-    type:        type || null,
     bank_id:     bank_id || null,
     currency_id: currency_id || null,
+    merged_into_id: null,
   };
+  // Sin banco (efectivo, otros): cada caja se distingue además por su método principal.
+  if (!bank_id) where.type = type || null;
   if (excludeId) where.id = { [Sequelize.Op.ne]: excludeId };
   const candidatos = await PaymentJournal.findAll({
     where,
     include: [{ model: Warehouse, as: 'Sucursales', attributes: ['id'], through: { attributes: [] }, required: false }],
   });
   const mine = widKey(warehouse_ids);
-  const dup = candidatos.find(c => widKey((c.Sucursales || []).map(w => w.id)) === mine);
+  const num = cuentaKey(account_number);
+  const dup = candidatos.find(c => widKey((c.Sucursales || []).map(w => w.id)) === mine && cuentaKey(c.account_number) === num);
   if (dup) {
-    const e = new Error(`Ya existe el diario "${dup.name}" con el mismo método, banco, moneda y sucursales${dup.active ? "" : " (está inactivo: actívalo)"}. Usa ese en vez de crear otro.`);
+    const e = new Error(bank_id
+      ? `Ya existe la cuenta "${dup.name}" en ese banco, moneda y sucursales${dup.active ? "" : " (está inactiva: actívala)"}. Agrégale el método ahí; si es otra cuenta del mismo banco, indica su número.`
+      : `Ya existe el diario "${dup.name}" con el mismo método, moneda y sucursales${dup.active ? "" : " (está inactivo: actívalo)"}. Usa ese en vez de crear otro.`);
     e.status = 409; e.isOperational = true; throw e;
   }
 }
@@ -198,21 +213,83 @@ function readWarehouseInput(body) {
   return { given: false, ids: [] };
 }
 
+const bad = (msg) => { const e = new Error(msg); e.status = 400; e.isOperational = true; return e; };
+
+// Métodos de la cuenta, cada uno con su sentido: [{ method_code, allows_inflow, allows_outflow }].
+// Recibe y paga llegan como booleanos o texto. Un método que no recibe ni paga no sirve: se
+// rechaza. Devuelve null si el cuerpo no trae la lista (clientes viejos que solo mandan `type`).
+const flag = (v) => v === undefined ? true : (v === true || v === "true" || v === 1 || v === "1");
+function leerMetodos(body) {
+  if (!Array.isArray(body.methods)) return null;
+  const vistos = new Set();
+  const lista = [];
+  for (const m of body.methods) {
+    const code = String(m?.method_code || "").trim();
+    if (!code || vistos.has(code)) continue;
+    vistos.add(code);
+    const allows_inflow = flag(m.allows_inflow), allows_outflow = flag(m.allows_outflow);
+    if (!allows_inflow && !allows_outflow) throw bad(`El método "${code}" tiene que recibir, pagar o las dos cosas`);
+    lista.push({ method_code: code, allows_inflow, allows_outflow, sort_order: lista.length });
+  }
+  if (!lista.length) throw bad("La cuenta necesita al menos un método de pago");
+  return lista;
+}
+
+// Número de cuenta y saldo inicial (lo que tenía la cuenta el día que empezó a llevarse
+// aquí). Con monto y sin fecha, cuenta desde hoy. Solo devuelve lo que vino en el cuerpo.
+function leerCuenta(body, actual = {}) {
+  const out = {};
+  if (body.account_number !== undefined) out.account_number = String(body.account_number || "").trim() || null;
+  if (body.opening_balance !== undefined) {
+    const vacio = body.opening_balance === "" || body.opening_balance === null;
+    const n = vacio ? 0 : parseFloat(String(body.opening_balance).replace(",", "."));
+    if (!Number.isFinite(n)) throw bad("Saldo inicial inválido");
+    out.opening_balance = Math.round(n * 100) / 100;
+  }
+  if (body.opening_date !== undefined) {
+    const d = String(body.opening_date || "");
+    if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) throw bad("Fecha del saldo inicial inválida");
+    out.opening_date = d || null;
+  }
+  const saldo = out.opening_balance ?? parseFloat(actual.opening_balance || 0);
+  const fecha = out.opening_date !== undefined ? out.opening_date : actual.opening_date;
+  if (saldo && !fecha) out.opening_date = new Date().toLocaleDateString("en-CA", { timeZone: TZ });
+  return out;
+}
+
+async function guardarMetodos(journal, metodos, transaction) {
+  await PaymentJournalMethod.destroy({ where: { journal_id: journal.id }, transaction });
+  await PaymentJournalMethod.bulkCreate(
+    metodos.map(m => ({ ...m, journal_id: journal.id, company_id: journal.company_id })),
+    { transaction },
+  );
+}
+
 async function createJournal(body, req) {
-  const { name, type, bank_id, color, sort_order, currency_id } = body;
-  if (!name) { const e = new Error("El nombre es requerido"); e.status = 400; throw e; }
+  const { name, bank_id, color, sort_order, currency_id } = body;
+  if (!name) throw bad("El nombre es requerido");
+  const metodos = leerMetodos(body)
+    || (body.type ? [{ method_code: body.type, allows_inflow: true, allows_outflow: true, sort_order: 0 }] : null);
+  if (!metodos) throw bad("La cuenta necesita al menos un método de pago");
+  const type = metodos[0].method_code;
+  const cuenta = leerCuenta(body);
   const widList = await resolveJournalWarehouses(req, readWarehouseInput(body).ids);
-  await assertNoDuplicate({ type, bank_id, currency_id, warehouse_ids: widList });
-  const journal = await PaymentJournal.create({
-    name,
-    warehouse_id: widList[0] ?? null,   // cache denormalizada
-    type:        type        || null,
-    bank_id:     bank_id     || null,
-    color:       color       || "#555555",
-    sort_order:  sort_order  ?? 0,
-    currency_id: currency_id || null
+  await assertNoDuplicate({ type, bank_id, currency_id, warehouse_ids: widList, account_number: cuenta.account_number });
+  const journal = await sequelize.transaction(async (transaction) => {
+    const j = await PaymentJournal.create({
+      name,
+      warehouse_id: widList[0] ?? null,   // cache denormalizada
+      type,
+      bank_id:     bank_id     || null,
+      color:       color       || "#555555",
+      sort_order:  sort_order  ?? 0,
+      currency_id: currency_id || null,
+      ...cuenta,
+    }, { transaction });
+    await j.setSucursales(widList, { transaction });
+    await guardarMetodos(j, metodos, transaction);
+    return j;
   });
-  await journal.setSucursales(widList);
   return { data: journal };
 }
 
@@ -222,6 +299,8 @@ async function updateJournal(id, body, req) {
     include: [{ model: Warehouse, as: 'Sucursales', attributes: ['id'], through: { attributes: [] }, required: false }],
   });
   if (!journal) { const e = new Error("Diario no encontrado"); e.status = 404; throw e; }
+  const metodos = leerMetodos(body);
+  const cuenta = leerCuenta(body, journal);
   // No se edita un diario de sucursales ajenas; los compartidos son del admin.
   const actuales = (journal.Sucursales || []).map(w => w.id);
   for (const wid of actuales) await assertWarehouseAccess(req, wid, { optional: true });
@@ -229,30 +308,36 @@ async function updateJournal(id, body, req) {
   const wInput = readWarehouseInput(body);
   const widList = wInput.given ? await resolveJournalWarehouses(req, wInput.ids) : actuales;
 
-  // Solo se valida el duplicado si la edición TOCA la identidad (método/banco/moneda/sucursales):
+  // Solo se valida el duplicado si la edición TOCA la identidad (banco/moneda/sucursales/número):
   // así un duplicado que ya existía se puede renombrar/recolorear/desactivar, pero no crear uno.
-  const nextType = type !== undefined ? (type || null) : journal.type;
+  const nextType = metodos ? metodos[0].method_code : (type !== undefined ? (type || null) : journal.type);
   const nextBank = bank_id !== undefined ? (bank_id || null) : journal.bank_id;
   const nextCur  = currency_id !== undefined ? (currency_id || null) : journal.currency_id;
+  const nextNum  = cuenta.account_number !== undefined ? cuenta.account_number : journal.account_number;
   const identidadCambia =
-    nextType !== journal.type ||
+    (!nextBank && nextType !== journal.type) ||
     nextBank !== journal.bank_id ||
     nextCur !== journal.currency_id ||
+    cuentaKey(nextNum) !== cuentaKey(journal.account_number) ||
     widKey(widList) !== widKey(actuales);
   if (identidadCambia) {
-    await assertNoDuplicate({ type: nextType, bank_id: nextBank, currency_id: nextCur, warehouse_ids: widList }, journal.id);
+    await assertNoDuplicate({ type: nextType, bank_id: nextBank, currency_id: nextCur, warehouse_ids: widList, account_number: nextNum }, journal.id);
   }
-  await journal.update({
-    name,
-    warehouse_id: widList[0] ?? null,
-    type:        type        || null,
-    bank_id:     bank_id     || null,
-    color:       color       || "#555555",
-    active:      active      ?? true,
-    sort_order:  sort_order  ?? 0,
-    currency_id: currency_id || null
+  await sequelize.transaction(async (transaction) => {
+    await journal.update({
+      name,
+      warehouse_id: widList[0] ?? null,
+      type:        nextType,
+      bank_id:     bank_id     || null,
+      color:       color       || "#555555",
+      active:      active      ?? true,
+      sort_order:  sort_order  ?? 0,
+      currency_id: currency_id || null,
+      ...cuenta,
+    }, { transaction });
+    if (wInput.given) await journal.setSucursales(widList, { transaction });
+    if (metodos) await guardarMetodos(journal, metodos, transaction);
   });
-  if (wInput.given) await journal.setSucursales(widList);
   return { data: journal };
 }
 
@@ -352,6 +437,31 @@ async function getSummary(req) {
   return { data };
 }
 
+// Saldo inicial de una o varias cuentas frente a un rango de fechas: cuánto suma al saldo
+// actual, cuánto al arrastre previo a `desde`, y qué líneas "Saldo inicial" caen en el rango.
+// La línea va con la fecha de apertura y antes de todo lo de ese día.
+function apertura(journals, desde, hasta) {
+  const out = { total: 0, previo: 0, lineas: [] };
+  for (const j of journals) {
+    const monto = parseFloat(j.opening_balance || 0);
+    if (!monto) continue;
+    const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(j.opening_date || "")) ? String(j.opening_date) : "2000-01-01";
+    out.total += monto;
+    if (desde && fecha < desde) out.previo += monto;
+    else if (!hasta || fecha <= hasta) out.lineas.push({ fecha, monto });
+  }
+  return out;
+}
+const aperturaSql = (lineas) => lineas.map(l => `
+        UNION ALL
+        SELECT 0 AS id, 'apertura' AS type,
+          CAST('${l.fecha}' AS date)::timestamptz                         AS date,
+          CAST('${l.fecha}' AS date)::timestamptz - INTERVAL '1 second'   AS created_at,
+          'Saldo inicial' AS reference, 'Saldo inicial de la cuenta' AS concept,
+          CAST(${Number(l.monto)} AS numeric) AS amount_local, CAST(${Number(l.monto)} AS numeric) AS amount_base,
+          1 AS rate, NULL AS doc_ref, NULL AS notes, 1 AS group_count, 'activo' AS status,
+          NULL AS payment_method`).join("");
+
 async function getMovements(req) {
   const { id } = req.params;
   const { date_from, date_to, limit = 200, offset = 0 } = req.query;
@@ -407,7 +517,8 @@ async function getMovements(req) {
       - COALESCE((SELECT SUM(amount * COALESCE(rate, 1))        FROM expenses WHERE status = 'activo' AND TRUE ${texp} ${whEBare}), 0)
     ) as balance
   `, { replacements: { id }, type: Sequelize.QueryTypes.SELECT });
-  const currentBalance = parseFloat(currBal?.balance || 0);
+  const ap = apertura([journal], safeFrom, safeTo);
+  const currentBalance = parseFloat(currBal?.balance || 0) + ap.total;
 
   const [countResult] = await sequelize.query(`
     SELECT (
@@ -434,6 +545,7 @@ async function getMovements(req) {
     `, { replacements: { id, date_from: safeFrom }, type: Sequelize.QueryTypes.SELECT });
     preBalance = parseFloat(prevBal?.balance || 0);
   }
+  preBalance += ap.previo;
 
   // Window function calcula el saldo acumulado en orden ASC; el query externo ordena DESC y pagina.
   //
@@ -446,7 +558,7 @@ async function getMovements(req) {
   const rows = await sequelize.query(`
     SELECT * FROM (
       SELECT *,
-        SUM(CASE WHEN type = 'ingreso' THEN amount_local ELSE -amount_local END)
+        SUM(CASE WHEN type IN ('ingreso', 'apertura') THEN amount_local ELSE -amount_local END)
           OVER (ORDER BY ${localDate('date')} ASC, created_at ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
           + :pre_balance AS balance
       FROM (
@@ -463,7 +575,8 @@ async function getMovements(req) {
           p.reference_number                                     AS doc_ref,
           p.notes,
           1                                                      AS group_count,
-          'activo'                                               AS status
+          'activo'                                               AS status,
+          p.payment_method
         FROM payments p
         LEFT JOIN sales s     ON s.id = p.sale_id
         LEFT JOIN customers c ON c.id = p.customer_id
@@ -490,7 +603,8 @@ async function getMovements(req) {
           MIN(p.reference_number)                                AS doc_ref,
           MIN(p.notes)                                           AS notes,
           COUNT(*)::int                                          AS group_count,
-          'activo'                                               AS status
+          'activo'                                               AS status,
+          MIN(p.payment_method)                                  AS payment_method
         FROM payments p
         LEFT JOIN sales s     ON s.id = p.sale_id
         LEFT JOIN customers c ON c.id = p.customer_id
@@ -512,7 +626,8 @@ async function getMovements(req) {
           NULL                                                   AS doc_ref,
           i.notes,
           1                                                      AS group_count,
-          i.status
+          i.status,
+          i.payment_method
         FROM incomes i
         WHERE i.payment_journal_id = :id AND i.status = 'activo' ${dateInc} ${tci} ${whI}
 
@@ -531,9 +646,11 @@ async function getMovements(req) {
           NULL                                                   AS doc_ref,
           e.notes,
           1                                                      AS group_count,
-          e.status
+          e.status,
+          e.payment_method
         FROM expenses e
         WHERE e.payment_journal_id = :id AND e.status = 'activo' ${dateExp} ${te} ${whE}
+        ${aperturaSql(ap.lineas)}
       ) all_movements
     ) with_balance
     ORDER BY ${localDate('date')} DESC, created_at DESC
@@ -563,10 +680,13 @@ async function getMovements(req) {
       currency_code:   jj.Currency?.code   || null,
       currency_symbol: jj.Currency?.symbol || 'Ref.',
       bank_name:       jj.Bank?.name       || null,
+      account_number:  jj.account_number   || null,
+      opening_balance: parseFloat(jj.opening_balance || 0),
+      opening_date:    jj.opening_date     || null,
       current_balance: currentBalance,
     },
     data,
-    total: parseInt(countResult?.total || 0),
+    total: parseInt(countResult?.total || 0) + ap.lineas.length,
   };
 }
 
@@ -586,7 +706,7 @@ async function getBankMovements(req) {
   const wid = hasWid && !sharedOnly ? parseInt(warehouse_id) : null;
   if (wid) await assertWarehouseAccess(req, wid);
 
-  const journalWhere = { bank_id: bankId, active: true, ...(scoped ? { company_id } : {}) };
+  const journalWhere = { bank_id: bankId, active: true, merged_into_id: null, ...(scoped ? { company_id } : {}) };
   if (sharedOnly)   journalWhere[Sequelize.Op.and] = [journalServes("shared")];
   else if (wid)     journalWhere[Sequelize.Op.and] = [journalServes(wid)];
   else Object.assign(journalWhere, await journalScope(req));
@@ -641,7 +761,8 @@ async function getBankMovements(req) {
       - COALESCE((SELECT SUM(amount * COALESCE(rate, 1))        FROM expenses WHERE status = 'activo' AND TRUE ${tp} ${whEBare}), 0)
     ) as balance
   `, { type: Sequelize.QueryTypes.SELECT });
-  const currentBalance = parseFloat(currBal?.balance || 0);
+  const ap = apertura(bankJournals, safeFrom, safeTo);
+  const currentBalance = parseFloat(currBal?.balance || 0) + ap.total;
 
   const [countResult] = await sequelize.query(`
     SELECT (
@@ -662,11 +783,12 @@ async function getBankMovements(req) {
     `, { type: Sequelize.QueryTypes.SELECT });
     preBalance = parseFloat(prevBal?.balance || 0);
   }
+  preBalance += ap.previo;
 
   const rows = await sequelize.query(`
     SELECT * FROM (
       SELECT *,
-        SUM(CASE WHEN type = 'ingreso' THEN amount_local ELSE -amount_local END)
+        SUM(CASE WHEN type IN ('ingreso', 'apertura') THEN amount_local ELSE -amount_local END)
           OVER (ORDER BY ${localDate('date')} ASC, created_at ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
           + ${preBalance} AS balance
       FROM (
@@ -678,7 +800,8 @@ async function getBankMovements(req) {
           p.amount                                          AS amount_base,
           COALESCE(p.exchange_rate, 1)                     AS rate,
           p.reference_number                                AS doc_ref,
-          p.notes, 1 AS group_count, 'activo'               AS status
+          p.notes, 1 AS group_count, 'activo'               AS status,
+          p.payment_method
         FROM payments p
         LEFT JOIN sales s     ON s.id = p.sale_id
         LEFT JOIN customers c ON c.id = p.customer_id
@@ -697,7 +820,8 @@ async function getBankMovements(req) {
           SUM(p.amount)                                     AS amount_base,
           MAX(COALESCE(p.exchange_rate, 1))                AS rate,
           MIN(p.reference_number)                           AS doc_ref,
-          MIN(p.notes) AS notes, COUNT(*)::int AS group_count, 'activo' AS status
+          MIN(p.notes) AS notes, COUNT(*)::int AS group_count, 'activo' AS status,
+          MIN(p.payment_method) AS payment_method
         FROM payments p
         LEFT JOIN sales s     ON s.id = p.sale_id
         LEFT JOIN customers c ON c.id = p.customer_id
@@ -712,7 +836,7 @@ async function getBankMovements(req) {
           i.description AS concept,
           (i.amount * COALESCE(i.rate, 1)) AS amount_local,
           i.amount AS amount_base, COALESCE(i.rate, 1) AS rate,
-          NULL AS doc_ref, i.notes, 1 AS group_count, i.status
+          NULL AS doc_ref, i.notes, 1 AS group_count, i.status, i.payment_method
         FROM incomes i
         WHERE i.payment_journal_id IN (${jList}) AND i.status = 'activo' ${dateInc} ${tci} ${whI}
 
@@ -724,9 +848,10 @@ async function getBankMovements(req) {
           e.description AS concept,
           (e.amount * COALESCE(e.rate, 1)) AS amount_local,
           e.amount AS amount_base, COALESCE(e.rate, 1) AS rate,
-          NULL AS doc_ref, e.notes, 1 AS group_count, e.status
+          NULL AS doc_ref, e.notes, 1 AS group_count, e.status, e.payment_method
         FROM expenses e
         WHERE e.payment_journal_id IN (${jList}) AND e.status = 'activo' ${dateExp} ${te} ${whE}
+        ${aperturaSql(ap.lineas)}
       ) all_movements
     ) with_balance
     ORDER BY ${localDate('date')} DESC, created_at DESC
@@ -750,7 +875,7 @@ async function getBankMovements(req) {
       rate:         parseFloat(row.rate         || 1),
       balance:      parseFloat(row.balance      || 0),
     })),
-    total: parseInt(countResult?.total || 0),
+    total: parseInt(countResult?.total || 0) + ap.lineas.length,
   };
 }
 

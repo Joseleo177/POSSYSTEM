@@ -2,6 +2,7 @@ const { Expense, ExpenseCategory, PaymentJournal, Employee, Currency, Warehouse,
 const { Op, literal } = require('sequelize');
 const { recalcPurchaseStatus, recalcBatch } = require('../services/purchasePayments/purchasePaymentService');
 const { toLocalDate, endOfLocalDay } = require('../utils/localDate');
+const { resolveMethod } = require("../utils/journalMethod");
 const { visibleWarehouseIds, assertWarehouseAccess } = require('../middleware/auth');
 const { assertJournalsInWarehouse } = require('../utils/journalWarehouse');
 const { expenseRefSql } = require('../utils/expenseReference');
@@ -35,7 +36,11 @@ exports.getAll = async (req, res, next) => {
 
     const { count, rows } = await Expense.findAndCountAll({
       // La clave interna de los pagos a proveedor no se muestra (ver utils/expenseReference).
-      attributes: { include: [[literal(expenseRefSql('"Expense"')), 'display_reference']] },
+      attributes: { include: [
+        [literal(expenseRefSql('"Expense"')), 'display_reference'],
+        // Casado con una línea del extracto del banco (Conciliación).
+        [literal(`EXISTS (SELECT 1 FROM bank_reconciliation_matches m WHERE m.source_type = 'expense' AND m.source_id = "Expense"."id")`), 'reconciled'],
+      ] },
       where,
       include: [
         { model: ExpenseCategory, as: 'category', attributes: ['id', 'name'] },
@@ -57,6 +62,7 @@ exports.getAll = async (req, res, next) => {
       amount:        parseFloat(e.amount),
       rate:          parseFloat(e.rate || 1),
       status:        e.status,
+      reconciled:    !!e.get('reconciled'),
       notes:         e.notes,
       date:          e.date ?? null,
       created_at:    e.created_at,
@@ -105,7 +111,7 @@ exports.upsertCategory = async (req, res, next) => {
 // ── Crear egreso ─────────────────────────────────────────────
 exports.create = async (req, res, next) => {
   try {
-    const { description, amount, category_id, payment_journal_id, reference, notes, currency_id, rate, date, warehouse_id } = req.body;
+    const { description, amount, category_id, payment_journal_id, payment_method, reference, notes, currency_id, rate, date, warehouse_id } = req.body;
 
     if (!description || !amount || !category_id) {
       return res.status(400).json({ ok: false, message: 'Descripción, monto y categoría son obligatorios' });
@@ -128,6 +134,8 @@ exports.create = async (req, res, next) => {
       amount,
       category_id,
       payment_journal_id: payment_journal_id || null,
+      // Por qué método salió/entró: la cuenta acepta varios (ver utils/journalMethod).
+      payment_method: await resolveMethod(payment_journal_id, payment_method, "out"),
       reference: reference || null,
       notes: notes || null,
       currency_id: currency_id || null,

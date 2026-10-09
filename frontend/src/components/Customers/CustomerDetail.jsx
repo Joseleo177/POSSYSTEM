@@ -123,6 +123,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
             await api.customers.creditRefund(detail.id, {
                 amount:         refundAmountBase,
                 journal_id:     refundForm.journal_id,
+                payment_method: refundForm.payment_method || null,
                 reference_date: refundForm.reference_date,
                 notes:          refundForm.notes || null,
                 // Sin esto el backend caía en el primer almacén del empleado, que no tiene por
@@ -592,7 +593,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             // si devuelve solo una parte.
                             const jCur  = j.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
                             const jRate = (!jCur || jCur.is_base) ? 1 : parseFloat(jCur.exchange_rate || 1);
-                            setRefundForm(p => ({ ...p, journal_id: String(j.id), amount: (refundAvailable * jRate).toFixed(2) }));
+                            setRefundForm(p => ({ ...p, journal_id: String(j.id), payment_method: j.payment_method || null, amount: (refundAvailable * jRate).toFixed(2) }));
                         }}
                         onClear={() => setRefundForm(p => ({ ...p, journal_id: "", amount: "" }))}
                         height="h-11"

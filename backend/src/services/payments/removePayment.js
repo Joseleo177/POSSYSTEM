@@ -1,4 +1,4 @@
-const { Payment, Sale, Return, Sequelize, sequelize } = require("./shared");
+const { Payment, Sale, Return, Sequelize, sequelize, getSaleBalance } = require("./shared");
 const { resolveSaleStatus } = require("../../utils/saleBalance");
 
 module.exports = async function removePayment(id) {
@@ -12,7 +12,10 @@ module.exports = async function removePayment(id) {
 
     await payment.destroy({ transaction: t });
 
-    const remainingPaid = parseFloat(await Payment.sum("amount", { where: { sale_id: sale.id }, transaction: t }) || 0);
+    // Lo cobrado con la misma cuenta que el cobro (getSaleBalance): descuenta el vuelto y suma
+    // el crédito aplicado. Sumar los montos a secas daba por pagada una factura que había
+    // recibido 5 con 1 de vuelto sobre un total de 4,12. Lo exonerado va aparte.
+    const remainingPaid = (await getSaleBalance(sale.id, t)) - parseFloat(sale.forgiven_amount || 0);
     // Una NC anulada no descuenta nada: la factura vuelve a deberse completa.
     const totalReturned = parseFloat(await Return.sum("total", {
       where: { sale_id: sale.id, status: { [Sequelize.Op.ne]: "anulado" } },

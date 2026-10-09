@@ -14,13 +14,17 @@ import Pagination from "../ui/Pagination";
 import RateField from "../ui/RateField";
 import { useApp } from "../../context/AppContext";
 import MovementDetailModal from "./MovementDetailModal";
+import MovementCard from "./MovementCard";
 import JournalPickerButton from "../cobro/JournalPickerButton";
 
-// Registrado es lo normal: va en gris. El color queda para lo que pide atención.
+// Registrado es lo normal: va en gris. Conciliado (casado con el extracto del banco) lleva el
+// visto en verde, como una factura pagada: es la confirmación de que el dinero se movió.
 const MOVEMENT_STATUS = {
-    activo:  { label: "Registrado", tone: "success", quiet: "check" },
-    anulado: { label: "Anulado",    tone: "neutral", quiet: "void" },
+    activo:     { label: "Registrado", tone: "neutral", quiet: "check" },
+    conciliado: { label: "Conciliado", tone: "success", quiet: "check" },
+    anulado:    { label: "Anulado",    tone: "neutral", quiet: "void" },
 };
+const movementStatus = (m) => (m.status === "activo" && m.reconciled ? "conciliado" : m.status);
 
 export default function EgresosTab({ notify, can, fmtPrice, journals }) {
     const {
@@ -123,11 +127,27 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
         </div>
     );
 
+    // Anular o, ya anulado, eliminar. Las mismas en la tabla y en la tarjeta del teléfono.
+    const acciones = (m) => {
+        const anulado = m.status === "anulado";
+        return (
+            <div className="flex items-center justify-end gap-0.5">
+                {can("admin") && !anulado && (
+                    <RowIcon icon="ban" tone="danger" title="Anular" onClick={() => setVoidConfirm(m)} />
+                )}
+                {can("admin") && anulado && (
+                    <RowIcon icon="trash" tone="danger" title="Eliminar permanentemente" onClick={() => setDeleteConfirm(m)} />
+                )}
+            </div>
+        );
+    };
+
     return (
         <div className="h-full flex flex-col overflow-hidden">
             {subheader}
             <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-                <div className="overflow-auto flex-1">
+                {/* Tablet y escritorio: tabla. En el teléfono, tarjetas (MovementCard). */}
+                <div className="hidden md:block overflow-auto flex-1">
                     <table className="table-ledger min-w-[820px]">
                         <thead className="sticky top-0 z-10">
                             <tr>
@@ -153,7 +173,7 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                                         <td className="pl-4">
                                             <span className={`text-[13px] font-semibold tabular-nums ${anulado ? "text-content-subtle line-through decoration-1" : "text-brand-700 dark:text-brand-300"}`}>{exp.reference || `#${exp.id}`}</span>
                                         </td>
-                                        <td><StatusMark status={exp.status} map={MOVEMENT_STATUS} /></td>
+                                        <td><StatusMark status={movementStatus(exp)} map={MOVEMENT_STATUS} /></td>
                                         <td className="max-w-0">
                                             <span className={`block truncate font-semibold ${anulado ? "text-content-subtle" : "text-content dark:text-white"}`}>{exp.description}</span>
                                             {exp.notes && <div className="text-[12px] text-content-subtle truncate">{exp.notes}</div>}
@@ -172,20 +192,29 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                                             )}
                                         </td>
                                         <td className="pr-4 whitespace-nowrap cursor-default" onClick={stopRow}>
-                                            <div className="flex items-center justify-end gap-0.5">
-                                                {can("admin") && !anulado && (
-                                                    <RowIcon icon="ban" tone="danger" title="Anular" onClick={() => setVoidConfirm(exp)} />
-                                                )}
-                                                {can("admin") && anulado && (
-                                                    <RowIcon icon="trash" tone="danger" title="Eliminar permanentemente" onClick={() => setDeleteConfirm(exp)} />
-                                                )}
-                                            </div>
+                                            {acciones(exp)}
                                         </td>
                                     </tr>
                                 );
                             })}
                         </tbody>
                     </table>
+                </div>
+
+                <div className="md:hidden flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                    {loading ? (
+                        <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
+                    ) : expenses.length === 0 ? (
+                        <div className="py-16 px-6 text-center">
+                            <div className="text-[14px] font-semibold text-content dark:text-white">Sin egresos</div>
+                            <div className="text-[13px] text-content-subtle mt-1">No hay egresos registrados con estos filtros.</div>
+                        </div>
+                    ) : expenses.map(m => (
+                        <MovementCard key={m.id} m={m} sign="-" fmtPrice={fmtPrice}
+                            status={<StatusMark status={movementStatus(m)} map={MOVEMENT_STATUS} />}
+                            actions={acciones(m)}
+                            onOpen={() => setDetail(m)} />
+                    ))}
                 </div>
 
                 <Pagination page={page} totalPages={totalPages} total={total} limit={LIMIT} onPageChange={setPage} />
@@ -207,7 +236,7 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                                     onChange={v => setForm(p => {
                                         const j = (journals || []).find(x => String(x.id) === String(p.payment_journal_id));
                                         const sigueValido = j && (!(j.warehouse_ids?.length) || j.warehouse_ids.includes(Number(v)));
-                                        return { ...p, warehouse_id: v, payment_journal_id: sigueValido ? p.payment_journal_id : "", rate: sigueValido ? p.rate : "" };
+                                        return { ...p, warehouse_id: v, payment_journal_id: sigueValido ? p.payment_journal_id : "", payment_method: sigueValido ? p.payment_method : "", rate: sigueValido ? p.rate : "" };
                                     })}
                                     placeholder="Seleccionar..."
                                     options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
@@ -255,8 +284,8 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                                 journals={journalsForWarehouse(journals || [], form.warehouse_id)}
                                 outflowOnly
                                 disabled={warehouses.length > 1 && !form.warehouse_id}
-                                onSelect={j => setForm(p => ({ ...p, payment_journal_id: String(j.id), rate: "" }))}
-                                onClear={() => setForm(p => ({ ...p, payment_journal_id: "", rate: "" }))}
+                                onSelect={j => setForm(p => ({ ...p, payment_journal_id: String(j.id), payment_method: j.payment_method || "", rate: "" }))}
+                                onClear={() => setForm(p => ({ ...p, payment_journal_id: "", payment_method: "", rate: "" }))}
                                 placeholder={warehouses.length > 1 && !form.warehouse_id ? "Elige la sucursal primero" : "Sin diario"}
                                 methodPrompt={{ tag: "Egreso", title: "¿De qué caja sale?" }}
                             />

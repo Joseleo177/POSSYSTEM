@@ -13,6 +13,9 @@ module.exports = (sequelize, DataTypes) => {
     currency_id:        { type: DataTypes.INTEGER },
     exchange_rate:      { type: DataTypes.DECIMAL(12, 6), allowNull: false, defaultValue: 1.0 },
     payment_journal_id: { type: DataTypes.INTEGER },
+    // Por qué método de la cuenta entró o salió el dinero (pago móvil, punto...). El diario
+    // es la cuenta; el método se completa y se valida en el hook de models/index.js.
+    payment_method: { type: DataTypes.STRING(30), allowNull: true },
     employee_id:        { type: DataTypes.INTEGER },
     reference_date:     { type: DataTypes.DATEONLY },
     reference_number:   { type: DataTypes.STRING(100) },

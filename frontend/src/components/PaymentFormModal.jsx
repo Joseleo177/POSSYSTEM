@@ -33,7 +33,7 @@ const getEmpty = () => ({
   pay_parts: [],
 });
 
-export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJournalId = null }) {
+export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJournalId = null, lockedMethod = null }) {
   const { notify, baseCurrency, activeCurrencies, activeJournals: allActiveJournals, can } = useApp();
   // Solo los diarios de la sucursal de esta venta (más los compartidos): un cajero de la
   // sucursal A no debe poder cobrar contra la caja de la B.
@@ -244,20 +244,46 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   const changeInPayCur = (!isNaN(receivedNum) && receivedNum > 0 && pendingAfterCredit > 0 && receivedNum > (isNaN(amountNum) ? 0 : amountNum))
     ? parseFloat((receivedNum - (isNaN(amountNum) ? 0 : amountNum)).toFixed(2))
     : 0;
-  // En combinado el sobrante es lo recibido (suma de tramos) menos el saldo, en base.
-  const changeBase = combinado
-    ? Math.max(0, round6(recibidoComb - pendingAfterCredit))
-    : (changeInPayCur > 0 ? changeInPayCur / payRate : 0);
-  const changeDisplay = combinado ? changeBase : changeInPayCur;
-
-  // Tasa y símbolo de la caja de una salida de vuelto: cada tramo se escribe en la moneda de
-  // SU caja, que es la que el cajero cuenta al entregarlo.
+  // Tasa y símbolo de una caja: cada tramo (del cobro o del vuelto) se escribe en la moneda de
+  // SU caja, que es la que el cajero cuenta.
   const datosCaja = (journalId) => {
     const j = journalId ? activeJournals.find(x => x.id === journalId) : null;
     const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
     const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
     return { journal: j, rate: r, sym: cur?.symbol || baseCurrency?.symbol || "Ref." };
   };
+
+  // Lo que falta por cubrir en el pago combinado, en la moneda de una caja de tasa `r` y sin
+  // contar el tramo `idx`. En bolívares se mide contra el saldo línea por línea (pendingBsAt),
+  // que es el que pide la pantalla y el que usa el servidor para dar por saldado un tramo en
+  // Bs; en la base, contra el saldo oficial. Medirlo siempre en la base restaba bolívares de
+  // un saldo redondeado (Ref.3,69 contra los Bs.3219,62 = 3,6949 de la factura): sugería
+  // Bs.1215,35 donde faltaban Bs.1219,62, y teclear lo correcto disparaba un "sobrante" de
+  // 0,0049 que pedía caja para el vuelto.
+  const faltaEnMoneda = (partes, idx, r) => {
+    const ya = (partes || []).reduce((a, q, i) => {
+      if (i === idx) return a;
+      const n = parseFloat(String(q.amount).replace(",", "."));
+      if (isNaN(n) || n <= 0) return a;
+      const rr = datosCaja(q.journal_id).rate;
+      if (r > 1) return a + (rr === r ? roundBs2(n) : roundBs2((n / rr) * r));
+      return a + (rr === 1 ? round2(n) : n / rr);
+    }, 0);
+    return r > 1
+      ? Math.max(0, roundBs2(pendingBsAt(r) - ya))
+      : Math.max(0, round2(pendingAfterCredit - ya));
+  };
+
+  // En combinado el sobrante es lo que el ÚLTIMO tramo pone por encima de lo que faltaba,
+  // medido en la moneda de ese tramo (el servidor le cuelga el vuelto a él) y pasado a base.
+  const ultimoComb = partesComb[partesComb.length - 1];
+  const sobranteUltimo = (combinado && ultimoComb?.num > 0)
+    ? Math.max(0, roundBs2(ultimoComb.num - faltaEnMoneda(form.pay_parts, partesComb.length - 1, ultimoComb.rate)))
+    : 0;
+  const changeBase = combinado
+    ? (sobranteUltimo > 0 ? round6(sobranteUltimo / ultimoComb.rate) : 0)
+    : (changeInPayCur > 0 ? changeInPayCur / payRate : 0);
+  const changeDisplay = combinado ? changeBase : changeInPayCur;
 
   // El vuelto puede salir de VARIAS cajas: sin sencillo en divisas se devuelven 2$ en efectivo
   // y los 0,66 restantes en bolívares. Cada tramo sale de la gaveta por la que salió de verdad.
@@ -282,7 +308,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // Asigna la caja elegida a un tramo del vuelto y le sugiere el monto que falta por
   // devolver, ya convertido a la moneda de esa caja: en el primer tramo el vuelto entero,
   // en los siguientes solo el resto.
-  const asignarCajaCambio = (idx, id) => setForm(p => {
+  const asignarCajaCambio = (idx, id, method = null) => setForm(p => {
     const partes = [...p.change_parts];
     const { rate: r } = datosCaja(id);
     const yaAsignado = partes.reduce((acc, q, i) => {
@@ -292,7 +318,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
       return acc + (isNaN(n) ? 0 : n / rr);
     }, 0);
     const falta = Math.max(0, changeBase - yaAsignado);
-    partes[idx] = { journal_id: id, amount: (Math.round(falta * r * 100) / 100).toFixed(2) };
+    partes[idx] = { journal_id: id, payment_method: method, amount: (Math.round(falta * r * 100) / 100).toFixed(2) };
     return { ...p, change_parts: partes };
   });
 
@@ -302,7 +328,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // por línea en Bs, saldo oficial en divisas). Lo usan tanto el desplegable "MÉTODO DE PAGO"
   // como el flujo de "Pago Inmediato", que llega con el diario ya escogido en la botonera y
   // sin desplegable a la vista.
-  const selectJournal = (id) => {
+  const selectJournal = (id, method = null) => {
     const j = activeJournals.find(x => x.id === id);
     if (!j) return;
     const newCurId = j.currency_id || baseCurrency?.id;
@@ -313,6 +339,8 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
     setForm(p => ({
       ...p,
       payment_journal_id: id,
+      // Por qué método de la cuenta entra (la cuenta acepta varios).
+      payment_method: method,
       pay_currency_id: newCurId || p.pay_currency_id,
       amount: newAmt,
       received_amount: newAmt,
@@ -328,7 +356,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
     if (lockedRef.current || !lockedJournalId) return;
     if (!activeJournals.some(j => j.id === lockedJournalId)) return;
     lockedRef.current = true;
-    selectJournal(lockedJournalId);
+    selectJournal(lockedJournalId, lockedMethod);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lockedJournalId, activeJournals]);
   const methodLocked = !!lockedJournalId && form.payment_journal_id === lockedJournalId;
@@ -391,6 +419,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
         ...(combinado && !creditCoversAll ? {
           pay_parts: partesComb.map(s => ({
             journal_id:       s.journal_id,
+            payment_method:   s.payment_method || null,
             amount:           s.base,
             currency_id:      s.cur?.id || null,
             exchange_rate:    s.rate,
@@ -401,6 +430,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
           currency_id:        payCur?.id || null,
           exchange_rate:      payRate,
           payment_journal_id: creditCoversAll ? null : (form.payment_journal_id || null),
+          payment_method:     creditCoversAll ? null : (form.payment_method || null),
         }),
         reference_date:     form.reference_date,
         reference_number:   combinado ? null : (form.reference_number || null),
@@ -409,7 +439,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
         change_given:       (changeBase > 0 && !form.keep_change && !form.credit_change) ? actualChangeBase : undefined,
         // Cada tramo del vuelto con su caja: el servidor registra un egreso por cada una.
         change_parts:       (changeBase > 0 && !form.keep_change && !form.credit_change)
-          ? salidasCambio.filter(s => s.journal_id && s.montoBase > 0).map(s => ({ journal_id: s.journal_id, amount: s.montoBase }))
+          ? salidasCambio.filter(s => s.journal_id && s.montoBase > 0).map(s => ({ journal_id: s.journal_id, payment_method: s.payment_method || null, amount: s.montoBase }))
           : undefined,
         // En combinado los tramos ya suman TODO lo recibido (aplicado + sobrante). No se manda
         // `surplus_kept`: el backend lo reconstruye sumándolo al monto de un tramo, y acá lo
@@ -615,16 +645,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                           const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
                           const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
                           // Se sugiere lo que falta por cubrir, en la moneda de esta caja.
-                          const yaBase = parts.reduce((a, q, i) => {
-                            if (i === idx) return a;
-                            const jj = activeJournals.find(x => x.id === q.journal_id);
-                            const cc = jj?.currency_id ? activeCurrencies.find(c => c.id === parseInt(jj.currency_id)) : baseCurrency;
-                            const rr = (!cc || cc.is_base) ? 1 : parseFloat(cc.exchange_rate || 1);
-                            const nn = parseFloat(String(q.amount).replace(",", "."));
-                            return a + (isNaN(nn) ? 0 : nn / rr);
-                          }, 0);
-                          const faltaBase = Math.max(0, pendingAfterCredit - yaBase);
-                          parts[idx] = { ...parts[idx], journal_id: j.id, amount: (Math.round(faltaBase * r * 100) / 100).toFixed(2) };
+                          parts[idx] = { ...parts[idx], journal_id: j.id, payment_method: j.payment_method || null, amount: faltaEnMoneda(parts, idx, r).toFixed(2) };
                           return { ...p, pay_parts: parts };
                         })}
                       />
@@ -656,6 +677,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                             ...p,
                             pay_parts: [],
                             payment_journal_id: only.journal_id || "",
+                            payment_method: only.payment_method || null,
                             pay_currency_id: jj?.currency_id ? String(jj.currency_id) : "",
                             amount: only.amount || "",
                             received_amount: only.amount || "",
@@ -715,7 +737,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
           <JournalPickerButton
             value={form.payment_journal_id}
             journals={activeJournals}
-            onSelect={(j) => selectJournal(j.id)}
+            onSelect={(j) => selectJournal(j.id, j.payment_method || null)}
             placeholder="Seleccionar método..."
             methodPrompt={{ tag: "Cobro", title: "¿Cómo paga el cliente?" }}
           />
@@ -790,7 +812,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                 ...p,
                 payment_journal_id: "", pay_currency_id: "", amount: "", received_amount: "", rate: "",
                 pay_parts: [
-                  { journal_id: p.payment_journal_id, amount: p.amount || "", reference: isCashJ ? "" : (p.reference_number || "") },
+                  { journal_id: p.payment_journal_id, payment_method: p.payment_method || null, amount: p.amount || "", reference: isCashJ ? "" : (p.reference_number || "") },
                   { journal_id: "", amount: "", reference: "" },
                 ],
               };
@@ -923,7 +945,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                     outflowOnly
                     methodPrompt={{ tag: "Dar cambio", title: "¿De qué caja sale el vuelto?" }}
                     onClose={() => setChangePickerIdx(null)}
-                    onPick={(journal) => { asignarCajaCambio(changePickerIdx, journal.id); setChangePickerIdx(null); }}
+                    onPick={(journal) => { asignarCajaCambio(changePickerIdx, journal.id, journal.payment_method || null); setChangePickerIdx(null); }}
                   />
                 )}
 

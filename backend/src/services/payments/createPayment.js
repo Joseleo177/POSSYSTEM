@@ -6,6 +6,7 @@ const { assertWarehouseAccess } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
 const { creditAvailable, addCreditMovement } = require("../customers/creditLedger");
 const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
+const { resolveMethod } = require("../../utils/journalMethod");
 
 // Los cobros recién registrados, con el nombre de su caja ya resuelto.
 //
@@ -64,6 +65,7 @@ async function applyOnePayment(body, req, t) {
       currency_id,
       exchange_rate,
       payment_journal_id,
+      payment_method,     // por qué método entró (pago móvil, punto…): la cuenta acepta varios
       employee_id,
       reference_date,
       reference_number,
@@ -72,7 +74,8 @@ async function applyOnePayment(body, req, t) {
       received_amount,    // lo que físicamente entregó el cliente (en moneda del pago)
       change_given,       // cambio a devolver (en moneda base)
       change_journal_id,  // diario del que sale el cambio
-      change_parts,       // vuelto repartido: [{ journal_id, amount }] en moneda base
+      change_parts,       // vuelto repartido: [{ journal_id, amount, payment_method }] en moneda base
+      change_payment_method, // método del vuelto cuando sale de una sola caja
       surplus_kept,       // sobrante que se queda en caja (en moneda base)
       change_to_credit,   // sobrante que va al crédito del cliente (en moneda base)
       // Crédito de cliente
@@ -110,11 +113,15 @@ async function applyOnePayment(body, req, t) {
     // El vuelto puede repartirse entre varias cajas; una sola es el caso de una parte.
     const partesVuelto = (Array.isArray(change_parts) && change_parts.length)
       ? change_parts
-          .map(p => ({ journal_id: p?.journal_id, amount: parseFloat(p?.amount || 0) }))
+          .map(p => ({ journal_id: p?.journal_id, amount: parseFloat(p?.amount || 0), payment_method: p?.payment_method || null }))
           .filter(p => p.amount > 0)
       : (parseFloat(change_given || 0) > 0
-          ? [{ journal_id: change_journal_id, amount: parseFloat(change_given) }]
+          ? [{ journal_id: change_journal_id, amount: parseFloat(change_given), payment_method: change_payment_method || null }]
           : []);
+    // Cada caja del vuelto paga por un método que pague (validado contra la cuenta).
+    for (const parte of partesVuelto) {
+      parte.payment_method = await resolveMethod(parte.journal_id, parte.payment_method, "out", { transaction: t });
+    }
 
     const changeAmt = parseFloat(partesVuelto.reduce((acc, p) => acc + p.amount, 0).toFixed(6));
 
@@ -226,6 +233,8 @@ async function applyOnePayment(body, req, t) {
           // Con el vuelto repartido, el pago apunta a la primera caja: es el marcador que hace
           // que getSaleBalance descuente el vuelto. El detalle por caja vive en los egresos.
           change_journal_id: changeAmt > 0 ? partesVuelto[0].journal_id : null,
+          change_payment_method: changeAmt > 0 ? partesVuelto[0].payment_method : null,
+          payment_method: await resolveMethod(payment_journal_id || sale.payment_journal_id, payment_method, "in", { transaction: t }),
           idempotency_key: idempotency_key || null,
         },
         { transaction: t }
@@ -267,6 +276,7 @@ async function applyOnePayment(body, req, t) {
           date: toLocalDate(reference_date),
           category_id: changeCat.id,
           payment_journal_id: parte.journal_id,
+          payment_method: parte.payment_method,
           employee_id: employee_id || null,
           currency_id: changeCurrencyId,
           // El vuelto sale de la caja de la sucursal que cobró.
@@ -323,6 +333,8 @@ async function applyOnePayment(body, req, t) {
             notes: `Sobrante — Factura ${sale.invoice_number || "#" + sale_id}`,
             change_given: null,
             change_journal_id: null,
+            // Entró con el mismo pago: mismo método.
+            payment_method: payment?.payment_method || null,
           },
           { transaction: t }
         );
@@ -419,6 +431,7 @@ module.exports = async function createPayment(body, req) {
           currency_id:       p.currency_id ?? null,
           exchange_rate:     p.exchange_rate ?? null,
           payment_journal_id: p.journal_id,
+          payment_method:    p.payment_method ?? null,
           reference_number:  p.reference_number ?? null,
           _noSettle:         !ultimo,
           credit_amount:     primero ? body.credit_amount     : undefined,
@@ -426,6 +439,7 @@ module.exports = async function createPayment(body, req) {
           change_given:      ultimo  ? body.change_given      : undefined,
           change_journal_id: ultimo  ? body.change_journal_id : undefined,
           change_parts:      ultimo  ? body.change_parts      : undefined,
+          change_payment_method: ultimo ? body.change_payment_method : undefined,
           surplus_kept:      ultimo  ? body.surplus_kept      : undefined,
           change_to_credit:  ultimo  ? body.change_to_credit  : undefined,
           idempotency_key:   body.idempotency_key ? `${body.idempotency_key}-${i}` : null,

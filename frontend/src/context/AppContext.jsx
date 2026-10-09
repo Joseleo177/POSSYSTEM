@@ -158,11 +158,16 @@ export function AppProvider({ children }) {
   const activeJournals   = journals.filter(j => j.active);
   const activeBanks      = banks.filter(b => b.active);
   const activePaymentMethods = paymentMethods.filter(m => m.active);
-  // Diarios usables para dinero que SALE (egresos, pagos a proveedores): excluye los casados
-  // a un método que solo puede recibir, como Punto de Venta (nadie "paga a una persona" con
-  // un terminal de tarjeta).
+  // Sentido de cada caja: lo dice el DIARIO (allows_inflow / allows_outflow). Si el backend
+  // todavía no manda la marca (migración pendiente), se cae a la del método, como antes.
   const outflowCodes    = new Set(paymentMethods.filter(m => m.allows_outflow !== false).map(m => m.code));
-  const outflowJournals = activeJournals.filter(j => outflowCodes.has(j.type));
+  // El diario es la cuenta y cada uno de sus métodos dice si recibe, paga o ambas. La cuenta
+  // paga si alguno de sus métodos paga. Sin la lista (respuesta vieja), manda el método.
+  const journalPays     = (j) => j.methods?.length ? j.methods.some(m => m.allows_outflow) : outflowCodes.has(j.type);
+  const journalReceives = (j) => j.methods?.length ? j.methods.some(m => m.allows_inflow) : true;
+  // Para dinero que SALE (egresos, pagos a proveedores, vuelto) y para el que ENTRA (cobros).
+  const outflowJournals = activeJournals.filter(journalPays);
+  const inflowJournals  = activeJournals.filter(journalReceives);
 
   const storeName    = settings.store_name || "Mi tienda POS";
   const printerWidth = parseInt(settings.printer_width || "80");
@@ -203,7 +208,7 @@ export function AppProvider({ children }) {
       // Currencies
       currencies, activeCurrencies, baseCurrency, loadCurrencies,
       // Journals
-      journals, activeJournals, outflowJournals, loadJournals,
+      journals, activeJournals, outflowJournals, inflowJournals, journalPays, journalReceives, loadJournals,
       // Banks
       banks, activeBanks, loadBanks,
       // Payment methods

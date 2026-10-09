@@ -153,7 +153,7 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses, onTra
         product_id: addStockProduct.id,
         qty: parseFloat(addStockForm.qty) || 0,
       });
-      notify(`${addStockProduct.name} agregado al almacén ✓`);
+      notify(`${addStockProduct.name} agregado al almacén`);
       setAddStockModal(false);
       await loadStock(selectedWarehouse.id);
       await loadWarehouses();

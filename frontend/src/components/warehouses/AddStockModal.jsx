@@ -1,9 +1,26 @@
 import { useState, useEffect, useCallback } from "react";
 import Modal from "../ui/Modal";
-import { Button } from "../ui/Button";
+import { Spinner } from "../ui/Spinner";
 import { useDebounce } from "../../hooks/useDebounce";
 import { api } from "../../services/api";
+import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import { isIntegerUnit, fmtQtyUnit } from "../../helpers/unitFormatter";
+
+// Dar de alta un producto en un almacén: se elige el producto y, recién elegido, la existencia
+// con la que entra. La lista solo trae lo que todavía NO está en este almacén.
+
+const INPUT = "w-full h-11 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[14px] text-content dark:text-white placeholder:text-content-subtle/50 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-colors";
+const LUPA = "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z";
+
+function Foto({ p, size = "w-10 h-10" }) {
+    return (
+        <span className={`${size} shrink-0 rounded-lg overflow-hidden bg-surface-2 dark:bg-white/[0.05] border border-border/60 dark:border-white/[0.06] flex items-center justify-center relative`}>
+            {p.image_url
+                ? <img src={resolveImageUrl(p.image_url)} alt="" loading="lazy" onError={imgRetryOnError} className="absolute inset-0 w-full h-full object-cover" />
+                : <span className="text-[13px] font-semibold text-content-subtle/60">{p.name?.charAt(0)?.toUpperCase()}</span>}
+        </span>
+    );
+}
 
 export default function AddStockModal({
     open, onClose, selectedWarehouse,
@@ -34,7 +51,7 @@ export default function AddStockModal({
                 is_service: false,
             };
             if (selectedWarehouse) params.not_in_warehouse_id = selectedWarehouse.id;
-            
+
             const r = await api.products.getAll(params);
             const prods = r.data || [];
             setResults(prev => append ? [...prev, ...prods] : prods);
@@ -69,114 +86,134 @@ export default function AddStockModal({
         }
     }, [open]);
 
+    const p = addStockProduct;
+    const intUnit = isIntegerUnit(p?.unit);
+    const unidad = p ? fmtQtyUnit(2, p.unit).replace(/^[\d.,\s]+/, "").toLowerCase() : "";
+    const almacen = toNameCase(selectedWarehouse?.name) || "el almacén";
+
+    const pie = (
+        <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="btn-outline h-11 px-5 rounded-lg text-[13px] font-medium">Cancelar</button>
+            {p && (
+                <button type="button" onClick={doAddStock} disabled={savingStock}
+                    className="btn-accent flex-1 h-11 rounded-lg text-[14px] font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.99] transition">
+                    {savingStock && <Spinner />}
+                    {savingStock ? "Agregando…" : `Agregar a ${almacen}`}
+                </button>
+            )}
+        </div>
+    );
+
     return (
-        <Modal open={open} onClose={onClose} title="Agregar producto al almacén" width={480}>
-            <p className="text-xs text-content-muted dark:text-content-dark-muted mb-4">
-                Almacén: <b className="text-content dark:text-content-dark">{selectedWarehouse?.name}</b>
+        <Modal open={open} onClose={onClose} title="Agregar producto al almacén" width={480} footer={pie}>
+            <p className="-mt-1 mb-4 text-[13px] text-content-subtle">
+                Se agrega a <span className="font-medium text-content dark:text-white">{almacen}</span>.
+                {!p && " Solo aparecen los productos que todavía no tiene."}
             </p>
 
-            <div className="mb-3">
-                <div className="label mb-1">Producto *</div>
-                {addStockProduct ? (
-                    <div className="flex items-center gap-2.5 bg-info/10 border border-info/40 rounded-lg px-3 py-2">
-                        <div className="flex-1">
-                            <div className="text-xs font-semibold text-info">{addStockProduct.name}</div>
-                            <div className="text-[12px] text-content-muted dark:text-content-dark-muted">
-                                {addStockProduct.category_name || "Sin categoría"} · Stock: {fmtQtyUnit(addStockProduct.stock, addStockProduct.unit)}
-                            </div>
+            {p ? (
+                <div className="space-y-5">
+                    {/* Producto elegido */}
+                    <div className="flex items-center gap-3 rounded-xl border border-border/70 dark:border-white/[0.08] p-3">
+                        <Foto p={p} size="w-12 h-12" />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[14px] font-semibold text-content dark:text-white truncate">{toNameCase(p.name)}</p>
+                            <p className="text-[12px] text-content-subtle truncate">
+                                {toNameCase(p.category_name) || "Sin categoría"} · en total hay {fmtQtyUnit(p.stock, p.unit).toLowerCase()}
+                            </p>
                         </div>
-                        <button
-                            onClick={clearAddStockProduct}
-                            className="p-1.5 rounded-lg bg-danger/10 text-danger border border-danger/20 hover:bg-danger hover:text-black transition-all"
-                        >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
+                        <button type="button" onClick={clearAddStockProduct}
+                            className="shrink-0 h-9 px-3 rounded-lg text-[13px] font-medium text-content-subtle hover:text-content dark:hover:text-white hover:bg-surface-2 dark:hover:bg-white/[0.06] transition-colors">
+                            Cambiar
                         </button>
                     </div>
-                ) : (
-                    <div className="space-y-3">
+
+                    {/* Existencia inicial */}
+                    <div>
+                        <label htmlFor="alta-cantidad" className="block text-[12px] font-medium text-content-subtle mb-1.5">
+                            Existencia inicial en {almacen}
+                        </label>
+                        <div className="relative">
+                            <input
+                                id="alta-cantidad"
+                                data-autofocus
+                                type="text"
+                                inputMode={intUnit ? "numeric" : "decimal"}
+                                autoComplete="off"
+                                value={addStockForm.qty}
+                                onChange={e => {
+                                    let v = String(e.target.value).replace(/[^0-9.,]/g, "").replace(",", ".");
+                                    if (intUnit) v = v.replace(/\..*$/, "");
+                                    setAddStockForm(prev => ({ ...prev, qty: v }));
+                                }}
+                                onKeyDown={e => { if (e.key === "Enter") doAddStock(); }}
+                                placeholder="0"
+                                className={`${INPUT} pl-3.5 pr-24 text-[16px] font-semibold tabular-nums`}
+                            />
+                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[13px] text-content-subtle pointer-events-none">{unidad}</span>
+                        </div>
+                        <p className="mt-1.5 text-[12px] text-content-subtle">
+                            Déjalo en 0 si todavía no llegó: la mercancía entra luego por Compras o Ajustes.
+                        </p>
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    <div className="relative">
+                        <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={LUPA} /></svg>
                         <input
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            placeholder="Buscar producto..."
-                            className="input"
+                            placeholder="Buscar por nombre o código"
+                            className={`${INPUT} pl-10 pr-3.5`}
                             autoComplete="off"
                             spellCheck={false}
+                            data-autofocus
                         />
-                        
-                        <div 
-                            className="max-h-48 overflow-y-auto border border-border/40 dark:border-white/10 rounded-lg divide-y divide-border/10 dark:divide-white/[0.04]"
-                            onScroll={handleScroll}
-                        >
-                            {loadingList ? (
-                                <div className="py-6 text-center text-xs text-content-muted dark:text-content-dark-muted font-semibold">
-                                    Buscando productos...
-                                </div>
-                            ) : results.length === 0 ? (
-                                <div className="py-6 text-center text-xs text-content-muted dark:text-content-dark-muted font-semibold">
-                                    No hay resultados
-                                </div>
-                            ) : (
-                                results.map(p => (
-                                    <div
-                                        key={p.id}
-                                        onClick={() => selectAddStockProduct(p)}
-                                        className="px-3 py-2 cursor-pointer text-xs hover:bg-surface-3 dark:hover:bg-surface-dark-3 transition-colors flex items-center justify-between"
-                                    >
-                                        <div>
-                                            <div className="font-semibold text-content dark:text-content-dark">{p.name}</div>
-                                            <div className="text-[12px] text-content-muted dark:text-content-dark-muted">
-                                                {p.category_name || "Sin categoría"}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                            {loadingMore && (
-                                <div className="py-3 text-center text-[11px] text-content-muted dark:text-content-dark-muted font-bold opacity-50">
-                                    Cargando más...
-                                </div>
-                            )}
-                        </div>
                     </div>
-                )}
-            </div>
 
-            <div className="mb-4">
-                <div className="label mb-1">
-                    Cantidad inicial *
-                    {addStockProduct?.unit && <span className="ml-1 opacity-40 font-semibold">({addStockProduct.unit})</span>}
+                    <div
+                        className="max-h-72 overflow-y-auto rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]"
+                        onScroll={handleScroll}
+                    >
+                        {loadingList ? (
+                            <div className="py-10 flex items-center justify-center gap-2.5 text-[13px] text-content-subtle">
+                                <Spinner /> Buscando…
+                            </div>
+                        ) : results.length === 0 ? (
+                            <div className="py-10 px-6 text-center">
+                                <p className="text-[14px] font-semibold text-content dark:text-white">
+                                    {search ? "Sin resultados" : "No hay productos por agregar"}
+                                </p>
+                                <p className="mt-1 text-[13px] text-content-subtle">
+                                    {search ? "Prueba con otro nombre o código." : "Todos los productos ya están en este almacén."}
+                                </p>
+                            </div>
+                        ) : (
+                            results.map(r => (
+                                <button
+                                    type="button"
+                                    key={r.id}
+                                    onClick={() => selectAddStockProduct(r)}
+                                    className="w-full px-3 py-2.5 flex items-center gap-3 text-left hover:bg-surface-2/70 dark:hover:bg-white/[0.03] transition-colors"
+                                >
+                                    <Foto p={r} />
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block text-[13px] font-medium text-content dark:text-white truncate">{toNameCase(r.name)}</span>
+                                        <span className="block text-[12px] text-content-subtle truncate">{toNameCase(r.category_name) || "Sin categoría"}</span>
+                                    </span>
+                                    <svg className="w-4 h-4 shrink-0 text-content-subtle/50" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                                </button>
+                            ))
+                        )}
+                        {loadingMore && (
+                            <div className="py-3 flex items-center justify-center gap-2 text-[12px] text-content-subtle">
+                                <Spinner /> Cargando más…
+                            </div>
+                        )}
+                    </div>
                 </div>
-                <input
-                    type="number"
-                    min="0"
-                    step={isIntegerUnit(addStockProduct?.unit) ? "1" : "0.001"}
-                    value={addStockForm.qty}
-                    onChange={e => {
-                        let v = e.target.value;
-                        if (isIntegerUnit(addStockProduct?.unit)) v = String(v).replace(/[.,].*$/, "");
-                        setAddStockForm(p => ({ ...p, qty: v }));
-                    }}
-                    placeholder="0"
-                    className="input"
-                />
-                <div className="text-[12px] text-content-muted dark:text-content-dark-muted mt-1">
-                    Puedes ingresar 0 para registrar sin stock inicial
-                </div>
-            </div>
-
-            <div className="flex justify-end gap-2.5 mt-2">
-                <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-                <Button
-                    onClick={doAddStock}
-                    disabled={savingStock}
-                    className="bg-success/10 text-success border border-success/30 hover:bg-success hover:text-black shadow-none"
-                >
-                    {savingStock ? "Guardando..." : "Agregar al almacén"}
-                </Button>
-            </div>
-
+            )}
         </Modal>
     );
 }

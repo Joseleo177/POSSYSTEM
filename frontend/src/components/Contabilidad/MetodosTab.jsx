@@ -66,8 +66,6 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
     setMethodForm({ name: m.name, code: m.code, color: m.color || "#555555", allows_outflow: m.allows_outflow ?? true });
     setImage({ file: null, current: m.image_url || null, clearImage: false });
   };
-  // Qué puede hacer el método: es lo que decide dónde aparece (cobros, pagos a proveedores).
-  const uso = (m) => m.allows_outflow === false ? "Solo recibe" : "Recibe y paga";
 
   // Acciones de la fila, siempre a la vista: en una tablet no hay hover que las descubra.
   const acciones = (m) => canManage ? (
@@ -93,14 +91,13 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
           <thead className="sticky top-0 z-10">
             <tr>
               <th className="pl-4">Método</th>
-              <th>Uso</th>
               <th>Estado</th>
               <th className="pr-4 w-px"><span className="sr-only">Acciones</span></th>
             </tr>
           </thead>
           <tbody>
             {paymentMethods.length === 0 ? (
-              <LedgerEmpty cols={4} title="Sin métodos de pago" hint="Crea al menos uno para poder cobrar." />
+              <LedgerEmpty cols={3} title="Sin métodos de pago" hint="Crea al menos uno para poder cobrar." />
             ) : paymentMethods.map(m => (
               <tr key={m.id} {...ledgerRow(canManage ? () => abrirEditar(m) : undefined)}>
                 <td className="pl-4">
@@ -112,7 +109,6 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
                     </div>
                   </div>
                 </td>
-                <td><span className="text-[13px] text-content-subtle">{uso(m)}</span></td>
                 <td><StatusMark status={m.active ? "activo" : "inactivo"} map={ACTIVE_STATUS} /></td>
                 <td className="pr-4 whitespace-nowrap cursor-default">{acciones(m)}</td>
               </tr>
@@ -134,7 +130,7 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
             <div className="min-w-0 flex-1">
               <div className={`text-[14px] font-semibold truncate ${m.active ? "text-content dark:text-white" : "text-content-subtle"}`}>{toNameCase(m.name)}</div>
               <div className="flex items-center gap-2 text-[12px] text-content-subtle">
-                <span className="truncate">{uso(m)}</span>
+                <span className="truncate">{m.code}</span>
                 {!m.active && <StatusMark status="inactivo" map={ACTIVE_STATUS} />}
               </div>
             </div>
@@ -211,22 +207,9 @@ export default function MetodosTab({ notify, can, paymentMethods, loadPaymentMet
             </span>
           </div>
         </div>
-        <div className="mb-4">
-          <label className="flex items-start gap-2.5 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={methodForm.allows_outflow ?? true}
-              onChange={e => setMethodForm(p => ({ ...p, allows_outflow: e.target.checked }))}
-              className="mt-0.5 w-4 h-4 rounded cursor-pointer accent-brand-500"
-            />
-            <span>
-              <span className="block text-[12px] font-bold text-content dark:text-white tracking-tight">Tiene salidas</span>
-              <span className="block text-[11px] font-semibold text-content-subtle mt-0.5">
-                Permite usarlo para pagar egresos o compras. Desactívalo en métodos que solo reciben, como Punto de Venta.
-              </span>
-            </span>
-          </label>
-        </div>
+        {/* "Tiene salidas" ya no va aquí: si una caja recibe, paga o ambas se elige en cada
+            diario (Diarios → Movimientos). El valor de este método solo se usa como sugerencia
+            al crear un diario nuevo con él. */}
         <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
           <Button variant="ghost" onClick={closeForm}>Cancelar</Button>
           <Button variant="primary" onClick={saveMethod} disabled={methodSaving}>

@@ -4,7 +4,7 @@ const {
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { resolveSaleStatus } = require("../../utils/saleBalance");
-const { addCreditMovement } = require("../customers/creditLedger");
+const { creditAvailable, addCreditMovement } = require("../customers/creditLedger");
 
 const Op = Sequelize.Op;
 const err = (message, status) => Object.assign(new Error(message), { status, isOperational: true });

@@ -127,6 +127,27 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   const saldoEnMonedaDePago = (s) => saldoEnMonedaDePagoAt(s, rate);
   const deudaEnPago = deudaEnPagoAt(rate);
 
+  // Lo que falta por cubrir en el pago combinado, en la moneda de una caja de tasa `r` y sin
+  // contar el tramo `idx`. En bolívares se resta de la deuda línea por línea (deudaEnPagoAt),
+  // la misma que se le pide al cliente; en la base, de la deuda oficial. Restarlo siempre en
+  // la base partía de saldos redondeados a dos decimales y sugería unos bolívares de menos
+  // (Bs.1215,35 donde faltaban Bs.1219,62).
+  const faltaEnMoneda = (partes, idx, r) => {
+    const ya = (partes || []).reduce((a, q, i) => {
+      if (i === idx) return a;
+      const n = parseFloat(String(q.amount).replace(",", "."));
+      if (isNaN(n) || n <= 0) return a;
+      const jj = activeJournals.find(x => x.id === q.journal_id);
+      const cc = jj?.currency_id ? activeCurrencies.find(c => c.id === parseInt(jj.currency_id)) : baseCurrency;
+      const rr = (!cc || cc.is_base) ? 1 : parseFloat(cc.exchange_rate || 1);
+      if (r > 1) return a + (rr === r ? round2(n) : round2((n / rr) * r));
+      return a + (rr === 1 ? round2(n) : n / rr);
+    }, 0);
+    return r > 1
+      ? Math.max(0, round2(deudaEnPagoAt(r) - ya))
+      : Math.max(0, round2(deudaTotal - ya));
+  };
+
   // Lo que el cliente entregó por encima de la deuda y hay que decidir qué hacer con ello.
   //
   // El umbral es la misma tolerancia de diez céntimos que usa el resto del sistema, y no una
@@ -212,6 +233,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
         ...(combinado ? {
           pay_parts: partesComb.map(s => ({
             journal_id:       s.journal_id,
+            payment_method:   s.payment_method || null,
             amount:           s.base,
             currency_id:      s.cur?.id || null,
             exchange_rate:    s.rate,
@@ -222,6 +244,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
           currency_id:        currency?.id || null,
           exchange_rate:      rate,
           payment_journal_id: form.journal_id,
+          payment_method:     form.payment_method || null,
         }),
         reference_date:     form.reference_date,
         reference_number:   combinado ? null : (form.reference_number || null),
@@ -230,7 +253,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
         // dinero sin decir a dónde va.
         // Cada tramo del vuelto con su caja: el servidor registra un egreso por cada una.
         change_parts:      haySobrante && form.surplus_mode === "devolver"
-          ? salidas.filter(s => s.montoBase > 0).map(s => ({ journal_id: s.journal_id, amount: s.montoBase }))
+          ? salidas.filter(s => s.montoBase > 0).map(s => ({ journal_id: s.journal_id, payment_method: s.payment_method || null, amount: s.montoBase }))
           : undefined,
         // Al devolver, lo que no se entregó se queda en la caja: sin esto el servidor vería un
         // sobrante sin destino y rechazaría el cobro.
@@ -354,16 +377,8 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                           const parts = [...p.pay_parts];
                           const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
                           const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
-                          const yaBase = parts.reduce((a, q, i) => {
-                            if (i === idx) return a;
-                            const jj = activeJournals.find(x => x.id === q.journal_id);
-                            const cc = jj?.currency_id ? activeCurrencies.find(c => c.id === parseInt(jj.currency_id)) : baseCurrency;
-                            const rr = (!cc || cc.is_base) ? 1 : parseFloat(cc.exchange_rate || 1);
-                            const nn = parseFloat(String(q.amount).replace(",", "."));
-                            return a + (isNaN(nn) ? 0 : nn / rr);
-                          }, 0);
-                          const faltaBase = Math.max(0, deudaTotal - yaBase);
-                          parts[idx] = { ...parts[idx], journal_id: j.id, amount: (Math.round(faltaBase * r * 100) / 100).toFixed(2) };
+                          // Se sugiere lo que falta por cubrir, en la moneda de esta caja.
+                          parts[idx] = { ...parts[idx], journal_id: j.id, payment_method: j.payment_method || null, amount: faltaEnMoneda(parts, idx, r).toFixed(2) };
                           return { ...p, pay_parts: parts };
                         })}
                       />
@@ -392,6 +407,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                             ...p,
                             pay_parts: [],
                             journal_id: only.journal_id || "",
+                            payment_method: only.payment_method || null,
                             amount: only.amount || "",
                             reference_number: only.reference || "",
                             rate: "",
@@ -455,6 +471,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
               setForm(p => ({
                 ...p,
                 journal_id: j.id,
+                payment_method: j.payment_method || null,
                 amount: deudaEnPagoAt(r).toFixed(2),
                 // La tasa escrita a mano era de la moneda anterior: arrastrarla convertiría
                 // este cobro a un número que no tiene nada que ver.
@@ -609,7 +626,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                             return acc + (Number.isFinite(n) ? n / rr : 0);
                           }, 0);
                           const falta = Math.max(0, sobrante - yaAsignado);
-                          partes[idx] = { journal_id: id, amount: round2(falta * r).toFixed(2) };
+                          partes[idx] = { journal_id: id, payment_method: j.payment_method || null, amount: round2(falta * r).toFixed(2) };
                           return { ...p, change_parts: partes };
                         })}
                       />

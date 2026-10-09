@@ -24,7 +24,7 @@ export function useEgresos({ notify, journals }) {
 
     const [showCreate, setShowCreate] = useState(false);
     const today = () => todayISO();
-    const [form, setForm] = useState({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "", date: today(), rate: "", warehouse_id: "" });
+    const [form, setForm] = useState({ description: "", amount: "", category_id: "", payment_journal_id: "", payment_method: "", reference: "", notes: "", date: today(), rate: "", warehouse_id: "" });
     const [saving, setSaving] = useState(false);
 
     // Los egresos son de una sucursal. La API ya devuelve solo los almacenes del usuario,
@@ -124,6 +124,8 @@ export function useEgresos({ notify, journals }) {
                 amount: baseAmount,
                 category_id: parseInt(form.category_id),
                 payment_journal_id: form.payment_journal_id ? parseInt(form.payment_journal_id) : null,
+                // Por qué método de la cuenta (la botonera lo eligió junto con la caja).
+                payment_method: form.payment_journal_id ? (form.payment_method || null) : null,
                 reference: form.reference || null,
                 notes: form.notes || null,
                 currency_id: selectedJournal?.currency_id || null,
@@ -133,7 +135,7 @@ export function useEgresos({ notify, journals }) {
             });
             notify("Egreso registrado correctamente");
             setShowCreate(false);
-            setForm({ description: "", amount: "", category_id: "", payment_journal_id: "", reference: "", notes: "", date: today(), rate: "", warehouse_id: warehouses.length === 1 ? String(warehouses[0].id) : "" });
+            setForm({ description: "", amount: "", category_id: "", payment_journal_id: "", payment_method: "", reference: "", notes: "", date: today(), rate: "", warehouse_id: warehouses.length === 1 ? String(warehouses[0].id) : "" });
             loadExpenses();
         } catch (e) { notify(e.message, "err"); }
         finally { setSaving(false); }

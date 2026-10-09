@@ -88,6 +88,10 @@ const MODULES = [
       { key: 'expense', label: 'Registrar egresos' },
       { key: 'void',    label: 'Anular movimientos' },
       { key: 'delete',  label: 'Eliminar movimientos' },
+      // Subir extractos y casarlos con cobros, ingresos y egresos. Registra comisiones y
+      // movimientos desde el extracto, así que se concedió a quien ya registraba egresos. No
+      // va en ningún LEGACY_MAP: es una facultad nueva y nadie la hereda en silencio.
+      { key: 'reconcile', label: 'Conciliar bancos' },
     ],
   },
   {
