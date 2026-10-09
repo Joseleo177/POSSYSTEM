@@ -16,28 +16,22 @@ La tercera mueve cobros, egresos, ingresos, pagos a proveedor y arqueos de un di
 ### 1. Respaldo de Supabase
 Desde el panel de Supabase (Database → Backups) o con `pg_dump` contra la conexión directa. Sin respaldo no se sigue: la fusión no tiene vuelta atrás automática.
 
-### 2. Revisar qué se va a fusionar
-Correr `20261009-1-vista-previa-fusion-diarios.sql` en el editor SQL (solo lee). Cada fila es un grupo de diarios que van a quedar como una sola cuenta. Si dos diarios de un grupo son cuentas bancarias **distintas** (por ejemplo, dos cuentas del Banco de Venezuela), separarlos antes de migrar: asignarles sucursales distintas en Diarios.
+### 2. Migraciones pendientes
+Correr `20261009-0-migraciones-pendientes.sql` en el editor SQL (solo lee). Tiene que listar **solo** las cuatro de la tabla de arriba. Si aparece otra, parar: `db:migrate` también la correría.
 
-### 3. Hora sin ventas
-Entre la migración y el despliegue del backend nuevo, el backend viejo de Vercel no conoce las columnas nuevas. Hacerlo fuera de horario y desplegar enseguida.
+### 3. Revisar qué se va a fusionar
+Correr `20261009-1-vista-previa-fusion-diarios.sql` (solo lee). Cada fila es un grupo de diarios que van a quedar como una sola cuenta. Si dos diarios de un grupo son cuentas bancarias **distintas** (por ejemplo, dos cuentas del Banco de Venezuela), separarlos antes de migrar: asignarles sucursales distintas en Diarios.
 
-### 4. Migrar desde el contenedor
-Con la **conexión directa** de Supabase (puerto 5432, no el pooler 6543: el pooler rompe el DDL en transacción). Los valores salen de Supabase → Project Settings → Database.
+### 4. Migrar (fuera de horario de ventas)
+Entre la migración y el despliegue del backend nuevo, el backend viejo de Vercel no conoce las columnas nuevas: hacerlo sin ventas en curso y desplegar enseguida.
+
+Desde Git Bash, en la carpeta `POSSYSTEM`:
 
 ```bash
-cd POSSYSTEM
-docker compose run --rm \
-  -e NODE_ENV=production \
-  -e DB_HOST=db.<proyecto>.supabase.co \
-  -e DB_PORT=5432 \
-  -e DB_NAME=postgres \
-  -e DB_USER=postgres \
-  -e DB_PASSWORD='<clave>' \
-  backend npx sequelize-cli db:migrate
+bash backend/migrations-sql/migrar_supabase.sh
 ```
 
-`NODE_ENV=production` activa el SSL. La salida tiene que listar las cuatro migraciones como `migrated` y, para cada empresa con diarios fusionados, una línea `[journal-accounts] empresa N: diarios … fusionados en …`. Guardar esa salida.
+Pide host, puerto, usuario y clave del **pooler** de Supabase (Project Settings → Database → Connection pooling): host `aws-1-us-east-1.pooler.supabase.com`, puerto 5432 (modo sesión; si cierra la conexión, 6543), usuario `postgres.<ref>`. Corre `db:migrate` en el contenedor con `NODE_ENV=production` (SSL) y guarda la salida en un `.log`. Tiene que listar las cuatro migraciones como `migrated` y, por cada empresa con diarios fusionados, una línea `[journal-accounts] empresa N: diarios … fusionados en …`.
 
 > No correr además `20261006100000-bank-reconciliation.sql`: es la alternativa manual de la primera migración y `db:migrate` ya la aplica.
 
