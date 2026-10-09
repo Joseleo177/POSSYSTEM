@@ -13,8 +13,10 @@ La tercera mueve cobros, egresos, ingresos, pagos a proveedor y arqueos de un di
 
 ## Orden
 
-### 1. Respaldo de Supabase
-Desde el panel de Supabase (Database → Backups) o con `pg_dump` contra la conexión directa. Sin respaldo no se sigue: la fusión no tiene vuelta atrás automática.
+### 1. Respaldo de Supabase, justo antes de migrar
+Un respaldo de horas antes no sirve: restaurarlo perdería las ventas del día. Dos capas:
+- **Obligatorio:** `20261009-0b-respaldo-antes-de-migrar.sql` en el editor SQL. Copia lo que toca la migración (diarios, a qué diario apunta cada cobro, egreso, ingreso, pago a proveedor y venta, arqueos y roles) en el esquema `respaldo_20261009`. La última consulta tiene que dar 0 en todas las filas.
+- **Si conecta:** `bash backend/migrations-sql/respaldar_supabase.sh` deja un respaldo completo en `backups/` (ignorado por git).
 
 ### 2. Migraciones pendientes
 Correr `20261009-0-migraciones-pendientes.sql` en el editor SQL (solo lee). Tiene que listar **solo** las cuatro de la tabla de arriba. Si aparece otra, parar: `db:migrate` también la correría.
