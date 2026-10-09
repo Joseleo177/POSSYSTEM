@@ -30,3 +30,8 @@ Thumbs.db
 *.local
 backups/posdb_20260608_124945.sql.gz
 backups/posdb_20260610_170457.sql.gz
+
+# ── Respaldos de base de datos (datos de clientes: nunca al repo) ──
+*.dump
+backups/*.sql
+backups/*.sql.gz
