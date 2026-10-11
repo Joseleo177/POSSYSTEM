@@ -308,6 +308,8 @@ export const api = {
     toggle:       (id)       => request(`/currencies/${id}/toggle`, { method: "PUT" }),
     remove:       (id)       => request(`/currencies/${id}`,        { method: "DELETE" }),
     refreshRates: ()         => request("/currencies/refresh",       { method: "POST" }),
+    // Tasa publicada por el BCV con su fecha valor, sin aplicarla.
+    bcv:          (fresh)    => request(`/currencies/bcv${fresh ? "?fresh=1" : ""}`),
   },
   journals: {
     getAll:       ()              => request("/payment-journals"),

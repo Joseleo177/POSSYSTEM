@@ -2,7 +2,8 @@
 import React from "react";
 import { resolveImageUrl, toNameCase } from "../helpers";
 import { ROLE_COLORS, DEFAULT_ROLE_CLASS } from "../constants/roles";
-import { api } from "../services/api";
+import { useApp } from "../context/AppContext";
+import { useBcvRate, checkBcvRate } from "../hooks/useBcvRate";
 
 function useDateTick() {
     const [now, setNow] = React.useState(new Date());
@@ -16,13 +17,19 @@ function useDateTick() {
 export default function TopBar({ settings, storeName, safeTab, visibleTabs, employee, dark, toggle, logout, onOpenLauncher, currencies = [] }) {
     const roleClass = ROLE_COLORS[employee?.role] || DEFAULT_ROLE_CLASS;
     const activeTab = visibleTabs.find((t) => t.key === safeTab);
-    const [refreshing, setRefreshing] = React.useState(false);
+    const { notify, can } = useApp();
+    const { checking: refreshing } = useBcvRate();
 
+    // Antes aplicaba sin preguntar lo último que publicara el BCV, que en la tarde ya es la
+    // tasa del día siguiente. Ahora consulta y, si hay una distinta, la ofrece en el aviso
+    // (RateBanner) con su fecha valor para que se decida si aplicarla.
     const handleRefreshRate = async () => {
         if (refreshing) return;
-        setRefreshing(true);
-        try { await api.currencies.refreshRates(); } catch {}
-        setRefreshing(false);
+        try {
+            const bcv = await checkBcvRate({ manual: true });
+            const actual = parseFloat(localCurrency?.exchange_rate) || 0;
+            if (bcv && Math.abs(bcv.rate - actual) < 0.00005) notify("Ya tienes la última tasa publicada por el BCV");
+        } catch (e) { notify(e.message || "No se pudo consultar la tasa del BCV", "err"); }
     };
 
     const now = useDateTick();
@@ -101,7 +108,8 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
                         )}
                     </div>
                 )}
-                {localCurrency && (
+                {/* Sin permiso para manejar la tasa el botón solo devolvía un error. */}
+                {localCurrency && can("currencies.manage") && (
                     <button
                         onClick={handleRefreshRate}
                         disabled={refreshing}

@@ -9,6 +9,7 @@ import NotificationToast from "../layout/NotificationToast";
 import HeaderMobile from "../layout/HeaderMobile";
 import TopBar from "../layout/TopBar";
 import SubscriptionBanner from "../layout/SubscriptionBanner";
+import RateBanner from "../layout/RateBanner";
 import AppLauncher from "../layout/AppLauncher";
 import CommandPalette from "../components/ui/CommandPalette";
 import BottomTabs from "../layout/BottomTabs";
@@ -83,6 +84,8 @@ export default function PosApp() {
             />
 
             <SubscriptionBanner company={company} employee={employee} />
+
+            <RateBanner />
 
             <HeaderMobile
                 settings={settings}

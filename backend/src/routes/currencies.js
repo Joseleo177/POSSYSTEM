@@ -3,6 +3,7 @@ const ctrl   = require("../controllers/currencies");
 const { auth, permit } = require("../middleware/auth");
 
 router.get("/",              auth, ctrl.getAll);
+router.get("/bcv",           auth, permit("currencies.manage"), ctrl.getBcvPreview);
 router.post("/refresh",      auth, permit("currencies.manage"), ctrl.refreshRates);
 router.post("/",             auth, permit("currencies.manage"), ctrl.create);
 router.put("/:id/rate",      auth, permit("currencies.manage"), ctrl.updateRate);
