@@ -429,13 +429,15 @@ export function buildPurchasesExcel(data, range) {
 // usando una clave por diario.
 export function buildPaymentJournalsExcel(data, range) {
   const journals = data.journals || [];
+  // En la vista por método cada columna es cuenta + método: el rótulo lleva los dos.
+  const rotulo = (j) => j.method_name ? `${j.name} - ${j.method_name}` : j.name;
 
   // Cada diario aporta su monto en su propia moneda; el equivalente en base solo se agrega
   // cuando el diario no está ya en base, para no repetir la misma cifra dos veces.
   const dayHeaders = [{ key: "fecha", label: "Fecha" }];
   for (const j of journals) {
-    dayHeaders.push({ key: `j${j.id}`, label: `${j.name} (${j.currency_symbol})` });
-    if (!j.is_base) dayHeaders.push({ key: `j${j.id}_base`, label: `${j.name} (Ref.)` });
+    dayHeaders.push({ key: `j${j.id}`, label: `${rotulo(j)} (${j.currency_symbol})` });
+    if (!j.is_base) dayHeaders.push({ key: `j${j.id}_base`, label: `${rotulo(j)} (Ref.)` });
   }
   dayHeaders.push({ key: "total_base", label: "Total (Ref.)" });
 
@@ -467,6 +469,7 @@ export function buildPaymentJournalsExcel(data, range) {
       name: "Por Diario",
       rows: journals.map(j => ({
         name: j.name,
+        method_name: j.method_name || "",
         bank_name: j.bank_name || "",
         currency_symbol: j.currency_symbol,
         tx_count: data.totals?.cells?.[j.id]?.tx_count || 0,
@@ -475,6 +478,7 @@ export function buildPaymentJournalsExcel(data, range) {
       })),
       headers: [
         { key: "name",            label: "Diario" },
+        ...(data.by === "method" ? [{ key: "method_name", label: "Método" }] : []),
         { key: "bank_name",       label: "Banco" },
         { key: "currency_symbol", label: "Moneda" },
         { key: "tx_count",        label: "Cobros" },

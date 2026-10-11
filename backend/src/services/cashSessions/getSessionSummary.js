@@ -76,6 +76,46 @@ module.exports = async function getSessionSummary(id, req) {
     }
   );
 
+  // Desglose por método dentro de cada cuenta. Una cuenta ("Bdv") recibe por punto, pago
+  // móvil y biopago, y el cajero cuadra cada uno contra un papel distinto: el cierre del
+  // punto no se compara con el total de la cuenta. Mismo filtro que la consulta de arriba y
+  // mismo criterio de método que el resto: COALESCE(payment_method, pj.type).
+  const methodRows = await sequelize.query(
+    `
+      SELECT p.payment_journal_id AS journal_id,
+        COALESCE(NULLIF(p.payment_method, ''), pj.type) AS method_code,
+        MAX(pm.name) AS method_name,
+        MIN(COALESCE(m.sort_order, 999)) AS sort_order,
+        COUNT(DISTINCT COALESCE(p.batch_id, CONCAT('p', p.id)))::int AS payment_count,
+        COALESCE(SUM(p.amount * p.exchange_rate), 0)::float AS total
+      FROM payments p
+      JOIN payment_journals pj ON p.payment_journal_id = pj.id
+      JOIN sales s ON p.sale_id = s.id
+      LEFT JOIN payment_methods pm
+        ON pm.code = COALESCE(NULLIF(p.payment_method, ''), pj.type) AND pm.company_id = pj.company_id
+      LEFT JOIN payment_journal_methods m
+        ON m.journal_id = pj.id AND m.method_code = COALESCE(NULLIF(p.payment_method, ''), pj.type)
+      WHERE s.warehouse_id = :wid AND s.employee_id = :eid
+        AND p.created_at >= :openedAt AND p.created_at < :closedAt
+      GROUP BY p.payment_journal_id, COALESCE(NULLIF(p.payment_method, ''), pj.type)
+      ORDER BY sort_order, total DESC
+    `,
+    {
+      type: Sequelize.QueryTypes.SELECT,
+      replacements: { wid, eid, openedAt: openedAt.toISOString(), closedAt: closedAt.toISOString() },
+    }
+  );
+  for (const pj of paymentsByJournal) {
+    pj.methods = methodRows
+      .filter((m) => m.journal_id === pj.id)
+      .map(({ method_code, method_name, payment_count, total }) => ({
+        code: method_code,
+        name: method_name || (method_code || "Sin método").replace(/_/g, " "),
+        payment_count,
+        total,
+      }));
+  }
+
   // Lo que salió de cada gaveta como vuelto se lee de los EGRESOS de "Cambio / Vuelto", que
   // llevan una fila por caja con su monto.
   //

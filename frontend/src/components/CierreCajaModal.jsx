@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
-import { fmtMoney, toNameCase } from "../helpers";
+import { fmtMoney, toNameCase, fmtDuracion } from "../helpers";
 import { Spinner } from "./ui/Spinner";
 import Money from "./ui/Money";
+import CobrosDelTurno from "./CobrosDelTurno";
 
 const fmt$ = (n) => fmtMoney(parseFloat(n) || 0);
 
@@ -52,9 +53,7 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
         }
     };
 
-    const openedAt    = new Date(session.opened_at);
-    const duration    = Math.round((Date.now() - openedAt.getTime()) / 60000);
-    const durationLabel = duration >= 60 ? `${Math.floor(duration / 60)} h ${duration % 60} min` : `${duration} min`;
+    const durationLabel = fmtDuracion(session.opened_at);
     const allFilled   = summary?.journal_summary?.every(j => closingAmounts[j.journal_id] !== "");
     const bloqueado   = saving || loadingSummary || !allFilled;
 
@@ -120,18 +119,7 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
                             {summary.payments_by_journal.length > 0 && (
                                 <div className="px-6 pt-5">
                                     <div className="text-[14px] font-semibold text-content dark:text-white mb-2">Cobros del turno</div>
-                                    <div className="divide-y divide-border/60 dark:divide-white/[0.06]">
-                                        {summary.payments_by_journal.map((p, i) => (
-                                            <div key={i} className="flex items-center justify-between gap-3 py-2.5">
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.journal_color || "#94a3b8" }} />
-                                                    <span className="text-[13px] font-medium text-content dark:text-white truncate">{toNameCase(p.journal_name)}</span>
-                                                    <span className="text-[12px] text-content-subtle shrink-0">{p.payment_count} {p.payment_count === 1 ? "cobro" : "cobros"}</span>
-                                                </div>
-                                                <Money value={fmtMoney(p.total, p.currency_symbol || "Ref.")} className="text-[13px] font-semibold text-content dark:text-white" />
-                                            </div>
-                                        ))}
-                                    </div>
+                                    <CobrosDelTurno items={summary.payments_by_journal} />
                                 </div>
                             )}
 

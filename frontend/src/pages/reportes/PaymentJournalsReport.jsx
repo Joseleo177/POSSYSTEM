@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "../../services/api";
 import FilterPopover from "../../components/ui/FilterPopover";
 import CustomSelect from "../../components/ui/CustomSelect";
+import Segmented from "../../components/ui/Segmented";
 import { fmtNumber } from "../../helpers/numbers";
 import { buildPaymentJournalsExcel } from "../../helpers/excel";
 import {
@@ -14,10 +15,22 @@ import {
 // Nace de un vacío concreto: el Estado de Cuenta de Contabilidad agrupa los diarios por
 // banco, así que con dos diarios del mismo banco —un punto de venta y un pago móvil— sus
 // montos quedan sumados sin forma de separarlos. Aquí cada diario tiene su columna.
+//
+// Y desde que el diario es la cuenta con varios métodos, una sola cuenta junta el punto, el
+// pago móvil y el biopago. "Por método" abre cada cuenta en una columna por método, bajo un
+// encabezado común: es lo que se cuadra contra el cierre del punto o el extracto del pago
+// móvil. "Por cuenta" queda para comparar contra el saldo del banco.
+const VISTAS = [
+    { key: "method",  label: "Por método" },
+    { key: "journal", label: "Por cuenta" },
+];
+
+// Línea que separa una cuenta de la siguiente cuando sus métodos van en varias columnas.
+const SEP = "border-l border-border/60 dark:border-white/[0.06]";
 
 // Fila de resumen de lo cargado a mano. Se dibuja apagada cuando no hubo movimiento: una
 // fila de guiones deja claro que se miró y no había nada, que no es lo mismo que faltar.
-function ManualRow({ label, summary, journals, sign, tone, fmtJ, fmtB }) {
+function ManualRow({ label, summary, journals, sign, tone, fmtJ, fmtB, sep }) {
     const hay = (summary?.tx_count || 0) > 0;
     return (
         <tr className={`border-t border-border/60 dark:border-white/5 ${hay ? "" : "opacity-40"}`}>
@@ -32,7 +45,7 @@ function ManualRow({ label, summary, journals, sign, tone, fmtJ, fmtB }) {
             {journals.map(j => {
                 const c = summary?.cells?.[j.id];
                 return (
-                    <td key={j.id} className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
+                    <td key={j.id} className={`px-4 py-2 text-right tabular-nums whitespace-nowrap ${sep(j)}`}>
                         {c ? (
                             <>
                                 <div className={`font-bold ${tone}`}>{sign} {fmtJ(c.amount_journal, j.currency_symbol)}</div>
@@ -55,6 +68,7 @@ function ManualRow({ label, summary, journals, sign, tone, fmtJ, fmtB }) {
 
 export default function PaymentJournalsReport() {
     const [range, setRange] = useState(defaultRange(30));
+    const [vista, setVista] = useState("method");
     // Filtros de corte: quién cobró y con qué serie se facturó. Varios a la vez, porque la
     // pregunta habitual es por un turno completo ("los tres cajeros de la mañana") o por un
     // punto de venta con su propia numeración, no por uno solo.
@@ -97,14 +111,14 @@ export default function PaymentJournalsReport() {
     }, [warehouseId]);
 
     const hr = useHourRange();
-    const params = { date_from: range.from, date_to: range.to, warehouse_id: warehouseId, ...hr.params };
+    const params = { date_from: range.from, date_to: range.to, warehouse_id: warehouseId, by: vista, ...hr.params };
     if (empSel.length)   params.employee_ids = empSel.join(",");
     if (serieSel.length) params.serie_ids    = serieSel.join(",");
 
     const { data, loading, error } = useReport(
         api.reports.paymentJournals,
         params,
-        [range.from, range.to, hr.key, warehouseId, empSel.join(","), serieSel.join(",")]
+        [range.from, range.to, hr.key, warehouseId, empSel.join(","), serieSel.join(","), vista]
     );
 
     const toggle = (setter) => (id) =>
@@ -115,6 +129,19 @@ export default function PaymentJournalsReport() {
     const days     = data?.days ?? [];
     const totals   = data?.totals;
     const manual   = data?.manual;
+    // La respuesta dice en qué vista viene: mientras llega la otra, la tabla no se arma con
+    // encabezados de una vista y celdas de la otra.
+    const porMetodo = data?.by === "method";
+
+    // Por método, las columnas de una misma cuenta llegan juntas y se agrupan bajo ella.
+    const grupos = [];
+    for (const j of journals) {
+        const g = grupos[grupos.length - 1];
+        if (g && g.journal_id === j.journal_id) g.cols.push(j);
+        else grupos.push({ journal_id: j.journal_id, head: j, cols: [j] });
+    }
+    const inicioDeGrupo = new Set(grupos.map(g => g.cols[0].id));
+    const sep = (j) => porMetodo && inicioDeGrupo.has(j.id) ? SEP : "";
 
     // Cada diario se muestra en SU moneda: es lo que el cajero contó. El total del día va en
     // la base, que es lo único sumable cuando hay diarios en monedas distintas.
@@ -140,6 +167,7 @@ export default function PaymentJournalsReport() {
                         ]}
                     />
                     )}
+                    <Segmented value={vista} onChange={setVista} options={VISTAS} />
                     {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} dateFrom={range.from} dateTo={range.to} />}
 
                     <div className="relative">
@@ -224,11 +252,11 @@ export default function PaymentJournalsReport() {
                         <KpiCard label="Cobrado en ventas" value={fmtB(totals?.total_base)} color="text-content dark:text-white" sub="Convertido a moneda base" />
                         <KpiCard label="Movimiento neto" value={fmtB(manual?.net?.total_base)} color="text-content dark:text-white" sub="Cobros + ingresos − egresos" />
                         <KpiCard label="Cobros" value={fmtNumber(totals?.tx_count || 0, 0)} color="text-content dark:text-white" />
-                        <KpiCard label="Diarios con movimiento" value={fmtNumber(journals.length, 0)} color="text-violet-500" />
+                        <KpiCard label="Cuentas con movimiento" value={fmtNumber(grupos.length, 0)} color="text-content dark:text-white" />
                     </div>
 
                     <SectionHeader
-                        title="Cobros por día y diario"
+                        title={porMetodo ? "Cobros por día, cuenta y método" : "Cobros por día y diario"}
                         sub="La matriz son cobros de ventas; los ingresos y egresos manuales van sumados abajo"
                     />
 
@@ -242,21 +270,49 @@ export default function PaymentJournalsReport() {
                         <div className="bg-white dark:bg-white/5 rounded-xl border border-border dark:border-white/5 shadow-sm overflow-x-auto">
                             <table className="w-full text-[12px] border-collapse">
                                 <thead>
-                                    <tr className="bg-surface-2 dark:bg-white/5">
-                                        <th className="px-4 py-2.5 text-left font-bold text-content-muted dark:text-content-dark-muted whitespace-nowrap">Fecha</th>
-                                        {journals.map(j => (
-                                            <th key={j.id} className="px-4 py-2.5 text-right font-bold whitespace-nowrap">
-                                                <span className="inline-flex items-center gap-1.5 justify-end">
-                                                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: j.color || "#888" }} />
-                                                    <span className="text-content dark:text-white">{j.name}</span>
-                                                </span>
-                                                <div className="font-semibold text-content-muted dark:text-content-dark-muted opacity-60 normal-case">
-                                                    {j.bank_name || j.currency_symbol}
-                                                </div>
-                                            </th>
-                                        ))}
-                                        <th className="px-4 py-2.5 text-right font-bold text-content dark:text-white whitespace-nowrap">Total</th>
-                                    </tr>
+                                    {porMetodo ? (
+                                        <>
+                                            {/* Fila 1: la cuenta, sobre todas sus columnas. Fila 2: el método. */}
+                                            <tr className="bg-surface-2 dark:bg-white/5">
+                                                <th rowSpan={2} className="px-4 py-2.5 text-left font-bold text-content-muted dark:text-content-dark-muted whitespace-nowrap align-bottom">Fecha</th>
+                                                {grupos.map(g => (
+                                                    <th key={g.journal_id} colSpan={g.cols.length} className={`px-4 pt-2.5 pb-1 font-bold whitespace-nowrap ${g.cols.length > 1 ? "text-center" : "text-right"} ${SEP}`}>
+                                                        <span className="inline-flex items-center gap-1.5 justify-end">
+                                                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: g.head.color || "#888" }} />
+                                                            <span className="text-content dark:text-white">{g.head.account_name}</span>
+                                                        </span>
+                                                        {g.head.bank_name && g.head.bank_name.toLowerCase() !== String(g.head.account_name).toLowerCase() && (
+                                                            <div className="font-medium text-content-subtle">{g.head.bank_name}</div>
+                                                        )}
+                                                    </th>
+                                                ))}
+                                                <th rowSpan={2} className="px-4 py-2.5 text-right font-bold text-content dark:text-white whitespace-nowrap align-bottom">Total</th>
+                                            </tr>
+                                            <tr className="bg-surface-2 dark:bg-white/5">
+                                                {journals.map(j => (
+                                                    <th key={j.id} className={`px-4 pt-1 pb-2.5 text-right font-medium text-content-subtle whitespace-nowrap ${sep(j)}`}>
+                                                        {j.method_name}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </>
+                                    ) : (
+                                        <tr className="bg-surface-2 dark:bg-white/5">
+                                            <th className="px-4 py-2.5 text-left font-bold text-content-muted dark:text-content-dark-muted whitespace-nowrap">Fecha</th>
+                                            {journals.map(j => (
+                                                <th key={j.id} className="px-4 py-2.5 text-right font-bold whitespace-nowrap">
+                                                    <span className="inline-flex items-center gap-1.5 justify-end">
+                                                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: j.color || "#888" }} />
+                                                        <span className="text-content dark:text-white">{j.name}</span>
+                                                    </span>
+                                                    <div className="font-semibold text-content-muted dark:text-content-dark-muted opacity-60 normal-case">
+                                                        {j.bank_name || j.currency_symbol}
+                                                    </div>
+                                                </th>
+                                            ))}
+                                            <th className="px-4 py-2.5 text-right font-bold text-content dark:text-white whitespace-nowrap">Total</th>
+                                        </tr>
+                                    )}
                                 </thead>
                                 <tbody>
                                     {days.map(d => (
@@ -267,7 +323,7 @@ export default function PaymentJournalsReport() {
                                             {journals.map(j => {
                                                 const c = d.cells[j.id];
                                                 return (
-                                                    <td key={j.id} className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">
+                                                    <td key={j.id} className={`px-4 py-2.5 text-right tabular-nums whitespace-nowrap ${sep(j)}`}>
                                                         {c ? (
                                                             <>
                                                                 <div className="font-bold text-content dark:text-white">{fmtJ(c.amount_journal, j.currency_symbol)}</div>
@@ -292,7 +348,7 @@ export default function PaymentJournalsReport() {
                                         {journals.map(j => {
                                             const c = totals?.cells?.[j.id];
                                             return (
-                                                <td key={j.id} className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">
+                                                <td key={j.id} className={`px-4 py-2.5 text-right tabular-nums whitespace-nowrap ${sep(j)}`}>
                                                     <div className="font-bold text-content dark:text-white">{fmtJ(c?.amount_journal, j.currency_symbol)}</div>
                                                     {!j.is_base && (
                                                         <div className="text-[11px] font-semibold text-content-muted dark:text-content-dark-muted opacity-60">{fmtB(c?.amount_base)}</div>
@@ -315,6 +371,7 @@ export default function PaymentJournalsReport() {
                                         tone="text-content dark:text-white"
                                         fmtJ={fmtJ}
                                         fmtB={fmtB}
+                                        sep={sep}
                                     />
                                     <ManualRow
                                         label="− Egresos manuales"
@@ -324,6 +381,7 @@ export default function PaymentJournalsReport() {
                                         tone="text-danger"
                                         fmtJ={fmtJ}
                                         fmtB={fmtB}
+                                        sep={sep}
                                     />
 
                                     <tr className="border-t-2 border-content/20 dark:border-white/20 bg-brand-500/[0.07]">
@@ -336,7 +394,7 @@ export default function PaymentJournalsReport() {
                                         {journals.map(j => {
                                             const c = manual?.net?.cells?.[j.id];
                                             return (
-                                                <td key={j.id} className="px-4 py-3 text-right tabular-nums whitespace-nowrap">
+                                                <td key={j.id} className={`px-4 py-3 text-right tabular-nums whitespace-nowrap ${sep(j)}`}>
                                                     <div className="font-bold text-content dark:text-white">{fmtJ(c?.amount_journal, j.currency_symbol)}</div>
                                                     {!j.is_base && (
                                                         <div className="text-[11px] font-semibold text-content-muted dark:text-content-dark-muted opacity-60">{fmtB(c?.amount_base)}</div>

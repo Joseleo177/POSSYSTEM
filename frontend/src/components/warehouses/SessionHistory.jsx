@@ -1,24 +1,14 @@
 import { useState } from "react";
 import Segmented from "../ui/Segmented";
 import { toNameCase } from "../../helpers";
-import { fmtDayLabel, fmtDateShort, fmtTime } from "../../helpers/dates";
+import { fmtDayLabel, fmtDateShort, fmtTime, fmtDuracion } from "../../helpers/dates";
 import { reasonLabel } from "./movementMeta";
 
 const fmtN = n => Math.abs(Number(n) || 0).toLocaleString("es-VE", { maximumFractionDigits: 3 });
 
-// Cuánto estuvo abierta: "22 min", "3 h 10 min" o "47 días". Las sesiones que cierra el
-// arqueo pueden quedar abiertas semanas; decirlo en días se entiende mejor que dos fechas.
-function duracion(desde, hasta) {
-    const ms = new Date(hasta || Date.now()) - new Date(desde);
-    if (!(ms >= 0)) return "";
-    const min = Math.round(ms / 60000);
-    if (min < 1) return "menos de 1 min";
-    if (min < 60) return `${min} min`;
-    const h = Math.floor(min / 60), m = min % 60;
-    if (h < 24) return m ? `${h} h ${m} min` : `${h} h`;
-    const d = Math.round(h / 24);
-    return `${d} ${d === 1 ? "día" : "días"}`;
-}
+// Cuánto estuvo abierta. Las sesiones que cierra el arqueo pueden quedar abiertas semanas;
+// decirlo en días se entiende mejor que dos fechas.
+const duracion = fmtDuracion;
 
 const mismoDia = (a, b) => b && fmtDateShort(a) === fmtDateShort(b);
 

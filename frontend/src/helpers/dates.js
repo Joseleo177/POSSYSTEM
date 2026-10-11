@@ -106,3 +106,23 @@ export const fmtDayLabel = (isoDate) => {
   });
   return txt.charAt(0).toUpperCase() + txt.slice(1);
 };
+
+/**
+ * Cuánto duró algo abierto: "22 min", "3 h 10 min" o "6 días 14 h".
+ *
+ * Un turno que nadie cerró a tiempo pasa del día, y "1580 h 32 min" obligaba a dividir de
+ * cabeza; en días se entiende de un vistazo. Sin `hasta` mide hasta ahora.
+ * @param {string|Date} desde
+ * @param {string|Date} [hasta]
+ */
+export const fmtDuracion = (desde, hasta) => {
+  const ms = new Date(hasta || Date.now()) - new Date(desde);
+  if (!(ms >= 0)) return "";
+  const min = Math.round(ms / 60000);
+  if (min < 1) return "menos de 1 min";
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60), m = min % 60;
+  if (h < 24) return m ? `${h} h ${m} min` : `${h} h`;
+  const d = Math.floor(h / 24), hr = h % 24;
+  return `${d} ${d === 1 ? "día" : "días"}${hr ? ` ${hr} h` : ""}`;
+};

@@ -21,7 +21,16 @@ const { sanitizeDate, localDate, hourClause, idList } = require("./shared");
 // de modo que amount * exchange_rate devuelve el monto en la moneda del diario. Se publican
 // los dos: el original es el que el cajero contó, el base es el único que se puede sumar
 // entre diarios de distinta moneda. incomes y expenses guardan lo mismo en `amount` y `rate`.
-async function paymentJournalsReport({ date_from, date_to, company_id, allowedWarehouses, employee_ids, serie_ids, hours, warehouse_id }) {
+//
+// Columnas por cuenta o por método (`by`). Desde que el diario es la CUENTA y acepta varios
+// métodos, "Banco de Venezuela" junta en una sola cifra lo que entró por punto, por pago móvil
+// y por biopago, y cada uno se concilia contra un papel distinto (el cierre del punto, el
+// extracto del pago móvil). Con by=method cada pareja cuenta+método es su propia columna; la
+// pantalla las agrupa bajo la cuenta. El método sale de COALESCE(payment_method, pj.type): los
+// movimientos viejos sin método caen al de la cuenta, como en el resto de la app.
+async function paymentJournalsReport({ date_from, date_to, company_id, allowedWarehouses, employee_ids, serie_ids, hours, warehouse_id, by }) {
+  const porMetodo = by === 'method';
+  const metodoDe = (alias) => porMetodo ? `COALESCE(NULLIF(${alias}.payment_method, ''), pj.type)` : 'NULL';
   const from = sanitizeDate(date_from);
   const to   = sanitizeDate(date_to);
 
@@ -106,10 +115,12 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
   const rows = await sequelize.query(
     `SELECT ${diaPago}                                            AS day,
             p.payment_journal_id                                  AS journal_id,
+            ${metodoDe('p')}                                      AS metodo,
             COUNT(p.id)::int                                      AS tx_count,
             COALESCE(SUM(p.amount * COALESCE(p.exchange_rate, 1)), 0)::float AS amount_journal,
             COALESCE(SUM(p.amount), 0)::float                      AS amount_base
        FROM payments p
+       JOIN payment_journals pj ON pj.id = p.payment_journal_id
       -- Aquí no va filtro por estado de la venta, a diferencia del resto de los reportes:
       -- esto mide plata que entró a cada diario, no ventas. Al anular se registra un pago
       -- inverso, así que el neto ya queda bien. (El JOIN a sales que había no se usaba.)
@@ -119,7 +130,7 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
         ${dateClause}
         ${empClause}
         ${serieClause}
-      GROUP BY day, p.payment_journal_id
+      GROUP BY day, p.payment_journal_id, metodo
       ORDER BY day DESC`,
     { replacements: rep, type: Sequelize.QueryTypes.SELECT }
   );
@@ -132,10 +143,12 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
   const manualQuery = (table, alias) => `
     SELECT ${localDate(`COALESCE(${alias}.date, ${alias}.created_at)`)} AS day,
            ${alias}.payment_journal_id                                   AS journal_id,
+           ${metodoDe(alias)}                                            AS metodo,
            COUNT(${alias}.id)::int                                       AS tx_count,
            COALESCE(SUM(${alias}.amount * COALESCE(${alias}.rate, 1)), 0)::float AS amount_journal,
            COALESCE(SUM(${alias}.amount), 0)::float                      AS amount_base
       FROM ${table} ${alias}
+      JOIN payment_journals pj ON pj.id = ${alias}.payment_journal_id
      WHERE ${alias}.payment_journal_id IS NOT NULL
        -- Un movimiento anulado no mueve plata: queda en el histórico, no en el cuadre.
        AND ${alias}.status = 'activo'
@@ -146,18 +159,27 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
        -- Filtrando por serie, lo cargado a mano queda fuera: un ingreso o un egreso manual no
        -- pertenece a ninguna serie de facturación, y colarlo inflaría el neto de ese corte.
        ${series ? "AND FALSE" : ""}
-     GROUP BY day, ${alias}.payment_journal_id`;
+     GROUP BY day, ${alias}.payment_journal_id, metodo`;
 
   const [incomeRows, expenseRows] = await Promise.all([
     sequelize.query(manualQuery('incomes',  'i'), { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
     sequelize.query(manualQuery('expenses', 'e'), { replacements: rep, type: Sequelize.QueryTypes.SELECT }),
   ]);
 
+  // Clave de columna: el diario solo, o diario:método. Todo lo que sigue (celdas, totales,
+  // neto, Excel) trabaja sobre esa clave sin saber cuál de las dos vistas es.
+  for (const r of [...rows, ...incomeRows, ...expenseRows]) {
+    r.account_id = r.journal_id;
+    if (porMetodo) r.journal_id = `${r.journal_id}:${r.metodo || ''}`;
+  }
+
   // Solo los diarios que tuvieron movimiento en el rango: una columna vacía en todas las
   // filas no aporta nada y ensancha la tabla. Un diario que solo recibió un ingreso manual
   // también cuenta: si no, su fila de resumen no tendría columna donde caer.
-  const usedIds = [...new Set([...rows, ...incomeRows, ...expenseRows].map(r => r.journal_id))];
-  const journals = usedIds.length
+  const all      = [...rows, ...incomeRows, ...expenseRows];
+  const usedKeys = [...new Set(all.map(r => r.journal_id))];
+  const usedIds  = [...new Set(all.map(r => r.account_id))];
+  const cuentas = usedIds.length
     ? await sequelize.query(
         `SELECT pj.id, pj.name, pj.color, pj.type,
                 COALESCE(c.symbol, 'Ref.') AS currency_symbol,
@@ -173,6 +195,44 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
         { replacements: { ids: usedIds }, type: Sequelize.QueryTypes.SELECT }
       )
     : [];
+
+  let journals = cuentas.map(pj => ({ ...pj, journal_id: pj.id, account_name: pj.name }));
+
+  if (porMetodo && cuentas.length) {
+    // Nombre del método según el catálogo de la empresa ("Punto de Venta", no "punto_venta")
+    // y su orden dentro de la cuenta. Un código que ya no está en la cuenta (se le quitó el
+    // método después de cobrar) igual se nombra por el catálogo y va al final.
+    const metodos = await sequelize.query(
+      `SELECT pj.id AS journal_id, pm.code, pm.name, m.sort_order
+         FROM payment_journals pj
+         JOIN payment_methods pm ON pm.company_id = pj.company_id
+         LEFT JOIN payment_journal_methods m ON m.journal_id = pj.id AND m.method_code = pm.code
+        WHERE pj.id IN (:ids)`,
+      { replacements: { ids: usedIds }, type: Sequelize.QueryTypes.SELECT }
+    );
+    const info = (jid, code) => metodos.find(m => m.journal_id === jid && m.code === code);
+    const legible = (code) => code
+      ? code.replace(/_/g, ' ').replace(/^\w/, ch => ch.toUpperCase())
+      : 'Sin método';
+
+    // Las columnas de una cuenta quedan juntas, en el orden de la cuenta; la pantalla las
+    // agrupa bajo un mismo encabezado.
+    journals = journals.flatMap(pj => usedKeys
+      .filter(k => k.startsWith(`${pj.id}:`))
+      .map(k => {
+        const code = k.slice(String(pj.id).length + 1) || null;
+        const m = info(pj.id, code);
+        return {
+          ...pj,
+          id: k,
+          method_code: code,
+          method_name: m?.name || legible(code),
+          orden: m?.sort_order ?? 999,
+        };
+      })
+      .sort((x, y) => x.orden - y.orden || x.method_name.localeCompare(y.method_name))
+      .map(({ orden, ...col }) => col));
+  }
 
   // Se arma una fila por día con una celda por diario. El total del día va en moneda base
   // porque es lo único sumable cuando hay diarios en monedas distintas.
@@ -221,7 +281,7 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
 
   // Cobros + ingresos − egresos: lo que efectivamente movió cada diario en el rango.
   const net = { cells: {}, total_base: 0 };
-  for (const id of usedIds) {
+  for (const id of usedKeys) {
     const v = (s) => s.cells[id] || { amount_journal: 0, amount_base: 0 };
     net.cells[id] = {
       amount_journal: v(totals).amount_journal + v(incomes).amount_journal - v(expenses).amount_journal,
@@ -231,6 +291,7 @@ async function paymentJournalsReport({ date_from, date_to, company_id, allowedWa
   net.total_base = totals.total_base + incomes.total_base - expenses.total_base;
 
   return {
+    by: porMetodo ? 'method' : 'journal',
     journals,
     days: [...byDay.values()],
     totals,
