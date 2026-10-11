@@ -4,6 +4,7 @@ import { api } from "../services/api";
 import { useApp } from "../context/AppContext";
 import { fmtMoney, fmtDate, resolveImageUrl, printInvoiceLetter, printHtml, toNameCase } from "../helpers";
 import Money from "./ui/Money";
+import { Spinner } from "./ui/Spinner";
 
 const fmt = fmtMoney;
 
@@ -560,16 +561,35 @@ export default function ReceiptModal({ open, onClose, sale }) {
         && Array.isArray(sale?.items) && sale.items.length > 0;
 
     const [fetched, setFetched] = useState(null);
+    // Venta cuya consulta ya terminó (bien o mal). Mientras no sea la abierta no se dibuja el
+    // comprobante: la fila del listado no trae los cobros, así que salía en Ref. y un instante
+    // después saltaba a Bs. Se compara por id y no con un "cargando" que encienda el efecto,
+    // porque el efecto corre después del primer pintado y ese cuadro ya mostraba el provisional.
+    const [loadedId, setLoadedId] = useState(null);
     useEffect(() => {
-        if (!open || !saleId || yaCompleto) { setFetched(null); return; }
+        if (!open || !saleId || yaCompleto) { setFetched(null); setLoadedId(null); return; }
         let alive = true;
+        setFetched(null);
+        setLoadedId(null);
         api.sales.getOne(saleId)
             .then(r => alive && setFetched(r.data))
-            .catch(() => { /* se muestra lo que haya: mejor un ticket parcial que ninguno */ });
+            .catch(() => { /* se muestra lo que haya: mejor un ticket parcial que ninguno */ })
+            .finally(() => alive && setLoadedId(saleId));
         return () => { alive = false; };
     }, [open, saleId, yaCompleto]);
 
     if (!open || !sale) return null;
+
+    if (saleId && !yaCompleto && loadedId !== saleId) {
+        return (
+            <Modal open={open} onClose={onClose} title="Comprobante" width={400}>
+                <div className="flex items-center justify-center py-20 gap-2.5 text-[13px] text-content-subtle">
+                    <Spinner />
+                    Cargando…
+                </div>
+            </Modal>
+        );
+    }
 
     // Lo pedido manda porque es la venta completa; encima van los datos que solo existen en el
     // objeto del recibo (moneda y serie con que se cobró en caja).

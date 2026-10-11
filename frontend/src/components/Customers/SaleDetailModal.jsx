@@ -6,7 +6,7 @@ import DatePicker from "../ui/DatePicker";
 import { Spinner } from "../ui/Spinner";
 import StatusMark from "../ui/StatusMark";
 import Money from "../ui/Money";
-import { montosEnBolivares } from "../ReceiptModal";
+import ReceiptModal, { montosEnBolivares } from "../ReceiptModal";
 
 /**
  * Props:
@@ -19,6 +19,9 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
     const [sale, setSale]   = useState(null);
     const [loading, setLoading] = useState(true);
     const [savingDue, setSavingDue] = useState(false);
+    // El detalle se abre desde Contactos, Cuentas por Cobrar y Reportes, donde no hay botón de
+    // recibo: desde aquí se llega al comprobante para imprimirlo o mandarlo en PDF.
+    const [showReceipt, setShowReceipt] = useState(false);
     // Misma regla que la ruta: quien da crédito o edita ventas.
     const canSetDue = can("sales.credit") || can("sales.edit");
 
@@ -104,6 +107,18 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
 
                     <div className="flex items-center gap-3 shrink-0">
                         {!loading && sale && <StatusMark status={sale.status} />}
+                        {!loading && sale && (
+                            <button
+                                onClick={() => setShowReceipt(true)}
+                                title="Ver el comprobante para imprimirlo o enviarlo en PDF"
+                                className="h-8 px-2.5 rounded-lg inline-flex items-center gap-1.5 text-[12px] font-medium text-content-muted dark:text-white/70 border border-border dark:border-white/10 hover:text-content hover:bg-surface-2 dark:hover:text-white dark:hover:bg-white/[0.06] transition-colors"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                Imprimir
+                            </button>
+                        )}
                         <button
                             onClick={onClose}
                             aria-label="Cerrar"
@@ -364,6 +379,13 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                     )}
                 </div>
             </div>
+
+            {/* Fuera del panel: su clic no debe llegar al fondo que cierra el detalle. */}
+            {showReceipt && sale && (
+                <div onClick={e => e.stopPropagation()}>
+                    <ReceiptModal open sale={sale} onClose={() => setShowReceipt(false)} />
+                </div>
+            )}
         </div>
     );
 }
