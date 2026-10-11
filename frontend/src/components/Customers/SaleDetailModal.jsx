@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
-import { fmtBase, fmtDateShort, todayISO, toNameCase } from "../../helpers";
+import { fmtBase, fmtMoney, fmtDateShort, todayISO, toNameCase } from "../../helpers";
 import DatePicker from "../ui/DatePicker";
 import { Spinner } from "../ui/Spinner";
 import StatusMark from "../ui/StatusMark";
 import Money from "../ui/Money";
+import { montosEnBolivares } from "../ReceiptModal";
 
 /**
  * Props:
@@ -14,7 +15,7 @@ import Money from "../ui/Money";
  *   onChanged – opcional: se cambió el vencimiento (Cuentas por Cobrar recarga su listado)
  */
 export default function SaleDetailModal({ saleId, onClose, onChanged }) {
-    const { baseCurrency, can, notify } = useApp();
+    const { baseCurrency, activeCurrencies, can, notify } = useApp();
     const [sale, setSale]   = useState(null);
     const [loading, setLoading] = useState(true);
     const [savingDue, setSavingDue] = useState(false);
@@ -55,6 +56,20 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
     const credit   = parseFloat(sale?.credit_applied || 0);
     const forgiven = parseFloat(sale?.forgiven_amount || 0);
     const discount = parseFloat(sale?.discount_amount || 0);
+    const charge   = parseFloat(sale?.service_charge || 0);
+
+    // Misma moneda que el recibo: saldada con bolívares, todo en Bs a la tasa del cobro (con
+    // los mismos céntimos que el papel); sin bolívares de por medio o con saldo pendiente, en
+    // divisas. Antes el detalle iba siempre en Ref. y solo el botón del recibo lo convertía.
+    const displayCurrency = activeCurrencies?.find(c => !c.is_base) || baseCurrency;
+    const bs = montosEnBolivares(sale, displayCurrency, baseCurrency);
+    const conv = (n) => bs ? fmtMoney(Math.round(parseFloat(n || 0) * bs.rate * 100) / 100, bs.sym) : fmt(n);
+    const fmtTotal    = bs ? bs.fmtTotal    : fmt(sale?.total);
+    const fmtPaid     = bs ? bs.fmtPaid     : fmt(sale?.amount_paid);
+    const fmtBalance  = bs ? bs.fmtBalance  : fmt(balance);
+    const fmtSubtotal = bs ? bs.fmtSubtotal : fmt(parseFloat(sale?.total || 0) + discount - charge);
+    const fmtDiscount = bs ? bs.fmtDiscount : fmt(discount);
+    const fmtCharge   = bs ? bs.fmtCharge   : fmt(charge);
 
     // Montos de un cobro en la moneda en que entró. Sin separador de miles, como el resto de
     // la app: "51.473,30" se leía distinto a "Bs. 51473.30" de la caja.
@@ -124,10 +139,10 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                                 </div>
                                 <div className="text-right shrink-0">
                                     <p className="text-[12px] text-content-subtle">Total</p>
-                                    <Money value={fmt(sale.total)} className="block text-[24px] font-bold tracking-tight leading-tight text-content dark:text-white" />
+                                    <Money value={fmtTotal} className="block text-[24px] font-bold tracking-tight leading-tight text-content dark:text-white" />
                                     <p className="text-[12px] mt-0.5 tabular-nums">
                                         {balance > 0
-                                            ? <span className="font-medium text-red-600 dark:text-red-400">Debe <Money value={fmt(balance)} /></span>
+                                            ? <span className="font-medium text-red-600 dark:text-red-400">Debe <Money value={fmtBalance} /></span>
                                             : sale.status === "exonerado"
                                                 ? <span className="text-content-subtle">Saldo exonerado</span>
                                                 : <span className="text-content-subtle">Sin saldo pendiente</span>}
@@ -222,10 +237,10 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                                         <div key={idx} className="px-3.5 py-2.5">
                                             <div className="flex items-baseline justify-between gap-3">
                                                 <span className="text-[13px] font-medium text-content dark:text-white min-w-0 truncate">{item.name}</span>
-                                                <Money value={fmt(item.subtotal)} className="text-[13px] font-semibold text-content dark:text-white shrink-0" />
+                                                <Money value={bs ? bs.items[idx].fmtSubtotal : fmt(item.subtotal)} className="text-[13px] font-semibold text-content dark:text-white shrink-0" />
                                             </div>
                                             <div className="flex items-baseline justify-between gap-3 mt-0.5 text-[12px] tabular-nums">
-                                                <span className="text-content-subtle">{parseFloat(item.quantity)} × {fmt(item.price)}</span>
+                                                <span className="text-content-subtle">{parseFloat(item.quantity)} × {bs ? bs.items[idx].fmtPrice : fmt(item.price)}</span>
                                                 {item.returned_qty > 0 && (
                                                     <span className="font-medium text-amber-700 dark:text-amber-400 whitespace-nowrap">
                                                         {item.returned_qty} devuelto{item.returned_qty > 1 ? "s" : ""}
@@ -238,16 +253,17 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
 
                                 {/* Totales */}
                                 <div className="mt-3 space-y-1 text-[13px]">
-                                    {discount > 0 && (
+                                    {(discount > 0 || charge > 0) && (
                                         <>
-                                            <Fila label="Subtotal" value={fmt(parseFloat(sale.total) + discount)} />
-                                            <Fila label="Descuento" value={`-${fmt(discount)}`} />
+                                            <Fila label="Subtotal" value={fmtSubtotal} />
+                                            {discount > 0 && <Fila label="Descuento" value={`-${fmtDiscount}`} />}
+                                            {charge > 0 && <Fila label={sale.service_charge_label || "Servicio"} value={`+${fmtCharge}`} />}
                                         </>
                                     )}
-                                    <Fila label="Total" value={fmt(sale.total)} strong />
-                                    <Fila label="Abonado" value={fmt(sale.amount_paid)} />
-                                    {forgiven > 0 && <Fila label="Exonerado" value={fmt(forgiven)} tone="text-violet-600 dark:text-violet-400" />}
-                                    {balance > 0 && <Fila label="Saldo pendiente" value={fmt(balance)} tone="text-red-600 dark:text-red-400" strong />}
+                                    <Fila label="Total" value={fmtTotal} strong />
+                                    <Fila label="Abonado" value={fmtPaid} />
+                                    {forgiven > 0 && <Fila label="Exonerado" value={conv(forgiven)} tone="text-violet-600 dark:text-violet-400" />}
+                                    {balance > 0 && <Fila label="Saldo pendiente" value={fmtBalance} tone="text-red-600 dark:text-red-400" strong />}
                                 </div>
                             </div>
 
@@ -257,7 +273,7 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                                 <div className="rounded-lg border border-border/60 dark:border-white/[0.06] border-l-[3px] border-l-violet-500 px-3.5 py-3">
                                     <div className="flex items-baseline justify-between gap-3">
                                         <span className="text-[13px] font-semibold text-content dark:text-white">Saldo exonerado</span>
-                                        <Money value={fmt(forgiven)} className="text-[13px] font-semibold text-violet-600 dark:text-violet-400" />
+                                        <Money value={conv(forgiven)} className="text-[13px] font-semibold text-violet-600 dark:text-violet-400" />
                                     </div>
                                     {sale.forgiven_reason && (
                                         <p className="text-[13px] text-content-muted dark:text-white/70 leading-snug mt-1">{sale.forgiven_reason}</p>
@@ -283,7 +299,7 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                                                     <p className="text-[13px] font-medium text-content dark:text-white">Saldo a favor del cliente</p>
                                                     <p className="text-[12px] text-content-subtle">Aplicado al saldo de la factura</p>
                                                 </div>
-                                                <Money value={fmt(credit)} className="text-[13px] font-semibold text-content dark:text-white shrink-0" />
+                                                <Money value={conv(credit)} className="text-[13px] font-semibold text-content dark:text-white shrink-0" />
                                             </div>
                                         )}
                                         {payments.map((p, idx) => {

@@ -347,6 +347,21 @@ export function receiptCurrency(s, displayCurrency, baseCurrency) {
     return { rate, sym: displayCurrency?.symbol || "Ref." };
 }
 
+/**
+ * Montos de la venta en bolívares, con la misma regla y los mismos céntimos que el papel.
+ * Devuelve null cuando el comprobante va en divisas (ver receiptCurrency).
+ *
+ * Lo usa el detalle de venta: antes se quedaba en Ref. mientras el recibo de la misma factura
+ * decía Bs, y la pantalla tiene que dar exactamente la cifra del ticket.
+ */
+export function montosEnBolivares(sale, displayCurrency, baseCurrency) {
+    if (!sale || !displayCurrency || displayCurrency.is_base) return null;
+    const s = normalizeSale(sale);
+    const cur = receiptCurrency(s, displayCurrency, baseCurrency);
+    if (!(cur.rate > 1)) return null;
+    return { ...totalesDelPapel(s, cur), rate: cur.rate, sym: cur.sym };
+}
+
 // displayCurrency: la moneda no-base (VES). Los montos del recibo se convierten a ella salvo
 // que el cobro haya entrado en divisas (ver receiptCurrency).
 // sale.total y item.price están siempre en USD base.
