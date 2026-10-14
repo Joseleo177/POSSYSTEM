@@ -7,7 +7,10 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, company_
   const dS = dateClause(df, dt, 's', hours);
   // Misma expresión de día que el filtro: con franja nocturna es la jornada, no la fecha.
   const diaS = localDate('s.created_at', hours);
-  const lim = parseInt(limit) || 0;   // 0 = usar defaults de pantalla
+  // Sin tope por defecto: la pantalla pagina sola y necesita TODOS los productos vendidos.
+  // Antes cortaba en 30 por utilidad, así que no se veía el resto y "Menor margen" ordenaba
+  // esos mismos 30 —los que más dejan—, sin mostrar nunca los que de verdad dejan poco.
+  const lim = parseInt(limit) || 0;
 
   // Margen de una sucursal concreta. Cobra sentido ahora que el costo es por sucursal: la
   // misma mercancía puede dejar utilidades distintas en cada tienda según a cuánto la compró.
@@ -70,7 +73,7 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, company_
          AND ${unitCost} > 0
        GROUP BY si.product_id, si.name, c.name
        ORDER BY gross_margin DESC
-       LIMIT ${lim || 30}`,
+       ${lim > 0 ? `LIMIT ${lim}` : ""}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
