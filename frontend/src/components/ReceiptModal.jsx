@@ -385,12 +385,6 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
     const dateStr = fmtDate(s.created_at);
 
     const fmtQty  = q => { const n = parseFloat(q); return n % 1 === 0 ? String(Math.round(n)) : n; };
-    const fmtPRow = text => {
-        if (printerWidth !== 58) return text;
-        const len = String(text).length;
-        const size = len >= 14 ? "5.5px" : len >= 12 ? "6px" : len >= 10 ? "6.5px" : "7.5px";
-        return `<span style="font-size:${size};white-space:nowrap">${text}</span>`;
-    };
 
     const html = `<!DOCTYPE html>
 <html>
@@ -431,23 +425,25 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
  .meta-label { font-weight: 400; }
  .meta-value { font-weight: 700; }
 
- table { width: 100%; border-collapse: collapse; margin-bottom: 2mm; }
- th { text-align: left; border-bottom: 1px solid #000; padding: 1mm 0; font-size: ${printerWidth === 58 ? "7.5px" : "9px"}; }
- td { padding: 1mm 0; font-size: ${printerWidth === 58 ? "7.5px" : "9px"}; vertical-align: top; }
-        /* overflow-wrap y no word-break: word-break parte la palabra en cuanto se acaba el
-           renglón, así que en la columna angosta del ticket "CAFE AMANECER" salía cortado en
-           pedazos letra a letra ("CAFE / AMA / NECE / R"). Así solo se parte la palabra que de
-           verdad no cabe entera. */
-        .item-name { max-width: ${printerWidth === 58 ? "20mm" : "32mm"}; overflow-wrap: break-word; font-weight: 600; text-transform: uppercase; }
- /* Separación entre columnas: sin ella cantidad, P.U. y total se leen como un solo bloque. */
- .td-center { text-align: center; padding-left: 1.5mm; padding-right: 1.5mm; }
- .td-right { text-align: right; padding-left: 1.5mm; }
- /* TODO el texto va en negro puro: la térmica es de 1 bit, no imprime grises. Un #444
- lo simula con un patrón de puntos disperso y sale lavado, casi ilegible.
- La jerarquía entre columnas se logra con el grosor y la "x" de la cantidad. */
- .qty { color: #000; font-weight: 700; white-space: nowrap; }
- .unit-price { color: #000; font-weight: 700; white-space: nowrap; }
- .line-total { color: #000; font-weight: 800; white-space: nowrap; }
+        /* Cada producto ocupa dos renglones: el nombre a todo el ancho y debajo "cant x P.U."
+           a la izquierda y el total a la derecha.
+           Antes era una tabla de cuatro columnas con los montos en nowrap: con importes de
+           cinco y seis cifras en bolívares (Bs. 51714.00) las columnas no cabían en los 72 mm,
+           la tabla se salía del cuerpo y la impresora cortaba el total de cada línea. */
+        .items { margin-bottom: 2mm; font-size: ${printerWidth === 58 ? "7.5px" : "9px"}; }
+        .items-head { display: flex; justify-content: space-between; font-weight: 700; border-bottom: 1px solid #000; padding: 1mm 0; }
+        .item { padding: 1mm 0; }
+        .item + .item { border-top: 1px dotted #000; }
+        /* overflow-wrap y no word-break: solo se parte la palabra que de verdad no cabe. */
+        .item-name { overflow-wrap: break-word; font-weight: 600; text-transform: uppercase; }
+        /* flex-wrap como red de seguridad: si aun así no cabe, el total baja a su propio
+           renglón alineado a la derecha en vez de salirse del papel. */
+        .item-line { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 2mm; margin-top: 0.3mm; }
+        /* TODO el texto va en negro puro: la térmica es de 1 bit, no imprime grises. Un #444
+           lo simula con un patrón de puntos disperso y sale lavado, casi ilegible.
+           La jerarquía se logra con el grosor. */
+        .qty { color: #000; font-weight: 700; white-space: nowrap; }
+        .line-total { color: #000; font-weight: 800; white-space: nowrap; margin-left: auto; }
 
  .totals { border-top: 1px dashed #000; padding-top: 2mm; margin-bottom: 2mm; }
  .total-row { display: flex; justify-content: space-between; font-size: ${printerWidth === 58 ? "8px" : "10px"}; margin-bottom: 0.5mm; }
@@ -484,26 +480,18 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
         ${s.customer_rif ? `<div class="meta-row"><span class="meta-label">C.I./RIF:</span><span class="meta-value">${s.customer_rif}</span></div>` : ""}
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Producto</th>
-                <th class="td-center">Cant</th>
-                <th class="td-right">P.U.</th>
-                <th class="td-right">Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            ${totals.items.map(i => `
-                <tr>
-                    <td><div class="item-name">${i.name}</div></td>
-                    <td class="td-center qty">x ${fmtQty(i.quantity)}</td>
-                    <td class="td-right unit-price">${fmtPRow(i.fmtPrice)}</td>
-                    <td class="td-right line-total">${fmtPRow(i.fmtSubtotal)}</td>
-                </tr>
-            `).join("")}
-        </tbody>
-    </table>
+    <div class="items">
+        <div class="items-head"><span>Producto</span><span>Total</span></div>
+        ${totals.items.map(i => `
+            <div class="item">
+                <div class="item-name">${i.name}</div>
+                <div class="item-line">
+                    <span class="qty">${fmtQty(i.quantity)} x ${i.fmtPrice}</span>
+                    <span class="line-total">${i.fmtSubtotal}</span>
+                </div>
+            </div>
+        `).join("")}
+    </div>
 
     <div class="totals">
         <div class="total-row"><span>SUBTOTAL</span><span>${totals.fmtSubtotal}</span></div>
