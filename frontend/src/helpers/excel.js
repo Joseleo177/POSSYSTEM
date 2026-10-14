@@ -488,3 +488,103 @@ export function buildPaymentJournalsExcel(data, range) {
     },
   ]), `DiariosPago_${range.from}_${range.to}${sufijoFranja(range)}`);
 }
+
+// Ingresos y egresos del período: las tres hojas del resumen de finanzas que las tiendas
+// llevaban a mano (resumen, ingresos por día y forma de pago, egresos uno por uno).
+export function buildFinanceExcel(data, range) {
+  const base  = data.base_symbol || "Ref.";
+  const local = data.local_symbol || "Bs.";
+  const s = data.summary || {};
+  const cols = data.income?.columns || [];
+  const tot  = data.income?.totals || {};
+  const simbolo = (c) => (c.is_base ? base : c.currency_symbol);
+  const TIPO = { compra: "COMPRA", gasto: "GASTO", devolucion: "DEVOLUCIÓN" };
+  const r2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+
+  const resumen = [
+    { concepto: "Total ingresos", moneda_local: r2(s.income_local), moneda_base: r2(s.income_base) },
+    { concepto: "Total egresos", moneda_local: "", moneda_base: r2(s.expense_base) },
+    { concepto: "Resultado", moneda_local: "", moneda_base: r2(s.net_base) },
+    { concepto: "% egresos sobre ingresos", moneda_local: "", moneda_base: s.expense_ratio == null ? "" : r2(s.expense_ratio * 100) },
+    { concepto: `Tasa promedio (${local} por ${base})`, moneda_local: s.avg_rate ? r2(s.avg_rate) : "", moneda_base: "" },
+    { concepto: "", moneda_local: "", moneda_base: "" },
+    { concepto: "INGRESOS POR FORMA DE PAGO", moneda_local: "", moneda_base: "" },
+    ...cols.map(c => ({
+      concepto: `${c.label} (${simbolo(c)})`,
+      moneda_local: r2(tot.cells?.[c.id]?.amount_journal),
+      moneda_base: r2(tot.cells?.[c.id]?.amount_base),
+    })),
+    ...((tot.other?.tx_count || 0) > 0 ? [{ concepto: "Otros ingresos", moneda_local: r2(tot.other.amount_local), moneda_base: r2(tot.other.amount_base) }] : []),
+    { concepto: "", moneda_local: "", moneda_base: "" },
+    { concepto: "EGRESOS POR FORMA DE PAGO", moneda_local: "", moneda_base: "" },
+    ...(data.expenses?.by_method || []).map(m => ({
+      concepto: `${m.method_name} (${m.is_base ? base : m.currency_symbol})`,
+      moneda_local: r2(m.amount_journal),
+      moneda_base: r2(m.amount_base),
+    })),
+    { concepto: "", moneda_local: "", moneda_base: "" },
+    { concepto: "EGRESOS POR TIPO", moneda_local: "", moneda_base: "" },
+    ...Object.entries(data.expenses?.by_kind || {}).map(([k, v]) => ({
+      concepto: `${TIPO[k] || k} (${v.count})`, moneda_local: "", moneda_base: r2(v.amount_base),
+    })),
+  ];
+
+  const dayHeaders = [
+    { key: "fecha", label: "Fecha" },
+    { key: "tasa", label: "Tasa" },
+    ...cols.map(c => ({ key: `c${c.id}`, label: `${c.label} (${simbolo(c)})` })),
+    ...((tot.other?.tx_count || 0) > 0 ? [{ key: "otros", label: `Otros ingresos (${base})` }] : []),
+    { key: "total_local", label: `Total ${local}` },
+    { key: "total_base", label: `Total ${base}` },
+  ];
+  const fila = (d, etiqueta) => {
+    const out = { fecha: etiqueta || d.date.split("-").reverse().join("/"), tasa: d.rate ? r2(d.rate) : "", otros: r2(d.other?.amount_base), total_local: r2(d.total_local), total_base: r2(d.total_base) };
+    for (const c of cols) out[`c${c.id}`] = r2(d.cells?.[c.id]?.amount_journal);
+    return out;
+  };
+  const dias = (data.income?.days || []).map(d => fila(d));
+  if (dias.length) dias.push(fila({ ...tot, rate: s.avg_rate }, "TOTAL"));
+
+  const egresos = (data.expenses?.rows || []).map(e => ({
+    fecha: e.date.split("-").reverse().join("/"),
+    rif: e.rif || "N/A",
+    tipo_doc: e.doc_type || "",
+    nro_doc: e.doc_number || e.doc_text || "",
+    tipo: TIPO[e.kind] || e.kind,
+    descripcion: e.description || "",
+    categoria: e.category_name || "",
+    moneda: e.is_base ? base : e.currency_symbol,
+    importe: r2(e.amount_journal),
+    tasa: e.is_base ? "" : r2(e.rate),
+    monto_base: r2(e.amount_base),
+    pct: r2(e.share * 100),
+    forma_pago: e.method_name || "",
+    banco: e.bank_name || e.journal_name || "",
+  }));
+  if (egresos.length) egresos.push({ fecha: "TOTAL", monto_base: r2(s.expense_base), pct: 100 });
+
+  download(buildWb([
+    { name: "Resumen", rows: resumen, headers: [
+      { key: "concepto", label: "Concepto" },
+      { key: "moneda_local", label: `Monto (${local} / moneda de la caja)` },
+      { key: "moneda_base", label: `Monto (${base})` },
+    ] },
+    { name: "Ingresos", rows: dias, headers: dayHeaders },
+    { name: "Egresos", rows: egresos, headers: [
+      { key: "fecha", label: "Fecha" },
+      { key: "rif", label: "RIF" },
+      { key: "tipo_doc", label: "Tipo doc." },
+      { key: "nro_doc", label: "Nro. doc." },
+      { key: "tipo", label: "Descripción" },
+      { key: "descripcion", label: "Proveedor / concepto" },
+      { key: "categoria", label: "Categoría" },
+      { key: "moneda", label: "Moneda" },
+      { key: "importe", label: "Importe" },
+      { key: "tasa", label: "Tasa" },
+      { key: "monto_base", label: `Monto (${base})` },
+      { key: "pct", label: "% del total" },
+      { key: "forma_pago", label: "Forma de pago" },
+      { key: "banco", label: "Banco / caja" },
+    ] },
+  ]), `IngresosEgresos_${range.from}_${range.to}${sufijoSucursal(range)}`);
+}

@@ -12,6 +12,7 @@ import ReceivablesReport from "./reportes/ReceivablesReport";
 import PurchasesReport from "./reportes/PurchasesReport";
 import CashSessionsReport from "./reportes/CashSessionsReport";
 import PaymentJournalsReport from "./reportes/PaymentJournalsReport";
+import FinanceReport from "./reportes/FinanceReport";
 import ExpiryReport from "./reportes/ExpiryReport";
 
 const TABS = [
@@ -24,13 +25,14 @@ const TABS = [
   { key: "compras",      label: "Compras" },
   { key: "sesiones",     label: "Cajas" },
   { key: "diarios",      label: "Diarios de Pago" },
+  { key: "finanzas",     label: "Ingresos y egresos" },
   { key: "vencimientos", label: "Vencimientos" },
 ];
 
 const NAV_GROUPS = [
   { label: "Comercial",   items: ["ventas", "margenes", "cobrar", "clientes"] },
   { label: "Inventario",  items: ["inventario", "vencimientos", "compras"] },
-  { label: "Operaciones", items: ["sesiones", "diarios", "auditoria"] },
+  { label: "Operaciones", items: ["finanzas", "sesiones", "diarios", "auditoria"] },
 ];
 
 const tabLabel = (key) => TABS.find(t => t.key === key)?.label ?? key;
@@ -98,6 +100,7 @@ export default function ReportesPage() {
         {tab === "compras"      && <PurchasesReport />}
         {tab === "sesiones"     && <CashSessionsReport />}
         {tab === "diarios"      && <PaymentJournalsReport />}
+        {tab === "finanzas"     && <FinanceReport />}
         {tab === "vencimientos" && <ExpiryReport />}
       </div>
     </Page>

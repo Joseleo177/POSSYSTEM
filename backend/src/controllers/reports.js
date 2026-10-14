@@ -10,6 +10,7 @@ const {
   auditReport,
   expiryReport,
   paymentJournalsReport,
+  financeReport,
 } = require("../services/reports");
 
 const wrap = (fn, errMsg) => async (req, res) => {
@@ -72,7 +73,13 @@ const getPaymentJournalsReport = wrap(
   "Error al generar reporte de diarios de pago"
 );
 
+const getFinanceReport = wrap(
+  async req => financeReport({ ...req.query, ...(await buildTenantContext(req)) }),
+  "Error al generar el reporte de ingresos y egresos"
+);
+
 module.exports = {
+  getFinanceReport,
   getSalesReport,
   getProductsReport,
   getReceivablesReport,

@@ -9,4 +9,5 @@ module.exports = {
   auditReport:       require("./auditReport"),
   expiryReport:      require("./expiryReport"),
   paymentJournalsReport: require("./paymentJournalsReport"),
+  financeReport:     require("./financeReport"),
 };

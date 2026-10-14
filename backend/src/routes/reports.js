@@ -15,4 +15,7 @@ router.get("/expiry",             auth, permit("reports.view", "inventory.view")
 // necesita aunque no tenga acceso al resto de reportes.
 router.get("/payment-journals",   auth, permit("reports.view", "journals.view"), ctrl.getPaymentJournalsReport);
 
+// Ingresos y egresos del período: dinero de caja, igual que Diarios de Pago.
+router.get("/finance",            auth, permit("reports.view", "journals.view"), ctrl.getFinanceReport);
+
 module.exports = router;

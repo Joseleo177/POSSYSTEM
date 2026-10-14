@@ -458,6 +458,7 @@ export const api = {
     audit:              (params = {}) => request("/reports/audit?"              + new URLSearchParams(params)),
     expiry:             (params = {}) => request("/reports/expiry?"             + new URLSearchParams(params)),
     paymentJournals:    (params = {}) => request("/reports/payment-journals?"   + new URLSearchParams(params)),
+    finance:            (params = {}) => request("/reports/finance?"            + new URLSearchParams(params)),
   },
 
   cashSessions: {
