@@ -1,5 +1,5 @@
 const { Payment, Sale, Return, Sequelize, sequelize, Op, getSaleBalance } = require("./shared");
-const { resolveSaleStatus } = require("../../utils/saleBalance");
+const { resolveSaleStatus, saleSettleTolerance } = require("../../utils/saleBalance");
 
 /**
  * Elimina de una vez todos los cobros de un mismo lote.
@@ -50,6 +50,7 @@ module.exports = async function removeBatchPayment(batchId) {
         returned: devuelto,
         forgiven: sale.forgiven_amount,
         hasInvoice: !!sale.invoice_number,
+        tolerance: await saleSettleTolerance(sale, t),
       });
       await sale.update({ status: nuevoEstado }, { transaction: t });
       estados.push({ sale_id: saleId, sale_status: nuevoEstado });

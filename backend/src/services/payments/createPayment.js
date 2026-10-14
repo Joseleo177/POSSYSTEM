@@ -1,5 +1,5 @@
 const { Payment, Sale, SaleItem, sequelize, getSaleBalance, Op } = require("./shared");
-const { PAYMENT_TOLERANCE } = require("../../utils/saleBalance");
+const { PAYMENT_TOLERANCE, saleSettleTolerance } = require("../../utils/saleBalance");
 const { Expense, ExpenseCategory, PaymentJournal, Currency, Customer } = require("../../models");
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
 const { assertWarehouseAccess } = require("../../middleware/auth");
@@ -46,7 +46,8 @@ async function existingPaymentResult(previos) {
     payments,
     sale_status: sale?.status || null,
     amount_paid: alreadyPaid,
-    balance: balance <= 0.10 ? 0 : balance,
+    // El estado ya lo decidió el cobro original: no se vuelve a adivinar con una tolerancia.
+    balance: ["pagado", "exonerado"].includes(sale?.status) || balance < 0 ? 0 : balance,
     change_given: list.reduce((acc, p) => acc + parseFloat(p.change_given || 0), 0),
     credit_applied: parseFloat(sale?.credit_applied || 0),
     invoice_number: sale?.invoice_number || null,
@@ -186,13 +187,21 @@ async function applyOnePayment(body, req, t) {
     const saleTotalBs = isBsPay ? totalBsAt(payRate) : saleTotal;
 
     const alreadyPaidBs = isBsPay ? round2(alreadyPaid * payRate) : alreadyPaid;
-    const pendingBalanceBs = Math.max(0, saleTotalBs - alreadyPaidBs);
+    // El crédito de cliente aplicado en este mismo cobro también se descuenta, como en la
+    // pantalla (pendingBsAt): sin él, cobrar parte con saldo a favor y el resto en Bs nunca
+    // alcanzaba el saldo en bolívares.
+    const creditAppliedBs = isBsPay ? round2(creditApplied * payRate) : creditApplied;
+    const pendingBalanceBs = Math.max(0, saleTotalBs - alreadyPaidBs - creditAppliedBs);
     const payAmtInCur = isBsPay ? round2(payAmt * payRate) : payAmt;
     // En un pago combinado, los tramos que NO son el último nunca "saldan" la factura por
     // tolerancia: el que cierra la cuenta (y lleva el vuelto) es el último. Sin esto un tramo
     // en Bs a menos de Bs.1 del saldo la daba por pagada y el siguiente tramo sobrepagaba.
+    //
+    // El margen en Bs es solo el de los redondeos a dos decimales de esta resta y del que hace
+    // la pantalla (cinco céntimos de bolívar). Era Bs.1: el cajero podía cobrar Bs.0,99 de
+    // menos y la factura se cerraba igual mientras la pantalla anunciaba un saldo restante.
     const noSettle = body._noSettle === true;
-    const isBsFullPay = isBsPay && !noSettle && (payAmtInCur >= pendingBalanceBs - 1.00);
+    const isBsFullPay = isBsPay && !noSettle && (payAmtInCur >= pendingBalanceBs - 0.05);
 
     // Ya no existe la tasa de efectivo: una factura se valora siempre a la tasa del sistema,
     // que es el dato con validez legal. Cobrar divisas por encima de la tasa oficial hacía que
@@ -360,16 +369,22 @@ async function applyOnePayment(body, req, t) {
       );
     }
 
-    // Tolerancia de $0.10 USD (10 céntimos): cubre desfasajes de redondeo por línea acumulados
-    // en ventas con múltiples productos al pagar en bolívares.
-    // La constante se comparte con quitar un pago y con anular una NC (utils/saleBalance),
-    // para que las tres rutas que fijan el estado no se desalineen.
-    const isFullPayment = isBsFullPay || totalPaidNow >= saleTotal - PAYMENT_TOLERANCE;
+    // Cobrando en bolívares, el veredicto es el de la pista en Bs (isBsFullPay): es la que el
+    // cliente pagó y la que pide la pantalla. Antes se le sumaba además una tolerancia fija de
+    // $0,10 en la base, y una factura cobrada en Bs con Bs.20, 50 u 85 de menos —diez céntimos
+    // de dólar a la tasa del día— quedaba 'pagado' mientras la pantalla mostraba el saldo
+    // restante. En divisas manda la base, con el margen de redondeo propio de esta factura
+    // (utils/saleBalance), compartido con quitar un pago, el cobro conjunto y anular una NC.
+    // Un tramo intermedio del combinado nunca cierra: lo hace el último (ver `noSettle`).
+    const tolerance = await saleSettleTolerance(sale, t);
+    // Sin dinero de caja (solo crédito de cliente) no hay pista en Bs: decide la base.
+    const decideEnBs = isBsPay && hasJournalPayment;
+    const isFullPayment = !noSettle && (decideEnBs ? isBsFullPay : totalPaidNow >= saleTotal - tolerance);
     const newStatus = isFullPayment ? "pagado" : "parcial";
     await sale.update({ status: newStatus }, { transaction: t });
 
     const rawBalance = parseFloat((saleTotal - totalPaidNow).toFixed(6));
-    const balance = (rawBalance <= PAYMENT_TOLERANCE || isFullPayment) ? 0 : rawBalance;
+    const balance = isFullPayment ? 0 : rawBalance;
     return {
       payment,
       sale_status: newStatus,

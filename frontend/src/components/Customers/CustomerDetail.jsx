@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { exportToCSV } from "../../utils/exportUtils";
-import { fmtBase, fmtSale as fmtSaleHelper, todayISO, journalsForWarehouse, fmtDateShort } from "../../helpers";
+import { fmtBase, fmtSale as fmtSaleHelper, todayISO, journalsForWarehouse, fmtDateShort, settleTolerance } from "../../helpers";
 import Check from "../ui/Check";
 import Money from "../ui/Money";
 import { useApp } from "../../context/AppContext";
@@ -159,7 +159,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
     // Un borrador sin correlativo se puede cobrar suelto (el cobro le asigna el número), pero
     // no entra al cobro conjunto: mezclar la asignación de correlativos con el reparto de un
     // monto es pedirle a la caja que revise dos cosas a la vez.
-    const cobrables    = puedeCobrar ? pendingSales.filter(s => parseFloat(s.balance || 0) > 0.10) : [];
+    const cobrables    = puedeCobrar ? pendingSales.filter(s => parseFloat(s.balance || 0) > settleTolerance(s)) : [];
     const seleccionadas = cobrables.filter(s => checkedIds.includes(s.id));
     const totalSeleccionado = seleccionadas.reduce((acc, s) => acc + parseFloat(s.balance || 0), 0);
     // El cobro conjunto genera un solo movimiento de caja: mezclar facturas de sucursales

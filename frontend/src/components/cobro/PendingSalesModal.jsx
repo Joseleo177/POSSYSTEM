@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../../services/api";
 import { hasTopOverlay } from "../../helpers/overlayGuard";
-import { toNameCase } from "../../helpers";
+import { toNameCase, settleTolerance } from "../../helpers";
 import BulkPaymentModal from "../Customers/BulkPaymentModal";
 import Check from "../ui/Check";
 import Money from "../ui/Money";
@@ -100,7 +100,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
     // Sin cliente identificado no hay a quién agrupar, y una factura sin saldo no se cobra.
     const marcable = (sale) =>
         !!sale.customer_id
-        && parseFloat(sale.balance || 0) > 0.10
+        && parseFloat(sale.balance || 0) > settleTolerance(sale)
         && (clienteFijado === null || sale.customer_id === clienteFijado)
         && (sucursalFijada === null || sale.warehouse_id === sucursalFijada);
     const toggleChecked = (sale) =>

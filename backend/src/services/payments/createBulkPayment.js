@@ -1,5 +1,5 @@
 const { Payment, Sale, Return, Sequelize, sequelize, Op, getSaleBalance } = require("./shared");
-const { PAYMENT_TOLERANCE, RECEIVABLE_STATUSES, resolveSaleStatus } = require("../../utils/saleBalance");
+const { RECEIVABLE_STATUSES, resolveSaleStatus, saleSettleTolerance } = require("../../utils/saleBalance");
 const { Expense, ExpenseCategory, PaymentJournal, Currency } = require("../../models");
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
 const { assertWarehouseAccess } = require("../../middleware/auth");
@@ -7,6 +7,11 @@ const { toLocalDate } = require("../../utils/localDate");
 const { addCreditMovement } = require("../customers/creditLedger");
 const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
 const { resolveMethod } = require("../../utils/journalMethod");
+
+// Margen para el SOBRANTE del cobro (lo entregado de más que obliga a declarar vuelto, caja o
+// crédito). Coincide con el que usa BulkPaymentModal para abrir ese paso, y no decide si una
+// factura queda saldada: eso lo hace el margen de redondeo de cada una (saleSettleTolerance).
+const SOBRANTE_TOLERANCE = 0.10;
 
 const err = (message, status = 400) =>
   Object.assign(new Error(message), { status, isOperational: true });
@@ -193,7 +198,9 @@ module.exports = async function createBulkPayment(body, req) {
         transaction: t,
       }) || 0);
       const saldo = parseFloat((Math.max(0, parseFloat(venta.total) - devuelto) - cobrado).toFixed(6));
-      if (saldo > PAYMENT_TOLERANCE) conSaldo.push({ venta, saldo, cobrado, devuelto });
+      // Margen de redondeo propio de la factura: decide si entra al reparto y si queda saldada.
+      const tolerancia = await saleSettleTolerance(venta, t);
+      if (saldo > tolerancia) conSaldo.push({ venta, saldo, cobrado, devuelto, tolerancia });
     }
 
     if (!conSaldo.length) throw err("Las facturas seleccionadas no tienen saldo por cobrar");
@@ -207,7 +214,7 @@ module.exports = async function createBulkPayment(body, req) {
     // El destino tiene que cubrir el sobrante SALVO por el desfase de redondeo: el frontend
     // muestra y manda el sobrante a 2 decimales mientras que acá se calcula con la deuda
     // exacta, y esos milésimos no son dinero sin declarar.
-    if (sobrante > PAYMENT_TOLERANCE && destinado < sobrante - PAYMENT_TOLERANCE) {
+    if (sobrante > SOBRANTE_TOLERANCE && destinado < sobrante - SOBRANTE_TOLERANCE) {
       throw err(
         `Recibiste ${(sobrante).toFixed(2)} de más sobre la deuda de ${deudaTotal.toFixed(2)}: indica si se devuelve, se queda en caja o va al crédito del cliente`
       );
@@ -215,7 +222,7 @@ module.exports = async function createBulkPayment(body, req) {
     // Con pago parcial `sobrante` es negativo (el cliente entregó menos que la deuda): sin el
     // Math.max, cualquier `destinado` —incluido 0— superaba ese negativo y el cobro se rechazaba
     // aunque no hubiera vuelto que declarar.
-    if (destinado > Math.max(0, sobrante) + PAYMENT_TOLERANCE) {
+    if (destinado > Math.max(0, sobrante) + SOBRANTE_TOLERANCE) {
       throw err(`El vuelto y el sobrante suman más de lo que se recibió por encima de la deuda`);
     }
     if (creditAmt > 0 && !conSaldo[0].venta.customer_id) {
@@ -254,7 +261,7 @@ module.exports = async function createBulkPayment(body, req) {
       const porImputarRaw = partsNorm.map((p, i) => i === partsNorm.length - 1
         ? parseFloat((p.base - destinado).toFixed(6))
         : p.base);
-      if (porImputarRaw.some(v => v < -PAYMENT_TOLERANCE)) throw err("La última forma de pago no alcanza para cubrir el vuelto/sobrante");
+      if (porImputarRaw.some(v => v < -SOBRANTE_TOLERANCE)) throw err("La última forma de pago no alcanza para cubrir el vuelto/sobrante");
       // Un pequeño negativo por redondeo se lleva a 0: ese tramo va entero al sobrante y el
       // ajuste (`seQueda` / vuelto) lo recupera abajo.
       const porImputar = porImputarRaw.map(v => Math.max(0, parseFloat(v.toFixed(6))));
@@ -291,7 +298,7 @@ module.exports = async function createBulkPayment(body, req) {
     const ultimoMetodoIdx = parts ? partsNorm.length - 1 : -1;
 
     for (const cs of porVenta.values()) {
-      const { venta, saldo, cobrado, devuelto } = cs[0].item;
+      const { venta, saldo, cobrado, devuelto, tolerancia } = cs[0].item;
       if (["borrador", "espera"].includes(venta.status)) {
         await assignInvoiceNumber(venta, t);
       }
@@ -319,13 +326,14 @@ module.exports = async function createBulkPayment(body, req) {
         if (c.mIdx === ultimoMetodoIdx) pagoUltimoMetodoId = pago.id;
       }
 
-      const salda = (saldo - aplicadoVenta) <= PAYMENT_TOLERANCE;
+      const salda = (saldo - aplicadoVenta) <= tolerancia;
       const nuevoEstado = resolveSaleStatus({
         saleTotal: venta.total,
         paid: cobrado + aplicadoVenta,
         returned: devuelto,
         forgiven: venta.forgiven_amount,
         hasInvoice: !!venta.invoice_number,
+        tolerance: tolerancia,
       });
       await venta.update({ status: nuevoEstado }, { transaction: t });
 
@@ -346,7 +354,7 @@ module.exports = async function createBulkPayment(body, req) {
     // de ninguna y sumárselo las dejaría cobradas de más. En pago simple es el primer cobro;
     // en combinado, el último (el sobrante se descontó del último tramo). Mismo criterio que
     // el cobro de una factura suelta (ver createPayment).
-    if (parts && !pagoUltimoMetodoId && (changeAmt + surplusAmt + creditAmt) > PAYMENT_TOLERANCE) {
+    if (parts && !pagoUltimoMetodoId && (changeAmt + surplusAmt + creditAmt) > SOBRANTE_TOLERANCE) {
       throw err("La última forma de pago debe aplicarse a la deuda, no ser solo vuelto/sobrante");
     }
     const pagoSobranteId = parts

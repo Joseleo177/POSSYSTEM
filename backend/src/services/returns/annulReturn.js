@@ -3,7 +3,7 @@ const {
   Return, ReturnItem, Payment, ProductComboItem, sequelize, Sequelize,
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
-const { resolveSaleStatus } = require("../../utils/saleBalance");
+const { resolveSaleStatus, saleSettleTolerance } = require("../../utils/saleBalance");
 const { creditAvailable, addCreditMovement } = require("../customers/creditLedger");
 
 const Op = Sequelize.Op;
@@ -180,6 +180,7 @@ module.exports = async function annulReturn(returnId, { employeeId }, req) {
       nuevoEstado = resolveSaleStatus({
         saleTotal, paid: pagado, returned: devuelto,
         forgiven: sale.forgiven_amount, hasInvoice: !!sale.invoice_number,
+        tolerance: await saleSettleTolerance(sale, t),
       });
       await sale.update({ status: nuevoEstado }, { transaction: t });
     }

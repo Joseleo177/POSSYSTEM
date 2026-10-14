@@ -1,6 +1,6 @@
 const { Sale, Payment, Return, Setting, Sequelize, sequelize } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
-const { PAYMENT_TOLERANCE, resolveSaleStatus } = require("../../utils/saleBalance");
+const { resolveSaleStatus, saleSettleTolerance } = require("../../utils/saleBalance");
 
 const { Op } = Sequelize;
 
@@ -77,7 +77,8 @@ async function forgiveSale(id, { reason, employee_id }, req) {
     }
 
     const { paid, returned, pending } = await pendingOf(sale, t);
-    if (pending <= PAYMENT_TOLERANCE) throw err("Esta factura no tiene saldo pendiente");
+    const tolerance = await saleSettleTolerance(sale, t);
+    if (pending <= tolerance) throw err("Esta factura no tiene saldo pendiente");
 
     // El tope solo aplica a quien no es administrador: es la barandilla del cajero que cierra
     // un vuelto de céntimos, no un candado para el dueño.
@@ -98,6 +99,7 @@ async function forgiveSale(id, { reason, employee_id }, req) {
       returned,
       forgiven,
       hasInvoice: !!sale.invoice_number,
+      tolerance,
     });
 
     await sale.update({
@@ -151,6 +153,7 @@ async function unforgiveSale(id, req) {
       returned,
       forgiven: 0,
       hasInvoice: !!sale.invoice_number,
+      tolerance: await saleSettleTolerance(sale, t),
     });
 
     await sale.update({

@@ -1,4 +1,5 @@
 const { Payment, Sale, SaleItem, Customer, Employee, Currency, PaymentJournal, Sequelize, Op, getSaleBalance } = require("./shared");
+const { settleTolerance } = require("../../utils/saleBalance");
 
 module.exports = async function getPendingPayments(query, tenant = {}) {
   const { limit = 100, offset = 0, date_from, date_to, search, warehouse_id } = query;
@@ -70,7 +71,13 @@ module.exports = async function getPendingPayments(query, tenant = {}) {
       // igual que createPayment/removePayment. Antes referenciaba una variable inexistente.
       const credited = parseFloat(await getSaleBalance(item.id)) || 0;
       const rawBalance = parseFloat((parseFloat(item.total) - credited).toFixed(6));
-      const balance = rawBalance <= 0.10 ? 0 : rawBalance;
+      // Solo se perdona el desfase de redondeo de esta factura (utils/saleBalance), no diez
+      // céntimos fijos: a la tasa del día eso escondía decenas de bolívares de deuda.
+      const tolerance = settleTolerance({
+        saleTotal: item.total, linesPrecise: item.total_precise,
+        discount: item.discount_amount, serviceCharge: item.service_charge,
+      });
+      const balance = rawBalance <= tolerance ? 0 : rawBalance;
       // getSaleBalance suma lo exonerado porque decide el saldo; "Ya pagado" no debe incluirlo:
       // en el modal de cobro eso se lee como dinero recibido.
       const forgiven = parseFloat(item.forgiven_amount || 0);

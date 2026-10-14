@@ -1,6 +1,7 @@
 const { Sale, SALE_INCLUDE } = require("./shared");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { effectiveDueDate, resolveCustomerCreditDays } = require("../../utils/dueDate");
+const { settleTolerance } = require("../../utils/saleBalance");
 
 module.exports = async function getOneSale(id, req) {
   const s = await Sale.findByPk(id, { include: SALE_INCLUDE });
@@ -105,10 +106,14 @@ module.exports = async function getOneSale(id, req) {
   item.balance = parseFloat(
     (parseFloat(item.total) - item.total_returned - item.amount_paid - forgiven).toFixed(6)
   );
-  // Una factura cerrada no tiene saldo: el estado manda sobre la resta. Cobrando divisas a
-  // tasa de efectivo entran menos dólares que el saldo oficial (el dólar físico vale más
-  // bolívares), y esos centavos no son deuda del cliente — ya pagó todo lo que debía en Bs.
-  if (item.status === 'pagado' || item.status === 'exonerado' || item.balance < 0 || item.balance <= 0.10) item.balance = 0;
+  // Una factura cerrada no tiene saldo: el estado manda sobre la resta. Una abierta muestra lo
+  // que debe salvo el desfase de redondeo de sus propias líneas (utils/saleBalance): con los
+  // diez céntimos fijos de antes, una factura 'parcial' debiendo Bs.80 se veía sin saldo.
+  const tolerance = settleTolerance({
+    saleTotal: item.total, linesPrecise: item.total_precise,
+    discount: item.discount_amount, serviceCharge: item.service_charge,
+  });
+  if (item.status === 'pagado' || item.status === 'exonerado' || item.balance <= tolerance) item.balance = 0;
 
   // Quién autorizó el perdón: en la ficha de la factura importa tanto como el monto.
   if (item.forgiven_by) {

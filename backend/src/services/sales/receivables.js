@@ -1,7 +1,7 @@
 const { Sale, Customer, sequelize, Sequelize } = require("../../models");
 const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
 const { dueDateSql, customerCreditDaysSql, TODAY_SQL, effectiveDueDate, parseDueDate, summarize, round, resolveCustomerCreditDays } = require("../../utils/dueDate");
-const { PAYMENT_TOLERANCE } = require("../../utils/saleBalance");
+const { settleToleranceSql } = require("../../utils/saleBalance");
 
 // Vencimiento de una factura: el pactado a mano o, si no hay, su fecha más los días de
 // crédito del cliente —los de su ficha si tiene una excepción, si no el plazo general de la
@@ -17,8 +17,8 @@ const DUE_SQL = dueDateSql('s', CREDIT_SQL);
  * abierta aparecería como "vence hoy".
  *
  * El saldo es el mismo de la ficha de la venta: total − cobrado (pagos + crédito aplicado) −
- * devuelto con NC vigente − exonerado. Con la tolerancia de siempre (PAYMENT_TOLERANCE): una
- * factura pagada a tasa de efectivo deja centavos que no son deuda.
+ * devuelto con NC vigente − exonerado. Con el margen de redondeo propio de cada factura (el
+ * mismo con que el cobro la da por saldada; ver settleTolerance en utils/saleBalance).
  */
 async function getReceivables({ warehouse_id, customer_id, search }, req) {
   const company_id = req.employee?.company_id ?? null;
@@ -65,14 +65,16 @@ async function getReceivables({ warehouse_id, customer_id, search }, req) {
                 COALESCE((SELECT SUM(r.total) FROM returns r WHERE r.sale_id = s.id AND r.status <> 'anulado'), 0)::float AS total_returned,
                 -- Como texto: un DATE crudo puede volver de pg como Date a medianoche UTC.
                 to_char(${DUE_SQL}, 'YYYY-MM-DD') AS due_date,
-                (${TODAY_SQL} - ${DUE_SQL})::int AS days_overdue
+                (${TODAY_SQL} - ${DUE_SQL})::int AS days_overdue,
+                -- Margen de redondeo propio de la factura (utils/saleBalance).
+                ${settleToleranceSql("s")}::float AS tolerance
            FROM sales s
            LEFT JOIN customers  c ON c.id = s.customer_id
            LEFT JOIN warehouses w ON w.id = s.warehouse_id
           WHERE s.status IN ('pendiente', 'parcial')
             ${where.length ? `AND ${where.join(' AND ')}` : ''}
        ) x
-      WHERE x.total - x.amount_paid - x.total_returned - x.forgiven_amount > ${PAYMENT_TOLERANCE}
+      WHERE x.total - x.amount_paid - x.total_returned - x.forgiven_amount > x.tolerance
       ORDER BY x.due_date ASC, x.id ASC`,
     { replacements: rep, type: Sequelize.QueryTypes.SELECT }
   );
@@ -85,6 +87,7 @@ async function getReceivables({ warehouse_id, customer_id, search }, req) {
       has_fixed_due: !!r.due_date_fixed,
     };
     delete inv.due_date_fixed;
+    delete inv.tolerance;
     return inv;
   });
 

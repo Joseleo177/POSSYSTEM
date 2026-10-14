@@ -1,5 +1,5 @@
 const { Payment, Sale, Return, Sequelize, sequelize, getSaleBalance } = require("./shared");
-const { resolveSaleStatus } = require("../../utils/saleBalance");
+const { resolveSaleStatus, saleSettleTolerance } = require("../../utils/saleBalance");
 
 module.exports = async function removePayment(id) {
   const t = await sequelize.transaction();
@@ -37,6 +37,7 @@ module.exports = async function removePayment(id) {
       newStatus = resolveSaleStatus({
         saleTotal, paid: remainingPaid, returned: totalReturned,
         forgiven: sale.forgiven_amount, hasInvoice: !!sale.invoice_number,
+        tolerance: await saleSettleTolerance(sale, t),
       });
       await sale.update({ status: newStatus }, { transaction: t });
     }

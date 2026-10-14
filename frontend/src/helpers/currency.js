@@ -1,12 +1,25 @@
 /**
- * Margen con el que el servidor da una factura por saldada, en moneda base.
- *
- * Es el desfase que dejan los dos redondeos de una misma venta: `sales.total` suma precios ya
- * redondeados por línea, y el cobro en bolívares trabaja con los subtotales precisos. Debe
- * valer lo mismo que PAYMENT_TOLERANCE en backend/src/utils/saleBalance.js — si la pantalla
- * usa otro número, anuncia un resultado distinto del que el servidor va a registrar.
+ * Un céntimo en moneda base: umbral de sobrantes y redondeos de pantalla. Debe valer lo mismo
+ * que PAYMENT_TOLERANCE en backend/src/utils/saleBalance.js.
  */
-export const PAYMENT_TOLERANCE = 0.10;
+export const PAYMENT_TOLERANCE = 0.01;
+
+/**
+ * Margen con el que el servidor da por saldada ESTA factura, en moneda base: medio céntimo más
+ * el desfase entre `sales.total` (precios redondeados por línea) y la suma precisa de sus
+ * líneas, que es lo que se cobra en bolívares. Copia de settleTolerance en
+ * backend/src/utils/saleBalance.js — si la pantalla usa otro número, anuncia un resultado
+ * distinto del que el servidor va a registrar.
+ *
+ * Antes era un $0,10 fijo: a la tasa del día, una factura se cerraba debiendo hasta Bs.85.
+ */
+export const settleTolerance = (sale) => {
+  const total = parseFloat(sale?.total) || 0;
+  const lineas = parseFloat(sale?.total_precise);
+  if (!Number.isFinite(lineas)) return 0.005;
+  const preciso = lineas - (parseFloat(sale?.discount_amount) || 0) + (parseFloat(sale?.service_charge) || 0);
+  return 0.005 + Math.max(0, total - Math.max(0, preciso));
+};
 
 /**
  * Formatea un número con símbolo de moneda.

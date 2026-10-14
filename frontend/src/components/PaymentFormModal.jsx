@@ -3,7 +3,7 @@ import { Spinner } from "./ui/Spinner";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 import Modal from "./ui/Modal";
-import { saleTotalAtRate, todayISO, PAYMENT_TOLERANCE } from "../helpers";
+import { saleTotalAtRate, todayISO, PAYMENT_TOLERANCE, settleTolerance } from "../helpers";
 import DatePicker from "./ui/DatePicker";
 import RateField, { resolveRate } from "./ui/RateField";
 import { journalsForWarehouse, toNameCase } from "../helpers";
@@ -191,8 +191,8 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // gaveta quedaba con diez céntimos menos de los que decía la caja, en cada cobro.
   //
   // No hace falta inflarlo para cerrar la factura: el servidor la da por saldada cuando lo
-  // cobrado llega al saldo menos la tolerancia (ver PAYMENT_TOLERANCE en utils/saleBalance),
-  // que es justo el desfase de redondeo que este ajuste intentaba tapar. Lo único que se
+  // cobrado llega al saldo menos el desfase de redondeo de la factura (settleTolerance en
+  // utils/saleBalance), que es justo lo que este ajuste intentaba tapar. Lo único que se
   // conserva es el tope: no se aplica a la factura más de lo que debe.
   //
   // El tope se aplica en la moneda contra la que se cobró, no siempre en la base. Cobrando en
@@ -230,10 +230,11 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // redondeo —el mismo que tolera utils/saleBalance— aparecía como "Saldo restante Bs.156,87"
   // debajo de un campo que decía "PAGO COMPLETO A FACTURA": dos criterios distintos en la
   // misma pantalla, y el que mentía era este, porque el servidor da la factura por saldada.
-  // La misma tolerancia que aplica el servidor al decidir si la factura queda saldada. Sin
-  // esto la pantalla anunciaba "abono parcial" y un saldo de diez céntimos para un cobro que
-  // el servidor iba a cerrar igual: dos veredictos distintos sobre el mismo pago.
-  const settlesInvoice = isNonBasePay ? remainingBs < 0.01 : remainingBase <= PAYMENT_TOLERANCE;
+  // El mismo criterio que aplica el servidor al decidir si la factura queda saldada: en Bs,
+  // contra el saldo en bolívares; en divisas, con el margen de redondeo de ESTA factura
+  // (settleTolerance). Con los diez céntimos fijos de antes se anunciaba "pago completo" a un
+  // cobro en divisas al que le faltaban hasta Bs.85.
+  const settlesInvoice = isNonBasePay ? remainingBs < 0.01 : remainingBase <= settleTolerance(sale);
   // Lo que se muestra: la cifra de la pista que manda, convertida a la moneda de pantalla. Si
   // la factura queda saldada el resto es cero, no los céntimos que absorbe la tolerancia.
   const remainingShown = settlesInvoice ? 0
@@ -467,7 +468,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // Exonerar el saldo pendiente. No pide diario ni fecha: no hay dinero que ubicar en ninguna
   // caja, solo una deuda que se deja de cobrar y el motivo por el que se dejó.
   const canForgive = can("sales.forgive")
-    && balanceUsd > 0.10
+    && balanceUsd > settleTolerance(sale)
     && !["pagado", "exonerado", "anulado", "devuelto"].includes(sale?.status);
 
   const submitForgive = async () => {
