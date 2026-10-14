@@ -42,12 +42,28 @@ module.exports = async function getOneSale(id, req) {
     where: { sale_id: id, amount: { [Op.gt]: 0 } },
     include: [
       {
-        model: PaymentJournal, foreignKey: 'payment_journal_id', attributes: ['name', 'color'], required: false,
+        model: PaymentJournal, foreignKey: 'payment_journal_id', attributes: ['name', 'color', 'type'], required: false,
         include: [{ model: CurrencyModel, attributes: ['symbol', 'exchange_rate'], required: false }],
       },
     ],
     order: [['created_at', 'ASC']],
   });
+
+  // Método de cada cobro ("Pago Móvil", "Punto de Venta"). El diario es la cuenta y acepta
+  // varios métodos, así que su nombre dice a dónde entró el dinero, no cómo pagó el cliente,
+  // que es lo que el comprobante tiene que decir. Cobros viejos sin método caen al tipo del
+  // diario, igual que el reporte de ventas.
+  const methodCode = (p) => p.payment_method || p.PaymentJournal?.type || null;
+  const codes = [...new Set(payRows.map(methodCode).filter(Boolean))];
+  const methodNames = {};
+  if (codes.length > 0) {
+    const { PaymentMethod } = require("../../models");
+    const pmRows = await PaymentMethod.findAll({
+      where: { code: codes, company_id: s.company_id },
+      attributes: ['code', 'name'],
+    });
+    pmRows.forEach(m => { methodNames[m.code] = m.name; });
+  }
 
   // Info de los diarios de cambio (consulta separada, no hay asociación definida)
   const changeIds = [...new Set(payRows.map(p => p.change_journal_id).filter(Boolean))];
@@ -82,6 +98,8 @@ module.exports = async function getOneSale(id, req) {
       notes:            pj.notes || null,
       journal_name:     pj.PaymentJournal?.name  || null,
       journal_color:    pj.PaymentJournal?.color || null,
+      payment_method:   pj.payment_method || null,
+      method_name:      methodNames[methodCode(pj)] || null,
       change_journal_name:  cj?.name  || null,
       change_journal_color: cj?.color || null,
       change_journal_rate:  cj?.rate  || 1,

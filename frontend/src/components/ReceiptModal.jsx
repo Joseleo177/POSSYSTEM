@@ -50,6 +50,9 @@ function normalizeSale(sale) {
         // decir cuánto entró por cada uno, no solo por el último.
         payments: (sale.Payments || sale.payments || []).map(p => ({
             journal_name: p.journal_name || null,
+            // Cómo pagó el cliente ("Pago Móvil"). El diario es la cuenta y admite varios
+            // métodos: "Banco de Venezuela" dice a dónde entró el dinero, no cómo se pagó.
+            method_name: p.method_name || null,
             amount: parseFloat(p.amount || 0),
             exchange_rate: parseFloat(p.exchange_rate || 1),
             // El vuelto entregado en ese cobro. `amount` es el dinero que ENTRÓ —incluye lo
@@ -89,19 +92,23 @@ function paymentSummary(s) {
     // "Cobro". Saltárselo era peor que un nombre genérico — dejaba el renglón de forma de
     // pago vacío sobre una venta marcada PAGADO, y el dinero de ese canal desaparecía del
     // comprobante que se lleva el cliente.
+    //
+    // El renglón se nombra por el MÉTODO ("Pago Móvil", "Efectivo"), que es lo que el cliente
+    // reconoce; la cuenta donde entró el dinero no se imprime. Se agrupa por ese nombre: dos
+    // pagos móviles a bancos distintos son, para el cliente, una sola forma de pago.
     const porDiario = [];
     for (const p of s.payments || []) {
         if (!(p.amount > 0)) continue;
-        const nombre = p.journal_name || "Cobro";
-        const found = porDiario.find(x => x.journal_name === nombre);
+        const nombre = p.method_name || p.journal_name || "Cobro";
+        const found = porDiario.find(x => x.nombre === nombre);
         if (found) found.amount += p.amount;
-        else porDiario.push({ journal_name: nombre, amount: p.amount });
+        else porDiario.push({ nombre, amount: p.amount });
     }
     // El saldo a favor no es un cobro pero sí una forma de pago: es lo que saldó la factura.
-    if (s.credit_applied > 0) porDiario.push({ journal_name: "Saldo a favor", amount: s.credit_applied });
+    if (s.credit_applied > 0) porDiario.push({ nombre: "Saldo a favor", amount: s.credit_applied });
     // Respaldo para el ticket que se imprime justo tras cobrar, cuando aún no hay lista de
     // pagos pero sí se sabe por dónde entró.
-    if (!porDiario.length && s.journal_name) porDiario.push({ journal_name: s.journal_name, amount: s.amount_paid });
+    if (!porDiario.length && s.journal_name) porDiario.push({ nombre: s.journal_name, amount: s.amount_paid });
 
     // Lo que el cliente puso sobre el mostrador y lo que se le devolvió. `amount` de cada
     // cobro es el dinero recibido —el vuelto todavía está dentro—, así que el papel puede
@@ -115,7 +122,7 @@ function paymentSummary(s) {
     const multiTasa = tasasEnBs(s.payments).size > 1;
     const cobros = multiTasa
         ? (s.payments || []).filter(p => p.amount > 0).map(p => ({
-            journal_name: p.journal_name || "Cobro",
+            nombre: p.method_name || p.journal_name || "Cobro",
             fecha: fechaCorta(p.created_at),
             enBs: p.exchange_rate > 1,
             monto: Math.round(p.amount * (p.exchange_rate > 1 ? p.exchange_rate : 1) * 100) / 100,
@@ -131,10 +138,9 @@ function paymentSummary(s) {
         recibido,
         vuelto,
         // Con un solo canal basta el nombre; con varios se listan aparte con su monto.
-        metodo: porDiario.length === 1 ? porDiario[0].journal_name
+        metodo: porDiario.length === 1 ? porDiario[0].nombre
             : porDiario.length > 1 ? "Combinado"
-            : (pendiente ? "Crédito" : "—"),
-        etiqueta: status === "parcial" ? "Abono parcial"
+            : (pendiente ? "Crédito" : "—"),        etiqueta: status === "parcial" ? "Abono parcial"
             : status === "pagado" ? "Pagado"
             : status === "exonerado" ? "Saldo exonerado"
             : pendiente ? "Pendiente de pago"
@@ -504,10 +510,10 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
         <div class="total-row"><span>FORMA DE PAGO</span><span>${pago.metodo}</span></div>
         ${pago.multiTasa
             ? pago.cobros.map(c => `
-        <div class="total-row"><span>&nbsp;&nbsp;${c.journal_name}${c.fecha ? ` ${c.fecha}` : ""}</span><span>${fmt(c.monto, c.enBs ? bsSym : refSym)}</span></div>
+        <div class="total-row"><span>&nbsp;&nbsp;${c.nombre}${c.fecha ? ` ${c.fecha}` : ""}</span><span>${fmt(c.monto, c.enBs ? bsSym : refSym)}</span></div>
         ${c.enBs ? `<div class="total-row"><span>&nbsp;&nbsp;&nbsp;&nbsp;Tasa ${fmtTasa(c.tasa)}</span><span></span></div>` : ""}`).join("")
             : pago.canales.length > 1
-            ? pago.canales.map(c => `<div class="total-row"><span>&nbsp;&nbsp;${c.journal_name}</span><span>${fmt(c.amount * rate, sym)}</span></div>`).join("")
+            ? pago.canales.map(c => `<div class="total-row"><span>&nbsp;&nbsp;${c.nombre}</span><span>${fmt(c.amount * rate, sym)}</span></div>`).join("")
             : ""}
         ${pago.vuelto > 0 ? `
         <div class="total-row"><span>RECIBIDO</span><span>${fmt(pago.recibido * rate, sym)}</span></div>
@@ -545,7 +551,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
         + (parseFloat(sale?.credit_applied) || 0);
     const yaCompleto = pagosRecibidos.length > 0
         && sumaCobros + 0.01 >= (parseFloat(sale?.amount_paid) || 0)
-        && pagosRecibidos.every(p => p?.journal_name)
+        && pagosRecibidos.every(p => p?.journal_name && p?.method_name)
         && Array.isArray(sale?.items) && sale.items.length > 0;
 
     const [fetched, setFetched] = useState(null);
@@ -677,7 +683,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
 
             {/* Forma de pago y estado — mismo bloque que se imprime en el papel. */}
             <div className="border-t border-border/60 dark:border-white/[0.06] pt-2 mb-4">
-                <Linea label="Forma de pago">{pago.metodo}</Linea>
+                <Linea label="Forma de pago">{toNameCase(pago.metodo)}</Linea>
                 {/* Con más de un canal se detalla cuánto entró por cada uno: "Combinado" a secas
                     no permite cuadrar el ticket contra las cajas. */}
                 {/* Abonos a tasas distintas: cada uno en su moneda, con fecha y tasa. */}
@@ -686,7 +692,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                         key={i}
                         label={
                             <span className="pl-3 block">
-                                {toNameCase(c.journal_name)}{c.fecha ? ` · ${c.fecha}` : ""}
+                                {toNameCase(c.nombre)}{c.fecha ? ` · ${c.fecha}` : ""}
                                 {c.enBs && <span className="block text-[12px]">Tasa {fmtTasa(c.tasa)}</span>}
                             </span>
                         }
@@ -695,7 +701,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     </Linea>
                 ))}
                 {!pago.multiTasa && pago.canales.length > 1 && pago.canales.map(c => (
-                    <Linea key={c.journal_name} label={<span className="pl-3">{toNameCase(c.journal_name)}</span>}>
+                    <Linea key={c.nombre} label={<span className="pl-3">{toNameCase(c.nombre)}</span>}>
                         <Money value={fmt(c.amount * rate, sym)} />
                     </Linea>
                 ))}
