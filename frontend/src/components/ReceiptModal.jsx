@@ -8,6 +8,14 @@ import { Spinner } from "./ui/Spinner";
 
 const fmt = fmtMoney;
 
+// Cobros de la venta: `payments` (los que la caja va acumulando) o `Payments` (getOneSale).
+// Manda la primera lista que tenga algo, no la primera que exista: una cuenta en espera se
+// cobra tras un update que responde con getOneSale, así que el recibo de la caja trae
+// `Payments: []` de antes del cobro. Con `Payments || payments` ese arreglo vacío ganaba y el
+// ticket salía con "FORMA DE PAGO —" y en Ref., habiéndose cobrado en bolívares.
+const cobrosDe = (sale) =>
+    [sale?.payments, sale?.Payments].find(l => Array.isArray(l) && l.length) || [];
+
 // Normaliza el objeto sale ya sea de ContabilidadPage (getAll) o de CobroPage (checkout)
 function normalizeSale(sale) {
     return {
@@ -48,7 +56,7 @@ function normalizeSale(sale) {
         // acumulando en `payments` a medida que se registran. Una venta puede cobrarse por
         // varios canales —parte en divisas, parte en punto de venta— y el ticket tiene que
         // decir cuánto entró por cada uno, no solo por el último.
-        payments: (sale.Payments || sale.payments || []).map(p => ({
+        payments: cobrosDe(sale).map(p => ({
             journal_name: p.journal_name || null,
             // Cómo pagó el cliente ("Pago Móvil"). El diario es la cuenta y admite varios
             // métodos: "Banco de Venezuela" dice a dónde entró el dinero, no cómo se pagó.
@@ -544,7 +552,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
     const saleId = sale?.sale_id ?? sale?.id ?? null;
     // Un cobro sin nombre de caja deja el comprobante sin forma de pago, así que la venta no
     // está "completa" mientras le falte: se consulta igual, que es de donde sale el nombre.
-    const pagosRecibidos = sale?.Payments || sale?.payments || [];
+    const pagosRecibidos = cobrosDe(sale);
     // Y si los cobros recibidos no suman lo abonado, faltan abonos de otro día (cada uno con su
     // tasa): la caja solo conoce los que se registraron en esa pantalla.
     const sumaCobros = pagosRecibidos.reduce((a, p) => a + (parseFloat(p?.amount) || 0), 0)

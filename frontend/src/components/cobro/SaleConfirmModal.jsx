@@ -208,7 +208,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
             // si les falta la caja, valen los de la consulta, que la traen resuelta desde la
             // base. Y si la consulta no devolvió ninguno, se vuelve a los de pantalla antes
             // que imprimir sin forma de pago.
-            const delServidor = full?.Payments ?? full?.payments ?? [];
+            const delServidor = full?.Payments?.length ? full.Payments : (full?.payments ?? []);
             const payments = (receiptPayments.length && !pagosSinCaja && !faltanCobros)
                 ? receiptPayments
                 : (delServidor.length ? delServidor : receiptPayments);
