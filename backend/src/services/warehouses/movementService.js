@@ -300,6 +300,10 @@ async function searchMovementProducts(req) {
       LEFT JOIN categories c ON c.id = p.category_id
      WHERE p.company_id = :cid
        AND COALESCE(p.is_service, false) = false AND COALESCE(p.is_combo, false) = false
+       -- Solo lo que vive en los almacenes del usuario. El catálogo es de la empresa, y sin
+       -- esto un encargado veía en rojo "0" todo lo que solo manejan las otras sucursales.
+       AND EXISTS (SELECT 1 FROM product_stock ps
+                    WHERE ps.product_id = p.id AND ps.warehouse_id IN (SELECT id FROM scope))
        AND (:text = '' OR p.name ILIKE :like OR p.barcode = :text)
      ORDER BY p.name
      LIMIT 20
