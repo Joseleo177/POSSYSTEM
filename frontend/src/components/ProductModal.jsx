@@ -124,8 +124,11 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             } else {
                 // initialName: lo que el usuario ya escribió en el buscador que lo trajo hasta
                 // acá. Volver a teclear el mismo nombre es trabajo repetido y una oportunidad
-                // de escribirlo distinto.
-                setForm({ ...EMPTY, name: initialName || "" });
+                // de escribirlo distinto. Si es solo dígitos, lo que se buscó fue un código de
+                // barras (el lector lo teclea): va a su campo, y así la ficha avisa enseguida si
+                // otra sucursal ya tiene ese producto.
+                const esCodigo = /^\d{6,}$/.test(String(initialName || "").trim());
+                setForm({ ...EMPTY, name: esCodigo ? "" : (initialName || ""), barcode: esCodigo ? initialName.trim() : "" });
                 setImagePreview(null);
             }
             setImageFile(null);
