@@ -701,6 +701,13 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                     // Lo que se buscó y no apareció es, casi siempre, el nombre del producto
                     // que se va a crear.
                     initialName={search.trim()}
+                    // Comprar es justo cómo un producto de otra sucursal entra a esta: no
+                    // hace falta registrarlo antes, basta con elegirlo.
+                    onPickExisting={p => {
+                        setShowProductModal(false);
+                        setSearch("");
+                        handleSelectProduct({ ...p, stock: p.warehouse_stock ?? 0 });
+                    }}
                 />
             )}
         </div>

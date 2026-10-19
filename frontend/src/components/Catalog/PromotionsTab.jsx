@@ -104,7 +104,20 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
         } catch (e) { console.error(e); }
     }, []);
 
-    useEffect(() => { load(); loadProducts(); loadWarehouses(); }, [load, loadProducts, loadWarehouses]);
+    useEffect(() => { load(); loadWarehouses(); }, [load, loadWarehouses]);
+
+    // "Todas las sucursales" es solo del admin. Un encargado ve únicamente sus almacenes, y
+    // antes, con uno solo, el selector no aparecía y la promo se guardaba para todas: corría
+    // en tiendas ajenas y ofrecía el catálogo entero.
+    const isAdmin = can("admin");
+    const propia = warehouses[0] ? String(warehouses[0].id) : "";
+    useEffect(() => {
+        if (modal === "new" && !isAdmin && !form.warehouse_id && propia) setForm(p => ({ ...p, warehouse_id: propia }));
+    }, [modal, isAdmin, form.warehouse_id, propia]);
+
+    // De qué sucursal se listan los productos. Con una sola que vende, "todas" es esa: el
+    // catálogo entero traería lo que solo tienen los depósitos, que no venden.
+    const sucursalProductos = form.warehouse_id || (warehouses.length === 1 ? propia : "");
 
     // Recarga la lista de productos cada vez que se elige o cambia la sucursal DENTRO del
     // modal (sea al abrir para editar una promo que ya tenía una, o al tocar el selector).
@@ -113,8 +126,8 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
     useEffect(() => {
         if (!modal) return;
         let alive = true;
-        loadProducts(form.warehouse_id).then(list => {
-            if (!alive || !form.warehouse_id) return;
+        loadProducts(sucursalProductos).then(list => {
+            if (!alive || !sucursalProductos) return;
             const validIds = new Set(list.map(p => p.id));
             setForm(prev => {
                 const kept = prev.product_ids.filter(id => validIds.has(id));
@@ -122,9 +135,12 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
             });
         });
         return () => { alive = false; };
-    }, [modal, form.warehouse_id, loadProducts]);
+    }, [modal, sucursalProductos, loadProducts]);
 
-    const openNew = useCallback(() => { setForm({ ...EMPTY_FORM, starts_at: todayISO() }); setProductSearch(""); setModal("new"); }, []);
+    const openNew = useCallback(() => {
+        setForm({ ...EMPTY_FORM, starts_at: todayISO(), warehouse_id: isAdmin ? "" : propia });
+        setProductSearch(""); setModal("new");
+    }, [isAdmin, propia]);
 
     // Mismo caso que CategoriesTab: la pestaña se remonta al volver a ella, y con la
     // condición `> 0` el modal se abría solo. Se compara contra el valor previo.
@@ -278,7 +294,9 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                                             </td>
                                             <td><StatusMark status={estado} map={PROMO_STATUS} /></td>
                                             <td className="pr-4 text-right">
-                                                {puedeEditar && (
+                                                {/* Las de todas las sucursales solo las toca el admin: el
+                                                    servidor las rechaza igual, mejor no ofrecerlo. */}
+                                                {puedeEditar && (isAdmin || p.warehouse_id) && (
                                                     <div className="inline-flex items-center gap-0.5">
                                                         <button onClick={() => openEdit(p)} className="row-icon" title="Editar" aria-label="Editar promoción">
                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
@@ -365,9 +383,9 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                         </div>
                     </div>
 
-                    {/* Sucursal donde corre. Lo normal es que sea en todas; limitarla es la
-                        excepción, así que esa es la opción por defecto. Con una sola sucursal
-                        "todas" y "esa" son lo mismo: el selector no aporta nada. */}
+                    {/* Sucursal donde corre. Para el admin lo normal es que sea en todas, así
+                        que esa es la opción por defecto; un encargado solo elige entre las
+                        suyas. Con una sola opción el selector no aporta nada. */}
                     {warehouses.length > 1 && (
                         <div>
                             <label className="label">Sucursal</label>
@@ -375,10 +393,10 @@ export default function PromotionsTab({ notify, can, triggerNew }) {
                                 value={String(form.warehouse_id || "")}
                                 onChange={val => setForm(p => ({ ...p, warehouse_id: val }))}
                                 options={[
-                                    { value: "", label: "Todas las sucursales" },
+                                    ...(isAdmin ? [{ value: "", label: "Todas las sucursales" }] : []),
                                     ...warehouses.map(w => ({ value: String(w.id), label: toNameCase(w.name) })),
                                 ]}
-                                placeholder="Todas las sucursales"
+                                placeholder={isAdmin ? "Todas las sucursales" : "Elige la sucursal"}
                                 className="w-full"
                             />
                         </div>

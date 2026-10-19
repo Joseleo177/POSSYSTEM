@@ -3,7 +3,9 @@ import Modal from "./ui/Modal";
 import { Button } from "./ui/Button";
 import { useApp } from "../context/AppContext";
 import CustomSelect from "./ui/CustomSelect";
-import { calcSalePrice as calcSalePriceHelper, resolveImageUrl } from "../helpers";
+import { calcSalePrice as calcSalePriceHelper, resolveImageUrl, toNameCase } from "../helpers";
+import { api } from "../services/api";
+import { Spinner } from "./ui/Spinner";
 import ComboItemsEditor from "./ComboItemsEditor";
 import BenefitTagPicker from "./BenefitTagPicker";
 import VariantsEditor from "./VariantsEditor";
@@ -19,8 +21,11 @@ const EMPTY = {
     visible_in_catalog: false, sellable: true, has_variants: false
 };
 
-export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName, warehouseCount = 1, initialName = "" }) {
-    const { notify, activeCurrencies, company } = useApp();
+// onPickExisting: quien abre el modal para usar un producto (la compra) recibe el que ya existe
+// con ese código en vez de crear otro. onRegistered: avisa que se agregó a la sucursal, para
+// que la pantalla recargue su lista.
+export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName, warehouseCount = 1, initialName = "", onPickExisting, onRegistered }) {
+    const { notify, activeCurrencies, company, can } = useApp();
     const catalogEnabled = !!company?.catalog_enabled;
     const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
     const exchangeRate = parseFloat(localCurrency?.exchange_rate || 0);
@@ -134,6 +139,41 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
         }
     }, [open, editData, warehouseId]);
+
+    // El catálogo es de la empresa: un código de barras que ya tiene otro producto casi siempre
+    // es el MISMO artículo, que otra sucursal ya cargó. Antes eso se descubría al guardar, con
+    // un "ya está registrado" que no decía de quién ni qué hacer; ahora se avisa al escribir
+    // el código y se ofrece traer ese producto a esta sucursal en vez de duplicarlo.
+    const [existing, setExisting] = useState(null);
+    const [registering, setRegistering] = useState(false);
+    const codigo = String(form.barcode || "").trim();
+    useEffect(() => {
+        setExisting(null);
+        if (!open || form.has_variants || codigo.length < 4) return;
+        let alive = true;
+        const t = setTimeout(async () => {
+            try {
+                const params = { barcode: codigo, limit: 1 };
+                if (warehouseId) { params.warehouse_id = warehouseId; params.for_purchase = true; }
+                const r = await api.products.getAll(params);
+                const p = (r.data || [])[0];
+                if (alive && p && p.id !== editData?.id) setExisting(p);
+            } catch { /* sin aviso: el servidor igual rechaza el duplicado al guardar */ }
+        }, 350);
+        return () => { alive = false; clearTimeout(t); };
+    }, [open, codigo, form.has_variants, warehouseId, editData?.id]);
+
+    const registrarExistente = async () => {
+        if (!existing || registering) return;
+        setRegistering(true);
+        try {
+            await api.warehouses.addStock(warehouseId, { product_id: existing.id, qty: 0 });
+            notify(`${existing.name} agregado a ${warehouseName ? toNameCase(warehouseName) : "tu sucursal"}`);
+            onRegistered?.(existing);
+            onClose();
+        } catch (e) { notify(e.message, "err"); }
+        finally { setRegistering(false); }
+    };
 
     const set = (key, val) => setForm(p => ({ ...p, [key]: val }));
 
@@ -297,6 +337,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
     const handleSave = async () => {
         if (savingRef.current) return;
+        // El servidor lo rechazaría igual; así el aviso queda a la vista, junto a qué hacer.
+        if (existing) return notify(`El código de barras ya es de «${toNameCase(existing.name)}»`, "err");
         // Al insumo no se le pide precio porque no se vende; se guarda en 0 junto con el
         // margen vacío, así no arrastra un precio viejo si algún día vuelve a venderse.
         if (form.sellable && (parseFloat(form.price) <= 0 || form.price === "")) {
@@ -583,6 +625,44 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 </div>
                             )}
                         </div>
+
+                        {existing && (() => {
+                            const yaEsta = !warehouseId || existing.in_warehouse === true;
+                            const puedeRegistrar = !isEdit && !onPickExisting && warehouseId && !yaEsta && can("inventory.adjust");
+                            return (
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3">
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                        <span className="w-10 h-10 shrink-0 rounded-lg overflow-hidden bg-white dark:bg-white/[0.05] border border-border/60 dark:border-white/[0.06] flex items-center justify-center relative">
+                                            {existing.image_url
+                                                ? <img src={resolveImageUrl(existing.image_url)} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                                                : <span className="text-[13px] font-semibold text-content-subtle/60">{existing.name?.charAt(0)?.toUpperCase()}</span>}
+                                        </span>
+                                        <div className="min-w-0">
+                                            <p className="text-[13px] font-semibold text-content dark:text-white">
+                                                {isEdit ? "Ese código ya es de otro producto" : yaEsta ? "Este producto ya está en tu catálogo" : "Este producto ya existe en la empresa"}
+                                            </p>
+                                            <p className="text-[12px] text-content-subtle truncate">
+                                                {toNameCase(existing.name)}{existing.category_name ? ` · ${toNameCase(existing.category_name)}` : ""}
+                                                {!isEdit && !yaEsta && !onPickExisting && (puedeRegistrar ? " · agrégalo en vez de crearlo de nuevo" : " · pide que lo registren en tu sucursal")}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {!isEdit && onPickExisting && (
+                                        <button type="button" onClick={() => onPickExisting(existing)}
+                                            className="btn-outline h-12 sm:h-9 px-4 rounded-lg text-[13px] font-semibold shrink-0">
+                                            Usar este producto
+                                        </button>
+                                    )}
+                                    {puedeRegistrar && (
+                                        <button type="button" onClick={registrarExistente} disabled={registering}
+                                            className="btn-outline h-12 sm:h-9 px-4 rounded-lg text-[13px] font-semibold shrink-0 inline-flex items-center justify-center gap-2 disabled:opacity-60">
+                                            {registering && <Spinner />}
+                                            {sucursal ? `Agregar a ${toNameCase(sucursal)}` : "Agregar a mi catálogo"}
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </div>
                 </div>
 

@@ -1,6 +1,7 @@
 const { Promotion, Product, PromotionProduct, sequelize } = require("../models");
 const { Op } = require("sequelize");
 const { broadcast } = require("../services/sseService");
+const { isAdmin, assertWarehouseAccess, visibleWarehouseIds } = require("../middleware/auth");
 
 // Una promoción cambia lo que la caja descuenta, y el servidor la revalida al facturar: si el
 // carrito no se entera, muestra un total y la factura sale con otro. Se reutiliza el aviso de
@@ -16,15 +17,28 @@ const TZ = process.env.DB_TIMEZONE || 'America/Caracas';
 const offsetDe = (dia) => {
   const v = new Intl.DateTimeFormat('en-US', { timeZone: TZ, timeZoneName: 'longOffset' })
     .formatToParts(new Date(`${dia}T12:00:00Z`)).find(p => p.type === 'timeZoneName')?.value || '';
-  return v.match(/GMT([+-]d{2}:d{2})/)?.[1] || '+00:00';
+  return v.match(/GMT([+-]\d{2}:\d{2})/)?.[1] || '+00:00';
 };
-const soloFecha = (s) => typeof s === 'string' && /^d{4}-d{2}-d{2}$/.test(s);
+const soloFecha = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const inicioDelDia = (s) => soloFecha(s) ? new Date(`${s}T00:00:00${offsetDe(s)}`) : s;
 const finDelDia = (s) => soloFecha(s) ? new Date(`${s}T23:59:59.999${offsetDe(s)}`) : s;
 
+// Una promoción sin sucursal corre en todas, así que crearla, cambiarla o borrarla es cosa
+// del admin. El resto opera solo sobre las de sus almacenes: antes, un encargado con una sola
+// sucursal no veía el selector y su promo se guardaba para todas, descontando en tiendas ajenas.
+const fail = (message, status) => Object.assign(new Error(message), { status });
+const assertAlcance = async (req, warehouseId) => {
+  if (isAdmin(req)) return;
+  if (!parseInt(warehouseId, 10)) throw fail("Solo el administrador puede manejar promociones de todas las sucursales", 403);
+  await assertWarehouseAccess(req, warehouseId);
+};
+
 const getAll = async (req, res) => {
   try {
+    // Fuera del admin: las de sus sucursales y las generales, que también corren en ellas.
+    const ids = await visibleWarehouseIds(req);
     const promos = await Promotion.findAll({
+      where: ids ? { [Op.or]: [{ warehouse_id: null }, { warehouse_id: { [Op.in]: ids } }] } : {},
       include: [{ model: Product, through: { attributes: [] }, attributes: ['id', 'name'] }],
       order: [['created_at', 'DESC']],
     });
@@ -86,6 +100,7 @@ const create = async (req, res) => {
     if (type === 'buy_x_get_y' && (!buy_qty || !get_qty)) throw new Error("Compra y lleva son requeridos");
     if (!starts_at) throw new Error("La fecha de inicio es requerida");
     if (!product_ids.length) throw new Error("Debe seleccionar al menos un producto");
+    await assertAlcance(req, warehouse_id);
 
     const promo = await Promotion.create({
       name: name.trim(), type,
@@ -112,7 +127,7 @@ const create = async (req, res) => {
     res.status(201).json({ ok: true, data: full });
   } catch (err) {
     await t.rollback();
-    res.status(400).json({ ok: false, message: err.message });
+    res.status(err.status || 400).json({ ok: false, message: err.message });
   }
 };
 
@@ -124,6 +139,9 @@ const update = async (req, res) => {
 
     const promo = await Promotion.findByPk(id, { transaction: t });
     if (!promo) { await t.rollback(); return res.status(404).json({ ok: false, message: "Promoción no encontrada" }); }
+    // La que está guardada y, si la mueven, también la de destino.
+    await assertAlcance(req, promo.warehouse_id);
+    if (warehouse_id !== undefined) await assertAlcance(req, warehouse_id);
 
     await promo.update({
       name: name?.trim() || promo.name,
@@ -156,7 +174,7 @@ const update = async (req, res) => {
     res.json({ ok: true, data: full });
   } catch (err) {
     await t.rollback();
-    res.status(400).json({ ok: false, message: err.message });
+    res.status(err.status || 400).json({ ok: false, message: err.message });
   }
 };
 
@@ -164,11 +182,12 @@ const remove = async (req, res) => {
   try {
     const promo = await Promotion.findByPk(req.params.id);
     if (!promo) return res.status(404).json({ ok: false, message: "Promoción no encontrada" });
+    await assertAlcance(req, promo.warehouse_id);
     await promo.destroy();
     avisarCajas(req);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ ok: false, message: err.message });
+    res.status(err.status || 500).json({ ok: false, message: err.message });
   }
 };
 

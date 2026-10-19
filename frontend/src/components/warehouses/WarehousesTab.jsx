@@ -114,7 +114,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
             onClick={openAddStock}
             className="h-8 px-2.5 sm:px-3"
         >
-            + <span className="hidden sm:inline">Registrar stock</span><span className="sm:hidden">Stock</span>
+            + <span className="hidden sm:inline">Registrar producto</span><span className="sm:hidden">Producto</span>
         </Button>
     ) : subTab === "transferencias" ? (
         canDispatch ? (

@@ -105,7 +105,7 @@ export default function AddStockModal({
     );
 
     return (
-        <Modal open={open} onClose={onClose} title="Agregar producto al almacén" width={480} footer={pie}>
+        <Modal open={open} onClose={onClose} title="Registrar producto" width={480} footer={pie}>
             <p className="-mt-1 mb-4 text-[13px] text-content-subtle">
                 Se agrega a <span className="font-medium text-content dark:text-white">{almacen}</span>.
                 {!p && " Solo aparecen los productos que todavía no tiene."}

@@ -266,7 +266,7 @@ async function anotarVariantes(rows, warehouseId) {
   }
 }
 
-async function getAll({ search, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, for_purchase, variant_view, limit = 100, offset = 0, company_id }) {
+async function getAll({ search, barcode, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, for_purchase, variant_view, limit = 100, offset = 0, company_id }) {
   // Catálogo, POS y promociones usan warehouse_id para acotar a lo que ESA sucursal
   // vende: un producto que nunca tuvo ficha de stock ahí queda afuera, con razón. Una
   // compra es justo lo contrario — comprar es cómo un producto entra por primera vez a un
@@ -276,6 +276,9 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
   const where = {};
   if (company_id) where.company_id = company_id;
   if (category_id) where.category_id = category_id;
+  // Exacto, no como `search`: la ficha de producto pregunta si un código ya es de otro
+  // producto de la empresa, y "759104" no puede casar con "7591049002252".
+  if (barcode) where.barcode = String(barcode).trim();
   if (is_combo !== undefined) where.is_combo = is_combo === 'true';
   if (is_service !== undefined) where.is_service = is_service === 'true';
   if (visible_in_catalog !== undefined) where.visible_in_catalog = visible_in_catalog === 'true' || visible_in_catalog === true;
@@ -566,7 +569,7 @@ async function createProduct({ body, file, company_id }) {
   if (barcode) {
     const existing = await Product.findOne({ where: { barcode, company_id } });
     if (existing) {
-      const e = new Error("El código de barras ya está registrado en otro producto");
+      const e = new Error(`El código de barras ya es de «${existing.name}». Si tu sucursal no lo tiene, regístralo en Stock › Registrar producto`);
       e.status = 400;
       e.isOperational = true;
       throw e;

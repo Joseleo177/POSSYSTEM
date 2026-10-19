@@ -502,6 +502,7 @@ export default function CatalogPage() {
                 warehouseId={warehouseId}
                 warehouseName={selectedWarehouseName}
                 warehouseCount={availableWarehouses.length}
+                onRegistered={() => loadProducts(page, warehouseId)}
             />
 
             <PublicLinkModal
