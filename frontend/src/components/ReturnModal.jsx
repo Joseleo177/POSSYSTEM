@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
 import { Spinner } from "./ui/Spinner";
 import DatePicker from "./ui/DatePicker";
+import Segmented from "./ui/Segmented";
+import Check from "./ui/Check";
+import Money from "./ui/Money";
 import JournalPickerButton from "./cobro/JournalPickerButton";
 import { api } from "../services/api";
-import { fmtNumber, printNotaCreditoDoc, todayISO, journalsForWarehouse, toNameCase } from "../helpers";
-import { fmtQtyUnit } from "../helpers/unitFormatter";
+import { fmtBase, printNotaCreditoDoc, todayISO, journalsForWarehouse, toNameCase } from "../helpers";
+import { isIntegerUnit } from "../helpers/unitFormatter";
 import ConfirmModal from "./ui/ConfirmModal";
 import PaymentFormModal from "./PaymentFormModal";
 import { useApp } from "../context/AppContext";
-
-const fmtPrice = (n) => `Ref. ${fmtNumber(n)}`;
 
 const EMPTY_REFUND = () => ({
     enabled: true,
@@ -21,11 +22,34 @@ const EMPTY_REFUND = () => ({
     parts: [{ journal_id: '', amount: '', reference: '' }],
 });
 
+// Cantidad leída de lo tecleado ("1,5" o "1.5"); vacío o inválido es 0.
+const numDe = (raw) => {
+    const n = parseFloat(String(raw ?? "").replace(",", "."));
+    return isNaN(n) || n < 0 ? 0 : n;
+};
+
+// Unidad corta para las de peso/volumen; las contables no la necesitan al lado del número.
+const UNIDAD_CORTA = { KG: "kg", KILOGRAMO: "kg", L: "L", LITRO: "L", M: "m", METRO: "m" };
+const fmtCant = (n, unit) => {
+    const u = UNIDAD_CORTA[String(unit || "").toUpperCase()];
+    const v = parseFloat(n || 0);
+    return u
+        ? `${v.toLocaleString("es-VE", { maximumFractionDigits: 3 })} ${u}`
+        : Math.trunc(v).toLocaleString("es-VE");
+};
+
+// Sin unidad conocida (respuesta vieja del servidor) manda la propia cantidad vendida: si se
+// vendió una fracción, el producto se vende a granel.
+const esEntera = (unit, vendido) => unit ? isIntegerUnit(unit) : Number.isInteger(parseFloat(vendido || 0));
+
 export default function ReturnModal({ open, onClose, sale, onReturnSuccess, notify }) {
     const { companyInfo, baseCurrency, activeCurrencies, activeJournals: allActiveJournals, printerWidth } = useApp();
+    const fmtB = (n) => fmtBase(n, baseCurrency);
     // El reembolso sale de la caja de la sucursal donde se vendió, no de la de otra tienda.
     const activeJournals = journalsForWarehouse(allActiveJournals, sale?.warehouse_id);
     const [mode, setMode] = useState("devolucion"); // "devolucion" | "cambio"
+    // Lo tecleado por línea, tal cual: guardar el número perdía el separador a mitad de
+    // escribir "1,5" en un producto a granel.
     const [returnQtys, setReturnQtys] = useState({});
     const [reason, setReason] = useState("");
     const [loading, setLoading] = useState(false);
@@ -40,7 +64,10 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     const [productSearch, setProductSearch] = useState("");
     const [productResults, setProductResults] = useState([]);
     const [searchLoading, setSearchLoading] = useState(false);
-    const [replacementItems, setReplacementItems] = useState([]); // [{product_id, name, price, qty, stock}]
+    // Término de la última búsqueda que respondió: sin esto, una búsqueda sin coincidencias
+    // no se distingue de una que todavía no empezó.
+    const [searchedFor, setSearchedFor] = useState("");
+    const [replacementItems, setReplacementItems] = useState([]); // [{product_id, name, price, qty, qtyRaw, unit}]
 
     useEffect(() => {
         if (open && sale) {
@@ -72,6 +99,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                     : await api.products.getAll({ search: productSearch.trim(), limit: 8 });
                 setProductResults(res.data || []);
             } catch { setProductResults([]); }
+            setSearchedFor(productSearch.trim());
             setSearchLoading(false);
         }, 300);
         return () => clearTimeout(timer);
@@ -79,29 +107,33 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
 
     if (!open || !sale) return null;
 
-    const handleQtyChange = (itemId, maxQty, val) => {
-        let parsed = parseFloat(val);
-        if (isNaN(parsed) || parsed < 0) parsed = 0;
-        if (parsed > maxQty) parsed = maxQty;
-        setReturnQtys(prev => ({ ...prev, [itemId]: parsed }));
+    const disponibleDe = (i) => Math.max(0, parseFloat(i.quantity) - parseFloat(i.returned_qty || 0));
+    const unidadDe = (i) => i.Product?.unit || i.unit || null;
+    const cantDe = (i) => Math.min(numDe(returnQtys[i.id]), disponibleDe(i));
+
+    const handleQtyChange = (item, raw) => {
+        const max = disponibleDe(item);
+        setReturnQtys(prev => ({ ...prev, [item.id]: numDe(raw) > max ? String(max) : raw }));
     };
 
     const handleReturnAll = () => {
         const qtys = {};
         sale.items.forEach(i => {
-            const available = parseFloat(i.quantity) - parseFloat(i.returned_qty || 0);
-            if (available > 0) qtys[i.id] = available;
+            const available = disponibleDe(i);
+            if (available > 0) qtys[i.id] = String(available);
         });
         setReturnQtys(qtys);
     };
 
-    const totalReturn = sale.items.reduce((acc, i) => {
-        const retQty = returnQtys[i.id] || 0;
-        return acc + (retQty * (parseFloat(i.price) - parseFloat(i.discount || 0)));
-    }, 0);
+    const totalReturn = sale.items.reduce((acc, i) =>
+        acc + (cantDe(i) * (parseFloat(i.price) - parseFloat(i.discount || 0))), 0);
 
     const totalReplacement = replacementItems.reduce((acc, i) => acc + (parseFloat(i.price) * parseFloat(i.qty)), 0);
     const exchangeDiff = totalReplacement - totalReturn; // >0 cobra, <0 acredita
+
+    const lineasDevueltas = () => sale.items
+        .map(i => ({ sale_item_id: parseInt(i.id), qty: cantDe(i) }))
+        .filter(i => i.qty > 0);
 
     const addReplacement = (product) => {
         setReplacementItems(prev => {
@@ -110,7 +142,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                 const newQty = existing.qty + 1;
                 return prev.map(i => i.product_id === product.id ? { ...i, qty: newQty, qtyRaw: String(newQty) } : i);
             }
-            return [...prev, { product_id: product.id, name: product.name, price: parseFloat(product.price || 0), qty: 1, qtyRaw: "1", stock: parseFloat(product.stock || 0) }];
+            return [...prev, { product_id: product.id, name: product.name, price: parseFloat(product.price || 0), qty: 1, qtyRaw: "1", stock: parseFloat(product.stock || 0), unit: product.unit || null }];
         });
         setProductSearch("");
         setProductResults([]);
@@ -121,8 +153,8 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
             setReplacementItems(prev => prev.map(i => i.product_id === product_id ? { ...i, qtyRaw: "" } : i));
             return;
         }
-        const qty = parseFloat(val);
-        if (isNaN(qty) || qty <= 0) {
+        const qty = numDe(val);
+        if (qty <= 0) {
             setReplacementItems(prev => prev.filter(i => i.product_id !== product_id));
             return;
         }
@@ -175,6 +207,12 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
         return { ...p, parts };
     });
 
+    const setParte = (idx, campos) => setRefund(p => {
+        const parts = [...p.parts];
+        parts[idx] = { ...parts[idx], ...campos };
+        return { ...p, parts };
+    });
+
     const handleToggleRefund = () => {
         setRefund(p => p.enabled
             ? { ...p, enabled: false }
@@ -182,11 +220,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     };
 
     const handleSubmit = () => {
-        const returnItems = Object.entries(returnQtys)
-            .map(([id, qty]) => ({ sale_item_id: parseInt(id), qty }))
-            .filter(i => i.qty > 0);
-
-        if (returnItems.length === 0)
+        if (lineasDevueltas().length === 0)
             return notify("Debes indicar al menos una cantidad mayor a 0 para devolver", "err");
 
         if (refund.enabled) {
@@ -200,9 +234,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     };
 
     const executeSubmit = async () => {
-        const returnItems = Object.entries(returnQtys)
-            .map(([id, qty]) => ({ sale_item_id: parseInt(id), qty }))
-            .filter(i => i.qty > 0);
+        const returnItems = lineasDevueltas();
 
         setConfirmShow(false);
         setLoading(true);
@@ -237,14 +269,13 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     };
 
     const handleExchangeSubmit = () => {
-        const returnItems = Object.entries(returnQtys).map(([id, qty]) => ({ sale_item_id: parseInt(id), qty })).filter(i => i.qty > 0);
-        if (returnItems.length === 0) return notify("Selecciona al menos un producto a devolver", "err");
+        if (lineasDevueltas().length === 0) return notify("Selecciona al menos un producto a devolver", "err");
         if (replacementItems.length === 0) return notify("Agrega al menos un producto de reemplazo", "err");
         setConfirmShow(true);
     };
 
     const executeExchange = async () => {
-        const returnItems = Object.entries(returnQtys).map(([id, qty]) => ({ sale_item_id: parseInt(id), qty })).filter(i => i.qty > 0);
+        const returnItems = lineasDevueltas();
         const replacements = replacementItems.map(i => ({ product_id: i.product_id, name: i.name, qty: i.qty, price: i.price }));
         setConfirmShow(false);
         setLoading(true);
@@ -258,548 +289,461 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
         setLoading(false);
     };
 
-    /* ── Vista: resultado exitoso ── */
+    const documento = sale.invoice_number ? `Factura ${sale.invoice_number}` : `Orden #${sale.id}`;
+    const nombresCajas = refundParts.filter(s => s.journal_id).map(s => toNameCase(s.journal?.name)).filter(Boolean).join(" + ");
+
+    /* ── Vista: devolución registrada ── */
     if (returnResult) return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200">
-            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden modal-in">
-                <div className="px-5 py-4 border-b border-border/10 dark:border-white/5 flex items-center gap-3 bg-warning/5">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-warning/10 text-warning border border-warning/20">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
-                        </svg>
+        <Velo>
+            <Panel ancho="max-w-sm">
+                <Cabecera icono={ICONO_CHECK} tono="ok" rotulo="Devolución registrada" titulo={returnResult.nc_number || `NC-${returnResult.return_id}`} />
+                <div className="px-5 pb-5 space-y-4">
+                    <div className="rounded-xl bg-surface-2 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] px-4 py-3.5">
+                        <p className="text-[12px] text-content-subtle">Total acreditado</p>
+                        <Money value={fmtB(returnResult.total)} className="block text-[24px] font-bold tracking-tight leading-tight text-content dark:text-white" />
                     </div>
-                    <div>
-                        <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">Devolución registrada</div>
-                        <div className="text-sm font-bold text-content dark:text-white">{returnResult.nc_number || `NC-${returnResult.return_id}`}</div>
-                    </div>
-                    <div className="ml-auto text-[12px] font-bold px-2.5 py-1 rounded-lg border bg-warning/10 text-warning border-warning/20">
-                        Procesada
-                    </div>
+                    <dl className="space-y-2">
+                        <Dato label="Factura" value={sale.invoice_number || `#${sale.id}`} />
+                        {sale.customer_name && <Dato label="Cliente" value={toNameCase(sale.customer_name)} />}
+                        {refundCreated && <Dato label="Reembolsado desde" value={nombresCajas || "—"} />}
+                    </dl>
                 </div>
-
-                <div className="px-5 py-4 space-y-2 border-b border-border/10 dark:border-white/5">
-                    <div className="flex justify-between items-center">
-                        <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40">Factura ref.</span>
-                        <span className="text-[12px] font-semibold text-content dark:text-white">{sale.invoice_number || `#${sale.id}`}</span>
-                    </div>
-                    {sale.customer_name && (
-                        <div className="flex justify-between items-center">
-                            <span className="text-[12px] font-semibold text-content-subtle dark:text-white/40">Cliente</span>
-                            <span className="text-[12px] font-semibold text-content dark:text-white/70">{toNameCase(sale.customer_name)}</span>
-                        </div>
-                    )}
-                    <div className="flex justify-between items-center pt-1 border-t border-border/10 dark:border-white/5">
-                        <span className="text-[12px] font-bold text-content dark:text-white">Total acreditado</span>
-                        <span className="text-xl font-bold text-warning tabular-nums">{fmtPrice(returnResult.total)}</span>
-                    </div>
-                    {refundCreated && (
-                        <div className="flex justify-between items-center pt-1.5 border-t border-border/10 dark:border-white/5">
-                            <span className="text-[12px] font-bold text-content-subtle dark:text-white/40">Reembolso registrado</span>
-                            <span className="text-[12px] font-bold text-success flex items-center gap-1 text-right">
-                                <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                </svg>
-                                {refundParts.filter(s => s.journal_id).map(s => s.journal?.name).filter(Boolean).join(" + ") || ''}
-                            </span>
-                        </div>
-                    )}
-                </div>
-
-                <div className="px-5 py-4 flex gap-2">
-                    <button
-                        onClick={() => printNotaCreditoDoc(returnResult, sale, companyInfo, baseCurrency, activeCurrencies, printerWidth)}
-                        className="flex-1 h-9 rounded-xl border border-border/30 dark:border-white/10 text-[12px] font-bold text-content-subtle hover:text-content dark:hover:text-white transition-all flex items-center justify-center gap-2"
-                    >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
+                <Pie>
+                    <button onClick={() => printNotaCreditoDoc(returnResult, sale, companyInfo, baseCurrency, activeCurrencies, printerWidth)} className={BTN_SEC}>
+                        {ICONO_IMPRIMIR}
                         Imprimir N/C
                     </button>
-                    <button
-                        onClick={onClose}
-                        className="flex-1 h-9 rounded-xl btn-accent text-[12px] font-bold transition-all flex items-center justify-center gap-2"
-                    >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Siguiente
-                    </button>
-                </div>
-            </div>
-        </div>
+                    <button onClick={onClose} className={`${BTN_PRI} sm:flex-1`}>Listo</button>
+                </Pie>
+            </Panel>
+        </Velo>
     );
 
-    /* ── Vista: resultado de cambio ── */
-    if (exchangeResult) return (
-        <>
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200">
-            <div className="w-full max-w-sm bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden modal-in">
-                <div className="px-5 py-4 border-b border-border/10 dark:border-white/5 flex items-center gap-3 bg-brand-500/5">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-brand-500/10 text-brand-500 border border-brand-500/20">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                        </svg>
+    /* ── Vista: cambio procesado ── */
+    if (exchangeResult) {
+        const porCobrar = exchangeResult.remaining_to_pay > 0.001;
+        const aFavor    = exchangeResult.credit_remainder > 0.001;
+        return (
+            <>
+            <Velo>
+                <Panel ancho="max-w-sm">
+                    <Cabecera icono={ICONO_CHECK} tono="ok" rotulo="Cambio procesado" titulo={exchangeResult.nc_number || `NC-${exchangeResult.return_id}`} />
+                    <div className="px-5 pb-5 space-y-4">
+                        <dl className="space-y-2">
+                            <Dato label="Devuelto" value={<Money value={`-${fmtB(exchangeResult.return_total)}`} />} />
+                            <Dato label="Reemplazo" value={<Money value={fmtB(exchangeResult.replacement_total)} />} />
+                        </dl>
+                        <div className="pt-3 border-t border-border/60 dark:border-white/[0.06]">
+                            {porCobrar ? (
+                                <div className="flex items-end justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="text-[13px] font-semibold text-red-600 dark:text-red-400">Por cobrar</p>
+                                        <p className="text-[12px] text-content-subtle truncate">Factura {exchangeResult.new_invoice_number || `#${exchangeResult.new_sale_id}`}</p>
+                                    </div>
+                                    <Money value={fmtB(exchangeResult.remaining_to_pay)} className="text-[22px] font-bold tracking-tight text-content dark:text-white" />
+                                </div>
+                            ) : aFavor ? (
+                                <div className="flex items-end justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="text-[13px] font-semibold text-content dark:text-white">Queda a su favor</p>
+                                        <p className="text-[12px] text-content-subtle">Saldo para su próxima compra</p>
+                                    </div>
+                                    <Money value={fmtB(exchangeResult.credit_remainder)} className="text-[22px] font-bold tracking-tight text-content dark:text-white" />
+                                </div>
+                            ) : (
+                                <p className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                    Sin diferencia
+                                </p>
+                            )}
+                        </div>
                     </div>
-                    <div>
-                        <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">Cambio procesado</div>
-                        <div className="text-sm font-bold text-content dark:text-white">{exchangeResult.nc_number || `NC-${exchangeResult.return_id}`}</div>
-                    </div>
-                </div>
-
-                <div className="px-5 py-4 space-y-2 border-b border-border/10 dark:border-white/5">
-                    <div className="flex justify-between"><span className="text-[12px] text-content-subtle dark:text-white/40 font-semibold">Devuelto</span><span className="text-[12px] font-bold text-warning tabular-nums">−{fmtPrice(exchangeResult.return_total)}</span></div>
-                    <div className="flex justify-between"><span className="text-[12px] text-content-subtle dark:text-white/40 font-semibold">Reemplazo</span><span className="text-[12px] font-bold text-content dark:text-white tabular-nums">{fmtPrice(exchangeResult.replacement_total)}</span></div>
-                    {exchangeResult.credit_remainder > 0.001 && (
-                        <div className="flex justify-between pt-1 border-t border-border/10 dark:border-white/5">
-                            <span className="text-[12px] font-bold text-brand-500">Crédito generado</span>
-                            <span className="text-[13px] font-bold text-brand-500 tabular-nums">{fmtPrice(exchangeResult.credit_remainder)}</span>
-                        </div>
-                    )}
-                    {exchangeResult.remaining_to_pay > 0.001 && (
-                        <div className="flex justify-between items-center pt-1 border-t border-border/10 dark:border-white/5">
-                            <div>
-                                <span className="text-[12px] font-bold text-danger">Por cobrar</span>
-                                <p className="text-[10px] text-content-subtle dark:text-white/30 mt-0.5">Factura {exchangeResult.new_invoice_number || `#${exchangeResult.new_sale_id}`}</p>
-                            </div>
-                            <span className="text-[13px] font-bold text-danger tabular-nums">{fmtPrice(exchangeResult.remaining_to_pay)}</span>
-                        </div>
-                    )}
-                    {exchangeResult.remaining_to_pay <= 0.001 && exchangeResult.credit_remainder <= 0.001 && (
-                        <div className="flex items-center justify-center gap-2 pt-1 border-t border-border/10 dark:border-white/5 text-success text-[12px] font-bold">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
-                            Sin diferencia
-                        </div>
-                    )}
-                </div>
-
-                    <div className="px-5 py-4 flex gap-2">
-                        <button
-                            onClick={() => printNotaCreditoDoc({ ...exchangeResult, total: exchangeResult.return_total }, sale, companyInfo, baseCurrency, activeCurrencies, printerWidth)}
-                            className="flex-1 h-9 rounded-xl border border-border/30 dark:border-white/10 text-[12px] font-bold text-content-subtle hover:text-content dark:hover:text-white transition-all flex items-center justify-center gap-2"
-                        >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                            </svg>
+                    <Pie>
+                        <button onClick={() => printNotaCreditoDoc({ ...exchangeResult, total: exchangeResult.return_total }, sale, companyInfo, baseCurrency, activeCurrencies, printerWidth)} className={BTN_SEC}>
+                            {ICONO_IMPRIMIR}
                             Imprimir N/C
                         </button>
-                        <button onClick={() => { onReturnSuccess(); onClose(); }}
-                            className="flex-1 h-9 rounded-xl border border-border/40 dark:border-white/10 text-[12px] font-bold text-content-subtle hover:text-content dark:hover:text-white transition-all">
-                            Cerrar
-                        </button>
-                    {exchangeResult.remaining_to_pay > 0.001 && (
-                        <button onClick={() => setShowPayDiff(true)}
-                            className="flex-1 h-9 rounded-xl bg-success text-black text-[12px] font-bold hover:brightness-110 transition-all shadow-sm flex items-center justify-center gap-2">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                            Cobrar diferencia
-                        </button>
-                    )}
-                </div>
-            </div>
-        </div>
+                        {porCobrar ? (
+                            <>
+                                <button onClick={() => { onReturnSuccess(); onClose(); }} className={BTN_SEC}>Cerrar</button>
+                                <button onClick={() => setShowPayDiff(true)} className={`${BTN_PRI} sm:flex-1`}>
+                                    Cobrar <Money value={fmtB(exchangeResult.remaining_to_pay)} className="[&>span]:!text-brand-ink/60" />
+                                </button>
+                            </>
+                        ) : (
+                            <button onClick={() => { onReturnSuccess(); onClose(); }} className={`${BTN_PRI} sm:flex-1`}>Listo</button>
+                        )}
+                    </Pie>
+                </Panel>
+            </Velo>
 
-        {showPayDiff && (
-            <PaymentFormModal
-                sale={{
-                    id:          exchangeResult.new_sale_id,
-                    invoice_number: exchangeResult.new_invoice_number || `#${exchangeResult.new_sale_id}`,
-                    balance:     exchangeResult.remaining_to_pay,
-                    total:       exchangeResult.replacement_total,
-                    amount_paid: exchangeResult.credit_applied,
-                    customer_id: sale.customer_id,
-                    exchange_rate: sale.exchange_rate,
-                }}
-                onClose={() => setShowPayDiff(false)}
-                onSuccess={() => { setShowPayDiff(false); onReturnSuccess(); onClose(); }}
-            />
-        )}
-        </>
-    );
+            {showPayDiff && (
+                <PaymentFormModal
+                    sale={{
+                        id:          exchangeResult.new_sale_id,
+                        invoice_number: exchangeResult.new_invoice_number || `#${exchangeResult.new_sale_id}`,
+                        balance:     exchangeResult.remaining_to_pay,
+                        total:       exchangeResult.replacement_total,
+                        amount_paid: exchangeResult.credit_applied,
+                        customer_id: sale.customer_id,
+                        exchange_rate: sale.exchange_rate,
+                    }}
+                    onClose={() => setShowPayDiff(false)}
+                    onSuccess={() => { setShowPayDiff(false); onReturnSuccess(); onClose(); }}
+                />
+            )}
+            </>
+        );
+    }
 
     /* ── Vista principal ── */
+    const hayDevolucion = totalReturn > 0;
+    const listoCambio   = hayDevolucion && replacementItems.length > 0;
+    const pista = mode === "devolucion"
+        ? "Indica cuánto devuelve de cada producto"
+        : !hayDevolucion ? "Indica qué productos devuelve" : "Elige el producto que se lleva a cambio";
+
     return (
         <>
-            <div
-                className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200"
-                onClick={onClose}
-            >
-                <div
-                    className="relative w-full max-w-xl bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden flex flex-col max-h-[90vh] modal-in"
-                    onClick={e => e.stopPropagation()}
-                >
-                    {/* Header */}
-                    <div className="shrink-0 px-4 py-3 border-b border-border/10 dark:border-white/5 flex items-center justify-between gap-2 bg-surface-2/50 dark:bg-white/[0.03]">
-                        <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-xl bg-warning/10 text-warning border border-warning/20 flex items-center justify-center shrink-0">
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                                </svg>
-                            </div>
-                            <div>
-                                <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">Devolución</div>
-                                <div className="text-[13px] font-bold text-content dark:text-white">{sale.invoice_number || `#${sale.id}`}</div>
-                            </div>
-                        </div>
-                        <button
-                            onClick={onClose}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-content-subtle hover:bg-surface-2 dark:hover:bg-white/10 transition-all"
-                        >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-
-                    {/* Tabs: Devolución / Cambio */}
-                    <div className="shrink-0 px-4 pt-2.5 pb-0 flex gap-1.5">
-                        {[["devolucion","Devolución"],["cambio","Cambio de Producto"]].map(([key, label]) => (
-                            <button key={key} type="button" onClick={() => setMode(key)}
-                                className={["flex-1 py-1.5 rounded-xl text-[10px] font-bold transition-all border",
-                                    mode === key ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "text-content-subtle dark:text-white/30 border-border/20 dark:border-white/5 hover:border-brand-500/30"
-                                ].join(" ")}>{label}</button>
-                        ))}
-                    </div>
+            <Velo onClick={onClose}>
+                <Panel ancho="max-w-xl">
+                    <Cabecera icono={ICONO_DEVOLVER} rotulo={mode === "cambio" ? "Cambio de producto" : "Devolución"} titulo={documento} onClose={onClose} />
 
                     {/* Body */}
-                    <div className="flex-1 overflow-y-auto scrollbar-hide">
-
-                        {/* Tabla de productos */}
-                        <div className="px-4 pt-3 pb-2">
-                            <div className="flex items-center justify-between mb-1.5">
-                                <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">
-                                    Productos ({sale.items.length})
+                    <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5">
+                        <div className="space-y-5 pt-1">
+                            {/* ── A quién y cuánto ── */}
+                            <div className="rounded-xl bg-surface-2 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] px-4 py-3.5 flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                    <p className="text-[12px] text-content-subtle">Cliente</p>
+                                    <p className="text-[15px] font-semibold text-content dark:text-white truncate">
+                                        {toNameCase(sale.customer_name) || "Sin cliente"}
+                                    </p>
                                 </div>
-                                <button
-                                    onClick={handleReturnAll}
-                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-2 dark:bg-white/5 hover:bg-warning/10 text-warning border border-warning/20 text-[10px] font-bold transition-all"
-                                >
-                                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                    {mode === "cambio" ? "Cambiar todo" : "Devolver todo"}
-                                </button>
+                                <div className="text-right shrink-0">
+                                    <p className="text-[12px] text-content-subtle">Se devuelve</p>
+                                    <Money value={fmtB(totalReturn)} className={`block text-[24px] font-bold tracking-tight leading-tight ${hayDevolucion ? "text-content dark:text-white" : "text-content-subtle"}`} />
+                                </div>
                             </div>
 
-                            <div className="rounded-xl border border-border/20 dark:border-white/5 overflow-hidden">
-                                {/* Thead */}
-                                <div className="grid grid-cols-12 bg-surface-2 dark:bg-white/[0.03] px-3 py-1.5">
-                                    <span className="col-span-4 text-[10px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/30">Producto</span>
-                                    <span className="col-span-2 text-[10px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/30 text-right">P. Unit</span>
-                                    <span className="col-span-2 text-[10px] font-bold uppercase tracking-wide text-content-subtle dark:text-white/30 text-center">Vend.</span>
-                                    <span className="col-span-2 text-[10px] font-bold uppercase tracking-wide text-danger dark:text-danger/70 text-center">Dev.</span>
-                                    <span className="col-span-2 text-[10px] font-bold uppercase tracking-wide text-brand-500 text-right">{mode === "cambio" ? "Camb." : "A dev."}</span>
-                                </div>
+                            <Segmented
+                                className="w-full [&>button]:flex-1 [&>button]:justify-center"
+                                value={mode}
+                                onChange={setMode}
+                                options={[
+                                    { key: "devolucion", label: "Devolución" },
+                                    { key: "cambio",     label: "Cambio de producto" },
+                                ]}
+                            />
 
-                                <div className="divide-y divide-border/10 dark:divide-white/5">
+                            {/* ── Productos: dos renglones por línea, sin tabla ── */}
+                            <div>
+                                <div className="flex items-center justify-between gap-3 mb-2">
+                                    <p className="text-[13px] font-semibold text-content dark:text-white">
+                                        Productos <span className="font-normal text-content-subtle">· {sale.items.length}</span>
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={handleReturnAll}
+                                        className="h-8 text-[12px] font-medium text-content-subtle hover:text-content dark:hover:text-white transition-colors"
+                                    >
+                                        {mode === "cambio" ? "Cambiar todo" : "Devolver todo"}
+                                    </button>
+                                </div>
+                                <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
                                     {sale.items.map((item, idx) => {
-                                        const available = parseFloat(item.quantity) - parseFloat(item.returned_qty || 0);
+                                        const available = disponibleDe(item);
+                                        const unit      = unidadDe(item);
+                                        const neto      = parseFloat(item.price) - parseFloat(item.discount || 0);
+                                        const cant      = cantDe(item);
+                                        const devuelto  = parseFloat(item.returned_qty || 0);
                                         return (
-                                            <div
-                                                key={idx}
-                                                className={`grid grid-cols-12 items-center px-3 py-2 transition-colors ${available <= 0 ? "opacity-40 bg-surface-2/50 dark:bg-white/[0.02]" : "hover:bg-surface-2/30 dark:hover:bg-white/[0.02]"}`}
-                                            >
-                                                <div className="col-span-4 min-w-0">
-                                                    <div className="text-[12px] font-semibold text-content dark:text-white truncate">{item.name}</div>
+                                            <div key={item.id ?? idx} className="flex items-center gap-3 px-3.5 py-3">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className={`text-[13px] font-semibold truncate ${available > 0 ? "text-content dark:text-white" : "text-content-subtle"}`}>{item.name}</p>
+                                                    <p className="text-[12px] text-content-subtle tabular-nums truncate">
+                                                        {fmtCant(item.quantity, unit)} × <Money value={fmtB(neto)} />
+                                                        {devuelto > 0 && <> · {available > 0 ? `${fmtCant(devuelto, unit)} ya devuelto` : "Devuelto completo"}</>}
+                                                        {/* En el teléfono no cabe: la cifra ya está arriba, en "Se devuelve". */}
+                                                        {cant > 0 && <span className="hidden sm:inline"> · <span className="font-medium text-content dark:text-white">{mode === "cambio" ? "Cambia" : "Devuelve"} <Money value={fmtB(cant * neto)} /></span></span>}
+                                                    </p>
                                                 </div>
-                                                <div className="col-span-2 text-right text-[11px] font-semibold text-content-subtle dark:text-white/40 tabular-nums">
-                                                    {fmtPrice(item.price)}
-                                                </div>
-                                                <div className="col-span-2 text-center text-[12px] font-semibold text-content dark:text-white tabular-nums">
-                                                    {parseFloat(item.quantity)}
-                                                </div>
-                                                <div className="col-span-2 text-center text-[12px] font-semibold text-danger tabular-nums">
-                                                    {parseFloat(item.returned_qty || 0)}
-                                                </div>
-                                                <div className="col-span-2 flex justify-end">
-                                                    <input
-                                                        type="number"
-                                                        min="0"
+                                                {available > 0 && (
+                                                    <Cantidad
+                                                        value={returnQtys[item.id] ?? ""}
                                                         max={available}
-                                                        step="1"
-                                                        disabled={available <= 0}
-                                                        className="w-12 h-7 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-lg text-[12px] font-semibold text-center outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed tabular-nums"
-                                                        value={returnQtys[item.id] === 0 ? "" : (returnQtys[item.id] || "")}
-                                                        onChange={e => handleQtyChange(item.id, available, e.target.value)}
-                                                        placeholder="0"
+                                                        entera={esEntera(unit, item.quantity)}
+                                                        onChange={raw => handleQtyChange(item, raw)}
+                                                        label={`Cantidad a ${mode === "cambio" ? "cambiar" : "devolver"} de ${item.name}`}
                                                     />
-                                                </div>
+                                                )}
                                             </div>
                                         );
                                     })}
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Motivo */}
-                        <div className="px-4 pb-2">
-                            <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">Motivo / notas</div>
-                            <input
-                                value={reason}
-                                onChange={e => setReason(e.target.value)}
-                                placeholder="Ej: Producto dañado, cambio por defecto, cliente se arrepintió..."
-                                className="w-full h-10 bg-surface-2/50 dark:bg-white/[0.03] border border-border/20 dark:border-white/5 rounded-xl px-3 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 focus:ring-1 focus:ring-brand-500/20 transition-all placeholder:text-content-subtle dark:placeholder:text-white/20"
-                            />
-                        </div>
+                            <Field label="Motivo" hint="Opcional">
+                                <input
+                                    value={reason}
+                                    onChange={e => setReason(e.target.value)}
+                                    placeholder="Dañado, defecto de fábrica, se arrepintió…"
+                                    className={INPUT}
+                                />
+                            </Field>
 
-                        {/* Reembolso al cliente (solo modo devolución) — activo por defecto */}
-                        {mode === "devolucion" && <div className="px-4 pb-2">
-                            <div className="flex items-center justify-between mb-1.5">
-                                <div className="flex items-center gap-1.5">
-                                    <svg className="w-3.5 h-3.5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                                    </svg>
-                                    <span className="text-[12px] font-medium text-content-subtle dark:text-white/50">Reembolso al cliente</span>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleToggleRefund}
-                                    className={[
-                                        "text-[11px] font-bold px-2.5 py-1 rounded-md border transition-all",
-                                        refund.enabled
-                                            ? "border-success/30 text-success bg-success/5 hover:bg-danger/5 hover:text-danger hover:border-danger/30"
-                                            : "border-border/20 dark:border-white/10 text-content-subtle dark:text-white/30 hover:border-success/30 hover:text-success"
-                                    ].join(" ")}
-                                >
-                                    {refund.enabled ? "Desactivar" : "Activar"}
-                                </button>
-                            </div>
-
-                            {refund.enabled && (
-                                <div className="p-4 bg-surface-2/50 dark:bg-white/[0.03] rounded-xl border border-border/20 dark:border-white/5 space-y-3">
-                                    <div>
-                                        <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">Sale de *</p>
-                                        <div className="space-y-2.5">
-                                            {refundParts.map((s, idx) => (
-                                                <div key={idx} className="space-y-1.5">
-                                                    <div className="flex gap-2 items-start">
-                                                        <div className="flex-1 min-w-0">
-                                                            <JournalPickerButton
-                                                                value={s.journal_id || ''}
-                                                                journals={activeJournals}
-                                                                outflowOnly
-                                                                onSelect={j => asignarCajaReembolso(idx, j.id, j.payment_method || null)}
-                                                                placeholder="Elegir caja…"
-                                                                methodPrompt={{ tag: "Reembolso", title: "¿De qué caja sale el reembolso?" }}
-                                                            />
-                                                        </div>
-                                                        <div className="w-28 shrink-0">
-                                                            <input
-                                                                type="text"
-                                                                inputMode="decimal"
-                                                                value={s.amount}
-                                                                placeholder={s.sym}
-                                                                onChange={e => setRefund(p => {
-                                                                    const parts = [...p.parts];
-                                                                    parts[idx] = { ...parts[idx], amount: e.target.value.replace(/[^\d.,]/g, '') };
-                                                                    return { ...p, parts };
-                                                                })}
-                                                                className="w-full h-10 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all tabular-nums"
-                                                            />
-                                                        </div>
-                                                        {refundParts.length > 1 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setRefund(p => ({ ...p, parts: p.parts.filter((_, i) => i !== idx) }))}
-                                                                className="w-10 h-10 shrink-0 rounded-xl border border-border/30 dark:border-white/10 text-content-subtle hover:text-danger hover:border-danger/40 transition-all flex items-center justify-center"
-                                                                title="Quitar este tramo"
-                                                            >
-                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                                                            </button>
-                                                        )}
-                                                    </div>
-
-                                                    {s.cur && !s.cur.is_base && s.montoBase > 0 && (
-                                                        <p className="text-[11px] font-semibold text-success">
-                                                            ≈ {baseCurrency?.symbol}{s.montoBase.toFixed(2)} {baseCurrency?.code} · tasa {s.rate}
-                                                        </p>
-                                                    )}
-                                                    {s.journal_id && !s.isCash && (
-                                                        <input
-                                                            type="text"
-                                                            value={s.reference || ''}
-                                                            onChange={e => setRefund(p => {
-                                                                const parts = [...p.parts];
-                                                                parts[idx] = { ...parts[idx], reference: e.target.value };
-                                                                return { ...p, parts };
-                                                            })}
-                                                            placeholder="N° de referencia *"
-                                                            className="w-full h-9 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3 text-[12px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
-                                                        />
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        {refundFaltaCaja && (
-                                            <p className="text-[11px] font-bold text-danger mt-1.5">Elige de qué caja sale ese monto</p>
-                                        )}
-
-                                        <button
-                                            type="button"
-                                            onClick={() => setRefund(p => ({ ...p, parts: [...p.parts, { journal_id: '', amount: '', reference: '' }] }))}
-                                            className="w-full h-9 mt-2.5 rounded-xl border border-dashed border-border/40 dark:border-white/15 text-content-subtle dark:text-white/40 text-[11px] font-bold hover:border-success/50 hover:text-success transition-all"
-                                        >
-                                            Reembolsar desde otra caja
-                                        </button>
-
-                                        <div className="flex items-center justify-between gap-2 mt-2.5 pt-2.5 border-t border-border/20 dark:border-white/5">
-                                            <span className={`text-[11px] font-bold uppercase tracking-widest tabular-nums ${refundExcede ? "text-danger" : "text-content-subtle dark:text-white/40"}`}>
-                                                Reembolsado {fmtPrice(refundTotalBase)} de {fmtPrice(totalReturn)}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">Fecha *</p>
-                                            <DatePicker
-                                                value={refund.date}
-                                                onChange={v => setRefund(p => ({ ...p, date: v }))}
-                                                className="w-full"
-                                            />
-                                        </div>
-                                        <div>
-                                            <p className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">Notas</p>
-                                            <input
-                                                type="text"
-                                                value={refund.notes}
-                                                onChange={e => setRefund(p => ({ ...p, notes: e.target.value }))}
-                                                placeholder="Observaciones..."
-                                                className="w-full h-10 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-xl px-3 text-[13px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>}
-
-                        {/* Total a reintegrar (solo modo devolución) */}
-                        {mode === "devolucion" && (
-                            <div className="px-4 pb-3">
-                                <div className="flex items-center justify-between px-3.5 py-3 bg-warning/5 border border-warning/20 rounded-xl">
-                                    <span className="text-[11px] font-bold uppercase tracking-widest text-warning/70">Total a reintegrar</span>
-                                    <span className="text-xl font-bold text-warning tabular-nums">{fmtPrice(totalReturn)}</span>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Sección producto de reemplazo (modo cambio) */}
-                        {mode === "cambio" && (
-                            <div className="px-5 pb-5 space-y-3">
-                                {/* Buscador */}
+                            {/* ── Reembolso (devolución) ── */}
+                            {mode === "devolucion" && (
                                 <div>
-                                    <div className="text-[12px] font-medium text-content-subtle dark:text-white/50 mb-1.5">Producto de reemplazo</div>
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            value={productSearch}
-                                            onChange={e => setProductSearch(e.target.value)}
-                                            placeholder="Buscar producto del catálogo..."
-                                            className="w-full h-10 bg-surface-2/50 dark:bg-white/[0.03] border border-border/20 dark:border-white/5 rounded-xl px-3.5 text-[12px] font-semibold text-content dark:text-white outline-none focus:border-brand-500/60 transition-all placeholder:text-content-subtle dark:placeholder:text-white/20"
-                                            autoComplete="off"
-                                            spellCheck={false}
-                                        />
-                                        {searchLoading && <div className="absolute right-3 top-3 text-[11px] text-content-subtle">...</div>}
+                                    <div className="flex items-start gap-3">
+                                        <Check checked={refund.enabled} onChange={handleToggleRefund} title="Reembolsar al cliente" className="mt-0.5" />
+                                        <button type="button" onClick={handleToggleRefund} className="text-left min-w-0">
+                                            <p className="text-[13px] font-semibold text-content dark:text-white">Reembolsar al cliente</p>
+                                            <p className="text-[12px] text-content-subtle">
+                                                {refund.enabled ? "Indica de qué caja sale el dinero" : "No sale dinero de ninguna caja"}
+                                            </p>
+                                        </button>
                                     </div>
-                                    {productResults.length > 0 && (
-                                        <div className="mt-1 rounded-xl border border-border/20 dark:border-white/5 overflow-hidden shadow-lg">
-                                            {productResults.map(p => (
-                                                <button key={p.id} type="button" onClick={() => addReplacement(p)}
-                                                    className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-brand-500/10 transition-colors text-left border-b last:border-0 border-border/10 dark:border-white/5">
-                                                    <div>
-                                                        <div className="text-[12px] font-semibold text-content dark:text-white">{p.name}</div>
-                                                        <div className="text-[11px] text-content-subtle dark:text-white/30">Stock: {p.stock != null ? fmtQtyUnit(p.stock, p.unit) : "—"}</div>
-                                                    </div>
-                                                    <span className="text-[12px] font-bold text-brand-500 tabular-nums">{fmtPrice(p.price)}</span>
+
+                                    {refund.enabled && (
+                                        <div className="mt-4 space-y-4">
+                                            <div>
+                                                <p className={`${LABEL} mb-1.5`}>Sale de</p>
+                                                <div className="space-y-2.5">
+                                                    {refundParts.map((s, idx) => (
+                                                        <div key={idx} className="space-y-1.5">
+                                                            <div className="flex gap-2 items-start">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <JournalPickerButton
+                                                                        value={s.journal_id || ''}
+                                                                        journals={activeJournals}
+                                                                        outflowOnly
+                                                                        boxClassName="rounded-lg"
+                                                                        onSelect={j => asignarCajaReembolso(idx, j.id, j.payment_method || null)}
+                                                                        placeholder="Elegir caja…"
+                                                                        methodPrompt={{ tag: "Reembolso", title: "¿De qué caja sale el reembolso?" }}
+                                                                    />
+                                                                </div>
+                                                                <div className="w-28 sm:w-32 shrink-0 relative">
+                                                                    <Prefijo>{s.sym}</Prefijo>
+                                                                    <input
+                                                                        type="text"
+                                                                        inputMode="decimal"
+                                                                        value={s.amount}
+                                                                        placeholder="0.00"
+                                                                        onChange={e => setParte(idx, { amount: e.target.value.replace(/[^\d.,]/g, '') })}
+                                                                        className={`${INPUT} pl-11 text-right font-semibold tabular-nums`}
+                                                                    />
+                                                                </div>
+                                                                {refundParts.length > 1 && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setRefund(p => ({ ...p, parts: p.parts.filter((_, i) => i !== idx) }))}
+                                                                        className={QUITAR}
+                                                                        title="Quitar este tramo" aria-label="Quitar este tramo"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                                    </button>
+                                                                )}
+                                                            </div>
+
+                                                            {s.cur && !s.cur.is_base && s.montoBase > 0 && (
+                                                                <p className="text-[12px] text-content-subtle tabular-nums">≈ {fmtB(s.montoBase)} · tasa {s.rate}</p>
+                                                            )}
+                                                            {s.journal_id && !s.isCash && (
+                                                                <input
+                                                                    type="text"
+                                                                    value={s.reference || ''}
+                                                                    onChange={e => setParte(idx, { reference: e.target.value })}
+                                                                    placeholder="N° de referencia"
+                                                                    className={`${INPUT} !h-9`}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                {refundFaltaCaja && (
+                                                    <p className="text-[12px] font-medium text-red-600 dark:text-red-400 mt-1.5">Elige de qué caja sale ese monto</p>
+                                                )}
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setRefund(p => ({ ...p, parts: [...p.parts, { journal_id: '', amount: '', reference: '' }] }))}
+                                                    className={`${AGREGAR} mt-2.5`}
+                                                >
+                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4" /></svg>
+                                                    Reembolsar desde otra caja
                                                 </button>
-                                            ))}
+
+                                                <div className="flex items-center justify-between gap-2 mt-2.5 pt-2.5 border-t border-border/60 dark:border-white/[0.06] text-[12px] tabular-nums">
+                                                    <span className="text-content-subtle">
+                                                        Reembolsado <span className="font-semibold text-content dark:text-white">{fmtB(refundTotalBase)}</span> de {fmtB(totalReturn)}
+                                                    </span>
+                                                    {refundExcede && <span className="font-medium text-red-600 dark:text-red-400">Supera lo devuelto</span>}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <Field label="Fecha del reembolso">
+                                                    <DatePicker
+                                                        value={refund.date}
+                                                        onChange={v => setRefund(p => ({ ...p, date: v }))}
+                                                        clearable={false}
+                                                        className="w-full"
+                                                    />
+                                                </Field>
+                                                <Field label="Notas" hint="Opcional">
+                                                    <input
+                                                        type="text"
+                                                        value={refund.notes}
+                                                        onChange={e => setRefund(p => ({ ...p, notes: e.target.value }))}
+                                                        placeholder="Observaciones…"
+                                                        className={INPUT}
+                                                    />
+                                                </Field>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
+                            )}
 
-                                {/* Lista de reemplazos seleccionados */}
-                                {replacementItems.length > 0 && (
-                                    <div className="rounded-xl border border-border/20 dark:border-white/5 overflow-hidden">
-                                        {replacementItems.map(item => (
-                                            <div key={item.product_id} className="flex items-center gap-3 px-3.5 py-2.5 border-b last:border-0 border-border/10 dark:border-white/5">
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-[12px] font-semibold text-content dark:text-white truncate">{item.name}</div>
-                                                    <div className="text-[11px] text-content-subtle dark:text-white/30 tabular-nums">{fmtPrice(item.price)} c/u</div>
+                            {/* ── Producto de reemplazo (cambio) ── */}
+                            {mode === "cambio" && (
+                                <div className="space-y-3">
+                                    <Field label="Producto de reemplazo">
+                                        <div className="relative">
+                                            <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+                                            </svg>
+                                            <input
+                                                type="text"
+                                                value={productSearch}
+                                                onChange={e => setProductSearch(e.target.value)}
+                                                placeholder="Buscar en el catálogo…"
+                                                className={`${INPUT} pl-9 pr-9`}
+                                                autoComplete="off"
+                                                spellCheck={false}
+                                            />
+                                            {searchLoading && <Spinner className="h-3.5 w-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle" />}
+                                        </div>
+                                    </Field>
+
+                                    {!searchLoading && productResults.length === 0 && productSearch.trim().length >= 2 && searchedFor === productSearch.trim() && (
+                                        <p className="text-[12px] text-content-subtle">No hay productos que coincidan con «{searchedFor}»</p>
+                                    )}
+
+                                    {productResults.length > 0 && (
+                                        <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06] overflow-hidden">
+                                            {productResults.map(p => {
+                                                const agotado = !p.is_service && !(parseFloat(p.stock) > 0);
+                                                return (
+                                                    <button key={p.id} type="button" onClick={() => addReplacement(p)}
+                                                        className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-left hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
+                                                        <div className="min-w-0">
+                                                            <p className="text-[13px] font-semibold text-content dark:text-white truncate">{p.name}</p>
+                                                            <p className={`text-[12px] tabular-nums ${agotado ? "text-red-600 dark:text-red-400" : "text-content-subtle"}`}>
+                                                                {p.is_service ? "Servicio" : agotado ? "Sin existencia" : `Existencia ${fmtCant(p.stock, p.unit)}`}
+                                                            </p>
+                                                        </div>
+                                                        <Money value={fmtB(p.price)} className="text-[13px] font-semibold text-content dark:text-white shrink-0" />
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    {replacementItems.length > 0 && (
+                                        <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
+                                            {replacementItems.map(item => (
+                                                <div key={item.product_id} className="flex items-center gap-3 px-3.5 py-3">
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-[13px] font-semibold text-content dark:text-white truncate">{item.name}</p>
+                                                        <p className="text-[12px] text-content-subtle tabular-nums"><Money value={fmtB(item.price)} /> c/u</p>
+                                                    </div>
+                                                    <Cantidad
+                                                        value={item.qtyRaw !== undefined ? item.qtyRaw : String(item.qty)}
+                                                        min={1}
+                                                        entera={esEntera(item.unit, item.qty)}
+                                                        onChange={raw => updateReplacementQty(item.product_id, raw)}
+                                                        onBlur={() => blurReplacementQty(item.product_id)}
+                                                        label={`Cantidad de ${item.name}`}
+                                                    />
+                                                    <button type="button" onClick={() => setReplacementItems(prev => prev.filter(i => i.product_id !== item.product_id))}
+                                                        className={`${QUITAR} !w-9 !h-9`} title="Quitar" aria-label={`Quitar ${item.name}`}>
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                    </button>
                                                 </div>
-                                                <input type="number" min="1" step="1"
-                                                    value={item.qtyRaw !== undefined ? item.qtyRaw : String(item.qty)}
-                                                    onChange={e => updateReplacementQty(item.product_id, e.target.value)}
-                                                    onBlur={() => blurReplacementQty(item.product_id)}
-                                                    className="w-14 h-8 bg-white dark:bg-white/5 border border-border/40 dark:border-white/10 rounded-lg text-[12px] font-semibold text-center outline-none focus:border-brand-500/60 transition-all tabular-nums"
-                                                />
-                                                <button type="button" onClick={() => setReplacementItems(prev => prev.filter(i => i.product_id !== item.product_id))}
-                                                    className="text-danger/60 hover:text-danger transition-colors">
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
-                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Resumen de la diferencia */}
+                                    {listoCambio && (
+                                        <div className="rounded-xl border border-border/70 dark:border-white/[0.08] px-4 py-3 space-y-1.5">
+                                            <div className="flex justify-between text-[13px]">
+                                                <span className="text-content-subtle">Devuelve</span>
+                                                <Money value={fmtB(totalReturn)} className="font-medium text-content dark:text-white" />
                                             </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Resumen diferencia */}
-                                {totalReturn > 0 && replacementItems.length > 0 && (
-                                    <div className="rounded-xl border overflow-hidden divide-y divide-border/10 dark:divide-white/5 border-border/20 dark:border-white/5">
-                                        <div className="flex justify-between px-4 py-2.5">
-                                            <span className="text-[12px] text-content-subtle dark:text-white/40 font-semibold">Devuelto</span>
-                                            <span className="text-[12px] font-bold text-warning tabular-nums">{fmtPrice(totalReturn)}</span>
+                                            <div className="flex justify-between text-[13px]">
+                                                <span className="text-content-subtle">Se lleva</span>
+                                                <Money value={fmtB(totalReplacement)} className="font-medium text-content dark:text-white" />
+                                            </div>
+                                            <div className="flex items-baseline justify-between gap-3 pt-2 mt-1 border-t border-border/60 dark:border-white/[0.06]">
+                                                {exchangeDiff > 0.001 ? (
+                                                    <span className="text-[13px] font-semibold text-red-600 dark:text-red-400">Paga la diferencia</span>
+                                                ) : exchangeDiff < -0.001 ? (
+                                                    <span className="text-[13px] font-semibold text-content dark:text-white">Queda a su favor</span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                                        Sin diferencia
+                                                    </span>
+                                                )}
+                                                {Math.abs(exchangeDiff) > 0.001 && (
+                                                    <Money value={fmtB(Math.abs(exchangeDiff))} className="text-[18px] font-bold tracking-tight text-content dark:text-white" />
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="flex justify-between px-4 py-2.5">
-                                            <span className="text-[12px] text-content-subtle dark:text-white/40 font-semibold">Reemplazo</span>
-                                            <span className="text-[12px] font-bold text-content dark:text-white tabular-nums">{fmtPrice(totalReplacement)}</span>
-                                        </div>
-                                        <div className={`flex justify-between px-4 py-3 ${exchangeDiff > 0.001 ? "bg-danger/5" : exchangeDiff < -0.001 ? "bg-brand-500/5" : "bg-success/5"}`}>
-                                            <span className="text-[12px] font-bold">
-                                                {exchangeDiff > 0.001 ? "A cobrar" : exchangeDiff < -0.001 ? "Va a crédito" : "Sin diferencia"}
-                                            </span>
-                                            <span className={`text-xl font-bold tabular-nums ${exchangeDiff > 0.001 ? "text-danger" : exchangeDiff < -0.001 ? "text-brand-500" : "text-success"}`}>
-                                                {exchangeDiff > 0.001 ? `+${fmtPrice(exchangeDiff)}` : exchangeDiff < -0.001 ? fmtPrice(Math.abs(exchangeDiff)) : "—"}
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
-                    {/* Footer */}
-                    <div className="shrink-0 px-4 py-3 border-t border-border/10 dark:border-white/5 bg-surface-2/30 dark:bg-white/[0.02] flex items-center justify-end gap-2">
-                        <button onClick={onClose} disabled={loading}
-                            className="h-8 px-3.5 rounded-xl border border-border/30 dark:border-white/10 text-[11px] font-bold text-content-subtle hover:text-content dark:hover:text-white transition-all disabled:opacity-50">
-                            Cerrar
-                        </button>
-                        {mode === "devolucion" ? (
-                            <button onClick={handleSubmit} disabled={loading || totalReturn === 0}
-                                className={["h-8 px-4 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
-                                    loading || totalReturn === 0 ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed" : "bg-warning text-black hover:brightness-110 shadow-sm"
-                                ].join(" ")}>
-                                {loading && <Spinner className="h-3.5 w-3.5" />}
-                                {loading ? "Procesando…" : "Confirmar Devolución"}
-                            </button>
+                    {/* Pie: la acción principal solo aparece cuando hay algo que confirmar. */}
+                    <Pie>
+                        {(mode === "devolucion" ? hayDevolucion : listoCambio) ? (
+                            <>
+                                <button onClick={onClose} disabled={loading} className={`${BTN_SEC} disabled:opacity-50`}>Cancelar</button>
+                                <button
+                                    onClick={mode === "devolucion" ? handleSubmit : handleExchangeSubmit}
+                                    disabled={loading}
+                                    className={`${BTN_PRI} sm:flex-1 disabled:opacity-60`}
+                                >
+                                    {loading && <Spinner className="h-3.5 w-3.5" />}
+                                    {loading ? "Procesando…"
+                                        : mode === "devolucion" ? <>Devolver <Money value={fmtB(totalReturn)} className="[&>span]:!text-brand-ink/60" /></>
+                                        : "Confirmar cambio"}
+                                </button>
+                            </>
                         ) : (
-                            <button onClick={handleExchangeSubmit} disabled={loading || totalReturn === 0 || replacementItems.length === 0}
-                                className={["h-8 px-4 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
-                                    loading || totalReturn === 0 || replacementItems.length === 0 ? "bg-surface-2 dark:bg-white/5 text-content-subtle cursor-not-allowed" : "btn-accent shadow-sm"
-                                ].join(" ")}>
-                                {loading && <Spinner className="h-3.5 w-3.5" />}
-                                {loading ? "Procesando…" : "Confirmar Cambio"}
-                            </button>
+                            <>
+                                {/* order-last: en la columna invertida del teléfono la pista queda encima del botón. */}
+                                <p className="order-last sm:order-none flex-1 self-center text-center sm:text-left text-[12px] text-content-subtle">{pista}</p>
+                                <button onClick={onClose} className={BTN_SEC}>Cerrar</button>
+                            </>
                         )}
-                    </div>
-                </div>
-            </div>
+                    </Pie>
+                </Panel>
+            </Velo>
 
             <ConfirmModal
                 isOpen={confirmShow}
                 title={mode === "cambio" ? "¿Confirmar cambio?" : "¿Confirmar devolución?"}
                 message={mode === "cambio"
-                    ? `Devuelves ${fmtPrice(totalReturn)} y entregas ${fmtPrice(totalReplacement)}.${exchangeDiff > 0.001 ? ` El cliente deberá pagar ${fmtPrice(exchangeDiff)} adicional.` : exchangeDiff < -0.001 ? ` Se acreditarán ${fmtPrice(Math.abs(exchangeDiff))} al cliente.` : ""}`
-                    : `Estás a punto de procesar una devolución por ${fmtPrice(totalReturn)}.${refund.enabled && refundTotalBase > 0 ? ` Se reembolsará ${fmtPrice(refundTotalBase)} vía ${refundParts.filter(s => s.journal_id).map(s => s.journal?.name).filter(Boolean).join(" + ") || '...'}.` : ''} El stock será reintegrado automáticamente.`
+                    ? `Devuelves ${fmtB(totalReturn)} y entregas ${fmtB(totalReplacement)}.${exchangeDiff > 0.001 ? ` El cliente deberá pagar ${fmtB(exchangeDiff)} adicional.` : exchangeDiff < -0.001 ? ` Se acreditarán ${fmtB(Math.abs(exchangeDiff))} al cliente.` : ""}`
+                    : `Estás a punto de procesar una devolución por ${fmtB(totalReturn)}.${refund.enabled && refundTotalBase > 0 ? ` Se reembolsará ${fmtB(refundTotalBase)} vía ${nombresCajas || '...'}.` : ''} El stock será reintegrado automáticamente.`
                 }
                 onConfirm={mode === "cambio" ? executeExchange : executeSubmit}
                 onCancel={() => setConfirmShow(false)}
@@ -807,5 +751,134 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                 type={mode === "cambio" ? "info" : "warning"}
             />
         </>
+    );
+}
+
+// ── piezas ───────────────────────────────────────────────────────────────────
+const LABEL   = "text-[12px] font-medium text-content-subtle";
+const INPUT   = "w-full h-10 px-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] font-medium text-content dark:text-white placeholder:text-content-subtle/50 dark:placeholder:text-white/25 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-colors";
+const AGREGAR = "w-full h-9 rounded-lg border border-dashed border-border dark:border-white/15 text-[12px] font-medium text-content-subtle hover:text-content hover:border-content-subtle/60 dark:hover:text-white dark:hover:border-white/30 transition-colors flex items-center justify-center gap-1.5";
+const QUITAR  = "w-10 h-10 shrink-0 rounded-lg border border-border dark:border-white/10 text-content-subtle hover:text-red-600 hover:border-red-500/40 dark:hover:text-red-400 transition-colors flex items-center justify-center";
+const BTN_SEC = "btn-outline h-12 sm:h-10 px-4 rounded-lg text-[13px] font-medium inline-flex items-center justify-center gap-2";
+const BTN_PRI = "btn-accent h-12 sm:h-10 px-5 rounded-lg text-[13px] font-semibold inline-flex items-center justify-center gap-1.5 active:scale-[0.99] transition-all";
+
+const ICONO_DEVOLVER = "M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6";
+const ICONO_CHECK    = "M5 13l4 4L19 7";
+const ICONO_IMPRIMIR = (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+    </svg>
+);
+
+const Velo = ({ children, onClick }) => (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] overlay-in" onClick={onClick}>
+        {children}
+    </div>
+);
+
+const Panel = ({ ancho, children }) => (
+    <div
+        className={`relative w-full ${ancho} bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] overflow-hidden flex flex-col max-h-[90vh] modal-in`}
+        onClick={e => e.stopPropagation()}
+    >
+        {children}
+    </div>
+);
+
+// Cabecera neutra de documento: icono en círculo gris (verde solo con el check de "hecho").
+function Cabecera({ icono, tono, rotulo, titulo, onClose }) {
+    return (
+        <div className="shrink-0 pl-5 pr-3 pt-4 pb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${tono === "ok"
+                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                    : "bg-surface-3 dark:bg-white/[0.06] text-content-muted dark:text-white/70"}`}>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icono} />
+                    </svg>
+                </div>
+                <div className="min-w-0">
+                    <div className="text-[12px] text-content-subtle">{rotulo}</div>
+                    <div className="text-[16px] font-bold tracking-[-0.01em] text-content dark:text-white tabular-nums truncate">{titulo}</div>
+                </div>
+            </div>
+            {onClose && (
+                <button
+                    onClick={onClose}
+                    aria-label="Cerrar"
+                    className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-content-subtle hover:text-content hover:bg-surface-3 dark:hover:text-white dark:hover:bg-white/[0.06] transition-colors"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            )}
+        </div>
+    );
+}
+
+const Pie = ({ children }) => (
+    <div className="shrink-0 px-5 py-4 border-t border-border/60 dark:border-white/[0.06] flex flex-col-reverse sm:flex-row gap-2">
+        {children}
+    </div>
+);
+
+const Dato = ({ label, value }) => (
+    <div className="flex items-baseline justify-between gap-3">
+        <dt className="text-[12px] text-content-subtle shrink-0">{label}</dt>
+        <dd className="text-[13px] font-medium text-content dark:text-white tabular-nums text-right truncate">{value}</dd>
+    </div>
+);
+
+// Símbolo de la moneda dentro del campo, a la izquierda.
+const Prefijo = ({ children }) => (
+    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">{children}</span>
+);
+
+function Field({ label, hint, children }) {
+    return (
+        <div>
+            <p className="mb-1.5 flex items-baseline justify-between gap-2">
+                <span className={LABEL}>{label}</span>
+                {hint && <span className="text-[11px] text-content-subtle/70">{hint}</span>}
+            </p>
+            {children}
+        </div>
+    );
+}
+
+// Cantidad con − y + a los lados: en la tablet de caja se toca, no se teclea. Las unidades
+// contables no aceptan decimales; las de peso o volumen, hasta tres.
+function Cantidad({ value, onChange, onBlur, min = 0, max = Infinity, entera = true, label }) {
+    const n = numDe(value);
+    const paso = (d) => {
+        const v = Math.min(max, Math.max(min, Math.round((n + d) * 1000) / 1000));
+        onChange(String(v));
+    };
+    const teclear = (raw) => {
+        if (entera) return onChange(raw.replace(/\D/g, ""));
+        const m = raw.replace(/[^\d.,]/g, "").match(/^(\d*)([.,]?)(\d{0,3})/);
+        onChange(m ? m[1] + m[2] + m[3] : "");
+    };
+    const BOTON = "w-9 h-full flex items-center justify-center text-content-subtle hover:text-content hover:bg-surface-2 dark:hover:text-white dark:hover:bg-white/[0.06] disabled:opacity-30 disabled:pointer-events-none transition-colors";
+    return (
+        <div className="h-9 shrink-0 flex items-stretch rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] overflow-hidden focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-colors">
+            <button type="button" onClick={() => paso(-1)} disabled={n <= min} className={BOTON} aria-label="Menos">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeWidth={2.4} d="M5 12h14" /></svg>
+            </button>
+            <input
+                type="text"
+                inputMode={entera ? "numeric" : "decimal"}
+                value={value}
+                onChange={e => teclear(e.target.value)}
+                onBlur={onBlur}
+                placeholder="0"
+                aria-label={label}
+                className="w-12 text-center text-[13px] font-semibold tabular-nums bg-transparent outline-none text-content dark:text-white placeholder:text-content-subtle/50 border-x border-border dark:border-white/10"
+            />
+            <button type="button" onClick={() => paso(1)} disabled={n >= max} className={BOTON} aria-label="Más">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeWidth={2.4} d="M12 5v14M5 12h14" /></svg>
+            </button>
+        </div>
     );
 }

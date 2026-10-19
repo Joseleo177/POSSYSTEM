@@ -30,7 +30,8 @@ const SALE_INCLUDE = [
   { 
     model: SaleItem, 
     include: [
-      { model: Product, attributes: ["id", "name"] },
+      // La unidad decide si la devolución admite decimales (KG/L/M) o solo enteros.
+      { model: Product, attributes: ["id", "name", "unit"] },
       {
         model: ReturnItem, attributes: ["qty"], required: false,
         // Las líneas de una NC anulada no cuentan como devueltas: si contaran, esas
