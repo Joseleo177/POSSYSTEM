@@ -2,8 +2,18 @@
 import { useEffect, useState } from "react";
 import { ALL_TABS } from "../constants/tabs";
 
+// La última pantalla abierta, para volver a ella al recargar. Una caja que se reinicia tras un
+// apagón tiene que caer en Venta y no en el Panel, que sin internet no tiene nada que mostrar.
+const ULTIMA = "pos_ultima_pantalla";
+
 export function useTabs(employee, can, setReceipt) {
-    const [tab, setTab] = useState("Dashboard");
+    const [tab, setTabState] = useState(() => {
+        try { return localStorage.getItem(ULTIMA) || "Dashboard"; } catch { return "Dashboard"; }
+    });
+    const setTab = (key) => {
+        setTabState(key);
+        try { localStorage.setItem(ULTIMA, key); } catch { /* modo privado */ }
+    };
 
     const visibleTabs = ALL_TABS.filter((t) => {
         if (t.superuserOnly) return !!employee?.is_superuser;

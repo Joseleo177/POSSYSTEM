@@ -43,7 +43,7 @@ export default function CobroPage() {
         selectedSerieId, selectSerie, mySeries,
         selectedCustomer, setSelectedCustomer,
         employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
-        checkout, saveQuotation, loading, receipt, setReceipt,
+        checkout, saveQuotation, loading, receipt, setReceipt, deshacerVentaSinConexion,
         heldCarts, holdCart, takeHeldCart, removeHeldCart, releaseHeldCart, loadHeldCarts, acceptWebOrder,
         activePromos, promoLineDiscount, promoDiscount,
     } = useCart();
@@ -187,6 +187,7 @@ export default function CobroPage() {
             baseCurrency={baseCurrency}
             currentCurrency={currentCurrency}
             onNext={() => { setReceipt(null); setSaleBalance(null); products.reload(); }}
+            onUndo={async (r) => { await deshacerVentaSinConexion(r); setSaleBalance(null); products.reload(); }}
             onPay={(res) => {
                 // Los pagos se ACUMULAN: cobrar parte en divisas y el resto por punto de venta
                 // son dos llamadas, y el ticket debe listar ambos canales. Quedarse con el

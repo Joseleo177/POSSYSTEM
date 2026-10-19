@@ -4,6 +4,7 @@ import PaymentFormModal from "../PaymentFormModal";
 import ImmediatePayPicker from "./ImmediatePayPicker";
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
+import { marcarLista } from "../../services/offline/outbox";
 import { saleTotalAtRate } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import StatusMark from "../ui/StatusMark";
@@ -20,7 +21,7 @@ function KeyHint({ n }) {
     );
 }
 
-export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay }) {
+export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay, onUndo }) {
     const { notify, activeCurrencies, activeJournals, companyInfo, printerWidth } = useApp();
     const [showReceiptModal, setShowReceiptModal] = useState(false);
     const [showPayModal, setShowPayModal] = useState(false);
@@ -157,6 +158,28 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // Venta creada pero sin desenlace: ni cobrada ni facturada a crédito.
     const isUnresolved   = ["borrador", "espera"].includes(currentStatus);
 
+    // Venta hecha sin conexión (ver CartContext.ventaSinConexion): vive en la cola del equipo
+    // hasta que vuelva internet. No se entrega a crédito —eso emite la factura, y aquí todavía
+    // no hay servidor que la emita— y salir sin cobrar no la deja pendiente: los productos
+    // vuelven al carrito, como si no se hubiera finalizado.
+    const offline = !!receipt?.offline;
+    const [undoing, setUndoing] = useState(false);
+    const volverAlCarrito = async () => {
+        if (undoing) return;
+        setUndoing(true);
+        try { await onUndo?.(receipt); }
+        catch (e) { notify(e.message, "err"); setUndoing(false); }
+    };
+    const salir = () => {
+        if (offline) {
+            if (isUnresolved) return volverAlCarrito();
+            // Ya cobrada (o abonada): lista para enviarse en cuanto haya conexión.
+            marcarLista(receipt.offline_key).catch(() => {});
+            return onNext();
+        }
+        return isUnresolved ? salirComoCredito() : onNext();
+    };
+
     // Qué botones se ven depende del estado de la venta: una ya pagada no ofrece cobrar ni
     // fiar, y el crédito solo aplica antes de facturar. La numeración se calcula sobre los
     // visibles para que el 1 sea siempre el primer botón en pantalla y no salte.
@@ -165,7 +188,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // "Cannot access before initialization" — const no se iza como var.
     // Una exonerada tampoco se cobra: su saldo ya se dio por perdido.
     const canSettle     = !["pagado", "exonerado"].includes(currentStatus);
-    const canGiveCredit = canSettle && isUnresolved;
+    const canGiveCredit = canSettle && isUnresolved && !offline;
     const actionKeys = [
         canSettle && "pay",
         canGiveCredit && "credit",
@@ -243,7 +266,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         if (key === "credit") return creditLoading ? undefined : confirmCredit();
         if (key === "print")  return printDirect();
         if (key === "ticket") return setShowReceiptModal(true);
-        if (key === "next")   return isUnresolved ? salirComoCredito() : onNext();
+        if (key === "next")   return salir();
     };
 
     useEffect(() => {
@@ -258,7 +281,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                 e.preventDefault();
                 e.stopPropagation();
                 // Mismo destino que el botón: sin resolver, se sale facturando a crédito.
-                if (isUnresolved) salirComoCredito(); else onNext();
+                salir();
                 return;
             }
             // Los dígitos disparan la acción de esa posición. Se descartan las combinaciones
@@ -276,7 +299,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         // eslint-disable-next-line react-hooks/exhaustive-deps
         // `printing` va en las dependencias: sin él, el handler quedaba capturado con el valor
         // viejo y dos pulsaciones seguidas del atajo lanzaban dos impresiones.
-    }, [onNext, showReceiptModal, showPayModal, showPicker, actionKeys.join(","), creditLoading, printing, isUnresolved]);
+    }, [onNext, showReceiptModal, showPayModal, showPicker, actionKeys.join(","), creditLoading, printing, isUnresolved, undoing]);
     // Mismo lenguaje que las tablas (ui/StatusMark): saldada va en gris con su check; lo que
     // aún espera dinero lleva punto de color. Antes toda la cabecera se teñía de rojo, y una
     // venta a crédito —algo normal— se leía como un error.
@@ -315,9 +338,11 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                                 }
                             </div>
                             <div className="min-w-0">
-                                <div className="text-[12px] font-medium text-content-subtle">Venta registrada</div>
+                                <div className="text-[12px] font-medium text-content-subtle">{offline ? "Venta sin conexión" : "Venta registrada"}</div>
                                 <div className="text-[16px] font-bold tracking-[-0.01em] text-content dark:text-white tabular-nums truncate">
-                                    {receipt.invoice_number ? `Orden ${receipt.invoice_number}` : `Borrador #${receipt.id}`}
+                                    {receipt.invoice_number
+                                        ? `Orden ${receipt.invoice_number}`
+                                        : offline ? `Provisional ${receipt.offline_ref}` : `Borrador #${receipt.id}`}
                                 </div>
                             </div>
                         </div>
@@ -404,7 +429,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             </Button>
                             {/* Solo tiene sentido antes de facturar: una venta ya confirmada
                                 (pendiente/parcial) no debe volver a consumir correlativo. */}
-                            {["borrador", "espera"].includes(currentStatus) && (
+                            {canGiveCredit && (
                                 <Button
                                     variant="ghost"
                                     onClick={confirmCredit}
@@ -446,20 +471,29 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             se entregó y queda por cobrar. */}
                         <Button
                             variant={principal === "next" ? "primary" : "ghost"}
-                            onClick={isUnresolved ? salirComoCredito : onNext}
-                            disabled={creditLoading}
+                            onClick={salir}
+                            disabled={creditLoading || undoing}
                             className="sm:flex-1 min-w-0 h-12 sm:h-10"
-                            title={isUnresolved ? "Emite la factura y la deja por cobrar" : undefined}
+                            title={isUnresolved && !offline ? "Emite la factura y la deja por cobrar" : undefined}
                         >
                             <KeyHint n={numOf("next")} />
-                            {isUnresolved ? (creditLoading ? "..." : "Dejar a crédito") : "Siguiente venta"}
+                            {isUnresolved
+                                ? (offline ? "Volver al carrito" : (creditLoading ? "..." : "Dejar a crédito"))
+                                : "Siguiente venta"}
                             <svg className="w-4 h-4 -mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
                         </Button>
                     </div>
 
-                    {isUnresolved && (
+                    {isUnresolved && !offline && (
                         <p className="text-[12px] text-content-subtle text-center leading-relaxed pt-1">
                             Al salir se emite la factura <span className="font-semibold text-content dark:text-white">a crédito</span>, por cobrar a nombre del cliente.
+                        </p>
+                    )}
+                    {offline && (
+                        <p className="text-[12px] text-content-subtle text-center leading-relaxed pt-1">
+                            {isUnresolved
+                                ? "Sin cobrar no se registra: al volver, los productos regresan al carrito."
+                                : "Guardada en este equipo. La factura se emite al volver la conexión."}
                         </p>
                     )}
                 </div>
@@ -471,7 +505,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     que esta fila —y los chips numerados de los botones— no aparecen. */}
                 <div className="shrink-0 hidden sm:flex px-6 py-3 border-t border-border/60 dark:border-white/[0.06] bg-surface-2/60 dark:bg-white/[0.02] items-center justify-center gap-4 text-[12px] text-content-subtle">
                     <span className="inline-flex items-center gap-1.5"><Kbd>1</Kbd>–<Kbd>{actionKeys.length}</Kbd> elegir</span>
-                    <span className="inline-flex items-center gap-1.5"><Kbd>Enter</Kbd><Kbd>Esc</Kbd> {isUnresolved ? "dejar a crédito" : "siguiente venta"}</span>
+                    <span className="inline-flex items-center gap-1.5"><Kbd>Enter</Kbd><Kbd>Esc</Kbd> {isUnresolved ? (offline ? "volver al carrito" : "dejar a crédito") : "siguiente venta"}</span>
                 </div>
             </div>
 

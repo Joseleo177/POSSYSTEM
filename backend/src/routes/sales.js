@@ -12,6 +12,8 @@ router.patch("/:id/due-date", permit("sales.credit", "sales.edit"), ctrl.setDueD
 // Se vende desde el almacén asignado: sin esto, la API acepta cualquier warehouse_id y la
 // venta descuenta stock de otra sucursal.
 router.post("/",         permit("sales.create"), warehouseAccess(req => req.body?.warehouse_id), ctrl.create);
+// Ventas que una caja hizo sin internet: llegan con su precio cobrado y su hora real.
+router.post("/offline",  permit("sales.create"), warehouseAccess(req => req.body?.warehouse_id), ctrl.syncOffline);
 router.patch("/:id",     permit("sales.edit"), ctrl.update);
 router.post("/:id/credit", permit("sales.credit"), ctrl.confirmCredit);
 router.post("/:id/accept-order", permit("sales.create"), warehouseAccess(req => req.body?.warehouse_id), ctrl.acceptOrder);

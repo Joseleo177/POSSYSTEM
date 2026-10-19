@@ -51,6 +51,12 @@ module.exports = (sequelize, DataTypes) => {
     // cajero abandona sin cerrarla (ver HOLD_TIMEOUT_MIN en holdLock.js).
     held_by_employee_id: { type: DataTypes.INTEGER, allowNull: true },
     held_at:             { type: DataTypes.DATE,    allowNull: true },
+    // Venta hecha en una caja sin internet y enviada al volver la conexión (ver
+    // syncOfflineSale.js). offline_at es la hora real de la venta —created_at es la de llegada,
+    // cuando se factura— y offline_ref el número provisional del ticket que se le entregó al
+    // cliente, para encontrar la factura a partir de él.
+    offline_at:          { type: DataTypes.DATE,    allowNull: true },
+    offline_ref:         { type: DataTypes.STRING(40), allowNull: true },
     // Solo se llenan en pedidos llegados del catálogo público (status 'pedido')
     web_customer_name:  { type: DataTypes.STRING(120), allowNull: true },
     web_customer_phone: { type: DataTypes.STRING(30),  allowNull: true },

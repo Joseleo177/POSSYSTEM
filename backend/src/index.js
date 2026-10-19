@@ -141,6 +141,29 @@ app.get("/health", async (req, res) => {
   }
 });
 
+// ¿Puede el servidor atender una venta? La caja lo pregunta cada pocos segundos mientras
+// trabaja sin conexión, y también cuando una petición le falla con un 5xx o tarda demasiado.
+//
+// Prueba la base y no solo el servidor: el 24-09-2026 internet funcionaba y Vercel respondía,
+// pero Supabase estaba congelado, y cada venta quedaba colgada esperando. Con la base caída
+// esto responde 503 en 3 segundos como mucho y la caja pasa a vender sin conexión.
+// Es un SELECT 1: no lee ninguna tabla.
+app.get("/api/ping", async (req, res) => {
+  let timer;
+  try {
+    const { sequelize } = require("./models");
+    await Promise.race([
+      sequelize.query("SELECT 1"),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("timeout")), 3000); }),
+    ]);
+    res.json({ ok: true });
+  } catch {
+    res.status(503).json({ ok: false, message: "La base de datos no responde" });
+  } finally {
+    clearTimeout(timer);
+  }
+});
+
 // ── 404 ───────────────────────────────────────────────────────
 app.use((req, res) => res.status(404).json({ ok: false, message: "Ruta no encontrada" }));
 

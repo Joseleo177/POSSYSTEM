@@ -1,4 +1,6 @@
 import { compressFormData } from "../helpers/compressImage";
+import { kvGet, kvSet } from "./offline/store";
+import { setOffline } from "./offline/network";
 
 const BASE = (import.meta.env.VITE_API_URL || "") + "/api";
 
@@ -6,8 +8,102 @@ function getToken() {
   return localStorage.getItem("pos_token");
 }
 
+// Id del empleado dueño del token, sin ir al servidor. Separa en el equipo lo guardado por
+// cada cajero: la sesión de caja o las series de uno no le sirven a otro.
+function usuarioDelToken() {
+  try {
+    const p = getToken()?.split(".")[1];
+    return p ? JSON.parse(atob(p.replace(/-/g, "+").replace(/_/g, "/"))).id ?? null : null;
+  } catch { return null; }
+}
+
+// Lo que la caja necesita para arrancar. Cada respuesta buena se guarda en el equipo y, si
+// después no hay conexión —se fue la luz y la PC volvió sin internet—, se sirve la guardada en
+// lugar de fallar: así la caja abre con su sesión, su sucursal, su caja abierta y sus cuentas.
+// Solo lecturas, y solo estas: el resto de la app sigue necesitando el servidor.
+const GUARDABLES = [
+  /^\/auth\/me$/,
+  /^\/settings$/,
+  /^\/currencies$/,
+  /^\/payment-journals$/,
+  /^\/banks(\/methods)?$/,
+  /^\/categories$/,
+  /^\/series\/my\?/,
+  /^\/promotions\/active\?/,
+  /^\/warehouses\/employee\/\d+$/,
+  /^\/cash-sessions\/current\?/,
+];
+
+// El login ya trae al empleado y la app no vuelve a pedir /auth/me hasta recargar. Sin esto,
+// una caja que entró y se quedó sin internet antes de recargar no tenía sesión guardada.
+export function recordarSesion(employee) {
+  const uid = usuarioDelToken();
+  if (uid && employee) kvSet(`get:${uid}:/auth/me`, { ok: true, employee });
+}
+
+// ¿El servidor está sin base de datos? Se pregunta a /ping (que prueba la base) cuando una
+// petición falla con un 5xx o tarda demasiado. Hay internet y Vercel responde, pero no puede
+// atender: es la caída del 24-09-2026, y para la caja es lo mismo que no tener conexión.
+//
+// Un 500 corriente —un error de la propia venta— no la dispara: el ping responde bien y el
+// error se muestra como siempre. El resultado se recuerda unos segundos para que una ráfaga
+// de fallos no lance una ráfaga de pings.
+let comprobacion = { t: 0, caido: false, enCurso: null };
+function servidorCaido() {
+  if (Date.now() - comprobacion.t < 5000) return Promise.resolve(comprobacion.caido);
+  if (comprobacion.enCurso) return comprobacion.enCurso;
+  comprobacion.enCurso = (async () => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    try { return !(await fetch(`${BASE}/ping`, { signal: ctrl.signal })).ok; }
+    catch { return true; }
+    finally { clearTimeout(timer); }
+  })().then((caido) => { comprobacion = { t: Date.now(), caido, enCurso: null }; return caido; });
+  return comprobacion.enCurso;
+}
+
+// Lo que tarde más que esto se da por perdido. Sin tope, con la base congelada la caja
+// esperaba lo que Vercel deje vivir a la función: minutos con el cliente delante.
+const ESPERA_ARRANQUE_MS = 12_000;
+
+async function request(path, options = {}) {
+  const guardable = (options.method || "GET") === "GET" && GUARDABLES.some((re) => re.test(path));
+  const uid = guardable ? usuarioDelToken() : null;
+  const clave = uid ? `get:${uid}:${path}` : null;
+  if (guardable && !options.timeout) options = { ...options, timeout: ESPERA_ARRANQUE_MS };
+  try {
+    const data = await requestServidor(path, options);
+    setOffline(false);
+    if (clave && data) kvSet(clave, data);
+    return data;
+  } catch (err) {
+    let sinServidor = err.code === "NETWORK_ERROR";
+    if (!sinServidor && path !== "/ping" && (err.status >= 500 || err.code === "TIMEOUT") && await servidorCaido()) {
+      sinServidor = true;
+      err.code = "SERVER_DOWN";
+      err.message = "El servidor no puede atender en este momento: su base de datos no responde.";
+    }
+    if (sinServidor) {
+      setOffline(true);
+      const guardada = clave ? await kvGet(clave) : null;
+      if (guardada) return guardada;
+    } else if (err.code === "TIMEOUT" && clave) {
+      // El servidor está bien pero lento (arranque en frío de Vercel, base cargada). Antes de
+      // existir el tope la app simplemente esperaba; ahora, si hay copia, se usa la copia en
+      // vez de arrancar sin ajustes o sin la caja abierta. La próxima consulta la renueva.
+      const guardada = await kvGet(clave);
+      if (guardada) return guardada;
+    } else if (err.status && path !== "/ping") {
+      // Respondió el servidor, aunque sea con un error: hay conexión.
+      setOffline(false);
+    }
+    throw err;
+  }
+}
+
 let isRefreshing = false;
 let refreshPromise = null;
+const SIN_RED = Symbol("sin-red");
 
 function buildApiError(status, message, code, data) {
   const err = new Error(message || "Error en la solicitud");
@@ -21,7 +117,13 @@ function buildApiError(status, message, code, data) {
 const pesoArchivos = (fd) => [...fd.values()].reduce((s, v) => s + (v instanceof File ? v.size : 0), 0);
 const MSG_PESADO = "La imagen pesa demasiado para subirla. Prueba con una más liviana (menos de 4 MB).";
 
-async function request(path, options = {}) {
+const errorDeRed = () => buildApiError(
+  503,
+  "No se pudo conectar con el servidor. Revisa tu conexión o intenta de nuevo en unos segundos.",
+  "NETWORK_ERROR"
+);
+
+async function requestServidor(path, options = {}) {
   const isFormData = options.body instanceof FormData;
   // Toda subida pasa por aquí: se achican las imágenes pesadas antes de mandarlas (ver
   // helpers/compressImage.js — en Vercel una petición de más de 4,5 MB no llega).
@@ -34,23 +136,30 @@ async function request(path, options = {}) {
     ...options.headers,
   };
   
+  // `timeout` (ms) es opcional: corta la espera y la convierte en un error TIMEOUT, que el
+  // envoltorio de arriba revisa por si el servidor se quedó sin base.
+  const { timeout, ...fetchOptions } = options;
+  const ctrl = timeout ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeout) : null;
+
   let res;
   try {
-    res = await fetch(`${BASE}${path}`, { ...options, headers });
+    res = await fetch(`${BASE}${path}`, { ...fetchOptions, headers, ...(ctrl ? { signal: ctrl.signal } : {}) });
   } catch (err) {
+    if (err.name === "AbortError") {
+      throw buildApiError(504, "El servidor tardó demasiado en responder. Intenta de nuevo en unos segundos.", "TIMEOUT");
+    }
     if (err.message?.toLowerCase().includes("failed to fetch") || err.name === "TypeError") {
       // Vercel responde 413 sin cabeceras CORS y el navegador lo presenta como un fallo de
       // red. Con una subida pesada, lo probable es eso y no que se cayó la conexión.
       if (isFormData && pesoArchivos(options.body) > 4 * 1024 * 1024) {
         throw buildApiError(413, MSG_PESADO, "PAYLOAD_TOO_LARGE");
       }
-      throw buildApiError(
-        503,
-        "No se pudo conectar con el servidor. Revisa tu conexión o intenta de nuevo en unos segundos.",
-        "NETWORK_ERROR"
-      );
+      throw errorDeRed();
     }
     throw err;
+  } finally {
+    clearTimeout(timer);
   }
 
   if (res.status === 413) throw buildApiError(413, MSG_PESADO, "PAYLOAD_TOO_LARGE");
@@ -72,7 +181,11 @@ async function request(path, options = {}) {
             return data.token;
           }
           throw new Error("Refresh failed");
-        }).catch(() => {
+        }).catch((err) => {
+          // Si lo que falló fue la red, la sesión sigue siendo buena: se conserva y se intenta
+          // de nuevo cuando vuelva la conexión. Antes un corte justo en este momento borraba
+          // los tokens y mandaba al login a una caja que podía seguir trabajando.
+          if (err instanceof TypeError) return SIN_RED;
           localStorage.removeItem("pos_token");
           localStorage.removeItem("pos_refresh_token");
           window.location.reload();
@@ -80,11 +193,16 @@ async function request(path, options = {}) {
           isRefreshing = false;
         });
       }
-      
+
       const newToken = await refreshPromise;
+      if (newToken === SIN_RED) throw errorDeRed();
       if (newToken) {
         headers.Authorization = `Bearer ${newToken}`;
-        res = await fetch(`${BASE}${path}`, { ...options, headers });
+        try {
+          res = await fetch(`${BASE}${path}`, { ...options, headers });
+        } catch {
+          throw errorDeRed();
+        }
       } else {
         return; // Page reloading
       }
@@ -191,9 +309,11 @@ function bannerForm(fields = {}, files = {}) {
 }
 
 export const api = {
+  // ¿Volvió internet? Lo pregunta la caja sin conexión cada pocos segundos (ver offline/sync.js).
+  ping: () => request("/ping"),
   auth: {
     login: async (body) => {
-      const data = await request("/auth/login", { method: "POST", body: JSON.stringify(body) });
+      const data = await request("/auth/login", { method: "POST", body: JSON.stringify(body), timeout: 15_000 });
       if (data.token) localStorage.setItem("pos_token", data.token);
       if (data.refresh_token) localStorage.setItem("pos_refresh_token", data.refresh_token);
       return data;
@@ -256,7 +376,7 @@ export const api = {
     remove:  (id)        => request(`/categories/${id}`, { method: "DELETE" }),
   },
   customers: {
-    getAll:       (params={}) => request("/customers?" + new URLSearchParams(params)),
+    getAll:       (params={}, opts={}) => request("/customers?" + new URLSearchParams(params), opts),
     getOne:       (id, params={}) => request(`/customers/${id}?` + new URLSearchParams(params)),
     getPurchases: (id, params = {}) => request(`/customers/${id}/purchases?` + new URLSearchParams(params)),
     create:       (body)      => request("/customers",       { method: "POST", body: JSON.stringify(body) }),
@@ -276,7 +396,11 @@ export const api = {
     },
     getStats:    (params={}) => request("/sales/stats?" + new URLSearchParams(params)),
     getOne:      (id)        => request(`/sales/${id}`),
-    create:      (body)      => request("/sales",        { method: "POST",   body: JSON.stringify(body) }),
+    // Con tope de espera: si la base se congela, la caja pasa a vender sin conexión con la
+    // misma clave de idempotencia en vez de quedarse colgada (ver servidorCaido).
+    create:      (body)      => request("/sales",        { method: "POST",   body: JSON.stringify(body), timeout: 20_000 }),
+    // Venta hecha sin conexión, enviada desde la cola del equipo (ver offline/sync.js).
+    syncOffline: (body)      => request("/sales/offline", { method: "POST",  body: JSON.stringify(body), timeout: 30_000 }),
     update:      (id, body)  => request(`/sales/${id}`,  { method: "PATCH",  body: JSON.stringify(body) }),
     cancel:      (id)        => request(`/sales/${id}`,  { method: "DELETE" }),
     // Entrega a crédito: asigna correlativo y deja la venta en 'pendiente' (por cobrar)
@@ -397,7 +521,7 @@ export const api = {
     receiveTransfer: (id, body)  => request(`/warehouses/transfers/${id}/receive`, { method: "POST", body: JSON.stringify(body) }),
     resolveTransfer: (id, body)  => request(`/warehouses/transfers/${id}/resolve`, { method: "POST", body: JSON.stringify(body) }),
     cancelTransfer:  (id, body)  => request(`/warehouses/transfers/${id}/cancel`,  { method: "POST", body: JSON.stringify(body) }),
-    getProducts: (id, params = {}) => request(`/warehouses/${id}/products?` + new URLSearchParams(params)),
+    getProducts: (id, params = {}, opts = {}) => request(`/warehouses/${id}/products?` + new URLSearchParams(params), opts),
     // Kardex: historial de un producto y el buscador de productos que lo alimenta.
     movements:        (params = {}) => request("/warehouses/movements?" + new URLSearchParams(params)),
     movementProducts: (params = {}) => request("/warehouses/movements/products?" + new URLSearchParams(params)),

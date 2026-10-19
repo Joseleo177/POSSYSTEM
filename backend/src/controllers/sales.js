@@ -122,6 +122,20 @@ const create = async (req, res) => {
   }
 };
 
+// POST /api/sales/offline — venta hecha sin conexión, enviada desde la cola de la caja
+const syncOffline = async (req, res) => {
+  try {
+    const data = await salesService.syncOfflineSale(req.body, req);
+    broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
+    res.status(201).json({ ok: true, data });
+  } catch (err) {
+    // `retry: false` le dice a la caja que reintentar no va a cambiar nada (un dato de la
+    // venta que el servidor no acepta): la pasa a su bandeja en vez de insistir.
+    const status = err.status || (/inválid|no encontrad|requerid|no existe|depósito|serie/i.test(err.message) ? 400 : 500);
+    res.status(status).json({ ok: false, message: err.message, retry: status >= 500 });
+  }
+};
+
 // DELETE /api/sales/:id
 const cancel = async (req, res) => {
   try {
@@ -191,4 +205,4 @@ const setDueDate = async (req, res) => {
   }
 };
 
-module.exports = { getOne, getAll, getStats, create, cancel, update, confirmCredit, acceptOrder, claim, release, forgive, unforgive, receivables, setDueDate };
+module.exports = { getOne, getAll, getStats, create, syncOffline, cancel, update, confirmCredit, acceptOrder, claim, release, forgive, unforgive, receivables, setDueDate };

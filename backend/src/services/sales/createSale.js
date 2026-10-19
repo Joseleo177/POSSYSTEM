@@ -50,9 +50,43 @@ async function formatSale(saleId) {
   return data;
 }
 
-module.exports = async function createSale(body) {
-  const { items, paid, customer_id, employee_id, currency_id, exchange_rate, payment_method, serie_id, discount_amount, service_charge, service_charge_label, warehouse_id, idempotency_key, quotation_id, hold } =
+// Ficha de existencias en cero para un producto que la sucursal nunca recibió. Solo sin
+// conexión: la venta ya ocurrió y la existencia tiene que quedar en negativo para que se vea.
+async function fichaEnCero(warehouse_id, product_id, transaction) {
+  await ProductStock.findOrCreate({
+    where: { warehouse_id, product_id },
+    defaults: { warehouse_id, product_id, qty: 0 },
+    transaction,
+  });
+  return ProductStock.findOne({ where: { warehouse_id, product_id }, transaction, lock: true });
+}
+
+// La promoción que la caja aplicó sin conexión, en la forma que espera calcLineDiscount. Viaja
+// con la línea porque al sincronizar puede haber vencido o cambiado: se factura la que vio el
+// cliente. Solo se aceptan los dos tipos que existen y con valores con sentido.
+function promoDeLinea(productId, promo) {
+  if (!promo) return [];
+  const pct = parseFloat(promo.discount_pct);
+  const buy = parseInt(promo.buy_qty);
+  const get = parseInt(promo.get_qty);
+  if (promo.type === "percentage" && pct > 0 && pct <= 100) {
+    return [{ type: "percentage", discount_pct: pct, Products: [{ id: productId }] }];
+  }
+  if (promo.type === "buy_x_get_y" && buy > 0 && get > 0) {
+    return [{ type: "buy_x_get_y", buy_qty: buy, get_qty: get, Products: [{ id: productId }] }];
+  }
+  return [];
+}
+
+// `offline` solo lo pasa syncOfflineSale, nunca el cuerpo de la petición: { sold_at, ref }.
+// Con él, la venta ya ocurrió en una caja sin internet —la mercancía salió y el dinero entró—,
+// así que se registra tal como se cobró: precio y promoción de cada línea los trae la caja, y
+// las existencias se descuentan aunque queden en negativo.
+module.exports = async function createSale(body, req, { offline = null } = {}) {
+  const { items, paid, customer_id, employee_id, currency_id, exchange_rate, payment_method, serie_id, discount_amount, service_charge, service_charge_label, warehouse_id, idempotency_key, hold } =
     body;
+  // Una cotización no se recupera sin conexión: su precio pactado vive en el servidor.
+  const quotation_id = offline ? null : body.quotation_id;
 
   // Idempotencia: si ya existe una venta con esta clave, devolverla sin
   // crear una nueva. Cubre reintentos de red y doble envío del cliente.
@@ -93,8 +127,11 @@ module.exports = async function createSale(body) {
     const rate = parseFloat(exchange_rate) || 1;
 
     // Promociones vigentes de esta sucursal (ver promoDiscounts.js: lo comparte updateSale,
-    // que factura las cuentas en espera con el mismo criterio).
-    const activePromos = await cargarPromosActivas(warehouse_id, transaction);
+    // que factura las cuentas en espera con el mismo criterio). Sin conexión, cada línea trae
+    // la suya.
+    const activePromos = offline ? [] : await cargarPromosActivas(warehouse_id, transaction);
+    // Productos que la venta dejó en negativo: se devuelven para que la caja los señale.
+    const stockNegativo = [];
 
     // Dos pistas de cálculo en paralelo:
     // - $ (sale.total): round2 POR LÍNEA → sum(round2(price) × qty) → 3 × 4.07 = 12.21
@@ -156,14 +193,22 @@ module.exports = async function createSale(body) {
       });
 
       // Orden: lo pactado en la cotización, si no el precio de esta sucursal, si no el general.
-      const rawPrice     = precioPactado.has(product.id)
-        ? precioPactado.get(product.id)
-        : parseFloat(fichaSucursal?.price ?? product.price);
+      // Sin conexión manda el precio con que se cobró.
+      let rawPrice;
+      if (offline) {
+        rawPrice = parseFloat(item.price);
+        if (!Number.isFinite(rawPrice) || rawPrice < 0) throw new Error(`Precio inválido para "${product.name}"`);
+      } else {
+        rawPrice = precioPactado.has(product.id)
+          ? precioPactado.get(product.id)
+          : parseFloat(fichaSucursal?.price ?? product.price);
+      }
       const roundedPrice = round2(rawPrice);
+      const promosLinea = offline ? promoDeLinea(product.id, item.promo) : activePromos;
       // lineDiscountUsd: usa roundedPrice (pista $, para sale.total)
       // lineDiscountBs:  usa rawPrice    (pista Bs, para SaleItem.discount y subtotal generado)
-      const lineDiscountUsd = calcLineDiscount(product.id, roundedPrice, item.quantity, activePromos);
-      const lineDiscountBs  = calcLineDiscount(product.id, rawPrice,     item.quantity, activePromos);
+      const lineDiscountUsd = calcLineDiscount(product.id, roundedPrice, item.quantity, promosLinea);
+      const lineDiscountBs  = calcLineDiscount(product.id, rawPrice,     item.quantity, promosLinea);
 
       if (product.is_service) {
         total += roundedPrice * item.quantity - lineDiscountUsd;
@@ -181,13 +226,16 @@ module.exports = async function createSale(body) {
           const ingredient = await Product.findByPk(cItem.product_id, { transaction, lock: true });
           const qtyNeeded = item.quantity * parseFloat(cItem.quantity);
 
-          const stockEntry = await ProductStock.findOne({
+          let stockEntry = await ProductStock.findOne({
             where: { warehouse_id, product_id: ingredient.id },
             transaction,
             lock: true,
           });
+          if (offline && !stockEntry) stockEntry = await fichaEnCero(warehouse_id, ingredient.id, transaction);
           const currentQty = parseFloat(stockEntry?.qty || 0);
-          if (currentQty < qtyNeeded) {
+          if (offline) {
+            if (currentQty < qtyNeeded) stockNegativo.push(ingredient.name);
+          } else if (currentQty < qtyNeeded) {
             throw new Error(
               `Stock insuficiente del ingrediente "${ingredient.name}" para el combo "${product.name}". Disponible: ${currentQty}, Requerido: ${qtyNeeded}`
             );
@@ -199,10 +247,12 @@ module.exports = async function createSale(body) {
         enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs, unitPrice: rawPrice });
       } else {
         // La ficha ya se cargó arriba con lock para leer el precio de la sucursal.
-        const stockEntry = fichaSucursal;
+        const stockEntry = fichaSucursal || (offline ? await fichaEnCero(warehouse_id, product.id, transaction) : null);
 
         const currentQty = parseFloat(stockEntry?.qty || 0);
-        if (currentQty < item.quantity) {
+        if (offline) {
+          if (currentQty < item.quantity) stockNegativo.push(product.name);
+        } else if (currentQty < item.quantity) {
           throw new Error(`Stock insuficiente para "${product.name}" en este almacén. Disponible: ${currentQty}`);
         }
 
@@ -238,6 +288,10 @@ module.exports = async function createSale(body) {
         // "Cuentas en espera" y es visible para cualquier caja de la empresa.
         status: hold ? 'espera' : 'borrador',
         idempotency_key: idempotency_key || null,
+        // created_at queda en la hora en que llega: es cuando se factura y toma correlativo,
+        // así los números siguen el orden de las fechas. La hora real de la venta va aparte.
+        offline_at: offline ? offline.sold_at : null,
+        offline_ref: offline ? offline.ref : null,
       },
       { transaction }
     );
@@ -308,7 +362,9 @@ module.exports = async function createSale(body) {
       ).catch(e => console.error('[quotation convert]', e.message));
     }
 
-    return formatSale(sale.id);
+    const data = await formatSale(sale.id);
+    if (stockNegativo.length) data.stock_negativo = [...new Set(stockNegativo)];
+    return data;
   } catch (err) {
     await transaction.rollback();
 

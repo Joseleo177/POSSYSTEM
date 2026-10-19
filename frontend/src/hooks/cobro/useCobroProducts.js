@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { api } from "../../services/api";
 import { onSSE } from "../../services/sse";
 import { useDebounce } from "../useDebounce";
+import { isOffline, onNetworkChange, esSinServidor } from "../../services/offline/network";
+import { buscarEnCatalogo, refrescarDatosLocales } from "../../services/offline/catalog";
 
 // En una pantalla ancha caben 8 columnas: con 30 la página no llenaba ni dos pantallas y
 // el scroll se detenía a esperar la siguiente a cada rato.
@@ -40,7 +42,14 @@ export function useCobroProducts(activeWarehouse, notify) {
             // como doce tarjetas casi iguales. Escanear el código de una talla la trae suelta.
             const params = { search: q, limit: pageSize, offset: off, sellable_only: true, group_variants: true };
             if (cat && cat !== "all") params.category = cat;
-            const r = await api.warehouses.getProducts(activeWarehouse.id, params);
+            // Sin conexión, la copia del catálogo guardada en el equipo (ver offline/catalog.js).
+            const local = () => buscarEnCatalogo(activeWarehouse.id, { search: q, category: cat, offset: off, limit: pageSize });
+            let r;
+            if (isOffline()) r = await local();
+            else {
+                try { r = await api.warehouses.getProducts(activeWarehouse.id, params, { timeout: 12_000 }); }
+                catch (e) { if (!esSinServidor(e)) throw e; r = await local(); }
+            }
             // Sin lista no se toca la grilla: guardar `undefined` en products tumbaba la caja
             // entera en el siguiente render (products.length). Se conserva lo que había.
             if (!Array.isArray(r?.data)) return;
@@ -70,6 +79,8 @@ export function useCobroProducts(activeWarehouse, notify) {
         // solo la primera lo devolvería al principio de la lista cada refresco.
         const refresh = () => loadProducts(debouncedSearch, debouncedCat, 0, true, Math.max(LIMIT, offsetRef.current));
         const unsubSSE  = onSSE('products:updated', refresh);
+        // Al caerse o volver la conexión cambia de dónde sale la grilla: se vuelve a pedir.
+        const unsubRed  = onNetworkChange(refresh);
         // Fallback: refrescar al volver al tab (por si SSE se reconecta tarde)
         const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
         document.addEventListener('visibilitychange', onVisible);
@@ -81,10 +92,22 @@ export function useCobroProducts(activeWarehouse, notify) {
         }, REFRESH_MS);
         return () => {
             unsubSSE();
+            unsubRed();
             clearInterval(timer);
             document.removeEventListener('visibilitychange', onVisible);
         };
     }, [activeWarehouse, debouncedSearch, debouncedCat, loadProducts]);
+
+    // Copia local del catálogo y de los clientes, por si se cae internet. refrescarDatosLocales
+    // no consulta nada si la copia es reciente, así que se puede llamar seguido.
+    useEffect(() => {
+        if (!activeWarehouse?.id) return;
+        refrescarDatosLocales(activeWarehouse.id);
+        const timer = setInterval(() => {
+            if (document.visibilityState === 'visible') refrescarDatosLocales(activeWarehouse.id);
+        }, 60_000);
+        return () => clearInterval(timer);
+    }, [activeWarehouse?.id]);
 
     // Cargar más (llamado por el sentinel)
     const loadMore = useCallback(() => {

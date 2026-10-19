@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../../services/api";
 import { useDebounce } from "../useDebounce";
+import { isOffline, esSinServidor } from "../../services/offline/network";
+import { buscarClientesLocal } from "../../services/offline/catalog";
 
 export function useCobroCustomer(setSelectedCustomer, notify, activeWarehouse) {
     const [customers, setCustomers] = useState([]);
@@ -18,9 +20,14 @@ export function useCobroCustomer(setSelectedCustomer, notify, activeWarehouse) {
         // tienda, y esa deuda no es asunto de esta caja ni se puede cobrar desde aquí.
         const params = { search: debouncedCustSearch };
         if (activeWarehouse) params.warehouse_id = activeWarehouse.id;
-        api.customers.getAll(params)
+        // Sin conexión se busca en la copia de clientes guardada en el equipo.
+        const local = () => activeWarehouse
+            ? buscarClientesLocal(activeWarehouse.id, debouncedCustSearch).then(setCustomers)
+            : undefined;
+        if (isOffline()) { local(); return; }
+        api.customers.getAll(params, { timeout: 12_000 })
             .then(r => setCustomers(r.data.filter(c => c.type !== "proveedor")))
-            .catch(() => {});
+            .catch(e => { if (esSinServidor(e)) local(); });
     }, [debouncedCustSearch, activeWarehouse]);
 
     // Único punto por donde se elige un cliente en la caja (clic, Enter en la lista o F2).

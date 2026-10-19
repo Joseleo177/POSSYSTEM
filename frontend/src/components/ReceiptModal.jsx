@@ -21,6 +21,8 @@ function normalizeSale(sale) {
     return {
         id: sale.id,
         invoice_number: sale.invoice_number || null,
+        // Venta sin conexión: todavía no tiene factura; el papel lleva su número provisional.
+        offline_ref: sale.offline_ref || null,
         total: parseFloat(sale.total || 0),
         total_precise: parseFloat(sale.total_precise ?? sale.total ?? 0),
         paid: parseFloat(sale.paid || 0),
@@ -404,7 +406,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
 <html>
 <head>
     <meta charset="utf-8" />
-    <title>${docName} ${s.invoice_number || s.id}</title>
+    <title>${docName} ${s.invoice_number || s.offline_ref || s.id}</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap');
 
@@ -484,10 +486,11 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
     <div class="doc-header">
         <div class="doc-title">TICKET DE CAJA</div>
         <div class="doc-warning">*** DOCUMENTO NO FISCAL ***</div>
+        ${s.offline_ref && !s.invoice_number ? `<div class="doc-warning">COMPROBANTE PROVISIONAL<br>Vendido sin conexión: la factura se emite al volver internet</div>` : ""}
     </div>
 
     <div class="meta">
-        <div class="meta-row"><span class="meta-label">Recibo:</span><span class="meta-value">${s.invoice_number || `#${s.id}`}</span></div>
+        <div class="meta-row"><span class="meta-label">Recibo:</span><span class="meta-value">${s.invoice_number || s.offline_ref || `#${s.id}`}</span></div>
         <div class="meta-row"><span class="meta-label">Fecha:</span><span class="meta-value">${dateStr}</span></div>
         ${s.employee_name ? `<div class="meta-row"><span class="meta-label">Cajero:</span><span class="meta-value">${s.employee_name}</span></div>` : ""}
         ${s.customer_name ? `<div class="meta-row"><span class="meta-label">Cliente:</span><span class="meta-value">${s.customer_name}</span></div>` : ""}
@@ -617,7 +620,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
     const pago = paymentSummary(s);
 
     const dateStr = fmtDate(s.created_at);
-    const invoiceLabel = s.invoice_number || `#${s.id}`;
+    const invoiceLabel = s.invoice_number || s.offline_ref || `#${s.id}`;
     // Cómo se llama el documento. Sale de Configuración porque hasta que el sistema no esté
     // homologado lo que se entrega no es una factura fiscal, y el papel no debe afirmarlo.
     const docLabel = companyInfo?.doc_name || "Documento de Venta";
@@ -643,7 +646,9 @@ export default function ReceiptModal({ open, onClose, sale }) {
                         {companyInfo?.email && <div className="text-[12px] text-content-subtle">{companyInfo.email}</div>}
                     </>
                 )}
-                <div className={`text-[12px] text-content-subtle ${companyInfo?.show_header !== false ? "mt-2" : ""}`}>Comprobante de venta</div>
+                <div className={`text-[12px] text-content-subtle ${companyInfo?.show_header !== false ? "mt-2" : ""}`}>
+                    {s.offline_ref && !s.invoice_number ? "Comprobante provisional · la factura se emite al volver la conexión" : "Comprobante de venta"}
+                </div>
             </div>
 
             {/* Datos del documento y del cliente, en una sola lista */}

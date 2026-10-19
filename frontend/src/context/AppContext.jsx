@@ -1,8 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { api } from "../services/api";
+import { api, recordarSesion } from "../services/api";
 import { hasPermission } from "../constants/permissions";
 import { initSSE, closeSSE, onSSE } from "../services/sse";
 import { applyBrandColor, clearBrandColor, rememberBrandColor, applyRememberedBrandColor } from "../helpers/brandColor";
+import { pedirAlmacenamientoPersistente } from "../services/offline/store";
+import { iniciarSincronizacion } from "../services/offline/sync";
+import { esSinServidor } from "../services/offline/network";
 
 const AppContext = createContext(null);
 
@@ -22,12 +25,24 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const token = localStorage.getItem("pos_token");
     if (!token) { setAuthChecked(true); return; }
+    // Sin conexión, /auth/me responde con la sesión guardada en el equipo (ver GUARDABLES en
+    // api.js). Si ni eso hay, el token se conserva: un corte de red no prueba que la sesión
+    // sea mala, y borrarlo dejaba fuera a la caja justo cuando volvía de un apagón.
     api.auth.me()
       .then(res => { setEmployee(res.employee); setAuthChecked(true); })
-      .catch(() => { localStorage.removeItem("pos_token"); setAuthChecked(true); });
+      .catch(e => {
+        if (!esSinServidor(e)) localStorage.removeItem("pos_token");
+        setAuthChecked(true);
+      });
   }, []);
 
-  const login  = (emp) => setEmployee(emp);
+  useEffect(() => { if (employee) pedirAlmacenamientoPersistente(); }, [employee]);
+
+  // Envío de las ventas hechas sin conexión (ver services/offline/sync.js). Corre mientras haya
+  // sesión, y solo con las ventas de la empresa con la que se entró.
+  useEffect(() => { if (employee?.company_id) iniciarSincronizacion(employee.company_id); }, [employee?.company_id]);
+
+  const login  = (emp) => { recordarSesion(emp); setEmployee(emp); };
   const logout = () => { localStorage.removeItem("pos_token"); setEmployee(null); };
 
   // Delegado en el mismo evaluador que usa el backend: si la pantalla y la API no coinciden,

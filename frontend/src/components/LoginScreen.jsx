@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../services/api";
+import { recordarAcceso, entrarSinConexion } from "../services/offline/session";
+import { esSinServidor } from "../services/offline/network";
 import { useTheme } from "../hooks/useTheme";
 import { NexusLogo, NexusMark } from "./ui/NexusLogo";
 import LandingDemo from "./landing/LandingDemo";
@@ -189,9 +191,21 @@ export default function LoginScreen({ onLogin }) {
             const res = await api.auth.login(form);
             localStorage.setItem("pos_token", res.token);
             try { localStorage.setItem(EQUIPO, "1"); } catch { /* modo privado */ }
+            // Para poder volver a entrar en este equipo si después no hay internet.
+            await recordarAcceso(form.username, form.password, res);
             onLogin(res.employee);
         } catch (e) {
-            setError(e.message);
+            if (!esSinServidor(e)) { setError(e.message); return; }
+            // Sin conexión: se entra con el acceso que este usuario dejó guardado la última vez
+            // que entró aquí con internet (ver services/offline/session.js).
+            try {
+                const ses = await entrarSinConexion(form.username, form.password);
+                localStorage.setItem("pos_token", ses.token);
+                if (ses.refresh_token) localStorage.setItem("pos_refresh_token", ses.refresh_token);
+                onLogin(ses.employee);
+            } catch (e2) {
+                setError(e2.message);
+            }
         } finally {
             setLoading(false);
         }

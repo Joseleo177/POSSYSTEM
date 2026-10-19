@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Spinner } from "./ui/Spinner";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
+import { agregarCobro } from "../services/offline/outbox";
 import Modal from "./ui/Modal";
 import { saleTotalAtRate, todayISO, PAYMENT_TOLERANCE, settleTolerance } from "../helpers";
 import DatePicker from "./ui/DatePicker";
@@ -375,6 +376,42 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
     return () => { cancelAnimationFrame(r1); if (r2) cancelAnimationFrame(r2); };
   }, [methodLocked]);
 
+  // Cobro de una venta hecha sin conexión: no hay servidor, así que se guarda en la cola del
+  // equipo junto con la venta y se envía con ella al volver internet. Devuelve lo mismo que
+  // POST /payments para que la caja y el ticket sigan igual. Si queda saldada lo decide la
+  // misma cuenta que esta pantalla ya muestra ("Factura saldada"); al sincronizar, el servidor
+  // vuelve a decidirlo con sus propias reglas.
+  const cobroSinConexion = async (cuerpo) => {
+    const nombreCaja = (id) => activeJournals.find(j => j.id === id)?.name || null;
+    const ahora = new Date().toISOString();
+    const partes = cuerpo.pay_parts?.length
+      ? cuerpo.pay_parts.map(p => ({ payment_journal_id: p.journal_id, amount: p.amount, exchange_rate: p.exchange_rate }))
+      : (parseFloat(cuerpo.amount) > 0
+          ? [{ payment_journal_id: cuerpo.payment_journal_id, amount: cuerpo.amount, exchange_rate: cuerpo.exchange_rate }]
+          : []);
+    const pagos = partes.map((p, i) => ({
+      id: null,
+      created_at: ahora,
+      payment_journal_id: p.payment_journal_id,
+      journal_name: nombreCaja(p.payment_journal_id),
+      amount: parseFloat(p.amount) || 0,
+      exchange_rate: parseFloat(p.exchange_rate) || 1,
+      change_given: i === partes.length - 1 ? (parseFloat(cuerpo.change_given) || 0) : 0,
+    }));
+    const cierra = combinado
+      ? recibidoComb + 1e-6 >= pendingAfterCredit - settleTolerance(sale)
+      : settlesInvoice;
+    await agregarCobro(sale.offline_key, cuerpo, { cierra });
+    return {
+      payments: pagos,
+      sale_status: cierra ? "pagado" : "parcial",
+      amount_paid: cierra ? parseFloat(sale.total) : paidBeforeBase + amountBase,
+      balance: cierra ? 0 : remainingBase,
+      credit_applied: 0,
+      invoice_number: null,
+    };
+  };
+
   const submit = async () => {
     if (!form.reference_date) return notify("La fecha de referencia es requerida", "err");
     if (!creditCoversAll && combinado) {
@@ -412,9 +449,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
       payKeyRef.current = crypto?.randomUUID?.() ?? `p-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     }
     try {
-      const res = await api.payments.create({
-        idempotency_key:    payKeyRef.current,
-        sale_id:            sale.id,
+      const cuerpo = {
         // Pago simple: monto único en base. Combinado: un tramo por forma de pago, cada uno
         // con su monto ya convertido a base y su tasa.
         ...(combinado && !creditCoversAll ? {
@@ -448,10 +483,14 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
         surplus_kept:       (!combinado && changeBase > 0 && form.keep_change) ? changeBase : undefined,
         change_to_credit:   (changeBase > 0 && form.credit_change) ? changeBase : undefined,
         credit_amount:      creditApplied > 0 ? creditApplied : undefined,
-      });
+      };
+      const res = sale.offline
+        ? await cobroSinConexion(cuerpo)
+        : await api.payments.create({ ...cuerpo, idempotency_key: payKeyRef.current, sale_id: sale.id });
       // `duplicated` llega cuando el servidor reconoció un reintento: el cobro ya estaba
       // guardado. Se le dice al cajero para que no crea que se cobró dos veces.
-      if (res.duplicated) notify("Ese cobro ya estaba registrado");
+      if (sale.offline) notify("Cobro guardado en este equipo: se envía solo al volver la conexión");
+      else if (res.duplicated) notify("Ese cobro ya estaba registrado");
       else if (res.sale_status === "pagado") notify("¡Factura pagada completamente!");
       else notify("Pago parcial registrado");
       payKeyRef.current = null; // cobro cerrado: el próximo abono lleva clave nueva
@@ -467,7 +506,9 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
 
   // Exonerar el saldo pendiente. No pide diario ni fecha: no hay dinero que ubicar en ninguna
   // caja, solo una deuda que se deja de cobrar y el motivo por el que se dejó.
+  // Sin conexión no se exonera: es una decisión sobre una factura que todavía no existe.
   const canForgive = can("sales.forgive")
+    && !sale?.offline
     && balanceUsd > settleTolerance(sale)
     && !["pagado", "exonerado", "anulado", "devuelto"].includes(sale?.status);
 
@@ -504,7 +545,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
     <Modal open={!!sale} onClose={() => { setForgiveMode(false); setForgiveReason(""); }} title="Exonerar saldo" width={460}>
 
       <div className="rounded-xl bg-white/[0.02] dark:bg-white/[0.04] border border-border/10 dark:border-white/[0.06] p-4 mb-5 space-y-1.5">
-        <Row label="Factura" value={sale.invoice_number || `#${sale.id}`} />
+        <Row label="Factura" value={sale.invoice_number || sale.offline_ref || `#${sale.id}`} />
         {sale.customer_name && <Row label="Cliente" value={sale.customer_name} />}
         <Row label="Total" value={fmtBase(sale.total)} />
         {sale.amount_paid > 0 && <Row label="Ya pagado" value={fmtBase(sale.amount_paid)} valueClass="text-success" />}
@@ -552,7 +593,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // que el cajero teclea para que no se pierda "entre tanta información".
   const resumenFactura = (
     <div className="rounded-xl bg-surface-2 dark:bg-white/[0.04] p-4 space-y-2">
-      <Row label="Factura" value={sale.invoice_number || `#${sale.id}`} />
+      <Row label="Factura" value={sale.invoice_number || sale.offline_ref || `#${sale.id}`} />
       {sale.customer_name && <Row label="Cliente" value={sale.customer_name} />}
       <Row label="Total" value={hasBsRate ? `${defaultSym}${totalPreciseBs.toFixed(2)}` : fmt(sale.total)} />
       {sale.amount_paid > 0 && (

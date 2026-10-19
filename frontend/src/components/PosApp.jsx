@@ -10,6 +10,7 @@ import HeaderMobile from "../layout/HeaderMobile";
 import TopBar from "../layout/TopBar";
 import SubscriptionBanner from "../layout/SubscriptionBanner";
 import RateBanner from "../layout/RateBanner";
+import OfflineBanner from "../layout/OfflineBanner";
 import AppLauncher from "../layout/AppLauncher";
 import CommandPalette from "../components/ui/CommandPalette";
 import BottomTabs from "../layout/BottomTabs";
@@ -109,6 +110,8 @@ export default function PosApp() {
                 onOpenLauncher={() => setShowLauncher(true)}
                 currencies={currencies}
             />
+
+            <OfflineBanner />
 
             <MainContent safeTab={safeTab} />
 

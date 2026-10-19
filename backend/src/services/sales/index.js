@@ -2,6 +2,7 @@ const getAllSales = require("./getAllSales");
 const getOneSale = require("./getOneSale");
 const getSalesStats = require("./getSalesStats");
 const createSale = require("./createSale");
+const syncOfflineSale = require("./syncOfflineSale");
 const cancelSale = require("./cancelSale");
 const updateSale = require("./updateSale");
 const confirmCreditSale = require("./confirmCreditSale");
@@ -17,6 +18,7 @@ module.exports = {
   getOneSale,
   getSalesStats,
   createSale,
+  syncOfflineSale,
   cancelSale,
   updateSale,
   confirmCreditSale,

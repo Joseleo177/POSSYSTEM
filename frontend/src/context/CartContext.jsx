@@ -2,6 +2,9 @@ import { createContext, useContext, useState, useCallback, useRef, useEffect } f
 import { api } from "../services/api";
 import { onSSE } from "../services/sse";
 import { useApp } from "./AppContext";
+import { isOffline, esSinServidor } from "../services/offline/network";
+import { guardarVenta, descartarSinCobro, siguienteNumeroProvisional } from "../services/offline/outbox";
+import { descontarDeCatalogo } from "../services/offline/catalog";
 
 const CartContext = createContext(null);
 
@@ -152,6 +155,59 @@ export function CartProvider({ children }) {
     setActiveWarehouse(warehouse);
     setCart([]);
   }, []);
+
+  // ── Carrito guardado en el equipo ──────────────────────────
+  // Si se va la luz con una venta a medio armar, al volver el cajero la encuentra como la dejó:
+  // productos, cliente, descuento y recargo. Va por cajero y sucursal.
+  //
+  // También se guarda la clave de idempotencia del cobro en curso. Si el apagón llega justo
+  // mientras se enviaba la venta, el servidor pudo haberla creado sin que la respuesta llegara;
+  // al reintentar con la misma clave la devuelve en vez de crear otra.
+  //
+  // Las cuentas en espera y las cotizaciones no se guardan aquí: ya viven en el servidor y se
+  // recuperan desde sus propias listas.
+  const cartStorageKey = employee?.id && activeWarehouse?.id ? `pos_cart:${employee.id}:${activeWarehouse.id}` : null;
+  const restoredKeyRef = useRef(null);
+  const skipSaveRef = useRef(false);
+
+  useEffect(() => {
+    if (!cartStorageKey || restoredKeyRef.current === cartStorageKey) return;
+    restoredKeyRef.current = cartStorageKey;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(cartStorageKey) || "null"); } catch { /* dañado: se ignora */ }
+    if (!saved?.cart?.length || cartRef.current.length) return;
+    // El guardado de abajo corre en este mismo ciclo, con el carrito aún vacío, y lo borraría.
+    skipSaveRef.current = true;
+    setCart(saved.cart);
+    setSelectedCustomer(saved.customer || null);
+    setDiscountEnabled(!!saved.discountEnabled);
+    setDiscountPct(saved.discountPct ?? "");
+    setDiscountMode(saved.discountMode || "pct");
+    setChargeEnabled(!!saved.chargeEnabled);
+    setChargeInput(saved.chargeInput ?? "");
+    setChargeMode(saved.chargeMode || "amount");
+    setChargeLabel(saved.chargeLabel || "Servicio");
+    if (saved.pendingKey) pendingKeyRef.current = saved.pendingKey;
+  }, [cartStorageKey]);
+
+  const saveCart = useCallback(() => {
+    if (!cartStorageKey || restoredKeyRef.current !== cartStorageKey) return;
+    try {
+      if (!cart.length || heldSaleId || quotationId) { localStorage.removeItem(cartStorageKey); return; }
+      localStorage.setItem(cartStorageKey, JSON.stringify({
+        cart, customer: selectedCustomer,
+        discountEnabled, discountPct, discountMode,
+        chargeEnabled, chargeInput, chargeMode, chargeLabel,
+        pendingKey: pendingKeyRef.current,
+      }));
+    } catch { /* almacenamiento lleno o bloqueado: el carrito sigue en pantalla */ }
+  }, [cartStorageKey, cart, selectedCustomer, heldSaleId, quotationId,
+    discountEnabled, discountPct, discountMode, chargeEnabled, chargeInput, chargeMode, chargeLabel]);
+
+  useEffect(() => {
+    if (skipSaveRef.current) { skipSaveRef.current = false; return; }
+    saveCart();
+  }, [saveCart]);
 
   // Cambiar de sucursal cambia el juego de series: se recargan las del almacén nuevo y, si
   // la que estaba elegida no es de ahí, se reemplaza por la primera disponible.
@@ -957,7 +1013,122 @@ export function CartProvider({ children }) {
     if (!pendingKeyRef.current) {
       pendingKeyRef.current =
         (crypto?.randomUUID?.() ?? `k-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      // Al disco antes de enviar: si se va la luz con la petición en vuelo, la clave sobrevive.
+      saveCart();
     }
+
+    // ── Venta sin conexión ──
+    // No hay servidor que cree la venta: se arma aquí, igual que la armaría createSale, y se
+    // guarda en la cola del equipo (offline/outbox.js) para enviarla cuando vuelva internet.
+    // Lleva la misma clave de idempotencia: si un intento en línea alcanzó a crearla sin que
+    // llegara la respuesta, al sincronizar el servidor devuelve esa en vez de duplicarla.
+    const ventaSinConexion = async () => {
+      const key = pendingKeyRef.current;
+      const r2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+      // La promoción que el carrito aplicó a cada línea viaja con ella: al sincronizar puede
+      // haber vencido, y se cobra la que vio el cliente.
+      const promoDe = (id) => {
+        const p = activePromos.find(pr => pr.product_ids?.includes(id));
+        return p ? { type: p.type, discount_pct: p.discount_pct, buy_qty: p.buy_qty, get_qty: p.get_qty } : null;
+      };
+      // Misma cuenta que calcLineDiscount en el servidor (services/sales/promoDiscounts.js).
+      const descuentoPromo = (promo, unit, qty) => {
+        if (promo?.type === "percentage") return parseFloat((unit * qty * parseFloat(promo.discount_pct) / 100).toFixed(5));
+        if (promo?.type === "buy_x_get_y") {
+          const gratis = Math.floor(qty / (promo.buy_qty + promo.get_qty)) * promo.get_qty;
+          return parseFloat((gratis * unit).toFixed(5));
+        }
+        return 0;
+      };
+      // Dos pistas, como createSale: el total en $ con el precio redondeado por línea, y el
+      // descuento por unidad de cada línea con el precio completo.
+      const lineas = cart.filter(i => parseFloat(i.qty) > 0).map(i => {
+        const quantity = parseFloat(i.qty);
+        const price = parseFloat(i.price) || 0;
+        const promo = promoDe(i.id);
+        const discount = quantity > 0 ? parseFloat((descuentoPromo(promo, price, quantity) / quantity).toFixed(5)) : 0;
+        return {
+          product_id: i.id, name: i.name, price, quantity, discount, promo,
+          subtotal: parseFloat(((price - discount) * quantity).toFixed(5)),
+          descUsd: descuentoPromo(promo, r2(price), quantity),
+        };
+      });
+      const descuento = parseFloat(discountAmount) || 0;
+      const recargo = Math.max(0, parseFloat(chargeAmountBase) || 0);
+      const recargoLabel = recargo > 0 ? (chargeLabel?.trim().slice(0, 40) || "Servicio") : null;
+      const total = Math.max(0, parseFloat(
+        (lineas.reduce((s, l) => s + r2(l.price) * l.quantity - l.descUsd, 0) - descuento + recargo).toFixed(2)
+      ));
+      const items = lineas.map(({ descUsd, promo, ...l }) => l); // eslint-disable-line no-unused-vars
+      const serie = mySeries.find(s => s.id === selectedSerieId);
+      const ref = siguienteNumeroProvisional();
+      const soldAt = new Date().toISOString();
+
+      // El mismo formato que devuelve POST /sales: el modal de cobro y el ticket lo leen igual.
+      const venta = {
+        id: null, offline: true, offline_key: key, offline_ref: ref, invoice_number: null,
+        total, total_precise: parseFloat(items.reduce((s, l) => s + l.subtotal, 0).toFixed(5)),
+        status: "borrador", amount_paid: 0, balance: total, credit_applied: 0,
+        items, discount_amount: descuento, service_charge: recargo, service_charge_label: recargoLabel,
+        exchange_rate: exchangeRate, currency_id: currentCurrency?.id || null,
+        customer_id: selectedCustomer?.id || null, customer_name: selectedCustomer?.name || null,
+        customer_rif: selectedCustomer?.rif || null,
+        employee_id: employee?.id || null, employee_name: employee?.full_name || null,
+        warehouse_id: activeWarehouse.id, warehouse_name: activeWarehouse.name,
+        serie_id: selectedSerieId, serie_name: serie?.name || null,
+        currency_symbol: currentCurrency?.symbol || null, currency_code: currentCurrency?.code || null,
+        created_at: soldAt,
+      };
+      try {
+        await guardarVenta({
+          key, ref, sold_at: soldAt,
+          company_id: employee?.company_id ?? null,
+          employee_id: employee?.id || null,
+          warehouse_id: activeWarehouse.id,
+          sale: {
+            serie_id: selectedSerieId,
+            customer_id: selectedCustomer?.id || null,
+            currency_id: currentCurrency?.id || null,
+            exchange_rate: exchangeRate,
+            discount_amount: descuento,
+            service_charge: recargo,
+            service_charge_label: recargoLabel,
+            items: lineas.map(l => ({ product_id: l.product_id, quantity: l.quantity, price: l.price, promo: l.promo })),
+          },
+          receipt: venta,
+          // Para volver al carrito si la venta no llega a cobrarse.
+          cart, customer: selectedCustomer,
+        });
+      } catch {
+        throw new Error("No se pudo guardar la venta en este equipo. Revisa que el navegador no esté en modo privado.");
+      }
+      descontarDeCatalogo(activeWarehouse.id, items).catch(() => {});
+      setReceipt({
+        ...venta,
+        customerName: selectedCustomer?.name || null,
+        customerRif: selectedCustomer?.rif || null,
+        currency: currentCurrency,
+        exchangeRate,
+        serie,
+      });
+      pendingKeyRef.current = null;
+      clearCart();
+      onSuccess?.();
+    };
+
+    if (isOffline()) {
+      try {
+        if (heldSaleId) notify("Las cuentas en espera necesitan conexión para cobrarse", "err");
+        else await ventaSinConexion();
+      } catch (e) {
+        notify(e.message, "err");
+      } finally {
+        setLoading(false);
+        submittingRef.current = false;
+      }
+      return;
+    }
+
     try {
       // Si se está cobrando una cuenta en espera, la venta YA existe: se actualizan sus
       // líneas (por si se agregaron rondas) y se pasa a 'borrador' para que el cobro le
@@ -1024,6 +1195,11 @@ export function CartProvider({ children }) {
       clearCart();
       onSuccess?.();
     } catch (e) {
+      // Se cayó la conexión justo al facturar: la venta sigue sin conexión, con la misma clave.
+      if (esSinServidor(e) && !heldSaleId) {
+        try { await ventaSinConexion(); } catch (e2) { notify(e2.message, "err"); }
+        return;
+      }
       notify(e.message, "err");
     } finally {
       setLoading(false);
@@ -1034,7 +1210,19 @@ export function CartProvider({ children }) {
   }, [cart, activeWarehouse, selectedCustomer, selectedSerieId,
     employee, currentCurrency, exchangeRate, heldSaleId, loadHeldCarts,
     discountAmount, chargeAmountBase, chargeLabel, quotationId,
-    mySeries, notify, clearCart]);
+    mySeries, notify, clearCart, saveCart, activePromos]);
+
+  // Venta sin conexión que no llegó a cobrarse (el cliente se fue, o hay que corregirla): se
+  // saca de la cola y su carrito vuelve a la pantalla, como si no se hubiera finalizado.
+  const deshacerVentaSinConexion = useCallback(async (rcpt) => {
+    const e = await descartarSinCobro(rcpt?.offline_key);
+    if (e) {
+      setCart(e.cart || []);
+      setSelectedCustomer(e.customer || null);
+      descontarDeCatalogo(e.warehouse_id, (e.receipt?.items || []).map(l => ({ ...l, quantity: -l.quantity }))).catch(() => {});
+    }
+    setReceipt(null);
+  }, []);
 
   return (
     <CartContext.Provider value={{
@@ -1062,7 +1250,7 @@ export function CartProvider({ children }) {
       // Almacén
       employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
       // Checkout
-      checkout, saveQuotation, loading, receipt, setReceipt,
+      checkout, saveQuotation, loading, receipt, setReceipt, deshacerVentaSinConexion,
       // Quotation pre-load
       loadFromQuotation, quotationId,
       // Hold Cart

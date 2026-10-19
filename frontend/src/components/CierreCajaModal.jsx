@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
+import { sinEnviarDeEmpleado } from "../services/offline/outbox";
+import { enviarAhora } from "../services/offline/sync";
 import { fmtMoney, toNameCase, fmtDuracion } from "../helpers";
 import { Spinner } from "./ui/Spinner";
 import Money from "./ui/Money";
@@ -45,6 +47,19 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
         setSaving(true);
         setError("");
         try {
+            // Ventas hechas sin conexión que todavía no llegaron al servidor: sus cobros son de
+            // este turno, y cerrarlo sin ellos dejaría el arqueo corto. Se intenta enviarlas ya;
+            // si alguna sigue pendiente, el cierre espera.
+            await enviarAhora();
+            const sinEnviar = await sinEnviarDeEmpleado(session.employee_id);
+            if (sinEnviar.length) {
+                const rechazadas = sinEnviar.filter(v => v.status === "rechazada").length;
+                setError(rechazadas
+                    ? `Hay ${sinEnviar.length === 1 ? "una venta" : `${sinEnviar.length} ventas`} sin conexión que el servidor no aceptó. Revísalas en "Ventas sin conexión" antes de cerrar.`
+                    : `Hay ${sinEnviar.length === 1 ? "una venta hecha" : `${sinEnviar.length} ventas hechas`} sin conexión que todavía no se envía. Espera unos segundos a que se envíe y vuelve a intentar.`);
+                setSaving(false);
+                return;
+            }
             const res = await api.cashSessions.close(session.id, { journals, notes });
             onClosed(res.data);
         } catch (e) {

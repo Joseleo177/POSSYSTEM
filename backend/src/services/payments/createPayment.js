@@ -59,7 +59,12 @@ async function existingPaymentResult(previos) {
 // El pago combinado (varias formas de pago en un cobro) llama a esto una vez por forma,
 // dentro de la misma transacción, así que cada tramo ve el saldo ya reducido por los
 // anteriores. La transacción y el commit los maneja `createPayment`.
-async function applyOnePayment(body, req, t) {
+//
+// `createdAt` solo lo pasa syncOfflineSale: el cobro se hizo en una caja sin internet y se
+// fecha a la hora real, no a la de llegada. El arqueo corta por created_at, y con la hora de
+// llegada el dinero caería en otro turno —o en el de otro día— del que lo recibió.
+async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
+    const fechaReal = createdAt ? { created_at: createdAt } : {};
     const {
       sale_id,
       amount,
@@ -245,6 +250,7 @@ async function applyOnePayment(body, req, t) {
           change_payment_method: changeAmt > 0 ? partesVuelto[0].payment_method : null,
           payment_method: await resolveMethod(payment_journal_id || sale.payment_journal_id, payment_method, "in", { transaction: t }),
           idempotency_key: idempotency_key || null,
+          ...fechaReal,
         },
         { transaction: t }
       );
@@ -292,6 +298,7 @@ async function applyOnePayment(body, req, t) {
           warehouse_id: sale.warehouse_id || null,
           notes: variasCajas ? `Vuelto repartido en ${partesVuelto.length} cajas` : null,
           status: "activo",
+          ...fechaReal,
         },
         { transaction: t }
       );
@@ -344,6 +351,7 @@ async function applyOnePayment(body, req, t) {
             change_journal_id: null,
             // Entró con el mismo pago: mismo método.
             payment_method: payment?.payment_method || null,
+            ...fechaReal,
           },
           { transaction: t }
         );
@@ -402,7 +410,7 @@ async function applyOnePayment(body, req, t) {
 // Cobro contra una factura. Simple (un diario) o COMBINADO: `pay_parts` con varias formas de
 // pago, cada una con su caja/monto/moneda/referencia. El vuelto y el sobrante se calculan
 // sobre el total y se cuelgan del último tramo; el crédito de cliente, del primero.
-module.exports = async function createPayment(body, req) {
+module.exports = async function createPayment(body, req, opts = {}) {
   const parts = (Array.isArray(body.pay_parts) && body.pay_parts.length > 1) ? body.pay_parts : null;
 
   // Cobro repetido: mismo `idempotency_key` que un pago ya guardado (la respuesta se perdió
@@ -423,7 +431,7 @@ module.exports = async function createPayment(body, req) {
   try {
     let result;
     if (!parts) {
-      result = await applyOnePayment(body, req, t);
+      result = await applyOnePayment(body, req, t, opts);
     } else {
       // Cada tramo necesita su caja y un monto real. Se valida acá también, no solo en la
       // pantalla, para que la regla valga si el cobro llega por API.
@@ -458,7 +466,7 @@ module.exports = async function createPayment(body, req) {
           surplus_kept:      ultimo  ? body.surplus_kept      : undefined,
           change_to_credit:  ultimo  ? body.change_to_credit  : undefined,
           idempotency_key:   body.idempotency_key ? `${body.idempotency_key}-${i}` : null,
-        }, req, t);
+        }, req, t, opts);
         if (result.payment) creados.push(result.payment);
         creditoTotal += parseFloat(result.credit_applied || 0);
       }
