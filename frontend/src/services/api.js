@@ -95,10 +95,24 @@ async function request(path, options = {}) {
     }
   }
 
+  // Un 200 cuyo cuerpo no se puede leer NO es un éxito vacío. Pasa cuando la conexión se corta
+  // a mitad de la respuesta o cuando algo intermedio (proxy, portal del router) contesta HTML.
+  // Antes se devolvía `{}` como si nada: el refresco del POS guardaba `products = undefined` y
+  // el siguiente render caía en la pantalla de "Ocurrió un error inesperado" con
+  // "Cannot read properties of undefined (reading 'length')". Todo lo que pasa por aquí es
+  // JSON, así que un cuerpo ilegible se trata como un fallo de red.
   let data = {};
   try {
-    data = await res.json();
+    const text = await res.text();
+    data = text ? JSON.parse(text) : {};
   } catch {
+    if (res.ok) {
+      throw buildApiError(
+        503,
+        "La respuesta del servidor llegó incompleta. Revisa tu conexión o intenta de nuevo.",
+        "BAD_RESPONSE"
+      );
+    }
     data = {};
   }
 

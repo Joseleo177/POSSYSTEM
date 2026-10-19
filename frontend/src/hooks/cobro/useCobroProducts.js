@@ -41,6 +41,9 @@ export function useCobroProducts(activeWarehouse, notify) {
             const params = { search: q, limit: pageSize, offset: off, sellable_only: true, group_variants: true };
             if (cat && cat !== "all") params.category = cat;
             const r = await api.warehouses.getProducts(activeWarehouse.id, params);
+            // Sin lista no se toca la grilla: guardar `undefined` en products tumbaba la caja
+            // entera en el siguiente render (products.length). Se conserva lo que había.
+            if (!Array.isArray(r?.data)) return;
             setTotal(r.total ?? 0);
             setProducts(prev => replace ? r.data : [...prev, ...r.data]);
             setOffset(off + r.data.length);
