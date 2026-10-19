@@ -222,6 +222,7 @@ async function anotarVariantes(rows, warehouseId) {
       SELECT v.parent_id,
              COUNT(*)::int AS variant_count,
              COALESCE(SUM(${warehouseId ? 'ps.qty' : 'v.stock'}), 0) AS qty
+             ${warehouseId ? ', COUNT(ps.product_id)::int AS en_sucursal' : ''}
         FROM products v
         ${warehouseId ? 'LEFT JOIN product_stock ps ON ps.product_id = v.id AND ps.warehouse_id = :wid' : ''}
        WHERE v.parent_id IN (:ids)
@@ -242,7 +243,10 @@ async function anotarVariantes(rows, warehouseId) {
       const r = porModelo.get(p.id);
       p.variant_count = r?.variant_count ?? 0;
       p.stock = parseFloat(r?.qty ?? 0);
-      if (warehouseId) p.warehouse_stock = p.stock;
+      if (warehouseId) {
+        p.warehouse_stock = p.stock;
+        p.in_warehouse = (r?.en_sucursal ?? 0) > 0;
+      }
       // Marcada: la ficha del modelo no debe tomarla como su foto propia.
       if (fotoColor.has(p.id)) { p.image_url = imageUrl(fotoColor.get(p.id)); p.image_from_variant = true; }
     }
@@ -429,6 +433,10 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
     if (prod.stocks?.length > 0) {
       const ficha = prod.stocks[0];
       prod.warehouse_stock = parseFloat(ficha.qty || 0);
+      // Con `for_purchase` salen también los que nunca tuvieron ficha aquí; la compra los
+      // distingue con esto, porque "0 en existencia" y "esta sucursal no lo maneja" no son
+      // lo mismo al reponer.
+      prod.in_warehouse = true;
       // Precio y mínimo de la sucursal pisan a los del producto: quien consulta un almacén
       // —el POS, el catálogo, las etiquetas— debe ver lo que rige ahí, sin tener que saber
       // que existe una herencia detrás. Los flags `_own` son para la pantalla de stock, que
@@ -470,6 +478,7 @@ async function getAll({ search, category_id, is_combo, is_service, warehouse_id,
       delete prod.stocks;
     } else if (warehouse_id) {
       prod.warehouse_stock = 0;
+      prod.in_warehouse = false;
       prod.price_own = false;
       prod.min_stock_own = false;
       prod.cost_own = false;

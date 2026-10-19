@@ -56,8 +56,19 @@ const STOCK_FILTERS = [
     { key: "sin",   label: "Agotados" },
 ];
 
+// Comprar es cómo un producto entra por primera vez a una sucursal, así que el catálogo
+// completo tiene que poder verse. Pero por defecto se mira lo que ESTA sucursal maneja: con
+// todo mezclado, lo de las otras tiendas salía en rojo "0 unidades", como si hubiera que
+// reponerlo aquí.
+const SCOPES = [
+    { key: "sucursal", label: "Esta sucursal" },
+    { key: "catalogo", label: "Todo el catálogo" },
+];
+
 function matchesStockFilter(p, filter) {
     if (filter === "todos") return true;
+    // Lo que nunca estuvo aquí no está "agotado" ni "bajo": no se maneja.
+    if (p.in_warehouse === false) return false;
     const lvl = stockLevel(p.stock, p.min_stock);
     if (filter === "con")  return lvl === "ok";
     if (filter === "bajo") return lvl === "low";
@@ -81,6 +92,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     const listRef   = useRef(null);
     const [form, setForm]           = useState(EMPTY_FORM);
     const [stockFilter, setStockFilter]         = useState("todos");
+    const [scope, setScope]                     = useState("sucursal");
     const [showProductModal, setShowProductModal] = useState(false);
     const [categories, setCategories]             = useState([]);
     const [savingNew, setSavingNew]               = useState(false);
@@ -116,6 +128,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
             setStep(1); setSearch(""); setSelected(null); setForm(EMPTY_FORM);
         }
         setStockFilter("todos");
+        setScope("sucursal");
         setShowProductModal(false);
     }, [open]);
 
@@ -129,12 +142,14 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
             // suelta solo aparece si se escanea su código.
             const params = { is_combo: false, is_service: false, limit: PAGE_SIZE, offset: off, variant_view: "grouped" };
             if (searchVal.trim()) params.search = searchVal.trim();
-            // Sin esto la lista mostraba el stock global de la empresa: un producto en 0 en
-            // esta sucursal aparecía "con 36 unidades" porque las tenía otra. `for_purchase`
-            // es la otra mitad: comprar es cómo un producto entra por primera vez a un
-            // almacén, así que warehouse_id no puede excluir del listado a los que todavía no
-            // tienen ficha de stock ahí (todo el catálogo aparecería "SIN PRODUCTOS").
-            if (warehouseId) { params.warehouse_id = warehouseId; params.for_purchase = true; }
+            // Sin warehouse_id la lista mostraba el stock global de la empresa: un producto en
+            // 0 en esta sucursal aparecía "con 36 unidades" porque las tenía otra. Solo, además,
+            // deja afuera lo que no tiene ficha aquí; `for_purchase` lo devuelve, marcado con
+            // in_warehouse = false, para comprar algo que esta sucursal todavía no maneja.
+            if (warehouseId) {
+                params.warehouse_id = warehouseId;
+                if (scope === "catalogo") params.for_purchase = true;
+            }
             const r = await api.products.getAll(params);
             if (myReq !== reqRef.current) return; // resultado obsoleto
             const raw = r.data || r || [];
@@ -149,7 +164,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         } finally {
             if (myReq === reqRef.current) { if (append) setLoadingMore(false); else setSearching(false); }
         }
-    }, [warehouseId]);
+    }, [warehouseId, scope]);
 
     // Carga inicial + búsqueda debounceada (reinicia desde offset 0)
     useEffect(() => {
@@ -339,6 +354,11 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     </div>
                                 )}
                             </div>
+                            {warehouseId && (
+                                <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+                                    <Segmented options={SCOPES} value={scope} onChange={setScope} />
+                                </div>
+                            )}
                             {/* Filtro a la vista en vez de escondido en un menú: son cuatro
                                 opciones y la de "sin stock" es la que más se usa al reponer. */}
                             <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
@@ -352,7 +372,30 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
                                 </div>
                             )}
-                            {!searching && visibleResults.length === 0 && (
+                            {/* Nada en esta sucursal: lo más probable es que exista en otra, así
+                                que la acción principal es ir a buscarlo al catálogo, no crearlo
+                                de nuevo y duplicarlo. */}
+                            {!searching && results.length === 0 && warehouseId && scope === "sucursal" && (
+                                <div className="py-10 px-6 text-center">
+                                    <p className="text-[14px] font-semibold text-content dark:text-white">
+                                        {search.trim() ? `"${search.trim()}" no está en esta sucursal` : "Esta sucursal todavía no maneja productos"}
+                                    </p>
+                                    <p className="text-[13px] text-content-subtle mt-1">Búscalo en todo el catálogo. Si no existe, créalo aquí mismo.</p>
+                                    <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-2">
+                                        <button onClick={() => setScope("catalogo")}
+                                            className="btn-accent h-9 px-4 rounded-lg text-[13px] font-semibold inline-flex items-center gap-1.5 active:scale-95">
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                            Buscar en todo el catálogo
+                                        </button>
+                                        <button onClick={openProductModal}
+                                            className="btn-outline h-9 px-4 rounded-lg text-[13px] font-semibold inline-flex items-center gap-1.5 active:scale-95">
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4"/></svg>
+                                            Crear producto
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                            {!searching && visibleResults.length === 0 && !(results.length === 0 && warehouseId && scope === "sucursal") && (
                                 <div className="py-10 px-6 text-center">
                                     <p className="text-[14px] font-semibold text-content dark:text-white">
                                         {search.trim() ? `Nada coincide con "${search.trim()}"` : "Sin productos con ese filtro"}
@@ -396,6 +439,10 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                             </div>
                                             {inOrder ? (
                                                 <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                            ) : p.in_warehouse === false ? (
+                                                // En gris y sin cifra: no es un faltante, es algo que esta
+                                                // sucursal no maneja. Comprarlo le crea la ficha.
+                                                <span className="text-[12px] text-content-subtle whitespace-nowrap shrink-0">No está aquí</span>
                                             ) : (
                                                 <StockQty qty={p.stock} value={n} unit={u} min={p.min_stock} size="text-[13px]" />
                                             )}
