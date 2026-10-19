@@ -170,7 +170,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         if (!existing || registering) return;
         setRegistering(true);
         try {
-            await api.warehouses.addStock(warehouseId, { product_id: existing.id, qty: 0 });
+            await api.warehouses.addStock(warehouseId, { product_id: existing.id, qty: 0, barcode: existing.barcode });
             notify(`${existing.name} agregado a ${warehouseName ? toNameCase(warehouseName) : "tu sucursal"}`);
             onRegistered?.(existing);
             onClose();

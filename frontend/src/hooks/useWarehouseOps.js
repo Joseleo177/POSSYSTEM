@@ -152,6 +152,8 @@ export function useWarehouseOps(notify, selectedWarehouse, loadWarehouses, onTra
       await api.warehouses.addStock(selectedWarehouse.id, {
         product_id: addStockProduct.id,
         qty: parseFloat(addStockForm.qty) || 0,
+        // Fuera del admin, traer un producto de otra sucursal se autoriza con su código.
+        barcode: addStockProduct.barcode || undefined,
       });
       notify(`${addStockProduct.name} agregado al almacén`);
       setAddStockModal(false);

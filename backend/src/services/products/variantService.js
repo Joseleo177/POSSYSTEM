@@ -4,6 +4,7 @@ const {
   StockSessionLine, ReturnItem, QuotationItem, Sequelize, sequelize,
 } = require("../../models");
 const { Op } = Sequelize;
+const { idsVisibles } = require("./productAccess");
 
 // Variantes de producto (talla, color). La variante es un producto más con parent_id hacia su
 // modelo; ver la migración 20261001120000-product-variants para el porqué.
@@ -209,16 +210,23 @@ async function motivoParaNoBorrar(id, transaction) {
   return null;
 }
 
-async function getVariants(modelId, { warehouse_id, company_id } = {}) {
+// visible_ids (fuera del admin): solo las variantes de esas sucursales. Que una tienda tenga la
+// talla S no le muestra las M y L que maneja otra; tampoco los valores que solo esas usan,
+// porque la grilla se arma con lo que viene aquí.
+async function getVariants(modelId, { warehouse_id, company_id, visible_ids = null } = {}) {
   const modelo = await Product.findOne({ where: { id: modelId, ...conEmpresa(company_id) } });
   if (!modelo) bad("Producto no encontrado", 404);
 
   const wid = parseInt(warehouse_id, 10) || null;
-  const variantes = await Product.findAll({
+  let variantes = await Product.findAll({
     where: { parent_id: modelo.id, ...conEmpresa(company_id) },
     include: wid ? [{ model: ProductStock, as: "stocks", where: { warehouse_id: wid }, required: false, attributes: ["qty", "price"] }] : [],
     order: [["id", "ASC"]],
   });
+  if (visible_ids) {
+    const vistas = new Set(await idsVisibles(variantes.map(v => v.id), visible_ids));
+    variantes = variantes.filter(v => vistas.has(v.id));
+  }
   const vals = await valoresDe(variantes.map(v => v.id));
 
   // Solo los atributos y valores que el modelo usa, en su orden: es lo que arma la grilla.
@@ -267,7 +275,12 @@ async function getVariants(modelId, { warehouse_id, company_id } = {}) {
 // `payload` = { attribute_ids: [orden de los atributos], variants: [{ id?, value_ids: {attrId: valueId}, barcode, price, own_price }] }
 // Las que ya existían y no vienen se borran, salvo que tengan historia: entonces se avisa
 // cuál y por qué, y no se guarda nada.
-async function syncVariants(modelo, payload, { company_id, warehouse_id }, transaction) {
+//
+// visible_ids (fuera del admin): los almacenes de quien guarda. Su lista trae solo las variantes
+// de su sucursal —las demás no las ve (ver getVariants)—, así que las de otras tiendas quedan
+// intactas en vez de leerse como quitadas. Y si agrega una talla que ya existe en otra
+// sucursal, es la MISMA variante: se le abre ficha aquí, no se crea otra.
+async function syncVariants(modelo, payload, { company_id, warehouse_id, visible_ids = null }, transaction) {
   const attributeIds = (payload?.attribute_ids || []).map(n => parseInt(n, 10)).filter(Number.isInteger);
   const entrantes = Array.isArray(payload?.variants) ? payload.variants : [];
   if (!attributeIds.length) bad("Elige al menos un atributo (talla, color...)");
@@ -281,7 +294,13 @@ async function syncVariants(modelo, payload, { company_id, warehouse_id }, trans
   const valorPorId = new Map(valores.map(v => [v.id, v]));
 
   const existentes = await Product.findAll({ where: { parent_id: modelo.id, ...conEmpresa(company_id) }, transaction });
-  const existentePorId = new Map(existentes.map(v => [v.id, v]));
+  let propias = existentes;
+  if (visible_ids) {
+    const vistas = new Set(await idsVisibles(existentes.map(v => v.id), visible_ids));
+    propias = existentes.filter(v => vistas.has(v.id));
+  }
+  const existentePorId = new Map(propias.map(v => [v.id, v]));
+  const ajenaPorClave = new Map(existentes.filter(v => !existentePorId.has(v.id)).map(v => [v.variant_key, v]));
 
   // Validar todo antes de escribir nada.
   const claves = new Set();
@@ -301,6 +320,11 @@ async function syncVariants(modelo, payload, { company_id, warehouse_id }, trans
     const key = Object.values(vids).sort((a, b) => a - b).join("-");
     if (claves.has(key)) bad(`"${etiqueta}" está repetida`);
     claves.add(key);
+
+    // Una talla nueva aquí que ya maneja otra sucursal: se adopta tal cual está, con su código
+    // y su precio; lo único que cambia es que esta sucursal también la tiene.
+    const adoptada = !e.id ? ajenaPorClave.get(key) : null;
+    if (adoptada) { plan.push({ adoptada, key, etiqueta }); continue; }
 
     const barcode = limpiar(e.barcode, 50) || null;
     if (barcode) {
@@ -330,8 +354,14 @@ async function syncVariants(modelo, payload, { company_id, warehouse_id }, trans
   }
 
   const quedan = new Set(plan.filter(p => p.id).map(p => p.id));
-  const salen = existentes.filter(v => !quedan.has(v.id));
+  const salen = propias.filter(v => !quedan.has(v.id));
   for (const v of salen) {
+    // Quitarla la borra de la EMPRESA. Si otra sucursal también la maneja, a quien no es admin
+    // solo le toca sacarla de la suya, como a cualquier producto.
+    if (visible_ids) {
+      const enOtras = await ProductStock.count({ where: { product_id: v.id, warehouse_id: { [Op.notIn]: visible_ids } }, transaction });
+      if (enOtras) bad(`"${v.name}" también la maneja otra sucursal: para quitarla de la tuya, hazlo desde Stock`);
+    }
     const motivo = await motivoParaNoBorrar(v.id, transaction);
     if (motivo) bad(`No se puede quitar "${v.name}": ${motivo}`);
   }
@@ -349,6 +379,16 @@ async function syncVariants(modelo, payload, { company_id, warehouse_id }, trans
 
   const wid = parseInt(warehouse_id, 10) || null;
   for (const p of plan) {
+    if (p.adoptada) {
+      if (wid) {
+        await ProductStock.findOrCreate({
+          where: { product_id: p.adoptada.id, warehouse_id: wid },
+          defaults: { qty: 0, company_id },
+          transaction,
+        });
+      }
+      continue;
+    }
     const datos = {
       ...heredado(modelo),
       name: nombreVariante(modelo, p.etiquetas),

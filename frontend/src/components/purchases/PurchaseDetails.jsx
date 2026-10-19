@@ -231,6 +231,8 @@ export default function PurchaseDetails({ state }) {
           // pierde cuántas unidades ya entraron al inventario.
           ...(i.id ? { id: i.id } : {}),
           product_id:      i.product_id,
+          // Un producto que la sucursal todavía no maneja se autoriza con su código de barras.
+          barcode:         i.product?.barcode || i.barcode || undefined,
           package_unit:    i.package_unit,
           package_size:    i.package_size,
           package_qty:     i.package_qty,

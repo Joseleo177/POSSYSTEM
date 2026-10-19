@@ -1,5 +1,7 @@
 const { Category, Product } = require("../models");
 const { imageUrl, saveImage, deleteImage } = require("../utils/imageStorage");
+const { visibleWarehouseIds } = require("../middleware/auth");
+const { condicionSucursal } = require("../services/products/productAccess");
 
 // create y update filtran por company_id a mano, y no por el hook de tenant como hacía este
 // controlador antes.
@@ -22,13 +24,17 @@ const withUrl = (c) => {
 
 const getAll = async (req, res) => {
   try {
+    // Las categorías son de la empresa, pero el conteo es de lo que ve quien consulta: a una
+    // sucursal le decía "120 productos" en Víveres cuando ella maneja 10.
+    const visibles = await visibleWarehouseIds(req);
+    const deLaSucursal = visibles ? `AND ${condicionSucursal("products", visibles)}` : "";
     const categories = await Category.findAll({
       order: [['name', 'ASC']],
       attributes: {
         include: [
           [
             Category.sequelize.literal(
-              `(SELECT COUNT(*) FROM products WHERE products.category_id = "Category".id)`
+              `(SELECT COUNT(*) FROM products WHERE products.category_id = "Category".id ${deLaSucursal})`
             ),
             'product_count',
           ],

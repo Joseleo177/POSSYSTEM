@@ -1,6 +1,8 @@
 const { Product, ProductStock, StockSession, StockSessionLine, Sequelize, sequelize } = require("../../models");
 const { floorToUnit } = require("../../utils/units");
 const { ensureOpenSession } = require("./sessionService");
+const { visibleWarehouseIds } = require("../../middleware/auth");
+const { idsVisibles, noEncontrado } = require("../products/productAccess");
 
 // Deja constancia de una entrada o salida que no pasa por Movimiento manual (alta con stock
 // inicial, retiro del almacén). Sin esta línea el kardex del producto no tenía cómo explicar
@@ -409,6 +411,16 @@ async function addStock(req) {
   try {
     const product = await Product.findByPk(product_id, { transaction, lock: true });
     if (!product) { const e = new Error("Producto no encontrado"); e.status = 404; throw e; }
+
+    // Traer a la sucursal un producto que todavía no maneja es la única puerta al catálogo de
+    // las demás, y para quien no es admin se abre con el código de barras exacto: el mismo con
+    // el que lo encontró. Sin esto, cualquier id de producto servía.
+    const visibles = await visibleWarehouseIds(req);
+    if (visibles) {
+      const [propio] = await idsVisibles([product.id], visibles);
+      const codigo = String(req.body?.barcode || "").trim();
+      if (!propio && (!codigo || codigo !== String(product.barcode || "").trim())) throw noEncontrado();
+    }
 
     const [stockEntry] = await ProductStock.findOrCreate({
       where: { warehouse_id: warehouseId, product_id },

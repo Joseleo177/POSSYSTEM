@@ -20,6 +20,7 @@
 // existencia inicial en vez de descuadrar las filas recientes.
 const { sequelize, Sequelize, Product } = require('../../models');
 const { assertWarehouseAccess } = require('../../middleware/auth');
+const { assertProductAccess } = require('../products/productAccess');
 const { imageUrl } = require('../../utils/imageStorage');
 const { TZ, sanitizeDate } = require('../reports/shared');
 
@@ -184,6 +185,9 @@ async function getProductMovements(req) {
 
   const wid = q.warehouse_id ? parseInt(q.warehouse_id) : null;
   if (wid) await assertWarehouseAccess(req, wid);
+  // Las filas ya salen acotadas a sus almacenes, pero la ficha del producto (nombre, código)
+  // tampoco es de quien no lo maneja.
+  await assertProductAccess(req, pid);
 
   // El tenant del modelo confirma que el producto es de esta empresa; las filas se filtran
   // por su product_id, así que con esto basta para no cruzar empresas.

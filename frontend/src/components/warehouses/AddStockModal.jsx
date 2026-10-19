@@ -3,6 +3,7 @@ import Modal from "../ui/Modal";
 import { Spinner } from "../ui/Spinner";
 import { useDebounce } from "../../hooks/useDebounce";
 import { api } from "../../services/api";
+import { useApp } from "../../context/AppContext";
 import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import { isIntegerUnit, fmtQtyUnit } from "../../helpers/unitFormatter";
 
@@ -37,15 +38,22 @@ export default function AddStockModal({
     const [loadingMore, setLoadingMore] = useState(false);
     const [loadingList, setLoadingList] = useState(false);
     const LIMIT = 30;
+    // Lo que una sucursal todavía no tiene es el catálogo de las demás. El admin lo recorre;
+    // el resto solo trae un producto por su código de barras exacto (el servidor no devuelve
+    // otra cosa), así nadie hojea lo que manejan las otras tiendas.
+    const { can } = useApp();
+    const porCodigo = !can("admin");
+    const codigo = debouncedSearch.trim();
 
     const loadProducts = useCallback(async (pageNum = 0, append = false) => {
         if (!open || addStockProduct) return;
+        if (porCodigo && !codigo) { setResults([]); setHasMore(false); return; }
         if (pageNum === 0) setLoadingList(true);
         else setLoadingMore(true);
 
         try {
             const params = {
-                search: debouncedSearch,
+                ...(porCodigo ? { barcode: codigo } : { search: debouncedSearch }),
                 limit: LIMIT,
                 offset: pageNum * LIMIT,
                 is_service: false,
@@ -63,7 +71,7 @@ export default function AddStockModal({
             setLoadingList(false);
             setLoadingMore(false);
         }
-    }, [open, addStockProduct, debouncedSearch, selectedWarehouse]);
+    }, [open, addStockProduct, debouncedSearch, selectedWarehouse, porCodigo, codigo]);
 
     useEffect(() => {
         if (open && !addStockProduct) loadProducts(0, false);
@@ -108,7 +116,9 @@ export default function AddStockModal({
         <Modal open={open} onClose={onClose} title="Registrar producto" width={480} footer={pie}>
             <p className="-mt-1 mb-4 text-[13px] text-content-subtle">
                 Se agrega a <span className="font-medium text-content dark:text-white">{almacen}</span>.
-                {!p && " Solo aparecen los productos que todavía no tiene."}
+                {!p && (porCodigo
+                    ? " Escanea o escribe el código de barras de un producto que ya maneja otra sucursal."
+                    : " Solo aparecen los productos que todavía no tiene.")}
             </p>
 
             {p ? (
@@ -119,7 +129,9 @@ export default function AddStockModal({
                         <div className="min-w-0 flex-1">
                             <p className="text-[14px] font-semibold text-content dark:text-white truncate">{toNameCase(p.name)}</p>
                             <p className="text-[12px] text-content-subtle truncate">
-                                {toNameCase(p.category_name) || "Sin categoría"} · en total hay {fmtQtyUnit(p.stock, p.unit).toLowerCase()}
+                                {toNameCase(p.category_name) || "Sin categoría"}
+                                {/* Fuera del admin el servidor no manda la existencia de las otras tiendas. */}
+                                {p.stock != null && ` · en total hay ${fmtQtyUnit(p.stock, p.unit).toLowerCase()}`}
                             </p>
                         </div>
                         <button type="button" onClick={clearAddStockProduct}
@@ -164,7 +176,8 @@ export default function AddStockModal({
                         <input
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            placeholder="Buscar por nombre o código"
+                            placeholder={porCodigo ? "Código de barras" : "Buscar por nombre o código"}
+                            inputMode={porCodigo ? "numeric" : undefined}
                             className={`${INPUT} pl-10 pr-3.5`}
                             autoComplete="off"
                             spellCheck={false}
@@ -183,10 +196,14 @@ export default function AddStockModal({
                         ) : results.length === 0 ? (
                             <div className="py-10 px-6 text-center">
                                 <p className="text-[14px] font-semibold text-content dark:text-white">
-                                    {search ? "Sin resultados" : "No hay productos por agregar"}
+                                    {porCodigo
+                                        ? (codigo ? "Ningún producto con ese código" : "Busca por código de barras")
+                                        : (search ? "Sin resultados" : "No hay productos por agregar")}
                                 </p>
                                 <p className="mt-1 text-[13px] text-content-subtle">
-                                    {search ? "Prueba con otro nombre o código." : "Todos los productos ya están en este almacén."}
+                                    {porCodigo
+                                        ? (codigo ? "O ya está en este almacén, o nadie en la empresa lo tiene: créalo en Catálogo." : "Se trae el producto que ya existe en la empresa, sin duplicarlo.")
+                                        : (search ? "Prueba con otro nombre o código." : "Todos los productos ya están en este almacén.")}
                                 </p>
                             </div>
                         ) : (

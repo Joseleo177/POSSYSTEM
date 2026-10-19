@@ -5,6 +5,7 @@ const { Product, Category, SaleItem, PurchaseItem, StockTransfer, ProductStock, 
 const { runWithoutTenant } = require("../../utils/tenantStorage");
 const { floorToUnit } = require("../../utils/units");
 const { syncVariants, propagateModelToVariants, assertCanBecomeModel } = require("./variantService");
+const { condicionSucursal, existenciaEn, idsVisibles } = require("./productAccess");
 
 // Los arrays del formulario multipart llegan como texto JSON (ver buildProductForm).
 const parseJson = (v) => (typeof v === 'string' ? (v ? JSON.parse(v) : null) : v);
@@ -266,7 +267,11 @@ async function anotarVariantes(rows, warehouseId) {
   }
 }
 
-async function getAll({ search, barcode, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, for_purchase, variant_view, limit = 100, offset = 0, company_id }) {
+// visible_ids: almacenes de quien consulta (null = admin, toda la empresa). Sin una sucursal
+// elegida, acota la lista a lo de esos almacenes y la existencia a lo que hay en ellos.
+async function getAll({ search, barcode, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, for_purchase, variant_view, limit = 100, offset = 0, company_id, visible_ids = null }) {
+  if (visible_ids && !visible_ids.length) return { data: [], total: 0, limit: parseInt(limit, 10), offset: parseInt(offset, 10) };
+  const porVisibles = visible_ids && !warehouse_id;
   // Catálogo, POS y promociones usan warehouse_id para acotar a lo que ESA sucursal
   // vende: un producto que nunca tuvo ficha de stock ahí queda afuera, con razón. Una
   // compra es justo lo contrario — comprar es cómo un producto entra por primera vez a un
@@ -304,6 +309,7 @@ async function getAll({ search, barcode, category_id, is_combo, is_service, ware
   // de traer antes todos los product_id a Node y devolverlos en un IN (...) gigante: con
   // miles de fichas eso eran varias idas y vueltas por request y agotaba el pooler.
   const andClauses = [...andClauses0];
+  if (porVisibles) andClauses.push(Sequelize.literal(condicionSucursal('"Product"', visible_ids)));
 
   if (not_in_warehouse_id) {
     andClauses.push(Sequelize.literal(`NOT EXISTS (SELECT 1 FROM product_stock ps WHERE ps.product_id = "Product"."id" AND ps.warehouse_id = ${parseInt(not_in_warehouse_id, 10)})`));
@@ -498,6 +504,22 @@ async function getAll({ search, barcode, category_id, is_combo, is_service, ware
 
   await anotarVariantes(data, warehouse_id ? parseInt(warehouse_id, 10) : null);
 
+  // `stock` es el total de la empresa: sin sucursal elegida, quien no es admin ve solo lo de
+  // sus almacenes. El de un combo sale de sus ingredientes, también totales: no se informa.
+  if (porVisibles) {
+    const aqui = await existenciaEn(data.filter(p => !p.is_combo).map(p => p.id), visible_ids);
+    for (const p of data) p.stock = p.is_combo ? null : (aqui.get(p.id) ?? 0);
+  }
+  // "4 variantes" contaba las de toda la empresa: fuera del admin, solo las de sus sucursales.
+  const modelos = visible_ids ? data.filter(p => p.is_variant_parent) : [];
+  if (modelos.length) {
+    const vs = await Product.findAll({ where: { parent_id: { [Op.in]: modelos.map(m => m.id) } }, attributes: ['id', 'parent_id'], raw: true });
+    const vistas = new Set(await idsVisibles(vs.map(v => v.id), visible_ids));
+    const cuenta = new Map();
+    for (const v of vs) if (vistas.has(v.id)) cuenta.set(v.parent_id, (cuenta.get(v.parent_id) || 0) + 1);
+    for (const m of modelos) m.variant_count = cuenta.get(m.id) || 0;
+  }
+
   // Post-filtrar combos por su stock calculado real
   let finalData = data;
   if (stock_filter === 'no') {
@@ -510,7 +532,7 @@ async function getAll({ search, barcode, category_id, is_combo, is_service, ware
   return { data: finalData, total: adjustedTotal, limit: parseInt(limit, 10), offset: parseInt(offset, 10) };
 }
 
-async function getOne(id, company_id) {
+async function getOne(id, company_id, visible_ids = null) {
   const product = await Product.findOne({
     where: { id, ...(company_id ? { company_id } : {}) },
     include: [
@@ -536,6 +558,12 @@ async function getOne(id, company_id) {
     const stats = calculateComboStockAndCost(p.comboItems, p.unit);
     p.stock = stats.stock;
     p.cost_price = stats.cost;
+  }
+  // Fuera del admin, la existencia es la de sus almacenes, no el total de la empresa (ver getAll).
+  if (visible_ids) {
+    const aqui = await existenciaEn([p.id], visible_ids);
+    p.stock = p.is_combo ? null : (aqui.get(p.id) ?? 0);
+    for (const c of p.comboItems || []) if (c.ingredient) delete c.ingredient.stock;
   }
   return { data: p };
 }
@@ -657,7 +685,7 @@ async function createProduct({ body, file, company_id }) {
   }
 }
 
-async function updateProduct({ id, body, file, company_id, warehouse_id = null }) {
+async function updateProduct({ id, body, file, company_id, warehouse_id = null, visible_ids = null }) {
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
     is_combo, combo_items, is_service, barcode, bulk_price,
@@ -897,7 +925,7 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null }
         await syncVariants(product, {
           attribute_ids: parseJson(variant_attribute_ids),
           variants: parseJson(variants),
-        }, { company_id, warehouse_id }, t);
+        }, { company_id, warehouse_id, visible_ids }, t);
       } else {
         await propagateModelToVariants(product, t);
       }

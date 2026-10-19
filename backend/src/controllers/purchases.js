@@ -1,5 +1,7 @@
 const { getAll, getOne, createPurchase, updateDraft, confirmOrder, receivePurchase, updateItemLots, deletePurchase, getPayables, setDueDate } = require("../services/purchases");
 const { broadcast } = require("../services/sseService");
+const { assertLineasAccess } = require("../services/products/productAccess");
+const { PurchaseItem } = require("../models");
 
 const wrap = (fn, status = 200) => async (req, res) => {
   try {
@@ -24,8 +26,16 @@ const companyId = (req) => req.employee?.company_id ?? 0;
 module.exports = {
   getAll:       wrap(req => getAll(req.query, req)),
   getOne:       wrap(req => getOne(req.params.id, req)),
-  create:       wrap(req => createPurchase({ body: req.body, employee_id: req.employee?.id ?? null }), 201),
-  updateDraft:  wrap(req => updateDraft(req.params.id, req.body, req)),
+  create:       wrap(async req => {
+    await assertLineasAccess(req, req.body?.items);
+    return createPurchase({ body: req.body, employee_id: req.employee?.id ?? null });
+  }, 201),
+  updateDraft:  wrap(async req => {
+    // Lo que la orden ya tenía guardado se autorizó al agregarlo; solo se validan los nuevos.
+    const previos = await PurchaseItem.findAll({ where: { purchase_id: req.params.id }, attributes: ["product_id"], raw: true });
+    await assertLineasAccess(req, req.body?.items, previos.map(p => p.product_id));
+    return updateDraft(req.params.id, req.body, req);
+  }),
   confirm:      wrap(req => confirmOrder(req.params.id, req)),
   receive:      wrap(async req => {
     const result = await receivePurchase(req.params.id, req);

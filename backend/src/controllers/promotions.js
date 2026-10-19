@@ -2,6 +2,7 @@ const { Promotion, Product, PromotionProduct, sequelize } = require("../models")
 const { Op } = require("sequelize");
 const { broadcast } = require("../services/sseService");
 const { isAdmin, assertWarehouseAccess, visibleWarehouseIds } = require("../middleware/auth");
+const { idsVisibles } = require("../services/products/productAccess");
 
 // Una promoción cambia lo que la caja descuenta, y el servidor la revalida al facturar: si el
 // carrito no se entera, muestra un total y la factura sale con otro. Se reutiliza el aviso de
@@ -27,10 +28,17 @@ const finDelDia = (s) => soloFecha(s) ? new Date(`${s}T23:59:59.999${offsetDe(s)
 // del admin. El resto opera solo sobre las de sus almacenes: antes, un encargado con una sola
 // sucursal no veía el selector y su promo se guardaba para todas, descontando en tiendas ajenas.
 const fail = (message, status) => Object.assign(new Error(message), { status });
-const assertAlcance = async (req, warehouseId) => {
+const assertAlcance = async (req, warehouseId, productIds) => {
   if (isAdmin(req)) return;
   if (!parseInt(warehouseId, 10)) throw fail("Solo el administrador puede manejar promociones de todas las sucursales", 403);
   await assertWarehouseAccess(req, warehouseId);
+  // Y los productos, de la propia sucursal: la pantalla solo ofrece esos, pero el id viaja
+  // en el cuerpo y podría ser cualquiera.
+  if (Array.isArray(productIds) && productIds.length) {
+    const pedidos = [...new Set(productIds.map(n => parseInt(n, 10)))];
+    const propios = await idsVisibles(pedidos, [parseInt(warehouseId, 10)]);
+    if (propios.length !== pedidos.length) throw fail("Algún producto no es de esta sucursal", 400);
+  }
 };
 
 const getAll = async (req, res) => {
@@ -42,7 +50,17 @@ const getAll = async (req, res) => {
       include: [{ model: Product, through: { attributes: [] }, attributes: ['id', 'name'] }],
       order: [['created_at', 'DESC']],
     });
-    res.json({ ok: true, data: promos });
+    if (!ids) return res.json({ ok: true, data: promos });
+    // Una promoción general puede llevar productos que solo tienen otras tiendas: de cada una
+    // se listan los que maneja esta sucursal, que son los únicos que aquí se descuentan.
+    const todos = [...new Set(promos.flatMap(p => (p.Products || []).map(pr => pr.id)))];
+    const propios = new Set(await idsVisibles(todos, ids));
+    const data = promos.map(p => {
+      const json = p.toJSON();
+      json.Products = (json.Products || []).filter(pr => propios.has(pr.id));
+      return json;
+    });
+    res.json({ ok: true, data });
   } catch (err) {
     res.status(500).json({ ok: false, message: err.message });
   }
@@ -100,7 +118,7 @@ const create = async (req, res) => {
     if (type === 'buy_x_get_y' && (!buy_qty || !get_qty)) throw new Error("Compra y lleva son requeridos");
     if (!starts_at) throw new Error("La fecha de inicio es requerida");
     if (!product_ids.length) throw new Error("Debe seleccionar al menos un producto");
-    await assertAlcance(req, warehouse_id);
+    await assertAlcance(req, warehouse_id, product_ids);
 
     const promo = await Promotion.create({
       name: name.trim(), type,
@@ -141,7 +159,7 @@ const update = async (req, res) => {
     if (!promo) { await t.rollback(); return res.status(404).json({ ok: false, message: "Promoción no encontrada" }); }
     // La que está guardada y, si la mueven, también la de destino.
     await assertAlcance(req, promo.warehouse_id);
-    if (warehouse_id !== undefined) await assertAlcance(req, warehouse_id);
+    await assertAlcance(req, warehouse_id === undefined ? promo.warehouse_id : warehouse_id, product_ids);
 
     await promo.update({
       name: name?.trim() || promo.name,

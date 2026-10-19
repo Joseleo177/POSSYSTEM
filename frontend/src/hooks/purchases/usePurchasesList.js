@@ -131,6 +131,8 @@ export function usePurchasesList({
             // el modo recepción las metería de nuevo. Las líneas nuevas no lo traen.
             ...(i.id ? { id: i.id } : {}),
             product_id: i.product.id,
+            // Un producto que la sucursal todavía no maneja se autoriza con su código de barras.
+            barcode: i.product.barcode || undefined,
             package_unit: i.package_unit,
             package_size: parseFloat(i.package_size),
             package_qty: parseFloat(i.package_qty),
