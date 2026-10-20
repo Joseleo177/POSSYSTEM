@@ -700,22 +700,27 @@ export default function PurchaseDetails({ state }) {
         return (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
 
-          <div className={`${SECTION} p-5`}>
+          <div className={`${SECTION} p-4 sm:p-5`}>
             <div className="flex items-center justify-between gap-3">
               <p className="text-[14px] font-semibold text-content dark:text-white">Estado de cuenta</p>
               <StatusMark status={payStatus} map={PAY_STATUS} />
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-px rounded-xl overflow-hidden bg-border/70 dark:bg-white/[0.06] border border-border/70 dark:border-white/[0.06]">
+            {/* Tres columnas solo desde sm. En el teléfono a cada una le tocaban ~90px y los
+                montos salían como "Ref. 2…": ahí van en renglones, rótulo a la izquierda y
+                monto a la derecha, que es como se lee un estado de cuenta. */}
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-px rounded-xl overflow-hidden bg-border/70 dark:bg-white/[0.06] border border-border/70 dark:border-white/[0.06]">
               {[
                 { label: "Total", val: total, cls: "text-content dark:text-white" },
                 { label: "Pagado", val: amountPaid, cls: "text-content dark:text-white" },
                 { label: "Saldo", val: balance, cls: saldoTone, strong: true },
               ].map(k => (
-                <div key={k.label} className="px-4 py-3 bg-surface-2 dark:bg-surface-dark min-w-0">
+                <div key={k.label} className="px-4 py-3 bg-surface-2 dark:bg-surface-dark min-w-0 flex items-baseline justify-between gap-3 sm:block">
                   <p className={LABEL}>{k.label}</p>
-                  <p className={`mt-1 text-[16px] tabular-nums truncate ${k.strong ? "font-bold" : "font-semibold"} ${k.cls}`}>Ref. {fmt2(k.val)}</p>
-                  {enMoneda(k.val)}
+                  <div className="min-w-0 text-right sm:text-left">
+                    <p className={`sm:mt-1 text-[16px] tabular-nums whitespace-nowrap sm:truncate ${k.strong ? "font-bold" : "font-semibold"} ${k.cls}`}>Ref. {fmt2(k.val)}</p>
+                    {enMoneda(k.val)}
+                  </div>
                 </div>
               ))}
             </div>
@@ -773,26 +778,30 @@ export default function PurchaseDetails({ state }) {
           </div>
 
           <div className={`${SECTION} overflow-hidden flex flex-col`}>
-            <div className="px-5 py-3 flex items-center justify-between gap-3 shrink-0">
-              <div>
-                <p className="text-[14px] font-semibold text-content dark:text-white">Pagos al proveedor</p>
+            <div className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 shrink-0">
+              <div className="min-w-0">
+                <p className="text-[14px] font-semibold text-content dark:text-white truncate">Pagos al proveedor</p>
                 <p className="text-[12px] text-content-subtle">{payments.length} {payments.length === 1 ? "pago" : "pagos"}</p>
               </div>
-              <div className="flex items-center gap-1.5">
+              {/* shrink-0 y whitespace-nowrap: sin ellos, en el teléfono el título y el botón
+                  se repartían el ancho y los dos partían su texto en dos renglones. */}
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button onClick={loadPayments} disabled={loadingPay} className="row-icon" title="Actualizar" aria-label="Actualizar pagos">
                   <svg className={`w-4 h-4 ${loadingPay ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                 </button>
                 {payStatus !== "pagado" && (
-                  <button onClick={() => setShowPayModal(true)} className="btn-accent h-8 px-3.5 rounded-lg text-[12px] font-semibold active:scale-95 inline-flex items-center gap-1.5">
+                  <button onClick={() => setShowPayModal(true)} className="btn-accent h-9 sm:h-8 px-3.5 rounded-lg text-[12px] font-semibold whitespace-nowrap active:scale-95 inline-flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4" /></svg>
                     Registrar pago
                   </button>
                 )}
               </div>
             </div>
-            <div className="flex-1 overflow-auto max-h-[280px] border-t border-border/60 dark:border-white/[0.06]">
+            {/* Tope de alto con scroll propio solo en escritorio: en el teléfono el scroll
+                anidado atrapaba el gesto y la lista de pagos quedaba en una franja. */}
+            <div className="flex-1 lg:overflow-auto lg:max-h-[280px] border-t border-border/60 dark:border-white/[0.06]">
               {loadingPay ? (
                 <div className="p-5 space-y-3">
                   {[0, 1].map(i => <div key={i} className="h-9 rounded-lg bg-surface-3/70 dark:bg-white/[0.04] animate-pulse" />)}

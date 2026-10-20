@@ -149,7 +149,7 @@ export default function PaymentJournalsReport() {
     const fmtB = (n) => `Ref. ${fmtNumber(n || 0, 2)}`;
 
     return (
-        <div className="h-full flex flex-col space-y-4 overflow-auto">
+        <div className="lg:h-full flex flex-col space-y-4 lg:overflow-auto">
             <div className="flex flex-wrap gap-2 justify-between items-center shrink-0">
                 <div className="flex flex-wrap items-center gap-2">
                     <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
@@ -247,7 +247,7 @@ export default function PaymentJournalsReport() {
             )}
 
             {!loading && !error && data && (
-                <div className="flex-1 min-h-0 space-y-3 overflow-auto">
+                <div className="lg:flex-1 lg:min-h-0 space-y-3 lg:overflow-auto">
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                         <KpiCard label="Cobrado en ventas" value={fmtB(totals?.total_base)} color="text-content dark:text-white" sub="Convertido a moneda base" />
                         <KpiCard label="Movimiento neto" value={fmtB(manual?.net?.total_base)} color="text-content dark:text-white" sub="Cobros + ingresos − egresos" />

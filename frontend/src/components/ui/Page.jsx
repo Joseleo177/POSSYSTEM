@@ -29,7 +29,9 @@ export default function Page({ module = "Módulo", title, subheader, actions, on
         <div className="h-full overflow-hidden flex flex-col">
 
             {/* Header */}
-            <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 flex items-center justify-between gap-2 sm:gap-3 border-b border-border/30 dark:border-white/5 min-w-0">
+            {/* Sin justify-between: las acciones ya se empujan a la derecha con ml-auto, y con
+                "volver" y sin acciones el título se iba al borde derecho, lejos de la flecha. */}
+            <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 flex items-center gap-2 sm:gap-3 border-b border-border/30 dark:border-white/5 min-w-0">
                 {onBack && (
                     <button
                         onClick={onBack}

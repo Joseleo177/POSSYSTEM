@@ -32,7 +32,7 @@ export default function ReceivablesReport() {
     const custPag = usePagination(data?.by_customer ?? []);
 
     return (
-        <div className="h-full flex flex-col space-y-4 overflow-auto">
+        <div className="lg:h-full flex flex-col space-y-4 lg:overflow-auto">
             <div className="flex items-center shrink-0 gap-2 flex-wrap">
                 {/* Con una sola sucursal no hay nada que elegir: mostrar el selector solo
                     insinuaría que hay más, cuando no las hay. */}
@@ -70,7 +70,7 @@ export default function ReceivablesReport() {
             {!loading && error && <div className="flex-1 flex items-center justify-center p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-bold">{error}</div>}
 
             {!loading && !error && data && (
-                <div className="flex-1 min-h-0 space-y-3 overflow-auto">
+                <div className="lg:flex-1 lg:min-h-0 space-y-3 lg:overflow-auto">
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                         <KpiCard label="Facturas pendientes" value={fmtN(s.total_invoices || 0)} icon="" color="text-content dark:text-white" />
                         <KpiCard label="Saldo en calle" value={fmt$(s.total_balance || 0)} icon="" color="text-danger" />

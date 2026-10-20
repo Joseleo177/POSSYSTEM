@@ -109,7 +109,7 @@ export default function Modal({ open, onClose, title, children, footer = null, w
         className="bg-white dark:bg-surface-dark-2 border border-black/[0.06] dark:border-white/[0.08] rounded-xl shadow-[0_24px_64px_-12px_rgb(0_0_0/0.25)] w-full relative modal-in flex flex-col max-h-[90vh]"
       >
         {/* Header */}
-        <div className="shrink-0 flex items-center justify-between gap-4 pl-6 pr-4 pt-5 pb-3">
+        <div className="shrink-0 flex items-center justify-between gap-4 pl-5 sm:pl-6 pr-4 pt-5 pb-3">
           <h2 className="text-[15px] font-bold tracking-[-0.01em] text-content dark:text-white">
             {title}
           </h2>
@@ -124,13 +124,14 @@ export default function Modal({ open, onClose, title, children, footer = null, w
           </button>
         </div>
 
-        {/* Body */}
-        <div className={`px-6 pt-2 flex-1 min-h-0 overflow-y-auto ${footer ? "pb-5" : "pb-6"}`}>
+        {/* Body. overflow-x-hidden: con solo overflow-y-auto el eje x también queda en auto, y
+            cualquier fila más ancha que el teléfono desplazaba el formulario entero de lado. */}
+        <div className={`px-5 sm:px-6 pt-2 flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${footer ? "pb-5" : "pb-6"}`}>
           {children}
         </div>
 
         {footer && (
-          <div className="shrink-0 px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-border/60 dark:border-white/[0.06]">
+          <div className="shrink-0 px-5 sm:px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-border/60 dark:border-white/[0.06]">
             {footer}
           </div>
         )}

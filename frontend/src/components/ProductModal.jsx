@@ -677,7 +677,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     pestaña se queda visible con un aviso de "actívalo primero" adentro: que
                     desaparezca sola en cuanto se apaga el interruptor —estando uno parado
                     en ella— sería más confuso que el aviso. */}
-                <div className="flex items-center gap-1 border-b border-border/40 dark:border-white/10 -mx-1">
+                {/* Se desplaza de lado si no caben: con cinco pestañas en el teléfono la fila
+                    medía más que el modal y arrastraba todo el formulario hacia la izquierda. */}
+                <div className="flex items-center gap-1 border-b border-border/40 dark:border-white/10 overflow-x-auto no-scrollbar">
                     {[
                         ["general", "General"],
                         ["receta", "Receta"],
@@ -693,7 +695,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             key={id}
                             type="button"
                             onClick={() => setTab(id)}
-                            className={`px-3 py-2 text-[13px] font-semibold border-b-2 -mb-px transition-colors ${tab === id
+                            className={`shrink-0 px-3 py-2 text-[13px] font-semibold border-b-2 -mb-px transition-colors ${tab === id
                                 ? "border-brand-500 text-brand-700 dark:text-brand-300"
                                 : "border-transparent text-content-subtle dark:text-content-dark-muted hover:text-content dark:hover:text-white"}`}
                         >

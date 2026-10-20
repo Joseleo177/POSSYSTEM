@@ -89,7 +89,7 @@ export default function SalesReport() {
  };
 
  return (
- <div className="h-full flex flex-col space-y-4 overflow-auto">
+ <div className="lg:h-full flex flex-col space-y-4 lg:overflow-auto">
  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
  <div className="flex items-center gap-2 flex-wrap">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
@@ -156,7 +156,7 @@ export default function SalesReport() {
  {!loading && error && <div className="flex-1 flex items-center justify-center p-12 text-center bg-danger/5 border border-danger/20 rounded-xl text-danger font-bold">{error}</div>}
 
  {!loading && !error && data && (
- <div className="flex-1 min-h-0 space-y-3 overflow-auto">
+ <div className="lg:flex-1 lg:min-h-0 space-y-3 lg:overflow-auto">
  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
  {/* Los cuatro miden lo DESPACHADO —la mercancía salió del inventario, se haya cobrado o
      no—, así que monto ÷ ventas vuelve a dar el ticket promedio de al lado. Las anuladas

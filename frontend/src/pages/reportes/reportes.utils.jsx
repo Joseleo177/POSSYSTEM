@@ -124,12 +124,33 @@ export function NightShiftNotice({ from, to, dateFrom, dateTo }) {
 // azul, rojo) y cuatro tarjetas en fila se leían como un semáforo sin significado. El color
 // queda para lo que sí lo tiene —la variación contra el período anterior—. `color` se acepta
 // por compatibilidad con las llamadas viejas, pero ya no pinta la cifra.
+//
+// En el teléfono caben dos tarjetas por fila (~145px útiles) y "Ref. 50.041,23" a 22px se
+// cortaba en "Ref. 50.04…": justo la cifra, que es lo único que importa. El prefijo de moneda
+// va aparte, chico y atenuado como en ui/Money, y el tamaño de la cifra se calcula contra el
+// ancho de la tarjeta (cqi) según cuánto mide el número: llega a 22px si cabe y baja si no.
+// Sin soporte de cqi el estilo se descarta y queda el text-[22px] de la clase.
+const PREFIJO_MONEDA = /^(Ref\.|Bs\.|\$)\s*/;
+const anchoEnEm = (s) => [...s].reduce((a, c) => a + (/\d/.test(c) ? 0.62 : /[.,]/.test(c) ? 0.3 : 0.66), 0);
+
 // eslint-disable-next-line no-unused-vars
 export function KpiCard({ label, value, sub, icon, color, delta: d }) {
+ const texto = typeof value === "string" ? value : null;
+ const prefijo = texto?.match(PREFIJO_MONEDA)?.[1] ?? null;
+ const cifra = prefijo ? texto.replace(PREFIJO_MONEDA, "") : value;
+ const em = texto ? anchoEnEm(String(cifra)) : 0;
+ const ajuste = em > 0
+ ? { fontSize: `clamp(15px, calc((100cqi - ${prefijo ? 32 : 0}px) / ${em.toFixed(2)}), 22px)` }
+ : undefined;
  return (
  <div className="rounded-xl border border-border/70 dark:border-white/[0.06] bg-white dark:bg-white/[0.03] px-4 py-3.5 flex flex-col gap-1.5 min-w-0">
  <div className="text-[12px] font-medium text-content-subtle leading-none truncate">{label}</div>
- <div className="text-[22px] font-bold text-content dark:text-white tracking-[-0.02em] leading-none tabular-nums truncate">{value}</div>
+ <div className="[container-type:inline-size] min-w-0">
+ <div className="flex items-baseline gap-1 text-[22px] font-bold text-content dark:text-white tracking-[-0.02em] leading-none tabular-nums whitespace-nowrap overflow-hidden" style={ajuste}>
+ {prefijo && <span className="text-[12px] font-medium tracking-normal text-content-subtle shrink-0">{prefijo}</span>}
+ <span className="min-w-0 truncate">{cifra}</span>
+ </div>
+ </div>
  <div className="flex items-center justify-between gap-2 min-h-[16px]">
  {sub && <div className="text-[12px] text-content-subtle truncate">{sub}</div>}
  {d !== null && d !== undefined && (
@@ -187,7 +208,8 @@ export function Loading() {
 
 // Botón de borde de la barra de reportes (Excel, PDF): mismo alto que los filtros (h-10) y sin
 // color propio. Antes Excel iba en verde y PDF en rojo, y el rojo se leía como un error.
-export const REPORT_BTN = "btn-outline shrink-0 whitespace-nowrap flex items-center gap-2 h-10 px-3 sm:px-4 text-[13px] font-semibold rounded-lg active:scale-[0.98] disabled:opacity-60";
+// self-start: en el móvil la barra de filtros es una columna y el botón se estiraba a todo el ancho.
+export const REPORT_BTN = "btn-outline self-start md:self-auto shrink-0 whitespace-nowrap flex items-center gap-2 h-10 px-3 sm:px-4 text-[13px] font-semibold rounded-lg active:scale-[0.98] disabled:opacity-60";
 
 export function ExportButton({ onClick, loading = false }) {
  if (loading) {
