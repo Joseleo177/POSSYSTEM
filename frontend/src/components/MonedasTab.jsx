@@ -123,9 +123,9 @@ export default function MonedasTab({ notify }) {
                 {!refreshing && (
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 )}
-                {refreshing ? "Consultando…" : "Sincronizar tasas"}
+                {refreshing ? "Consultando…" : <>Sincronizar<span className="hidden sm:inline"> tasas</span></>}
             </Button>
-            <Button variant="ghost" onClick={() => setShowNewCurrency(true)} className="h-8 px-3">+ Nueva divisa</Button>
+            <Button variant="ghost" onClick={() => setShowNewCurrency(true)} className="h-8 px-3">+ Nueva<span className="hidden sm:inline"> divisa</span></Button>
         </>
     ) : null;
 

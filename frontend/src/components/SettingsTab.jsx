@@ -163,10 +163,13 @@ export default function SettingsTab({ notify }) {
         </Campo>
     );
 
-    // Barra de guardado, pegada abajo mientras se desplaza: antes el botón quedaba al final
-    // del formulario, a un lado, y no había forma de saber si algo quedó sin guardar.
+    // Barra de guardado, fija al pie de la página: antes el botón quedaba al final del
+    // formulario, a un lado, y no había forma de saber si algo quedó sin guardar.
+    // Va fuera del área que se desplaza, no como sticky dentro de ella: el sticky respetaba el
+    // relleno del contenedor y en el móvil flotaba a media altura, más angosta que la pantalla
+    // y con el formulario asomando por debajo. Los márgenes negativos anulan el relleno de Page.
     const barraGuardar = (
-        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-4 px-4 py-3 bg-white/90 dark:bg-surface-dark-2/90 backdrop-blur border-t border-border/60 dark:border-white/[0.06] flex items-center justify-end gap-3">
+        <div className="shrink-0 -mx-3 sm:-mx-4 -mb-2 px-4 py-2.5 bg-white dark:bg-surface-dark-2 border-t border-border/60 dark:border-white/[0.06] flex items-center justify-end gap-3">
             {dirty ? (
                 <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-amber-700 dark:text-amber-400">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
@@ -210,7 +213,8 @@ export default function SettingsTab({ notify }) {
 
     return (
         <Page module="Sistema" title="Configuración general" subheader={subheader}>
-            <div className="flex-1 min-h-0 overflow-auto custom-scrollbar p-4">
+            {/* En el móvil sin relleno lateral propio: Page ya pone 12px y sumados eran 28. */}
+            <div className="flex-1 min-h-0 overflow-auto custom-scrollbar py-3 sm:p-4">
 
                 {/* ── Empresa ──
                     Todo a la vista sin bajar: los dos formularios lado a lado y, debajo, la imagen
@@ -322,7 +326,6 @@ export default function SettingsTab({ notify }) {
                                 </div>
                             </Seccion>
                         </div>
-                        {barraGuardar}
                     </div>
                 )}
 
@@ -433,7 +436,6 @@ export default function SettingsTab({ notify }) {
                                 </div>
                             </Seccion>
                         </div>
-                        {barraGuardar}
                     </div>
                 )}
 
@@ -466,7 +468,6 @@ export default function SettingsTab({ notify }) {
                                 </Campo>
                             </Seccion>
                         </div>
-                        {barraGuardar}
                     </div>
                 )}
 
@@ -539,6 +540,7 @@ export default function SettingsTab({ notify }) {
                 )}
 
             </div>
+            {["empresa", "factura", "credito"].includes(section) && barraGuardar}
         </Page>
     );
 }
@@ -548,7 +550,7 @@ export default function SettingsTab({ notify }) {
 // Tarjeta de sección: título en caja de oración y una línea que explica para qué sirve.
 function Seccion({ titulo, detalle, className = "", children }) {
     return (
-        <section className={`${SECTION} p-5 ${className}`}>
+        <section className={`${SECTION} p-4 sm:p-5 ${className}`}>
             <div className="mb-4">
                 <h3 className="text-[14px] font-semibold text-content dark:text-white">{titulo}</h3>
                 {detalle && <p className="text-[12px] text-content-subtle mt-0.5">{detalle}</p>}

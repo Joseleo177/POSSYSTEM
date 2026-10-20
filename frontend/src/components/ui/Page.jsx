@@ -45,7 +45,10 @@ export default function Page({ module = "Módulo", title, subheader, actions, on
                     </button>
                 )}
 
-                <div className="min-w-0 shrink-0 max-w-[40%] xs:max-w-none">
+                {/* Tope de 60%: el resto queda para la barra de acciones, que se desplaza. Antes
+                    era 40% con un `xs:max-w-none` que no hacía nada (no hay pantalla xs), y
+                    "Almacenes y sucursales" se cortaba al lado de un solo botón. */}
+                <div className="min-w-0 shrink-0 max-w-[60%]">
                     {/* Migas en gris y título en caja normal: antes eran dos líneas en
                         mayúsculas, la de arriba en color de marca, y competían entre sí. */}
                     <div className="text-[11px] sm:text-[12px] font-semibold text-brand-600 dark:text-brand-400 leading-none mb-1 truncate">

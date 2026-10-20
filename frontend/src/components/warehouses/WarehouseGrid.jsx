@@ -29,7 +29,10 @@ export default function WarehouseGrid({ warehouses, employees = [], canManage = 
     const empById = new Map(employees.map(e => [e.id, e]));
 
     return (
-        <div className="flex-1 overflow-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 content-start py-3">
+        // auto-rows-max: la tarjeta lleva overflow-hidden, y en una grilla de alto fijo eso deja
+        // su mínimo en 0; con dos o más filas en el móvil se repartían el alto y la fila de
+        // botones quedaba cortada al pie de cada tarjeta.
+        <div className="flex-1 min-h-0 overflow-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 auto-rows-max gap-4 content-start py-3">
             {warehouses.map(w => {
                 const deposito = w.sells === false;
                 const total = w.product_count || 0;

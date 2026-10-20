@@ -64,7 +64,11 @@ export default function PosApp() {
     if (!employee) return <LoginScreen onLogin={login} />;
 
     return (
-        <div className="h-screen flex flex-col overflow-hidden bg-surface-2 dark:bg-surface-dark text-content dark:text-content-dark font-sans">
+        // fixed inset-0 y no h-screen: en iOS 100vh mide la pantalla SIN la barra de Safari (y
+        // en la app instalada suma la franja de estado), así que el documento quedaba más alto
+        // que lo visible y se desplazaba entero, llevándose la cabecera y la barra de pestañas.
+        // Fijo al viewport, el documento no tiene alto propio y solo se desplaza el contenido.
+        <div className="fixed inset-0 flex flex-col overflow-hidden bg-surface-2 dark:bg-surface-dark text-content dark:text-content-dark font-sans">
             <NotificationToast notification={notification} />
 
             <CommandPalette

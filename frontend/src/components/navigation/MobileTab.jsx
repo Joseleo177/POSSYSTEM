@@ -7,7 +7,8 @@ export default function MobileTab({ t, active, onGo }) {
     return (
         <button
             onClick={() => onGo(t.key)}
-            className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] py-1.5 px-1 rounded-xl transition-all
+            aria-current={isActive ? "page" : undefined}
+            className={`shrink-0 flex flex-col items-center justify-center gap-0.5 min-w-[56px] py-1.5 px-1 rounded-xl transition-all
  ${isActive
                     ? "text-brand-500"
                     : "text-content-subtle/60 dark:text-content-dark-muted/60"
