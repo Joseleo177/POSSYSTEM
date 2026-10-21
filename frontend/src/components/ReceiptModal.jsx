@@ -50,6 +50,10 @@ function normalizeSale(sale) {
         // distinguía de uno pagado: ambos terminaban en el total y el "gracias por su compra".
         amount_paid: parseFloat(sale.amount_paid ?? sale.paid ?? 0),
         balance: parseFloat(sale.balance ?? 0),
+        // Lo devuelto en notas de crédito vivas. En una factura a crédito rebaja la deuda: sin
+        // restarlo, el papel de una factura de 69,06 con 66,00 devueltos decía "queda debiendo
+        // 69,06" mientras la ficha decía 3,06.
+        returned: parseFloat(sale.total_returned || 0),
         // Saldo a favor del cliente consumido por esta venta. No es un cobro —no entra dinero
         // a ninguna caja, así que no hay Payment que listar— pero sí es con lo que se pagó, y
         // sin nombrarlo el ticket decía PAGADO con la forma de pago en blanco.
@@ -62,7 +66,11 @@ function normalizeSale(sale) {
             journal_name: p.journal_name || null,
             // Cómo pagó el cliente ("Pago Móvil"). El diario es la cuenta y admite varios
             // métodos: "Banco de Venezuela" dice a dónde entró el dinero, no cómo se pagó.
-            method_name: p.method_name || null,
+            // El pago de una factura de cambio no entra por ninguna caja: lo cubre la nota de
+            // crédito de la devolución, que el servidor anota en el propio pago.
+            method_name: p.method_name || (/^Crédito aplicado por cambio — NC /.test(p.notes || "")
+                ? `Nota de crédito ${p.notes.replace(/^Crédito aplicado por cambio — NC /, "")}`
+                : null),
             amount: parseFloat(p.amount || 0),
             exchange_rate: parseFloat(p.exchange_rate || 1),
             // El vuelto entregado en ese cobro. `amount` es el dinero que ENTRÓ —incluye lo
@@ -226,8 +234,12 @@ function calcReceiptTotals(s, rate, sym) {
     //
     // amount_paid ya viene neto de vuelto y con el crédito de cliente aplicado (getSaleBalance),
     // así que restarlo del total reproduce el saldo real sin recalcular nada.
-    const paidBs    = isBs ? round2(s.amount_paid * rate) : s.amount_paid;
-    const balanceBs = Math.max(0, round2(totalBs - paidBs));
+    //
+    // Lo devuelto se resta igual que en la pantalla de cobro (pendingBsAt): un solo redondeo a
+    // la misma tasa. Así el papel pide exactamente lo que la caja va a cobrar.
+    const paidBs     = isBs ? round2(s.amount_paid * rate) : s.amount_paid;
+    const returnedBs = isBs ? round2(s.returned * rate) : s.returned;
+    const balanceBs  = Math.max(0, round2(totalBs - paidBs - returnedBs));
 
     return {
         items,
@@ -239,8 +251,10 @@ function calcReceiptTotals(s, rate, sym) {
         fmtTotal: fmt(totalBs, sym),
         totalBs,
         paidBs,
+        returnedBs,
         balanceBs,
-        fmtPaid:    fmt(paidBs, sym),
+        fmtPaid:     fmt(paidBs, sym),
+        fmtReturned: fmt(returnedBs, sym),
         fmtBalance: fmt(balanceBs, sym),
     };
 }
@@ -506,6 +520,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
                     <span class="qty">${fmtQty(i.quantity)} x ${i.fmtPrice}</span>
                     <span class="line-total">${i.fmtSubtotal}</span>
                 </div>
+                ${parseFloat(i.returned_qty) > 0 ? `<div class="item-line"><span class="qty">DEVUELTO: ${fmtQty(i.returned_qty)}</span></div>` : ""}
             </div>
         `).join("")}
     </div>
@@ -515,6 +530,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
         ${s.discount > 0 ? `<div class="total-row discount"><span>DESCUENTO</span><span>-${totals.fmtDiscount}</span></div>` : ""}
         ${s.charge > 0 ? `<div class="total-row"><span>${s.chargeLabel}</span><span>+${totals.fmtCharge}</span></div>` : ""}
         <div class="total-row big"><span>TOTAL</span><span>${totals.fmtTotal}</span></div>
+        ${totals.returnedBs > 0 ? `<div class="total-row"><span>DEVUELTO (N/C)</span><span>-${totals.fmtReturned}</span></div>` : ""}
     </div>
 
     <div class="totals">
@@ -672,8 +688,13 @@ export default function ReceiptModal({ open, onClose, sale }) {
                             <span className="font-medium text-content dark:text-white min-w-0">{item.name}</span>
                             <Money value={item.fmtSubtotal} className="font-semibold text-content dark:text-white shrink-0" />
                         </div>
-                        <div className="text-[12px] text-content-subtle tabular-nums mt-0.5">
-                            {parseFloat(item.quantity) % 1 === 0 ? Math.round(parseFloat(item.quantity)) : item.quantity} × {item.fmtPrice}
+                        <div className="flex items-baseline justify-between gap-3 text-[12px] text-content-subtle tabular-nums mt-0.5">
+                            <span>{parseFloat(item.quantity) % 1 === 0 ? Math.round(parseFloat(item.quantity)) : item.quantity} × {item.fmtPrice}</span>
+                            {parseFloat(item.returned_qty) > 0 && (
+                                <span className="font-medium text-amber-700 dark:text-amber-400 whitespace-nowrap">
+                                    {parseFloat(item.returned_qty)} devuelto{parseFloat(item.returned_qty) > 1 ? "s" : ""}
+                                </span>
+                            )}
                         </div>
                     </div>
                 ))}
@@ -692,6 +713,9 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     <span className="text-[13px] font-semibold text-content dark:text-white">Total</span>
                     <Money value={totals.fmtTotal} className="text-[20px] font-bold tracking-tight text-content dark:text-white" />
                 </div>
+                {totals.returnedBs > 0 && (
+                    <Linea label="Devuelto (N/C)"><Money value={`-${totals.fmtReturned}`} /></Linea>
+                )}
             </div>
 
             {/* Forma de pago y estado — mismo bloque que se imprime en el papel. */}

@@ -9,6 +9,7 @@ import { fmtBase, printNotaCreditoDoc, todayISO, journalsForWarehouse, toNameCas
 import { isIntegerUnit } from "../helpers/unitFormatter";
 import ConfirmModal from "./ui/ConfirmModal";
 import PaymentFormModal from "./PaymentFormModal";
+import ReceiptModal from "./ReceiptModal";
 import { useApp } from "../context/AppContext";
 
 const EMPTY_REFUND = () => ({
@@ -61,6 +62,9 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     // Modo cambio
     const [exchangeResult, setExchangeResult] = useState(null);
     const [showPayDiff, setShowPayDiff] = useState(false);
+    const [diffCobrada, setDiffCobrada] = useState(false);
+    // Comprobante de la factura nueva que emite el cambio.
+    const [showNewInvoice, setShowNewInvoice] = useState(false);
     const [productSearch, setProductSearch] = useState("");
     const [productResults, setProductResults] = useState([]);
     const [searchLoading, setSearchLoading] = useState(false);
@@ -79,6 +83,8 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
             setSurplusMode(null);
             setExchangeResult(null);
             setShowPayDiff(false);
+            setDiffCobrada(false);
+            setShowNewInvoice(false);
             setReplacementItems([]);
             setProductSearch("");
             setProductResults([]);
@@ -379,7 +385,12 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                             </dl>
                         )}
                         <div className="pt-3 border-t border-border/60 dark:border-white/[0.06]">
-                            {porCobrar ? (
+                            {diffCobrada ? (
+                                <p className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                    Diferencia cobrada
+                                </p>
+                            ) : porCobrar ? (
                                 <div className="flex items-end justify-between gap-3">
                                     <div className="min-w-0">
                                         <p className="text-[13px] font-semibold text-red-600 dark:text-red-400">Por cobrar</p>
@@ -397,12 +408,20 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                             )}
                         </div>
                     </div>
-                    <Pie>
+                    {/* Los dos papeles del cambio: la N/C de lo que devolvió y la factura nueva con
+                        lo que se llevó. En dos columnas: en el pie no caben junto a cobrar. */}
+                    <div className="px-5 pb-4 grid grid-cols-2 gap-2">
                         <button onClick={() => printNotaCreditoDoc({ ...exchangeResult, total: exchangeResult.return_total }, sale, companyInfo, baseCurrency, activeCurrencies, printerWidth)} className={BTN_SEC}>
                             {ICONO_IMPRIMIR}
-                            Imprimir N/C
+                            N/C
                         </button>
-                        {porCobrar ? (
+                        <button onClick={() => setShowNewInvoice(true)} className={`${BTN_SEC} min-w-0`}>
+                            {ICONO_IMPRIMIR}
+                            <span className="truncate">Factura {exchangeResult.new_invoice_number || `#${exchangeResult.new_sale_id}`}</span>
+                        </button>
+                    </div>
+                    <Pie>
+                        {porCobrar && !diffCobrada ? (
                             <>
                                 <button onClick={() => { onReturnSuccess(); onClose(); }} className={BTN_SEC}>Cerrar</button>
                                 <button onClick={() => setShowPayDiff(true)} className={`${BTN_PRI} sm:flex-1`}>
@@ -416,6 +435,10 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                 </Panel>
             </Velo>
 
+            {showNewInvoice && (
+                <ReceiptModal open sale={{ id: exchangeResult.new_sale_id }} onClose={() => setShowNewInvoice(false)} />
+            )}
+
             {showPayDiff && (
                 <PaymentFormModal
                     sale={{
@@ -428,7 +451,8 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                         exchange_rate: sale.exchange_rate,
                     }}
                     onClose={() => setShowPayDiff(false)}
-                    onSuccess={() => { setShowPayDiff(false); onReturnSuccess(); onClose(); }}
+                    // Cobrada la diferencia, sale la factura nueva ya pagada para imprimirla.
+                    onSuccess={() => { setShowPayDiff(false); setDiffCobrada(true); onReturnSuccess(); setShowNewInvoice(true); }}
                 />
             )}
             </>

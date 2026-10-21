@@ -60,6 +60,8 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
     const forgiven = parseFloat(sale?.forgiven_amount || 0);
     const discount = parseFloat(sale?.discount_amount || 0);
     const charge   = parseFloat(sale?.service_charge || 0);
+    // Notas de crédito vivas: rebajan lo que se debe (getOneSale ya las resta del saldo).
+    const returned = parseFloat(sale?.total_returned || 0);
 
     // Misma moneda que el recibo: saldada con bolívares, todo en Bs a la tasa del cobro (con
     // los mismos céntimos que el papel); sin bolívares de por medio o con saldo pendiente, en
@@ -73,6 +75,7 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
     const fmtSubtotal = bs ? bs.fmtSubtotal : fmt(parseFloat(sale?.total || 0) + discount - charge);
     const fmtDiscount = bs ? bs.fmtDiscount : fmt(discount);
     const fmtCharge   = bs ? bs.fmtCharge   : fmt(charge);
+    const fmtReturned = bs ? bs.fmtReturned : fmt(returned);
 
     // Montos de un cobro en la moneda en que entró. Sin separador de miles, como el resto de
     // la app: "51.473,30" se leía distinto a "Bs. 51473.30" de la caja.
@@ -276,6 +279,7 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                                         </>
                                     )}
                                     <Fila label="Total" value={fmtTotal} strong />
+                                    {returned > 0 && <Fila label="Devuelto (N/C)" value={`-${fmtReturned}`} />}
                                     <Fila label="Abonado" value={fmtPaid} />
                                     {forgiven > 0 && <Fila label="Exonerado" value={conv(forgiven)} tone="text-violet-600 dark:text-violet-400" />}
                                     {balance > 0 && <Fila label="Saldo pendiente" value={fmtBalance} tone="text-red-600 dark:text-red-400" strong />}
