@@ -16,7 +16,7 @@ const cid = (req) => req.employee?.company_id ?? 0;
 
 module.exports = {
   createReturn: wrap(async req => {
-    const result = await createReturn({ saleId: parseInt(req.params.id), items: req.body.items, reason: req.body.reason, refund: req.body.refund, employee_id: req.employee?.id ?? null }, req);
+    const result = await createReturn({ saleId: parseInt(req.params.id), items: req.body.items, reason: req.body.reason, refund: req.body.refund, surplus_mode: req.body.surplus_mode, employee_id: req.employee?.id ?? null }, req);
     broadcast(cid(req), 'products:updated', {});
     return result;
   }, 201),
@@ -27,8 +27,10 @@ module.exports = {
       returnItems:      req.body.return_items,
       replacementItems: req.body.replacement_items,
       reason:           req.body.reason,
+      surplusMode:      req.body.surplus_mode,
+      refund:           req.body.refund,
       employeeId:       req.employee?.id ?? null,
-    });
+    }, req);
     broadcast(cid(req), 'products:updated', {});
     return result;
   }, 201),

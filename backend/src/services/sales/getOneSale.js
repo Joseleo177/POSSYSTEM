@@ -116,7 +116,8 @@ module.exports = async function getOneSale(id, req) {
   }) || 0);
   item.amount_paid = parseFloat(await Payment.sum('amount', { where: { sale_id: id } }) || 0)
     - changeGiven + creditApplied;
-  item.total_returned = parseFloat(await Return.sum('total', { where: { sale_id: id } }) || 0);
+  // Solo las NC vivas: una anulada nunca pasó, y contarla bajaba el saldo de la factura.
+  item.total_returned = parseFloat(await Return.sum('total', { where: { sale_id: id, status: { [Op.ne]: 'anulado' } } }) || 0);
   // El saldo perdonado cierra la factura pero no es un cobro: se resta aparte de amount_paid
   // para que la ficha pueda mostrarlo con su motivo en vez de disfrazarlo de pago.
   const forgiven = parseFloat(item.forgiven_amount || 0);

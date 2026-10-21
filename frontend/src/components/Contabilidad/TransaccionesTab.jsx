@@ -109,7 +109,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                 <button onClick={() => setReceiptSale(sale)} className="row-icon" title="Ver recibo" aria-label="Ver recibo">
                     <Icon d={ICON_RECEIPT} />
                 </button>
-                {(sale.status === "pagado" || sale.status === "parcial") && (
+                {(sale.status === "pagado" || sale.status === "parcial" || sale.status === "pendiente") && (
                     <button onClick={() => openReturnModal(sale)} disabled={loadingReturn === sale.id} className="row-icon hover:!text-amber-600 dark:hover:!text-amber-400" title="Devolver" aria-label="Devolver">
                         {loadingReturn === sale.id
                             ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>

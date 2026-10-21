@@ -7,6 +7,7 @@ const { toLocalDate } = require("../../utils/localDate");
 const { creditAvailable, addCreditMovement } = require("../customers/creditLedger");
 const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
 const { resolveMethod } = require("../../utils/journalMethod");
+const { liveReturnedTotal } = require("../returns/shared");
 
 // Los cobros recién registrados, con el nombre de su caja ya resuelto.
 //
@@ -39,7 +40,7 @@ async function existingPaymentResult(previos) {
   const sale = await Sale.findByPk(ultimo.sale_id);
   const saleTotal = parseFloat(sale?.total || 0);
   const alreadyPaid = await getSaleBalance(ultimo.sale_id);
-  const balance = parseFloat((saleTotal - alreadyPaid).toFixed(6));
+  const balance = parseFloat((saleTotal - await liveReturnedTotal(ultimo.sale_id) - alreadyPaid).toFixed(6));
   const payments = await withJournalNames(list);
   return {
     payment: payments[payments.length - 1] || ultimo,
@@ -146,7 +147,13 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
 
     const saleTotal   = parseFloat(sale.total);
     const alreadyPaid = await getSaleBalance(sale_id, t);
-    const pendingBalance = saleTotal - alreadyPaid;
+    // Lo devuelto en notas de crédito vivas ya no se debe: en una factura a crédito la NC
+    // rebaja primero la deuda (services/returns/shared.js). La pantalla de cobro y cuentas por
+    // cobrar ya lo descontaban; aquí no, y una factura de 100 con una NC de 30 quedaba
+    // 'parcial' para siempre después de pagar los 70 que pedía la pantalla.
+    const returned = await liveReturnedTotal(sale_id, t);
+    const owed = Math.max(0, saleTotal - returned);
+    const pendingBalance = owed - alreadyPaid;
 
     // Aplicar crédito de cliente si viene en el body
     let creditApplied = 0;
@@ -196,7 +203,10 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
     // pantalla (pendingBsAt): sin él, cobrar parte con saldo a favor y el resto en Bs nunca
     // alcanzaba el saldo en bolívares.
     const creditAppliedBs = isBsPay ? round2(creditApplied * payRate) : creditApplied;
-    const pendingBalanceBs = Math.max(0, saleTotalBs - alreadyPaidBs - creditAppliedBs);
+    // Lo devuelto, convertido igual que en la pantalla (pendingBsAt): un solo redondeo a la
+    // misma tasa del cobro.
+    const returnedBs = isBsPay ? round2(returned * payRate) : returned;
+    const pendingBalanceBs = Math.max(0, saleTotalBs - alreadyPaidBs - returnedBs - creditAppliedBs);
     const payAmtInCur = isBsPay ? round2(payAmt * payRate) : payAmt;
     // En un pago combinado, los tramos que NO son el último nunca "saldan" la factura por
     // tolerancia: el que cierra la cuenta (y lleva el vuelto) es el último. Sin esto un tramo
@@ -222,8 +232,8 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
     if (netCredit < -0.001) {
       throw new Error("El cambio no puede superar el monto recibido");
     }
-    if (totalPaidNow > saleTotal + 0.001) {
-      throw new Error(`El monto excede el saldo pendiente. Saldo: ${(saleTotal - alreadyPaid).toFixed(2)}`);
+    if (totalPaidNow > owed + 0.001) {
+      throw new Error(`El monto excede el saldo pendiente. Saldo: ${(owed - alreadyPaid).toFixed(2)}`);
     }
 
     // Registrar el cobro de diario (solo si hay monto de pago regular)
@@ -387,16 +397,16 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
     const tolerance = await saleSettleTolerance(sale, t);
     // Sin dinero de caja (solo crédito de cliente) no hay pista en Bs: decide la base.
     const decideEnBs = isBsPay && hasJournalPayment;
-    const isFullPayment = !noSettle && (decideEnBs ? isBsFullPay : totalPaidNow >= saleTotal - tolerance);
+    const isFullPayment = !noSettle && (decideEnBs ? isBsFullPay : totalPaidNow >= owed - tolerance);
     const newStatus = isFullPayment ? "pagado" : "parcial";
     await sale.update({ status: newStatus }, { transaction: t });
 
-    const rawBalance = parseFloat((saleTotal - totalPaidNow).toFixed(6));
+    const rawBalance = parseFloat((owed - totalPaidNow).toFixed(6));
     const balance = isFullPayment ? 0 : rawBalance;
     return {
       payment,
       sale_status: newStatus,
-      amount_paid: isFullPayment ? saleTotal : totalPaidNow,
+      amount_paid: isFullPayment ? owed : totalPaidNow,
       balance: balance < 0 ? 0 : balance,
       change_given: changeAmt > 0 ? changeAmt : 0,
       // Crédito del cliente consumido en este tramo. Salda factura sin generar un Payment,

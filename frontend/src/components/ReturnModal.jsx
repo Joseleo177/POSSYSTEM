@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Spinner } from "./ui/Spinner";
 import DatePicker from "./ui/DatePicker";
 import Segmented from "./ui/Segmented";
-import Check from "./ui/Check";
 import Money from "./ui/Money";
 import JournalPickerButton from "./cobro/JournalPickerButton";
 import { api } from "../services/api";
@@ -13,7 +12,6 @@ import PaymentFormModal from "./PaymentFormModal";
 import { useApp } from "../context/AppContext";
 
 const EMPTY_REFUND = () => ({
-    enabled: true,
     date: todayISO(),
     notes: '',
     // El reembolso puede salir de varias cajas (parte efectivo, resto transferencia), igual
@@ -56,7 +54,9 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     const [confirmShow, setConfirmShow] = useState(false);
     const [returnResult, setReturnResult] = useState(null);
     const [refund, setRefund] = useState(EMPTY_REFUND());
-    const [refundCreated, setRefundCreated] = useState(false);
+    // Qué se hace con lo que le sobra al cliente: "credito" | "reembolso" | "redondeo".
+    // null = el de cada modo (ver destinoPorDefecto).
+    const [surplusMode, setSurplusMode] = useState(null);
 
     // Modo cambio
     const [exchangeResult, setExchangeResult] = useState(null);
@@ -76,7 +76,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
             setReason("");
             setReturnResult(null);
             setRefund(EMPTY_REFUND());
-            setRefundCreated(false);
+            setSurplusMode(null);
             setExchangeResult(null);
             setShowPayDiff(false);
             setReplacementItems([]);
@@ -129,7 +129,22 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
         acc + (cantDe(i) * (parseFloat(i.price) - parseFloat(i.discount || 0))), 0);
 
     const totalReplacement = replacementItems.reduce((acc, i) => acc + (parseFloat(i.price) * parseFloat(i.qty)), 0);
-    const exchangeDiff = totalReplacement - totalReturn; // >0 cobra, <0 acredita
+
+    // Reparto de lo devuelto, el mismo que hace el servidor (services/returns/shared.js): en una
+    // factura a crédito rebaja primero lo que se debe; lo libre paga la mercancía del cambio; y
+    // lo que todavía sobre es del cliente, y el cajero elige qué hacer con ello.
+    const hayCliente = !!sale.customer_id;
+    const deuda      = Math.max(0, parseFloat(sale.balance || 0));
+    const aDeuda     = Math.min(totalReturn, deuda);
+    const libre      = Math.max(0, totalReturn - aDeuda);
+    const aReemplazo = mode === "cambio" ? Math.min(libre, totalReplacement) : 0;
+    const sobrante   = libre - aReemplazo;
+    const porCobrar  = mode === "cambio" ? Math.max(0, totalReplacement - aReemplazo) : 0;
+    const haySobrante = sobrante > 0.001;
+    // Antes: la devolución ofrecía reembolsar y el cambio mandaba todo al saldo a favor.
+    const destinoPorDefecto = mode === "cambio" && hayCliente ? "credito" : "reembolso";
+    const destino = (surplusMode === "credito" && !hayCliente) ? "reembolso" : (surplusMode || destinoPorDefecto);
+    const reembolsando = haySobrante && destino === "reembolso";
 
     const lineasDevueltas = () => sale.items
         .map(i => ({ sale_item_id: parseInt(i.id), qty: cantDe(i) }))
@@ -189,10 +204,12 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     const refundTotalBase = parseFloat(refundParts.reduce((a, s) => a + s.montoBase, 0).toFixed(6));
     const refundFaltaCaja = refundParts.some(s => !isNaN(s.num) && s.num > 0 && !s.journal_id);
     const refundFaltaRef  = refundParts.some(s => s.journal_id && !s.isCash && !String(s.reference || '').trim());
-    const refundExcede    = refundTotalBase > totalReturn + 0.01;
+    const refundExcede    = refundTotalBase > sobrante + 0.01;
+    // Lo que no se reembolsa queda a su favor; sin cliente no hay dónde dejarlo.
+    const refundResto     = Math.max(0, sobrante - refundTotalBase);
 
     // Elegir la caja de un tramo: sugiere lo que falta por reembolsar, convertido a la moneda
-    // de esa caja — el total entero en el primero, solo el resto en los siguientes.
+    // de esa caja — todo lo que sobra en el primero, solo el resto en los siguientes.
     const asignarCajaReembolso = (idx, id, method = null) => setRefund(p => {
         const parts = [...p.parts];
         const { rate } = datosCajaReembolso(id);
@@ -202,7 +219,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
             const n = parseFloat(String(q.amount).replace(',', '.'));
             return acc + (isNaN(n) ? 0 : n / rr);
         }, 0);
-        const falta = Math.max(0, totalReturn - yaAsignado);
+        const falta = Math.max(0, sobrante - yaAsignado);
         parts[idx] = { ...parts[idx], journal_id: id, payment_method: method, amount: (Math.round(falta * rate * 100) / 100).toFixed(2) };
         return { ...p, parts };
     });
@@ -213,23 +230,44 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
         return { ...p, parts };
     });
 
-    const handleToggleRefund = () => {
-        setRefund(p => p.enabled
-            ? { ...p, enabled: false }
-            : { ...p, enabled: true, parts: p.parts.length ? p.parts : [{ journal_id: '', amount: '', reference: '' }] });
+    // Lo que sobra solo se valida cuando sale de caja: los otros dos destinos no piden nada.
+    const validarSobrante = () => {
+        if (!reembolsando) return true;
+        const conMonto = refundParts.filter(s => !isNaN(s.num) && s.num > 0);
+        if (conMonto.length === 0) { notify("Indica el monto del reembolso", "err"); return false; }
+        if (refundFaltaCaja) { notify("Falta elegir la caja de un tramo del reembolso", "err"); return false; }
+        if (refundFaltaRef) { notify("El número de referencia es obligatorio para ese método de reembolso", "err"); return false; }
+        if (refundExcede) { notify(`El reembolso supera lo que le corresponde (${fmtB(sobrante)})`, "err"); return false; }
+        if (!hayCliente && refundResto > 0.01) {
+            notify(`Faltan ${fmtB(refundResto)} por reembolsar: la venta no tiene cliente al que dejárselos a favor`, "err");
+            return false;
+        }
+        return true;
+    };
+
+    // El destino del sobrante y, si sale de caja, sus tramos. El backend registra un egreso por
+    // tramo dentro de la misma transacción, con categoría propia y precisión de 6 decimales.
+    const payloadSobrante = () => {
+        if (!haySobrante) return {};
+        if (destino !== "reembolso") return { surplus_mode: destino };
+        const parts = refundParts
+            .filter(s => s.journal_id && !isNaN(s.num) && s.num > 0)
+            .map(s => ({
+                journal_id: parseInt(s.journal_id),
+                payment_method: s.payment_method || null,
+                amount: String(s.amount || '').replace(',', '.'),
+                reference: String(s.reference || '').trim() || null,
+            }));
+        return {
+            surplus_mode: "reembolso",
+            refund: { date: refund.date, notes: refund.notes?.trim() || null, parts },
+        };
     };
 
     const handleSubmit = () => {
         if (lineasDevueltas().length === 0)
             return notify("Debes indicar al menos una cantidad mayor a 0 para devolver", "err");
-
-        if (refund.enabled) {
-            const conMonto = refundParts.filter(s => !isNaN(s.num) && s.num > 0);
-            if (conMonto.length === 0) return notify("Indica el monto del reembolso", "err");
-            if (refundFaltaCaja) return notify("Falta elegir la caja de un tramo del reembolso", "err");
-            if (refundFaltaRef) return notify("El número de referencia es obligatorio para ese método de reembolso", "err");
-        }
-
+        if (!validarSobrante()) return;
         setConfirmShow(true);
     };
 
@@ -239,27 +277,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
         setConfirmShow(false);
         setLoading(true);
         try {
-            // El reembolso viaja junto con la devolución: el backend registra un egreso por
-            // tramo dentro de la misma transacción, con categoría propia y precisión de 6
-            // decimales.
-            const partesValidas = refundParts
-                .filter(s => s.journal_id && !isNaN(s.num) && s.num > 0)
-                .map(s => ({
-                    journal_id: parseInt(s.journal_id),
-                    payment_method: s.payment_method || null,
-                    amount: String(s.amount || '').replace(',', '.'),
-                    reference: String(s.reference || '').trim() || null,
-                }));
-            const refundPayload = (refund.enabled && partesValidas.length) ? {
-                enabled: true,
-                date: refund.date,
-                notes: refund.notes?.trim() || null,
-                parts: partesValidas,
-            } : undefined;
-
-            const res = await api.sales.createReturn(sale.id, { items: returnItems, reason, refund: refundPayload });
-
-            setRefundCreated(!!res.data.refund_expense_id);
+            const res = await api.sales.createReturn(sale.id, { items: returnItems, reason, ...payloadSobrante() });
             onReturnSuccess();
             setReturnResult({ ...res.data, reason });
         } catch (e) {
@@ -271,6 +289,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     const handleExchangeSubmit = () => {
         if (lineasDevueltas().length === 0) return notify("Selecciona al menos un producto a devolver", "err");
         if (replacementItems.length === 0) return notify("Agrega al menos un producto de reemplazo", "err");
+        if (!validarSobrante()) return;
         setConfirmShow(true);
     };
 
@@ -280,7 +299,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
         setConfirmShow(false);
         setLoading(true);
         try {
-            const res = await api.sales.createExchange(sale.id, { return_items: returnItems, replacement_items: replacements, reason });
+            const res = await api.sales.createExchange(sale.id, { return_items: returnItems, replacement_items: replacements, reason, ...payloadSobrante() });
             onReturnSuccess();
             setExchangeResult(res);
         } catch (e) {
@@ -292,6 +311,24 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     const documento = sale.invoice_number ? `Factura ${sale.invoice_number}` : `Orden #${sale.id}`;
     const nombresCajas = refundParts.filter(s => s.journal_id).map(s => toNameCase(s.journal?.name)).filter(Boolean).join(" + ");
 
+    // Lo que sobra, dicho en la confirmación.
+    const textoSobrante = () => {
+        if (!haySobrante) return "";
+        if (destino === "credito") return ` Quedan ${fmtB(sobrante)} a su favor.`;
+        if (destino === "redondeo") return ` No se le devuelven ${fmtB(sobrante)}.`;
+        const resto = hayCliente && refundResto > 0.01 ? ` y ${fmtB(refundResto)} quedan a su favor` : "";
+        return ` Se reembolsan ${fmtB(refundTotalBase)} vía ${nombresCajas || "…"}${resto}.`;
+    };
+
+    // A dónde fue cada parte de la NC, tal como la registró el servidor. Solo las que tienen monto.
+    const repartoNC = (r) => [
+        [r.applied_to_debt,  "Rebajó la deuda de la factura"],
+        [r.credit_applied,   "Pagó el reemplazo"],
+        [r.credit_remainder ?? r.credited, "Quedó a su favor"],
+        [r.refunded,         nombresCajas ? `Reembolsado · ${nombresCajas}` : "Reembolsado"],
+        [r.kept,             "No se le devolvió"],
+    ].filter(([monto]) => parseFloat(monto || 0) > 0.001);
+
     /* ── Vista: devolución registrada ── */
     if (returnResult) return (
         <Velo>
@@ -299,13 +336,15 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                 <Cabecera icono={ICONO_CHECK} tono="ok" rotulo="Devolución registrada" titulo={returnResult.nc_number || `NC-${returnResult.return_id}`} />
                 <div className="px-5 pb-5 space-y-4">
                     <div className="rounded-xl bg-surface-2 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] px-4 py-3.5">
-                        <p className="text-[12px] text-content-subtle">Total acreditado</p>
+                        <p className="text-[12px] text-content-subtle">Total de la nota de crédito</p>
                         <Money value={fmtB(returnResult.total)} className="block text-[24px] font-bold tracking-tight leading-tight text-content dark:text-white" />
                     </div>
                     <dl className="space-y-2">
                         <Dato label="Factura" value={sale.invoice_number || `#${sale.id}`} />
                         {sale.customer_name && <Dato label="Cliente" value={toNameCase(sale.customer_name)} />}
-                        {refundCreated && <Dato label="Reembolsado desde" value={nombresCajas || "—"} />}
+                        {repartoNC(returnResult).map(([monto, label]) => (
+                            <Dato key={label} label={label} value={<Money value={fmtB(monto)} />} />
+                        ))}
                     </dl>
                 </div>
                 <Pie>
@@ -322,7 +361,6 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     /* ── Vista: cambio procesado ── */
     if (exchangeResult) {
         const porCobrar = exchangeResult.remaining_to_pay > 0.001;
-        const aFavor    = exchangeResult.credit_remainder > 0.001;
         return (
             <>
             <Velo>
@@ -333,6 +371,13 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                             <Dato label="Devuelto" value={<Money value={`-${fmtB(exchangeResult.return_total)}`} />} />
                             <Dato label="Reemplazo" value={<Money value={fmtB(exchangeResult.replacement_total)} />} />
                         </dl>
+                        {repartoNC(exchangeResult).length > 0 && (
+                            <dl className="space-y-2 pt-3 border-t border-border/60 dark:border-white/[0.06]">
+                                {repartoNC(exchangeResult).map(([monto, label]) => (
+                                    <Dato key={label} label={label} value={<Money value={fmtB(monto)} />} />
+                                ))}
+                            </dl>
+                        )}
                         <div className="pt-3 border-t border-border/60 dark:border-white/[0.06]">
                             {porCobrar ? (
                                 <div className="flex items-end justify-between gap-3">
@@ -342,14 +387,8 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                     </div>
                                     <Money value={fmtB(exchangeResult.remaining_to_pay)} className="text-[22px] font-bold tracking-tight text-content dark:text-white" />
                                 </div>
-                            ) : aFavor ? (
-                                <div className="flex items-end justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <p className="text-[13px] font-semibold text-content dark:text-white">Queda a su favor</p>
-                                        <p className="text-[12px] text-content-subtle">Saldo para su próxima compra</p>
-                                    </div>
-                                    <Money value={fmtB(exchangeResult.credit_remainder)} className="text-[22px] font-bold tracking-tight text-content dark:text-white" />
-                                </div>
+                            ) : (exchangeResult.credit_remainder > 0.001 || exchangeResult.refunded > 0.001 || exchangeResult.kept > 0.001) ? (
+                                <p className="text-[13px] font-semibold text-content dark:text-white">Nada por cobrar</p>
                             ) : (
                                 <p className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
@@ -492,122 +531,6 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                 />
                             </Field>
 
-                            {/* ── Reembolso (devolución) ── */}
-                            {mode === "devolucion" && (
-                                <div>
-                                    <div className="flex items-start gap-3">
-                                        <Check checked={refund.enabled} onChange={handleToggleRefund} title="Reembolsar al cliente" className="mt-0.5" />
-                                        <button type="button" onClick={handleToggleRefund} className="text-left min-w-0">
-                                            <p className="text-[13px] font-semibold text-content dark:text-white">Reembolsar al cliente</p>
-                                            <p className="text-[12px] text-content-subtle">
-                                                {refund.enabled ? "Indica de qué caja sale el dinero" : "No sale dinero de ninguna caja"}
-                                            </p>
-                                        </button>
-                                    </div>
-
-                                    {refund.enabled && (
-                                        <div className="mt-4 space-y-4">
-                                            <div>
-                                                <p className={`${LABEL} mb-1.5`}>Sale de</p>
-                                                <div className="space-y-2.5">
-                                                    {refundParts.map((s, idx) => (
-                                                        <div key={idx} className="space-y-1.5">
-                                                            <div className="flex gap-2 items-start">
-                                                                <div className="flex-1 min-w-0">
-                                                                    <JournalPickerButton
-                                                                        value={s.journal_id || ''}
-                                                                        journals={activeJournals}
-                                                                        outflowOnly
-                                                                        boxClassName="rounded-lg"
-                                                                        onSelect={j => asignarCajaReembolso(idx, j.id, j.payment_method || null)}
-                                                                        placeholder="Elegir caja…"
-                                                                        methodPrompt={{ tag: "Reembolso", title: "¿De qué caja sale el reembolso?" }}
-                                                                    />
-                                                                </div>
-                                                                <div className="w-28 sm:w-32 shrink-0 relative">
-                                                                    <Prefijo>{s.sym}</Prefijo>
-                                                                    <input
-                                                                        type="text"
-                                                                        inputMode="decimal"
-                                                                        value={s.amount}
-                                                                        placeholder="0.00"
-                                                                        onChange={e => setParte(idx, { amount: e.target.value.replace(/[^\d.,]/g, '') })}
-                                                                        className={`${INPUT} pl-11 text-right font-semibold tabular-nums`}
-                                                                    />
-                                                                </div>
-                                                                {refundParts.length > 1 && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setRefund(p => ({ ...p, parts: p.parts.filter((_, i) => i !== idx) }))}
-                                                                        className={QUITAR}
-                                                                        title="Quitar este tramo" aria-label="Quitar este tramo"
-                                                                    >
-                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                                                    </button>
-                                                                )}
-                                                            </div>
-
-                                                            {s.cur && !s.cur.is_base && s.montoBase > 0 && (
-                                                                <p className="text-[12px] text-content-subtle tabular-nums">≈ {fmtB(s.montoBase)} · tasa {s.rate}</p>
-                                                            )}
-                                                            {s.journal_id && !s.isCash && (
-                                                                <input
-                                                                    type="text"
-                                                                    value={s.reference || ''}
-                                                                    onChange={e => setParte(idx, { reference: e.target.value })}
-                                                                    placeholder="N° de referencia"
-                                                                    className={`${INPUT} !h-9`}
-                                                                />
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-
-                                                {refundFaltaCaja && (
-                                                    <p className="text-[12px] font-medium text-red-600 dark:text-red-400 mt-1.5">Elige de qué caja sale ese monto</p>
-                                                )}
-
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setRefund(p => ({ ...p, parts: [...p.parts, { journal_id: '', amount: '', reference: '' }] }))}
-                                                    className={`${AGREGAR} mt-2.5`}
-                                                >
-                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4" /></svg>
-                                                    Reembolsar desde otra caja
-                                                </button>
-
-                                                <div className="flex items-center justify-between gap-2 mt-2.5 pt-2.5 border-t border-border/60 dark:border-white/[0.06] text-[12px] tabular-nums">
-                                                    <span className="text-content-subtle">
-                                                        Reembolsado <span className="font-semibold text-content dark:text-white">{fmtB(refundTotalBase)}</span> de {fmtB(totalReturn)}
-                                                    </span>
-                                                    {refundExcede && <span className="font-medium text-red-600 dark:text-red-400">Supera lo devuelto</span>}
-                                                </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <Field label="Fecha del reembolso">
-                                                    <DatePicker
-                                                        value={refund.date}
-                                                        onChange={v => setRefund(p => ({ ...p, date: v }))}
-                                                        clearable={false}
-                                                        className="w-full"
-                                                    />
-                                                </Field>
-                                                <Field label="Notas" hint="Opcional">
-                                                    <input
-                                                        type="text"
-                                                        value={refund.notes}
-                                                        onChange={e => setRefund(p => ({ ...p, notes: e.target.value }))}
-                                                        placeholder="Observaciones…"
-                                                        className={INPUT}
-                                                    />
-                                                </Field>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
                             {/* ── Producto de reemplazo (cambio) ── */}
                             {mode === "cambio" && (
                                 <div className="space-y-3">
@@ -685,24 +608,174 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                                 <span className="text-content-subtle">Devuelve</span>
                                                 <Money value={fmtB(totalReturn)} className="font-medium text-content dark:text-white" />
                                             </div>
+                                            {aDeuda > 0.001 && (
+                                                <div className="flex justify-between text-[13px]">
+                                                    <span className="text-content-subtle">Rebaja la deuda de la factura</span>
+                                                    <Money value={`-${fmtB(aDeuda)}`} className="font-medium text-content dark:text-white" />
+                                                </div>
+                                            )}
                                             <div className="flex justify-between text-[13px]">
                                                 <span className="text-content-subtle">Se lleva</span>
                                                 <Money value={fmtB(totalReplacement)} className="font-medium text-content dark:text-white" />
                                             </div>
                                             <div className="flex items-baseline justify-between gap-3 pt-2 mt-1 border-t border-border/60 dark:border-white/[0.06]">
-                                                {exchangeDiff > 0.001 ? (
-                                                    <span className="text-[13px] font-semibold text-red-600 dark:text-red-400">Paga la diferencia</span>
-                                                ) : exchangeDiff < -0.001 ? (
-                                                    <span className="text-[13px] font-semibold text-content dark:text-white">Queda a su favor</span>
+                                                {porCobrar > 0.001 ? (
+                                                    <span className="text-[13px] font-semibold text-red-600 dark:text-red-400">{aDeuda > 0.001 ? "Queda por cobrar" : "Paga la diferencia"}</span>
+                                                ) : haySobrante ? (
+                                                    <span className="text-[13px] font-semibold text-content dark:text-white">Le corresponde</span>
                                                 ) : (
                                                     <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">
                                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                                                         Sin diferencia
                                                     </span>
                                                 )}
-                                                {Math.abs(exchangeDiff) > 0.001 && (
-                                                    <Money value={fmtB(Math.abs(exchangeDiff))} className="text-[18px] font-bold tracking-tight text-content dark:text-white" />
+                                                {(porCobrar > 0.001 || haySobrante) && (
+                                                    <Money value={fmtB(porCobrar > 0.001 ? porCobrar : sobrante)} className="text-[18px] font-bold tracking-tight text-content dark:text-white" />
                                                 )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* ── Devolución sobre una factura con deuda: cómo se reparte ── */}
+                            {mode === "devolucion" && aDeuda > 0.001 && (
+                                <div className="rounded-xl border border-border/70 dark:border-white/[0.08] px-4 py-3 space-y-1.5">
+                                    <div className="flex justify-between text-[13px]">
+                                        <span className="text-content-subtle">Rebaja la deuda de la factura</span>
+                                        <Money value={fmtB(aDeuda)} className="font-medium text-content dark:text-white" />
+                                    </div>
+                                    <div className="flex items-baseline justify-between gap-3 pt-2 mt-1 border-t border-border/60 dark:border-white/[0.06]">
+                                        <span className="text-[13px] font-semibold text-content dark:text-white">{haySobrante ? "Le corresponde" : "Sigue debiendo"}</span>
+                                        <Money value={fmtB(haySobrante ? sobrante : deuda - aDeuda)} className="text-[18px] font-bold tracking-tight text-content dark:text-white" />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ── Lo que le sobra al cliente: a favor, reembolso o no se devuelve ── */}
+                            {haySobrante && (mode === "devolucion" ? hayDevolucion : listoCambio) && (
+                                <div>
+                                    <p className="mb-1.5 flex items-baseline justify-between gap-2">
+                                        <span className={LABEL}>Qué hacer con lo que le corresponde</span>
+                                        <Money value={fmtB(sobrante)} className="text-[13px] font-semibold text-content dark:text-white" />
+                                    </p>
+                                    <Segmented
+                                        className="w-full [&>button]:flex-1 [&>button]:justify-center"
+                                        value={destino}
+                                        onChange={setSurplusMode}
+                                        options={[
+                                            ...(hayCliente ? [{ key: "credito", label: "Saldo a favor" }] : []),
+                                            { key: "reembolso", label: "Reembolsar" },
+                                            { key: "redondeo",  label: "No devolver" },
+                                        ]}
+                                    />
+                                    <p className="mt-1.5 text-[12px] text-content-subtle">
+                                        {destino === "credito"   ? "Queda en su saldo para la próxima compra en esta sucursal"
+                                        : destino === "redondeo" ? "No sale dinero ni queda saldo: la diferencia es de la tienda"
+                                        : "Indica de qué caja sale el dinero"}
+                                    </p>
+
+                                    {reembolsando && (
+                                        <div className="mt-4 space-y-4">
+                                            <div>
+                                                <p className={`${LABEL} mb-1.5`}>Sale de</p>
+                                                <div className="space-y-2.5">
+                                                    {refundParts.map((s, idx) => (
+                                                        <div key={idx} className="space-y-1.5">
+                                                            <div className="flex gap-2 items-start">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <JournalPickerButton
+                                                                        value={s.journal_id || ''}
+                                                                        journals={activeJournals}
+                                                                        outflowOnly
+                                                                        boxClassName="rounded-lg"
+                                                                        onSelect={j => asignarCajaReembolso(idx, j.id, j.payment_method || null)}
+                                                                        placeholder="Elegir caja…"
+                                                                        methodPrompt={{ tag: "Reembolso", title: "¿De qué caja sale el reembolso?" }}
+                                                                    />
+                                                                </div>
+                                                                <div className="w-28 sm:w-32 shrink-0 relative">
+                                                                    <Prefijo>{s.sym}</Prefijo>
+                                                                    <input
+                                                                        type="text"
+                                                                        inputMode="decimal"
+                                                                        value={s.amount}
+                                                                        placeholder="0.00"
+                                                                        onChange={e => setParte(idx, { amount: e.target.value.replace(/[^\d.,]/g, '') })}
+                                                                        className={`${INPUT} pl-11 text-right font-semibold tabular-nums`}
+                                                                    />
+                                                                </div>
+                                                                {refundParts.length > 1 && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setRefund(p => ({ ...p, parts: p.parts.filter((_, i) => i !== idx) }))}
+                                                                        className={QUITAR}
+                                                                        title="Quitar este tramo" aria-label="Quitar este tramo"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                                    </button>
+                                                                )}
+                                                            </div>
+
+                                                            {s.cur && !s.cur.is_base && s.montoBase > 0 && (
+                                                                <p className="text-[12px] text-content-subtle tabular-nums">≈ {fmtB(s.montoBase)} · tasa {s.rate}</p>
+                                                            )}
+                                                            {s.journal_id && !s.isCash && (
+                                                                <input
+                                                                    type="text"
+                                                                    value={s.reference || ''}
+                                                                    onChange={e => setParte(idx, { reference: e.target.value })}
+                                                                    placeholder="N° de referencia"
+                                                                    className={`${INPUT} !h-9`}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                {refundFaltaCaja && (
+                                                    <p className="text-[12px] font-medium text-red-600 dark:text-red-400 mt-1.5">Elige de qué caja sale ese monto</p>
+                                                )}
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setRefund(p => ({ ...p, parts: [...p.parts, { journal_id: '', amount: '', reference: '' }] }))}
+                                                    className={`${AGREGAR} mt-2.5`}
+                                                >
+                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4" /></svg>
+                                                    Reembolsar desde otra caja
+                                                </button>
+
+                                                <div className="flex items-center justify-between gap-2 mt-2.5 pt-2.5 border-t border-border/60 dark:border-white/[0.06] text-[12px] tabular-nums">
+                                                    <span className="text-content-subtle">
+                                                        Reembolsado <span className="font-semibold text-content dark:text-white">{fmtB(refundTotalBase)}</span> de {fmtB(sobrante)}
+                                                    </span>
+                                                    {refundExcede
+                                                        ? <span className="font-medium text-red-600 dark:text-red-400">Supera lo que le corresponde</span>
+                                                        : refundResto > 0.01 && (hayCliente
+                                                            ? <span className="text-content-subtle">El resto queda a su favor</span>
+                                                            : <span className="font-medium text-red-600 dark:text-red-400">Faltan {fmtB(refundResto)}</span>)}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <Field label="Fecha del reembolso">
+                                                    <DatePicker
+                                                        value={refund.date}
+                                                        onChange={v => setRefund(p => ({ ...p, date: v }))}
+                                                        clearable={false}
+                                                        className="w-full"
+                                                    />
+                                                </Field>
+                                                <Field label="Notas" hint="Opcional">
+                                                    <input
+                                                        type="text"
+                                                        value={refund.notes}
+                                                        onChange={e => setRefund(p => ({ ...p, notes: e.target.value }))}
+                                                        placeholder="Observaciones…"
+                                                        className={INPUT}
+                                                    />
+                                                </Field>
                                             </div>
                                         </div>
                                     )}
@@ -742,8 +815,8 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                 isOpen={confirmShow}
                 title={mode === "cambio" ? "¿Confirmar cambio?" : "¿Confirmar devolución?"}
                 message={mode === "cambio"
-                    ? `Devuelves ${fmtB(totalReturn)} y entregas ${fmtB(totalReplacement)}.${exchangeDiff > 0.001 ? ` El cliente deberá pagar ${fmtB(exchangeDiff)} adicional.` : exchangeDiff < -0.001 ? ` Se acreditarán ${fmtB(Math.abs(exchangeDiff))} al cliente.` : ""}`
-                    : `Estás a punto de procesar una devolución por ${fmtB(totalReturn)}.${refund.enabled && refundTotalBase > 0 ? ` Se reembolsará ${fmtB(refundTotalBase)} vía ${nombresCajas || '...'}.` : ''} El stock será reintegrado automáticamente.`
+                    ? `Devuelves ${fmtB(totalReturn)} y entregas ${fmtB(totalReplacement)}.${aDeuda > 0.001 ? ` ${fmtB(aDeuda)} rebajan la deuda de la factura.` : ""}${porCobrar > 0.001 ? ` Quedan ${fmtB(porCobrar)} por cobrar.` : ""}${textoSobrante()}`
+                    : `Estás a punto de procesar una devolución por ${fmtB(totalReturn)}.${aDeuda > 0.001 ? ` ${fmtB(aDeuda)} rebajan la deuda de la factura.` : ""}${textoSobrante()} El stock será reintegrado automáticamente.`
                 }
                 onConfirm={mode === "cambio" ? executeExchange : executeSubmit}
                 onCancel={() => setConfirmShow(false)}

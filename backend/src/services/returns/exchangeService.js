@@ -2,10 +2,10 @@ const {
   Sale, SaleItem, Product, ProductStock, Employee,
   Return, ReturnItem, Payment, ProductComboItem, Serie, SerieRange, sequelize, Sequelize,
 } = require("../../models");
-const { excludeAnnulledReturns } = require("./shared");
-const { addCreditMovement } = require("../customers/creditLedger");
+const { assertWarehouseAccess } = require("../../middleware/auth");
+const { excludeAnnulledReturns, saleDebt, refreshSaleStatus, settleSurplus, defaultSurplusMode } = require("./shared");
 
-module.exports = async function createExchange({ saleId, returnItems, replacementItems, reason, employeeId }) {
+module.exports = async function createExchange({ saleId, returnItems, replacementItems, reason, employeeId, surplusMode, refund }, req) {
   if (!returnItems?.length)      { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
   if (!replacementItems?.length) { const e = new Error("Debes indicar al menos un producto de reemplazo"); e.status = 400; throw e; }
 
@@ -14,6 +14,9 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
     /* ── 1. Validar venta original ── */
     const sale = await Sale.findByPk(saleId, { transaction: t, lock: true });
     if (!sale) { const e = new Error("Venta no encontrada"); e.status = 404; throw e; }
+    if (sale.status === "anulado") { const e = new Error("La factura está anulada: no admite cambios"); e.status = 400; throw e; }
+    // El cambio reingresa y saca mercancía del almacén de la venta.
+    await assertWarehouseAccess(req, sale.warehouse_id, { optional: true });
 
     const saleItemsDb = await SaleItem.findAll({ where: { sale_id: saleId }, transaction: t });
     const itemsMap = Object.fromEntries(saleItemsDb.map(i => [i.id, i]));
@@ -40,6 +43,12 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
       returnLines.push({ sale_item_id, product_id: si.product_id, name: si.name, price: si.price, qty: parsedQty, subtotal });
     }
     returnTotal = parseFloat(returnTotal.toFixed(6));
+
+    // La deuda se mide ANTES de crear la NC: una vez creada, ella misma ya la rebaja. En una
+    // factura a crédito lo devuelto salda primero lo que se debe; solo el resto paga la
+    // mercancía nueva (ver saleDebt).
+    const deuda = await saleDebt(sale, t);
+    const appliedToDebt = parseFloat(Math.min(returnTotal, deuda).toFixed(6));
 
     /* ── 3. Crear registro de devolución + NC ── */
     let nc_number = null;
@@ -123,7 +132,8 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
       const totalRet = parseFloat(await ReturnItem.sum('qty', { where: { sale_item_id: si.id, ...soloVivas }, transaction: t }) || 0);
       if (totalRet < parseFloat(si.quantity)) { fullyReturned = false; break; }
     }
-    if (fullyReturned) await sale.update({ status: 'devuelto' }, { transaction: t });
+    // Con la NC ya creada, una factura a crédito puede quedar saldada por ella.
+    await refreshSaleStatus(sale, { fullyReturned }, t);
 
     /* ── 4. Calcular total de reemplazo y validar stock ── */
     let replacementTotal = 0;
@@ -264,8 +274,12 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
     }
 
     /* ── 6. Aplicar crédito de devolución a la nueva venta ── */
-    const creditToApply = parseFloat(Math.min(returnTotal, replacementTotal).toFixed(6));
-    if (creditToApply > 0 && sale.customer_id) {
+    // Lo que no se llevó la deuda de la factura original paga la nueva. Va aunque la venta no
+    // tenga cliente: sin el pago, la factura de reemplazo quedaba 'pagado' sin nada que lo
+    // respaldara.
+    const libre = parseFloat((returnTotal - appliedToDebt).toFixed(6));
+    const creditToApply = parseFloat(Math.min(libre, replacementTotal).toFixed(6));
+    if (creditToApply > 0) {
       await Payment.create({
         sale_id:            exchangeSale.id,
         customer_id:        sale.customer_id,
@@ -279,20 +293,17 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
       }, { transaction: t });
     }
 
-    /* Saldo sobrante va al crédito del cliente */
-    const creditRemainder = parseFloat((returnTotal - creditToApply).toFixed(6));
-    if (creditRemainder > 0.001 && sale.customer_id) {
-      await addCreditMovement({
-        customer_id:  sale.customer_id,
-        warehouse_id: sale.warehouse_id,
-        amount:       creditRemainder,
-        reason:       'devolucion',
-        sale_id:      saleId,
-        return_id:    returnRecord.id,
-        employee_id:  employeeId || null,
-        company_id:   sale.company_id || null,
-      }, t);
-    }
+    /* Lo que sobra: saldo a favor, reembolso desde caja o no se devuelve (lo elige el cajero) */
+    const surplus = parseFloat((libre - creditToApply).toFixed(6));
+    const settled = await settleSurplus({
+      sale,
+      surplus,
+      mode:       surplusMode || defaultSurplusMode({ refund, customerId: sale.customer_id }),
+      refund,
+      ncNumber:   nc_number,
+      returnId:   returnRecord.id,
+      employeeId,
+    }, t);
 
     const remainingToPay = parseFloat((replacementTotal - creditToApply).toFixed(6));
     const newStatus = remainingToPay <= 0.001 ? 'pagado' : 'pendiente';
@@ -307,7 +318,12 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
       return_total:        returnTotal,
       replacement_total:   replacementTotal,
       credit_applied:      creditToApply,
-      credit_remainder:    creditRemainder,
+      applied_to_debt:     appliedToDebt,
+      // Lo que sobró, según lo que eligió el cajero.
+      credit_remainder:    settled.credited,
+      refunded:            settled.refunded,
+      kept:                settled.kept,
+      refund_expense_ids:  settled.expenseIds,
       remaining_to_pay:    remainingToPay > 0.001 ? remainingToPay : 0,
       new_sale_status:     newStatus,
       items:               returnLines,

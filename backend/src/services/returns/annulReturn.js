@@ -1,5 +1,5 @@
 const {
-  Sale, SaleItem, Product, ProductStock, Customer,
+  Sale, SaleItem, Product, ProductStock, Customer, CustomerCreditMovement, Expense,
   Return, ReturnItem, Payment, ProductComboItem, sequelize, Sequelize,
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
@@ -56,6 +56,10 @@ module.exports = async function annulReturn(returnId, { employeeId }, req) {
     /* ── Guarda 1: la NC viene de un cambio ── */
     // El cambio deja el crédito aplicado como pago de la venta de reemplazo, con la NC
     // escrita en la nota. Es el único rastro que las enlaza.
+    //
+    // En una factura a crédito lo devuelto puede haberse ido entero a la deuda: entonces no hay
+    // pago y no hace falta guarda. Anular deja la factura original debiéndose otra vez y la de
+    // reemplazo como una venta aparte, que es justo lo que pasó si la devolución no existió.
     const pagoDeCambio = await Payment.findOne({
       where: { notes: `Crédito aplicado por cambio — NC ${ret.nc_number || ret.id}` },
       transaction: t,
@@ -70,8 +74,37 @@ module.exports = async function annulReturn(returnId, { employeeId }, req) {
       );
     }
 
+    /* ── Guarda 1b: lo que sobró se reembolsó desde caja ── */
+    // Ese dinero ya salió: anular la NC sin anular el egreso dejaría la caja corta con un
+    // documento que dice que la devolución nunca pasó.
+    if (ret.nc_number) {
+      const reembolsos = await Expense.count({
+        where: { description: { [Op.like]: `Reembolso ${ret.nc_number} /%` }, status: { [Op.ne]: "anulado" } },
+        transaction: t,
+      });
+      if (reembolsos > 0) {
+        throw err(
+          `${etiqueta} tiene un reembolso en efectivo o transferencia. Anula primero ese egreso ` +
+          `(Contabilidad → Egresos, "Reembolso ${ret.nc_number}").`,
+          400
+        );
+      }
+    }
+
     /* ── Guarda 2: el crédito ya se consumió ── */
-    const acreditado = round6(ret.total);
+    // Solo se revierte lo que esta NC dejó a favor del cliente, que ya no es siempre su total:
+    // lo que rebajó la deuda de la factura, lo reembolsado y lo no devuelto no generan saldo.
+    // Las NC de antes del ledger no tienen movimiento propio; esas acreditaban el total.
+    const movimientos = await CustomerCreditMovement.findAll({
+      where: { return_id: ret.id, reason: "devolucion" },
+      attributes: ["amount"],
+      transaction: t,
+    });
+    let acreditado = round6(movimientos.reduce((acc, m) => acc + parseFloat(m.amount), 0));
+    if (!movimientos.length && sale.customer_id) {
+      const inicioLedger = await CustomerCreditMovement.min("created_at", { transaction: t });
+      if (!inicioLedger || new Date(ret.created_at) < new Date(inicioLedger)) acreditado = round6(ret.total);
+    }
     let customer = null;
     if (sale.customer_id) {
       customer = await Customer.findByPk(sale.customer_id, { transaction: t, lock: true });

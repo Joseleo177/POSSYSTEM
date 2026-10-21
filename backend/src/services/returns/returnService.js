@@ -1,22 +1,30 @@
 const {
   Sale, SaleItem, Product, ProductStock, Employee,
-  Return, ReturnItem, Payment, ProductComboItem, Serie, SerieRange,
-  Expense, ExpenseCategory, PaymentJournal, Currency, sequelize, Sequelize,
+  Return, ReturnItem, ProductComboItem, Serie, SerieRange, sequelize, Sequelize,
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
-const { excludeAnnulledReturns } = require("./shared");
-const { addCreditMovement } = require("../customers/creditLedger");
-const { toLocalDate } = require("../../utils/localDate");
-const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
-const { resolveMethod } = require("../../utils/journalMethod");
+const { excludeAnnulledReturns, saleDebt, refreshSaleStatus, settleSurplus, defaultSurplusMode } = require("./shared");
 
-async function createReturn({ saleId, items, reason, employee_id, refund }, req) {
+async function createReturn({ saleId, items, reason, employee_id, refund, surplus_mode }, req) {
   if (!items?.length) { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
+
+  // El reembolso puede salir de VARIAS cajas (parte en efectivo, resto por transferencia),
+  // igual que el vuelto de un cobro. `refund.parts` es la forma nueva; `refund.journal_id`
+  // suelto se acepta como un solo tramo por compatibilidad.
+  const refundNormalizado = refund && refund.enabled !== false
+    ? {
+        ...refund,
+        parts: (Array.isArray(refund.parts) && refund.parts.length)
+          ? refund.parts
+          : (refund.journal_id ? [{ journal_id: refund.journal_id, amount: refund.amount, reference: refund.reference }] : []),
+      }
+    : null;
 
   const transaction = await sequelize.transaction();
   try {
     const sale = await Sale.findByPk(saleId, { transaction, lock: true });
     if (!sale) { const e = new Error("Venta no encontrada"); e.status = 404; throw e; }
+    if (sale.status === "anulado") { const e = new Error("La factura está anulada: no admite devoluciones"); e.status = 400; throw e; }
     // La devolución reingresa mercancía al almacén de la venta.
     await assertWarehouseAccess(req, sale.warehouse_id, { optional: true });
 
@@ -54,6 +62,10 @@ async function createReturn({ saleId, items, reason, employee_id, refund }, req)
       returnTotal += subtotal;
       returnLines.push({ sale_item_id, product_id: si.product_id, name: si.name, price: si.price, qty: parsedQty, subtotal });
     }
+
+    // La deuda se mide ANTES de crear la NC: una vez creada, ella misma ya la rebaja.
+    const deuda = await saleDebt(sale, transaction);
+    const appliedToDebt = parseFloat(Math.min(returnTotal, deuda).toFixed(6));
 
     // Consume NC series if configured for this company
     let nc_number = null;
@@ -105,7 +117,7 @@ async function createReturn({ saleId, items, reason, employee_id, refund }, req)
       // Propagar errores si ocurren durante la consulta
       throw e;
     }
-    
+
     if (!nc_number) {
       const e = new Error("No hay serie de Notas de Crédito vinculada o con correlativos disponibles para procesar esta devolución.");
       e.status = 400; throw e;
@@ -167,98 +179,39 @@ async function createReturn({ saleId, items, reason, employee_id, refund }, req)
       const totalRet = await ReturnItem.sum('qty', { where: { sale_item_id: si.id, ...soloVivas }, transaction }) || 0;
       if (parseFloat(totalRet) < parseFloat(si.quantity)) { fullyReturned = false; break; }
     }
-    if (fullyReturned) await sale.update({ status: 'devuelto' }, { transaction });
+    // Con la NC ya creada, una factura a crédito puede quedar saldada por ella.
+    const saleStatus = await refreshSaleStatus(sale, { fullyReturned }, transaction);
 
-    // Acreditar al cliente: el crédito queda atado a la sucursal que vendió lo que se
-    // devuelve, la misma que reingresó la mercancía arriba. Solo se puede aplicar en otra
-    // venta de esa misma sucursal (ver creditLedger.js).
-    if (sale.customer_id) {
-      await addCreditMovement({
-        customer_id:  sale.customer_id,
-        warehouse_id: sale.warehouse_id,
-        amount:       returnTotal,
-        reason:       'devolucion',
-        sale_id:      saleId,
-        return_id:    returnRecord.id,
-        employee_id:  employee_id || null,
-        company_id:   sale.company_id || null,
-      }, transaction);
-    }
-
-    // Reembolso en efectivo/transferencia al cliente. Se registra como egreso DENTRO de esta
-    // misma transacción: si falla, la devolución tampoco se emite (antes se creaba aparte y
-    // podía quedar la NC sin el egreso, o el egreso en una categoría cualquiera).
-    // El reembolso puede salir de VARIAS cajas (parte en efectivo, resto por transferencia),
-    // igual que el vuelto de un cobro. Cada tramo es un egreso propio, con su diario, su
-    // moneda y su referencia. `refund.parts` es la forma nueva; `refund.journal_id` suelto se
-    // acepta como un solo tramo por compatibilidad.
-    const refundExpenseIds = [];
-    if (refund && refund.enabled !== false) {
-      const parts = (Array.isArray(refund.parts) && refund.parts.length)
-        ? refund.parts
-        : (refund.journal_id ? [{ journal_id: refund.journal_id, amount: refund.amount, reference: refund.reference }] : []);
-
-      // Cada tramo del reembolso sale de una caja de la sucursal de la venta (o compartida).
-      await assertJournalsInWarehouse(parts.map(p => p.journal_id), sale.warehouse_id, transaction);
-
-      // Categoría propia y estable, la misma que usa el reembolso desde la ficha del cliente.
-      const [cat] = parts.length
-        ? await ExpenseCategory.findOrCreate({
-            where:    { name: "Devolución de Crédito" },
-            defaults: { name: "Devolución de Crédito", active: true },
-            transaction,
-          })
-        : [null];
-
-      for (const part of parts) {
-        if (!part.journal_id) continue;
-        const rawAmount = parseFloat(String(part.amount ?? "").replace(",", "."));
-        if (isNaN(rawAmount) || rawAmount <= 0) {
-          const e = new Error("El monto de cada tramo del reembolso debe ser mayor a 0"); e.status = 400; throw e;
-        }
-
-        const journal = await PaymentJournal.findByPk(part.journal_id, {
-          include: [{ model: Currency, attributes: ["id", "exchange_rate"], required: false }],
-          transaction,
-        });
-        if (!journal) { const e = new Error("Método de reembolso no encontrado"); e.status = 400; throw e; }
-        // El método del tramo (la cuenta puede tener varios); sin él, el principal de la cuenta.
-        const metodo = await resolveMethod(part.journal_id, part.payment_method, "out", { transaction });
-        if (metodo !== "efectivo" && !String(part.reference || "").trim()) {
-          const e = new Error("El número de referencia es obligatorio para este método de reembolso"); e.status = 400; throw e;
-        }
-
-        // El monto se teclea en la moneda del diario; se guarda en la base con 6 decimales,
-        // igual que los cobros y el reembolso desde la ficha del cliente. Redondear a 4 (o a 2)
-        // hacía que al reconstruir el bolívar diera 1.200,02 en vez de 1.200,00.
-        const rate       = parseFloat(journal.Currency?.exchange_rate || 1) || 1;
-        const baseAmount = parseFloat((rawAmount / rate).toFixed(6));
-
-        const refundExpense = await Expense.create({
-          description:        `Reembolso ${nc_number} / ${sale.invoice_number || "#" + sale.id}`,
-          amount:             baseAmount,
-          rate,
-          category_id:        cat.id,
-          payment_journal_id: parseInt(part.journal_id),
-          payment_method:     metodo,
-          currency_id:        journal.currency_id || null,
-          reference:          String(part.reference || "").trim() || null,
-          notes:              String(refund.notes || "").trim() || null,
-          employee_id:        employee_id || null,
-          warehouse_id:       sale.warehouse_id,
-          company_id:         sale.company_id || null,
-          status:             "activo",
-          date:               refund.date ? toLocalDate(refund.date) : new Date(),
-        }, { transaction });
-        refundExpenseIds.push(refundExpense.id);
-      }
-    }
+    // Lo que no se llevó la deuda es dinero que el cliente ya pagó: el cajero elige si queda a
+    // su favor, si se le reembolsa desde caja o si no se le devuelve (ver settleSurplus). El
+    // saldo a favor queda atado a la sucursal que vendió —la misma que reingresó la mercancía
+    // arriba— y solo se aplica en otra venta de esa sucursal (ver creditLedger.js).
+    const surplus = parseFloat((returnTotal - appliedToDebt).toFixed(6));
+    const settled = await settleSurplus({
+      sale,
+      surplus,
+      mode:       surplus_mode || defaultSurplusMode({ refund: refundNormalizado, customerId: sale.customer_id }),
+      refund:     refundNormalizado,
+      ncNumber:   nc_number,
+      returnId:   returnRecord.id,
+      employeeId: employee_id,
+    }, transaction);
+    const refundExpenseIds = settled.expenseIds;
     const refundExpenseId = refundExpenseIds[0] || null;
 
     await transaction.commit();
     return {
       message: `Devolución registrada exitosamente. Total: ${returnTotal.toFixed(2)}`,
-      data:    { return_id: returnRecord.id, nc_number, total: returnTotal, items: returnLines, refund_expense_id: refundExpenseId, refund_expense_ids: refundExpenseIds },
+      data: {
+        return_id: returnRecord.id, nc_number, total: returnTotal, items: returnLines,
+        refund_expense_id: refundExpenseId, refund_expense_ids: refundExpenseIds,
+        // Cómo se repartió la NC: lo que rebajó la deuda de la factura y lo que sobró.
+        applied_to_debt: appliedToDebt,
+        credited:        settled.credited,
+        refunded:        settled.refunded,
+        kept:            settled.kept,
+        sale_status:     saleStatus,
+      },
     };
   } catch (err) {
     await transaction.rollback();
