@@ -24,6 +24,9 @@ const MODULES = [
       // bajo sales.view porque es el mismo que usa la pantalla de Ventas.
       { key: 'pending',  label: 'Ver facturas pendientes en el POS' },
       { key: 'create',   label: 'Cobrar / facturar' },
+      // Descuento global y por línea. El tope para quien no es administrador sale de
+      // Configuración → Punto de venta (discount_max_pct).
+      { key: 'discount', label: 'Dar descuentos' },
       { key: 'edit',     label: 'Editar cuenta abierta' },
       { key: 'void',     label: 'Anular venta' },
       { key: 'credit',   label: 'Entregar a crédito' },
@@ -92,6 +95,18 @@ const MODULES = [
       // movimientos desde el extracto, así que se concedió a quien ya registraba egresos. No
       // va en ningún LEGACY_MAP: es una facultad nueva y nadie la hereda en silencio.
       { key: 'reconcile', label: 'Conciliar bancos' },
+    ],
+  },
+  {
+    // Módulo Fábrica: solo aparece en empresas con companies.fabrica_enabled (ver
+    // routes/factory.js). No va en ningún LEGACY_MAP: es nuevo y nadie lo hereda.
+    key: 'factory',
+    label: 'Fábrica',
+    actions: [
+      { key: 'view',    label: 'Ver órdenes y láminas' },
+      { key: 'manage',  label: 'Registrar láminas, órdenes y devoluciones' },
+      // Aparte porque consume un correlativo de la serie fiscal.
+      { key: 'invoice', label: 'Facturar órdenes' },
     ],
   },
   {
@@ -165,7 +180,7 @@ const LEGACY_MAP = {
   // permit("sales", ...) aparecía en: cobrar, anular, crédito, devoluciones, caja, y además
   // en crear/editar clientes, ajustar su crédito y registrar cobros.
   sales: [
-    'sales.view', 'sales.pending', 'sales.create', 'sales.edit', 'sales.void', 'sales.credit', 'sales.return', 'sales.cash',
+    'sales.view', 'sales.pending', 'sales.create', 'sales.discount', 'sales.edit', 'sales.void', 'sales.credit', 'sales.return', 'sales.cash',
     'customers.view', 'customers.create', 'customers.edit', 'customers.credit',
   ],
 
@@ -212,7 +227,7 @@ const LEGACY_MAP = {
     'currencies.view', 'currencies.manage',
     'reports.view', 'reports.audit',
     'accounting.view', 'accounting.income', 'accounting.expense', 'accounting.void', 'accounting.delete',
-    'sales.view', 'sales.pending', 'sales.create', 'sales.edit', 'sales.void', 'sales.credit', 'sales.cash',
+    'sales.view', 'sales.pending', 'sales.create', 'sales.discount', 'sales.edit', 'sales.void', 'sales.credit', 'sales.cash',
     'products.view', 'products.create', 'products.edit',
     'customers.view', 'customers.create', 'customers.edit', 'customers.credit',
     'inventory.view', 'inventory.adjust', 'inventory.transfer', 'inventory.receive',

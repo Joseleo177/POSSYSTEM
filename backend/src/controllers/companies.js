@@ -46,7 +46,7 @@ const create = async (req, res) => {
   try {
     if (!req.is_superuser) return res.status(403).json({ ok: false, message: "Acceso denegado" });
 
-    const { name, tax_id, address, phone, email, plan_name, subscription_status, expires_at, max_users, catalog_enabled, admin_username, admin_password } = req.body;
+    const { name, tax_id, address, phone, email, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled, admin_username, admin_password } = req.body;
     if (!name) return res.status(400).json({ ok: false, message: "Nombre es requerido" });
 
     const wantedUser = admin_username?.trim() || null;
@@ -82,7 +82,8 @@ const create = async (req, res) => {
         subscription_status: subscription_status || 'Demo',
         expires_at: expDate,
         max_users: max_users || 5,
-        catalog_enabled: !!catalog_enabled
+        catalog_enabled: !!catalog_enabled,
+        fabrica_enabled: !!fabrica_enabled
       }, { transaction });
 
       // Los roles son de cada empresa: la nueva recibe su copia de las plantillas (los roles
@@ -107,6 +108,14 @@ const create = async (req, res) => {
         { code: 'USD', name: 'Dólar Americano', symbol: 'Ref.', exchange_rate: 1.0, is_base: true, active: true, company_id: company.id },
         { code: 'VES', name: 'Bolívar Venezolano', symbol: 'Bs.', exchange_rate: 36.0, is_base: false, active: true, company_id: company.id }
       ], { transaction });
+
+      // La revisión del pedido antes de facturar nace encendida en las empresas nuevas: no
+      // tienen una costumbre que romper. Las que ya existían no tienen la clave y siguen con
+      // el flujo de siempre hasta que la enciendan en Configuración → Punto de venta.
+      await models.Setting.create(
+        { key: 'pos_review_checkout', value: 'true', company_id: company.id },
+        { transaction }
+      );
 
       // Sin categorías, la empresa nace sin poder mover dinero: `expenses.category_id` e
       // `incomes.category_id` son NOT NULL, así que el desplegable salía vacío y no se podía
@@ -173,7 +182,7 @@ const update = async (req, res) => {
   try {
     if (!req.is_superuser) return res.status(403).json({ ok: false, message: "Acceso denegado" });
     const { id } = req.params;
-    const { name, tax_id, address, phone, email, active, plan_name, subscription_status, expires_at, max_users, catalog_enabled } = req.body;
+    const { name, tax_id, address, phone, email, active, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled } = req.body;
 
     const company = await Company.findByPk(id);
     if (!company) return res.status(404).json({ ok: false, message: "Empresa no encontrada" });
@@ -181,7 +190,8 @@ const update = async (req, res) => {
     await company.update({
       name, tax_id, address, phone, email, active,
       plan_name, subscription_status, expires_at: normalizeExpiry(expires_at), max_users,
-      catalog_enabled: !!catalog_enabled
+      catalog_enabled: !!catalog_enabled,
+      fabrica_enabled: !!fabrica_enabled
     });
     // Suspender o reactivar tiene que notarse ya: sin esto, la caché del middleware seguiría
     // dejando pasar (o bloqueando) a esa empresa hasta que venciera el TTL.
@@ -203,6 +213,10 @@ const update = async (req, res) => {
 // cascada.
 const DELETE_ORDER = [
   'Quotation',                                   // bloquea sales, customers, warehouses, employees
+  // Fábrica: sus órdenes apuntan a ventas, productos, clientes y almacenes, y las piezas y
+  // recetas a productos. Sin borrarlas primero, la empresa no se podía eliminar.
+  'FabricationOrderCut', 'FabricationOrderStage', 'FabricationOrderPlan', 'FabricationOrderItem', 'FabricationOrderPiece',
+  'FabricationOrder', 'FabricationRecipeItem', 'FabricationRecipe', 'MaterialPiece', 'FabricationStage',
   'Expense', 'Income', 'PurchasePayment',        // bloquean employees, currencies, journals y categorías
   'ProductComboItem',                            // RESTRICT sobre products
   'Payment', 'ReturnItem', 'Return',

@@ -11,4 +11,7 @@ export const PKG_UNITS = [
     "FARDO",
     "SACO",
     "CESTA",
+    // Materiales con control por piezas (Fábrica): el empaque es la pieza y su tamaño, el área o
+    // el largo de cada una. Lo fija la compra a partir de las medidas.
+    "PIEZA",
 ];

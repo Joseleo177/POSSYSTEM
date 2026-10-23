@@ -6,6 +6,7 @@ const SHORTCUTS = [
     { k: "F3",  l: "En espera"  },
     { k: "F4",  l: "Pausar"     },
     { k: "F5",  l: "Pendientes", perm: "sales.pending" },
+    { k: "F6",  l: "Devolución", perm: "sales.return" },
     { k: "F10", l: "Cobrar"     },
     { k: "Esc", l: "Limpiar"    },
 ];

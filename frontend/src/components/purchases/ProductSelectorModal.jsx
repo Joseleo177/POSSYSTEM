@@ -12,6 +12,12 @@ import { toNameCase } from "../../helpers";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers/image";
 import { unidadCorta } from "../warehouses/movementMeta";
 import VariantCurve from "./VariantCurve";
+import { DimsInput, UnitSwitch, useMeasureUnit, toMm, fromMm, fmtSize } from "../fabrica/shared";
+
+// Tamaño de una pieza (m² o m) con los tres decimales de la existencia.
+const pieceSize = (mode, wMm, lMm) => (mode === "length"
+    ? (lMm > 0 ? Math.round(lMm) / 1000 : 0)
+    : (wMm > 0 && lMm > 0 ? Math.round((wMm * lMm) / 1000) / 1000 : 0));
 
 const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
@@ -84,6 +90,8 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     const [showProductModal, setShowProductModal] = useState(false);
     const [categories, setCategories]             = useState([]);
     const [savingNew, setSavingNew]               = useState(false);
+    // Material por piezas (Fábrica): las medidas se escriben en la unidad del taller.
+    const [pieceUnit, setPieceUnit] = useMeasureUnit();
 
     // Reset / init al abrir
     useEffect(() => {
@@ -102,6 +110,8 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                 // Sin esto, reabrir la línea de un insumo volvía a ofrecer margen y precio
                 // de venta, que es justo lo que la compra no le va a escribir.
                 sellable: editItem.sellable ?? editItem.product?.sellable ?? true,
+                piece_mode: editItem.product?.piece_mode
+                    ?? (editItem.piece_length_mm ? (editItem.piece_width_mm ? "area" : "length") : null),
             });
             setForm({
                 package_unit:    normalizePkgUnit(editItem.package_unit),
@@ -111,6 +121,8 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                 profit_margin:   String(editItem.profit_margin ?? "30"),
                 lot_number:      editItem.lot_number      || "",
                 expiration_date: editItem.expiration_date || "",
+                piece_w:         editItem.piece_width_mm  ? fromMm(editItem.piece_width_mm, pieceUnit)  : "",
+                piece_l:         editItem.piece_length_mm ? fromMm(editItem.piece_length_mm, pieceUnit) : "",
             });
         } else {
             setStep(1); setSearch(""); setSelected(null); setForm(EMPTY_FORM);
@@ -196,6 +208,23 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     const handleSelectProduct = (p) => {
         setSelected(p);
         if (p.is_variant_parent) { setStep(3); return; }
+        // Material por piezas: el empaque es la pieza, con el formato del material (el
+        // proveedor puede traer otro tamaño y se cambia aquí). Al recibir, cada una se numera.
+        if (p.piece_mode) {
+            const size = pieceSize(p.piece_mode, p.piece_width_mm, p.piece_length_mm);
+            setForm({
+                ...EMPTY_FORM,
+                package_unit:  "PIEZA",
+                package_size:  String(size),
+                package_qty:   "1",
+                package_price: p.cost_price ? String((p.cost_price * size * invoiceRate).toFixed(2)) : "",
+                profit_margin: p.profit_margin != null ? String(p.profit_margin) : "30",
+                piece_w: p.piece_mode === "area" ? fromMm(p.piece_width_mm, pieceUnit) : "",
+                piece_l: fromMm(p.piece_length_mm, pieceUnit),
+            });
+            setStep(2);
+            return;
+        }
         const isUnidad = !p.package_unit || p.package_unit.toLowerCase() === "unidad";
         const rawSize  = isUnidad ? 1 : (parseFloat(p.package_size) || 1);
         // Productos por unidad → tamaño de empaque entero (no admite 12.502)
@@ -208,6 +237,26 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
             profit_margin: p.profit_margin != null ? String(p.profit_margin) : "30",
         });
         setStep(2);
+    };
+
+    const pieceMode = selected?.piece_mode || null;
+    const pieceW = pieceMode === "area" ? toMm(form.piece_w, pieceUnit) : null;
+    const pieceL = pieceMode ? toMm(form.piece_l, pieceUnit) : null;
+    // Medidas → tamaño de la pieza, que es lo que multiplica la existencia.
+    const setPiece = (key, val) => setForm(prev => {
+        const next = { ...prev, [key]: val };
+        const w = pieceMode === "area" ? toMm(next.piece_w, pieceUnit) : null;
+        const l = toMm(next.piece_l, pieceUnit);
+        const size = pieceSize(pieceMode, w, l);
+        next.package_size = size ? String(size) : "";
+        return next;
+    });
+    const changePieceUnit = (u) => {
+        setForm(prev => {
+            const w = toMm(prev.piece_w, pieceUnit), l = toMm(prev.piece_l, pieceUnit);
+            return { ...prev, piece_w: w > 0 ? fromMm(w, u) : prev.piece_w, piece_l: l > 0 ? fromMm(l, u) : prev.piece_l };
+        });
+        setPieceUnit(u);
     };
 
     const pkgPriceBase = parseFloat(form.package_price) / invoiceRate;
@@ -251,11 +300,20 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     // también es 0 — el producto queda a la venta regalado.
     const lineaValida = !!selected
         && parseFloat(form.package_qty) > 0
-        && parseFloat(form.package_price) > 0;
+        && parseFloat(form.package_price) > 0
+        // Por piezas: medidas completas y piezas enteras (media lámina no se numera).
+        && (!pieceMode || (parseFloat(form.package_size) > 0 && Number.isInteger(parseFloat(form.package_qty))));
 
     const handleAdd = () => {
         if (!lineaValida) return;
         const result = { ...form, package_price: String(pkgPriceBase), product: selected, ...calc, key: Date.now() };
+        delete result.piece_w;
+        delete result.piece_l;
+        if (pieceMode) {
+            result.package_unit = "PIEZA";
+            result.piece_width_mm = pieceW;
+            result.piece_length_mm = pieceL;
+        }
         // El margen del formulario arrastra su valor por defecto aunque el campo no se vea.
         // Sin limpiarlo, la línea de un insumo entraba a la orden prometiendo 30% y un precio
         // de venta que la compra después no aplica.
@@ -449,6 +507,37 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                             {/* ¿Cómo viene? Los rótulos nombran la presentación elegida ("Cajas"
                                 y no "Cant. a pedir"), y los campos se alinean abajo para que un
                                 rótulo de dos líneas no los desfase. */}
+                            {pieceMode ? (
+                            <section>
+                                <p className="text-[13px] font-semibold text-content dark:text-white mb-2.5">Cómo viene</p>
+                                <div className="space-y-3">
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[12px] text-content-subtle flex justify-between gap-2">
+                                            <span>Medidas de cada pieza</span>
+                                            {parseFloat(form.package_size) > 0 && <span className="tabular-nums">{fmtSize(form.package_size, selected.unit)} c/u</span>}
+                                        </label>
+                                        <div className="flex flex-col sm:flex-row gap-2">
+                                            <div className="flex-1 min-w-0">
+                                                <DimsInput mode={pieceMode} w={form.piece_w || ""} l={form.piece_l || ""} unit={pieceUnit}
+                                                    onW={v => setPiece("piece_w", v)} onL={v => setPiece("piece_l", v)} />
+                                            </div>
+                                            <UnitSwitch unit={pieceUnit} setUnit={changePieceUnit} className="self-start" />
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-1.5 sm:w-1/2">
+                                        <label className="text-[12px] text-content-subtle">Cantidad de piezas</label>
+                                        <input
+                                            type="text" inputMode="numeric"
+                                            value={form.package_qty}
+                                            onChange={e => setF("package_qty", sanitizeDecimal(e.target.value, false))}
+                                            data-autofocus
+                                            className="input h-10 text-right text-[14px] font-semibold tabular-nums"
+                                        />
+                                    </div>
+                                    <p className="text-[12px] text-content-subtle leading-snug">Al recibir la compra, cada pieza queda numerada en Fábrica.</p>
+                                </div>
+                            </section>
+                            ) : (
                             <section>
                                 <p className="text-[13px] font-semibold text-content dark:text-white mb-2.5">Cómo viene</p>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -492,6 +581,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     </div>
                                 </div>
                             </section>
+                            )}
 
                             {/* Costo y precio. Sin margen (insumo), el costo ocupa la fila entera. */}
                             <section>

@@ -60,7 +60,10 @@ module.exports = async function getSessionSummary(id, req) {
       JOIN payment_journals pj ON p.payment_journal_id = pj.id
       LEFT JOIN currencies c ON pj.currency_id = c.id
       JOIN sales s ON p.sale_id = s.id
-      WHERE s.warehouse_id = :wid AND s.employee_id = :eid
+      -- El cobro es de quien lo registró, no de quien hizo la venta: la factura a crédito
+      -- que María vendió ayer y hoy cobra otro cajero entra en la gaveta de este. Sin
+      -- cobrador conocido (cobros viejos) se queda con el vendedor, como antes.
+      WHERE s.warehouse_id = :wid AND COALESCE(p.employee_id, s.employee_id) = :eid
         AND p.created_at >= :openedAt AND p.created_at < :closedAt
       GROUP BY pj.id, pj.name, pj.type, pj.color, c.symbol
       ORDER BY total DESC
@@ -95,7 +98,10 @@ module.exports = async function getSessionSummary(id, req) {
         ON pm.code = COALESCE(NULLIF(p.payment_method, ''), pj.type) AND pm.company_id = pj.company_id
       LEFT JOIN payment_journal_methods m
         ON m.journal_id = pj.id AND m.method_code = COALESCE(NULLIF(p.payment_method, ''), pj.type)
-      WHERE s.warehouse_id = :wid AND s.employee_id = :eid
+      -- El cobro es de quien lo registró, no de quien hizo la venta: la factura a crédito
+      -- que María vendió ayer y hoy cobra otro cajero entra en la gaveta de este. Sin
+      -- cobrador conocido (cobros viejos) se queda con el vendedor, como antes.
+      WHERE s.warehouse_id = :wid AND COALESCE(p.employee_id, s.employee_id) = :eid
         AND p.created_at >= :openedAt AND p.created_at < :closedAt
       GROUP BY p.payment_journal_id, COALESCE(NULLIF(p.payment_method, ''), pj.type)
       ORDER BY sort_order, total DESC
@@ -175,10 +181,18 @@ module.exports = async function getSessionSummary(id, req) {
 
   const journalSummary = (session.journals || []).map((sj) => {
     const collected = paymentsByJournal.find((p) => p.id === sj.journal_id);
-    const cashIn = parseFloat(collected?.total || 0);
+    let cashIn = parseFloat(collected?.total || 0);
     const manualIn = parseFloat(incomesByJournal.find((i) => i.journal_id === sj.journal_id)?.total_in || 0);
     const cashOut = parseFloat(expensesByJournal.find((c) => c.journal_id === sj.journal_id)?.total_out || 0);
-    const expected = parseFloat(sj.opening_amount || 0) + cashIn + manualIn - cashOut;
+    let expected = parseFloat(sj.opening_amount || 0) + cashIn + manualIn - cashOut;
+    // Un turno cerrado muestra lo que quedó asentado al cerrarlo, no una cuenta rehecha con
+    // las reglas de hoy: si cambia cómo se atribuye un cobro, el cierre viejo no debe
+    // amanecer con otro esperado y una diferencia que ya no cuadra con él. Los cobros se
+    // deducen del esperado guardado para que el desglose siga sumando.
+    if (session.status === "closed" && sj.expected_amount != null) {
+      expected = parseFloat(sj.expected_amount);
+      cashIn = parseFloat((expected - parseFloat(sj.opening_amount || 0) - manualIn + cashOut).toFixed(2));
+    }
     return {
       journal_id: sj.journal_id,
       journal_name: sj.journal?.name,

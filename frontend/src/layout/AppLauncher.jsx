@@ -16,6 +16,7 @@ const APPS = {
     "Catálogo":      { tone: "bg-violet-500/[0.12] text-violet-600 dark:text-violet-400",    hint: "Productos y precios" },
     Inventario:      { tone: "bg-amber-500/[0.12] text-amber-600 dark:text-amber-400",       hint: "Stock y transferencias" },
     Compras:         { tone: "bg-orange-500/[0.12] text-orange-600 dark:text-orange-400",    hint: "Mercancía de proveedores" },
+    "Fábrica":       { tone: "bg-stone-500/[0.12] text-stone-600 dark:text-stone-300",       hint: "Láminas y órdenes de fabricación" },
     Clientes:        { tone: "bg-sky-500/[0.12] text-sky-600 dark:text-sky-400",             hint: "Clientes y proveedores" },
     Dashboard:       { tone: "bg-cyan-500/[0.12] text-cyan-600 dark:text-cyan-400",          hint: "Resumen del negocio" },
     Contabilidad:    { tone: "bg-green-500/[0.12] text-green-600 dark:text-green-400",       hint: "Cajas, facturas y cuentas" },
@@ -27,7 +28,7 @@ const APPS = {
 };
 
 const SECCIONES = [
-    { label: "Operación",      keys: ["Cobro", "Catálogo", "Inventario", "Compras", "Clientes"] },
+    { label: "Operación",      keys: ["Cobro", "Catálogo", "Inventario", "Compras", "Fábrica", "Clientes"] },
     { label: "Finanzas",       keys: ["Dashboard", "Contabilidad", "Reportes", "Monedas"] },
     { label: "Administración", keys: ["Empleados", "Empresas", "Configuración"] },
 ];

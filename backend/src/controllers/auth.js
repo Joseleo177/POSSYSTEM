@@ -70,7 +70,22 @@ const login = async (req, res) => {
 };
 
 // GET /api/auth/me
-const me = (req, res) => {
+// Los permisos van al día, no los del token: un permiso concedido por migración o desde la
+// pantalla de Roles tardaba hasta 12 h (lo que vive el token) en aparecer en la app. Pasó con
+// `sales.discount`: el cajero con sesión abierta dejaba de ver el descuento que el servidor sí le
+// aceptaba. Si la consulta falla, se responde con lo del token, como antes.
+const me = async (req, res) => {
+  try {
+    const emp = await Employee.findByPk(req.employee.id, {
+      attributes: ["id"], include: [{ model: Role, attributes: ["name", "label", "permissions"] }],
+    });
+    if (emp?.Role) {
+      return res.json({ ok: true, employee: {
+        ...req.employee,
+        role: emp.Role.name, role_label: emp.Role.label, permissions: emp.Role.permissions || {},
+      } });
+    }
+  } catch { /* se cae a lo del token */ }
   res.json({ ok: true, employee: req.employee });
 };
 

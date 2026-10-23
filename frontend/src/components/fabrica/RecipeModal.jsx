@@ -1,0 +1,343 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Modal from "../ui/Modal";
+import Money from "../ui/Money";
+import Segmented from "../ui/Segmented";
+import ConfirmModal from "../ui/ConfirmModal";
+import CustomSelect from "../ui/CustomSelect";
+import { Button } from "../ui/Button";
+import { Spinner } from "../ui/Spinner";
+import { api } from "../../services/api";
+import { useApp } from "../../context/AppContext";
+import { useDebounce } from "../../hooks/useDebounce";
+import { toNameCase, fmtBase } from "../../helpers";
+import {
+    INPUT, AGREGAR, QUITAR, CARD, Field, PlusIcon, XIcon, SearchPick, fmtDims, fmtSize, errMsg,
+} from "./shared";
+
+const NARROW = INPUT.replace("w-full ", "");
+const RECIPE_UNITS = [{ key: "m", label: "m" }, { key: "cm", label: "cm" }, { key: "mm", label: "mm" }];
+
+// Campo de fórmula: acepta un número ("0,40") o una cuenta con las variables ("L + 0,10").
+function Formula({ value, onChange, placeholder, suffix, className = "" }) {
+    return (
+        <div className={`relative ${className}`}>
+            <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} spellCheck={false} autoComplete="off"
+                className={`${INPUT} ${suffix ? "pr-14" : ""} tabular-nums font-medium`} />
+            {suffix && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">{suffix}</span>}
+        </div>
+    );
+}
+
+const fmtMin = (m) => `${Number(m || 0).toLocaleString("es-VE", { maximumFractionDigits: 1 })} min`;
+
+/**
+ * Receta de un producto. Lo que se fabrica siempre igual lleva números fijos; lo que el
+ * cliente pide con otras medidas lleva variables (L, A, puertas) y fórmulas: el mesón de
+ * L × A lleva un corte de (L + 0,10) × (A + 0,25). Cada orden la calcula con sus valores.
+ *
+ * Tres tipos de línea, por unidad: cortes de material, accesorios y minutos en una etapa del
+ * taller (mano de obra). El cálculo de abajo lo hace el servidor con el mismo intérprete que
+ * usará la orden, así que lo que se ve aquí es exactamente lo que va a salir.
+ *
+ * `productId`: null cerrado · "new" receta nueva · id del producto para editar la suya.
+ */
+export default function RecipeModal({ productId, materials, stages = [], onClose, onSaved }) {
+    const { notify, baseCurrency } = useApp();
+    const [loading, setLoading] = useState(false);
+    const [product, setProduct] = useState(null);
+    const [unit, setUnit] = useState("m");
+    const [params, setParams] = useState([]);
+    const [instructions, setInstructions] = useState("");
+    const [cuts, setCuts] = useState([]);
+    const [accs, setAccs] = useState([]);
+    const [procs, setProcs] = useState([]);
+    const [deleting, setDeleting] = useState(false);
+    const [calc, setCalc] = useState(null);
+    const [calcError, setCalcError] = useState(null);
+    const open = productId != null;
+    const editing = open && productId !== "new";
+    const activeStages = stages.filter(s => s.active !== false);
+
+    useEffect(() => {
+        if (!open) return;
+        setProduct(null); setInstructions(""); setUnit("m"); setParams([]);
+        setCuts([]); setAccs([]); setProcs([]); setCalc(null); setCalcError(null);
+        if (!editing) {
+            setCuts(materials[0] ? [{ material_id: String(materials[0].id), w: "", l: "", cuts: "1" }] : []);
+            return;
+        }
+        setLoading(true);
+        api.factory.recipe(productId)
+            .then(r => {
+                const d = r.data;
+                setProduct({ id: d.product_id, name: d.product_name || "", unit: d.product_unit });
+                setUnit(d.unit || "m");
+                setParams((d.params || []).map(p => ({ ...p, default: String(p.default).replace(".", ",") })));
+                setInstructions(d.instructions || "");
+                setCuts(d.items.filter(i => i.kind === "material").map(i => ({
+                    material_id: String(i.component_id), w: i.width_expr || "", l: i.length_expr || "", cuts: i.cuts_expr || "1",
+                })));
+                setAccs(d.items.filter(i => i.kind === "accesorio").map(i => ({
+                    product: { id: i.component_id, name: i.name, unit: i.unit }, quantity: i.quantity_expr || "",
+                })));
+                setProcs(d.items.filter(i => i.kind === "proceso").map(i => ({ stage_id: String(i.stage_id), minutes: i.minutes_expr || "" })));
+            })
+            .catch(e => notify(errMsg(e, "No se pudo abrir la receta"), "err"))
+            .finally(() => setLoading(false));
+    }, [productId]);
+
+    const searchProducts = useCallback(async (term) => {
+        const r = await api.products.getAll({ search: term, is_combo: false, is_service: false, limit: 20 });
+        return (r.data || []).filter(p => !p.piece_mode && !p.is_variant_parent);
+    }, []);
+
+    const matOf = (id) => materials.find(m => String(m.id) === String(id));
+    const upd = (setter) => (i, patch) => setter(rows => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+    const setCut = upd(setCuts), setAcc = upd(setAccs), setProc = upd(setProcs), setParam = upd(setParams);
+    const drop = (setter, i) => setter(rows => rows.filter((_, j) => j !== i));
+
+    // El borrador tal como lo recibe el servidor.
+    const draft = useMemo(() => ({
+        product_id: product?.id,
+        unit,
+        params: params.map(p => ({ key: p.key.trim(), label: p.label.trim() || p.key.trim(), kind: p.kind, default: String(p.default).replace(",", ".") })),
+        instructions: instructions.trim() || null,
+        items: [
+            ...cuts.map(c => ({ component_id: parseInt(c.material_id) || 0, width_expr: c.w, length_expr: c.l, cuts_expr: c.cuts })),
+            ...accs.filter(a => a.product).map(a => ({ component_id: a.product.id, quantity_expr: a.quantity })),
+            ...procs.map(p => ({ stage_id: parseInt(p.stage_id) || 0, minutes_expr: p.minutes })),
+        ],
+    }), [product, unit, params, instructions, cuts, accs, procs]);
+
+    // Cálculo en vivo con los valores por defecto.
+    const dDraft = useDebounce(draft, 500);
+    useEffect(() => {
+        if (!open || loading || !dDraft.items.length) { setCalc(null); setCalcError(null); return; }
+        let vivo = true;
+        api.factory.evaluateRecipe(dDraft)
+            .then(r => { if (vivo) { setCalc(r.data); setCalcError(null); } })
+            .catch(e => { if (vivo) { setCalc(null); setCalcError(errMsg(e)); } });
+        return () => { vivo = false; };
+    }, [dDraft, open, loading]);
+
+    const money = (n) => fmtBase(n, baseCurrency);
+
+    const save = async () => {
+        if (!product) return notify("Elige el producto de la receta", "err");
+        if (!draft.items.length) return notify("Agrega al menos un corte, accesorio o proceso", "err");
+        try {
+            await api.factory.saveRecipe(product.id, draft);
+            notify("Receta guardada");
+            onSaved?.();
+        } catch (e) { notify(errMsg(e), "err"); }
+    };
+
+    const keys = params.map(p => p.key.trim().toUpperCase()).filter(Boolean);
+    const ejemplo = keys.length ? `${keys[0]} + 0,10` : "0,40";
+
+    return (
+        <>
+            <Modal open={open} onClose={deleting ? () => {} : onClose} title={editing ? "Editar receta" : "Nueva receta"} width={760}
+                footer={
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div className="sm:mr-auto text-[13px] min-w-0">
+                            {calc ? (
+                                <>
+                                    <span className="text-content-subtle">Costo estimado por unidad </span>
+                                    <Money value={money(calc.unit_cost)} className="font-semibold text-content dark:text-white" />
+                                </>
+                            ) : calcError ? (
+                                <span className="text-red-600 dark:text-red-400">{calcError}</span>
+                            ) : null}
+                        </div>
+                        <div className="flex flex-col-reverse sm:flex-row gap-2">
+                            {editing && (
+                                <button onClick={() => setDeleting(true)} className="h-12 sm:h-10 px-3 rounded-lg text-[13px] font-medium text-content-subtle hover:text-red-600 dark:hover:text-red-400">
+                                    Borrar receta
+                                </button>
+                            )}
+                            <button onClick={onClose} className="btn-outline h-12 sm:h-10 px-5 rounded-lg text-[13px] font-medium">Cancelar</button>
+                            <Button onClick={save} className="h-12 sm:h-10 px-5">Guardar receta</Button>
+                        </div>
+                    </div>
+                }>
+                {loading ? (
+                    <div className="py-16 flex justify-center"><Spinner /></div>
+                ) : (
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+                            <Field label="Producto que se fabrica">
+                                <SearchPick searchFn={searchProducts} value={product} onChange={setProduct} disabled={editing}
+                                    placeholder="Vaso, mesón, fregadero…" autoFocus={!editing}
+                                    renderItem={p => (
+                                        <span className="flex items-center justify-between gap-3">
+                                            <span className="truncate">{toNameCase(p.name)}</span>
+                                            <span className="text-[11px] text-content-subtle shrink-0">{p.unit}</span>
+                                        </span>
+                                    )} />
+                            </Field>
+                            <Field label="Medidas en">
+                                <Segmented value={unit} onChange={setUnit} options={RECIPE_UNITS} />
+                            </Field>
+                        </div>
+
+                        {/* Variables */}
+                        <section>
+                            <div className="mb-2">
+                                <h3 className="text-[14px] font-semibold text-content dark:text-white">Variables que pide el cliente</h3>
+                                <p className="text-[12px] text-content-subtle">Opcional. Para lo hecho a medida: largo, ancho, cantidad de puertas. Se usan en las fórmulas.</p>
+                            </div>
+                            <div className="space-y-2">
+                                {params.map((p, i) => (
+                                    <div key={i} className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                                        <input value={p.key} onChange={e => setParam(i, { key: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, "").slice(0, 10) })}
+                                            placeholder="L" aria-label="Nombre corto" className={`${NARROW} w-16 shrink-0 text-center font-semibold`} />
+                                        <input value={p.label} onChange={e => setParam(i, { label: e.target.value })} maxLength={40}
+                                            placeholder="Largo" aria-label="Nombre" className={`${NARROW} flex-1 min-w-[120px]`} />
+                                        <CustomSelect className="w-36 shrink-0" value={p.kind} onChange={v => setParam(i, { kind: v })}
+                                            options={[{ value: "medida", label: `Medida (${unit})` }, { value: "numero", label: "Número" }]} />
+                                        <input value={p.default} onChange={e => setParam(i, { default: e.target.value })} inputMode="decimal"
+                                            placeholder="Por defecto" aria-label="Valor por defecto" className={`${NARROW} w-28 shrink-0 tabular-nums`} />
+                                        <button onClick={() => drop(setParams, i)} aria-label="Quitar variable" className={QUITAR}><XIcon /></button>
+                                    </div>
+                                ))}
+                            </div>
+                            {params.length < 10 && (
+                                <button onClick={() => setParams(ps => [...ps, { key: ["L", "A", "H", "P"].find(k => !ps.some(x => x.key === k)) || "", label: "", kind: "medida", default: "" }])} className={`${AGREGAR} mt-2`}>
+                                    <PlusIcon /> Agregar variable
+                                </button>
+                            )}
+                        </section>
+
+                        {/* Cortes */}
+                        <section>
+                            <h3 className="text-[14px] font-semibold text-content dark:text-white mb-2">Cortes de material por unidad</h3>
+                            {materials.length === 0 && <p className="text-[13px] text-content-subtle mb-2">No hay materiales con control por piezas todavía.</p>}
+                            <div className="space-y-2">
+                                {cuts.map((c, i) => {
+                                    const m = matOf(c.material_id);
+                                    const area = m?.piece_mode !== "length";
+                                    return (
+                                        <div key={i} className="rounded-xl border border-border/60 dark:border-white/[0.06] p-3 space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <CustomSelect className="flex-1 min-w-0" value={c.material_id} onChange={v => setCut(i, { material_id: v })} placeholder="Material…"
+                                                    options={materials.map(x => ({ value: String(x.id), label: toNameCase(x.name) }))} />
+                                                <button onClick={() => drop(setCuts, i)} aria-label="Quitar corte" className={QUITAR}><XIcon /></button>
+                                            </div>
+                                            <div className={`grid gap-2 ${area ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2"}`}>
+                                                {area && <Formula value={c.w} onChange={v => setCut(i, { w: v })} placeholder={`Ancho: ${ejemplo}`} suffix={unit} />}
+                                                <Formula value={c.l} onChange={v => setCut(i, { l: v })} placeholder="Largo" suffix={unit} />
+                                                <Formula value={c.cuts} onChange={v => setCut(i, { cuts: v })} placeholder="1" suffix="cortes" />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            {materials.length > 0 && (
+                                <button onClick={() => setCuts(cs => [...cs, { material_id: String(materials[0].id), w: "", l: "", cuts: "1" }])} className={`${AGREGAR} mt-2`}>
+                                    <PlusIcon /> Agregar corte
+                                </button>
+                            )}
+                        </section>
+
+                        {/* Accesorios */}
+                        <section>
+                            <h3 className="text-[14px] font-semibold text-content dark:text-white mb-2">Accesorios por unidad</h3>
+                            <div className="space-y-2">
+                                {accs.map((a, i) => (
+                                    <div key={i} className="flex items-center gap-2">
+                                        <div className="flex-1 min-w-0">
+                                            <SearchPick searchFn={searchProducts} value={a.product} onChange={p => setAcc(i, { product: p })}
+                                                placeholder="Tornillos, bisagras…"
+                                                renderItem={p => (
+                                                    <span className="flex items-center justify-between gap-3">
+                                                        <span className="truncate">{toNameCase(p.name)}</span>
+                                                        <span className="text-[11px] text-content-subtle shrink-0">{p.unit}</span>
+                                                    </span>
+                                                )} />
+                                        </div>
+                                        <Formula value={a.quantity} onChange={v => setAcc(i, { quantity: v })} placeholder={keys.includes("P") ? "P * 2" : "2"} className="w-32 shrink-0" />
+                                        <button onClick={() => drop(setAccs, i)} aria-label="Quitar accesorio" className={QUITAR}><XIcon /></button>
+                                    </div>
+                                ))}
+                            </div>
+                            <button onClick={() => setAccs(as => [...as, { product: null, quantity: "1" }])} className={`${AGREGAR} mt-2`}>
+                                <PlusIcon /> Agregar accesorio
+                            </button>
+                        </section>
+
+                        {/* Procesos */}
+                        <section>
+                            <h3 className="text-[14px] font-semibold text-content dark:text-white mb-2">Tiempo de taller por unidad</h3>
+                            {activeStages.length === 0 ? (
+                                <p className="text-[13px] text-content-subtle">Define las etapas del taller (pestaña Etapas) para calcular la mano de obra.</p>
+                            ) : (
+                                <>
+                                    <div className="space-y-2">
+                                        {procs.map((p, i) => (
+                                            <div key={i} className="flex items-center gap-2">
+                                                <CustomSelect className="flex-1 min-w-0" value={p.stage_id} onChange={v => setProc(i, { stage_id: v })} placeholder="Etapa…"
+                                                    options={activeStages.map(s => ({ value: String(s.id), label: s.name }))} />
+                                                <Formula value={p.minutes} onChange={v => setProc(i, { minutes: v })} placeholder={keys.length ? `20 + ${keys[0]} * 10` : "30"} suffix="min" className="w-40 shrink-0" />
+                                                <button onClick={() => drop(setProcs, i)} aria-label="Quitar proceso" className={QUITAR}><XIcon /></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button onClick={() => setProcs(ps => [...ps, { stage_id: String(activeStages.find(s => !ps.some(x => x.stage_id === String(s.id)))?.id ?? activeStages[0].id), minutes: "" }])} className={`${AGREGAR} mt-2`}>
+                                        <PlusIcon /> Agregar etapa
+                                    </button>
+                                </>
+                            )}
+                        </section>
+
+                        <Field label="Instrucciones para el taller" hint="Opcional">
+                            <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={3} maxLength={4000}
+                                placeholder="Cortar las caras, doblar a 90° y soldar la base…"
+                                className={`${INPUT} h-auto py-2 resize-none`} />
+                        </Field>
+
+                        {/* Así queda con los valores por defecto */}
+                        {calc && (
+                            <section className={`${CARD} px-4 py-3`}>
+                                <div className="text-[13px] font-semibold text-content dark:text-white">
+                                    Así queda una unidad{calc.params?.length ? ` con ${calc.params.map(p => `${p.key} = ${String(p.value).replace(".", ",")}`).join(", ")}` : ""}
+                                </div>
+                                <ul className="mt-2 space-y-1">
+                                    {calc.lines.map((l, i) => (
+                                        <li key={i} className="text-[12px] text-content-muted dark:text-white/70 flex justify-between gap-3">
+                                            <span className="truncate">
+                                                {l.kind === "material"
+                                                    ? `${l.cuts} corte${l.cuts === 1 ? "" : "s"} de ${fmtDims({ width_mm: l.cut_width_mm, length_mm: l.cut_length_mm })} · ${toNameCase(l.name)} · ${fmtSize(l.expected, l.unit)}`
+                                                    : l.kind === "proceso"
+                                                    ? `${l.name} · ${fmtMin(l.expected)}`
+                                                    : `${Number(l.expected).toLocaleString("es-VE")} × ${toNameCase(l.name)}`}
+                                            </span>
+                                            <Money value={money(l.cost)} className="shrink-0" />
+                                        </li>
+                                    ))}
+                                </ul>
+                                <p className="text-[11px] text-content-subtle mt-2">Los cortes y lo que se cuenta por unidades se redondean hacia arriba.</p>
+                            </section>
+                        )}
+                    </div>
+                )}
+            </Modal>
+
+            <ConfirmModal
+                isOpen={deleting}
+                title="Borrar receta"
+                message="Las órdenes que ya se crearon con ella conservan su copia. Las nuevas de este producto saldrán sin receta."
+                confirmText="Borrar"
+                onCancel={() => setDeleting(false)}
+                onConfirm={async () => {
+                    try {
+                        await api.factory.deleteRecipe(product.id);
+                        notify("Receta borrada");
+                        setDeleting(false);
+                        onSaved?.();
+                    } catch (e) { notify(errMsg(e), "err"); }
+                }}
+            />
+        </>
+    );
+}

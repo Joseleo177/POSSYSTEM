@@ -1,6 +1,6 @@
 // Unidades de peso/volumen: admiten decimales. El resto son contables (enteras).
 // Espejo de frontend/src/helpers/unitFormatter.js — si una lista cambia, la otra también.
-const WEIGHTED_UNITS = ["KG", "KILOGRAMO", "L", "LITRO", "M", "METRO"];
+const WEIGHTED_UNITS = ["KG", "KILOGRAMO", "L", "LITRO", "M", "METRO", "M2"];
 
 const isIntegerUnit = (unit) => !WEIGHTED_UNITS.includes(String(unit || "").toUpperCase());
 

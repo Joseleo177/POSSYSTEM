@@ -6,6 +6,16 @@ const { runWithoutTenant } = require("../../utils/tenantStorage");
 const { floorToUnit } = require("../../utils/units");
 const { syncVariants, propagateModelToVariants, assertCanBecomeModel } = require("./variantService");
 const { condicionSucursal, existenciaEn, idsVisibles } = require("./productAccess");
+const { pieceConfigChanges } = require("../factory/numbering");
+const { unitOfMode } = require("../factory/shared");
+
+// ¿La empresa tiene el módulo Fábrica? El control por piezas solo se acepta ahí.
+async function fabricaActiva(companyId, transaction) {
+  if (!companyId) return false;
+  const { Company } = require("../../models");
+  const c = await Company.findByPk(companyId, { attributes: ["fabrica_enabled"], transaction });
+  return !!c?.fabrica_enabled;
+}
 
 // Los arrays del formulario multipart llegan como texto JSON (ver buildProductForm).
 const parseJson = (v) => (typeof v === 'string' ? (v ? JSON.parse(v) : null) : v);
@@ -646,6 +656,12 @@ async function createProduct({ body, file, company_id }) {
       company_id,
     }, { transaction: t });
 
+    // Control por piezas (Fábrica): solo en empresas con el módulo. Fija la unidad del modo.
+    if (body.piece_mode && await fabricaActiva(company_id, t)) {
+      const piezas = await pieceConfigChanges(product, body, t);
+      if (Object.keys(piezas).length) await product.update(piezas, { transaction: t });
+    }
+
     // El modelo no tiene ficha: las existencias son de sus variantes, que nacen con la suya.
     if (warehouse_id && !esModelo) {
       await ProductStock.create({
@@ -882,6 +898,17 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
         : (visible_in_catalog === 'true' || visible_in_catalog === true)),
     }, { transaction: t });
 
+    // Control por piezas (Fábrica). Se valida después de escribir lo demás porque la unidad
+    // pudo haber cambiado arriba: un material por piezas con existencia no puede dejar su M2
+    // o su METRO, o sus piezas quedarían midiéndose en otra cosa.
+    if (body.piece_mode !== undefined && await fabricaActiva(company_id, t)) {
+      const piezas = await pieceConfigChanges(product, body, t);
+      if (Object.keys(piezas).length) await product.update(piezas, { transaction: t });
+    } else if (product.piece_mode && String(product.unit).toUpperCase() !== unitOfMode(product.piece_mode)) {
+      const e = new Error(`"${product.name}" se controla por piezas en ${unitOfMode(product.piece_mode)}: su unidad no se puede cambiar`);
+      e.status = 400; e.isOperational = true; throw e;
+    }
+
     // ── Lo que es de la sucursal, a la ficha de la sucursal ──────────────────────────
     // `cambios` se calculó más arriba, antes de escribir el producto.
     if (warehouse_id && Object.keys(cambios).length && !esGlobalSinFicha) {
@@ -976,6 +1003,20 @@ async function deleteProduct(id, company_id) {
   const transferCount = await StockTransfer.count({ where: { product_id: id } });
   if (transferCount > 0) {
     const e = new Error("No se puede eliminar: tiene historial de transferencias"); e.status = 400; throw e;
+  }
+
+  // Fábrica: piezas numeradas, productos fabricados y accesorios usados en órdenes. Sin esto
+  // el borrado chocaba con la llave foránea y salía como un 500.
+  const [{ fabrica }] = await sequelize.query(`
+    SELECT (SELECT COUNT(*) FROM material_pieces WHERE product_id = :id)
+         + (SELECT COUNT(*) FROM fabrication_orders WHERE product_id = :id)
+         + (SELECT COUNT(*) FROM fabrication_order_items WHERE product_id = :id)
+         + (SELECT COUNT(*) FROM fabrication_recipes WHERE product_id = :id)
+         + (SELECT COUNT(*) FROM fabrication_recipe_items WHERE component_id = :id)
+         + (SELECT COUNT(*) FROM fabrication_order_plan WHERE component_id = :id) AS fabrica`,
+    { replacements: { id: product.id }, type: Sequelize.QueryTypes.SELECT });
+  if (parseInt(fabrica) > 0) {
+    const e = new Error("No se puede eliminar: tiene historial en Fábrica (piezas, órdenes o recetas)"); e.status = 400; throw e;
   }
 
   await handleImageDelete(product.image_filename, product.id);

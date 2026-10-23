@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import CustomSelect from "../ui/CustomSelect";
 import KeyboardLegend from "./KeyboardLegend";
 import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
@@ -6,6 +6,9 @@ import { StockBand, splitQty } from "../ui/StockQty";
 
 // Agotado y sin posibilidad de venderse: misma regla que handleSelect.
 const agotado = (p) => !p.is_service && p.stock !== null && parseFloat(p.stock) <= 0;
+
+// Cantidad en formato es-VE: entera para lo contable, hasta 3 decimales para lo de peso.
+const fmtCant = (n) => n.toLocaleString("es-VE", { maximumFractionDigits: 3 });
 
 export default function ProductGrid({
     mobileTab, setMobileTab, cart,
@@ -20,6 +23,20 @@ export default function ProductGrid({
 }) {
     const sentinelRef = useRef(null);
     const scrollRef = useRef(null);
+
+    // Cuánto de cada producto ya está en el carrito, para marcar su tarjeta y no volver a
+    // agregarlo por error. Las tallas y colores suman en la tarjeta de su modelo, que es la
+    // que se ve en la grilla.
+    const enCarrito = useMemo(() => {
+        const m = new Map();
+        for (const i of cart) {
+            const q = parseFloat(i.qty) || 0;
+            if (q <= 0) continue;
+            m.set(i.id, (m.get(i.id) || 0) + q);
+            if (i.parent_id) m.set(i.parent_id, (m.get(i.parent_id) || 0) + q);
+        }
+        return m;
+    }, [cart]);
 
     const handleSelect = (p) => {
         // Bloquear si stock es 0 o menos, salvo: servicio, o combo con stock null (todos sus ingredientes son servicios)
@@ -116,13 +133,16 @@ export default function ProductGrid({
                     </div>
                 ) : (
                     <div data-product-grid className="grid grid-cols-3 sm:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-1.5 lg:gap-4 pb-10">
-                        {filteredProducts.map((p, idx) => (
+                        {filteredProducts.map((p, idx) => {
+                            const cantCarrito = enCarrito.get(p.id) || 0;
+                            return (
                             <div
                                 key={p.id}
                                 data-product-idx={idx}
                                 onClick={() => handleSelect(p)}
                                 className={`group bg-white dark:bg-white/5 rounded-2xl lg:rounded-[32px] overflow-hidden border transition-all cursor-pointer active:scale-95
- ${idx === selectedIndex ? "border-brand-500 ring-2 lg:ring-4 ring-brand-500/10 shadow-2xl -translate-y-0.5 lg:-translate-y-1 scale-[1.02]" : "border-black/5 dark:border-white/5 hover:border-brand-500/50"}`}
+ ${idx === selectedIndex ? "border-brand-500 ring-2 lg:ring-4 ring-brand-500/10 shadow-2xl -translate-y-0.5 lg:-translate-y-1 scale-[1.02]" : cantCarrito > 0 ? "border-brand-500/70 ring-1 ring-brand-500/40" : "border-black/5 dark:border-white/5 hover:border-brand-500/50"}
+ ${cantCarrito > 0 ? "!bg-brand-500/[0.07] dark:!bg-brand-500/[0.10]" : ""}`}
                             >
                                 {/* 4/3 en todos los tamaños. Con aspect-square en pantalla grande la
                                     foto se comía la altura de la tarjeta y en una rejilla de 6
@@ -152,6 +172,15 @@ export default function ProductGrid({
                                         );
                                     })()}
 
+                                    {/* Ya en el carrito: cuánto lleva, en la esquina de la foto. Es una
+                                        marca, no un botón: tocar la tarjeta sigue abriendo la cantidad. */}
+                                    {cantCarrito > 0 && (
+                                        <div className="absolute top-1 right-1 lg:top-2 lg:right-2 flex items-center gap-0.5 lg:gap-1 h-4 lg:h-7 px-1 lg:px-2.5 rounded-full bg-brand-500 text-brand-ink text-[9px] lg:text-[13px] font-bold tabular-nums shadow-md pointer-events-none">
+                                            <svg className="w-2.5 h-2.5 lg:w-3.5 lg:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                            {fmtCant(cantCarrito)}
+                                        </div>
+                                    )}
+
                                     {/* Existencia en franja al pie de la foto, como en Inventario y
                                         Catálogo: oscura para todo, roja si se agotó, punto ámbar si
                                         está bajo el mínimo (ver ui/StockQty). */}
@@ -180,7 +209,8 @@ export default function ProductGrid({
                                     </div>
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                         <div ref={sentinelRef} className="h-4 w-full" />
                     </div>
                 )}

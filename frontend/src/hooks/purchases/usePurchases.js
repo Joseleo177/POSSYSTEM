@@ -19,7 +19,9 @@ const toFormItem = (i) => ({
   // `received_units`. `key` no sirve: las líneas nuevas lo generan con Date.now().
   id: i.id,
   received_units: parseFloat(i.received_units || 0),
-  product: { id: i.product_id, name: i.product_name },
+  product: { id: i.product_id, name: i.product_name, piece_mode: i.piece_length_mm ? (i.piece_width_mm ? "area" : "length") : null },
+  piece_width_mm: i.piece_width_mm ?? null,
+  piece_length_mm: i.piece_length_mm ?? null,
   package_unit: i.package_unit || "unidad",
   package_size: String(i.package_size ?? ""),
   package_qty: String(i.package_qty ?? 1),

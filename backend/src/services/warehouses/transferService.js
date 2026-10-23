@@ -129,6 +129,9 @@ async function createTransfer(req) {
       if (!product) throw fail("Producto no encontrado", 404);
       if (product.is_service) throw fail(`"${product.name}" es un servicio: no maneja stock`);
       if (product.is_combo)   throw fail(`"${product.name}" es un combo: su stock sale de los ingredientes`);
+      // Sus piezas numeradas viven en un almacén: mover metros sin mover las piezas dejaría
+      // los dos inventarios diciendo otra cosa que las piezas.
+      if (product.piece_mode) throw fail(`"${product.name}" se controla por piezas: todavía no se transfiere entre almacenes`);
 
       const fromStock = await ProductStock.findOne({
         where: { warehouse_id: from_warehouse_id, product_id: it.product_id },

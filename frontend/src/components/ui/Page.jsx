@@ -72,7 +72,7 @@ export default function Page({ module = "Módulo", title, subheader, actions, on
                 {actions && (
                     <div
                         ref={barRef}
-                        className="flex items-center gap-1.5 sm:gap-2 shrink min-w-0 overflow-x-auto no-scrollbar py-0.5 ml-auto"
+                        className="flex items-center gap-1.5 sm:gap-2 shrink min-w-0 overflow-x-auto scrollbar-hide py-0.5 ml-auto"
                         style={desvanecer ? {
                             WebkitMaskImage: "linear-gradient(to right, #000 calc(100% - 20px), transparent)",
                             maskImage: "linear-gradient(to right, #000 calc(100% - 20px), transparent)",

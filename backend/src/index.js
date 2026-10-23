@@ -122,6 +122,7 @@ app.use("/api/promotions",       require("./routes/promotions"));        // auth
 app.use("/api/credit-notes",     require("./routes/creditNotes"));       // auth dentro
 app.use("/api/incomes",          require("./routes/incomes"));            // auth dentro
 app.use("/api/bank-reconciliations", require("./routes/bankReconciliation")); // auth+permit dentro
+app.use("/api/factory",          require("./routes/factory"));             // auth+permit+módulo dentro
 app.use("/api/backup",           require("./routes/backup"));             // auth+config dentro
 app.use("/api/catalog-link",     require("./routes/publicCatalog").adminRouter); // auth+config dentro
 app.use("/api/catalog-banners",  require("./routes/catalogBanners"));       // auth+config dentro

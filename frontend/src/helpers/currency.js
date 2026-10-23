@@ -101,17 +101,33 @@ export const convertToDisplay = (amountBase, currency) => {
  * @param {object} sale - Venta con { total, discount_amount, service_charge, items[{ price, discount, quantity }] }
  * @param {number} rate - Tasa a la que convertir
  */
+// Neto de una línea de factura a una tasa, con un solo redondeo por línea. Sin descuento manual
+// es la cuenta de siempre (neto por unidad redondeado × cantidad), la de todas las facturas
+// previas. Con descuento manual se resta el de la LÍNEA entera: repartido por unidad, 200 Bs
+// entre 12 unidades no cabe en céntimos y la línea salía 8 céntimos lejos de lo tecleado.
+// Espejo de netoLineaEnTasa en backend/src/services/sales/lineDiscount.js y de la pista en
+// bolívares de CartContext.
+export const netoLineaEnTasa = (i, rate) => {
+  const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const r = parseFloat(rate) || 1;
+  const qty = parseFloat(i.quantity ?? i.qty ?? 0);
+  const price = parseFloat(i.price || 0);
+  const value = parseFloat(i.line_discount_value);
+  if (i.line_discount_mode && value > 0) {
+    const bruto = round2(price * r) * qty;
+    const desc = i.line_discount_mode === "amount" ? Math.min(round2(value * r), bruto) : bruto * value / 100;
+    return round2(bruto - desc);
+  }
+  return round2((price - parseFloat(i.discount || 0)) * r) * qty;
+};
+
 export const saleTotalAtRate = (sale, rate) => {
   const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
   const r = parseFloat(rate) || 1;
   const items = sale?.items || [];
   if (!(r > 1) || !items.length) return round2(parseFloat(sale?.total || 0) * r);
 
-  const lines = items.reduce((acc, i) => {
-    const net = parseFloat(i.price || 0) - parseFloat(i.discount || 0);
-    const qty = parseFloat(i.quantity ?? i.qty ?? 0);
-    return acc + round2(net * r) * qty;
-  }, 0);
+  const lines = items.reduce((acc, i) => acc + netoLineaEnTasa(i, r), 0);
   return round2(
     lines
     - round2(parseFloat(sale?.discount_amount || 0) * r)

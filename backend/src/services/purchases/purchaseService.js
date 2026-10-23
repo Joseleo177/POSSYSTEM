@@ -8,6 +8,7 @@ const { ensureOpenSession } = require("../warehouses/sessionService");
 const { effectiveDueDate } = require("./payablesService");
 const { updateComboPricesForProduct } = require("../products/productService");
 const { propagateModelToVariants } = require("../products/variantService");
+const { purchaseLineSpec, numberPurchaseReceipt, releasePurchasePieces } = require("../factory/numbering");
 const { Op } = Sequelize;
 
 async function getAll({ limit = 50, offset = 0, search, status, order_status, date_from, date_to, warehouse_id }, req) {
@@ -243,6 +244,15 @@ async function _applyStockAndPrices(purchase, items, transaction, ctx = {}) {
         }, { transaction });
       }
 
+      // Material por piezas (Fábrica): cada pieza que entra queda numerada, con las medidas
+      // de esta línea y su costo por m² o por metro.
+      if (product.piece_mode && qtyIn > 0) {
+        await numberPurchaseReceipt({
+          product, item, warehouseId: purchase.warehouse_id, qtyIn, reference: purchaseRef,
+          employeeId: ctx.employeeId ?? purchase.employee_id ?? null,
+        }, transaction);
+      }
+
       if (lot_number && expiration_date && entran !== 0) {
         const [lotEntry] = await ProductLot.findOrCreate({
           where: { warehouse_id: purchase.warehouse_id, product_id, lot_number: String(lot_number), expiration_date },
@@ -365,10 +375,16 @@ async function createPurchase({ body, employee_id }) {
         profit_margin, lot_number, expiration_date, update_price
       } = item;
 
-      if (!product_id || !package_size || !package_qty)
+      if (!product_id || !package_qty)
         throw new Error("Datos incompletos en línea de compra");
 
-      const pkgSize  = parseFloat(package_size);
+      const product = await Product.findByPk(product_id, { transaction });
+      if (!product) throw new Error(`Producto ID ${product_id} no encontrado`);
+      // Material por piezas: el "empaque" es la pieza y su tamaño lo calcula el servidor.
+      const piezas = purchaseLineSpec(product, item);
+
+      const pkgSize  = piezas ? piezas.package_size : parseFloat(package_size);
+      if (!(pkgSize > 0)) throw new Error("Datos incompletos en línea de compra");
       const pkgQty   = parseFloat(package_qty);
       const pkgPrice = parseFloat(package_price);
       // Margen vacío = conservar el precio de venta actual. Hay productos con precio
@@ -384,9 +400,6 @@ async function createPurchase({ body, employee_id }) {
       const subtotal    = pkgQty * pkgPrice;
       grandTotal += subtotal;
 
-      const product = await Product.findByPk(product_id, { transaction });
-      if (!product) throw new Error(`Producto ID ${product_id} no encontrado`);
-
       // Sin costo no se recibe mercancía: entraría al inventario valorizada en cero, pisaría el
       // costo del producto y dejaría el margen —y el reporte de utilidad— inventados. Con el
       // interruptor de precio encendido, además, el PVP que se calcula es 0 y el producto sale
@@ -398,11 +411,13 @@ async function createPurchase({ body, employee_id }) {
         purchase_id: purchase.id,
         product_id,
         product_name: product.name,
-        package_unit: package_unit || "unidad",
+        package_unit: piezas ? piezas.package_unit : (package_unit || "unidad"),
         package_qty: pkgQty,
         package_size: pkgSize,
         package_price: pkgPrice,
         unit_cost,
+        piece_width_mm: piezas?.piece_width_mm ?? null,
+        piece_length_mm: piezas?.piece_length_mm ?? null,
         // Columnas NOT NULL: sin margen se deja constancia del precio vigente y margen 0,
         // y es update_price el que dice que esta línea no cambia nada.
         profit_margin: hasMargin ? margin : 0,
@@ -589,6 +604,12 @@ async function deletePurchase(id, req) {
       };
       const purchaseRef = purchase.invoice_number ? `Compra ${purchase.invoice_number} anulada` : `Compra #${purchase.id} anulada`;
 
+      // Las piezas numeradas de esta compra se dan de baja, o se frena todo si ya se usaron.
+      await releasePurchasePieces(
+        items.filter(i => parseFloat(i.received_units || 0) > 0).map(i => i.id),
+        purchaseRef, transaction
+      );
+
       for (const item of items) {
         if (!item.product_id) continue;
         if (parseFloat(item.received_units || 0) <= 0) continue;   // nunca entró: nada que sacar
@@ -670,10 +691,15 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
     if (items?.length) {
       for (const item of items) {
         const { product_id, package_unit, package_size, package_qty, package_price, profit_margin, lot_number, expiration_date, update_price } = item;
-        if (!product_id || !package_size || !package_qty)
+        if (!product_id || !package_qty)
           throw new Error("Datos incompletos en línea de compra");
 
-        const pkgSize  = parseFloat(package_size);
+        const product = await Product.findByPk(product_id, { transaction });
+        if (!product) throw new Error(`Producto ID ${product_id} no encontrado`);
+        const piezas = purchaseLineSpec(product, item);
+
+        const pkgSize  = piezas ? piezas.package_size : parseFloat(package_size);
+        if (!(pkgSize > 0)) throw new Error("Datos incompletos en línea de compra");
         const pkgQty   = parseFloat(package_qty);
         const pkgPrice = parseFloat(package_price) || 0;
         // Margen vacío = conservar el precio de venta actual. Hay productos con precio
@@ -687,9 +713,6 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
         const total_units = pkgQty * pkgSize;
         const subtotal    = pkgQty * pkgPrice;
         grandTotal += subtotal;
-
-        const product = await Product.findByPk(product_id, { transaction });
-        if (!product) throw new Error(`Producto ID ${product_id} no encontrado`);
 
         // Mismo criterio que al crear: una línea sin costo no puede quedar guardada.
         if (!(pkgPrice > 0))
@@ -719,10 +742,20 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
           e.status = 400; e.isOperational = true; throw e;
         }
 
+        // Las piezas que ya entraron se numeraron con estas medidas: cambiarlas dejaría
+        // piezas que la línea ya no describe.
+        if (piezas && previa && yaEntro > 0
+            && (previa.piece_width_mm !== piezas.piece_width_mm || previa.piece_length_mm !== piezas.piece_length_mm)) {
+          const e = new Error(`"${product.name}": ya entraron piezas con otras medidas; no se pueden cambiar`);
+          e.status = 400; e.isOperational = true; throw e;
+        }
+
         const datos = {
           product_id,
           product_name: product.name,
-          package_unit: package_unit || "unidad",
+          piece_width_mm: piezas?.piece_width_mm ?? null,
+          piece_length_mm: piezas?.piece_length_mm ?? null,
+          package_unit: piezas ? piezas.package_unit : (package_unit || "unidad"),
           package_qty: pkgQty,
           package_size: pkgSize,
           package_price: pkgPrice,

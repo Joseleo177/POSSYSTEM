@@ -14,7 +14,7 @@ const vacio = () => ({
     name: "", tax_id: "", address: "", phone: "", email: "",
     plan_name: "Básico", subscription_status: "Demo",
     expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-    max_users: 5, active: true, catalog_enabled: false,
+    max_users: 5, active: true, catalog_enabled: false, fabrica_enabled: false,
     admin_username: "", admin_password: "",
 });
 
@@ -126,6 +126,20 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                     <span className="relative inline-flex items-center shrink-0">
                         <input type="checkbox" className="sr-only peer" checked={!!form.catalog_enabled}
                             onChange={e => set("catalog_enabled", e.target.checked)} />
+                        <span className="block w-10 h-6 rounded-full bg-border dark:bg-white/15 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500/40 peer-checked:bg-brand-600 dark:peer-checked:bg-brand-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-4" />
+                    </span>
+                </label>
+
+                {/* Fábrica: láminas numeradas, retazos y órdenes de fabricación. Mismo criterio que
+                    la vitrina: es un extra que se contrata, no un ajuste de la empresa. */}
+                <label className="flex items-center justify-between gap-4 rounded-xl border border-border/70 dark:border-white/[0.08] px-4 py-3 cursor-pointer">
+                    <span className="min-w-0">
+                        <span className="block text-[13px] font-medium text-content dark:text-white">Fábrica</span>
+                        <span className="block text-[12px] text-content-subtle mt-0.5">Extra: seguimiento de láminas y retazos, y órdenes de fabricación.</span>
+                    </span>
+                    <span className="relative inline-flex items-center shrink-0">
+                        <input type="checkbox" className="sr-only peer" checked={!!form.fabrica_enabled}
+                            onChange={e => set("fabrica_enabled", e.target.checked)} />
                         <span className="block w-10 h-6 rounded-full bg-border dark:bg-white/15 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500/40 peer-checked:bg-brand-600 dark:peer-checked:bg-brand-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-4" />
                     </span>
                 </label>

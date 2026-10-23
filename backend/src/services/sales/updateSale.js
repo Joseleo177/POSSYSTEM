@@ -9,6 +9,7 @@ const {
 } = require("./shared");
 const getOneSale = require("./getOneSale");
 const { cargarPromosActivas, calcLineDiscount } = require("./promoDiscounts");
+const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = require("./lineDiscount");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 
 const bad = (msg, status = 400, code = null) => Object.assign(new Error(msg), { status, code });
@@ -104,6 +105,20 @@ module.exports = async function updateSale(saleId, body, req) {
     // que la caja tiene en pantalla al cobrar, no las de cuando se abrió la cuenta.
     const activePromos = await cargarPromosActivas(warehouseId, transaction);
 
+    // Descuento manual que ya tenía cada producto de la cuenta. Quien reescribe la cuenta sin
+    // hablar de descuentos (la vista BARRA suma una ronda) no debe borrarlo: una línea que no
+    // trae `line_discount` conserva el suyo, y solo un `null` explícito lo quita.
+    const manualPrevio = new Map();
+    for (const it of previousItems) {
+      if (it.product_id && it.line_discount_mode) {
+        manualPrevio.set(it.product_id, {
+          mode: it.line_discount_mode, value: parseFloat(it.line_discount_value), by: it.discount_by,
+        });
+      }
+    }
+    let subtotalBruto = 0;
+    const descuentosNuevos = [];
+
     let total = 0;
     for (const item of items) {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
@@ -130,8 +145,19 @@ module.exports = async function updateSale(saleId, body, req) {
       // Dos pistas de redondeo, igual que en createSale.js: el total en $ va con el precio
       // redondeado a 2 decimales (lo que el cajero ve por línea) y el descuento que se guarda
       // en la línea con el precio completo, que es la base del subtotal en Bs.
-      const lineDiscountUsd = calcLineDiscount(product.id, round2(unitPrice), qty, activePromos);
-      const lineDiscountBs  = calcLineDiscount(product.id, unitPrice,         qty, activePromos);
+      // El descuento manual reemplaza a la promoción, como en createSale (ver lineDiscount.js).
+      const previo = manualPrevio.get(product.id) || null;
+      const manual = item.line_discount === undefined ? previo : leerDescuentoLinea(item.line_discount);
+      const lineDiscountUsd = manual
+        ? calcDescuentoLinea(manual, round2(unitPrice), qty)
+        : calcLineDiscount(product.id, round2(unitPrice), qty, activePromos);
+      const lineDiscountBs = manual
+        ? calcDescuentoLinea(manual, unitPrice, qty)
+        : calcLineDiscount(product.id, unitPrice, qty, activePromos);
+      subtotalBruto += round2(unitPrice) * qty;
+      // Solo se controla lo que cambia: el descuento que ya estaba lo autorizó quien lo dio.
+      const mismo = previo && manual && previo.mode === manual.mode && Math.abs(previo.value - manual.value) < 0.000005;
+      if (manual && !mismo) descuentosNuevos.push({ nombre: product.name, bruto: round2(unitPrice) * qty, descuento: lineDiscountUsd });
       // `discount` se guarda POR UNIDAD: la BD calcula subtotal = (price - discount) * quantity.
       const unitDiscount = qty > 0 ? parseFloat((lineDiscountBs / qty).toFixed(5)) : 0;
 
@@ -199,6 +225,9 @@ module.exports = async function updateSale(saleId, body, req) {
           price: unitPrice,
           quantity: qty,
           discount: unitDiscount,
+          line_discount_mode:  manual ? manual.mode : null,
+          line_discount_value: manual ? manual.value : null,
+          discount_by:         manual ? (mismo ? previo.by : (req?.employee?.id || null)) : null,
           cost_price: unitCost,
         },
         { transaction }
@@ -230,6 +259,12 @@ module.exports = async function updateSale(saleId, body, req) {
     }
 
     const discAmt = parseFloat(discount_amount ?? sale.discount_amount) || 0;
+    // Permiso y tope de los descuentos nuevos. El global solo si cambió: la cuenta pudo
+    // pausarla alguien con más permisos que quien la cobra.
+    const globalCambio = Math.abs(discAmt - (parseFloat(sale.discount_amount) || 0)) > 0.000005;
+    await assertDescuentosPermitidos(
+      req, { lineas: descuentosNuevos, subtotal: subtotalBruto, global: globalCambio ? discAmt : 0 }, transaction
+    );
     // El recargo se conserva si el body no lo trae: reabrir una cuenta para agregarle una
     // ronda no debe borrar la propina que ya se le había cargado.
     const chargeAmt = Math.max(0, parseFloat(service_charge ?? sale.service_charge) || 0);

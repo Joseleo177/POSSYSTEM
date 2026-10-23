@@ -25,6 +25,9 @@ module.exports = (sequelize, DataTypes) => {
     // responde en público mientras esto siga en false (ver resolveCompanyId en
     // publicCatalogService).
     catalog_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Módulo Fábrica (láminas y órdenes de fabricación). Igual que la vitrina: lo enciende
+    // el superusuario para la empresa que lo contrata.
+    fabrica_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

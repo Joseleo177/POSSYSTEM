@@ -21,7 +21,7 @@ export default function PosApp() {
     const { setReceipt, clearCart } = useCart();
     const { dark, toggle } = useTheme();
 
-    const { tab: safeTab, goTab, visibleTabs } = useTabs(employee, can, setReceipt);
+    const { tab: safeTab, goTab, visibleTabs } = useTabs(employee, can, setReceipt, company);
     const [showLauncher, setShowLauncher] = React.useState(false);
     const [showPalette, setShowPalette]   = React.useState(false);
 

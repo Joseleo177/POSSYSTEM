@@ -33,6 +33,7 @@ export const REASON_LABELS = {
     retiro:         "Retiro del almacén",
     importacion:    "Importación desde Excel",
     compra_anulada: "Compra anulada",
+    fabricacion:    "Fabricación",
 };
 export const reasonLabel = (r) => REASON_LABELS[r] || (r ? toNameCase(String(r).replace(/_/g, " ")) : "Ajuste");
 
@@ -43,6 +44,7 @@ export const GROUPS = [
     { key: "devolucion",    label: "Devoluciones" },
     { key: "transferencia", label: "Transferencias" },
     { key: "ajuste",        label: "Ajustes" },
+    { key: "fabricacion",   label: "Fabricación" },
 ];
 
 // Título, documento y contraparte de una fila del kardex.
@@ -63,6 +65,9 @@ export function describe(m) {
             return { icon: ICON.ban, title: "Nota de crédito anulada", doc, party: m.party ? toNameCase(m.party) : null, extra: null };
         case "compra":
             return { icon: ICON.truck, title: "Compra", doc, party: m.party ? toNameCase(m.party) : null, extra: null };
+        // Fábrica: el documento es la orden; el detalle, la pieza, el accesorio o el terminado.
+        case "fabricacion":
+            return { icon: ICON.box, title: "Fabricación", doc: doc || "Fábrica", party: null, extra: m.notes };
         case "compra_anulada":
             return { icon: ICON.ban, title: "Compra anulada", doc, party: m.party ? toNameCase(m.party) : null, extra: null };
         case "transferencia_salida":

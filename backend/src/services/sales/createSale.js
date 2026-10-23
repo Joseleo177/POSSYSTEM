@@ -16,6 +16,7 @@ const {
 } = require("./shared");
 const { Quotation, QuotationItem } = require("../../models");
 const { cargarPromosActivas, calcLineDiscount } = require("./promoDiscounts");
+const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = require("./lineDiscount");
 
 // Devuelve la venta con todas sus relaciones, en el formato plano que
 // espera el frontend. Reutilizado por la respuesta normal y la idempotente.
@@ -160,6 +161,9 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
 
     let total = 0;
     const enrichedItems = [];
+    // Para el control de descuentos: lo bruto de la venta y cada descuento manual por línea.
+    let subtotalBruto = 0;
+    const descuentosManuales = [];
 
     for (const item of items) {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
@@ -207,14 +211,22 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
       const promosLinea = offline ? promoDeLinea(product.id, item.promo) : activePromos;
       // lineDiscountUsd: usa roundedPrice (pista $, para sale.total)
       // lineDiscountBs:  usa rawPrice    (pista Bs, para SaleItem.discount y subtotal generado)
-      const lineDiscountUsd = calcLineDiscount(product.id, roundedPrice, item.quantity, promosLinea);
-      const lineDiscountBs  = calcLineDiscount(product.id, rawPrice,     item.quantity, promosLinea);
+      // El descuento manual de la caja, si lo hay, reemplaza a la promoción (ver lineDiscount.js).
+      const manual = leerDescuentoLinea(item.line_discount);
+      const lineDiscountUsd = manual
+        ? calcDescuentoLinea(manual, roundedPrice, item.quantity)
+        : calcLineDiscount(product.id, roundedPrice, item.quantity, promosLinea);
+      const lineDiscountBs = manual
+        ? calcDescuentoLinea(manual, rawPrice, item.quantity)
+        : calcLineDiscount(product.id, rawPrice, item.quantity, promosLinea);
+      subtotalBruto += roundedPrice * item.quantity;
+      if (manual) descuentosManuales.push({ nombre: product.name, bruto: roundedPrice * item.quantity, descuento: lineDiscountUsd });
 
       if (product.is_service) {
         total += roundedPrice * item.quantity - lineDiscountUsd;
         // stockEntry va solo para congelar el costo de esta sucursal (el servicio no mueve
         // existencias): mismo criterio que el precio, y que el COALESCE que ve la caja.
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, stockEntry: fichaSucursal, lineDiscountBs, unitPrice: rawPrice });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, stockEntry: fichaSucursal, lineDiscountBs, unitPrice: rawPrice, manual });
       } else if (product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
         if (!comboItems || comboItems.length === 0) {
@@ -244,7 +256,7 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
         }
 
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs, unitPrice: rawPrice });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs, unitPrice: rawPrice, manual });
       } else {
         // La ficha ya se cargó arriba con lock para leer el precio de la sucursal.
         const stockEntry = fichaSucursal || (offline ? await fichaEnCero(warehouse_id, product.id, transaction) : null);
@@ -257,8 +269,14 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
         }
 
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs, unitPrice: rawPrice });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs, unitPrice: rawPrice, manual });
       }
+    }
+
+    // Descuentos: permiso y tope de quien factura. Sin conexión no se controla: la venta ya
+    // ocurrió en el mostrador y se registra tal como se cobró, igual que su precio.
+    if (!offline) {
+      await assertDescuentosPermitidos(req, { lineas: descuentosManuales, subtotal: subtotalBruto, global: discAmt }, transaction);
     }
 
     // 2 decimales: sale.total es el monto "oficial" de la factura en $.
@@ -331,6 +349,9 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
           price: entry.unitPrice,
           quantity: entry.qty,
           discount: unitDiscount,
+          line_discount_mode:  entry.manual ? entry.manual.mode : null,
+          line_discount_value: entry.manual ? entry.manual.value : null,
+          discount_by:         entry.manual ? (employee_id || req?.employee?.id || null) : null,
           cost_price: unitCost,
         },
         { transaction }

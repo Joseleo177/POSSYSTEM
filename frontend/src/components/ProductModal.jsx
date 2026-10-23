@@ -11,14 +11,22 @@ import BenefitTagPicker from "./BenefitTagPicker";
 import VariantsEditor from "./VariantsEditor";
 import { PKG_UNITS } from "../constants/pkg";
 import { fmtQtyUnit } from "../helpers/unitFormatter";
+import Segmented from "./ui/Segmented";
+import { MODES as PIECE_MODES, DimsInput, UnitSwitch, useMeasureUnit, toMm, fromMm } from "./fabrica/shared";
 
-const UNITS = ["UNIDAD", "KG", "LITRO", "METRO"];
+// Unidad que impone cada modo de control por piezas.
+const PIECE_UNIT = { area: "M2", length: "METRO" };
+
+const UNITS = ["UNIDAD", "KG", "LITRO", "METRO", "M2"];
 const EMPTY = {
     name: "", price: "", stock: "", category_id: "", unit: "UNIDAD", qty_step: "1",
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
     is_combo: false, combo_items: [], is_service: false, barcode: "", bulk_price: "",
     brand: "", short_description: "", description: "", benefit_tag_ids: [],
-    visible_in_catalog: false, sellable: true, has_variants: false
+    visible_in_catalog: false, sellable: true, has_variants: false,
+    // Control por piezas (módulo Fábrica). Las medidas van como se escriben; al guardar se
+    // pasan a milímetros.
+    piece_mode: "", piece_w: "", piece_l: "",
 };
 
 // onPickExisting: quien abre el modal para usar un producto (la compra) recibe el que ya existe
@@ -27,6 +35,8 @@ const EMPTY = {
 export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName, warehouseCount = 1, initialName = "", onPickExisting, onRegistered }) {
     const { notify, activeCurrencies, company, can } = useApp();
     const catalogEnabled = !!company?.catalog_enabled;
+    const fabricaEnabled = !!company?.fabrica_enabled;
+    const [pieceUnit, setPieceUnit] = useMeasureUnit();
     const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
     const exchangeRate = parseFloat(localCurrency?.exchange_rate || 0);
 
@@ -109,6 +119,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     // campo: se asumen vendibles, que es como se comportaban.
                     sellable: editData.sellable !== false,
                     has_variants: !!editData.is_variant_parent,
+                    piece_mode: editData.piece_mode || "",
+                    piece_w: editData.piece_width_mm ? fromMm(editData.piece_width_mm, pieceUnit) : "",
+                    piece_l: editData.piece_length_mm ? fromMm(editData.piece_length_mm, pieceUnit) : "",
                     combo_items: editData.comboItems ? editData.comboItems.map(c => ({
                         product_id: c.ingredient.id,
                         name: c.ingredient.name,
@@ -373,6 +386,21 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         }
         // Al crear sirve para dar el stock inicial en ese almacén; al editar marca el alcance:
         // el precio, el costo y el mínimo son de esta sucursal y no de la empresa entera.
+        delete submissionForm.piece_w;
+        delete submissionForm.piece_l;
+        if (fabricaEnabled && form.piece_mode && !form.is_service && !form.is_combo && !form.has_variants) {
+            const w = toMm(form.piece_w, pieceUnit), l = toMm(form.piece_l, pieceUnit);
+            if (!(l > 0) || (form.piece_mode === "area" && !(w > 0))) {
+                return notify(form.piece_mode === "area" ? "Control por piezas: escribe el ancho y el largo del formato" : "Control por piezas: escribe el largo del formato", "err");
+            }
+            submissionForm.piece_width_mm = form.piece_mode === "area" ? w : "";
+            submissionForm.piece_length_mm = l;
+        } else if (fabricaEnabled) {
+            // Vacío lo apaga (el servidor rechaza apagarlo si quedan piezas vivas).
+            submissionForm.piece_mode = "";
+        } else {
+            delete submissionForm.piece_mode;
+        }
         if (warehouseId) submissionForm.warehouse_id = warehouseId;
         savingRef.current = true;
         setSaving(true);
@@ -567,6 +595,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                     options={UNITS.map(u => ({ value: u, label: unidadLabel(u) }))}
                                     placeholder="Unidad de medida"
                                     className="w-full"
+                                    disabled={!!form.piece_mode}
                                 />
                             </div>
                             <div className="order-3 md:order-2 col-span-2 md:col-span-1 min-w-0">
@@ -679,7 +708,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     en ella— sería más confuso que el aviso. */}
                 {/* Se desplaza de lado si no caben: con cinco pestañas en el teléfono la fila
                     medía más que el modal y arrastraba todo el formulario hacia la izquierda. */}
-                <div className="flex items-center gap-1 border-b border-border/40 dark:border-white/10 overflow-x-auto no-scrollbar">
+                <div className="flex items-center gap-1 border-b border-border/40 dark:border-white/10 overflow-x-auto scrollbar-hide">
                     {[
                         ["general", "General"],
                         ["receta", "Receta"],
@@ -695,7 +724,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             key={id}
                             type="button"
                             onClick={() => setTab(id)}
-                            className={`shrink-0 px-3 py-2 text-[13px] font-semibold border-b-2 -mb-px transition-colors ${tab === id
+                            className={`shrink-0 px-3 py-2 text-[13px] font-semibold border-b-2 transition-colors ${tab === id
                                 ? "border-brand-500 text-brand-700 dark:text-brand-300"
                                 : "border-transparent text-content-subtle dark:text-content-dark-muted hover:text-content dark:hover:text-white"}`}
                         >
@@ -742,6 +771,44 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 disabled={isEdit && editData?.is_variant_parent && (editData?.variant_count ?? 1) > 0}
                                 onChange={e => setForm(p => ({ ...p, has_variants: e.target.checked, ...(e.target.checked ? { is_combo: false, is_service: false } : {}) }))}
                             />
+                        )}
+                        {/* Material que se corta y se sigue por piezas (Fábrica): láminas por área,
+                            tubos y perfiles por longitud. Cada pieza se numera al recibir la compra. */}
+                        {fabricaEnabled && !form.is_service && !form.is_combo && !form.has_variants && (
+                            <Interruptor
+                                titulo="Control por piezas"
+                                detalle="Se corta y se aprovecha lo que sobra: cada pieza se numera al comprarla y se siguen sus retazos en Fábrica."
+                                checked={!!form.piece_mode}
+                                onChange={e => setForm(f => e.target.checked
+                                    ? { ...f, piece_mode: "area", unit: "M2", qty_step: "0.001",
+                                        piece_w: f.piece_w || fromMm(1220, pieceUnit), piece_l: f.piece_l || fromMm(2440, pieceUnit) }
+                                    : { ...f, piece_mode: "" })}
+                            />
+                        )}
+                        {fabricaEnabled && form.piece_mode && !form.is_service && !form.is_combo && !form.has_variants && (
+                            <div className="px-4 py-3 space-y-3 bg-surface-2/40 dark:bg-white/[0.02]">
+                                <Segmented className="w-full [&>button]:flex-1 [&>button]:justify-center" value={form.piece_mode}
+                                    onChange={m => setForm(f => ({ ...f, piece_mode: m, unit: PIECE_UNIT[m], qty_step: "0.001",
+                                        piece_w: m === "area" ? (f.piece_w || fromMm(1220, pieceUnit)) : "",
+                                        piece_l: f.piece_l || fromMm(m === "area" ? 2440 : 6000, pieceUnit) }))}
+                                    options={PIECE_MODES.map(m => ({ key: m.key, label: m.label }))} />
+                                <div>
+                                    <div className="text-[12px] text-content-subtle mb-1.5">
+                                        Formato habitual · {PIECE_MODES.find(m => m.key === form.piece_mode)?.hint}
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                        <div className="flex-1 min-w-0">
+                                            <DimsInput mode={form.piece_mode} w={form.piece_w} l={form.piece_l} unit={pieceUnit}
+                                                onW={v => set("piece_w", v)} onL={v => set("piece_l", v)} />
+                                        </div>
+                                        <UnitSwitch unit={pieceUnit} className="self-start" setUnit={u => {
+                                            const w = toMm(form.piece_w, pieceUnit), l = toMm(form.piece_l, pieceUnit);
+                                            setForm(f => ({ ...f, piece_w: w > 0 ? fromMm(w, u) : f.piece_w, piece_l: l > 0 ? fromMm(l, u) : f.piece_l }));
+                                            setPieceUnit(u);
+                                        }} />
+                                    </div>
+                                </div>
+                            </div>
                         )}
                         {/* Van juntos porque se leen juntos: el primero decide si el producto se
                             vende, y el segundo solo tiene sentido si la respuesta es que sí.

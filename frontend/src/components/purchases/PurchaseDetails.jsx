@@ -235,6 +235,9 @@ export default function PurchaseDetails({ state }) {
           barcode:         i.product?.barcode || i.barcode || undefined,
           package_unit:    i.package_unit,
           package_size:    i.package_size,
+          // Sin esto, editar la compra devolvía la pieza al formato del material.
+          piece_width_mm:  i.piece_width_mm  ?? null,
+          piece_length_mm: i.piece_length_mm ?? null,
           package_qty:     i.package_qty,
           package_price:   i.package_price,
           profit_margin:   i.profit_margin,

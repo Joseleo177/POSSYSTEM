@@ -25,7 +25,11 @@ module.exports = (sequelize, DataTypes) => {
     subtotal: { type: DataTypes.DECIMAL(14, 6), allowNull: false },
     lot_number: { type: DataTypes.STRING(100), allowNull: true },
     expiration_date: { type: DataTypes.DATEONLY, allowNull: true },
-    update_price: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true }
+    update_price: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    // Material por piezas: medidas de cada pieza de esta línea. Al recibir, cada una queda
+    // numerada en Fábrica (ver services/factory/numbering.js).
+    piece_width_mm: { type: DataTypes.INTEGER, allowNull: true },
+    piece_length_mm: { type: DataTypes.INTEGER, allowNull: true },
   }, {
     sequelize,
     tableName: 'purchase_items',

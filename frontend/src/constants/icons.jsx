@@ -62,6 +62,17 @@ export const TAB_ICONS = {
             />
         </svg>
     ),
+    // Una lámina con su corte: el rectángulo y la línea por donde se pica.
+    "Fábrica": (cls = "w-5 h-5") => (
+        <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.8}
+                d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 9h9V4m0 10v6"
+            />
+        </svg>
+    ),
     Contabilidad: (cls = "w-5 h-5") => (
         <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

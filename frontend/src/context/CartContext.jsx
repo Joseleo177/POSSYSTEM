@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
+import { netoLineaEnTasa } from "../helpers/currency";
 import { api } from "../services/api";
 import { onSSE } from "../services/sse";
 import { useApp } from "./AppContext";
@@ -537,7 +538,17 @@ export function CartProvider({ children }) {
     subtotalUsd
   );
 
-  const promoLineDiscountUsd = useCallback((item) => {
+  // Descuento manual de la línea, si la caja le dio uno (ver setLineDiscount). Reemplaza a la
+  // promoción de esa línea, igual que en el servidor (services/sales/lineDiscount.js).
+  const manualDe = (item) => (item?.ld_mode && parseFloat(item.ld_value) > 0)
+    ? { mode: item.ld_mode, value: parseFloat(item.ld_value) }
+    : null;
+  // Descuento TOTAL de la línea sobre el bruto de su pista: el porcentaje sale de ese bruto y
+  // el monto llega ya expresado en la moneda de la pista. Nunca más que la propia línea.
+  const manualSobre = (m, bruto, montoEnPista) =>
+    Math.min(Math.max(m.mode === "pct" ? bruto * m.value / 100 : montoEnPista, 0), bruto);
+
+  const promoOnlyUsd = useCallback((item) => {
     for (const promo of activePromos) {
       if (!promo.product_ids?.includes(item.id)) continue;
       const p = round2(item.price); // mismo round2 que la línea de subtotalUsd
@@ -551,10 +562,20 @@ export function CartProvider({ children }) {
     return 0;
   }, [activePromos]);
 
-  const promoDiscountUsd = cart.reduce((s, i) => s + promoLineDiscountUsd(i), 0);
-  const netUsd = subtotalUsd - discountAmountUsd - promoDiscountUsd;
+  // Lo que se le rebaja a la línea, venga de la caja o de una promoción. El nombre se quedó
+  // en "promo" porque es lo que ya leen el carrito y la revisión para pintar cada línea.
+  const promoLineDiscountUsd = useCallback((item) => {
+    const m = manualDe(item);
+    if (!m) return promoOnlyUsd(item);
+    return manualSobre(m, round2(item.price) * item.qty, m.value);
+  }, [promoOnlyUsd]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const promoLineDiscountBs = useCallback((item) => {
+  // Por separado, para que el resumen distinga "Promociones" de "Descuentos por línea".
+  const promoDiscountUsd = cart.reduce((s, i) => s + (manualDe(i) ? 0 : promoOnlyUsd(i)), 0);
+  const lineManualUsd = cart.reduce((s, i) => s + (manualDe(i) ? promoLineDiscountUsd(i) : 0), 0);
+  const netUsd = subtotalUsd - discountAmountUsd - promoDiscountUsd - lineManualUsd;
+
+  const promoOnlyBs = useCallback((item) => {
     if (!vesRate) return 0;
     for (const promo of activePromos) {
       if (!promo.product_ids?.includes(item.id)) continue;
@@ -569,6 +590,20 @@ export function CartProvider({ children }) {
     return 0;
   }, [activePromos, vesRate]);
 
+  // En bolívares, la línea con descuento manual se calcula como la cobra la caja y la imprime
+  // el ticket (netoLineaEnTasa): bruto de la línea menos el descuento de la LÍNEA entera, con
+  // un solo redondeo. Así los 200 Bs tecleados son 200 Bs en el carrito, el cobro y el papel.
+  const promoLineDiscountBs = useCallback((item) => {
+    if (!vesRate) return 0;
+    const m = manualDe(item);
+    if (!m) return promoOnlyBs(item);
+    const precio = parseFloat(item.price) || 0;
+    const q = parseFloat(item.qty) || 0;
+    if (!(q > 0)) return 0;
+    const bruto = round2(precio * vesRate) * q;
+    return bruto - netoLineaEnTasa({ price: precio, quantity: q, line_discount_mode: m.mode, line_discount_value: m.value }, vesRate);
+  }, [promoOnlyBs, vesRate]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const subtotalBs = vesRate
     ? cart.reduce((s, i) => s + round2((parseFloat(i.price) || 0) * vesRate) * i.qty, 0)
     : null;
@@ -582,8 +617,9 @@ export function CartProvider({ children }) {
         subtotalBs
       )
     : 0;
-  const promoDiscountBs = vesRate ? cart.reduce((s, i) => s + promoLineDiscountBs(i), 0) : 0;
-  const netBs = vesRate ? (subtotalBs - discountAmountBs - promoDiscountBs) : null;
+  const promoDiscountBs = vesRate ? cart.reduce((s, i) => s + (manualDe(i) ? 0 : promoOnlyBs(i)), 0) : 0;
+  const lineManualBs = vesRate ? cart.reduce((s, i) => s + (manualDe(i) ? promoLineDiscountBs(i) : 0), 0) : 0;
+  const netBs = vesRate ? (subtotalBs - discountAmountBs - promoDiscountBs - lineManualBs) : null;
 
   // El recargo, ya con el neto resuelto. En porcentaje se aplica sobre el consumo neto —el
   // 10% es del consumo, no de sí mismo— y cada pista lo calcula en su propia moneda, sin ida
@@ -613,6 +649,25 @@ export function CartProvider({ children }) {
   const promoDiscountDisplay   = isVesPrimary ? promoDiscountBs : promoDiscountUsd;
   const discountAmountDisplay  = isVesPrimary ? discountAmountBs : discountAmountUsd;
   const promoLineDiscountDisplay = isVesPrimary ? promoLineDiscountBs : promoLineDiscountUsd;
+  const lineManualDiscountDisplay = isVesPrimary ? lineManualBs : lineManualUsd;
+
+  // Descuento manual de una línea. `value` es el porcentaje, o el monto de la LÍNEA entera en
+  // moneda base con 5 decimales (como discount_amount: con 2, lo tecleado en bolívares no
+  // vuelve redondo). Sin modo o sin valor se quita y la línea vuelve a su promoción.
+  const setLineDiscount = useCallback((id, mode, value) => {
+    setCart(prev => prev.map(i => {
+      if (i.id !== id) return i;
+      const v = parseFloat(value);
+      if (!mode || !(v > 0)) {
+        const { ld_mode, ld_value, ...rest } = i; // eslint-disable-line no-unused-vars
+        return rest;
+      }
+      return { ...i, ld_mode: mode, ld_value: parseFloat(v.toFixed(5)) };
+    }));
+  }, []);
+  // Lo que viaja al servidor por línea: null quita el descuento (updateSale distingue null de
+  // "no lo trae", que conserva el que tenía la cuenta en espera).
+  const ldPayload = (i) => { const m = manualDe(i); return m ? { mode: m.mode, value: m.value } : null; };
   const totalDisplay    = isVesPrimary ? (totalBs ?? 0) : totalUsd;
   const totalSecondary  = isVesPrimary ? totalUsd : (totalBs ?? convertToSecondary(totalUsd));
 
@@ -736,7 +791,7 @@ export function CartProvider({ children }) {
     setLoading(true);
     try {
       const createHold = () => api.sales.create({
-        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty) })),
+        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty), line_discount: ldPayload(i) })),
         paid: 0,
         customer_id: selectedCustomer?.id || null,
         employee_id: employee?.id || null,
@@ -756,7 +811,7 @@ export function CartProvider({ children }) {
       if (heldSaleId) {
         try {
           await api.sales.update(heldSaleId, {
-            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty) })),
+            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty), line_discount: ldPayload(i) })),
             discount_amount: discountAmount,
             service_charge: chargeAmountBase,
             service_charge_label: chargeLabel,
@@ -880,7 +935,9 @@ export function CartProvider({ children }) {
         const qty = parseFloat(item.quantity) || 1;
         // El precio con que se abrió la cuenta manda: es el que updateSale vuelve a grabar
         // al cobrarla, así que el refresco de precios no debe cambiarlo por debajo.
-        return [...acc, { ...withOwnStock(prod, qty), price: parseFloat(item.price), price_locked: true, qty }];
+        // El descuento manual que se le dio vuelve con la línea (ver sale_items.line_discount_*).
+        const ld = item.line_discount_mode ? { ld_mode: item.line_discount_mode, ld_value: parseFloat(item.line_discount_value) } : {};
+        return [...acc, { ...withOwnStock(prod, qty), price: parseFloat(item.price), price_locked: true, qty, ...ld }];
       }, []);
 
       setCart(newCart);
@@ -971,7 +1028,12 @@ export function CartProvider({ children }) {
           product_id:   i.id,
           product_name: i.name,
           quantity:     parseFloat(i.qty),
-          price:        parseFloat(i.price),
+          // La cotización no tiene descuento por línea: se pacta dentro del precio, que es lo
+          // que guarda y lo que la caja cobra al recuperarla (precio pactado).
+          price:        (() => {
+            const m = manualDe(i); const q = parseFloat(i.qty); const pr = parseFloat(i.price);
+            return m && q > 0 ? parseFloat((pr - manualSobre(m, pr * q, m.value) / q).toFixed(5)) : pr;
+          })(),
         })),
         customer_id:     selectedCustomer?.id || null,
         customer_name:   selectedCustomer?.name || null,
@@ -1045,12 +1107,16 @@ export function CartProvider({ children }) {
       const lineas = cart.filter(i => parseFloat(i.qty) > 0).map(i => {
         const quantity = parseFloat(i.qty);
         const price = parseFloat(i.price) || 0;
-        const promo = promoDe(i.id);
-        const discount = quantity > 0 ? parseFloat((descuentoPromo(promo, price, quantity) / quantity).toFixed(5)) : 0;
+        // El descuento manual reemplaza a la promoción, como en createSale.
+        const manual = manualDe(i);
+        const promo = manual ? null : promoDe(i.id);
+        const descLinea = (unit) => manual ? manualSobre(manual, unit * quantity, manual.value) : descuentoPromo(promo, unit, quantity);
+        const discount = quantity > 0 ? parseFloat((descLinea(price) / quantity).toFixed(5)) : 0;
         return {
-          product_id: i.id, name: i.name, price, quantity, discount, promo,
+          product_id: i.id, name: i.name, price, quantity, discount, promo, manual,
+          line_discount_mode: manual?.mode ?? null, line_discount_value: manual?.value ?? null,
           subtotal: parseFloat(((price - discount) * quantity).toFixed(5)),
-          descUsd: descuentoPromo(promo, r2(price), quantity),
+          descUsd: descLinea(r2(price)),
         };
       });
       const descuento = parseFloat(discountAmount) || 0;
@@ -1059,7 +1125,7 @@ export function CartProvider({ children }) {
       const total = Math.max(0, parseFloat(
         (lineas.reduce((s, l) => s + r2(l.price) * l.quantity - l.descUsd, 0) - descuento + recargo).toFixed(2)
       ));
-      const items = lineas.map(({ descUsd, promo, ...l }) => l); // eslint-disable-line no-unused-vars
+      const items = lineas.map(({ descUsd, promo, manual, ...l }) => l); // eslint-disable-line no-unused-vars
       const serie = mySeries.find(s => s.id === selectedSerieId);
       const ref = siguienteNumeroProvisional();
       const soldAt = new Date().toISOString();
@@ -1093,7 +1159,7 @@ export function CartProvider({ children }) {
             discount_amount: descuento,
             service_charge: recargo,
             service_charge_label: recargoLabel,
-            items: lineas.map(l => ({ product_id: l.product_id, quantity: l.quantity, price: l.price, promo: l.promo })),
+            items: lineas.map(l => ({ product_id: l.product_id, quantity: l.quantity, price: l.price, promo: l.promo, line_discount: l.manual })),
           },
           receipt: venta,
           // Para volver al carrito si la venta no llega a cobrarse.
@@ -1134,7 +1200,7 @@ export function CartProvider({ children }) {
       // líneas (por si se agregaron rondas) y se pasa a 'borrador' para que el cobro le
       // asigne el correlativo. Crear una nueva duplicaría la venta y el descuento de stock.
       const createPayload = () => ({
-        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty) })),
+        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty), line_discount: ldPayload(i) })),
         paid: 0,
         customer_id: selectedCustomer?.id || null,
         employee_id: employee?.id || null,
@@ -1153,7 +1219,7 @@ export function CartProvider({ children }) {
       if (heldSaleId) {
         try {
           res = await api.sales.update(heldSaleId, {
-            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty) })),
+            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty), line_discount: ldPayload(i) })),
             discount_amount: discountAmount,
             service_charge: chargeAmountBase,
             service_charge_label: chargeLabel,
@@ -1233,6 +1299,8 @@ export function CartProvider({ children }) {
       discountPct, setDiscountPct, discountMode, setDiscountMode,
       totalBase, totalDisplay, totalSecondary,
       subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
+      // Descuento por línea
+      setLineDiscount, lineManualDiscountDisplay,
       // Recargo (propina / servicio)
       chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel,
       chargeInput, setChargeInput, chargeMode, setChargeMode, setChargeFromPct,

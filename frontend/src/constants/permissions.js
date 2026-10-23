@@ -9,7 +9,7 @@
 // PUEDE es el backend, y lo hace con el mismo mapa.
 export const LEGACY_MAP = {
   sales: [
-    "sales.view", "sales.pending", "sales.create", "sales.edit", "sales.void", "sales.credit", "sales.return", "sales.cash",
+    "sales.view", "sales.pending", "sales.create", "sales.discount", "sales.edit", "sales.void", "sales.credit", "sales.return", "sales.cash",
     "customers.view", "customers.create", "customers.edit", "customers.credit",
   ],
   products: [
@@ -34,7 +34,7 @@ export const LEGACY_MAP = {
     "currencies.view", "currencies.manage",
     "reports.view", "reports.audit",
     "accounting.view", "accounting.income", "accounting.expense", "accounting.void", "accounting.delete",
-    "sales.view", "sales.pending", "sales.create", "sales.edit", "sales.void", "sales.credit", "sales.cash",
+    "sales.view", "sales.pending", "sales.create", "sales.discount", "sales.edit", "sales.void", "sales.credit", "sales.cash",
     "products.view", "products.create", "products.edit",
     "customers.view", "customers.create", "customers.edit", "customers.credit",
     "inventory.view", "inventory.adjust", "inventory.transfer", "inventory.receive",

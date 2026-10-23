@@ -135,6 +135,9 @@ export function usePurchasesList({
             barcode: i.product.barcode || undefined,
             package_unit: i.package_unit,
             package_size: parseFloat(i.package_size),
+            // Material por piezas: las medidas de cada pieza; el tamaño lo recalcula el servidor.
+            piece_width_mm: i.piece_width_mm ?? null,
+            piece_length_mm: i.piece_length_mm ?? null,
             package_qty: parseFloat(i.package_qty),
             package_price: parseFloat(i.package_price) || 0,
             profit_margin: parseFloat(i.profit_margin) || 0,

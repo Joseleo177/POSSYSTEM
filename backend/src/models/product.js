@@ -46,6 +46,13 @@ module.exports = (sequelize, DataTypes) => {
     is_variant_parent: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     variant_key: { type: DataTypes.STRING(100), allowNull: true },
     own_price: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Control por piezas (módulo Fábrica): 'area' (láminas, en M2) o 'length' (tubos,
+    // perfiles, en METRO); null = producto normal. Cada pieza se numera al entrar y sus
+    // retazos se siguen hasta que no queda nada. Las medidas son el formato habitual, que
+    // prellena la compra; cada pieza guarda el suyo propio.
+    piece_mode: { type: DataTypes.STRING(10), allowNull: true },
+    piece_width_mm: { type: DataTypes.INTEGER, allowNull: true },
+    piece_length_mm: { type: DataTypes.INTEGER, allowNull: true },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

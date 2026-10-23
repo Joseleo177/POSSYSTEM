@@ -11,12 +11,14 @@ import ConfigPage from "../pages/ConfigPage";
 import MonedasPage from "../pages/MonedasPage";
 import ReportesPage from "../pages/ReportesPage";
 import CompaniesPage from "../pages/CompaniesPage";
+import FabricaPage from "../pages/FabricaPage";
 
 export const PAGE_COMPONENTS = {
     Dashboard: DashboardPage,
     Cobro: CobroPage,
     "Catálogo": CatalogPage,
     Compras: PurchasesPage,
+    "Fábrica": FabricaPage,
     Inventario: InventarioPage,
     Clientes: ClientesPage,
     Contabilidad: ContabilidadPage,

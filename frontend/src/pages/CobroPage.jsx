@@ -17,9 +17,11 @@ import SaleConfirmModal    from "../components/cobro/SaleConfirmModal";
 import CustomerModal       from "../components/Customers/CustomerModal";
 import HeldCartsModal      from "../components/HeldCartsModal";
 import PendingSalesModal   from "../components/cobro/PendingSalesModal";
+import ReturnableSalesModal from "../components/cobro/ReturnableSalesModal";
 import AperturaCajaModal   from "../components/AperturaCajaModal";
 import CierreCajaModal     from "../components/CierreCajaModal";
 import CheckoutTypeModal       from "../components/cobro/CheckoutTypeModal";
+import CheckoutReview          from "../components/cobro/CheckoutReview";
 import QuotationConfirmModal  from "../components/cobro/QuotationConfirmModal";
 import QuantityModal          from "../components/cobro/QuantityModal";
 import CustomerDebtAlert      from "../components/cobro/CustomerDebtAlert";
@@ -28,7 +30,9 @@ import VariantPickerModal     from "../components/cobro/VariantPickerModal";
 const fmt = fmtMoney;
 
 export default function CobroPage() {
-    const { notify, employee, baseCurrency, activeCurrencies, categories, can } = useApp();
+    const { notify, employee, baseCurrency, activeCurrencies, categories, can, settings } = useApp();
+    // Configuración → Punto de venta. Sin la clave (empresas de antes) sigue el modal de siempre.
+    const revisarAntes = settings?.pos_review_checkout === "true";
 
     const {
         cart, addToCart, removeFromCart, changeQty, setQtyDirect, syncCartPrices,
@@ -39,7 +43,8 @@ export default function CobroPage() {
         chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel,
         chargeInput, setChargeInput, chargeMode, setChargeMode, setChargeFromPct, chargeAmountDisplay, chargePct,
         currentCurrency, setSelectedCurrency, secondaryCurrency,
-        convertToDisplay, convertToSecondary,
+        convertToDisplay, convertToSecondary, convertToBase,
+        setLineDiscount, lineManualDiscountDisplay,
         selectedSerieId, selectSerie, mySeries,
         selectedCustomer, setSelectedCustomer,
         employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
@@ -65,6 +70,7 @@ export default function CobroPage() {
     const [variantModel, setVariantModel]          = useState(null);
     const openProduct = (p) => (p?.is_variant_parent ? setVariantModel(p) : setQtyModalItem(p));
     const [showPendingSales, setShowPendingSales]  = useState(false);
+    const [showReturns, setShowReturns]            = useState(false);
     const searchInputRef                           = useRef(null);
     const scanPendingRef                           = useRef(false);
 
@@ -153,12 +159,40 @@ export default function CobroPage() {
         // buscador de productos: lo que se teclea es para su propio buscador de clientes, y
         // si el foco se perdió (un clic en una tarjeta) las letras se colaban en la grilla
         // de fondo.
-        modalOpen: !!qtyModalItem || !!variantModel || !!customer.debtAlert || showHeldModal,
+        modalOpen: !!qtyModalItem || !!variantModel || !!customer.debtAlert || showHeldModal || showReturns || showConfirmCheckout,
         notify,
         setShowHeldModal,
         // Sin sales.pending el F5 queda mudo: el hook lo llama con ?. y no abre nada.
         setShowPendingSales: can("sales.pending") ? setShowPendingSales : undefined,
+        // Sin turno abierto tampoco: el botón no se muestra y el reembolso, que sale de la
+        // caja, tiene que caer en un arqueo.
+        setShowReturns: can("sales.return") && session.cashSession ? setShowReturns : undefined,
     });
+
+    // ── Facturar / cotizar ─────────────────────────────────────
+    // Las usan el modal de siempre y la revisión del pedido: las dos tienen que hacer
+    // exactamente lo mismo.
+    //
+    // Se cierra al TERMINAR, no al pulsar: si falta el cliente, la serie o el servidor rechaza
+    // la venta (stock, tope de descuento), checkout avisa y la pantalla sigue abierta con todo
+    // lo que el cajero estaba ajustando. Antes se cerraba primero y el aviso llegaba solo.
+    const cerrarRevision = () => setShowConfirmCheckout(false);
+    const facturar = () => {
+        // Sin turno abierto no se factura: la venta y su cobro no caerían en
+        // ningún arqueo, y el cierre de caja nunca cuadraría. Se podía, porque la
+        // apertura se deja saltar ("Continuar sin abrir caja") y nada lo revisaba
+        // después. La cotización sigue permitida: no mueve dinero.
+        if (!session.cashSession) {
+            cerrarRevision();
+            notify("Abre el turno de caja para poder facturar", "error");
+            session.setShowApertura(true);
+            return;
+        }
+        checkout(cerrarRevision);
+    };
+    const cotizar = () => {
+        saveQuotation(q => { cerrarRevision(); setSavedQuotation(q); });
+    };
 
     // ── Sin almacén asignado ───────────────────────────────────
     if (employeeWarehouses.length === 0) return (
@@ -254,6 +288,7 @@ export default function CobroPage() {
                 setShowApertura={session.setShowApertura}
                 setShowHeldModal={setShowHeldModal}
                 setShowPendingSales={setShowPendingSales}
+                setShowReturns={setShowReturns}
                 heldCarts={heldCarts}
                 loading={loading}
                 setShowConfirmCheckout={setShowConfirmCheckout}
@@ -263,6 +298,7 @@ export default function CobroPage() {
                 activePromos={activePromos}
                 promoLineDiscount={promoLineDiscount}
                 promoDiscount={promoDiscount}
+                lineManualDiscountDisplay={lineManualDiscountDisplay}
             />
 
             <ProductGrid
@@ -338,6 +374,14 @@ export default function CobroPage() {
                     }
                 }}
             />
+            <ReturnableSalesModal
+                open={showReturns}
+                onClose={() => setShowReturns(false)}
+                onDone={products.reload}
+                baseCurrency={baseCurrency}
+                warehouseId={activeWarehouse?.id}
+                notify={notify}
+            />
             <HeldCartsModal
                 open={showHeldModal}
                 onClose={() => setShowHeldModal(false)}
@@ -370,27 +414,49 @@ export default function CobroPage() {
                 notify={notify}
                 onRefresh={loadHeldCarts}
             />
+            {revisarAntes ? (
+                <CheckoutReview
+                    open={showConfirmCheckout}
+                    onClose={() => setShowConfirmCheckout(false)}
+                    onSelectFactura={() => facturar()}
+                    onSelectCotizacion={() => cotizar()}
+                    // Con el alta de cliente o el aviso de deuda encima, Enter es de ellos.
+                    blocked={customer.customerModal || !!customer.debtAlert}
+                    cart={cart} removeFromCart={removeFromCart} changeQty={changeQty} setQtyDirect={setQtyDirect}
+                    convertToDisplay={convertToDisplay} convertToSecondary={convertToSecondary}
+                    currSym={currSym} secondaryCurrency={secondaryCurrency} fmt={fmt}
+                    promoLineDiscountDisplay={promoLineDiscountDisplay} activePromos={activePromos}
+                    subtotalDisplay={subtotalDisplay} promoDiscount={promoDiscount} promoDiscountDisplay={promoDiscountDisplay}
+                    discountEnabled={discountEnabled} setDiscountEnabled={setDiscountEnabled}
+                    discountPct={discountPct} setDiscountPct={setDiscountPct}
+                    discountMode={discountMode} setDiscountMode={setDiscountMode}
+                    discountAmount={discountAmount} discountAmountDisplay={discountAmountDisplay}
+                    chargeEnabled={chargeEnabled} setChargeEnabled={setChargeEnabled}
+                    chargeLabel={chargeLabel} setChargeLabel={setChargeLabel}
+                    chargeMode={chargeMode} setChargeMode={setChargeMode}
+                    chargeInput={chargeInput} setChargeInput={setChargeInput} setChargeFromPct={setChargeFromPct}
+                    chargeAmountDisplay={chargeAmountDisplay} chargePct={chargePct}
+                    totalDisplay={totalDisplay} totalSecondary={totalSecondary}
+                    currentCurrency={currentCurrency} setSelectedCurrency={setSelectedCurrency} activeCurrencies={activeCurrencies}
+                    selectedSerieId={selectedSerieId} selectSerie={selectSerie} mySeries={mySeries}
+                    selectedCustomer={selectedCustomer} setSelectedCustomer={setSelectedCustomer}
+                    custSearch={customer.custSearch} setCustSearch={customer.setCustSearch}
+                    customers={customer.customers} pickCustomer={customer.pickCustomer}
+                    selectedCustIdx={customer.selectedCustIdx} setSelectedCustIdx={customer.setSelectedCustIdx}
+                    setCustomerEditData={customer.setCustomerEditData} setCustomerModal={customer.setCustomerModal}
+                    cashSession={session.cashSession}
+                    loading={loading}
+                    setLineDiscount={setLineDiscount} convertToBase={convertToBase}
+                    lineManualDiscountDisplay={lineManualDiscountDisplay}
+                />
+            ) : (
             <CheckoutTypeModal
                 open={showConfirmCheckout}
                 onClose={() => setShowConfirmCheckout(false)}
-                onSelectFactura={() => {
-                    setShowConfirmCheckout(false);
-                    // Sin turno abierto no se factura: la venta y su cobro no caerían en
-                    // ningún arqueo, y el cierre de caja nunca cuadraría. Se podía, porque la
-                    // apertura se deja saltar ("Continuar sin abrir caja") y nada lo revisaba
-                    // después. La cotización sigue permitida: no mueve dinero.
-                    if (!session.cashSession) {
-                        notify("Abre el turno de caja para poder facturar", "error");
-                        session.setShowApertura(true);
-                        return;
-                    }
-                    checkout();
-                }}
-                onSelectCotizacion={() => {
-                    setShowConfirmCheckout(false);
-                    saveQuotation(q => setSavedQuotation(q));
-                }}
+                onSelectFactura={() => facturar()}
+                onSelectCotizacion={() => cotizar()}
             />
+            )}
             {session.showApertura && !session.checkingSession && (
                 <AperturaCajaModal
                     employee={employee}

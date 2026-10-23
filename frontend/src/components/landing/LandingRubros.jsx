@@ -98,7 +98,7 @@ export default function LandingRubros() {
                 </div>
 
                 {/* Rubros: fila deslizable en el teléfono. */}
-                <div role="tablist" aria-label="Tipos de negocio" className="mt-8 -mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto no-scrollbar sm:flex-wrap">
+                <div role="tablist" aria-label="Tipos de negocio" className="mt-8 -mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto scrollbar-hide sm:flex-wrap">
                     {RUBROS.map(x => {
                         const on = x.id === activo;
                         return (

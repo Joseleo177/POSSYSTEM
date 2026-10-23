@@ -24,7 +24,7 @@ const { assertProductAccess } = require('../products/productAccess');
 const { imageUrl } = require('../../utils/imageStorage');
 const { TZ, sanitizeDate } = require('../reports/shared');
 
-const GRUPOS = ['venta', 'devolucion', 'compra', 'ajuste', 'transferencia'];
+const GRUPOS = ['venta', 'devolucion', 'compra', 'ajuste', 'transferencia', 'fabricacion'];
 
 const esAdmin = (req) => !!(req.is_superuser || req.employee?.permissions?.all);
 
@@ -100,13 +100,19 @@ const MOV_SQL = `
   SELECT l.created_at, l.warehouse_id, l.qty_adjusted,
          CASE WHEN l.reason = 'compra_anulada' THEN 'compra_anulada'
               WHEN l.reason = 'compra' AND l.notes ~ '^Compra #[0-9]+$' THEN 'compra'
+              -- Fábrica: consumo de piezas, accesorios y producto terminado. El documento es
+              -- la orden (OF-0001) y el detalle, la pieza o el motivo.
+              WHEN l.reason = 'fabricacion' THEN 'fabricacion'
               ELSE 'ajuste' END,
          l.reason,
-         CASE WHEN l.notes ~ '^Compra #[0-9]+' THEN substring(l.notes from '#[0-9]+') END,
+         CASE WHEN l.notes ~ '^Compra #[0-9]+' THEN substring(l.notes from '#[0-9]+')
+              WHEN l.reason = 'fabricacion' THEN substring(l.notes from '^(OF-[0-9]+)') END,
          p.id,
          p.supplier_name,
          ss.employee_id,
-         CASE WHEN l.notes ~ '^Compra #[0-9]+' THEN NULL ELSE l.notes END,
+         CASE WHEN l.notes ~ '^Compra #[0-9]+' THEN NULL
+              WHEN l.reason = 'fabricacion' AND l.notes ~ '^OF-[0-9]+ · ' THEN substring(l.notes from '^OF-[0-9]+ · (.*)$')
+              ELSE l.notes END,
          NULL, false, NULL,
          7, l.id
     FROM stock_session_lines l
@@ -173,6 +179,7 @@ const GRUPO_SQL = `CASE
     WHEN m.kind IN ('devolucion', 'devolucion_anulada') THEN 'devolucion'
     WHEN m.kind IN ('compra', 'compra_anulada') THEN 'compra'
     WHEN m.kind = 'ajuste' THEN 'ajuste'
+    WHEN m.kind = 'fabricacion' THEN 'fabricacion'
     ELSE 'transferencia' END`;
 
 const num = (v) => parseFloat(v) || 0;

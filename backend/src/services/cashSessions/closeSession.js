@@ -24,7 +24,10 @@ module.exports = async function closeSession(id, body) {
       `
       SELECT p.payment_journal_id AS journal_id, COALESCE(SUM(p.amount * p.exchange_rate), 0)::float AS total
       FROM payments p JOIN sales s ON p.sale_id = s.id
-      WHERE s.warehouse_id = :warehouseId AND s.employee_id = :employeeId
+      -- El cobro es de quien lo registró, no de quien hizo la venta: la factura a crédito
+      -- que María vendió ayer y hoy cobra otro cajero entra en la gaveta de este. Sin
+      -- cobrador conocido (cobros viejos) se queda con el vendedor, como antes.
+      WHERE s.warehouse_id = :warehouseId AND COALESCE(p.employee_id, s.employee_id) = :employeeId
         AND p.created_at >= :openedAt AND p.created_at < :closedAt
       GROUP BY p.payment_journal_id
     `,

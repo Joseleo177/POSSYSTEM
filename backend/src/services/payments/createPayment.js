@@ -1,4 +1,5 @@
-const { Payment, Sale, SaleItem, sequelize, getSaleBalance, Op } = require("./shared");
+const { Payment, Sale, SaleItem, sequelize, getSaleBalance, Op } = require("./shared");
+const { netoLineaEnTasa } = require("../sales/lineDiscount");
 const { PAYMENT_TOLERANCE, saleSettleTolerance } = require("../../utils/saleBalance");
 const { Expense, ExpenseCategory, PaymentJournal, Currency, Customer } = require("../../models");
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
@@ -190,9 +191,8 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
     // El recargo (propina/servicio) se convierte y redondea igual que el descuento: es un
     // monto de cabecera, no una línea, así que entra una sola vez al final de la suma.
     const totalBsAt = (rate) => round2(
-      saleItems.reduce((acc, i) =>
-        acc + round2((parseFloat(i.price || 0) - parseFloat(i.discount || 0)) * rate) * parseFloat(i.quantity || 0)
-      , 0)
+      // Por línea, con la misma regla que la pantalla (saleTotalAtRate): ver netoLineaEnTasa.
+      saleItems.reduce((acc, i) => acc + netoLineaEnTasa(i, rate), 0)
       - round2(parseFloat(sale.discount_amount || 0) * rate)
       + round2(parseFloat(sale.service_charge || 0) * rate)
     );

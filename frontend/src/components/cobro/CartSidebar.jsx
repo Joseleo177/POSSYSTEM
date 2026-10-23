@@ -24,11 +24,11 @@ export default function CartSidebar({
     custSearch, setCustSearch, customers, setCustomers, pickCustomer,
     selectedCustIdx, setSelectedCustIdx,
     setCustomerEditData, setCustomerModal,
-    cashSession, setShowCierre, setShowApertura, setShowHeldModal, heldCarts, setShowPendingSales,
+    cashSession, setShowCierre, setShowApertura, setShowHeldModal, heldCarts, setShowPendingSales, setShowReturns,
     loading, setShowConfirmCheckout, holdCart,
     openQtyModal,
     searchInputRef,
-    activePromos = [], promoLineDiscount, promoDiscount = 0,
+    activePromos = [], promoLineDiscount, promoDiscount = 0, lineManualDiscountDisplay = 0,
 }) {
     // Mismo redondeo por línea que CartContext, para que las líneas sumen el total del footer.
     const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
@@ -38,6 +38,11 @@ export default function CartSidebar({
     // Edición del cliente ya elegido, sin abandonar la venta.
     const { can, notify } = useApp();
     const canPending = can("sales.pending");
+    const canReturn  = can("sales.return");
+    // Sin el permiso no se ofrece el descuento: el servidor lo rechazaría al facturar.
+    const canDiscount = can("sales.discount");
+    // Con los cuatro botones la fila no cabe en 360 px: pasan a dos filas de dos.
+    const accionesCaja = 2 + (canPending ? 1 : 0) + (canReturn ? 1 : 0);
     const [editandoCliente, setEditandoCliente] = useState(false);
     const [guardandoCliente, setGuardandoCliente] = useState(false);
 
@@ -102,7 +107,7 @@ export default function CartSidebar({
                 {/* Acciones de sesión (escritorio). Sin título "POS · Punto de venta": el
                     módulo ya se nombra en la barra superior, y el título le quitaba ancho a estos
                     tres botones hasta montarlos unos sobre otros. Ahora van en una fila pareja. */}
-                <div className={`hidden lg:grid ${canPending ? "grid-cols-3" : "grid-cols-2"} gap-1.5`}>
+                <div className={`hidden lg:grid ${accionesCaja === 3 ? "grid-cols-3" : "grid-cols-2"} gap-1.5`}>
                     {cashSession ? (
                         <>
                             {/* Facturas pendientes: con permiso propio (sales.pending). Sin él
@@ -115,6 +120,19 @@ export default function CartSidebar({
                                 >
                                     <svg className="w-4 h-4 shrink-0 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
                                     <span className="truncate">Pendientes</span>
+                                </button>
+                            )}
+
+                            {/* Devolución o cambio: busca la factura y abre el mismo modal de
+                                Contabilidad, que el cajero no ve. Permiso propio (sales.return). */}
+                            {canReturn && (
+                                <button
+                                    onClick={() => setShowReturns(true)}
+                                    className="btn-outline h-10 px-2 rounded-lg flex items-center justify-center gap-1.5 text-[12px] font-semibold active:scale-[0.98] min-w-0"
+                                    title="Devolución o cambio (F6)"
+                                >
+                                    <svg className="w-4 h-4 shrink-0 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
+                                    <span className="truncate">Devolución</span>
                                 </button>
                             )}
 
@@ -208,6 +226,17 @@ export default function CartSidebar({
                                         title="Facturas pendientes"
                                     >
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                    </button>
+                                )}
+
+                                {canReturn && (
+                                    <button
+                                        onClick={() => setShowReturns(true)}
+                                        className="h-9 px-4 rounded-xl bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 flex items-center justify-center active:scale-90 transition-all"
+                                        title="Devolución o cambio"
+                                        aria-label="Devolución o cambio"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
                                     </button>
                                 )}
 
@@ -415,7 +444,13 @@ export default function CartSidebar({
                                         {/* El nombre se lee entero: truncado, "SARDINA INCOSA T..." no
                                             distingue una presentación de otra en pleno cobro. */}
                                         <div className="text-[12px] font-bold dark:text-white leading-tight break-words min-w-0 flex-1">{i.name}</div>
-                                        {activePromos.find(p => p.product_ids?.includes(i.id)) && (() => {
+                                        {/* Descuento manual de la línea (se da en la revisión del pedido):
+                                            reemplaza a la promoción, así que se muestra en su lugar. */}
+                                        {i.ld_mode ? (
+                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-500/10 text-brand-700 dark:text-brand-300 shrink-0">
+                                                {i.ld_mode === "pct" ? `-${parseFloat(i.ld_value).toLocaleString("es-VE", { maximumFractionDigits: 2 })}%` : "Desc."}
+                                            </span>
+                                        ) : activePromos.find(p => p.product_ids?.includes(i.id)) && (() => {
                                             const promo = activePromos.find(p => p.product_ids?.includes(i.id));
                                             return (
                                                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-success/10 text-success border border-success/20 shrink-0">
@@ -478,14 +513,15 @@ export default function CartSidebar({
                 <div className="sticky bottom-0 z-10 -mx-3 -mb-3 px-3 pb-3 lg:static lg:mx-0 lg:mb-0 lg:px-0 lg:pb-1 bg-white dark:bg-[#0c0c0c] pt-2 border-t border-border/60 dark:border-white/[0.06] space-y-1.5">
                     {/* Móvil: descuento y recargo en una fila de dos botones; sus controles
                         aparecen solo al activarlos. Dos franjas fijas se comían la pantalla. */}
-                    <div className="lg:hidden grid grid-cols-2 gap-1.5">
-                        {[["Descuento", discountEnabled, () => setDiscountEnabled(!discountEnabled)], ["Recargo", chargeEnabled, () => setChargeEnabled(!chargeEnabled)]].map(([label, on, fn]) => (
+                    <div className={`lg:hidden grid ${canDiscount ? "grid-cols-2" : "grid-cols-1"} gap-1.5`}>
+                        {[...(canDiscount ? [["Descuento", discountEnabled, () => setDiscountEnabled(!discountEnabled)]] : []), ["Recargo", chargeEnabled, () => setChargeEnabled(!chargeEnabled)]].map(([label, on, fn]) => (
                             <button key={label} onClick={fn} className={`h-9 rounded-lg text-[13px] font-medium border flex items-center justify-center gap-1.5 transition-colors ${on ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "bg-white dark:bg-white/5 border-border dark:border-white/10 text-content-muted dark:text-white/70"}`}>
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d={on ? "M5 13l4 4L19 7" : "M12 5v14M5 12h14"} /></svg>
                                 {label}
                             </button>
                         ))}
                     </div>
+                    {canDiscount && (
                     <div className={`${discountEnabled ? "flex" : "hidden lg:flex"} bg-surface-2 dark:bg-white/5 rounded-lg p-2 items-center justify-between gap-3 border border-black/5 dark:border-white/5`}>
                         <div className="flex items-center gap-3">
                             <button onClick={() => setDiscountEnabled(!discountEnabled)} className={`w-8 h-5 lg:w-10 lg:h-6 rounded-full transition-all relative ${discountEnabled ? "bg-brand-500" : "bg-surface-3 dark:bg-white/10"}`}>
@@ -526,6 +562,7 @@ export default function CartSidebar({
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* Recargo: propina, servicio, delivery. Se carga por MONTO en la moneda
                         que está en pantalla, y los atajos de porcentaje solo rellenan ese
@@ -593,7 +630,7 @@ export default function CartSidebar({
                         )}
                     </div>
                     <div className="bg-surface-2 dark:bg-white/5 p-3 rounded-xl border border-black/5 dark:border-white/10">
-                        <div className={`${(promoDiscount > 0 || (discountEnabled && discountAmount > 0) || chargeAmountDisplay > 0) ? "" : "hidden lg:block"} space-y-1 mb-2`}>
+                        <div className={`${(promoDiscount > 0 || lineManualDiscountDisplay > 0 || (discountEnabled && discountAmount > 0) || chargeAmountDisplay > 0) ? "" : "hidden lg:block"} space-y-1 mb-2`}>
                             <div className="flex justify-between items-center opacity-60 dark:text-content-dark-muted">
                                 <span className="text-[12px] lg:text-[13px] font-medium">Subtotal</span>
                                 <span className="text-[12px] lg:text-sm font-bold tabular-nums">{fmt(subtotalDisplay, currSym)}</span>
@@ -602,6 +639,12 @@ export default function CartSidebar({
                                 <div className="flex justify-between items-center text-success">
                                     <span className="text-[12px] lg:text-[13px] font-medium">Promociones</span>
                                     <span className="text-[12px] lg:text-sm font-bold tabular-nums">-{fmt(promoDiscountDisplay, currSym)}</span>
+                                </div>
+                            )}
+                            {lineManualDiscountDisplay > 0 && (
+                                <div className="flex justify-between items-center text-content-muted dark:text-white/70">
+                                    <span className="text-[12px] lg:text-[13px] font-medium">Descuentos por línea</span>
+                                    <span className="text-[12px] lg:text-sm font-bold tabular-nums">-{fmt(lineManualDiscountDisplay, currSym)}</span>
                                 </div>
                             )}
                             {discountEnabled && discountAmount > 0 && (

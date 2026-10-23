@@ -43,6 +43,9 @@ const tenantModels = [
   'StockSession', 'CatalogBanner', 'BenefitTag', 'CustomerCreditMovement', 'PaymentJournalWarehouse',
   'ProductAttribute', 'ProductAttributeValue', 'Role',
   'BankStatement', 'BankStatementLine', 'BankReconciliationMatch', 'PaymentJournalMethod',
+  'MaterialPiece', 'FabricationOrder', 'FabricationOrderPiece', 'FabricationOrderItem',
+  'FabricationRecipe', 'FabricationRecipeItem', 'FabricationOrderPlan',
+  'FabricationStage', 'FabricationOrderStage', 'FabricationOrderCut',
 ];
 
 const applyTenantFilter = (modelName, options) => {

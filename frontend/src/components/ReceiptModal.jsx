@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { netoLineaEnTasa } from "../helpers/currency";
 import Modal from "./ui/Modal";
 import { api } from "../services/api";
 import { useApp } from "../context/AppContext";
@@ -177,11 +178,16 @@ function calcReceiptTotals(s, rate, sym) {
         if (isBs) {
             const priceBs = round2((parseFloat(i.price) || 0) * rate);
             const discountBs = round2((parseFloat(i.discount) || 0) * rate);
-            const subtotalBs = round2((priceBs - discountBs) * qty);
+            // Con descuento manual, el de la línea entera (ver netoLineaEnTasa); sin él, como siempre.
+            const subtotalBs = i.line_discount_mode ? netoLineaEnTasa(i, rate) : round2((priceBs - discountBs) * qty);
+            // Lo rebajado en la línea (descuento de la caja o promoción), ya restado del
+            // total de la línea: el ticket lo dice para que "2 × 10" dando 18 se entienda.
+            const rebaja = round2(round2(priceBs * qty) - subtotalBs);
             return {
                 ...i,
                 fmtPrice: fmt(priceBs, sym),
                 fmtSubtotal: fmt(subtotalBs, sym),
+                fmtLineDiscount: rebaja > 0 ? fmt(rebaja, sym) : null,
                 subtotalBs,
             };
         } else {
@@ -194,11 +200,13 @@ function calcReceiptTotals(s, rate, sym) {
             // el que el cliente acababa de ver en pantalla.
             const p = round2(parseFloat(i.price || 0));
             const d = round2(parseFloat(i.discount || 0));
-            const sub = round2((p - d) * qty);
+            const sub = i.line_discount_mode ? netoLineaEnTasa(i, 1) : round2((p - d) * qty);
+            const rebaja = round2(round2(p * qty) - sub);
             return {
                 ...i,
                 fmtPrice: fmt(p, sym),
                 fmtSubtotal: fmt(sub, sym),
+                fmtLineDiscount: rebaja > 0 ? fmt(rebaja, sym) : null,
                 subtotalBs: sub,
             };
         }
@@ -520,6 +528,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
                     <span class="qty">${fmtQty(i.quantity)} x ${i.fmtPrice}</span>
                     <span class="line-total">${i.fmtSubtotal}</span>
                 </div>
+                ${i.fmtLineDiscount ? `<div class="item-line"><span class="qty">Incluye desc. -${i.fmtLineDiscount}</span></div>` : ""}
                 ${parseFloat(i.returned_qty) > 0 ? `<div class="item-line"><span class="qty">DEVUELTO: ${fmtQty(i.returned_qty)}</span></div>` : ""}
             </div>
         `).join("")}
@@ -689,7 +698,10 @@ export default function ReceiptModal({ open, onClose, sale }) {
                             <Money value={item.fmtSubtotal} className="font-semibold text-content dark:text-white shrink-0" />
                         </div>
                         <div className="flex items-baseline justify-between gap-3 text-[12px] text-content-subtle tabular-nums mt-0.5">
-                            <span>{parseFloat(item.quantity) % 1 === 0 ? Math.round(parseFloat(item.quantity)) : item.quantity} × {item.fmtPrice}</span>
+                            <span>
+                                {parseFloat(item.quantity) % 1 === 0 ? Math.round(parseFloat(item.quantity)) : item.quantity} × {item.fmtPrice}
+                                {item.fmtLineDiscount && <> · incluye desc. −{item.fmtLineDiscount}</>}
+                            </span>
                             {parseFloat(item.returned_qty) > 0 && (
                                 <span className="font-medium text-amber-700 dark:text-amber-400 whitespace-nowrap">
                                     {parseFloat(item.returned_qty)} devuelto{parseFloat(item.returned_qty) > 1 ? "s" : ""}

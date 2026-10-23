@@ -449,6 +449,10 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                         amount_paid: exchangeResult.credit_applied,
                         customer_id: sale.customer_id,
                         exchange_rate: sale.exchange_rate,
+                        // La factura nueva es de la misma sucursal: sin esto el selector ofrecía
+                        // las cajas de todas las tiendas, y un cobro a una caja que no está en el
+                        // turno no aparecía en el arqueo.
+                        warehouse_id: sale.warehouse_id,
                     }}
                     onClose={() => setShowPayDiff(false)}
                     // Cobrada la diferencia, sale la factura nueva ya pagada para imprimirla.

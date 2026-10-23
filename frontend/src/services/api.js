@@ -250,7 +250,7 @@ async function requestServidor(path, options = {}) {
 // producto—, pero en estos vaciar la caja es justamente cómo se quita el dato, y sin esto no
 // habría manera de borrarlo desde el modal. El código de barras va aquí porque uno mal
 // cargado (o repetido) tiene que poder quitarse: el servidor guarda el vacío como NULL.
-const CAMPOS_VACIABLES = ["brand", "short_description", "description", "benefits", "barcode"];
+const CAMPOS_VACIABLES = ["brand", "short_description", "description", "benefits", "barcode", "piece_mode", "piece_width_mm"];
 
 function buildProductForm(body, imageFile, removeImage) {
   const fd = new FormData();
@@ -641,6 +641,44 @@ export const api = {
     register:   (id, lineId, body) => request(`/bank-reconciliations/${id}/lines/${lineId}/register`, { method: "POST", body: JSON.stringify(body) }),
     ignore:     (id, lineId, body={}) => request(`/bank-reconciliations/${id}/lines/${lineId}/ignore`, { method: "POST", body: JSON.stringify(body) }),
     unmatch:    (id, lineId)       => request(`/bank-reconciliations/${id}/lines/${lineId}/unmatch`,  { method: "POST" }),
+  },
+
+  // ── Fábrica: láminas, retazos y órdenes de fabricación ───────
+  factory: {
+    materials:      (params={})        => request("/factory/materials?" + new URLSearchParams(params)),
+    saveMaterial:   (body)             => request("/factory/materials", { method: "POST", body: JSON.stringify(body) }),
+    pieces:         (params={})        => request("/factory/pieces?" + new URLSearchParams(params)),
+    registerPieces: (body)             => request("/factory/pieces", { method: "POST", body: JSON.stringify(body) }),
+    piece:          (id)               => request(`/factory/pieces/${id}`),
+    dischargePiece: (id, body)         => request(`/factory/pieces/${id}/discharge`, { method: "POST", body: JSON.stringify(body) }),
+    stages:         (params={})        => request("/factory/stages?" + new URLSearchParams(params)),
+    saveStage:      (body)             => body.id
+      ? request(`/factory/stages/${body.id}`, { method: "PUT", body: JSON.stringify(body) })
+      : request("/factory/stages", { method: "POST", body: JSON.stringify(body) }),
+    reorderStages:  (ids)              => request("/factory/stages/order", { method: "PUT", body: JSON.stringify({ ids }) }),
+    deleteStage:    (id)               => request(`/factory/stages/${id}`, { method: "DELETE" }),
+    presetStages:   ()                 => request("/factory/stages/presets", { method: "POST" }),
+    moveStage:      (id, body)         => request(`/factory/orders/${id}/stage`, { method: "POST", body: JSON.stringify(body) }),
+    evaluateRecipe: (body)             => request("/factory/recipes/evaluate", { method: "POST", body: JSON.stringify(body) }),
+    recipes:        ()                 => request("/factory/recipes"),
+    recipe:         (productId)        => request(`/factory/recipes/${productId}`),
+    recipePreview:  (productId, params={}) => request(`/factory/recipes/${productId}/preview?` + new URLSearchParams(params)),
+    saveRecipe:     (productId, body)  => request(`/factory/recipes/${productId}`, { method: "PUT", body: JSON.stringify(body) }),
+    deleteRecipe:   (productId)        => request(`/factory/recipes/${productId}`, { method: "DELETE" }),
+    orders:         (params={})        => request("/factory/orders?" + new URLSearchParams(params)),
+    order:          (id)               => request(`/factory/orders/${id}`),
+    createOrder:    (body)             => request("/factory/orders", { method: "POST", body: JSON.stringify(body) }),
+    updateOrder:    (id, body)         => request(`/factory/orders/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    deliverPiece:   (id, body)         => request(`/factory/orders/${id}/pieces`, { method: "POST", body: JSON.stringify(body) }),
+    cancelDelivery: (id, useId)        => request(`/factory/orders/${id}/pieces/${useId}`, { method: "DELETE" }),
+    returnPiece:    (id, useId, body)  => request(`/factory/orders/${id}/pieces/${useId}/return`, { method: "POST", body: JSON.stringify(body) }),
+    undoReturn:     (id, useId)        => request(`/factory/orders/${id}/pieces/${useId}/undo`, { method: "POST" }),
+    addItem:        (id, body)         => request(`/factory/orders/${id}/items`, { method: "POST", body: JSON.stringify(body) }),
+    removeItem:     (id, itemId)       => request(`/factory/orders/${id}/items/${itemId}`, { method: "DELETE" }),
+    finish:         (id, body={})      => request(`/factory/orders/${id}/finish`, { method: "POST", body: JSON.stringify(body) }),
+    reopen:         (id)               => request(`/factory/orders/${id}/reopen`, { method: "POST" }),
+    cancel:         (id, body)         => request(`/factory/orders/${id}/cancel`, { method: "POST", body: JSON.stringify(body) }),
+    invoice:        (id, body)         => request(`/factory/orders/${id}/invoice`, { method: "POST", body: JSON.stringify(body) }),
   },
   companies: {
     getAll: ()          => request("/companies"),

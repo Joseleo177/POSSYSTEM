@@ -17,6 +17,9 @@ const SECTIONS = [
     ["empresa", "Empresa"],
     ["suscripcion", "Mi suscripción"],
     ["factura", "Factura"],
+    // Cómo trabaja la caja. Cada opción nace apagada en las empresas que ya existían: nadie
+    // amanece con su POS cambiado.
+    ["pos", "Punto de venta"],
     // Reglas de cuentas por cobrar (plazo de crédito, tope de exoneración): no son del papel.
     ["credito", "Crédito y cobranza"],
     // Contenido del catálogo público: banners, anuncio y menú destacado. Va aquí y no en el
@@ -185,7 +188,7 @@ export default function SettingsTab({ notify }) {
     );
 
     const subheader = (
-        <div className="flex gap-1 px-4 border-b border-border/20 dark:border-white/5 overflow-x-auto no-scrollbar">
+        <div className="flex gap-1 px-4 border-b border-border/20 dark:border-white/5 overflow-x-auto scrollbar-hide">
             {visibleSections.map(([key, label]) => (
                 <button
                     key={key}
@@ -202,6 +205,9 @@ export default function SettingsTab({ notify }) {
     );
 
     const headerOn = (settings.receipt_show_header || "true") === "true";
+    // Sin la clave guardada es "apagado": así siguen las empresas que ya existían. Las nuevas
+    // la reciben encendida al darse de alta (ver controllers/companies.js).
+    const reviewOn = settings.pos_review_checkout === "true";
     const usados   = companyInfo?.current_users || 0;
     const maximo   = companyInfo?.max_users;
     const estado   = companyInfo?.subscription_status || "Demo";
@@ -439,6 +445,34 @@ export default function SettingsTab({ notify }) {
                     </div>
                 )}
 
+                {/* ── Punto de venta ── */}
+                {section === "pos" && (
+                    <div className="grid gap-4 lg:grid-cols-2">
+                        <Seccion titulo="Al finalizar la venta" detalle="Qué ve el cajero al pulsar Finalizar venta o F10." className="h-full">
+                            <div className="rounded-xl border border-border/70 dark:border-white/[0.08]">
+                                <Interruptor
+                                    titulo="Revisar el pedido antes de facturar"
+                                    detalle="Abre el pedido en pantalla completa para ajustar cantidades, cliente, descuento y recargo antes de emitir. Las teclas no cambian: Enter factura y 2 cotiza."
+                                    checked={reviewOn}
+                                    onChange={() => setSettings(p => ({ ...p, pos_review_checkout: reviewOn ? "false" : "true" }))}
+                                />
+                            </div>
+                        </Seccion>
+
+                        {/* Tope de descuento. Mismo criterio que el de exoneración: limita a quien
+                            tiene el permiso "Dar descuentos" sin ser administrador. */}
+                        <Seccion titulo="Descuentos" detalle="Cuánto puede rebajar un empleado, por línea o en toda la venta." className="h-full">
+                            <Campo label="Tope de descuento (%)"
+                                ayuda="Vale para el descuento de cada línea y para el de la venta. Aplica a quien tiene el permiso de dar descuentos sin ser administrador; el administrador no tiene tope. Con 0 o vacío no hay límite.">
+                                <input type="text" inputMode="decimal" placeholder="0 = sin límite"
+                                    value={settings.discount_max_pct || ""}
+                                    onChange={e => setSettings(p => ({ ...p, discount_max_pct: e.target.value.replace(",", ".").replace(/[^\d.]/g, "").slice(0, 5) }))}
+                                    className={`${INPUT} tabular-nums sm:max-w-[200px]`} />
+                            </Campo>
+                        </Seccion>
+                    </div>
+                )}
+
                 {/* ── Crédito y cobranza ──
                     Reglas de cuentas por cobrar: quién puede perdonar deuda y cuándo vence una
                     factura a crédito. Vivían en Factura, pero no tienen que ver con el papel. */}
@@ -540,7 +574,7 @@ export default function SettingsTab({ notify }) {
                 )}
 
             </div>
-            {["empresa", "factura", "credito"].includes(section) && barraGuardar}
+            {["empresa", "factura", "pos", "credito"].includes(section) && barraGuardar}
         </Page>
     );
 }

@@ -1,5 +1,5 @@
 // Unidades de peso/volumen (admiten decimales). El resto son contables (enteras).
-export const WEIGHTED_UNITS = ["KG", "KILOGRAMO", "L", "LITRO", "M", "METRO"];
+export const WEIGHTED_UNITS = ["KG", "KILOGRAMO", "L", "LITRO", "M", "METRO", "M2"];
 
 // true si la unidad es contable (UNIDAD, etc.) → cantidades estrictamente enteras.
 export const isIntegerUnit = (unit) => !WEIGHTED_UNITS.includes((unit || "").toUpperCase());
