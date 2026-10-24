@@ -608,6 +608,27 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // Resumen de la factura: en el lateral en escritorio, arriba del todo en móvil. Es
   // contexto de solo lectura —qué se cobra y cómo queda—, así que se separa de los campos
   // que el cajero teclea para que no se pierda "entre tanta información".
+  //
+  // Saldo en la moneda con que se va a cobrar. Sin método elegido todavía no se sabe cuál
+  // es, así que van las dos: el cajero le dice al cliente cuánto es en Bs y en Ref sin abrir
+  // nada más. Elegido el método, solo la suya, que es la cifra que se va a teclear.
+  const saldoBsDia  = defaultRate > 1 ? pendingBsAt(defaultRate) : null;
+  const saldoRefTxt = fmtBase(pendingAfterCredit);
+  const metodoElegido = combinado || !!form.payment_journal_id;
+  let saldoMain, saldoAlt = null;
+  if (metodoElegido) {
+    saldoMain = isNonBasePay ? `${payCur?.symbol || defaultSym}${pendingPreciseBs.toFixed(2)}`
+      : combinado ? (hasBsRate ? `${defaultSym}${pendingPreciseBs.toFixed(2)}` : saldoRefTxt)
+      : saldoRefTxt;
+  } else if (saldoBsDia !== null) {
+    saldoMain = `${defaultSym}${saldoBsDia.toFixed(2)}`;
+    // Con Ref.0,00 en base y bolívares por cobrar (ver forgiveSoloBs), el "Ref.0.00" de al
+    // lado diría que no se debe nada: en ese caso solo va el monto en Bs.
+    saldoAlt = pendingAfterCredit > settleTolerance(sale) ? saldoRefTxt : null;
+  } else {
+    saldoMain = saldoRefTxt;
+  }
+
   const resumenFactura = (
     <div className="rounded-xl bg-surface-2 dark:bg-white/[0.04] p-4 space-y-2">
       <Row label="Factura" value={sale.invoice_number || sale.offline_ref || `#${sale.id}`} />
@@ -624,8 +645,11 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
       )}
       <div className="border-t border-border/70 dark:border-white/[0.08] pt-2 mt-2">
         <Row label="Saldo pendiente"
-          value={hasBsRate ? `${defaultSym}${pendingPreciseBs.toFixed(2)}` : fmt(pendingAfterCredit)}
+          value={saldoMain}
           valueClass="text-content dark:text-white !text-[15px] !font-bold" />
+        {saldoAlt && (
+          <div className="text-right text-[12px] font-semibold text-content-subtle tabular-nums">{saldoAlt}</div>
+        )}
       </div>
     </div>
   );

@@ -120,15 +120,28 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
     // abierta, lo que se debe son bolívares (cobrada en Bs, con el total en base por debajo de
     // sus líneas en Bs): A-0007150 salía "Ref. 0.00 · Parcial" debiendo Bs.7,86. Se calcula
     // como en el modal de cobro (pendingBsAt), a la tasa del sistema.
+    //
+    // Al lado va siempre lo que se cobra en bolívares, para que el cajero no tenga que abrir
+    // la factura —ni sacar la cuenta— para decirle al cliente cuánto pagar en cada moneda.
     const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
-    const saldoDe = (sale) => {
-        const bal = parseFloat(sale.balance || 0);
-        if (bal > 0 || !(bsRate > 1) || !sale.items?.length) return fmt(bal);
-        const bs = Math.max(0, round2(saleTotalAtRate(sale, bsRate)
+    const fmtBs = (n) => `${bsCur?.symbol || "Bs."}${n.toFixed(2)}`;
+    const saldoBsDe = (sale) => {
+        if (!(bsRate > 1) || !sale.items?.length) return null;
+        return Math.max(0, round2(saleTotalAtRate(sale, bsRate)
             - round2(parseFloat(sale.amount_paid || 0) * bsRate)
             - round2(parseFloat(sale.forgiven_amount || 0) * bsRate)));
-        return bs >= 0.01 ? `${bsCur?.symbol || "Bs."}${bs.toFixed(2)}` : fmt(bal);
     };
+    // { main, alt }: la cifra principal y la de la otra moneda (null si no aplica).
+    const saldosDe = (sale) => {
+        const bal = parseFloat(sale.balance || 0);
+        const bs = saldoBsDe(sale);
+        if (bal > 0) return { main: fmt(bal), alt: bs !== null ? fmtBs(bs) : null };
+        if (bs !== null && bs >= 0.01) return { main: fmtBs(bs), alt: null };
+        return { main: fmt(bal), alt: null };
+    };
+    const saldoTotalBs = bsRate > 1
+        ? filtered.reduce((acc, s) => acc + (saldoBsDe(s) ?? round2(parseFloat(s.balance || 0) * bsRate)), 0)
+        : null;
     const fmtDate = (d) => {
         if (!d) return "—";
         const dt = new Date(d);
@@ -151,6 +164,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                 <>
                                     {filtered.length} {filtered.length === 1 ? "factura" : "facturas"}
                                     {filtered.length > 0 && <> · saldo <Money value={fmt(saldoTotal)} className="font-semibold text-content dark:text-white" /></>}
+                                    {filtered.length > 0 && saldoTotalBs !== null && <> · <Money value={fmtBs(saldoTotalBs)} className="font-semibold text-content dark:text-white" /></>}
                                 </>
                             )}
                         </p>
@@ -217,9 +231,12 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-baseline justify-between gap-2">
                                             <span className="text-[14px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums">{docLabel(sale)}</span>
-                                            <Money value={saldoDe(sale)} className="text-[14px] font-semibold text-content dark:text-white" />
+                                            <Money value={saldosDe(sale).main} className="text-[14px] font-semibold text-content dark:text-white" />
                                         </div>
-                                        <div className="text-[13px] text-content-muted truncate">{clientName(sale) || "Sin cliente"}</div>
+                                        <div className="flex items-baseline justify-between gap-2">
+                                            <div className="text-[13px] text-content-muted truncate">{clientName(sale) || "Sin cliente"}</div>
+                                            {saldosDe(sale).alt && <Money value={saldosDe(sale).alt} className="text-[12px] text-content-subtle shrink-0" />}
+                                        </div>
                                         <div className="flex items-center justify-between gap-2 mt-1">
                                             <span className="text-[12px] text-content-subtle tabular-nums">{fmtDate(sale.created_at)}</span>
                                             <StatusMark status={sale.status} map={STATUS_MAP} />
@@ -279,7 +296,10 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                             <Money value={fmt(sale.total)} className="text-[13px] font-medium text-content-subtle" />
                                         </td>
                                         <td className="text-right">
-                                            <Money value={saldoDe(sale)} className="text-[14px] font-semibold text-content dark:text-white" />
+                                            <Money value={saldosDe(sale).main} className="text-[14px] font-semibold text-content dark:text-white" />
+                                            {saldosDe(sale).alt && (
+                                                <div className="text-[12px] text-content-muted"><Money value={saldosDe(sale).alt} /></div>
+                                            )}
                                             {/* Lo abonado solo cuando hay: una columna "Pagado" en
                                                 cero en cada fila era ruido. */}
                                             {sale.amount_paid > 0 && (
