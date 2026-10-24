@@ -164,6 +164,8 @@ const forgive = async (req, res) => {
   try {
     const result = await salesService.forgiveSale(req.params.id, {
       reason: req.body?.reason,
+      // Tasa del día con que la pantalla calculó el saldo en Bs (ver forgiveSale).
+      rate: req.body?.rate,
       employee_id: req.employee?.id ?? null,
     }, req);
     // Las demás cajas deben ver la factura fuera de cuentas por cobrar sin recargar a mano.

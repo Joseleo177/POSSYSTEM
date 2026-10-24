@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../../services/api";
 import { hasTopOverlay } from "../../helpers/overlayGuard";
-import { toNameCase, settleTolerance } from "../../helpers";
+import { toNameCase, settleTolerance, saleTotalAtRate } from "../../helpers";
+import { useApp } from "../../context/AppContext";
 import BulkPaymentModal from "../Customers/BulkPaymentModal";
 import Check from "../ui/Check";
 import Money from "../ui/Money";
@@ -37,6 +38,9 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
     const [checkedIds, setCheckedIds] = useState([]);
     const [showBulk, setShowBulk]     = useState(false);
     const sym = baseCurrency?.symbol || "Ref.";
+    const { activeCurrencies = [] } = useApp();
+    const bsCur  = activeCurrencies.find(c => !c.is_base);
+    const bsRate = parseFloat(bsCur?.exchange_rate) || 0;
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -112,6 +116,19 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
         : "Cobrar junto con las demás";
 
     const fmt = (n) => `${sym}${parseFloat(n || 0).toFixed(2)}`;
+    // Saldo que se muestra. Si en base ya está dentro del redondeo pero la factura sigue
+    // abierta, lo que se debe son bolívares (cobrada en Bs, con el total en base por debajo de
+    // sus líneas en Bs): A-0007150 salía "Ref. 0.00 · Parcial" debiendo Bs.7,86. Se calcula
+    // como en el modal de cobro (pendingBsAt), a la tasa del sistema.
+    const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+    const saldoDe = (sale) => {
+        const bal = parseFloat(sale.balance || 0);
+        if (bal > 0 || !(bsRate > 1) || !sale.items?.length) return fmt(bal);
+        const bs = Math.max(0, round2(saleTotalAtRate(sale, bsRate)
+            - round2(parseFloat(sale.amount_paid || 0) * bsRate)
+            - round2(parseFloat(sale.forgiven_amount || 0) * bsRate)));
+        return bs >= 0.01 ? `${bsCur?.symbol || "Bs."}${bs.toFixed(2)}` : fmt(bal);
+    };
     const fmtDate = (d) => {
         if (!d) return "—";
         const dt = new Date(d);
@@ -200,7 +217,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-baseline justify-between gap-2">
                                             <span className="text-[14px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums">{docLabel(sale)}</span>
-                                            <Money value={fmt(sale.balance)} className="text-[14px] font-semibold text-content dark:text-white" />
+                                            <Money value={saldoDe(sale)} className="text-[14px] font-semibold text-content dark:text-white" />
                                         </div>
                                         <div className="text-[13px] text-content-muted truncate">{clientName(sale) || "Sin cliente"}</div>
                                         <div className="flex items-center justify-between gap-2 mt-1">
@@ -262,7 +279,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                             <Money value={fmt(sale.total)} className="text-[13px] font-medium text-content-subtle" />
                                         </td>
                                         <td className="text-right">
-                                            <Money value={fmt(sale.balance)} className="text-[14px] font-semibold text-content dark:text-white" />
+                                            <Money value={saldoDe(sale)} className="text-[14px] font-semibold text-content dark:text-white" />
                                             {/* Lo abonado solo cuando hay: una columna "Pagado" en
                                                 cero en cada fila era ruido. */}
                                             {sale.amount_paid > 0 && (

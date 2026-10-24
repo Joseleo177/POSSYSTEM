@@ -407,7 +407,7 @@ export const api = {
     confirmCredit: (id)      => request(`/sales/${id}/credit`, { method: "POST" }),
     // Exonerar: perdona el saldo pendiente y cierra la factura sin cobrarla. `reason` es
     // obligatorio. Deshacerla la devuelve a por cobrar con el saldo que tenía.
-    forgive:     (id, reason) => request(`/sales/${id}/forgive`, { method: "POST", body: JSON.stringify({ reason }) }),
+    forgive:     (id, reason, rate) => request(`/sales/${id}/forgive`, { method: "POST", body: JSON.stringify({ reason, rate }) }),
     unforgive:   (id)         => request(`/sales/${id}/forgive`, { method: "DELETE" }),
     // Cuentas en espera y pedidos del catálogo público: visibles desde cualquier caja.
     // Los 'pedido' todavía no descontaron inventario; se listan juntos porque se

@@ -1,4 +1,5 @@
-const { Sale, Payment, Return, Setting, Sequelize, sequelize } = require("../../models");
+const { Sale, SaleItem, Payment, Return, Setting, Sequelize, sequelize } = require("../../models");
+const { netoLineaEnTasa } = require("./lineDiscount");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { resolveSaleStatus, saleSettleTolerance } = require("../../utils/saleBalance");
 
@@ -44,6 +45,24 @@ async function pendingOf(sale, transaction) {
   };
 }
 
+// Lo que falta en bolívares a la tasa `rate`, con la misma cuenta que el cobro (totalBsAt en
+// createPayment.js) y la pantalla (pendingBsAt): el total línea por línea en Bs menos lo
+// cobrado, lo devuelto y lo ya exonerado, cada término convertido con la misma tasa.
+async function pendingBsOf(sale, { paid, returned }, rate, transaction) {
+  const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const items = await SaleItem.findAll({ where: { sale_id: sale.id }, transaction });
+  const totalBs = round2(
+    items.reduce((acc, i) => acc + netoLineaEnTasa(i, rate), 0)
+    - round2(parseFloat(sale.discount_amount || 0) * rate)
+    + round2(parseFloat(sale.service_charge || 0) * rate)
+  );
+  const credited = paid + parseFloat(sale.credit_applied || 0);
+  return Math.max(0, round2(totalBs
+    - round2(credited * rate)
+    - round2(returned * rate)
+    - round2(parseFloat(sale.forgiven_amount || 0) * rate)));
+}
+
 /**
  * Exonera el saldo que queda por cobrar de una factura.
  *
@@ -56,7 +75,7 @@ async function pendingOf(sale, transaction) {
  * no crea un Payment: ese dinero nunca entró a caja. Solo queda anotado en la venta, con quién
  * lo autorizó y por qué.
  */
-async function forgiveSale(id, { reason, employee_id }, req) {
+async function forgiveSale(id, { reason, employee_id, rate }, req) {
   const motivo = String(reason || "").trim();
   if (!motivo) throw err("Indica el motivo de la exoneración");
   if (motivo.length > 300) throw err("El motivo no puede pasar de 300 caracteres");
@@ -78,21 +97,33 @@ async function forgiveSale(id, { reason, employee_id }, req) {
 
     const { paid, returned, pending } = await pendingOf(sale, t);
     const tolerance = await saleSettleTolerance(sale, t);
-    if (pending <= tolerance) throw err("Esta factura no tiene saldo pendiente");
+
+    // Saldo en base dentro del redondeo, pero la factura sigue abierta: debe bolívares. Pasa
+    // cuando se cobró en Bs y el total en base (precios redondeados en $) vale menos que sus
+    // líneas en Bs — A-0007150: Ref.0,00 en base y Bs.7,86 a la tasa del día. Lo que se
+    // perdona es esa diferencia, llevada a la base con la misma tasa con que la pantalla la
+    // pide (pendingBsAt en PaymentFormModal), para que después de exonerar ahí quede en cero.
+    let forgiveNow = pending;
+    if (pending <= tolerance) {
+      const r = parseFloat(rate) || 0;
+      const pendingBs = r > 1 ? await pendingBsOf(sale, { paid, returned }, r, t) : 0;
+      if (pendingBs < 0.01) throw err("Esta factura no tiene saldo pendiente");
+      forgiveNow = parseFloat((pendingBs / r).toFixed(6));
+    }
 
     // El tope solo aplica a quien no es administrador: es la barandilla del cajero que cierra
     // un vuelto de céntimos, no un candado para el dueño.
     if (!isAdmin(req)) {
       const limit = await forgiveLimitFor(sale.company_id ?? req?.employee?.company_id ?? null);
-      if (limit !== null && pending > limit) {
+      if (limit !== null && forgiveNow > limit) {
         throw err(
-          `Solo puedes exonerar hasta ${limit.toFixed(2)} por factura. Esta debe ${pending.toFixed(2)}: pídelo a un administrador`,
+          `Solo puedes exonerar hasta ${limit.toFixed(2)} por factura. Esta debe ${forgiveNow.toFixed(2)}: pídelo a un administrador`,
           403
         );
       }
     }
 
-    const forgiven = parseFloat((parseFloat(sale.forgiven_amount || 0) + pending).toFixed(6));
+    const forgiven = parseFloat((parseFloat(sale.forgiven_amount || 0) + forgiveNow).toFixed(6));
     const status = resolveSaleStatus({
       saleTotal: sale.total,
       paid,
@@ -115,7 +146,7 @@ async function forgiveSale(id, { reason, employee_id }, req) {
       sale_id: sale.id,
       invoice_number: sale.invoice_number || null,
       forgiven_amount: forgiven,
-      forgiven_now: pending,
+      forgiven_now: forgiveNow,
       sale_status: status,
       // Mismos campos que devuelve un cobro: la pantalla post-venta refresca el resumen con
       // esta respuesta sin tener que distinguir de dónde vino. `amount_paid` es dinero real.

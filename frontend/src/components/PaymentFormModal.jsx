@@ -242,8 +242,12 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
     : (isNonBasePay ? remainingBs : roundBs2(remainingBase * vistaBsRate));
 
   // Sobrante calculado en la moneda de pago (570 - 561.22 = 8.78 exacto),
-  // sin ida-y-vuelta por USD que acumula error de redondeo
-  const changeInPayCur = (!isNaN(receivedNum) && receivedNum > 0 && pendingAfterCredit > 0 && receivedNum > (isNaN(amountNum) ? 0 : amountNum))
+  // sin ida-y-vuelta por USD que acumula error de redondeo.
+  //
+  // Hay vuelto mientras quede algo que cobrar EN LA MONEDA DEL PAGO (maxInPayCur), no en la
+  // base: A-0007150 debía Bs.7,86 con Ref.0,00 en base, y con el viejo `pendingAfterCredit > 0`
+  // el cliente entregaba Bs.100 y el modal no ofrecía devolverle nada.
+  const changeInPayCur = (!isNaN(receivedNum) && receivedNum > 0 && maxInPayCur > 0 && receivedNum > (isNaN(amountNum) ? 0 : amountNum))
     ? parseFloat((receivedNum - (isNaN(amountNum) ? 0 : amountNum)).toFixed(2))
     : 0;
   // Tasa y símbolo de una caja: cada tramo (del cobro o del vuelto) se escribe en la moneda de
@@ -510,18 +514,28 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // Exonerar el saldo pendiente. No pide diario ni fecha: no hay dinero que ubicar en ninguna
   // caja, solo una deuda que se deja de cobrar y el motivo por el que se dejó.
   // Sin conexión no se exonera: es una decisión sobre una factura que todavía no existe.
+  //
+  // También cuando el saldo en base ya está dentro del redondeo pero faltan bolívares: una
+  // factura cobrada en Bs puede deber Bs.7,86 con Ref.0,00 en base (A-0007150), y sin esto
+  // no había forma de cerrarla. Se mide a la tasa del sistema, la misma que manda al servidor.
+  const forgiveBs = defaultRate > 1 ? pendingBsAt(defaultRate) : 0;
+  const forgiveSoloBs = balanceUsd <= settleTolerance(sale) && forgiveBs >= 0.01;
   const canForgive = can("sales.forgive")
     && !sale?.offline
-    && balanceUsd > settleTolerance(sale)
+    && (balanceUsd > settleTolerance(sale) || forgiveSoloBs)
     && !["pagado", "exonerado", "anulado", "devuelto"].includes(sale?.status);
+  // Sin fmtBase: se declara más abajo y acá todavía no existe.
+  const forgiveLabel = forgiveSoloBs
+    ? `${defaultSym}${forgiveBs.toFixed(2)}`
+    : `${baseCurrency?.symbol || "Ref."}${Number(balanceUsd || 0).toFixed(2)}`;
 
   const submitForgive = async () => {
     const motivo = forgiveReason.trim();
     if (!motivo || loading) return;
     setLoading(true);
     try {
-      const res = await api.sales.forgive(sale.id, motivo);
-      notify(`Saldo exonerado: ${fmtBase(res.forgiven_now)}`);
+      const res = await api.sales.forgive(sale.id, motivo, defaultRate > 1 ? defaultRate : undefined);
+      notify(`Saldo exonerado: ${forgiveSoloBs ? forgiveLabel : fmtBase(res.forgiven_now)}`);
       setForgiveMode(false);
       setForgiveReason("");
       onSuccess?.(res);
@@ -553,7 +567,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
         <Row label="Total" value={fmtBase(sale.total)} />
         {sale.amount_paid > 0 && <Row label="Ya pagado" value={fmtBase(sale.amount_paid)} valueClass="text-success" />}
         <div className="border-t border-border/70 dark:border-white/[0.08] pt-2 mt-2">
-          <Row label="Se dejará de cobrar" value={fmtBase(balanceUsd)} valueClass="text-violet-500 dark:text-violet-400 font-bold" />
+          <Row label="Se dejará de cobrar" value={forgiveLabel} valueClass="text-violet-500 dark:text-violet-400 font-bold" />
         </div>
       </div>
 
@@ -585,7 +599,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
         </button>
         <button onClick={submitForgive} disabled={loading || !forgiveReason.trim()}
           className="flex-[2] h-10 rounded-xl bg-violet-500 text-white text-[12px] font-bold transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed">
-          {loading ? "Exonerando..." : `Exonerar ${fmtBase(balanceUsd)}`}
+          {loading ? "Exonerando..." : `Exonerar ${forgiveLabel}`}
         </button>
       </div>
     </Modal>
