@@ -599,11 +599,14 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
       <Row label="Factura" value={sale.invoice_number || sale.offline_ref || `#${sale.id}`} />
       {sale.customer_name && <Row label="Cliente" value={sale.customer_name} />}
       <Row label="Total" value={hasBsRate ? `${defaultSym}${totalPreciseBs.toFixed(2)}` : fmt(sale.total)} />
+      {/* Lo pagado y el crédito van a la MISMA tasa que el total y el saldo (ver pendingBsAt).
+          Con fmt salían a la tasa de la factura y la resta no cuadraba: A-0007150 mostraba
+          Total Bs.61685,25 (a 887,302), Ya pagado Bs.61500,00 (a 884,75) y Saldo Bs.7,86. */}
       {sale.amount_paid > 0 && (
-        <Row label="Ya pagado" value={fmt(sale.amount_paid)} />
+        <Row label="Ya pagado" value={hasBsRate ? `${defaultSym}${roundBs2(sale.amount_paid * bsRate).toFixed(2)}` : fmt(sale.amount_paid)} />
       )}
       {creditApplied > 0 && (
-        <Row label="Crédito aplicado" value={`−${fmt(creditApplied)}`} valueClass="text-brand-700 dark:text-brand-300" />
+        <Row label="Crédito aplicado" value={`−${hasBsRate ? `${defaultSym}${roundBs2(creditApplied * bsRate).toFixed(2)}` : fmt(creditApplied)}`} valueClass="text-brand-700 dark:text-brand-300" />
       )}
       <div className="border-t border-border/70 dark:border-white/[0.08] pt-2 mt-2">
         <Row label="Saldo pendiente"
