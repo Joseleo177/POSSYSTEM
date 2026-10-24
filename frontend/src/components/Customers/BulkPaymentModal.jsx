@@ -126,6 +126,11 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   const deudaEnPagoAt = (r) => round2(ordenadas.reduce((acc, s) => acc + saldoEnMonedaDePagoAt(s, r), 0));
   const saldoEnMonedaDePago = (s) => saldoEnMonedaDePagoAt(s, rate);
   const deudaEnPago = deudaEnPagoAt(rate);
+  // Moneda local del sistema, para mostrar la deuda en Bs mientras no hay método elegido.
+  const bsCurSistema  = activeCurrencies.find(c => !c.is_base);
+  const bsRateSistema = parseFloat(bsCurSistema?.exchange_rate) || 0;
+  const fmtBsSistema  = (n) => `${bsCurSistema?.symbol || "Bs."} ${(parseFloat(n) || 0).toFixed(2)}`;
+  const metodoElegido = combinado || !!form.journal_id;
 
   // Lo que falta por cubrir en el pago combinado, en la moneda de una caja de tasa `r` y sin
   // contar el tramo `idx`. En bolívares se resta de la deuda línea por línea (deudaEnPagoAt),
@@ -342,8 +347,17 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
         </div>
         <div className="text-right shrink-0">
           <p className="text-[12px] text-content-subtle">Total a cobrar</p>
-          <Money value={rate > 1 ? fmtPago(deudaEnPago) : fmtP(deudaTotal)} className="block text-[22px] font-bold tracking-tight text-content dark:text-white leading-tight" />
-          {rate > 1 && <Money value={`≈ ${fmtP(deudaTotal)}`} className="block text-[12px] text-content-subtle" />}
+          {/* Elegido el método, solo su moneda: es la cifra que se va a teclear. Antes de
+              elegirlo van las dos, para decirle al cliente cuánto es en Bs y en Ref sin tener
+              que escoger una caja solo para ver el monto. */}
+          {!metodoElegido && bsRateSistema > 1 ? (
+            <>
+              <Money value={fmtBsSistema(deudaEnPagoAt(bsRateSistema))} className="block text-[22px] font-bold tracking-tight text-content dark:text-white leading-tight" />
+              <Money value={fmtP(deudaTotal)} className="block text-[13px] font-semibold text-content-subtle" />
+            </>
+          ) : (
+            <Money value={rate > 1 ? fmtPago(deudaEnPago) : fmtP(deudaTotal)} className="block text-[22px] font-bold tracking-tight text-content dark:text-white leading-tight" />
+          )}
         </div>
       </div>
 
