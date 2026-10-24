@@ -324,7 +324,10 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
     return { ...p, change_parts: partes };
   });
 
-  const creditCoversAll = creditApplied >= balanceUsd - 0.001;
+  // Solo si de verdad se aplicó crédito. Con saldo en base 0 —una factura cobrada en Bs puede
+  // tener abonado más que su total en Ref y deber todavía bolívares— la comparación sola daba
+  // 0 >= -0,001 y el modal escondía las formas de pago: quedaba vacío pidiendo Bs.7,86.
+  const creditCoversAll = creditApplied > 0 && creditApplied >= balanceUsd - 0.001;
 
   // Elegir método/diario: fija el diario, su moneda y prellena el monto con el saldo (línea
   // por línea en Bs, saldo oficial en divisas). Lo usan tanto el desplegable "MÉTODO DE PAGO"

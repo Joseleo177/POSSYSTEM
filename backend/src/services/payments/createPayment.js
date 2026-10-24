@@ -1,4 +1,4 @@
-const { Payment, Sale, SaleItem, sequelize, getSaleBalance, Op } = require("./shared");
+const { Payment, Sale, SaleItem, sequelize, getSaleBalance, Op } = require("./shared");
 const { netoLineaEnTasa } = require("../sales/lineDiscount");
 const { PAYMENT_TOLERANCE, saleSettleTolerance } = require("../../utils/saleBalance");
 const { Expense, ExpenseCategory, PaymentJournal, Currency, Customer } = require("../../models");
@@ -154,7 +154,13 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
     // 'parcial' para siempre después de pagar los 70 que pedía la pantalla.
     const returned = await liveReturnedTotal(sale_id, t);
     const owed = Math.max(0, saleTotal - returned);
-    const pendingBalance = owed - alreadyPaid;
+    // Nunca negativo: una factura cobrada en Bs puede tener en la base MÁS de lo facturado y
+    // aun así deber bolívares. El total en base suma precios redondeados en $ y el de Bs suma
+    // líneas redondeadas ya convertidas; las dos cuentas se separan unos céntimos. A-0007150
+    // (22-10-2026): total Ref.69,49, cobrados Bs.61.500 a 884,75 (= 69,5112), y por líneas
+    // la factura valía Bs.61.507,8 a esa tasa. Con el saldo en base negativo, cobrar los
+    // Bs.7,86 que faltaban tumbaba el pago con "El cambio no puede superar el monto recibido".
+    const pendingBalance = Math.max(0, owed - alreadyPaid);
 
     // Aplicar crédito de cliente si viene en el body
     let creditApplied = 0;
@@ -232,7 +238,8 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
     if (netCredit < -0.001) {
       throw new Error("El cambio no puede superar el monto recibido");
     }
-    if (totalPaidNow > owed + 0.001) {
+    // Lo que ya estaba abonado de más en la base (ver pendingBalance) no lo trajo este cobro.
+    if (totalPaidNow > Math.max(owed, alreadyPaid) + 0.001) {
       throw new Error(`El monto excede el saldo pendiente. Saldo: ${(owed - alreadyPaid).toFixed(2)}`);
     }
 
@@ -373,9 +380,16 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
     // topó al saldo—, así que quedan anotados en el propio cobro. Sin esto el dinero seguía
     // ahí sin que ningún registro lo explicara, y el pago aparecía por encima de lo facturado
     // sin motivo visible. No se suma al monto: `amount` ya trae todo lo que el cliente entregó.
-    const noAplicado = parseFloat(((payAmt - changeAmt) - netCredit).toFixed(6));
+    //
+    // En bolívares el sobrante se mide en la pista en Bs, la misma que decide si la factura
+    // cerró: en la base el abono se topa al total oficial, que puede valer menos que las
+    // líneas en Bs, y A-0007150 quedó anotada con un "sobrante de 18.72" en un cobro que
+    // en realidad se quedó Bs.7,86 corto.
+    const noteRate = parseFloat(exchange_rate) || 1;
+    const noAplicado = isBsPay
+      ? Math.max(0, round2(payAmtInCur - round2(changeAmt * payRate) - pendingBalanceBs)) / noteRate
+      : parseFloat(((payAmt - changeAmt) - netCredit).toFixed(6));
     if (payment && surplusAmt <= 0 && noAplicado > PAYMENT_TOLERANCE) {
-      const noteRate = parseFloat(exchange_rate) || 1;
       await payment.update(
         {
           notes: [
