@@ -5,7 +5,7 @@ import Segmented from "./ui/Segmented";
 import Money from "./ui/Money";
 import JournalPickerButton from "./cobro/JournalPickerButton";
 import { api } from "../services/api";
-import { fmtBase, printNotaCreditoDoc, todayISO, journalsForWarehouse, toNameCase } from "../helpers";
+import { fmtBase, printNotaCreditoDoc, todayISO, journalsForWarehouse, toNameCase, factorDevolucion } from "../helpers";
 import { isIntegerUnit } from "../helpers/unitFormatter";
 import ConfirmModal from "./ui/ConfirmModal";
 import PaymentFormModal from "./PaymentFormModal";
@@ -131,8 +131,11 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
         setReturnQtys(qtys);
     };
 
-    const totalReturn = sale.items.reduce((acc, i) =>
-        acc + (cantDe(i) * (parseFloat(i.price) - parseFloat(i.discount || 0))), 0);
+    // Cada línea devuelta se lleva su parte del descuento de la venta y de la rebaja por pagar en
+    // divisas: se devuelve lo que se cobró, no el precio de lista (ver factorDevolucion).
+    const factor = factorDevolucion(sale);
+    const netoDe = (i) => (parseFloat(i.price) - parseFloat(i.discount || 0)) * factor;
+    const totalReturn = sale.items.reduce((acc, i) => acc + cantDe(i) * netoDe(i), 0);
 
     const totalReplacement = replacementItems.reduce((acc, i) => acc + (parseFloat(i.price) * parseFloat(i.qty)), 0);
 
@@ -521,7 +524,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                                     {sale.items.map((item, idx) => {
                                         const available = disponibleDe(item);
                                         const unit      = unidadDe(item);
-                                        const neto      = parseFloat(item.price) - parseFloat(item.discount || 0);
+                                        const neto      = netoDe(item);
                                         const cant      = cantDe(item);
                                         const devuelto  = parseFloat(item.returned_qty || 0);
                                         return (

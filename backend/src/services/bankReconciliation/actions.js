@@ -136,9 +136,10 @@ async function match(req, id, lineId, body = {}) {
       });
     }
 
-    const rows = chosen.flatMap(u => u.ids.map(sid => ({
-      company_id: companyId, line_id: pl.id, source_type: u.type, source_id: sid, role: "documento",
-      amount: u.ids.length === 1 ? u.amount : 0,
+    // Una unidad puede juntar movimientos de distinto tipo (cobro + avance): cada uno con el suyo.
+    const rows = chosen.flatMap(u => (u.parts || u.ids.map(id => ({ type: u.type, id }))).map((part, _, all) => ({
+      company_id: companyId, line_id: pl.id, source_type: part.type, source_id: part.id, role: "documento",
+      amount: all.length === 1 ? u.amount : 0,
     })));
     try {
       await BankReconciliationMatch.bulkCreate(rows, { transaction: t });

@@ -405,6 +405,7 @@ export const api = {
     cancel:      (id)        => request(`/sales/${id}`,  { method: "DELETE" }),
     // Entrega a crédito: asigna correlativo y deja la venta en 'pendiente' (por cobrar)
     confirmCredit: (id)      => request(`/sales/${id}/credit`, { method: "POST" }),
+    removeFxRate: (id)       => request(`/sales/${id}/fx-rate`, { method: "DELETE" }),
     // Exonerar: perdona el saldo pendiente y cierra la factura sin cobrarla. `reason` es
     // obligatorio. Deshacerla la devuelve a por cobrar con el saldo que tenía.
     forgive:     (id, reason, rate) => request(`/sales/${id}/forgive`, { method: "POST", body: JSON.stringify({ reason, rate }) }),
@@ -545,6 +546,10 @@ export const api = {
   },
 
   // ── Pagos clientes ──────────────────────────────────────────
+  // Avance de efectivo suelto (con venta va dentro del cobro: payments.create, `cash_advance`).
+  cashAdvances: {
+    create: (body) => request("/cash-advances", { method: "POST", body: JSON.stringify(body) }),
+  },
   payments: {
     getAll:     (params={}) => request("/payments?"        + new URLSearchParams(params)),
     getStats:   (params={}) => request("/payments/stats?"  + new URLSearchParams(params)),

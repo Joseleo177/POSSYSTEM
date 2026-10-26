@@ -6,6 +6,7 @@ const syncOfflineSale = require("./syncOfflineSale");
 const cancelSale = require("./cancelSale");
 const updateSale = require("./updateSale");
 const confirmCreditSale = require("./confirmCreditSale");
+const removeFxRate = require("./removeFxRate");
 const acceptWebOrder = require("./acceptWebOrder");
 const { forgiveSale, unforgiveSale } = require("./forgiveSale");
 const { claimSale, releaseSale, annotateHolders } = require("./holdLock");
@@ -22,6 +23,7 @@ module.exports = {
   cancelSale,
   updateSale,
   confirmCreditSale,
+  removeFxRate,
   claimSale,
   releaseSale,
   annotateHolders,

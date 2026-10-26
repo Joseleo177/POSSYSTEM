@@ -7,6 +7,10 @@ const { toLocalDate } = require("../../utils/localDate");
 const { addCreditMovement } = require("../customers/creditLedger");
 const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
 const { resolveMethod } = require("../../utils/journalMethod");
+const { tasaDivisasDeCaja, tienePagoEnDivisas, exentaDeDivisas } = require("../sales/fxRate");
+const { netoLineaEnTasa } = require("../sales/lineDiscount");
+const { aplicarTasaEnCobro } = require("./createPayment");
+const { SaleItem } = require("../../models");
 
 // Margen para el SOBRANTE del cobro (lo entregado de más que obliga a declarar vuelto, caja o
 // crédito). Coincide con el que usa BulkPaymentModal para abrir ese paso, y no decide si una
@@ -29,7 +33,8 @@ const err = (message, status = 400) =>
  * docena de facturas a medio pagar que hay que volver a perseguir.
  *
  * `amount` viene en moneda BASE, igual que en createPayment; `exchange_rate` es la tasa con la
- * que se cobró y viaja a cada Payment para que el histórico sepa a cuánto entró el dinero.
+ * que se cobró y viaja a cada Payment para que el histórico sepa a cuánto entró el dinero. Una
+ * factura con tasa de divisas recibe la suya en vez de esa (ver el reparto más abajo).
  */
 module.exports = async function createBulkPayment(body, req) {
   const {
@@ -60,6 +65,8 @@ module.exports = async function createBulkPayment(body, req) {
     // base, lo convierte el frontend) /moneda/referencia. El sobrante se descuenta del ÚLTIMO
     // tramo. >1 = combinado.
     pay_parts,
+    // Tasa de divisas aplicada al cobrar: { rate, currency_id, forgive: { [sale_id]: base } }.
+    fx_cobro,
   } = body;
 
   const ids = [...new Set((sale_ids || []).map(n => parseInt(n, 10)).filter(Number.isInteger))];
@@ -179,6 +186,22 @@ module.exports = async function createBulkPayment(body, req) {
       t,
     );
 
+    // Tasa de divisas aplicada en este cobro a las facturas que no la traían: como en el cobro
+    // de una factura suelta (aplicarTasaEnCobro), su total no se toca y la diferencia se
+    // exonera. `forgive` trae lo de cada una, calculado por la caja y topado aquí. Las que ya
+    // tenían tasa conservan la suya. Va dentro de la transacción: si el cobro no entra, no se
+    // perdona nada.
+    const conTasaEnEsteLote = new Set();
+    if (fx_cobro && typeof fx_cobro.forgive === "object") {
+      for (const venta of ventas) {
+        const perdon = parseFloat(fx_cobro.forgive[venta.id]);
+        if (!(perdon > 0)) continue;
+        await aplicarTasaEnCobro(venta.id, { rate: fx_cobro.rate, forgive: perdon, currency_id: fx_cobro.currency_id }, req, employee_id, t);
+        conTasaEnEsteLote.add(venta.id);
+        await venta.reload({ transaction: t });
+      }
+    }
+
     const conSaldo = [];
     for (const venta of ventas) {
       await assertWarehouseAccess(req, venta.warehouse_id, { optional: true });
@@ -200,16 +223,116 @@ module.exports = async function createBulkPayment(body, req) {
       const saldo = parseFloat((Math.max(0, parseFloat(venta.total) - devuelto) - cobrado).toFixed(6));
       // Margen de redondeo propio de la factura: decide si entra al reparto y si queda saldada.
       const tolerancia = await saleSettleTolerance(venta, t);
-      if (saldo > tolerancia) conSaldo.push({ venta, saldo, cobrado, devuelto, tolerancia });
+      if (saldo > tolerancia) {
+        // Las líneas, para valorar la deuda en bolívares como la valora la caja (ver deudaEnTasa).
+        const lineas = await SaleItem.findAll({ where: { sale_id: venta.id }, transaction: t, raw: true });
+        conSaldo.push({ venta, saldo, cobrado, devuelto, tolerancia, lineas });
+      }
     }
 
     if (!conSaldo.length) throw err("Las facturas seleccionadas no tienen saldo por cobrar");
 
     const deudaTotal = conSaldo.reduce((acc, x) => acc + x.saldo, 0);
+
+    // ── Formas de pago y la tasa de cada factura en cada una ──────────────────
+    // El reparto se hace en la moneda de cada forma de pago, no en la base. Cada factura se
+    // convierte a SU tasa: una con tasa de divisas (sales/fxRate.js) cobra sus bolívares a esa
+    // tasa, y las demás a la del cobro. Así se pueden saldar juntas la factura de ayer con tasa
+    // especial y la de hoy sin ella, y los bolívares registrados (monto × tasa de cada cobro)
+    // suman exactamente los que entraron. En divisas todas las tasas son 1 y es el reparto de
+    // siempre.
+    const formas = parts
+      ? partsNorm.map((p, i) => ({ ...p, rate: p.exchange_rate, mIdx: i }))
+      : [{
+          journal_id: payment_journal_id, base: totalPay, rate: parseFloat(exchange_rate) || 1,
+          currency_id: currency_id || null, payment_method: metodoSimple,
+          reference_number: reference_number?.trim() || null, mIdx: 0,
+        }];
+    // Deuda de una factura en bolívares a la tasa `r`, línea por línea: la misma cuenta que hace
+    // BulkPaymentModal (saldoEnMonedaDePagoAt) para pedirle el monto al cliente. Repartir con el
+    // saldo en base × tasa daba otra cifra —el total en base redondea cada línea en $— y la
+    // primera factura se llevaba de más mientras la última quedaba 'parcial' por céntimos, aun
+    // pagando exactamente lo pedido.
+    //
+    // Todo —total, lo cobrado y lo devuelto— a la MISMA tasa, como el cobro de una factura
+    // suelta (pendingBsAt) y Facturas pendientes: la deuda es en base y se cobra a la tasa de
+    // hoy. Convertir lo ya abonado a la tasa de su día descuadraba: con A-0100 (abono de 2,04 a
+    // 877,90) el cobro conjunto pedía Bs.19,17 más que Pendientes por las mismas facturas.
+    // `cobrado` (getSaleBalance) ya trae el crédito aplicado y lo exonerado.
+    const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+    const deudaEnTasa = ({ venta, cobrado, devuelto, lineas }, r) => {
+      const totalBs = round2(
+        lineas.reduce((acc, l) => acc + netoLineaEnTasa(l, r), 0)
+        - round2(parseFloat(venta.discount_amount || 0) * r)
+        + round2(parseFloat(venta.service_charge || 0) * r)
+      );
+      return Math.max(0, round2(totalBs - round2(cobrado * r) - round2(devuelto * r)));
+    };
+    for (const f of formas) {
+      f.tasas = new Map();
+      for (const item of conSaldo) {
+        const fx = await tasaDivisasDeCaja(item.venta, f.journal_id, t);
+        const rate = fx || f.rate;
+        f.tasas.set(item.venta.id, { rate, fx: !!fx, deudaU: rate > 1 && item.lineas.length ? deudaEnTasa(item, rate) : null });
+      }
+    }
+
+    // Reparto de la más vieja a la más nueva. `destinadoBase` (vuelto + sobrante en caja + al
+    // crédito) se descuenta de la ÚLTIMA forma de pago. Devuelve los chunks y lo que sobró de
+    // cada forma, en su moneda.
+    const repartir = (destinadoBase) => {
+      const chunks = [];
+      const rest = new Map(conSaldo.map(x => [x.venta.id, x.saldo]));
+      const sobraPorForma = [];
+      formas.forEach((f, fi) => {
+        let u = f.base * f.rate;
+        if (fi === formas.length - 1) {
+          u -= destinadoBase * f.rate;
+          if (u < -SOBRANTE_TOLERANCE * f.rate) throw err("La última forma de pago no alcanza para cubrir el vuelto/sobrante");
+        }
+        // Un pequeño negativo por redondeo se lleva a 0: esa forma va entera al sobrante.
+        u = Math.max(0, parseFloat(u.toFixed(6)));
+        for (const item of conSaldo) {
+          if (u <= 0.000001) break;
+          const restB = rest.get(item.venta.id);
+          if (restB <= 0.000001) continue;
+          const { rate: r, fx, deudaU } = f.tasas.get(item.venta.id);
+          // Lo que se debe en la moneda de esta forma: en bolívares, la deuda línea por línea menos
+          // lo que ya cubrieron las formas anteriores de este lote, convertido a la misma tasa
+          // (como resta lo ya cobrado el cobro de una factura suelta: 13.224,37 − 12 × 1100);
+          // en divisas, el saldo en base.
+          const cubierto = item.saldo - restB;
+          // En divisas, el saldo en céntimos, que es lo que la caja muestra y le pide al cliente:
+          // con la tasa aplicada al cobrar el saldo en base trae más decimales (11,0528), y
+          // repartir con ellos le cargaba a la última factura los medios céntimos de todas.
+          const deuda = deudaU != null
+            ? Math.max(0, round2(deudaU - round2(cubierto * r)))
+            : (r === 1 ? round2(restB) : restB * r);
+          if (deuda <= 0.000001) { rest.set(item.venta.id, 0); continue; }
+          const aplicarU = Math.min(u, deuda);
+          const cubre = aplicarU >= deuda - 0.000001;
+          // Se registra el dinero que entró (aplicarU a su tasa), no el saldo en base: los
+          // céntimos de diferencia los absorbe el margen de redondeo de la factura.
+          const aplicar = parseFloat((aplicarU / r).toFixed(6));
+          chunks.push({
+            item, aplicar, fx, journal_id: f.journal_id, payment_method: f.payment_method,
+            currency_id: f.currency_id, exchange_rate: r, reference_number: f.reference_number, mIdx: f.mIdx,
+          });
+          rest.set(item.venta.id, cubre ? 0 : Math.max(0, parseFloat((restB - aplicar).toFixed(6))));
+          u = parseFloat((u - aplicarU).toFixed(6));
+        }
+        sobraPorForma.push(Math.max(0, u));
+      });
+      const sobraBase = parseFloat(formas.reduce((a, f, fi) => a + sobraPorForma[fi] / f.rate, 0).toFixed(6));
+      return { chunks, sobraPorForma, sobraBase };
+    };
+
     // Lo que el cliente entregó de más tiene que tener destino declarado: se le devuelve, se
     // queda en la caja o se le acredita. Sin eso el dinero entraría a la gaveta sin que nada
     // lo explique, y el arqueo del turno cerraría con un sobrante que nadie sabe de dónde salió.
-    const sobrante = parseFloat((totalPay - deudaTotal).toFixed(6));
+    // Se mide repartiendo, no restando en la base: los bolívares que van a una factura con tasa
+    // de divisas cubren menos base que los que van a una sin ella.
+    const sobrante = repartir(0).sobraBase;
     const destinado = parseFloat((changeAmt + surplusAmt + creditAmt).toFixed(6));
     // El destino tiene que cubrir el sobrante SALVO por el desfase de redondeo: el frontend
     // muestra y manda el sobrante a 2 decimales mientras que acá se calcula con la deuda
@@ -234,55 +357,22 @@ module.exports = async function createBulkPayment(body, req) {
     // por una deuda de Bs.15967,90), y recortar guardaba 15967,90 —diez céntimos menos de los
     // que el cajero tiene en la mano—. Se registra lo recibido, igual que el cobro de una
     // factura suelta, y el céntimo de diferencia lo absorbe la última factura del reparto.
-    const aImputar = parseFloat((totalPay - destinado).toFixed(6));
+    //
+    // Un "chunk" es (una factura, una forma de pago, un monto en base, la tasa de esa factura en
+    // esa forma). En pago simple hay uno por factura; en combinado, cada forma cubre facturas de
+    // la más vieja a la más nueva con un cursor global.
+    const { chunks, sobraPorForma } = repartir(destinado);
 
-    // ── Plan de reparto ──────────────────────────────────────────────────────
-    // Un "chunk" es (una factura, una forma de pago, un monto). En pago simple hay uno por
-    // factura. En combinado, cada tramo cubre facturas de la más vieja a la más nueva, con un
-    // cursor global; el sobrante (destinado) se descuenta del ÚLTIMO tramo.
-    const chunks = [];
+    // El resto por debajo de la tolerancia (redondeo al billete) se lo lleva el último chunk de
+    // la MISMA forma de pago, convertido a su tasa: es dinero que entró por esa caja.
     let leftover = 0;
-
-    if (!parts) {
-      let restante = aImputar;
-      for (const item of conSaldo) {
-        if (restante <= 0.000001) break;
-        const aplicar = parseFloat(Math.min(restante, item.saldo).toFixed(6));
-        chunks.push({ item, aplicar, journal_id: payment_journal_id, payment_method: metodoSimple, currency_id: currency_id || null, exchange_rate: parseFloat(exchange_rate) || null, reference_number: reference_number?.trim() || null, mIdx: 0 });
-        restante = parseFloat((restante - aplicar).toFixed(6));
-      }
-      // El resto por debajo de la tolerancia (redondeo al billete) se lo lleva el último chunk.
-      if (restante > 0.000001 && chunks.length) {
-        chunks[chunks.length - 1].aplicar = parseFloat((chunks[chunks.length - 1].aplicar + restante).toFixed(6));
-        restante = 0;
-      }
-      leftover = restante;
-    } else {
-      const porImputarRaw = partsNorm.map((p, i) => i === partsNorm.length - 1
-        ? parseFloat((p.base - destinado).toFixed(6))
-        : p.base);
-      if (porImputarRaw.some(v => v < -SOBRANTE_TOLERANCE)) throw err("La última forma de pago no alcanza para cubrir el vuelto/sobrante");
-      // Un pequeño negativo por redondeo se lleva a 0: ese tramo va entero al sobrante y el
-      // ajuste (`seQueda` / vuelto) lo recupera abajo.
-      const porImputar = porImputarRaw.map(v => Math.max(0, parseFloat(v.toFixed(6))));
-      const restPorFactura = conSaldo.map(x => ({ item: x, rest: x.saldo }));
-      partsNorm.forEach((p, mIdx) => {
-        let restanteM = porImputar[mIdx];
-        for (const rf of restPorFactura) {
-          if (restanteM <= 0.000001) break;
-          if (rf.rest <= 0.000001) continue;
-          const aplicar = parseFloat(Math.min(restanteM, rf.rest).toFixed(6));
-          chunks.push({ item: rf.item, aplicar, journal_id: p.journal_id, payment_method: p.payment_method, currency_id: p.currency_id, exchange_rate: p.exchange_rate, reference_number: p.reference_number, mIdx });
-          rf.rest = parseFloat((rf.rest - aplicar).toFixed(6));
-          restanteM = parseFloat((restanteM - aplicar).toFixed(6));
-        }
-        leftover = parseFloat((leftover + Math.max(0, restanteM)).toFixed(6));
-      });
-      if (leftover > 0.000001 && chunks.length) {
-        chunks[chunks.length - 1].aplicar = parseFloat((chunks[chunks.length - 1].aplicar + leftover).toFixed(6));
-        leftover = 0;
-      }
-    }
+    formas.forEach((f, fi) => {
+      const sobra = sobraPorForma[fi];
+      if (sobra <= 0.000001) return;
+      const ultimo = [...chunks].reverse().find(c => c.mIdx === f.mIdx) || chunks[chunks.length - 1];
+      if (ultimo) ultimo.aplicar = parseFloat((ultimo.aplicar + sobra / ultimo.exchange_rate).toFixed(6));
+      else leftover = parseFloat((leftover + sobra / f.rate).toFixed(6));
+    });
 
     // ── Crear los pagos, agrupados por factura para fijar su estado una sola vez ──
     const porVenta = new Map();
@@ -290,6 +380,31 @@ module.exports = async function createBulkPayment(body, req) {
       const id = c.item.venta.id;
       if (!porVenta.has(id)) porVenta.set(id, []);
       porVenta.get(id).push(c);
+    }
+
+    // Factura con tasa de divisas que recibe bolívares: tiene que haber dinero en divisas (ver
+    // exigirPagoEnDivisas en sales/fxRate.js). En el cobro conjunto basta con que el LOTE traiga
+    // una forma de pago en divisas: el reparto va de la más vieja a la más nueva, y exigirlo
+    // factura por factura rechazaría "$20 y el resto en Bs" solo porque los dólares se los
+    // llevaron las facturas viejas. Sin divisas en el lote, cada una necesita un cobro previo.
+    const ventasFx = conSaldo.map(x => x.venta).filter(v => parseFloat(v.fx_rate) > 0);
+    if (ventasFx.length) {
+      const cajas = await PaymentJournal.findAll({
+        where: { id: formas.map(f => f.journal_id) }, attributes: ["id", "currency_id"], transaction: t,
+      });
+      const monedaFx = parseInt(ventasFx[0].fx_currency_id);
+      const loteTraeDivisas = cajas.some(c => parseInt(c.currency_id) !== monedaFx);
+      if (!loteTraeDivisas) {
+        for (const cs of porVenta.values()) {
+          const { venta } = cs[0].item;
+          if (!cs.some(c => c.fx)) continue;
+          // Fiada con tasa antes de la regla de contado: se cobra en Bs a su tasa (ver
+          // exentaDeDivisas). La que recibe la tasa en este lote, no.
+          if (exentaDeDivisas(venta, conTasaEnEsteLote.has(venta.id))) continue;
+          if (await tienePagoEnDivisas(venta, t)) continue;
+          throw err(`La factura ${venta.invoice_number || `#${venta.id}`} lleva tasa de divisas: al menos una parte del pago tiene que ser en divisas. Usa un pago combinado.`);
+        }
+      }
     }
 
     const applied = [];
@@ -327,11 +442,16 @@ module.exports = async function createBulkPayment(body, req) {
       }
 
       const salda = (saldo - aplicadoVenta) <= tolerancia;
+      // `cobrado` (getSaleBalance) ya incluye lo exonerado: se le quita para no contarlo dos
+      // veces, que daba por saldada una factura a la que aún le faltaba lo perdonado. La rebaja
+      // por pagar en divisas (fx_forgiven) salda pero no deja la factura 'exonerado'.
+      const exonerado = parseFloat(venta.forgiven_amount) || 0;
       const nuevoEstado = resolveSaleStatus({
         saleTotal: venta.total,
-        paid: cobrado + aplicadoVenta,
+        paid: cobrado - exonerado + aplicadoVenta,
         returned: devuelto,
-        forgiven: venta.forgiven_amount,
+        forgiven: exonerado,
+        forgivenFx: venta.fx_forgiven,
         hasInvoice: !!venta.invoice_number,
         tolerance: tolerancia,
       });
@@ -363,14 +483,20 @@ module.exports = async function createBulkPayment(body, req) {
     const pagoSobrante = pagoSobranteId
       ? await Payment.findByPk(pagoSobranteId, { transaction: t })
       : null;
+    // El sobrante llega en base a la tasa de su forma de pago (la última). Si el cobro que lo
+    // carga es de una factura con tasa de divisas, se reexpresa a la tasa de ese cobro: así sus
+    // bolívares (monto × tasa) siguen siendo los que de verdad entraron.
+    const aTasaDelPago = (base) => pagoSobrante
+      ? parseFloat((base * formas[formas.length - 1].rate / (parseFloat(pagoSobrante.exchange_rate) || 1)).toFixed(6))
+      : base;
 
     if (changeAmt > 0 && pagoSobrante) {
       // El billete entró completo y el vuelto salió: se registran los dos movimientos, para
       // que la gaveta cuadre contra lo que realmente pasó por ella. getSaleBalance descuenta
       // change_given, así que la factura sigue acreditada solo por lo suyo.
       await pagoSobrante.update(
-        { amount: parseFloat((parseFloat(pagoSobrante.amount) + changeAmt).toFixed(6)),
-          change_given: changeAmt,
+        { amount: parseFloat((parseFloat(pagoSobrante.amount) + aTasaDelPago(changeAmt)).toFixed(6)),
+          change_given: aTasaDelPago(changeAmt),
           // Con el vuelto repartido, el pago apunta a la primera caja: es el marcador que hace
           // que el saldo de la factura descuente el vuelto. El detalle de por dónde salió cada
           // tramo vive en los egresos, uno por caja.
@@ -428,7 +554,7 @@ module.exports = async function createBulkPayment(body, req) {
         creditAmt  > 0 ? `${creditAmt.toFixed(2)} al crédito del cliente` : null,
       ].filter(Boolean).join(" · ");
       await pago.update({
-        amount: parseFloat((parseFloat(pago.amount) + seQueda).toFixed(6)),
+        amount: parseFloat((parseFloat(pago.amount) + aTasaDelPago(seQueda)).toFixed(6)),
         notes: [pago.notes, `Incluye ${detalle}`].filter(Boolean).join(" · "),
       }, { transaction: t });
     }

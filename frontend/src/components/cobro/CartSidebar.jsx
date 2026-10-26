@@ -25,6 +25,7 @@ export default function CartSidebar({
     selectedCustIdx, setSelectedCustIdx,
     setCustomerEditData, setCustomerModal,
     cashSession, setShowCierre, setShowApertura, setShowHeldModal, heldCarts, setShowPendingSales, setShowReturns,
+    setShowAdvance,
     loading, setShowConfirmCheckout, holdCart,
     openQtyModal,
     searchInputRef,
@@ -41,8 +42,12 @@ export default function CartSidebar({
     const canReturn  = can("sales.return");
     // Sin el permiso no se ofrece el descuento: el servidor lo rechazaría al facturar.
     const canDiscount = can("sales.discount");
-    // Con los cuatro botones la fila no cabe en 360 px: pasan a dos filas de dos.
-    const accionesCaja = 2 + (canPending ? 1 : 0) + (canReturn ? 1 : 0);
+    // Avance de efectivo: opción de la empresa y permiso propio (lo decide CobroPage, que solo
+    // pasa setShowAdvance si se puede).
+    const canAdvance = !!setShowAdvance;
+    // Con los cuatro botones la fila no cabe en 360 px: pasan a dos filas de dos. Con cinco,
+    // tres y dos.
+    const accionesCaja = 2 + (canPending ? 1 : 0) + (canReturn ? 1 : 0) + (canAdvance ? 1 : 0);
     const [editandoCliente, setEditandoCliente] = useState(false);
     const [guardandoCliente, setGuardandoCliente] = useState(false);
 
@@ -104,10 +109,31 @@ export default function CartSidebar({
                     </button>
                 </div>
 
+                {/* Almacén activo. Con más de uno asignado se cambia desde aquí: cada sucursal
+                    lleva su propio turno, así que al cambiar se retoma el que esté abierto allá o
+                    se pide abrirlo (useCobroSession). Línea de ancho completo para que el nombre
+                    no se corte. */}
+                <div className="hidden lg:flex items-center gap-1.5 min-w-0 text-[12px]">
+                    <svg className="w-3.5 h-3.5 text-content-subtle shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                    <span className="text-content-subtle shrink-0">Sucursal</span>
+                    {puedeCambiarSucursal ? (
+                        <CustomSelect
+                            value={activeWarehouse ? String(activeWarehouse.id) : ""}
+                            onChange={cambiarSucursal}
+                            options={opcionesSucursal}
+                            placeholder="Elegir sucursal"
+                            className="flex-1 min-w-0"
+                            height="h-8"
+                        />
+                    ) : (
+                        <span className="font-semibold text-content dark:text-white truncate">{toNameCase(activeWarehouse?.name) || "Sin sucursal"}</span>
+                    )}
+                </div>
+
                 {/* Acciones de sesión (escritorio). Sin título "POS · Punto de venta": el
                     módulo ya se nombra en la barra superior, y el título le quitaba ancho a estos
                     tres botones hasta montarlos unos sobre otros. Ahora van en una fila pareja. */}
-                <div className={`hidden lg:grid ${accionesCaja === 3 ? "grid-cols-3" : "grid-cols-2"} gap-1.5`}>
+                <div className={`hidden lg:grid ${accionesCaja === 3 || accionesCaja >= 5 ? "grid-cols-3" : "grid-cols-2"} gap-1.5`}>
                     {cashSession ? (
                         <>
                             {/* Facturas pendientes: con permiso propio (sales.pending). Sin él
@@ -133,6 +159,19 @@ export default function CartSidebar({
                                 >
                                     <svg className="w-4 h-4 shrink-0 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
                                     <span className="truncate">Devolución</span>
+                                </button>
+                            )}
+
+                            {/* Avance de efectivo sin venta: billetes de la caja contra un pago por
+                                punto con comisión. Con venta va dentro del cobro. */}
+                            {canAdvance && (
+                                <button
+                                    onClick={() => setShowAdvance(true)}
+                                    className="btn-outline h-10 px-2 rounded-lg flex items-center justify-center gap-1.5 text-[12px] font-semibold active:scale-[0.98] min-w-0"
+                                    title="Avance de efectivo"
+                                >
+                                    <svg className="w-4 h-4 shrink-0 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                    <span className="truncate">Avance</span>
                                 </button>
                             )}
 
@@ -177,27 +216,6 @@ export default function CartSidebar({
                     )}
                 </div>
 
-                {/* Almacén activo. Con más de uno asignado se cambia desde aquí: cada sucursal
-                    lleva su propio turno, así que al cambiar se retoma el que esté abierto allá o
-                    se pide abrirlo (useCobroSession). Línea de ancho completo para que el nombre
-                    no se corte. */}
-                <div className="hidden lg:flex items-center gap-1.5 min-w-0 text-[12px]">
-                    <svg className="w-3.5 h-3.5 text-content-subtle shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                    <span className="text-content-subtle shrink-0">Sucursal</span>
-                    {puedeCambiarSucursal ? (
-                        <CustomSelect
-                            value={activeWarehouse ? String(activeWarehouse.id) : ""}
-                            onChange={cambiarSucursal}
-                            options={opcionesSucursal}
-                            placeholder="Elegir sucursal"
-                            className="flex-1 min-w-0"
-                            height="h-8"
-                        />
-                    ) : (
-                        <span className="font-semibold text-content dark:text-white truncate">{toNameCase(activeWarehouse?.name) || "Sin sucursal"}</span>
-                    )}
-                </div>
-
                 {/* Acciones de sesión en móvil. Antes esta barra solo tenía "en espera" y un
                     indicador de estado que era un div: faltaba el acceso a facturas pendientes
                     y, sobre todo, no había forma de cerrar la caja desde el teléfono —el resto
@@ -237,6 +255,17 @@ export default function CartSidebar({
                                         aria-label="Devolución o cambio"
                                     >
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
+                                    </button>
+                                )}
+
+                                {canAdvance && (
+                                    <button
+                                        onClick={() => setShowAdvance(true)}
+                                        className="h-9 px-4 rounded-xl bg-surface-2 dark:bg-white/5 text-content-subtle dark:text-white/40 flex items-center justify-center active:scale-90 transition-all"
+                                        title="Avance de efectivo"
+                                        aria-label="Avance de efectivo"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                                     </button>
                                 )}
 

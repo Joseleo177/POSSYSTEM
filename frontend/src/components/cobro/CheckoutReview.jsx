@@ -32,6 +32,8 @@ export default function CheckoutReview({
     discountAmount, discountAmountDisplay,
     chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel, chargeMode, setChargeMode,
     chargeInput, setChargeInput, setChargeFromPct, chargeAmountDisplay = 0, chargePct = 0,
+    fxEnabled, setFxEnabled, fxRateInput = "", setFxRateInput, fxActivo = false, fxDiscount = 0,
+    avanceOn = false, setAvanceOn, avanceMonto = "", setAvanceMonto, avancePct = "", setAvancePct,
     totalDisplay, totalSecondary,
     currentCurrency, setSelectedCurrency, activeCurrencies = [],
     selectedSerieId, selectSerie, mySeries = [],
@@ -47,6 +49,21 @@ export default function CheckoutReview({
     const canDiscount = can("sales.discount");
     const topeCfg = parseFloat(settings?.discount_max_pct);
     const tope = !can("admin") && topeCfg > 0 ? topeCfg : null;
+    // Cobro a tasa de divisas: permiso propio, y solo si la caja maneja bolívares. La tasa tiene
+    // que pasar la del sistema; por debajo sería un recargo (el servidor también lo exige).
+    const monedaBs = activeCurrencies.find(c => !c.is_base) || null;
+    const tasaSistema = parseFloat(monedaBs?.exchange_rate) || 0;
+    // Además del permiso, la empresa tiene que tenerlo activo (Configuración → Punto de venta).
+    const puedeFx = settings?.pos_fx_cobro === "true" && can("sales.fx") && tasaSistema > 1;
+    const fxTecleada = parseFloat(String(fxRateInput).replace(",", ".")) || 0;
+    const fxRef = useRef(null);
+    // Avance de efectivo junto a la venta: opción de la empresa y permiso propio. No entra en la
+    // factura: se cobra aparte en el mismo pase del punto (ver CartContext / PaymentFormModal).
+    // No se combina con la tasa de divisas: se ofrece uno u otro.
+    const puedeAvance = settings?.pos_cash_advance === "true" && can("sales.advance") && !!setAvanceOn && !fxEnabled;
+    const avanceEfectivo = parseFloat(String(avanceMonto).replace(",", ".")) || 0;
+    const avanceComision = Math.round(avanceEfectivo * (parseFloat(String(avancePct).replace(",", ".")) || 0)) / 100;
+    const simboloBs = monedaBs?.symbol || "Bs.";
 
     const [accion, setAccion] = useState("factura");
     // Lo que falta para emitir, marcado al intentarlo. Antes la pantalla se cerraba y el aviso
@@ -77,19 +94,34 @@ export default function CheckoutReview({
     // Al elegir lo que faltaba, la marca se va sola.
     useEffect(() => { if (selectedCustomer) setFaltan(f => (f.cliente ? { ...f, cliente: false } : f)); }, [selectedCustomer]);
     useEffect(() => { if (selectedSerieId) setFaltan(f => (f.serie ? { ...f, serie: false } : f)); }, [selectedSerieId]);
+    useEffect(() => { if (!fxEnabled || fxActivo) setFaltan(f => (f.fx ? { ...f, fx: false } : f)); }, [fxEnabled, fxActivo]);
+
+    // El cobro en divisas encendido sin una tasa válida no se factura: saldría a precio normal
+    // sin que la caja lo note. La cotización no lo lleva, así que ahí no se exige.
+    const fxError = !fxEnabled ? ""
+        : fxTecleada > 0 && fxTecleada <= tasaSistema ? `Tiene que ser mayor que la del sistema (${tasaSistema.toFixed(2)})`
+        : faltan.fx && !(fxTecleada > 0) ? "Escribe la tasa o apaga el cobro en divisas"
+        : "";
 
     // Cliente siempre (también la cotización lo pide); serie solo para facturar. Lo que falte
     // se marca en rojo y se lleva la vista ahí: en el teléfono el cliente queda bajo las líneas.
     const listo = (que) => {
-        const f = { cliente: !selectedCustomer, serie: que === "factura" && !selectedSerieId };
+        const f = {
+            cliente: !selectedCustomer,
+            serie: que === "factura" && !selectedSerieId,
+            fx: que === "factura" && !!fxEnabled && puedeFx && !fxActivo,
+        };
         setFaltan(f);
         if (f.cliente) {
             custRef.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
             requestAnimationFrame(() => custRef.current?.focus());
         } else if (f.serie) {
             serieRef.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+        } else if (f.fx) {
+            fxRef.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+            requestAnimationFrame(() => fxRef.current?.focus());
         }
-        return !f.cliente && !f.serie;
+        return !f.cliente && !f.serie && !f.fx;
     };
     const facturar = () => { if (!loading && cart.length && listo("factura")) onSelectFactura(); };
     const cotizar  = () => { if (!loading && cart.length && listo("cotizacion")) onSelectCotizacion(); };
@@ -277,6 +309,10 @@ export default function CheckoutReview({
     const modoOpts = [{ key: "pct", label: "%" }, { key: "amount", label: sym }];
 
     const totalTxt = fmt(totalDisplay, currSym);
+    // La factura en bolívares, para sumarle el avance (que siempre se cuenta en Bs).
+    const totalBsFactura = !currentCurrency?.is_base
+        ? (parseFloat(totalDisplay) || 0)
+        : (secondaryCurrency && !secondaryCurrency.is_base ? (parseFloat(totalSecondary) || 0) : (parseFloat(totalDisplay) || 0) * tasaSistema);
     const BOTON = "h-12 sm:h-11 px-5 rounded-xl text-[14px] font-semibold active:scale-[0.98] transition-all inline-flex items-center justify-center gap-2 whitespace-nowrap";
 
     return (
@@ -484,6 +520,51 @@ export default function CheckoutReview({
                                     ))}
                                 </div>
                             </>))}
+                            {/* El dólar por encima de la tasa oficial: en bolívares la cuenta no
+                                cambia, en divisas baja. Ver descuentoDivisas (helpers/currency). */}
+                            {puedeFx && !avanceOn && ajuste("Cobro en divisas", fxEnabled, () => setFxEnabled(!fxEnabled), (<>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">{monedaBs.symbol}</span>
+                                    <input ref={fxRef} type="text" inputMode="decimal" autoComplete="off" autoFocus
+                                        value={fxRateInput} onChange={e => setFxRateInput(e.target.value.replace(",", "."))}
+                                        onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); panelRef.current?.focus(); } }}
+                                        placeholder={tasaSistema.toFixed(2)}
+                                        aria-label="Tasa de divisas"
+                                        className={`${INPUT} w-full pl-11 text-right tabular-nums ${fxError ? "!border-red-500 focus:!ring-red-500/20" : ""}`} />
+                                </div>
+                                <p className={`text-[12px] leading-snug ${fxError ? "text-red-600 dark:text-red-400" : "text-content-subtle"}`}>
+                                    {fxError || `Tasa a la que recibes la divisa. La del sistema es ${monedaBs.symbol} ${tasaSistema.toFixed(2)}.`}
+                                </p>
+                            </>))}
+                            {/* El cliente compra y además pide efectivo: se cobra todo en un pase del
+                                punto. No toca la factura; lo registra el cobro (services/cashAdvances). */}
+                            {puedeAvance && ajuste("Avance de efectivo", avanceOn, () => {
+                                if (!avanceOn && !String(avancePct).trim() && settings?.cash_advance_pct) setAvancePct(String(settings.cash_advance_pct));
+                                setAvanceOn(!avanceOn);
+                            }, (<>
+                                <div className="grid grid-cols-[1fr_110px] gap-2">
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">{simboloBs}</span>
+                                        <input type="text" inputMode="decimal" autoComplete="off" autoFocus
+                                            value={avanceMonto} onChange={e => setAvanceMonto(e.target.value.replace(",", "."))}
+                                            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); panelRef.current?.focus(); } }}
+                                            placeholder="0.00" aria-label="Efectivo a entregar"
+                                            className={`${INPUT} w-full pl-11 text-right tabular-nums`} />
+                                    </div>
+                                    <div className="relative">
+                                        <input type="text" inputMode="decimal" autoComplete="off"
+                                            value={avancePct} onChange={e => setAvancePct(e.target.value.replace(",", "."))}
+                                            placeholder="0" aria-label="Comisión del avance en porcentaje"
+                                            className={`${INPUT} w-full pr-8 text-right tabular-nums`} />
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">%</span>
+                                    </div>
+                                </div>
+                                <p className="text-[12px] text-content-subtle leading-snug">
+                                    {avanceEfectivo > 0
+                                        ? `Entregas ${simboloBs} ${avanceEfectivo.toFixed(2)} y cobras ${simboloBs} ${(avanceEfectivo + avanceComision).toFixed(2)} aparte de la factura, en el mismo pase del punto.`
+                                        : "Efectivo que se lleva el cliente y comisión que se le cobra encima. No entra en la factura."}
+                                </p>
+                            </>))}
                         </div>
 
                         {/* Totales */}
@@ -513,13 +594,41 @@ export default function CheckoutReview({
                                     <dd className="shrink-0">+<Money value={fmt(chargeAmountDisplay, currSym)} /></dd>
                                 </div>
                             )}
+                            {/* En divisas la diferencia de tasa es un descuento; en bolívares no
+                                hay nada que rebajar, la cuenta es la misma. */}
+                            {fxActivo && fxDiscount > 0 && currentCurrency?.is_base && (
+                                <div className="flex justify-between gap-3 text-content-subtle">
+                                    <dt>Pago en divisas (tasa {fxTecleada.toFixed(2)})</dt>
+                                    <dd className="shrink-0">−<Money value={fmt(fxDiscount, currSym)} /></dd>
+                                </div>
+                            )}
                             <div className="flex justify-between items-end gap-3 pt-2 mt-1 border-t border-border/60 dark:border-white/[0.06]">
                                 <dt className="text-[14px] font-semibold text-content dark:text-white">Total</dt>
                                 <dd className="text-right">
                                     <Money value={totalTxt} className="text-[24px] font-bold tracking-tight text-content dark:text-white" />
-                                    {secondaryCurrency && <div><Money value={fmt(totalSecondary, secondaryCurrency.symbol)} className="text-[13px] text-content-subtle" /></div>}
+                                    {secondaryCurrency && (fxActivo && !currentCurrency?.is_base ? (
+                                        // Con la pantalla en Bs, lo que cambia es la cifra en divisas.
+                                        <div className="mt-0.5 text-[13px] text-content-subtle">
+                                            En divisas a {fxTecleada.toFixed(2)}{" "}
+                                            <Money value={fmt(totalSecondary, secondaryCurrency.symbol)} className="text-[15px] font-semibold text-content dark:text-white" />
+                                        </div>
+                                    ) : (
+                                        <div><Money value={fmt(totalSecondary, secondaryCurrency.symbol)} className="text-[13px] text-content-subtle" /></div>
+                                    ))}
                                 </dd>
                             </div>
+                            {/* El avance no entra en la factura, pero sí en lo que se pasa por el punto:
+                                se dice aquí para que el cajero sepa la cifra antes de facturar. */}
+                            {puedeAvance && avanceOn && avanceEfectivo > 0 && (<>
+                                <div className="flex justify-between gap-3 pt-2 mt-1 border-t border-border/60 dark:border-white/[0.06] text-content-subtle">
+                                    <dt>Avance de efectivo + comisión</dt>
+                                    <dd className="shrink-0">+<Money value={fmt(avanceEfectivo + avanceComision, simboloBs)} /></dd>
+                                </div>
+                                <div className="flex justify-between items-baseline gap-3">
+                                    <dt className="font-semibold text-content dark:text-white">A pasar por el punto</dt>
+                                    <dd className="shrink-0"><Money value={fmt(totalBsFactura + avanceEfectivo + avanceComision, simboloBs)} className="text-[15px] font-semibold text-content dark:text-white" /></dd>
+                                </div>
+                            </>)}
                         </dl>
 
                         {!cashSession && (

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../../services/api";
 import { hasTopOverlay } from "../../helpers/overlayGuard";
-import { toNameCase, settleTolerance, saleTotalAtRate } from "../../helpers";
+import { toNameCase, settleTolerance, saleTotalAtRate, tasaDeVenta } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import BulkPaymentModal from "../Customers/BulkPaymentModal";
 import Check from "../ui/Check";
@@ -127,9 +127,11 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
     const fmtBs = (n) => `${bsCur?.symbol || "Bs."}${n.toFixed(2)}`;
     const saldoBsDe = (sale) => {
         if (!(bsRate > 1) || !sale.items?.length) return null;
-        return Math.max(0, round2(saleTotalAtRate(sale, bsRate)
-            - round2(parseFloat(sale.amount_paid || 0) * bsRate)
-            - round2(parseFloat(sale.forgiven_amount || 0) * bsRate)));
+        // Una factura con tasa de divisas se cobra en Bs a esa tasa, no a la del día.
+        const r = tasaDeVenta(sale, bsRate);
+        return Math.max(0, round2(saleTotalAtRate(sale, r)
+            - round2(parseFloat(sale.amount_paid || 0) * r)
+            - round2(parseFloat(sale.forgiven_amount || 0) * r)));
     };
     // { main, alt }: la cifra principal y la de la otra moneda (null si no aplica).
     const saldosDe = (sale) => {

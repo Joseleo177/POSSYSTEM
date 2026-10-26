@@ -18,6 +18,7 @@ import CustomerModal       from "../components/Customers/CustomerModal";
 import HeldCartsModal      from "../components/HeldCartsModal";
 import PendingSalesModal   from "../components/cobro/PendingSalesModal";
 import ReturnableSalesModal from "../components/cobro/ReturnableSalesModal";
+import CashAdvanceModal from "../components/cobro/CashAdvanceModal";
 import AperturaCajaModal   from "../components/AperturaCajaModal";
 import CierreCajaModal     from "../components/CierreCajaModal";
 import CheckoutTypeModal       from "../components/cobro/CheckoutTypeModal";
@@ -42,6 +43,8 @@ export default function CobroPage() {
         subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
         chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel,
         chargeInput, setChargeInput, chargeMode, setChargeMode, setChargeFromPct, chargeAmountDisplay, chargePct,
+        fxEnabled, setFxEnabled, fxRateInput, setFxRateInput, fxActivo, fxDiscount,
+        avanceOn, setAvanceOn, avanceMonto, setAvanceMonto, avancePct, setAvancePct,
         currentCurrency, setSelectedCurrency, secondaryCurrency,
         convertToDisplay, convertToSecondary, convertToBase,
         setLineDiscount, lineManualDiscountDisplay,
@@ -71,6 +74,9 @@ export default function CobroPage() {
     const openProduct = (p) => (p?.is_variant_parent ? setVariantModel(p) : setQtyModalItem(p));
     const [showPendingSales, setShowPendingSales]  = useState(false);
     const [showReturns, setShowReturns]            = useState(false);
+    // Avance de efectivo sin venta: opción de la empresa, permiso propio y turno abierto (el
+    // efectivo sale de la gaveta y tiene que caer en un arqueo).
+    const [showAdvance, setShowAdvance]            = useState(false);
     const searchInputRef                           = useRef(null);
     const scanPendingRef                           = useRef(false);
 
@@ -81,6 +87,7 @@ export default function CobroPage() {
     const products = useCobroProducts(activeWarehouse, notify);
     const customer = useCobroCustomer(setSelectedCustomer, notify, activeWarehouse);
     const session  = useCobroSession(employee, activeWarehouse);
+    const puedeAvance = settings?.pos_cash_advance === "true" && can("sales.advance") && !!session.cashSession;
 
     // Cada vez que la caja recibe productos frescos (aviso en vivo, refresco periódico o una
     // búsqueda nueva), las líneas que ya están en el carrito se ponen al día. Sin esto el
@@ -159,7 +166,7 @@ export default function CobroPage() {
         // buscador de productos: lo que se teclea es para su propio buscador de clientes, y
         // si el foco se perdió (un clic en una tarjeta) las letras se colaban en la grilla
         // de fondo.
-        modalOpen: !!qtyModalItem || !!variantModel || !!customer.debtAlert || showHeldModal || showReturns || showConfirmCheckout,
+        modalOpen: !!qtyModalItem || !!variantModel || !!customer.debtAlert || showHeldModal || showReturns || showAdvance || showConfirmCheckout,
         notify,
         setShowHeldModal,
         // Sin sales.pending el F5 queda mudo: el hook lo llama con ?. y no abre nada.
@@ -222,6 +229,9 @@ export default function CobroPage() {
             currentCurrency={currentCurrency}
             onNext={() => { setReceipt(null); setSaleBalance(null); products.reload(); }}
             onUndo={async (r) => { await deshacerVentaSinConexion(r); setSaleBalance(null); products.reload(); }}
+            // La factura cambió en el servidor (a crédito pierde la tasa de divisas): se toma la
+            // nueva sin perder lo que la caja le agregó (moneda, serie, nombre del cliente).
+            onRefresh={(data) => setReceipt(prev => (prev ? { ...prev, ...data } : prev))}
             onPay={(res) => {
                 // Los pagos se ACUMULAN: cobrar parte en divisas y el resto por punto de venta
                 // son dos llamadas, y el ticket debe listar ambos canales. Quedarse con el
@@ -289,6 +299,7 @@ export default function CobroPage() {
                 setShowHeldModal={setShowHeldModal}
                 setShowPendingSales={setShowPendingSales}
                 setShowReturns={setShowReturns}
+                setShowAdvance={puedeAvance ? setShowAdvance : undefined}
                 heldCarts={heldCarts}
                 loading={loading}
                 setShowConfirmCheckout={setShowConfirmCheckout}
@@ -374,6 +385,12 @@ export default function CobroPage() {
                     }
                 }}
             />
+            <CashAdvanceModal
+                open={showAdvance}
+                onClose={() => setShowAdvance(false)}
+                warehouseId={activeWarehouse?.id}
+                customer={selectedCustomer}
+            />
             <ReturnableSalesModal
                 open={showReturns}
                 onClose={() => setShowReturns(false)}
@@ -436,6 +453,10 @@ export default function CobroPage() {
                     chargeMode={chargeMode} setChargeMode={setChargeMode}
                     chargeInput={chargeInput} setChargeInput={setChargeInput} setChargeFromPct={setChargeFromPct}
                     chargeAmountDisplay={chargeAmountDisplay} chargePct={chargePct}
+                    fxEnabled={fxEnabled} setFxEnabled={setFxEnabled} fxRateInput={fxRateInput} setFxRateInput={setFxRateInput}
+                    fxActivo={fxActivo} fxDiscount={fxDiscount}
+                    avanceOn={avanceOn} setAvanceOn={setAvanceOn} avanceMonto={avanceMonto} setAvanceMonto={setAvanceMonto}
+                    avancePct={avancePct} setAvancePct={setAvancePct}
                     totalDisplay={totalDisplay} totalSecondary={totalSecondary}
                     currentCurrency={currentCurrency} setSelectedCurrency={setSelectedCurrency} activeCurrencies={activeCurrencies}
                     selectedSerieId={selectedSerieId} selectSerie={selectSerie} mySeries={mySeries}

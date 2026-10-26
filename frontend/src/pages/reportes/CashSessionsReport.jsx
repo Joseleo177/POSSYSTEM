@@ -410,7 +410,9 @@ function ResumenCierre({ session, onClose, onOpenSale }) {
                                                 <Linea label="Fondo inicial" value={f(j.opening_amount)} />
                                                 <Linea label="Cobros en efectivo" value={`+${f(j.cash_in)}`} />
                                                 {parseFloat(j.manual_in) > 0 && <Linea label="Ingresos manuales" value={`+${f(j.manual_in)}`} />}
-                                                {out > 0 && <Linea label="Egresos y vueltos" value={`-${f(out)}`} />}
+                                                {/* El avance de efectivo se nombra aparte de los egresos y vueltos. */}
+                                                {parseFloat(j.advance_out) > 0 && <Linea label="Avances de efectivo" value={`-${f(j.advance_out)}`} />}
+                                                {out - (parseFloat(j.advance_out) || 0) > 0.004 && <Linea label="Egresos y vueltos" value={`-${f(out - (parseFloat(j.advance_out) || 0))}`} />}
                                                 <Linea label="Debería haber" value={f(j.expected_amount)} strong />
                                                 <Linea label="Contado" value={j.closing_amount != null ? f(j.closing_amount) : "—"} />
                                             </div>

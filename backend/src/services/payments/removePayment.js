@@ -1,5 +1,8 @@
 const { Payment, Sale, Return, Sequelize, sequelize, getSaleBalance } = require("./shared");
 const { resolveSaleStatus, saleSettleTolerance } = require("../../utils/saleBalance");
+const { deshacerTasaDeCobro } = require("../sales/fxRate");
+const { anularAvance } = require("../cashAdvances");
+const { CashAdvance } = require("../../models");
 
 module.exports = async function removePayment(id) {
   const t = await sequelize.transaction();
@@ -11,6 +14,12 @@ module.exports = async function removePayment(id) {
     if (!sale) throw new Error("Factura no encontrada");
 
     await payment.destroy({ transaction: t });
+    // El avance de efectivo que pasó por el punto con este cobro: fue el mismo pase, así que se
+    // anula con él (egreso de la caja, avance y comisión). Si no, quedaría a medias.
+    const avances = await CashAdvance.findAll({ where: { payment_id: payment.id, status: "activo" }, transaction: t });
+    for (const a of avances) await anularAvance(a.id, t);
+    // Si era el cobro que trajo la tasa de divisas y no queda otro, la rebaja se deshace.
+    await deshacerTasaDeCobro(sale, t);
 
     // Lo cobrado con la misma cuenta que el cobro (getSaleBalance): descuenta el vuelto y suma
     // el crédito aplicado. Sumar los montos a secas daba por pagada una factura que había
@@ -36,7 +45,7 @@ module.exports = async function removePayment(id) {
       // vuelve sola a 'parcial' con la diferencia que nadie perdonó.
       newStatus = resolveSaleStatus({
         saleTotal, paid: remainingPaid, returned: totalReturned,
-        forgiven: sale.forgiven_amount, hasInvoice: !!sale.invoice_number,
+        forgiven: sale.forgiven_amount, forgivenFx: sale.fx_forgiven, hasInvoice: !!sale.invoice_number,
         tolerance: await saleSettleTolerance(sale, t),
       });
       await sale.update({ status: newStatus }, { transaction: t });

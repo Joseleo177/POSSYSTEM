@@ -169,7 +169,12 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
                                                     <Linea label="Fondo inicial" value={f(j.opening_amount)} />
                                                     <Linea label="Cobros en efectivo" value={`+${f(j.cash_in)}`} />
                                                     {parseFloat(j.manual_in) > 0 && <Linea label="Ingresos manuales" value={`+${f(j.manual_in)}`} />}
-                                                    {parseFloat(j.cash_out ?? j.change_out) > 0 && <Linea label="Egresos y vueltos" value={`-${f(j.cash_out ?? j.change_out)}`} />}
+                                                    {/* Los billetes de un avance de efectivo se nombran aparte: no son un
+                                                        gasto ni un vuelto, y el cajero los busca por su nombre. */}
+                                                    {parseFloat(j.advance_out) > 0 && <Linea label="Avances de efectivo" value={`-${f(j.advance_out)}`} />}
+                                                    {(parseFloat(j.cash_out ?? j.change_out) || 0) - (parseFloat(j.advance_out) || 0) > 0.004 && (
+                                                        <Linea label="Egresos y vueltos" value={`-${f((parseFloat(j.cash_out ?? j.change_out) || 0) - (parseFloat(j.advance_out) || 0))}`} />
+                                                    )}
                                                     <Linea label="Debería haber" value={f(j.expected_amount)} strong />
                                                 </div>
                                                 {/* Conteo real */}

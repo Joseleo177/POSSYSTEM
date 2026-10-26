@@ -3,7 +3,7 @@ const {
   Return, ReturnItem, Payment, ProductComboItem, Serie, SerieRange, sequelize, Sequelize,
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
-const { excludeAnnulledReturns, saleDebt, refreshSaleStatus, settleSurplus, defaultSurplusMode } = require("./shared");
+const { excludeAnnulledReturns, factorDevolucion, saleDebt, refreshSaleStatus, settleSurplus, defaultSurplusMode } = require("./shared");
 
 module.exports = async function createExchange({ saleId, returnItems, replacementItems, reason, employeeId, surplusMode, refund }, req) {
   if (!returnItems?.length)      { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
@@ -20,6 +20,8 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
 
     const saleItemsDb = await SaleItem.findAll({ where: { sale_id: saleId }, transaction: t });
     const itemsMap = Object.fromEntries(saleItemsDb.map(i => [i.id, i]));
+    // Lo devuelto se lleva su parte del descuento de la venta (ver factorDevolucion).
+    const factor = factorDevolucion(sale, saleItemsDb);
     // Lo devuelto en una NC anulada vuelve a estar disponible para devolver.
     const soloVivas = await excludeAnnulledReturns(saleId, t);
 
@@ -38,7 +40,7 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
         const e = new Error(`Solo quedan ${availableToReturn} uds disponibles para devolver de "${si.name}"`);
         e.status = 400; throw e;
       }
-      const subtotal = parseFloat(((si.price - (si.discount || 0)) * parsedQty).toFixed(6));
+      const subtotal = parseFloat(((si.price - (si.discount || 0)) * parsedQty * factor).toFixed(6));
       returnTotal += subtotal;
       returnLines.push({ sale_item_id, product_id: si.product_id, name: si.name, price: si.price, qty: parsedQty, subtotal });
     }

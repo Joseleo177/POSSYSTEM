@@ -106,12 +106,16 @@ const UNPAID_SQL = UNPAID_STATUSES.map(s => `'${s}'`).join(", ");
  *
  * `tolerance` es el de la factura (saleSettleTolerance); sin él no se perdona más que el medio
  * céntimo.
+ *
+ * `forgivenFx` (sales.fx_forgiven) es la parte de `forgiven` que es rebaja por pagar en divisas:
+ * salda igual, pero no es un perdón de deuda, así que sola no deja la factura 'exonerado'.
  */
-function resolveSaleStatus({ saleTotal, paid, returned = 0, hasInvoice = true, forgiven = 0, tolerance = SETTLE_EPSILON }) {
+function resolveSaleStatus({ saleTotal, paid, returned = 0, hasInvoice = true, forgiven = 0, forgivenFx = 0, tolerance = SETTLE_EPSILON }) {
   const total = parseFloat(saleTotal) || 0;
   const cobrado = parseFloat(paid) || 0;
   const acreditado = parseFloat(returned) || 0;
   const perdonado = parseFloat(forgiven) || 0;
+  const perdonReal = perdonado - (parseFloat(forgivenFx) || 0);
   // Lo que realmente queda por cobrar descuenta las devoluciones vivas.
   const porCobrar = Math.max(0, total - acreditado);
 
@@ -119,7 +123,7 @@ function resolveSaleStatus({ saleTotal, paid, returned = 0, hasInvoice = true, f
   // Lo perdonado salda igual que el dinero, pero deja constancia: mientras quede algo
   // exonerado en pie, la factura no se hace pasar por cobrada.
   if (cobrado + perdonado >= porCobrar - tolerance) {
-    return perdonado > 0 ? "exonerado" : "pagado";
+    return perdonReal > SETTLE_EPSILON ? "exonerado" : "pagado";
   }
   if (cobrado <= 0) return hasInvoice ? "pendiente" : "borrador";
   return "parcial";

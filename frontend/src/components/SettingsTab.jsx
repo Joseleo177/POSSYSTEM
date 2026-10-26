@@ -208,6 +208,8 @@ export default function SettingsTab({ notify }) {
     // Sin la clave guardada es "apagado": así siguen las empresas que ya existían. Las nuevas
     // la reciben encendida al darse de alta (ver controllers/companies.js).
     const reviewOn = settings.pos_review_checkout === "true";
+    const fxCobroOn = settings.pos_fx_cobro === "true";
+    const avanceOn = settings.pos_cash_advance === "true";
     const usados   = companyInfo?.current_users || 0;
     const maximo   = companyInfo?.max_users;
     const estado   = companyInfo?.subscription_status || "Demo";
@@ -456,6 +458,45 @@ export default function SettingsTab({ notify }) {
                                     checked={reviewOn}
                                     onChange={() => setSettings(p => ({ ...p, pos_review_checkout: reviewOn ? "false" : "true" }))}
                                 />
+                            </div>
+                        </Seccion>
+
+                        {/* Cobro a tasa de divisas: opción de cada comercio, apagada por defecto. Sin
+                            ella no aparece el interruptor ni al facturar ni al cobrar, y el servidor
+                            lo rechaza (services/sales/fxRate.js). */}
+                        <Seccion titulo="Cobro en divisas" detalle="Recibir el dólar por encima de la tasa oficial." className="h-full">
+                            <div className="rounded-xl border border-border/70 dark:border-white/[0.08]">
+                                <Interruptor
+                                    titulo="Permitir cobrar a tasa de divisas"
+                                    detalle="Al facturar o al cobrar, el cajero escribe la tasa a la que recibe la divisa y el cliente paga menos en dólares; en bolívares paga lo de siempre. Es de contado: si la venta se deja a crédito, pierde la tasa. Además hace falta el permiso «Cobrar a tasa de divisas»."
+                                    checked={fxCobroOn}
+                                    onChange={() => setSettings(p => ({ ...p, pos_fx_cobro: fxCobroOn ? "false" : "true" }))}
+                                />
+                            </div>
+                        </Seccion>
+
+                        {/* Avances de efectivo: apagados por defecto. Sin la opción no aparece el
+                            botón en la caja ni el bloque en el cobro, y el servidor los rechaza
+                            (services/cashAdvances). */}
+                        <Seccion titulo="Avances de efectivo" detalle="Entregar billetes de la caja y cobrarlos por el punto." className="h-full">
+                            <div className="space-y-4">
+                                <div className="rounded-xl border border-border/70 dark:border-white/[0.08]">
+                                    <Interruptor
+                                        titulo="Permitir avances de efectivo"
+                                        detalle="El cliente se lleva efectivo de la caja y lo paga por el punto o pago móvil con la comisión encima, solo o junto a una compra. Sale de la caja como egreso y entra como ingreso, sin factura. Además hace falta el permiso «Dar avances de efectivo»."
+                                        checked={avanceOn}
+                                        onChange={() => setSettings(p => ({ ...p, pos_cash_advance: avanceOn ? "false" : "true" }))}
+                                    />
+                                </div>
+                                {avanceOn && (
+                                    <Campo label="Comisión sugerida (%)"
+                                        ayuda="Con la que arranca cada avance; el cajero la puede cambiar. Vacío = sin comisión.">
+                                        <input type="text" inputMode="decimal" placeholder="0"
+                                            value={settings.cash_advance_pct || ""}
+                                            onChange={e => setSettings(p => ({ ...p, cash_advance_pct: e.target.value.replace(",", ".").replace(/[^\d.]/g, "").slice(0, 6) }))}
+                                            className={`${INPUT} tabular-nums sm:max-w-[200px]`} />
+                                    </Campo>
+                                )}
                             </div>
                         </Seccion>
 

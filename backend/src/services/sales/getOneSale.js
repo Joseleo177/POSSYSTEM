@@ -2,6 +2,7 @@ const { Sale, SALE_INCLUDE } = require("./shared");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { effectiveDueDate, resolveCustomerCreditDays } = require("../../utils/dueDate");
 const { settleTolerance } = require("../../utils/saleBalance");
+const { tienePagoEnDivisas } = require("./fxRate");
 
 module.exports = async function getOneSale(id, req) {
   const s = await Sale.findByPk(id, { include: SALE_INCLUDE });
@@ -27,6 +28,9 @@ module.exports = async function getOneSale(id, req) {
       returned_qty
     };
   }) ?? [];
+
+  // Con tasa de divisas: si ya entró algún cobro en divisas (ver sales/fxRate.js).
+  item.fx_pago_divisas = parseFloat(s.fx_rate) > 0 ? await tienePagoEnDivisas(s) : false;
 
   // Suma precisa de líneas (precio completo sin truncar a 2 dec).
   // El frontend la usa para convertir a Bs; sale.total queda en 2 dec (monto oficial en $).

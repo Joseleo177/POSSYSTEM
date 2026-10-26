@@ -5,7 +5,7 @@ import ImmediatePayPicker from "./ImmediatePayPicker";
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { marcarLista } from "../../services/offline/outbox";
-import { saleTotalAtRate } from "../../helpers";
+import { saleTotalAtRate, tasaDeVenta } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import StatusMark from "../ui/StatusMark";
 import Money from "../ui/Money";
@@ -21,7 +21,7 @@ function KeyHint({ n }) {
     );
 }
 
-export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay, onUndo }) {
+export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay, onUndo, onRefresh }) {
     const { notify, activeCurrencies, activeJournals, companyInfo, printerWidth } = useApp();
     const [showReceiptModal, setShowReceiptModal] = useState(false);
     const [showPayModal, setShowPayModal] = useState(false);
@@ -47,13 +47,21 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         setCreditLoading(true);
         try {
             const res = await api.sales.confirmCredit(receipt.id);
-            notify(`Factura ${res.data.invoice_number || ""} entregada a crédito`.trim());
+            // A crédito pierde la tasa de divisas y vuelve a precio normal: se recarga la factura
+            // para que esta pantalla y el ticket muestren el total que quedó por cobrar.
+            if (res.data.fx_quitada) {
+                notify(`Factura ${res.data.invoice_number || ""} a crédito, a precio normal: la tasa de divisas es de contado`);
+                const full = await api.sales.getOne(receipt.id).catch(() => null);
+                if (full) onRefresh?.(full.data ?? full);
+            } else {
+                notify(`Factura ${res.data.invoice_number || ""} entregada a crédito`.trim());
+            }
             // Se reutiliza onPay: es el canal que ya refresca el saldo y el estado en CobroPage.
             onPay({
                 sale_status: "pendiente",
                 invoice_number: res.data.invoice_number,
                 amount_paid: paidBase,
-                balance: currentBalance,
+                balance: res.data.fx_quitada ? parseFloat(res.data.total) - paidBase : currentBalance,
             });
             return true;
         } catch (e) {
@@ -84,8 +92,16 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // "Registrar pago" pedía otro. La tasa de la factura queda solo como dato informativo.
     const receiptCurId  = receipt?.currency?.id ?? receipt?.currency_id;
     const liveRate      = parseFloat(activeCurrencies?.find(c => c.id === receiptCurId)?.exchange_rate || 0);
-    const mainRate      = receiptIsBase ? 1 : (liveRate > 0 ? liveRate : receiptRate);
-    const rateChanged   = !receiptIsBase && receiptRate > 1 && Math.abs(mainRate - receiptRate) > 0.000001;
+    // Con tasa de divisas, los bolívares de esta factura van a esa tasa (ver tasaDeVenta).
+    const tasaFx        = parseFloat(receipt?.fx_rate) > 0 ? parseFloat(receipt.fx_rate) : null;
+    // Avance de efectivo pedido en la revisión del pedido (CartContext → receipt._avance). No
+    // está en la factura: se registra con el cobro. Se cuenta en bolívares; lo que se cobra es
+    // lo entregado más la comisión. `hecho` = ya quedó registrado.
+    const avancePedido  = receipt?._avance?.cash_amount > 0 ? receipt._avance : null;
+    const simboloAvance = (activeCurrencies || []).find(c => !c.is_base)?.symbol || "Bs.";
+    const avanceCobro   = avancePedido ? avancePedido.cash_amount + Math.round(avancePedido.cash_amount * (avancePedido.fee_pct || 0)) / 100 : 0;
+    const mainRate      = receiptIsBase ? 1 : tasaDeVenta(receipt, liveRate > 0 ? liveRate : receiptRate);
+    const rateChanged   = !tasaFx && !receiptIsBase && receiptRate > 1 && Math.abs(mainRate - receiptRate) > 0.000001;
 
     // Equivalente en la otra moneda. El cajero cobra en bolívares pero la factura se lleva en
     // la moneda base (o al revés), y tener que hacer la cuenta aparte con el cliente delante
@@ -94,7 +110,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     const altCurrency = receiptIsBase
         ? activeCurrencies?.find(c => !c.is_base)
         : baseCurrency;
-    const altRate = receiptIsBase ? parseFloat(altCurrency?.exchange_rate || 0) : 1;
+    const altRate = receiptIsBase ? tasaDeVenta(receipt, parseFloat(altCurrency?.exchange_rate || 0)) : 1;
     // Sin segunda moneda configurada no hay nada que mostrar, y con tasa 1 la línea sería una
     // repetición del monto de arriba.
     const showAlt = !!altCurrency && altRate > 0 && !(receiptIsBase && altRate === 1);
@@ -105,14 +121,33 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // El TOTAL no se convierte así: sigue la regla del carrito (round2 del precio de cada
     // línea ya convertido × cantidad). Multiplicarlo desde la moneda base mostraba aquí un
     // total distinto al que pedía después "Registrar pago" sobre la misma factura.
-    const totalMain = saleTotalAtRate(receipt, mainRate);
-    const totalAlt  = saleTotalAtRate(receipt, altRate);
+    // Tasa de divisas aplicada al COBRAR (factura que no la traía): la diferencia quedó
+    // exonerada y es lo que se rebajó por pagar en divisas. El total de la factura no cambió,
+    // así que se resta aquí, a la tasa de cada pista. Las facturadas con tasa la llevan en el
+    // descuento (fx_discount) y no exoneran nada.
+    const fxPerdon  = parseFloat(receipt?.fx_forgiven || 0);
+    const totalMain = Math.max(0, saleTotalAtRate(receipt, mainRate) - round2(fxPerdon * mainRate));
+    const totalAlt  = Math.max(0, saleTotalAtRate(receipt, altRate) - round2(fxPerdon * altRate));
+    // La factura en bolívares, para decir cuánto se pasa por el punto con el avance encima.
+    const avanceFacturaBs = !receiptIsBase ? totalMain : (altCurrency && !altCurrency.is_base ? totalAlt : null);
     const fmtTotal    = (t, sym) => `${sym}${t.toFixed(2)}`;
     // El subtotal se reconstruye desde el total: se le devuelve el descuento y se le quita el
     // recargo, cada uno convertido con el mismo redondeo que usó saleTotalAtRate.
+    //
+    // La rebaja por divisas (descuento de divisas o la aplicada al cobrar) solo se ve en
+    // divisas: en bolívares la cuenta es la de siempre y no hay nada rebajado. Ahí el subtotal y
+    // el descuento manual van a la tasa del sistema con que se calculó la rebaja, como el ticket
+    // (receiptCurrency): a la tasa especial salían inflados (Bs.1121,50 − 216,85 = 904,65).
+    const fxDesc      = parseFloat(receipt?.fx_discount || 0);
+    const descManual  = Math.max(0, parseFloat(receipt?.discount_amount || 0) - fxDesc);
+    const descEnPapel = receiptIsBase ? parseFloat(receipt?.discount_amount || 0) : descManual;
+    const rebajaFxEnPapel = receiptIsBase ? fxPerdon : 0;
+    const tasaPapel   = !receiptIsBase && tasaFx && parseFloat(receipt?.fx_base_rate) > 1 ? parseFloat(receipt.fx_base_rate) : mainRate;
+    const fmtPapel    = (n) => `${receiptSym}${round2(Number(n || 0) * tasaPapel).toFixed(2)}`;
     const fmtSubtotal = (t, rate, sym) => `${sym}${round2(
         t
-        + round2(parseFloat(receipt?.discount_amount || 0) * rate)
+        + round2(descEnPapel * rate)
+        + round2(rebajaFxEnPapel * rate)
         - round2(parseFloat(receipt?.service_charge || 0) * rate)
     ).toFixed(2)}`;
     const saleCharge = parseFloat(receipt?.service_charge || 0);
@@ -142,6 +177,12 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // para una respuesta vieja. Al revés fallaba: esa lista se carga al iniciar sesión, y un
     // diario que no estuviera en ella dejaba el pago sin nombre, que es como el ticket
     // terminaba diciendo PAGADO con la forma de pago en blanco.
+    // Con tasa de divisas, si ya entró algún cobro en divisas: el que traía la venta o uno hecho
+    // aquí mismo (abonó los $10 y vuelve por el resto en Bs). Ver PaymentFormModal.
+    const pagoEnDivisas = !!receipt?.fx_pago_divisas || (saleBalance?.payments || []).some(p => {
+        const j = (activeJournals || []).find(x => x.id === p?.payment_journal_id);
+        return j && parseInt(j.currency_id) !== parseInt(receipt?.fx_currency_id);
+    });
     const receiptPayments = (saleBalance?.payments || []).map(p => ({
         id: p?.id ?? null,
         // La fecha distingue en el papel los abonos hechos a tasas distintas.
@@ -354,22 +395,34 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     {/* Totales: un bloque gris con la cifra grande en tinta. El turquesa del
                         total competía con el botón principal por la atención. */}
                     <div className="mt-5 rounded-lg bg-surface-2 dark:bg-white/[0.04] px-4 py-3.5 space-y-1.5">
-                        {(parseFloat(receipt.discount_amount) > 0 || saleCharge > 0) && (
+                        {(descEnPapel > 0 || saleCharge > 0 || rebajaFxEnPapel > 0) && (
                             <div className="space-y-1 pb-2 mb-1 border-b border-border/70 dark:border-white/[0.06]">
                                 <div className="flex justify-between items-center text-[13px]">
                                     <span className="text-content-subtle">Subtotal</span>
-                                    <Money value={fmtSubtotal(totalMain, mainRate, receiptSym)} className="font-medium text-content-muted" />
+                                    <Money value={fmtSubtotal(totalMain, tasaPapel, receiptSym)} className="font-medium text-content-muted" />
                                 </div>
-                                {parseFloat(receipt.discount_amount) > 0 && (
+                                {descManual > 0 && (
                                     <div className="flex justify-between items-center text-[13px]">
                                         <span className="text-content-subtle">Descuento</span>
-                                        <Money value={`-${fmt(receipt.discount_amount)}`} className="font-medium text-content-muted" />
+                                        <Money value={`-${fmtPapel(descManual)}`} className="font-medium text-content-muted" />
+                                    </div>
+                                )}
+                                {rebajaFxEnPapel > 0 && (
+                                    <div className="flex justify-between items-center text-[13px]">
+                                        <span className="text-content-subtle">Pago en divisas</span>
+                                        <Money value={`-${fmt(fxPerdon)}`} className="font-medium text-content-muted" />
+                                    </div>
+                                )}
+                                {receiptIsBase && fxDesc > 0 && (
+                                    <div className="flex justify-between items-center text-[13px]">
+                                        <span className="text-content-subtle">Pago en divisas</span>
+                                        <Money value={`-${fmt(fxDesc)}`} className="font-medium text-content-muted" />
                                     </div>
                                 )}
                                 {saleCharge > 0 && (
                                     <div className="flex justify-between items-center text-[13px]">
                                         <span className="text-content-subtle truncate pr-2">{saleChargeLabel}</span>
-                                        <Money value={`+${fmt(saleCharge)}`} className="font-medium text-content-muted shrink-0" />
+                                        <Money value={`+${fmtPapel(saleCharge)}`} className="font-medium text-content-muted shrink-0" />
                                     </div>
                                 )}
                             </div>
@@ -406,7 +459,37 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                                 Tasa de hoy {mainRate.toFixed(4).replace(/\.?0+$/, "")} · facturada a {receiptRate.toFixed(4).replace(/\.?0+$/, "")}
                             </div>
                         )}
+                        {tasaFx && (
+                            <div className="pt-1 text-right text-[11px] text-content-subtle tabular-nums">
+                                Tasa de divisas {tasaFx.toFixed(2)}
+                            </div>
+                        )}
                     </div>
+
+                    {/* Avance de efectivo pedido en la revisión. Antes de cobrar: lo que suma al pase
+                        del punto y cómo se registra. Ya registrado: cuánto efectivo entregar. */}
+                    {avancePedido && avancePedido.hecho && (
+                        <div className="mt-3 rounded-xl px-4 py-3 text-[13px] leading-snug bg-emerald-500/10 text-emerald-800 dark:text-emerald-300">
+                            Avance registrado: entrega <Money value={`${simboloAvance} ${avancePedido.cash_amount.toFixed(2)}`} className="font-semibold" /> en efectivo al cliente.
+                        </div>
+                    )}
+                    {avancePedido && !avancePedido.hecho && isUnresolved && (
+                        <div className="mt-3 rounded-xl px-4 py-3 bg-surface-2 dark:bg-white/[0.04] text-[13px] space-y-1.5">
+                            <div className="flex justify-between gap-3 text-content-subtle">
+                                <span>Avance de efectivo + comisión</span>
+                                <span className="shrink-0">+<Money value={`${simboloAvance} ${avanceCobro.toFixed(2)}`} /></span>
+                            </div>
+                            {avanceFacturaBs != null && (
+                                <div className="flex justify-between items-baseline gap-3">
+                                    <span className="font-semibold text-content dark:text-white">A pasar por el punto</span>
+                                    <Money value={`${simboloAvance} ${(avanceFacturaBs + avanceCobro).toFixed(2)}`} className="shrink-0 text-[16px] font-bold text-content dark:text-white" />
+                                </div>
+                            )}
+                            <p className="pt-1 text-[12px] text-content-subtle leading-snug">
+                                Entregas <Money value={`${simboloAvance} ${avancePedido.cash_amount.toFixed(2)}`} /> en efectivo. Se registra con <span className="font-semibold text-content dark:text-white">Cobrar ahora</span> por punto o pago móvil; en efectivo o a crédito no.
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Acciones. Cada una lleva su número: en caja se opera con el teclado y sin
@@ -489,6 +572,14 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             Al salir se emite la factura <span className="font-semibold text-content dark:text-white">a crédito</span>, por cobrar a nombre del cliente.
                         </p>
                     )}
+                    {/* La tasa de divisas es de contado: a crédito la factura vuelve a precio
+                        normal (confirmCreditSale → quitarTasaDivisas en el backend). */}
+                    {tasaFx && canGiveCredit && !offline && (
+                        <p className="flex items-start gap-2 rounded-lg bg-amber-500/10 text-amber-800 dark:text-amber-300 px-3 py-2.5 text-[12px] leading-snug">
+                            <svg className="w-4 h-4 shrink-0 mt-px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            La tasa de divisas es de contado: si la dejas a crédito, la factura queda a precio normal. Si después paga en divisas, la tasa se aplica al cobrar.
+                        </p>
+                    )}
                     {offline && (
                         <p className="text-[12px] text-content-subtle text-center leading-relaxed pt-1">
                             {isUnresolved
@@ -542,11 +633,32 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
 
             {showPayModal && (
                 <PaymentFormModal
-                    sale={{ ...receipt, balance: currentBalance, amount_paid: paidBase }}
+                    sale={{ ...receipt, balance: currentBalance, amount_paid: paidBase, fx_pago_divisas: pagoEnDivisas }}
+                    // Se le quitó la tasa de divisas desde el cobro: esta pantalla y el ticket
+                    // pasan a mostrar el precio normal.
+                    onSaleChange={(nueva) => {
+                        onRefresh?.(nueva);
+                        onPay?.({ sale_status: nueva.status, amount_paid: parseFloat(nueva.amount_paid || 0), balance: parseFloat(nueva.balance ?? nueva.total ?? 0) });
+                    }}
                     lockedJournalId={lockedJournalId}
+                    // Avance de efectivo pedido en la revisión del pedido: se cobra en el mismo pase.
+                    avanceInicial={avancePedido && !avancePedido.hecho ? avancePedido : null}
                     lockedMethod={lockedMethod}
                     onClose={() => { setShowPayModal(false); setLockedJournalId(null); }}
-                    onSuccess={(res) => { onPay(res); setShowPayModal(false); setLockedJournalId(null); }}
+                    onSuccess={async (res) => {
+                        onPay(res); setShowPayModal(false); setLockedJournalId(null);
+                        // El avance quedó registrado con el cobro: la pantalla pasa a decir cuánto
+                        // efectivo entregar, y no se vuelve a proponer en otro abono.
+                        if (res?.cash_advance) {
+                            onRefresh?.({ _avance: { cash_amount: parseFloat(res.cash_advance.cash_amount), fee_pct: parseFloat(res.cash_advance.fee_pct) || 0, hecho: true } });
+                        }
+                        // Se le aplicó la tasa de divisas en este cobro: la factura ahora tiene la
+                        // tasa y lo exonerado, que esta pantalla y el ticket tienen que mostrar.
+                        if (res?.fx_aplicada) {
+                            const full = await api.sales.getOne(receipt.id).catch(() => null);
+                            if (full) onRefresh?.(full.data ?? full);
+                        }
+                    }}
                 />
             )}
         </div>

@@ -121,6 +121,7 @@ app.use("/api/quotations",       require("./routes/quotations"));        // auth
 app.use("/api/promotions",       require("./routes/promotions"));        // auth dentro
 app.use("/api/credit-notes",     require("./routes/creditNotes"));       // auth dentro
 app.use("/api/incomes",          require("./routes/incomes"));            // auth dentro
+app.use("/api/cash-advances",    require("./routes/cashAdvances"));       // auth+permit dentro
 app.use("/api/bank-reconciliations", require("./routes/bankReconciliation")); // auth+permit dentro
 app.use("/api/factory",          require("./routes/factory"));             // auth+permit+módulo dentro
 app.use("/api/backup",           require("./routes/backup"));             // auth+config dentro

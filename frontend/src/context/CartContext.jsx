@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
-import { netoLineaEnTasa } from "../helpers/currency";
+import { netoLineaEnTasa, descuentoDivisas, totalBsEnTasa } from "../helpers/currency";
 import { api } from "../services/api";
 import { onSSE } from "../services/sse";
 import { useApp } from "./AppContext";
@@ -122,6 +122,21 @@ export function CartProvider({ children }) {
   // propina de 2 Ref se convertiría sola en 2 Bs, o sea en nada. El descuento no sufre esto
   // porque es un porcentaje.
   const chargeIsVesRef = useRef(false);
+
+  // ── Cobro a tasa de divisas ───────────────────────────────
+  // El dólar se recibe por encima de la tasa oficial: la cuenta da Bs.8000 a 800 y en divisas
+  // se cobran $8, a 1000. La tasa la teclea la caja en cada venta y se conserva para la
+  // siguiente; el interruptor no, como el descuento. Ver descuentoDivisas (helpers/currency).
+  const [fxEnabled, setFxEnabled] = useState(false);
+  const [fxRateInput, setFxRateInput] = useState("");
+
+  // ── Avance de efectivo junto a la venta ───────────────────
+  // El cliente compra y además pide billetes, todo en un pase del punto. No toca la factura: se
+  // anota aquí y viaja con el comprobante hasta el cobro, que lo registra en la misma operación
+  // (createPayment, `cash_advance`). Ver services/cashAdvances.
+  const [avanceOn, setAvanceOn] = useState(false);
+  const [avanceMonto, setAvanceMonto] = useState("");
+  const [avancePct, setAvancePct] = useState("");
 
   // ── Cliente seleccionado ───────────────────────────────────
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -422,6 +437,9 @@ export function CartProvider({ children }) {
     setChargeEnabled(false);
     setChargeInput("");
     setChargeLabel("Servicio");
+    setFxEnabled(false);
+    setAvanceOn(false);
+    setAvanceMonto("");
     setQuotationId(null);
   }, [mySeries]);
 
@@ -635,6 +653,63 @@ export function CartProvider({ children }) {
 
   const totalUsd = netUsd + chargeUsd;
   const totalBs = vesRate ? (netBs + chargeBs) : null;
+  // Avance de efectivo pedido junto a la venta (en Bs). No se combina con la tasa de divisas:
+  // esa pide un pago en divisas y el avance va por punto o pago móvil.
+  const avanceEfectivo = avanceOn && !fxEnabled ? (parseFloat(String(avanceMonto).replace(",", ".")) || 0) : 0;
+
+  // Las líneas como las guarda la factura (createSale): precio completo y descuento POR UNIDAD
+  // con 5 decimales, de la promoción o del descuento manual. Las usan la venta sin conexión,
+  // que se arma aquí igual que la armaría el servidor, y la tasa de divisas.
+  const promoDeLinea = (id) => {
+    const p = activePromos.find(pr => pr.product_ids?.includes(id));
+    return p ? { type: p.type, discount_pct: p.discount_pct, buy_qty: p.buy_qty, get_qty: p.get_qty } : null;
+  };
+  // Misma cuenta que calcLineDiscount en el servidor (services/sales/promoDiscounts.js).
+  const descuentoPromo = (promo, unit, qty) => {
+    if (promo?.type === "percentage") return parseFloat((unit * qty * parseFloat(promo.discount_pct) / 100).toFixed(5));
+    if (promo?.type === "buy_x_get_y") {
+      const gratis = Math.floor(qty / (promo.buy_qty + promo.get_qty)) * promo.get_qty;
+      return parseFloat((gratis * unit).toFixed(5));
+    }
+    return 0;
+  };
+  // Dos pistas, como createSale: el total en $ con el precio redondeado por línea (descUsd), y
+  // el descuento por unidad de cada línea con el precio completo.
+  const lineasFactura = () => cart.filter(i => parseFloat(i.qty) > 0).map(i => {
+    const quantity = parseFloat(i.qty);
+    const price = parseFloat(i.price) || 0;
+    // El descuento manual reemplaza a la promoción, como en createSale.
+    const manual = manualDe(i);
+    const promo = manual ? null : promoDeLinea(i.id);
+    const descLinea = (unit) => manual ? manualSobre(manual, unit * quantity, manual.value) : descuentoPromo(promo, unit, quantity);
+    const discount = quantity > 0 ? parseFloat((descLinea(price) / quantity).toFixed(5)) : 0;
+    return {
+      product_id: i.id, name: i.name, price, quantity, discount, promo, manual,
+      line_discount_mode: manual?.mode ?? null, line_discount_value: manual?.value ?? null,
+      subtotal: parseFloat(((price - discount) * quantity).toFixed(5)),
+      descUsd: descLinea(round2(price)),
+    };
+  });
+
+  // Tasa de divisas: solo con bolívares en la caja y por encima de la tasa del sistema (por
+  // debajo sería un recargo, y para eso está el suyo). El total en Bs no cambia —a esa tasa, en
+  // bolívares se paga lo de siempre—; baja el de divisas, y la diferencia viaja como descuento.
+  const fxRate = parseFloat(String(fxRateInput).replace(",", ".")) || 0;
+  const fxActivo = fxEnabled && !!vesRate && fxRate > vesRate && (totalBs ?? 0) > 0;
+  const fxDiscount = fxActivo
+    ? descuentoDivisas({ lineas: lineasFactura(), manual: discountAmountUsd, recargo: chargeUsd, totalBs, tasa: fxRate })
+    : 0;
+  const totalUsdCobro = totalUsd - fxDiscount;
+  // Los bolívares que va a pedir el cobro a la tasa especial. Son los de siempre salvo, a veces,
+  // un céntimo de redondeo: se muestran estos para que pantalla, cobro y ticket digan lo mismo.
+  const totalBsCobro = fxDiscount > 0
+    ? totalBsEnTasa({ lineas: lineasFactura(), descuento: discountAmountUsd + fxDiscount, recargo: chargeUsd, tasa: fxRate })
+    : totalBs;
+  // Lo que viaja al servidor sobre la tasa. `fx_rate: null` la quita (updateSale).
+  const fxPayload = () => fxDiscount > 0
+    // fx_base_rate: la tasa del sistema con que se calculó la rebaja; el ticket en Bs va a ella.
+    ? { fx_rate: fxRate, fx_discount: fxDiscount, fx_currency_id: vesCurrency?.id ?? null, fx_base_rate: vesRate }
+    : { fx_rate: null, fx_discount: 0, fx_currency_id: null };
 
   // ── Mapeo a "principal"/"secundaria" según la moneda seleccionada en el toggle ──
   // (subtotalUsd/discountAmountUsd/promoDiscountUsd/totalUsd se mantienen con estos nombres
@@ -643,7 +718,7 @@ export function CartProvider({ children }) {
   const discountAmount  = discountAmountUsd;
   const promoLineDiscount = promoLineDiscountUsd;
   const promoDiscount   = promoDiscountUsd;
-  const totalBase        = totalUsd;
+  const totalBase        = totalUsdCobro;
 
   const subtotalDisplay        = isVesPrimary ? (subtotalBs ?? 0) : subtotalUsd;
   const promoDiscountDisplay   = isVesPrimary ? promoDiscountBs : promoDiscountUsd;
@@ -668,8 +743,8 @@ export function CartProvider({ children }) {
   // Lo que viaja al servidor por línea: null quita el descuento (updateSale distingue null de
   // "no lo trae", que conserva el que tenía la cuenta en espera).
   const ldPayload = (i) => { const m = manualDe(i); return m ? { mode: m.mode, value: m.value } : null; };
-  const totalDisplay    = isVesPrimary ? (totalBs ?? 0) : totalUsd;
-  const totalSecondary  = isVesPrimary ? totalUsd : (totalBs ?? convertToSecondary(totalUsd));
+  const totalDisplay    = isVesPrimary ? (totalBsCobro ?? 0) : totalUsdCobro;
+  const totalSecondary  = isVesPrimary ? totalUsdCobro : (totalBsCobro ?? convertToSecondary(totalUsdCobro));
 
   // Lo que se muestra del recargo: el monto en la moneda de pantalla (tal cual se tecleó) y
   // el porcentaje que representa sobre el consumo neto, que es la lectura que le interesa a
@@ -813,6 +888,8 @@ export function CartProvider({ children }) {
           await api.sales.update(heldSaleId, {
             items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty), line_discount: ldPayload(i) })),
             discount_amount: discountAmount,
+            // La tasa de divisas se elige al cobrar: una cuenta en espera no la guarda.
+            fx_rate: null,
             service_charge: chargeAmountBase,
             service_charge_label: chargeLabel,
             // La cabecera viaja también al re-pausar: si el cajero cambió el cliente o la
@@ -1089,37 +1166,10 @@ export function CartProvider({ children }) {
       const r2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
       // La promoción que el carrito aplicó a cada línea viaja con ella: al sincronizar puede
       // haber vencido, y se cobra la que vio el cliente.
-      const promoDe = (id) => {
-        const p = activePromos.find(pr => pr.product_ids?.includes(id));
-        return p ? { type: p.type, discount_pct: p.discount_pct, buy_qty: p.buy_qty, get_qty: p.get_qty } : null;
-      };
-      // Misma cuenta que calcLineDiscount en el servidor (services/sales/promoDiscounts.js).
-      const descuentoPromo = (promo, unit, qty) => {
-        if (promo?.type === "percentage") return parseFloat((unit * qty * parseFloat(promo.discount_pct) / 100).toFixed(5));
-        if (promo?.type === "buy_x_get_y") {
-          const gratis = Math.floor(qty / (promo.buy_qty + promo.get_qty)) * promo.get_qty;
-          return parseFloat((gratis * unit).toFixed(5));
-        }
-        return 0;
-      };
-      // Dos pistas, como createSale: el total en $ con el precio redondeado por línea, y el
-      // descuento por unidad de cada línea con el precio completo.
-      const lineas = cart.filter(i => parseFloat(i.qty) > 0).map(i => {
-        const quantity = parseFloat(i.qty);
-        const price = parseFloat(i.price) || 0;
-        // El descuento manual reemplaza a la promoción, como en createSale.
-        const manual = manualDe(i);
-        const promo = manual ? null : promoDe(i.id);
-        const descLinea = (unit) => manual ? manualSobre(manual, unit * quantity, manual.value) : descuentoPromo(promo, unit, quantity);
-        const discount = quantity > 0 ? parseFloat((descLinea(price) / quantity).toFixed(5)) : 0;
-        return {
-          product_id: i.id, name: i.name, price, quantity, discount, promo, manual,
-          line_discount_mode: manual?.mode ?? null, line_discount_value: manual?.value ?? null,
-          subtotal: parseFloat(((price - discount) * quantity).toFixed(5)),
-          descUsd: descLinea(r2(price)),
-        };
-      });
-      const descuento = parseFloat(discountAmount) || 0;
+      const lineas = lineasFactura();
+      // El de divisas viaja dentro del descuento de la venta, como en línea.
+      const fx = fxPayload();
+      const descuento = parseFloat(((parseFloat(discountAmount) || 0) + fx.fx_discount).toFixed(5));
       const recargo = Math.max(0, parseFloat(chargeAmountBase) || 0);
       const recargoLabel = recargo > 0 ? (chargeLabel?.trim().slice(0, 40) || "Servicio") : null;
       const total = Math.max(0, parseFloat(
@@ -1136,6 +1186,7 @@ export function CartProvider({ children }) {
         total, total_precise: parseFloat(items.reduce((s, l) => s + l.subtotal, 0).toFixed(5)),
         status: "borrador", amount_paid: 0, balance: total, credit_applied: 0,
         items, discount_amount: descuento, service_charge: recargo, service_charge_label: recargoLabel,
+        ...fx,
         exchange_rate: exchangeRate, currency_id: currentCurrency?.id || null,
         customer_id: selectedCustomer?.id || null, customer_name: selectedCustomer?.name || null,
         customer_rif: selectedCustomer?.rif || null,
@@ -1157,6 +1208,7 @@ export function CartProvider({ children }) {
             currency_id: currentCurrency?.id || null,
             exchange_rate: exchangeRate,
             discount_amount: descuento,
+            ...fx,
             service_charge: recargo,
             service_charge_label: recargoLabel,
             items: lineas.map(l => ({ product_id: l.product_id, quantity: l.quantity, price: l.price, promo: l.promo, line_discount: l.manual })),
@@ -1208,7 +1260,9 @@ export function CartProvider({ children }) {
         exchange_rate: exchangeRate,
         serie_id: selectedSerieId,
         warehouse_id: activeWarehouse.id,
-        discount_amount: discountAmount,
+        // El descuento de divisas va dentro del de la venta; fx_discount dice cuánto es suyo.
+        discount_amount: parseFloat((discountAmount + fxDiscount).toFixed(5)),
+        ...fxPayload(),
         service_charge: chargeAmountBase,
         service_charge_label: chargeLabel,
         idempotency_key: pendingKeyRef.current,
@@ -1220,7 +1274,8 @@ export function CartProvider({ children }) {
         try {
           res = await api.sales.update(heldSaleId, {
             items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty), line_discount: ldPayload(i) })),
-            discount_amount: discountAmount,
+            discount_amount: parseFloat((discountAmount + fxDiscount).toFixed(5)),
+            ...fxPayload(),
             service_charge: chargeAmountBase,
             service_charge_label: chargeLabel,
             status: "borrador",
@@ -1252,6 +1307,10 @@ export function CartProvider({ children }) {
         currency: currentCurrency,
         exchangeRate,
         serie,
+        // Avance de efectivo pedido junto a la venta: lo registra el cobro (PaymentFormModal).
+        _avance: avanceEfectivo > 0
+          ? { cash_amount: avanceEfectivo, fee_pct: parseFloat(String(avancePct).replace(",", ".")) || 0 }
+          : null,
       });
 
       // Venta concretada: invalidamos la clave para que el próximo
@@ -1276,7 +1335,7 @@ export function CartProvider({ children }) {
   }, [cart, activeWarehouse, selectedCustomer, selectedSerieId,
     employee, currentCurrency, exchangeRate, heldSaleId, loadHeldCarts,
     discountAmount, chargeAmountBase, chargeLabel, quotationId,
-    mySeries, notify, clearCart, saveCart, activePromos]);
+    mySeries, notify, clearCart, saveCart, activePromos, fxDiscount, fxRate, avanceEfectivo, avancePct]);
 
   // Venta sin conexión que no llegó a cobrarse (el cliente se fue, o hay que corregirla): se
   // saca de la cola y su carrito vuelve a la pantalla, como si no se hubiera finalizado.
@@ -1301,6 +1360,10 @@ export function CartProvider({ children }) {
       subtotalDisplay, promoDiscountDisplay, discountAmountDisplay, promoLineDiscountDisplay,
       // Descuento por línea
       setLineDiscount, lineManualDiscountDisplay,
+      // Tasa de divisas
+      fxEnabled, setFxEnabled, fxRateInput, setFxRateInput, fxRate, fxActivo, fxDiscount,
+      // Avance de efectivo junto a la venta
+      avanceOn, setAvanceOn, avanceMonto, setAvanceMonto, avancePct, setAvancePct,
       // Recargo (propina / servicio)
       chargeEnabled, setChargeEnabled, chargeLabel, setChargeLabel,
       chargeInput, setChargeInput, chargeMode, setChargeMode, setChargeFromPct,

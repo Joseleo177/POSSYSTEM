@@ -32,6 +32,13 @@ export default function CobrosDelTurno({ items, sinArqueo }) {
                             </div>
                             <Money value={fmtMoney(p.total, sym)} className="text-[13px] font-semibold text-content dark:text-white" />
                         </div>
+                        {/* El total de la cuenta trae lo que entró por avances de efectivo (lo que
+                            dice el papel del punto); se aclara cuánto fue de eso. */}
+                        {p.advance_total > 0 && (
+                            <div className="mt-0.5 ml-4 text-[12px] text-content-subtle">
+                                Incluye avances de efectivo <Money value={fmtMoney(p.advance_total, sym)} />
+                            </div>
+                        )}
                         {varios && (
                             <div className="mt-1.5 ml-4 pl-3 border-l border-border/70 dark:border-white/[0.08] space-y-1">
                                 {metodos.map(m => (

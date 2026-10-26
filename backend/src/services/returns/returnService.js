@@ -3,7 +3,7 @@ const {
   Return, ReturnItem, ProductComboItem, Serie, SerieRange, sequelize, Sequelize,
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
-const { excludeAnnulledReturns, saleDebt, refreshSaleStatus, settleSurplus, defaultSurplusMode } = require("./shared");
+const { excludeAnnulledReturns, factorDevolucion, saleDebt, refreshSaleStatus, settleSurplus, defaultSurplusMode } = require("./shared");
 
 async function createReturn({ saleId, items, reason, employee_id, refund, surplus_mode }, req) {
   if (!items?.length) { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
@@ -30,6 +30,8 @@ async function createReturn({ saleId, items, reason, employee_id, refund, surplu
 
     const saleItems = await SaleItem.findAll({ where: { sale_id: saleId }, transaction });
     const itemsMap  = Object.fromEntries(saleItems.map(i => [i.id, i]));
+    // Lo devuelto se lleva su parte del descuento de la venta (ver factorDevolucion).
+    const factor = factorDevolucion(sale, saleItems);
     // Lo devuelto en una NC anulada vuelve a estar disponible para devolver.
     const soloVivas = await excludeAnnulledReturns(saleId, transaction);
 
@@ -58,7 +60,7 @@ async function createReturn({ saleId, items, reason, employee_id, refund, surplu
       // 6 decimales y no 2: el precio de la línea puede tener cinco (sale_items.price), y
       // redondear aquí devolvía menos dinero del que se cobró. Lo que se muestra al cajero sí
       // se redondea a dos, pero eso es presentación, no lo que se guarda.
-      const subtotal = parseFloat(((si.price - si.discount) * parsedQty).toFixed(6));
+      const subtotal = parseFloat(((si.price - si.discount) * parsedQty * factor).toFixed(6));
       returnTotal += subtotal;
       returnLines.push({ sale_item_id, product_id: si.product_id, name: si.name, price: si.price, qty: parsedQty, subtotal });
     }

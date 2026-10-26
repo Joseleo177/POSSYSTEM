@@ -19,6 +19,16 @@ import { journalsForWarehouse, fmtDate, toNameCase } from "../../helpers";
 const VERIFIED = { ok: { label: "Conciliado", tone: "success", quiet: "check" } };
 
 export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayment, setReceiptSale, journals = [] }) {
+    // Avance de efectivo que pasó por el punto con el cobro. Lo cobrado (avance + comisión) va en
+    // la moneda de la cuenta del cobro; lo entregado, en la de la caja de efectivo.
+    const simboloDe = (p) => (!p.currency_code || p.currency_code === baseCurrency?.code) ? (baseCurrency?.symbol || "Ref.") : (p.currency_symbol || "Bs.");
+    const fmtAvance = (p, n) => `${simboloDe(p)} ${Number(n || 0).toFixed(2)}`;
+    // Lo que pasó por el punto: el cobro en su moneda más el avance con su comisión.
+    const fmtPaso = (p) => {
+        const isBase = !p.currency_code || p.currency_code === baseCurrency?.code;
+        const cobro = Number(p.amount || 0) * (isBase ? 1 : (parseFloat(p.exchange_rate) || 1));
+        return fmtAvance(p, Math.round(cobro * 100) / 100 + Number(p.cash_advance?.in_amount || 0));
+    };
     const {
         data, total, sumBase, sumLocal, currencyCount, currencyId, page, setPage, loading, LIMIT,
         viewType,
@@ -213,6 +223,11 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                             {!isInvoice && item.reference_number && (
                                                 <div className="text-[12px] text-content-subtle tabular-nums">Ref. {item.reference_number}</div>
                                             )}
+                                            {/* El pase del punto trajo además un avance de efectivo: lo que se
+                                                ve en el banco es la suma, no solo este cobro. */}
+                                            {!isInvoice && item.cash_advance && (
+                                                <div className="text-[12px] font-medium text-amber-700 dark:text-amber-400">Con avance de efectivo</div>
+                                            )}
                                             {warehouses.length > 1 && item.warehouse_name && (
                                                 <div className="text-[12px] text-content-subtle">{toNameCase(item.warehouse_name)}</div>
                                             )}
@@ -244,7 +259,14 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                             <span className="text-[12px] font-medium text-content-subtle tabular-nums whitespace-nowrap">{fmtDate(item.created_at)}</span>
                                         </td>
                                         <td className="text-right">
-                                            <Money value={isInvoice ? fmtPrice(item.total) : fmtPayment(item)} className="text-[14px] font-semibold text-content dark:text-white" />
+                                            {/* Con avance, el monto es el pase completo (el que muestra el banco)
+                                                y debajo cuánto fue de la factura y cuánto del avance. */}
+                                            <Money value={isInvoice ? fmtPrice(item.total) : (item.cash_advance ? fmtPaso(item) : fmtPayment(item))} className="text-[14px] font-semibold text-content dark:text-white" />
+                                            {!isInvoice && item.cash_advance && (
+                                                <div className="text-[12px] text-content-subtle whitespace-nowrap">
+                                                    Factura <Money value={fmtPayment(item)} /> + avance <Money value={fmtAvance(item, item.cash_advance.in_amount)} />
+                                                </div>
+                                            )}
                                             {isInvoice && item.status === "parcial" && (
                                                 <div className="text-[12px] text-red-600 dark:text-red-400">Debe <Money value={fmtPrice(item.balance)} /></div>
                                             )}
@@ -329,7 +351,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                     <span className="min-w-0 text-[14px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums break-words">
                                         {item.invoice_number || (isInvoice ? `Factura #${item.id}` : `Cobro #${item.id}`)}
                                     </span>
-                                    <Money value={isInvoice ? fmtPrice(item.total) : fmtPayment(item)} className="shrink-0 text-[15px] font-semibold text-content dark:text-white" />
+                                    <Money value={isInvoice ? fmtPrice(item.total) : (item.cash_advance ? fmtPaso(item) : fmtPayment(item))} className="shrink-0 text-[15px] font-semibold text-content dark:text-white" />
                                 </div>
                                 <div className="mt-1 pr-1 flex items-baseline justify-between gap-3">
                                     <span className="min-w-0 text-[14px] font-semibold text-content dark:text-white truncate">{toNameCase(item.customer_name) || "Consumidor final"}</span>
@@ -338,6 +360,11 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                 {detalle && <div className="pr-1 text-[12px] text-content-subtle truncate">{detalle}</div>}
                                 {item.batch_journal_count > 1 && (
                                     <div className="pr-1 text-[12px] font-medium text-amber-700 dark:text-amber-400">Pago combinado · {item.batch_journal_count} formas</div>
+                                )}
+                                {!isInvoice && item.cash_advance && (
+                                    <div className="pr-1 text-[12px] font-medium text-amber-700 dark:text-amber-400">
+                                        Con avance · factura <Money value={fmtPayment(item)} /> + avance <Money value={fmtAvance(item, item.cash_advance.in_amount)} />
+                                    </div>
                                 )}
                                 <div className="mt-1.5 flex items-center justify-between gap-3">
                                     <div className="min-w-0 flex items-center gap-2.5">
@@ -403,13 +430,36 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                             {/* Cifra héroe: la caja por la que entró y cuánto, en su moneda. */}
                             <div className="rounded-xl bg-surface-2 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] px-4 py-3.5">
                                 <JournalDot name={p.journal_name || "Sin caja"} color={p.journal_color} />
-                                <Money value={fmtP(p.amount)} className="block mt-1 text-[24px] font-bold tracking-tight leading-tight text-content dark:text-white" />
+                                {/* Con avance, la cifra es el pase completo; el desglose va debajo. */}
+                                <Money value={p.cash_advance ? fmtPaso(p) : fmtP(p.amount)} className="block mt-1 text-[24px] font-bold tracking-tight leading-tight text-content dark:text-white" />
                                 {!isBase && (
                                     <p className="mt-0.5 text-[12px] text-content-subtle tabular-nums">
-                                        <Money value={`≈ ${baseSym} ${Number(p.amount || 0).toFixed(2)}`} /> · tasa {rate.toFixed(4)}
+                                        <Money value={`≈ ${baseSym} ${(Number(p.amount || 0) + (p.cash_advance ? p.cash_advance.in_amount / rate : 0)).toFixed(2)}`} /> · tasa {rate.toFixed(4)}
                                     </p>
                                 )}
                             </div>
+
+                            {/* El pase del punto llevó también un avance de efectivo: el banco muestra
+                                la suma. Se desglosa para que el cobro no parezca mal cargado. */}
+                            {p.cash_advance && (
+                                <div className="rounded-lg border-l-[3px] border-amber-500 bg-amber-500/[0.06] px-3.5 py-2.5">
+                                    <p className="text-[13px] font-medium text-content dark:text-white">Con avance de efectivo</p>
+                                    <dl className="mt-1.5 space-y-1 text-[12px]">
+                                        <div className="flex justify-between gap-3 text-content-subtle"><dt>Cobro de la factura</dt><dd><Money value={fmtP(p.amount)} /></dd></div>
+                                        <div className="flex justify-between gap-3 text-content-subtle">
+                                            <dt>Avance{p.cash_advance.cash_journal_name ? ` (de ${p.cash_advance.cash_journal_name})` : ""}</dt>
+                                            <dd><Money value={`${p.cash_advance.cash_symbol || simboloDe(p)} ${p.cash_advance.cash_amount.toFixed(2)}`} /></dd>
+                                        </div>
+                                        <div className="flex justify-between gap-3 text-content-subtle">
+                                            <dt>Comisión ({p.cash_advance.fee_pct.toLocaleString("es-VE", { maximumFractionDigits: 3 })} %)</dt>
+                                            <dd><Money value={fmtAvance(p, p.cash_advance.fee_amount)} /></dd>
+                                        </div>
+                                        <div className="flex justify-between gap-3 pt-1 border-t border-amber-500/20 font-semibold text-content dark:text-white">
+                                            <dt>Pasó por {p.journal_name || "el punto"}</dt><dd><Money value={fmtPaso(p)} /></dd>
+                                        </div>
+                                    </dl>
+                                </div>
+                            )}
 
                             {/* Esta fila es UN movimiento de caja; si el cobro se hizo con varias
                                 formas de pago, las otras son sus propias filas y se borran juntas. */}
@@ -465,13 +515,13 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
             <ConfirmModal
                 isOpen={!!deleteDialog}
                 title="¿Eliminar cobro?"
-                message={
+                message={(
                     deleteDialog?.batch_journal_count > 1
                         ? `Este movimiento es una de las ${deleteDialog.batch_journal_count} formas de pago de un mismo cobro: se revierte el cobro COMPLETO, incluidas las otras cajas${deleteDialog.group_count > 1 ? ` y las ${deleteDialog.group_count} facturas que cubrió` : ""}.`
                     : deleteDialog?.group_count > 1
                         ? `Este cobro cubrió ${deleteDialog.group_count} facturas y se revierte completo: todas vuelven a quedar con su saldo pendiente.`
                         : "Esta acción revertirá el cobro. El saldo de la factura se actualizará automáticamente."
-                }
+                ) + (deleteDialog?.cash_advance ? " También se anula el avance de efectivo que pasó con él: los billetes vuelven a la caja." : "")}
                 onConfirm={confirmRemovePayment}
                 onCancel={() => setDeleteDialog(null)}
                 type="danger"

@@ -86,9 +86,10 @@ async function runAuto(companyId, statement) {
   await sequelize.transaction(async (t) => {
     const now = new Date();
     for (const { line, units: us } of pairs) {
-      const rows = us.flatMap(u => u.ids.map(id => ({
-        company_id: companyId, line_id: line.id, source_type: u.type, source_id: id, role: "documento",
-        amount: us.length === 1 && u.ids.length === 1 ? u.amount : 0,
+      // Una unidad puede juntar movimientos de distinto tipo (cobro + avance): cada uno con el suyo.
+      const rows = us.flatMap(u => (u.parts || u.ids.map(id => ({ type: u.type, id }))).map((part, _, all) => ({
+        company_id: companyId, line_id: line.id, source_type: part.type, source_id: part.id, role: "documento",
+        amount: us.length === 1 && all.length === 1 ? u.amount : 0,
       })));
       await BankReconciliationMatch.bulkCreate(rows, { transaction: t, ignoreDuplicates: true });
       await BankStatementLine.update(

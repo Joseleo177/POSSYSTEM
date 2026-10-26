@@ -129,6 +129,7 @@ async function forgiveSale(id, { reason, employee_id, rate }, req) {
       paid,
       returned,
       forgiven,
+      forgivenFx: sale.fx_forgiven,
       hasInvoice: !!sale.invoice_number,
       tolerance,
     });
@@ -170,28 +171,38 @@ async function unforgiveSale(id, req) {
     if (!sale) throw err("Factura no encontrada", 404);
     await assertWarehouseAccess(req, sale.warehouse_id, { optional: true });
 
-    if (parseFloat(sale.forgiven_amount || 0) <= 0) throw err("Esta factura no tiene saldo exonerado");
+    // La rebaja por pagar en divisas (fx_forgiven) va junto a lo exonerado pero no es un perdón:
+    // se pactó con el cobro que la trajo y se deshace borrando ese cobro (removePayment), no
+    // aquí. Deshacerla aquí dejaba la factura debiendo la rebaja a la tasa especial.
+    const rebajaFx = parseFloat(sale.fx_forgiven || 0);
+    const perdonReal = parseFloat(((parseFloat(sale.forgiven_amount) || 0) - rebajaFx).toFixed(6));
+    if (perdonReal <= 0.000001) {
+      throw err(rebajaFx > 0
+        ? "Esta factura no tiene saldo exonerado: lo que tiene es la rebaja por pagar en divisas, que se deshace eliminando el cobro"
+        : "Esta factura no tiene saldo exonerado");
+    }
     // Revertir el perdón sobre una factura ya anulada o devuelta la reviviría como deuda.
     if (["anulado", "devuelto"].includes(sale.status)) {
       throw err("Esta factura ya está cerrada por otro flujo");
     }
 
-    // Con forgiven en 0, el saldo perdonado vuelve a ser saldo por cobrar.
+    // Sin el perdón, ese saldo vuelve a ser saldo por cobrar. La rebaja por divisas se queda.
     const { paid, returned } = await pendingOf(sale, t);
     const status = resolveSaleStatus({
       saleTotal: sale.total,
       paid,
       returned,
-      forgiven: 0,
+      forgiven: rebajaFx,
+      forgivenFx: rebajaFx,
       hasInvoice: !!sale.invoice_number,
       tolerance: await saleSettleTolerance(sale, t),
     });
 
     await sale.update({
-      forgiven_amount: 0,
-      forgiven_reason: null,
-      forgiven_by: null,
-      forgiven_at: null,
+      forgiven_amount: rebajaFx,
+      forgiven_reason: rebajaFx > 0 ? `Pago en divisas a tasa ${parseFloat(sale.fx_rate || 0).toFixed(2)}` : null,
+      forgiven_by: rebajaFx > 0 ? sale.forgiven_by : null,
+      forgiven_at: rebajaFx > 0 ? sale.forgiven_at : null,
       status,
     }, { transaction: t });
 

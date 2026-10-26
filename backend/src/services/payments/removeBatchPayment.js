@@ -1,5 +1,6 @@
 const { Payment, Sale, Return, Sequelize, sequelize, Op, getSaleBalance } = require("./shared");
 const { resolveSaleStatus, saleSettleTolerance } = require("../../utils/saleBalance");
+const { deshacerTasaDeCobro } = require("../sales/fxRate");
 
 /**
  * Elimina de una vez todos los cobros de un mismo lote.
@@ -30,6 +31,8 @@ module.exports = async function removeBatchPayment(batchId) {
     for (const saleId of saleIds) {
       const sale = await Sale.findByPk(saleId, { transaction: t, lock: true });
       if (!sale) continue;
+      // La tasa de divisas aplicada en este lote se deshace si la factura queda sin cobros.
+      await deshacerTasaDeCobro(sale, t);
 
       // Misma cuenta que el cobro: descuenta el vuelto y suma el crédito; lo exonerado va aparte.
       const cobrado = (await getSaleBalance(saleId, t)) - parseFloat(sale.forgiven_amount || 0);
@@ -48,7 +51,7 @@ module.exports = async function removeBatchPayment(batchId) {
         saleTotal: sale.total,
         paid: cobrado,
         returned: devuelto,
-        forgiven: sale.forgiven_amount,
+        forgiven: sale.forgiven_amount, forgivenFx: sale.fx_forgiven,
         hasInvoice: !!sale.invoice_number,
         tolerance: await saleSettleTolerance(sale, t),
       });

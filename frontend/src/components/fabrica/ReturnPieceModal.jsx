@@ -3,6 +3,7 @@ import Modal from "../ui/Modal";
 import Money from "../ui/Money";
 import Check from "../ui/Check";
 import Segmented from "../ui/Segmented";
+import ConfirmModal from "../ui/ConfirmModal";
 import { Button } from "../ui/Button";
 import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
@@ -12,7 +13,7 @@ import {
     INPUT, AGREGAR, QUITAR, CARD, Field, PlusIcon, XIcon, DimsInput, UnitSwitch, useMeasureUnit,
     toMm, parseNum, fmtDims, fmtSize, unitLabel, errMsg,
 } from "./shared";
-import { CutEditor, canDraw, initialRegions, remnantsOf } from "./CutLayout";
+import { CutEditor, canDraw, initialRegions, remnantsOf, suggestLayout } from "./CutLayout";
 
 const r3 = (n) => Math.round(n * 1000) / 1000;
 const rect = () => ({ kind: "rect", w: "", l: "" });
@@ -38,17 +39,33 @@ export default function ReturnPieceModal({ use, order, onClose, onDone }) {
     const [print, setPrint] = useState(true);
     const [way, setWay] = useState("dibujo");
     const [regions, setRegions] = useState([]);
+    const [suggested, setSuggested] = useState(null);
+    const [fresh, setFresh] = useState(0);     // reinicia el editor al empezar de cero
+    const [askOver, setAskOver] = useState(false);
 
     const mode = use ? use.piece_mode || (use.width_mm ? "area" : "length") : "area";
     const drawable = !!use && canDraw(use, mode);
+
+    // Los cortes de la receta que se le asignaron a esta pieza al entregarla.
+    const planCuts = (use?.cuts || []).map(c => {
+        const pl = order?.plan?.lines.find(x => x.id === c.plan_id);
+        return pl ? { w: pl.cut_width_mm, l: pl.cut_length_mm, count: c.cuts } : null;
+    }).filter(Boolean);
 
     useEffect(() => {
         if (!use) return;
         setRows([]);
         setNote("");
         setWay(drawable ? "dibujo" : "medidas");
-        setRegions(drawable ? initialRegions(use, mode) : []);
+        // El dibujo arranca con esos cortes ya acomodados; si no hay, con la pieza entera.
+        const s = drawable ? suggestLayout(use, mode, planCuts) : null;
+        setSuggested(s);
+        setRegions(drawable ? (s ? s.regions : initialRegions(use, mode)) : []);
+        setFresh(n => n + 1);
     }, [use]);
+
+    const startOver = () => { setSuggested(null); setRegions(initialRegions(use, mode)); setFresh(n => n + 1); };
+    const cutsText = planCuts.map(c => `${c.count} corte${c.count === 1 ? "" : "s"} de ${fmtDims({ width_mm: c.w, length_mm: c.l })}`).join(" y ");
 
     if (!use) return null;
 
@@ -70,7 +87,13 @@ export default function ReturnPieceModal({ use, order, onClose, onDone }) {
     const over = consumed < 0;
     const cost = Math.max(0, consumed) * (use.unit_cost || 0);
 
-    const save = async () => {
+    // Lo que pedían los cortes de la receta asignados a esta pieza. Si se va a consumir mucho
+    // más, lo típico es que sobró un pedazo y no se anotó: saldría del inventario sin estar gastado.
+    const expected = r3(planCuts.reduce((s, c) => s + c.count * (mode === "length" ? c.l / 1000 : (c.w * c.l) / 1e6), 0));
+    const excess = r3(consumed - expected);
+    const tooMuch = planCuts.length > 0 && !over && excess > 0.25 * expected && excess >= (mode === "length" ? 0.1 : 0.05);
+
+    const save = async (force = false) => {
         const remnants = [];
         for (let i = 0; !drawing && i < rows.length; i++) {
             const r = rows[i];
@@ -90,6 +113,7 @@ export default function ReturnPieceModal({ use, order, onClose, onDone }) {
         }
         if (over) return notify("Los retazos suman más que la pieza entregada", "err");
         if (consumed <= 0) return notify("No se consumió nada: si volvió sin cortar, usa Volvió sin cortar", "err");
+        if (tooMuch && !force) { setAskOver(true); return; }
 
         try {
             await api.factory.returnPiece(order.id, use.id, drawing
@@ -109,17 +133,23 @@ export default function ReturnPieceModal({ use, order, onClose, onDone }) {
     };
 
     return (
-        <Modal open={!!use} onClose={onClose} title={`Devolución de #${use.code}`} width={drawing ? 720 : 600}
+        <>
+        <Modal open={!!use} onClose={askOver ? () => {} : onClose} title={`Devolución de #${use.code}`} width={drawing ? 720 : 600}
             footer={
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="sm:mr-auto text-[13px]">
                         <span className="text-content-subtle">Se consumió </span>
                         <span className={`font-semibold tabular-nums ${over ? "text-red-600 dark:text-red-400" : "text-content dark:text-white"}`}>{fmtSize(consumed, use.unit)}</span>
                         {!over && <> <span className="text-content-subtle">· </span><Money value={fmtBase(cost, baseCurrency)} className="font-semibold text-content dark:text-white" /></>}
+                        {tooMuch && (
+                            <div className="text-[12px] text-amber-700 dark:text-amber-400">
+                                {fmtSize(excess, use.unit)} más de lo que pide la receta ({fmtSize(expected, use.unit)})
+                            </div>
+                        )}
                     </div>
                     <div className="flex flex-col-reverse sm:flex-row gap-2">
                         <button onClick={onClose} className="btn-outline h-12 sm:h-10 px-5 rounded-lg text-[13px] font-medium">Cancelar</button>
-                        <Button onClick={save} disabled={over} className="h-12 sm:h-10 px-5">Registrar devolución</Button>
+                        <Button onClick={() => save()} disabled={over} className="h-12 sm:h-10 px-5">Registrar devolución</Button>
                     </div>
                 </div>
             }>
@@ -143,7 +173,20 @@ export default function ReturnPieceModal({ use, order, onClose, onDone }) {
 
                 {drawing ? (
                 <div className="space-y-3">
-                    <CutEditor piece={use} mode={mode} value={regions} onChange={setRegions} unit={unit} setUnit={setUnit} />
+                    {suggested && (
+                        <div className="rounded-xl bg-surface-2/70 dark:bg-white/[0.04] px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                            <div className="flex-1 min-w-0 text-[13px]">
+                                <div className="font-semibold text-content dark:text-white">Sugerido según la receta: {cutsText}</div>
+                                <div className={suggested.placed < suggested.total ? "text-amber-700 dark:text-amber-400" : "text-content-subtle"}>
+                                    {suggested.placed < suggested.total
+                                        ? `Solo caben ${suggested.placed} de los ${suggested.total} cortes en esta pieza: revisa el dibujo.`
+                                        : "Si el taller lo cortó distinto, pica sobre el dibujo o empieza de cero."}
+                                </div>
+                            </div>
+                            <button onClick={startOver} className="h-[36px] px-3 rounded-lg text-[13px] font-medium btn-outline shrink-0">Empezar de cero</button>
+                        </div>
+                    )}
+                    <CutEditor key={fresh} piece={use} mode={mode} value={regions} onChange={setRegions} unit={unit} setUnit={setUnit} />
                     <div className="text-[13px]">
                         <span className="text-[12px] font-medium text-content-subtle">Retazos que vuelven</span>
                         {retazos.length === 0 ? (
@@ -214,5 +257,17 @@ export default function ReturnPieceModal({ use, order, onClose, onDone }) {
                 )}
             </div>
         </Modal>
+
+        <ConfirmModal
+            isOpen={askOver}
+            type="warning"
+            title="¿No sobró nada útil?"
+            message={`La receta pedía ${fmtSize(expected, use.unit)} de esta pieza y se van a consumir ${fmtSize(consumed, use.unit)}. Si sobró un pedazo que sirve, regístralo como retazo; si no, sale del inventario como gastado.`}
+            confirmText="Registrar igual"
+            cancelText="Revisar"
+            onConfirm={async () => { await save(true); setAskOver(false); }}
+            onCancel={() => setAskOver(false)}
+        />
+        </>
     );
 }

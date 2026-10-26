@@ -122,6 +122,59 @@ module.exports = async function getSessionSummary(id, req) {
       }));
   }
 
+  // Avances de efectivo del turno: lo que entró por el punto (avance + comisión) va con los
+  // cobros de esa cuenta, o el cierre muestra Bs.904,65 por un pase que en el papel del punto
+  // fue de Bs.2.004,65. El que pasó junto a un cobro no suma movimientos (fue el mismo pase);
+  // el suelto sí. Mismo criterio que los ingresos del arqueo: de quien lo registró.
+  const avancesEntrada = await sequelize.query(
+    `
+      SELECT i.payment_journal_id AS journal_id, pj.name AS journal_name, pj.type AS journal_type,
+        pj.color AS journal_color, c.symbol AS currency_symbol,
+        COALESCE(NULLIF(i.payment_method, ''), pj.type) AS method_code, MAX(pm.name) AS method_name,
+        COUNT(DISTINCT CASE WHEN ca.payment_id IS NULL THEN ca.id END)::int AS sueltos,
+        COALESCE(SUM(i.amount * COALESCE(i.rate, 1)), 0)::float AS total
+      FROM incomes i
+      JOIN cash_advances ca ON ca.id = i.cash_advance_id
+      JOIN payment_journals pj ON pj.id = i.payment_journal_id
+      LEFT JOIN currencies c ON c.id = pj.currency_id
+      LEFT JOIN payment_methods pm
+        ON pm.code = COALESCE(NULLIF(i.payment_method, ''), pj.type) AND pm.company_id = pj.company_id
+      WHERE i.status = 'activo' AND i.warehouse_id = :wid AND i.employee_id = :eid
+        AND i.created_at >= :openedAt AND i.created_at < :closedAt
+      GROUP BY i.payment_journal_id, pj.name, pj.type, pj.color, c.symbol, COALESCE(NULLIF(i.payment_method, ''), pj.type)
+    `,
+    {
+      type: Sequelize.QueryTypes.SELECT,
+      replacements: { wid, eid, openedAt: openedAt.toISOString(), closedAt: closedAt.toISOString() },
+    }
+  );
+  for (const a of avancesEntrada) {
+    let pj = paymentsByJournal.find((p) => p.id === a.journal_id);
+    if (!pj) {
+      pj = {
+        id: a.journal_id, journal_name: a.journal_name, journal_type: a.journal_type, journal_color: a.journal_color,
+        currency_symbol: a.currency_symbol, payment_count: 0, total: 0, methods: [],
+      };
+      paymentsByJournal.push(pj);
+    }
+    pj.total += a.total;
+    pj.advance_total = (pj.advance_total || 0) + a.total;
+    pj.payment_count += a.sueltos;
+    const m = pj.methods.find((x) => x.code === a.method_code);
+    if (m) {
+      m.total += a.total;
+      m.payment_count += a.sueltos;
+    } else {
+      pj.methods.push({
+        code: a.method_code,
+        name: a.method_name || (a.method_code || "Sin método").replace(/_/g, " "),
+        payment_count: a.sueltos,
+        total: a.total,
+      });
+    }
+  }
+  paymentsByJournal.sort((x, y) => y.total - x.total);
+
   // Lo que salió de cada gaveta como vuelto se lee de los EGRESOS de "Cambio / Vuelto", que
   // llevan una fila por caja con su monto.
   //
@@ -144,7 +197,9 @@ module.exports = async function getSessionSummary(id, req) {
   const expensesByJournal = await sequelize.query(
     `
       SELECT e.payment_journal_id AS journal_id,
-             COALESCE(SUM(e.amount * COALESCE(e.rate, 1)), 0)::float AS total_out
+             COALESCE(SUM(e.amount * COALESCE(e.rate, 1)), 0)::float AS total_out,
+             -- La parte que fue avance de efectivo: el cierre la nombra aparte.
+             COALESCE(SUM(CASE WHEN e.cash_advance_id IS NOT NULL THEN e.amount * COALESCE(e.rate, 1) END), 0)::float AS advance_out
       FROM expenses e
       WHERE e.status = 'activo'
         AND e.payment_journal_id IS NOT NULL
@@ -205,6 +260,8 @@ module.exports = async function getSessionSummary(id, req) {
       // mismo valor para no romper lo que ya lo leía.
       cash_out: cashOut,
       change_out: cashOut,
+      // De cash_out, lo que salió como avance de efectivo (billetes contra un pase del punto).
+      advance_out: parseFloat(expensesByJournal.find((c) => c.journal_id === sj.journal_id)?.advance_out || 0),
       expected_amount: parseFloat(expected.toFixed(2)),
       closing_amount: sj.closing_amount != null ? parseFloat(sj.closing_amount) : null,
       difference: sj.difference != null ? parseFloat(sj.difference) : null,

@@ -154,6 +154,28 @@ module.exports = async function getAllPayments(query, tenant = {}) {
   )).map(r => r.source_id) : []);
   for (const [id, item] of porId) item.verified = verificados.has(id);
 
+  // Avance de efectivo que pasó por el punto junto con el cobro (cash_advances.payment_id). Sin
+  // él, quien revisa los pagos del día ve un cobro de Bs.904,65 con la referencia de un pase que
+  // en el banco fue de Bs.2.004,65, y parece mal cargado. Montos en Bs, como se entregaron.
+  const avances = idsPagina.length ? await sequelize.query(
+    `SELECT ca.id, ca.payment_id, ca.cash_amount, ca.fee_pct, ca.fee_amount, ca.in_amount,
+            pj.name AS cash_journal_name, c.symbol AS cash_symbol
+       FROM cash_advances ca
+       LEFT JOIN payment_journals pj ON pj.id = ca.cash_journal_id
+       LEFT JOIN currencies c ON c.id = pj.currency_id
+      WHERE ca.status = 'activo' AND ca.payment_id IN (:ids)`,
+    { replacements: { ids: idsPagina }, type: Sequelize.QueryTypes.SELECT },
+  ) : [];
+  for (const a of avances) {
+    const item = porId.get(a.payment_id);
+    if (!item) continue;
+    item.cash_advance = {
+      id: a.id, cash_amount: parseFloat(a.cash_amount), fee_pct: parseFloat(a.fee_pct),
+      fee_amount: parseFloat(a.fee_amount), in_amount: parseFloat(a.in_amount),
+      cash_journal_name: a.cash_journal_name, cash_symbol: a.cash_symbol || null,
+    };
+  }
+
   const data = pagina.map(unidad => {
     const partes = unidad.ids.map(id => porId.get(id)).filter(Boolean);
     if (!partes.length) return null;
@@ -219,11 +241,23 @@ module.exports = async function getAllPayments(query, tenant = {}) {
     subQuery: false,
   });
 
+  // Las filas con avance muestran el pase completo (cobro + avance + comisión): el pie suma lo
+  // mismo, o no cuadraría con lo que se ve. Son los ingresos del avance, en la misma cuenta y
+  // moneda que su cobro.
+  const idsFiltro = unidadesRaw.map(p => p.id);
+  const [avanceTot] = idsFiltro.length ? await sequelize.query(
+    `SELECT COALESCE(SUM(i.amount), 0)::float AS base, COALESCE(SUM(i.amount * COALESCE(i.rate, 1)), 0)::float AS local
+       FROM incomes i
+       JOIN cash_advances ca ON ca.id = i.cash_advance_id
+      WHERE i.status = 'activo' AND ca.status = 'activo' AND ca.payment_id IN (:ids)`,
+    { replacements: { ids: idsFiltro }, type: Sequelize.QueryTypes.SELECT },
+  ) : [];
+
   return {
     data,
     total: count,
-    sum_base:       parseFloat(totals?.sum_base  || 0),
-    sum_local:      parseFloat(totals?.sum_local || 0),
+    sum_base:       parseFloat(totals?.sum_base  || 0) + (avanceTot?.base  || 0),
+    sum_local:      parseFloat(totals?.sum_local || 0) + (avanceTot?.local || 0),
     currency_count: parseInt(totals?.currency_count || 0, 10),
     currency_id:    totals?.currency_id ?? null,
   };

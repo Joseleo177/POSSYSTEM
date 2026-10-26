@@ -28,6 +28,63 @@ export const initialRegions = (piece, mode) => (mode !== "length" && hasShape(pi
     ? piece.shape.map(s => ({ x: s.x, y: s.y, dx: s.dx, dy: s.dy, kind: "usado" }))
     : [{ x: 0, y: 0, dx: piece.length_mm, dy: mode === "length" ? 0 : piece.width_mm, kind: "usado" }]);
 
+// Lo que sobra con un lado de menos de 10 cm no se guarda como retazo: se cuenta como usado.
+const MIN_USEFUL = 100;
+
+/**
+ * El dibujo sugerido al devolver: los cortes que la receta le asignó a la pieza (`cuts`:
+ * [{ w, l, count }] en mm; sin w en tubos), acomodados como los picaría la cizalla.
+ *
+ * Por columnas a lo largo de la pieza: cada tipo de corte, del más grande al más chico, va en
+ * columnas de su largo con tantos cortes apilados a lo ancho como quepan, probando el corte
+ * girado y quedándose con lo que acomode más usando menos largo. Lo que sobra en cada columna
+ * y al final es retazo si sirve. Es una sugerencia: el taller pudo cortarlo distinto.
+ *
+ * Devuelve { regions, placed, total }, o null si no hay nada que sugerir.
+ */
+export function suggestLayout(piece, mode, cuts) {
+    if (!canDraw(piece, mode) || (mode !== "length" && hasShape(piece)) || !cuts?.length) return null;
+    const length = mode === "length";
+    const L = piece.length_mm, W = length ? 0 : piece.width_mm;
+    const keep = (r) => r.dx >= MIN_USEFUL && (length || r.dy >= MIN_USEFUL);
+    const regions = [];
+    const total = cuts.reduce((s, c) => s + c.count, 0);
+    let x = 0, placed = 0, lastRest = null;
+
+    const rest = (r) => {
+        // Sobrantes de columnas vecinas a la misma altura forman una sola tira.
+        if (lastRest && lastRest.y === r.y && lastRest.dy === r.dy && lastRest.x + lastRest.dx === r.x) lastRest.dx += r.dx;
+        else { lastRest = { ...r }; regions.push(lastRest); }
+    };
+
+    for (const c of [...cuts].sort((a, b) => b.l * (b.w || 1) - a.l * (a.w || 1))) {
+        let left = c.count;
+        if (length) {
+            while (left > 0 && x + c.l <= L) { regions.push({ x, y: 0, dx: c.l, dy: 0, kind: "usado" }); x += c.l; left--; placed++; }
+            continue;
+        }
+        // a: lo que ocupa a lo ancho; b: a lo largo.
+        const opts = [[c.w, c.l], [c.l, c.w]].filter(([a]) => a > 0 && a <= W).map(([a, b]) => {
+            const per = Math.floor(W / a);
+            const fits = Math.min(left, Math.floor((L - x) / b) * per);
+            return { a, b, per, fits, need: Math.ceil(left / per) * b };
+        });
+        if (!opts.length) continue;
+        opts.sort((p, q) => q.fits - p.fits || p.need - q.need);
+        const { a, b, per } = opts[0];
+        while (left > 0 && x + b <= L) {
+            const n = Math.min(left, per);
+            for (let k = 0; k < n; k++) regions.push({ x, y: k * a, dx: b, dy: a, kind: "usado" });
+            if (W - n * a > 0) rest({ x, y: n * a, dx: b, dy: W - n * a });
+            x += b; left -= n; placed += n;
+        }
+    }
+    if (!placed) return null;
+    if (x < L) regions.push({ x, y: 0, dx: L - x, dy: W });
+    for (const r of regions) if (!r.kind) r.kind = keep(r) ? "retazo" : "usado";
+    return { regions, placed, total };
+}
+
 const areaOf = (r) => r.dx * r.dy;
 const touches = (a, b, length) => {
     if (length) return a.x + a.dx === b.x || b.x + b.dx === a.x;

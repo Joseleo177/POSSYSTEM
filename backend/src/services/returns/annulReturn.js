@@ -212,7 +212,7 @@ module.exports = async function annulReturn(returnId, { employeeId }, req) {
       // esa nota descontaba, no el que se perdonó.
       nuevoEstado = resolveSaleStatus({
         saleTotal, paid: pagado, returned: devuelto,
-        forgiven: sale.forgiven_amount, hasInvoice: !!sale.invoice_number,
+        forgiven: sale.forgiven_amount, forgivenFx: sale.fx_forgiven, hasInvoice: !!sale.invoice_number,
         tolerance: await saleSettleTolerance(sale, t),
       });
       await sale.update({ status: nuevoEstado }, { transaction: t });

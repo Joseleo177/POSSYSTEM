@@ -1,5 +1,6 @@
 const { Sale, sequelize } = require("../../models");
 const assignInvoiceNumber = require("./assignInvoiceNumber");
+const { quitarTasaDivisas } = require("./fxRate");
 
 // Confirma una venta entregada a crédito: le asigna su correlativo fiscal y la deja en
 // 'pendiente' (por cobrar), sin registrar ningún pago.
@@ -33,11 +34,20 @@ module.exports = async function confirmCreditSale(saleId, req) {
       throw e;
     }
 
+    // La tasa de divisas es de contado: a crédito la factura vuelve a precio normal, antes de
+    // numerarse (ver quitarTasaDivisas). Un borrador no tiene cobros, así que no hay en divisas.
+    const fxQuitada = await quitarTasaDivisas(sale, t);
+
     await assignInvoiceNumber(sale, t);
     await sale.update({ status: "pendiente" }, { transaction: t });
 
     await t.commit();
-    return { data: { id: sale.id, status: "pendiente", invoice_number: sale.invoice_number } };
+    return {
+      data: {
+        id: sale.id, status: "pendiente", invoice_number: sale.invoice_number,
+        fx_quitada: fxQuitada, total: parseFloat(sale.total),
+      },
+    };
   } catch (err) {
     await t.rollback();
     throw err;

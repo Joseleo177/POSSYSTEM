@@ -16,6 +16,9 @@ router.post("/",         permit("sales.create"), warehouseAccess(req => req.body
 router.post("/offline",  permit("sales.create"), warehouseAccess(req => req.body?.warehouse_id), ctrl.syncOffline);
 router.patch("/:id",     permit("sales.edit"), ctrl.update);
 router.post("/:id/credit", permit("sales.credit"), ctrl.confirmCredit);
+// Quitar la tasa de divisas a una venta de contado que al final paga todo en Bs. Lo puede
+// quien cobra: solo devuelve la venta a su precio normal, nunca la rebaja.
+router.delete("/:id/fx-rate", permit("sales.create"), ctrl.removeFxRate);
 router.post("/:id/accept-order", permit("sales.create"), warehouseAccess(req => req.body?.warehouse_id), ctrl.acceptOrder);
 // Tomar y soltar una cuenta en espera. Llevan el mismo permiso que cobrar porque son parte
 // de atenderla, no una acción administrativa. Liberar la cuenta de OTRO cajero sí exige ser

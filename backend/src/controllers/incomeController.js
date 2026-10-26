@@ -4,6 +4,7 @@ const { toLocalDate, endOfLocalDay } = require('../utils/localDate');
 const { resolveMethod } = require("../utils/journalMethod");
 const { visibleWarehouseIds, assertWarehouseAccess } = require('../middleware/auth');
 const { assertJournalsInWarehouse } = require('../utils/journalWarehouse');
+const { anularAvance } = require('../services/cashAdvances');
 
 exports.getAll = async (req, res, next) => {
   try {
@@ -149,6 +150,11 @@ exports.voidIncome = async (req, res, next) => {
     if (!income) return res.status(404).json({ ok: false, message: 'Ingreso no encontrado' });
     await assertWarehouseAccess(req, income.warehouse_id, { optional: true });
     if (income.status === 'anulado') return res.status(400).json({ ok: false, message: 'Ya está anulado' });
+    // Parte de un avance de efectivo: se anula el avance entero (el egreso de la caja también).
+    if (income.cash_advance_id) {
+      await anularAvance(income.cash_advance_id);
+      return res.json({ ok: true, message: 'Avance de efectivo anulado completo (egreso, avance y comisión)' });
+    }
     await income.update({ status: 'anulado' });
     res.json({ ok: true, message: 'Ingreso anulado' });
   } catch (err) { next(err); }

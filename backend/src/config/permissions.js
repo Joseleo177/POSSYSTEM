@@ -27,6 +27,13 @@ const MODULES = [
       // Descuento global y por línea. El tope para quien no es administrador sale de
       // Configuración → Punto de venta (discount_max_pct).
       { key: 'discount', label: 'Dar descuentos' },
+      // Cobrar las divisas por encima de la tasa oficial (ver services/sales/fxRate.js). No
+      // pasa por el tope de descuentos: la diferencia la fija la tasa que se teclea.
+      { key: 'fx',       label: 'Cobrar a tasa de divisas' },
+      // Entregar efectivo de la caja contra un pago por punto o pago móvil con comisión (ver
+      // services/cashAdvances). Saca billetes de la gaveta: facultad nueva, solo el admin de
+      // entrada.
+      { key: 'advance',  label: 'Dar avances de efectivo' },
       { key: 'edit',     label: 'Editar cuenta abierta' },
       { key: 'void',     label: 'Anular venta' },
       { key: 'credit',   label: 'Entregar a crédito' },

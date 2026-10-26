@@ -29,6 +29,15 @@ function normalizeSale(sale) {
         paid: parseFloat(sale.paid || 0),
         change: parseFloat(sale.change || 0),
         discount: parseFloat(sale.discount_amount || sale.discount || 0),
+        // Parte del descuento que salió de la tasa de divisas (ya incluida en `discount`).
+        fxDiscount: parseFloat(sale.fx_discount || 0),
+        // Tasa de divisas aplicada al COBRAR una factura que no la traía: lo rebajado quedó
+        // exonerado (el total emitido no cambia). Se descuenta en el papel como "Pago en divisas".
+        fxPerdon: parseFloat(sale.fx_forgiven || 0),
+        // Tasa de divisas de la factura y la del sistema con que se calculó la rebaja: el papel
+        // en bolívares se imprime a esta última (ver receiptCurrency).
+        fxRate: parseFloat(sale.fx_rate || 0),
+        fxBaseRate: parseFloat(sale.fx_base_rate || 0),
         // Recargo de cabecera (propina, servicio, delivery). Va discriminado en el papel:
         // el cliente tiene que poder ver qué parte del total no es mercancía.
         charge: parseFloat(sale.service_charge || 0),
@@ -169,7 +178,11 @@ function paymentSummary(s) {
 
 // displayCurrency: la moneda no-base (VES). Todos los montos del recibo se convierten a ella.
 // Helper para calcular precios y subtotals del recibo alineado con el carrito POS
-function calcReceiptTotals(s, rate, sym) {
+// `sinRebajaFx`: papel en bolívares de una factura con tasa de divisas, impreso a la tasa del
+// sistema (ver receiptCurrency). A esa tasa no hubo rebaja —el cliente paga los Bs de siempre—,
+// así que ni el descuento de divisas ni la rebaja aplicada al cobrar se restan: solo el
+// descuento que dio la caja.
+function calcReceiptTotals(s, rate, sym, { sinRebajaFx = false } = {}) {
     const isBs = rate > 1;
     const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
 
@@ -213,15 +226,18 @@ function calcReceiptTotals(s, rate, sym) {
     });
 
     let subtotalBs = 0;
-    let discountBs = isBs ? round2(s.discount * rate) : s.discount;
+    const descuento = sinRebajaFx ? Math.max(0, s.discount - (s.fxDiscount || 0)) : s.discount;
+    let discountBs = isBs ? round2(descuento * rate) : descuento;
     // El recargo se convierte una sola vez, al final, igual que el descuento: no es una línea
     // que se multiplique por cantidad. Mismo criterio que saleTotalAtRate y que el backend.
     const chargeBs = isBs ? round2(s.charge * rate) : s.charge;
+    // Lo exonerado por pagar en divisas: resta igual que un descuento, convertido una vez.
+    const fxPerdonBs = !sinRebajaFx && s.fxPerdon > 0 ? (isBs ? round2(s.fxPerdon * rate) : s.fxPerdon) : 0;
     let totalBs = 0;
 
     if (isBs) {
         subtotalBs = items.reduce((acc, i) => acc + i.subtotalBs, 0);
-        totalBs = Math.max(0, subtotalBs - discountBs + chargeBs);
+        totalBs = Math.max(0, subtotalBs - discountBs + chargeBs - fxPerdonBs);
     } else {
         // En divisas el subtotal sale de las mismas líneas que la pista en Bs —ya redondeadas
         // arriba—. Antes se derivaba de total_precise, que es la suma bruta de líneas sin el
@@ -230,7 +246,7 @@ function calcReceiptTotals(s, rate, sym) {
         subtotalBs = items.length
             ? items.reduce((acc, i) => acc + i.subtotalBs, 0)
             : Math.max(0, s.total + s.discount - s.charge);
-        totalBs = Math.max(0, subtotalBs - discountBs + chargeBs);
+        totalBs = Math.max(0, subtotalBs - discountBs + chargeBs - fxPerdonBs);
     }
 
     // Lo abonado y lo que queda debiendo salen de la MISMA pista que el TOTAL.
@@ -249,11 +265,23 @@ function calcReceiptTotals(s, rate, sym) {
     const returnedBs = isBs ? round2(s.returned * rate) : s.returned;
     const balanceBs  = Math.max(0, round2(totalBs - paidBs - returnedBs));
 
+    // Papel en divisas de una factura con tasa de divisas: la rebaja se nombra aparte del
+    // descuento de la caja, para que el cliente vea por qué pagó menos. En bolívares va junta:
+    // ahí no hubo rebaja que explicar (a esa tasa, en Bs se paga lo de siempre).
+    const manual = Math.max(0, s.discount - (s.fxDiscount || 0));
+    const fx = !isBs && s.fxDiscount > 0
+        ? { manual, fmtManual: fmt(manual, sym), fmtFx: fmt(s.fxDiscount, sym) }
+        : null;
+
     return {
         items,
         subtotalBs,
         fmtSubtotal: fmt(subtotalBs, sym),
+        discountBs,
         fmtDiscount: fmt(discountBs, sym),
+        fx,
+        fxPerdonBs,
+        fmtFxPerdon: fmt(fxPerdonBs, sym),
         chargeBs,
         fmtCharge: fmt(chargeBs, sym),
         fmtTotal: fmt(totalBs, sym),
@@ -324,7 +352,7 @@ function ajusteRedondeo(totals, cur) {
 // un renglón "Redondeo" en el comprobante (01-10-2026). Así el total sigue siendo lo pagado y
 // subtotal − descuento + recargo sigue dando el total.
 function totalesDelPapel(s, cur) {
-    const calc = calcReceiptTotals(s, cur.rate, cur.sym);
+    const calc = calcReceiptTotals(s, cur.rate, cur.sym, { sinRebajaFx: !!cur.sinRebajaFx });
     const ajuste = ajusteRedondeo(calc, cur);
     if (!ajuste) return calc;
     const r2 = n => Math.round(n * 100) / 100;
@@ -363,6 +391,25 @@ export function receiptCurrency(s, displayCurrency, baseCurrency) {
     const saldada = ["pagado", "exonerado"].includes(String(s.status || "").toLowerCase());
 
     if (!huboBolivares || !saldada) return enDivisas;
+
+    // Factura con tasa de divisas: sus bolívares entraron a la tasa especial, y a esa tasa el
+    // papel salía con los precios inflados y un descuento grande —un "subtotal" que el cliente
+    // nunca vio en la caja—. Se imprime a la tasa del sistema con que se calculó la rebaja: a
+    // ella los precios son los de siempre y, sin rebaja que restar, el total es lo pagado. Lo
+    // recibido (cada dólar vale la tasa especial) se pasa a Bs con `ratePagos`. Los céntimos de
+    // diferencia entre el total armado línea por línea y lo pagado se absorben como en un abono
+    // a varias tasas (`promedio` + `objetivoBs`, ver ajusteRedondeo).
+    if (s.fxRate > 0 && s.fxBaseRate > 1) {
+        const round2 = n => Math.round(n * 100) / 100;
+        const objetivoBs = round2(pagos.reduce((acc, p) => {
+            const r = parseFloat(p.exchange_rate) > 1 ? parseFloat(p.exchange_rate) : s.fxRate;
+            return acc + (parseFloat(p.amount) - parseFloat(p.change_given || 0)) * r;
+        }, 0));
+        return {
+            rate: s.fxBaseRate, ratePagos: s.fxRate, sinRebajaFx: true,
+            sym: displayCurrency?.symbol || "Ref.", promedio: true, objetivoBs,
+        };
+    }
 
     // Abonada a tasas distintas (una parte hoy, el resto otra semana): el papel va igual en
     // bolívares, a la tasa PROMEDIO de lo cobrado en bolívares —los Bs que entraron entre los
@@ -416,6 +463,8 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
     const s = normalizeSale(sale);
     const cur = receiptCurrency(s, displayCurrency, baseCurrency);
     const { rate, sym } = cur;
+    // Lo recibido se pasa a Bs a la tasa a la que entró: la de divisas, en una factura con ella.
+    const ratePagos = cur.ratePagos || rate;
     const totals = totalesDelPapel(s, cur);
     const pago = paymentSummary(s);
     const bsSym = displayCurrency?.symbol || "Bs.";
@@ -536,8 +585,11 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
 
     <div class="totals">
         <div class="total-row"><span>SUBTOTAL</span><span>${totals.fmtSubtotal}</span></div>
-        ${s.discount > 0 ? `<div class="total-row discount"><span>DESCUENTO</span><span>-${totals.fmtDiscount}</span></div>` : ""}
+        ${totals.discountBs > 0 ? (totals.fx
+            ? `${totals.fx.manual > 0.000001 ? `<div class="total-row discount"><span>DESCUENTO</span><span>-${totals.fx.fmtManual}</span></div>` : ""}<div class="total-row discount"><span>PAGO EN DIVISAS</span><span>-${totals.fx.fmtFx}</span></div>`
+            : `<div class="total-row discount"><span>DESCUENTO</span><span>-${totals.fmtDiscount}</span></div>`) : ""}
         ${s.charge > 0 ? `<div class="total-row"><span>${s.chargeLabel}</span><span>+${totals.fmtCharge}</span></div>` : ""}
+        ${totals.fxPerdonBs > 0 ? `<div class="total-row discount"><span>PAGO EN DIVISAS</span><span>-${totals.fmtFxPerdon}</span></div>` : ""}
         <div class="total-row big"><span>TOTAL</span><span>${totals.fmtTotal}</span></div>
         ${totals.returnedBs > 0 ? `<div class="total-row"><span>DEVUELTO (N/C)</span><span>-${totals.fmtReturned}</span></div>` : ""}
     </div>
@@ -549,11 +601,11 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
         <div class="total-row"><span>&nbsp;&nbsp;${c.nombre}${c.fecha ? ` ${c.fecha}` : ""}</span><span>${fmt(c.monto, c.enBs ? bsSym : refSym)}</span></div>
         ${c.enBs ? `<div class="total-row"><span>&nbsp;&nbsp;&nbsp;&nbsp;Tasa ${fmtTasa(c.tasa)}</span><span></span></div>` : ""}`).join("")
             : pago.canales.length > 1
-            ? pago.canales.map(c => `<div class="total-row"><span>&nbsp;&nbsp;${c.nombre}</span><span>${fmt(c.amount * rate, sym)}</span></div>`).join("")
+            ? pago.canales.map(c => `<div class="total-row"><span>&nbsp;&nbsp;${c.nombre}</span><span>${fmt(c.amount * ratePagos, sym)}</span></div>`).join("")
             : ""}
         ${pago.vuelto > 0 ? `
-        <div class="total-row"><span>RECIBIDO</span><span>${fmt(pago.recibido * rate, sym)}</span></div>
-        <div class="total-row"><span>CAMBIO</span><span>${fmt(pago.vuelto * rate, sym)}</span></div>` : ""}
+        <div class="total-row"><span>RECIBIDO</span><span>${fmt(pago.recibido * ratePagos, sym)}</span></div>
+        <div class="total-row"><span>CAMBIO</span><span>${fmt(pago.vuelto * ratePagos, sym)}</span></div>` : ""}
         ${pago.etiqueta ? `<div class="total-row"><span>ESTADO</span><span>${pago.etiqueta.toUpperCase()}</span></div>` : ""}
         ${s.amount_paid > 0 && pago.pendiente ? `<div class="total-row"><span>ABONADO</span><span>${totals.fmtPaid}</span></div>` : ""}
         ${pago.pendiente && s.balance > 0 && totals.balanceBs > 0 ? `<div class="total-row big"><span>QUEDA DEBIENDO</span><span>${totals.fmtBalance}</span></div>` : ""}
@@ -641,6 +693,8 @@ export default function ReceiptModal({ open, onClose, sale }) {
         ? { rate: 1, sym: baseCurrency?.symbol || "Ref." }
         : receiptCurrency(s, displayCurrency, baseCurrency);
     const { rate, sym } = cur;
+    // Lo recibido se pasa a Bs a la tasa a la que entró: la de divisas, en una factura con ella.
+    const ratePagos = cur.ratePagos || rate;
     const totals = totalesDelPapel(s, cur);
     const pago = paymentSummary(s);
 
@@ -714,11 +768,15 @@ export default function ReceiptModal({ open, onClose, sale }) {
 
             {/* Totales */}
             <div className="mb-3">
-                {(s.discount > 0 || s.charge > 0) && (
+                {(totals.discountBs > 0 || s.charge > 0 || totals.fxPerdonBs > 0) && (
                     <>
                         <Linea label="Subtotal"><Money value={totals.fmtSubtotal} /></Linea>
-                        {s.discount > 0 && <Linea label="Descuento"><Money value={`-${totals.fmtDiscount}`} /></Linea>}
+                        {totals.discountBs > 0 && (totals.fx ? (<>
+                            {totals.fx.manual > 0.000001 && <Linea label="Descuento"><Money value={`-${totals.fx.fmtManual}`} /></Linea>}
+                            <Linea label="Pago en divisas"><Money value={`-${totals.fx.fmtFx}`} /></Linea>
+                        </>) : <Linea label="Descuento"><Money value={`-${totals.fmtDiscount}`} /></Linea>)}
                         {s.charge > 0 && <Linea label={s.chargeLabel.charAt(0).toUpperCase() + s.chargeLabel.slice(1).toLowerCase()}><Money value={`+${totals.fmtCharge}`} /></Linea>}
+                        {totals.fxPerdonBs > 0 && <Linea label="Pago en divisas"><Money value={`-${totals.fmtFxPerdon}`} /></Linea>}
                     </>
                 )}
                 <div className="flex items-baseline justify-between gap-3 pt-1.5">
@@ -751,15 +809,15 @@ export default function ReceiptModal({ open, onClose, sale }) {
                 ))}
                 {!pago.multiTasa && pago.canales.length > 1 && pago.canales.map(c => (
                     <Linea key={c.nombre} label={<span className="pl-3">{toNameCase(c.nombre)}</span>}>
-                        <Money value={fmt(c.amount * rate, sym)} />
+                        <Money value={fmt(c.amount * ratePagos, sym)} />
                     </Linea>
                 ))}
                 {/* Lo que entregó el cliente y lo que se le devolvió: las dos cifras que
                     verifica contra el dinero que tiene en la mano al recibir el ticket. */}
                 {pago.vuelto > 0 && (
                     <>
-                        <Linea label="Recibido"><Money value={fmt(pago.recibido * rate, sym)} /></Linea>
-                        <Linea label="Vuelto"><Money value={fmt(pago.vuelto * rate, sym)} /></Linea>
+                        <Linea label="Recibido"><Money value={fmt(pago.recibido * ratePagos, sym)} /></Linea>
+                        <Linea label="Vuelto"><Money value={fmt(pago.vuelto * ratePagos, sym)} /></Linea>
                     </>
                 )}
                 {pago.etiqueta && (

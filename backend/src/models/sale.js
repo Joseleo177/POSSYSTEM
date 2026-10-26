@@ -20,6 +20,17 @@ module.exports = (sequelize, DataTypes) => {
     // en el reporte de productos vendidos.
     service_charge:       { type: DataTypes.DECIMAL(14, 5), allowNull: false, defaultValue: 0 },
     service_charge_label: { type: DataTypes.STRING(40), allowNull: true },
+    // Cobro a tasa de divisas (ver services/sales/fxRate.js): la tasa especial con que se
+    // cobran los bolívares de esta factura, su moneda, y la parte de discount_amount que salió
+    // de ella. Sin tasa, la factura se cobra a la del sistema como siempre.
+    fx_rate:        { type: DataTypes.DECIMAL(12, 6), allowNull: true },
+    fx_currency_id: { type: DataTypes.INTEGER, allowNull: true },
+    fx_discount:    { type: DataTypes.DECIMAL(14, 5), allowNull: false, defaultValue: 0 },
+    // Tasa del sistema con que se calculó la rebaja: el ticket en Bs se imprime a ella.
+    fx_base_rate:   { type: DataTypes.DECIMAL(12, 6), allowNull: true },
+    // Parte de forgiven_amount que es rebaja por pagar en divisas (tasa aplicada al cobrar), no
+    // perdón de deuda: ver migración 20261028110000.
+    fx_forgiven:    { type: DataTypes.DECIMAL(14, 6), allowNull: false, defaultValue: 0 },
     payment_method: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'efectivo' },
     payment_method_id: { type: DataTypes.INTEGER },
     payment_journal_id: { type: DataTypes.INTEGER },

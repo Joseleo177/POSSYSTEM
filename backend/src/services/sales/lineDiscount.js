@@ -51,11 +51,7 @@ async function topeDescuento(company_id, transaction) {
 //
 // `lineas`: [{ nombre, bruto, descuento }] solo con los descuentos MANUALES —las promociones
 // las configura quien administra, no se controlan aquí—. `subtotal` y `global` en moneda base.
-async function assertDescuentosPermitidos(req, { lineas = [], subtotal = 0, global = 0 }, transaction) {
-  const hayManual = lineas.some(l => l.descuento > 0);
-  if (!hayManual && !(global > 0)) return;
-  if (req?.is_superuser) return;
-
+async function permisosVigentes(req, transaction) {
   let perms = req?.employee?.permissions;
   if (req?.employee?.id) {
     const emp = await Employee.findByPk(req.employee.id, {
@@ -63,6 +59,15 @@ async function assertDescuentosPermitidos(req, { lineas = [], subtotal = 0, glob
     });
     if (emp?.Role) perms = emp.Role.permissions;
   }
+  return perms;
+}
+
+async function assertDescuentosPermitidos(req, { lineas = [], subtotal = 0, global = 0 }, transaction) {
+  const hayManual = lineas.some(l => l.descuento > 0);
+  if (!hayManual && !(global > 0)) return;
+  if (req?.is_superuser) return;
+
+  const perms = await permisosVigentes(req, transaction);
   if (perms?.all) return;
   if (!hasPermission(perms, "sales.discount")) throw err("Tu usuario no tiene permiso para dar descuentos", 403);
 
@@ -98,4 +103,4 @@ function netoLineaEnTasa(item, rate) {
   return round2((price - parseFloat(item.discount || 0)) * r) * qty;
 }
 
-module.exports = { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos, netoLineaEnTasa, MAX_SETTING_KEY };
+module.exports = { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos, permisosVigentes, netoLineaEnTasa, MAX_SETTING_KEY };

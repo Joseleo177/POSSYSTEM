@@ -40,6 +40,25 @@ async function liveReturnedTotal(saleId, transaction) {
 }
 
 /**
+ * Qué parte del precio de sus líneas se cobró de verdad, para valorar lo que se devuelve.
+ *
+ * El descuento de la venta (discount_amount: el que da la caja y el de la tasa de divisas) y la
+ * rebaja por pagar en divisas aplicada al cobrar (fx_forgiven) rebajan la factura entera, no una
+ * línea. La nota de crédito valoraba solo con el precio de la línea y devolvía de más: una venta
+ * de $10 cobrada en $8 a tasa de divisas, devuelta completa, daba una NC de $10. Cada línea
+ * devuelta se lleva su parte proporcional de esa rebaja. Espejo de factorDevolucion en
+ * frontend/src/helpers/currency.js (ReturnModal), que muestra el monto antes de confirmar.
+ */
+function factorDevolucion(sale, saleItems) {
+  const neto = (saleItems || []).reduce(
+    (acc, si) => acc + (parseFloat(si.price) - parseFloat(si.discount || 0)) * parseFloat(si.quantity || 0), 0
+  );
+  const rebaja = (parseFloat(sale?.discount_amount) || 0) + (parseFloat(sale?.fx_forgiven) || 0);
+  if (!(neto > 0) || !(rebaja > 0)) return 1;
+  return Math.min(1, Math.max(0, (neto - rebaja) / neto));
+}
+
+/**
  * Lo que la factura todavía debe, ANTES de la devolución que se está registrando.
  *
  * Una nota de crédito sobre una factura a crédito rebaja primero esa deuda: es mercancía que
@@ -80,7 +99,7 @@ async function refreshSaleStatus(sale, { fullyReturned }, transaction) {
     // getSaleBalance ya suma lo exonerado; resolveSaleStatus lo quiere aparte.
     paid: (await getSaleBalance(sale.id, transaction)) - forgiven,
     returned: await liveReturnedTotal(sale.id, transaction),
-    forgiven,
+    forgiven, forgivenFx: sale.fx_forgiven,
     hasInvoice: !!sale.invoice_number,
     tolerance: await saleSettleTolerance(sale, transaction),
   });
@@ -214,6 +233,7 @@ function defaultSurplusMode({ refund, customerId }) {
 
 module.exports = {
   excludeAnnulledReturns,
+  factorDevolucion,
   liveReturnedTotal,
   saleDebt,
   refreshSaleStatus,

@@ -5,6 +5,7 @@ const { toLocalDate } = require("../../utils/localDate");
 const { SETTLED_SQL, SETTLED_STATUSES, RECEIVABLE_STATUSES } = require("../../utils/saleBalance");
 const { creditAvailable, addCreditMovement } = require("./creditLedger");
 const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
+const { FX_PAGO_DIVISAS_SQL } = require("../sales/fxRate");
 
 // Deuda, gasto y cantidad de compras de un contacto, acotados a las sucursales del empleado.
 // El contacto es de la empresa —el mismo cliente compra en varias sucursales— pero sus
@@ -257,6 +258,8 @@ async function getCustomerPurchases(id, { limit = 50, offset = 0, warehouse_id }
             FROM payments p JOIN payment_journals pj ON pj.id = p.payment_journal_id
            WHERE p.sale_id = "Sale"."id"
         )`), 'paid_journals'],
+        // Con tasa de divisas: si ya entró algún cobro en divisas (ver sales/fxRate.js).
+        [Sequelize.literal(FX_PAGO_DIVISAS_SQL), 'fx_pago_divisas'],
       ]
     },
     include: [

@@ -178,9 +178,16 @@ export default function FinanceReport() {
                                 <div className="px-4 pt-4 shrink-0">
                                     <SectionHeader
                                         title="Ingresos por día y forma de pago"
-                                        sub={s.change_base > 0
-                                            ? `Cobros de ventas menos el vuelto entregado (${fmtB(s.change_base)} en el período)`
-                                            : "Cobros de ventas por la fecha en que entró el dinero"}
+                                        sub={[
+                                            s.change_base > 0
+                                                ? `Cobros de ventas menos el vuelto entregado (${fmtB(s.change_base)} en el período)`
+                                                : "Cobros de ventas por la fecha en que entró el dinero",
+                                            // El avance sale de la columna del efectivo y entra en la del punto con su comisión.
+                                            s.advance_out_base > 0
+                                                // El que va en una factura entra con su cobro; solo el suelto tiene ingreso propio.
+                                                ? `avances de efectivo: ${fmtB(s.advance_out_base)} salieron en billetes${s.advance_in_base > 0 ? ` y ${fmtB(s.advance_in_base)} entraron sin factura` : ""}`
+                                                : null,
+                                        ].filter(Boolean).join("; ")}
                                     />
                                 </div>
 

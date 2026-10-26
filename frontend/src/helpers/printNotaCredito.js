@@ -24,11 +24,13 @@ export function printNotaCreditoDoc(returnData, sale, companyInfo, baseCurrency,
     const total = parseFloat(returnData.total || 0);
     const ncLabel = returnData.nc_number || `NC-${returnData.return_id}`;
 
+    // El unitario es el acreditado (subtotal ÷ cantidad): con el descuento de la venta repartido
+    // en lo devuelto (factorDevolucion), el precio de lista no cuadraba con su propia línea.
     const itemsRows = (returnData.items || []).map(i => `
         <tr>
             <td><div class="item-name">${i.name}</div></td>
             <td class="td-center">${fmtQty(i.qty)}</td>
-            <td class="td-right">${fmtP(i.price)}</td>
+            <td class="td-right">${fmtP(parseFloat(i.qty) > 0 ? parseFloat(i.subtotal) / parseFloat(i.qty) : i.price)}</td>
             <td class="td-right"><b>${fmtP(i.subtotal)}</b></td>
         </tr>
     `).join("");

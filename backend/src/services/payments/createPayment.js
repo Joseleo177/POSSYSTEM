@@ -1,14 +1,16 @@
 const { Payment, Sale, SaleItem, sequelize, getSaleBalance, Op } = require("./shared");
-const { netoLineaEnTasa } = require("../sales/lineDiscount");
+const { netoLineaEnTasa, permisosVigentes } = require("../sales/lineDiscount");
 const { PAYMENT_TOLERANCE, saleSettleTolerance } = require("../../utils/saleBalance");
 const { Expense, ExpenseCategory, PaymentJournal, Currency, Customer } = require("../../models");
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
-const { assertWarehouseAccess } = require("../../middleware/auth");
+const { assertWarehouseAccess, hasPermission } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
 const { creditAvailable, addCreditMovement } = require("../customers/creditLedger");
 const { assertJournalsInWarehouse } = require("../../utils/journalWarehouse");
 const { resolveMethod } = require("../../utils/journalMethod");
 const { liveReturnedTotal } = require("../returns/shared");
+const { tasaDivisasDeCaja, exigirPagoEnDivisas, exigirCobroDivisasActivo } = require("../sales/fxRate");
+const { registrarAvance } = require("../cashAdvances");
 
 // Los cobros recién registrados, con el nombre de su caja ya resuelto.
 //
@@ -71,7 +73,7 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
       sale_id,
       amount,
       currency_id,
-      exchange_rate,
+      exchange_rate: tasaPedida,
       payment_journal_id,
       payment_method,     // por qué método entró (pago móvil, punto…): la cuenta acepta varios
       employee_id,
@@ -108,6 +110,16 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
     if (sale.status === "exonerado") throw new Error("Esta factura fue exonerada: no tiene saldo por cobrar");
     if (sale.status === "anulado") throw new Error("Esta factura está anulada");
     if (sale.status === "devuelto") throw new Error("Esta factura fue devuelta en su totalidad, no tiene saldo por cobrar");
+
+    // Factura con tasa de divisas: lo que entre en bolívares va a esa tasa, siempre (ver
+    // services/sales/fxRate.js). `amount` llega en base y se calculó con la tasa que dice el
+    // cobro; si no es la de la factura —una pantalla vieja—, los bolívares guardados no serían
+    // los recibidos, así que se rechaza en vez de corregirlo en silencio.
+    const tasaFx = await tasaDivisasDeCaja(sale, payment_journal_id || sale.payment_journal_id, t);
+    if (tasaFx && Math.abs((parseFloat(tasaPedida) || 0) - tasaFx) > 0.000001) {
+      throw new Error(`Esta factura se cobra a tasa de divisas (${tasaFx.toFixed(2)}). Recarga la página e intenta de nuevo.`);
+    }
+    const exchange_rate = tasaFx || tasaPedida;
 
     // Asignar correlativo al primer pago de una venta que aún no lo tiene: borrador
     // (contado) o cuenta en espera. Una venta ya entregada a crédito llega con status
@@ -290,7 +302,10 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
         include: [{ model: Currency, attributes: ["id", "exchange_rate"] }],
         transaction: t,
       });
-      const changeRate = parseFloat(changeJournal?.Currency?.exchange_rate || 1);
+      // El vuelto en bolívares de una factura con tasa de divisas sale a esa misma tasa: es la
+      // que usó la caja para calcularlo.
+      const changeRate = await tasaDivisasDeCaja(sale, parte.journal_id, t)
+        || parseFloat(changeJournal?.Currency?.exchange_rate || 1);
       const changeCurrencyId = changeJournal?.currency_id || null;
 
       await Expense.create(
@@ -431,6 +446,66 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
     };
 }
 
+// Tasa de divisas aplicada AL COBRAR una factura que no la tenía: la que se fue a crédito (y
+// perdió la tasa, ver quitarTasaDivisas) o la que se facturó sin ella. El total no se toca —es
+// el documento fiscal ya emitido—: la diferencia se EXONERA, con su motivo y quién la dio, y la
+// factura queda con la tasa para que sus bolívares entren a ella. Hoy debe Bs.8100 a 810; en
+// divisas, a 1000, paga $8,10 y se perdona el resto.
+//
+// La caja calcula cuánto perdonar (lo que deja la deuda en Bs a la tasa especial igual a la de
+// hoy a la del sistema) y aquí se topa con la misma cuenta. Va dentro de la transacción del
+// cobro: si el cobro no entra —por ejemplo, sin ninguna parte en divisas—, no se perdona nada.
+async function aplicarTasaEnCobro(saleId, fxCobro, req, employeeId, t) {
+  const fail = (m, status = 400) => Object.assign(new Error(m), { status, isOperational: true });
+  const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const tasa = parseFloat(fxCobro?.rate);
+  const perdon = parseFloat(fxCobro?.forgive);
+  if (!(tasa > 0) || !(perdon > 0)) return;
+
+  const sale = await Sale.findByPk(saleId, { transaction: t, lock: true });
+  if (!sale) throw fail("Factura no encontrada", 404);
+  if (parseFloat(sale.fx_rate) > 0) throw fail("Esta factura ya tiene tasa de divisas");
+  await exigirCobroDivisasActivo(sale.company_id, t);
+  if (!["borrador", "pendiente", "parcial"].includes(sale.status)) throw fail("Esta factura no está por cobrar");
+
+  if (!req?.is_superuser) {
+    const perms = await permisosVigentes(req, t);
+    if (!perms?.all && !hasPermission(perms, "sales.fx")) throw fail("Tu usuario no tiene permiso para cobrar a tasa de divisas", 403);
+  }
+  const moneda = fxCobro.currency_id ? await Currency.findByPk(fxCobro.currency_id, { transaction: t }) : null;
+  if (!moneda || moneda.is_base) throw fail("Falta la moneda de la tasa de divisas");
+  const sistema = parseFloat(moneda.exchange_rate) || 0;
+  if (!(tasa > sistema)) throw fail(`La tasa de divisas tiene que ser mayor que la del sistema (${sistema.toFixed(2)})`);
+
+  // Tope: lo que deja la deuda en Bs a la tasa especial igual a la de hoy a la del sistema.
+  const items = await SaleItem.findAll({ where: { sale_id: sale.id }, transaction: t });
+  const totalEn = (r) => round2(
+    items.reduce((acc, i) => acc + netoLineaEnTasa(i, r), 0)
+    - round2(parseFloat(sale.discount_amount || 0) * r)
+    + round2(parseFloat(sale.service_charge || 0) * r)
+  );
+  const ya = await getSaleBalance(sale.id, t);            // cobrado + crédito + ya exonerado
+  const devuelto = await liveReturnedTotal(sale.id, t);
+  const debeHoyBs = Math.max(0, totalEn(sistema) - round2(ya * sistema) - round2(devuelto * sistema));
+  const tope = (totalEn(tasa) - round2(devuelto * tasa) - debeHoyBs) / tasa - ya;
+  if (perdon > tope + 0.01 + (debeHoyBs / tasa) * 0.02) {
+    throw fail("El descuento de divisas no corresponde a la tasa indicada");
+  }
+
+  await sale.update({
+    fx_rate: parseFloat(tasa.toFixed(6)),
+    fx_currency_id: moneda.id,
+    // La tasa del sistema con que se midió la rebaja: a ella se imprime el ticket en Bs.
+    fx_base_rate: parseFloat(sistema.toFixed(6)),
+    // La rebaja va dentro de lo exonerado, pero marcada aparte: no es un perdón de deuda.
+    fx_forgiven: parseFloat(((parseFloat(sale.fx_forgiven) || 0) + perdon).toFixed(6)),
+    forgiven_amount: parseFloat(((parseFloat(sale.forgiven_amount) || 0) + perdon).toFixed(6)),
+    forgiven_reason: `Pago en divisas a tasa ${tasa.toFixed(2)} (sistema ${sistema.toFixed(2)})`,
+    forgiven_by: employeeId || null,
+    forgiven_at: new Date(),
+  }, { transaction: t });
+}
+
 // Cobro contra una factura. Simple (un diario) o COMBINADO: `pay_parts` con varias formas de
 // pago, cada una con su caja/monto/moneda/referencia. El vuelto y el sobrante se calculan
 // sobre el total y se cuelgan del último tramo; el crédito de cliente, del primero.
@@ -453,6 +528,17 @@ module.exports = async function createPayment(body, req, opts = {}) {
   // conjunto sí lo lleva, porque ahí un mismo billete tocó varias facturas.
   const t = await sequelize.transaction();
   try {
+    // Factura con tasa de divisas: al menos un cobro en divisas (ver sales/fxRate.js). Se mira el
+    // cobro entero —todas sus partes— antes de registrar ninguna. Sin conexión no se controla:
+    // el cobro ya ocurrió en el mostrador, igual que los descuentos.
+    if (!opts.createdAt) {
+      if (body.fx_cobro) await aplicarTasaEnCobro(body.sale_id, body.fx_cobro, req, body.employee_id, t);
+      const venta = await Sale.findByPk(body.sale_id, { transaction: t });
+      if (venta) {
+        await exigirPagoEnDivisas(venta, parts ? parts.map(p => p.journal_id) : [body.payment_journal_id], t, { fxEnEsteCobro: !!body.fx_cobro });
+      }
+    }
+
     let result;
     if (!parts) {
       result = await applyOnePayment(body, req, t, opts);
@@ -498,6 +584,29 @@ module.exports = async function createPayment(body, req, opts = {}) {
       // bucle es el del último: sin acumularlo, el cobro combinado lo perdía de la respuesta.
       result = { ...result, payments: creados, credit_applied: creditoTotal };
     }
+
+    // Avance de efectivo junto a la venta, en el mismo pase del punto: el cliente paga la
+    // factura y además lo que se lleva en billetes con su comisión, todo por la cuenta de este
+    // cobro (ver services/cashAdvances). Misma transacción: sin cobro no hay avance, y al revés.
+    if (body.cash_advance && !opts.createdAt) {
+      if (parts) {
+        throw Object.assign(new Error("El avance de efectivo va con un cobro de una sola forma de pago"), { status: 400, isOperational: true });
+      }
+      const venta = await Sale.findByPk(body.sale_id, { transaction: t });
+      result.cash_advance = await registrarAvance({
+        ...body.cash_advance,
+        in_journal_id: body.payment_journal_id,
+        in_method: body.payment_method,
+        reference: body.reference_number,
+        customer_id: venta?.customer_id ?? null,
+        sale_id: venta?.id ?? null,
+        // El cobro del mismo pase: la conciliación bancaria los cuenta como una sola línea.
+        payment_id: result.payment?.id ?? null,
+        warehouse_id: venta?.warehouse_id,
+        employee_id: body.employee_id,
+        reference_date: body.reference_date,
+      }, req, t);
+    }
     await t.commit();
 
     // Todos los cobros de este envío, con el nombre de su caja. `payment` sigue siendo el
@@ -508,6 +617,8 @@ module.exports = async function createPayment(body, req, opts = {}) {
     const enriquecidos = await withJournalNames(result.payments || [result.payment]);
     return {
       ...result,
+      // Se le aplicó la tasa de divisas en este cobro: la caja recarga la factura.
+      fx_aplicada: !opts.createdAt && !!body.fx_cobro,
       payments: enriquecidos,
       payment: enriquecidos[enriquecidos.length - 1] || result.payment,
     };
@@ -523,3 +634,6 @@ module.exports = async function createPayment(body, req, opts = {}) {
     throw err;
   }
 };
+
+// El cobro conjunto aplica la tasa de divisas con la misma regla (createBulkPayment).
+module.exports.aplicarTasaEnCobro = aplicarTasaEnCobro;

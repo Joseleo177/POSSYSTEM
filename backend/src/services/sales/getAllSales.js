@@ -1,4 +1,5 @@
 const { Sale, SaleItem, Customer, Employee, Currency, Warehouse, Serie, Sequelize, Op, PAYMENT_METHODS } = require("./shared");
+const { FX_PAGO_DIVISAS_SQL } = require("./fxRate");
 
 module.exports = async function getAllSales(query, tenant = {}) {
   const { limit = 50, offset = 0, date_from, date_to, payment_method, status, serie_id, search, warehouse_id, employee_id } = query;
@@ -93,6 +94,9 @@ module.exports = async function getAllSales(query, tenant = {}) {
         [Sequelize.literal('(SELECT exchange_rate FROM payments WHERE sale_id = "Sale"."id" ORDER BY created_at DESC LIMIT 1)'), "final_payment_rate"],
         // Suma precisa de líneas (sin truncar a 2 dec). El frontend la usa para convertir a Bs.
         [Sequelize.literal('(SELECT COALESCE(SUM(subtotal),0) FROM sale_items WHERE sale_id = "Sale"."id")'), "total_precise"],
+        // Factura con tasa de divisas que ya recibió un cobro en divisas: desde ahí puede
+        // cobrarse en bolívares (ver sales/fxRate.js). Sin tasa ni se consulta.
+        [Sequelize.literal(FX_PAGO_DIVISAS_SQL), "fx_pago_divisas"],
       ],
     },
     include: [

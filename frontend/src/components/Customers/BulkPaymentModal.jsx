@@ -4,7 +4,7 @@ import DatePicker from "../ui/DatePicker";
 import JournalPickerButton from "../cobro/JournalPickerButton";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
-import { fmtBase, todayISO, saleTotalAtRate, journalsForSales, fmtDateShort } from "../../helpers";
+import { fmtBase, todayISO, saleTotalAtRate, tasaDeVenta, journalsForSales, fmtDateShort } from "../../helpers";
 import Money from "../ui/Money";
 import Segmented from "../ui/Segmented";
 import RateField, { resolveRate } from "../ui/RateField";
@@ -22,7 +22,10 @@ import { Spinner } from "../ui/Spinner";
  * y en el cobro de una factura suelta; al servidor viaja en moneda base.
  */
 export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }) {
-  const { notify, baseCurrency, activeJournals: allActiveJournals, activeCurrencies } = useApp();
+  const { notify, baseCurrency, activeJournals: allActiveJournals, activeCurrencies, can, settings } = useApp();
+  // Cobro en divisas aplicado a las facturas que no traen tasa (ver más abajo).
+  const [fxOn, setFxOn] = useState(false);
+  const [fxText, setFxText] = useState("");
   const [form, setForm] = useState({
     amount: "",
     journal_id: "",
@@ -46,11 +49,56 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   const keyRef = useRef(null);
 
   // De la más vieja a la más nueva: mismo orden con el que el servidor imputa.
-  const ordenadas = useMemo(
+  const ordenadasBase = useMemo(
     () => [...(sales || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
     [sales]
   );
-  const deudaTotal = ordenadas.reduce((acc, s) => acc + parseFloat(s.balance || 0), 0);
+
+  // ── Cobro en divisas ────────────────────────────────────────────────────────
+  // Igual que en el cobro de una factura suelta (PaymentFormModal): a cada factura que no trae
+  // tasa se le aplica la que se teclea. Su total no se toca y la diferencia se exonera en el
+  // mismo cobro (createBulkPayment, `fx_cobro`). Las que ya traían tasa conservan la suya. Desde
+  // ahí el modal trabaja con las facturas como si ya la tuvieran.
+  const monedaFx = activeCurrencies.find(c => !c.is_base) || null;
+  const tasaSistemaFx = parseFloat(monedaFx?.exchange_rate) || 0;
+  // Opción de la empresa (Configuración → Punto de venta) más el permiso.
+  const puedeFx = settings?.pos_fx_cobro === "true" && can("sales.fx") && tasaSistemaFx > 1
+    && ordenadasBase.some(s => !(parseFloat(s.fx_rate) > 0) && s.items?.length);
+  const fxTasa = parseFloat(String(fxText).replace(",", ".")) || 0;
+  const fxActivo = puedeFx && fxOn && fxTasa > tasaSistemaFx;
+  // Lo que se exonera de una factura para que, a la tasa especial, su deuda en Bs sea la de hoy.
+  // Mismos términos y redondeos que saldoEnMonedaDePagoAt, para que a la tasa especial el
+  // modal pida exactamente los bolívares que se debían a la de hoy.
+  const perdonDe = (s) => {
+    const r2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+    const pagado = parseFloat(s.amount_paid || 0), devuelto = parseFloat(s.total_returned || 0), perdonado = parseFloat(s.forgiven_amount || 0);
+    const debeHoyBs = Math.max(0, r2(saleTotalAtRate(s, tasaSistemaFx)
+      - r2(pagado * tasaSistemaFx) - r2(devuelto * tasaSistemaFx) - r2(perdonado * tasaSistemaFx)));
+    const objetivo = r2(saleTotalAtRate(s, fxTasa) - r2(pagado * fxTasa) - r2(devuelto * fxTasa) - debeHoyBs);
+    // Exacto: en bolívares la deuda queda en los mismos Bs de hoy, al céntimo. En divisas cada
+    // factura se pide en céntimos (ver deudaTotal) y la fracción la absorbe su margen.
+    return Math.max(0, parseFloat((objetivo / fxTasa - perdonado).toFixed(6)));
+  };
+  const perdones = {};
+  const ordenadas = !fxActivo ? ordenadasBase : ordenadasBase.map(s => {
+    if (parseFloat(s.fx_rate) > 0 || !s.items?.length) return s;
+    const F = perdonDe(s);
+    if (!(F > 0)) return s;
+    perdones[s.id] = F;
+    return {
+      ...s,
+      fx_rate: fxTasa,
+      fx_currency_id: monedaFx.id,
+      forgiven_amount: parseFloat(s.forgiven_amount || 0) + F,
+      fx_forgiven: parseFloat(s.fx_forgiven || 0) + F,
+      balance: Math.max(0, parseFloat(s.balance || 0) - F),
+    };
+  });
+  const totalPerdon = Object.values(perdones).reduce((a, n) => a + n, 0);
+  // En divisas cada factura se debe en céntimos, que es como se muestra en el reparto y como la
+  // reparte el servidor: sumar los saldos con sus decimales (11,0528 × 4) daba una cabecera de
+  // Ref.36,37 sobre un reparto de Ref.36,36.
+  const deudaTotal = ordenadas.reduce((acc, s) => acc + Math.round(parseFloat(s.balance || 0) * 100) / 100, 0);
 
   // Si las facturas son de sucursales distintas, solo caben los diarios compartidos: no hay
   // una sola sucursal contra la que cobrar.
@@ -86,10 +134,39 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
     };
   });
   const recibidoComb = round6(partesComb.reduce((a, s) => a + s.base, 0));
-  const noUltimoComb = round6(partesComb.slice(0, -1).reduce((a, s) => a + s.base, 0));
   const combParteFalta = partesComb.some(s => !s.journal_id || !(s.base > 0));
-  // La referencia de cada tramo es OPCIONAL, igual que en el cobro simple.
-  const combNoUltimoExcede = noUltimoComb > deudaTotal + 0.10;
+
+  // Reparto como lo hace el servidor (createBulkPayment): cada forma de pago, en su moneda,
+  // cubre las facturas de la más vieja a la más nueva, y en bolívares cada factura va a SU tasa
+  // —la de divisas si la tiene—. Restar en la base ya no basta: los bolívares que van a una
+  // factura con tasa de divisas cubren menos base que los que van a una sin ella.
+  // `formas`: [{ base, rate }]. Devuelve lo que queda de cada factura (en base) y lo que sobra.
+  //
+  // Lo que falta de una factura en la moneda de una forma de pago, cuando las anteriores ya le
+  // cubrieron `cubierto` (en base): en bolívares, su deuda línea por línea menos lo cubierto
+  // convertido a su tasa —igual que el servidor y que el cobro de una factura suelta—.
+  const deudaRestante = (s, r, cubierto) => {
+    if (!(r > 1)) return Math.max(0, round6(parseFloat(s.balance || 0) - cubierto));
+    return Math.max(0, round2(saldoEnMonedaDePagoAt(s, r) - round2(cubierto * tasaDeVenta(s, r))));
+  };
+  const simularReparto = (formas) => {
+    const rest = ordenadas.map(s => parseFloat(s.balance || 0));
+    let sobraBase = 0;
+    for (const f of formas) {
+      let u = f.base * f.rate;
+      ordenadas.forEach((s, i) => {
+        if (u <= 0.000001 || rest[i] <= 0.000001) return;
+        const ri = f.rate > 1 ? tasaDeVenta(s, f.rate) : 1;
+        const deuda = deudaRestante(s, f.rate, parseFloat(s.balance || 0) - rest[i]);
+        if (deuda <= 0.000001) { rest[i] = 0; return; }
+        const ap = Math.min(u, deuda);
+        rest[i] = ap >= deuda - 0.000001 ? 0 : Math.max(0, round6(rest[i] - ap / ri));
+        u = round6(u - ap);
+      });
+      sobraBase += Math.max(0, u) / f.rate;
+    }
+    return { rest, sobraBase: round6(sobraBase) };
+  };
 
   const amountLocal = combinado ? recibidoComb : (parseFloat(String(form.amount).replace(",", ".")) || 0);
   const amountBase  = combinado ? recibidoComb : (amountLocal / rate);
@@ -110,17 +187,27 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   // Lo ya cobrado se convierte a la tasa de su día, no a la de hoy: es el dinero que entró.
   // Recibe la tasa como parámetro para poder calcular el monto sugerido con la moneda del
   // diario que se acaba de elegir, antes de que el estado del formulario se haya actualizado.
-  const saldoEnMonedaDePagoAt = (s, r) => {
+  //
+  // Una factura con tasa de divisas se cobra en bolívares a esa tasa (ver tasaDeVenta).
+  //
+  // Lo ya cobrado va a la MISMA tasa que el total, como en el cobro de una factura suelta
+  // (pendingBsAt) y en Facturas pendientes: la deuda es en base y se cobra a la tasa de hoy.
+  // Antes iba a la tasa de su día y este modal pedía otra cifra que Pendientes por las mismas
+  // facturas (A-0100, abono de 2,04 a 877,90: Bs.19,17 de diferencia).
+  const saldoEnMonedaDePagoAt = (s, rPago) => {
     const saldoBase = parseFloat(s.balance || 0);
-    if (!(r > 1)) return round2(saldoBase);
+    if (!(rPago > 1)) return round2(saldoBase);
 
-    const hist = parseFloat(s.exchange_rate) > 1 ? parseFloat(s.exchange_rate) : r;
+    const r = tasaDeVenta(s, rPago);
     const totalBs = saleTotalAtRate(s, r);
-    const cobrado = round2(parseFloat(s.amount_paid || 0) * hist)
-      + round2(parseFloat(s.total_returned || 0) * hist)
-      + round2(parseFloat(s.forgiven_amount || 0) * hist);
+    const cobrado = round2(parseFloat(s.amount_paid || 0) * r)
+      + round2(parseFloat(s.total_returned || 0) * r)
+      + round2(parseFloat(s.forgiven_amount || 0) * r);
     return Math.max(0, round2(totalBs - cobrado));
   };
+
+  // La referencia de cada tramo es OPCIONAL, igual que en el cobro simple.
+  const combNoUltimoExcede = simularReparto(partesComb.slice(0, -1)).sobraBase > 0.10;
 
   // Lo que hay que pedirle al cliente, en la moneda con la que va a pagar.
   const deudaEnPagoAt = (r) => round2(ordenadas.reduce((acc, s) => acc + saldoEnMonedaDePagoAt(s, r), 0));
@@ -137,20 +224,26 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   // la misma que se le pide al cliente; en la base, de la deuda oficial. Restarlo siempre en
   // la base partía de saldos redondeados a dos decimales y sugería unos bolívares de menos
   // (Bs.1215,35 donde faltaban Bs.1219,62).
+  //
+  // Se reparten primero las demás formas (simularReparto) y lo que queda de cada factura se
+  // pasa a la moneda de esta: en bolívares, la parte que falta de su saldo línea por línea, a
+  // su tasa.
   const faltaEnMoneda = (partes, idx, r) => {
-    const ya = (partes || []).reduce((a, q, i) => {
-      if (i === idx) return a;
+    const otras = (partes || []).flatMap((q, i) => {
+      if (i === idx) return [];
       const n = parseFloat(String(q.amount).replace(",", "."));
-      if (isNaN(n) || n <= 0) return a;
+      if (isNaN(n) || n <= 0) return [];
       const jj = activeJournals.find(x => x.id === q.journal_id);
       const cc = jj?.currency_id ? activeCurrencies.find(c => c.id === parseInt(jj.currency_id)) : baseCurrency;
       const rr = (!cc || cc.is_base) ? 1 : parseFloat(cc.exchange_rate || 1);
-      if (r > 1) return a + (rr === r ? round2(n) : round2((n / rr) * r));
-      return a + (rr === 1 ? round2(n) : n / rr);
+      return [{ base: rr === 1 ? round2(n) : n / rr, rate: rr }];
+    });
+    const { rest } = simularReparto(otras);
+    const falta = ordenadas.reduce((a, s, i) => {
+      if (rest[i] <= 0.000001) return a;
+      return a + deudaRestante(s, r, parseFloat(s.balance || 0) - rest[i]);
     }, 0);
-    return r > 1
-      ? Math.max(0, round2(deudaEnPagoAt(r) - ya))
-      : Math.max(0, round2(deudaTotal - ya));
+    return Math.max(0, round2(falta));
   };
 
   // Lo que el cliente entregó por encima de la deuda y hay que decidir qué hacer con ello.
@@ -166,7 +259,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   // redondear factura por factura: si no, el `surplus_kept` que se manda no coincide con el
   // sobrante que el servidor calcula y rechaza el cobro por unos milésimos.
   const sobrantePago = combinado
-    ? Math.max(0, round6(recibidoComb - deudaTotal))
+    ? simularReparto(partesComb).sobraBase
     : Math.max(0, round2(amountLocal - deudaEnPago));
   const sobrante     = combinado ? sobrantePago : parseFloat((sobrantePago / rate).toFixed(6));
   const haySobrante  = sobrante > 0.10;
@@ -266,6 +359,8 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                          : haySobrante && form.surplus_mode === "devolver" && restoEnCaja > 0.0001 ? restoEnCaja
                          : undefined,
         change_to_credit:  haySobrante && form.surplus_mode === "credito"  ? parseFloat(sobrante.toFixed(6)) : undefined,
+        // Tasa de divisas aplicada en este cobro: lo que se exonera de cada factura sin tasa.
+        fx_cobro:          totalPerdon > 0 ? { rate: fxTasa, currency_id: monedaFx.id, forgive: perdones } : undefined,
       });
       if (res.duplicated) notify("Ese cobro ya estaba registrado");
       else {
@@ -304,6 +399,12 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-[13px] font-semibold text-content dark:text-white tabular-nums truncate">
                     {sale.invoice_number || `#${sale.id}`}
+                    {/* Con tasa de divisas sus bolívares van a esa tasa: se dice aquí. */}
+                    {parseFloat(sale.fx_rate) > 0 && (
+                      <span className="ml-1.5 text-[11px] font-semibold px-1.5 py-px rounded bg-brand-500/10 text-brand-700 dark:text-brand-300">
+                        tasa {parseFloat(sale.fx_rate).toFixed(0)}
+                      </span>
+                    )}
                   </span>
                   <Money value={fmtPago(saldo)} className="text-[13px] font-semibold text-content dark:text-white shrink-0" />
                 </div>
@@ -358,6 +459,9 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
           ) : (
             <Money value={rate > 1 ? fmtPago(deudaEnPago) : fmtP(deudaTotal)} className="block text-[22px] font-bold tracking-tight text-content dark:text-white leading-tight" />
           )}
+          {totalPerdon > 0 && (
+            <p className="text-[12px] text-brand-700 dark:text-brand-300 tabular-nums">Pago en divisas: −{fmtP(totalPerdon)}</p>
+          )}
         </div>
       </div>
 
@@ -365,6 +469,37 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
 
         {/* ── Columna principal: lo que se teclea ── */}
         <div className="min-w-0 space-y-4">
+
+        {/* Cobro en divisas: la tasa especial para las facturas que no la traen. */}
+        {puedeFx && (
+          <div className="rounded-xl border border-border/70 dark:border-white/[0.08]">
+            <label className="flex items-center justify-between gap-3 px-3.5 h-11 cursor-pointer">
+              <span className="text-[13px] font-medium text-content dark:text-white">Cobro en divisas</span>
+              <span className="relative inline-flex items-center shrink-0">
+                <input type="checkbox" className="sr-only peer" checked={fxOn} onChange={() => setFxOn(v => !v)} />
+                <span className="block w-10 h-6 rounded-full bg-border dark:bg-white/15 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500/40 peer-checked:bg-brand-600 dark:peer-checked:bg-brand-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-4" />
+              </span>
+            </label>
+            {fxOn && (
+              <div className="px-3.5 pb-3.5 space-y-2">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">{monedaFx.symbol}</span>
+                  <input type="text" inputMode="decimal" autoComplete="off" autoFocus
+                    value={fxText} onChange={e => setFxText(e.target.value.replace(",", "."))}
+                    placeholder={tasaSistemaFx.toFixed(2)} aria-label="Tasa de divisas"
+                    className={`${INPUT} w-full pl-11 text-right tabular-nums ${fxTasa > 0 && fxTasa <= tasaSistemaFx ? "!border-red-500" : ""}`} />
+                </div>
+                <p className={`text-[12px] leading-snug ${fxTasa > 0 && fxTasa <= tasaSistemaFx ? "text-red-600 dark:text-red-400" : "text-content-subtle"}`}>
+                  {fxTasa > 0 && fxTasa <= tasaSistemaFx
+                    ? `Tiene que ser mayor que la del sistema (${tasaSistemaFx.toFixed(2)})`
+                    : fxActivo
+                      ? `Se exoneran ${fmtP(totalPerdon)} al cobrar. Al menos una parte del pago tiene que ser en divisas; las facturas que ya traían tasa conservan la suya.`
+                      : `Tasa a la que recibes la divisa. La del sistema es ${monedaFx.symbol} ${tasaSistemaFx.toFixed(2)}.`}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Pago combinado: varias formas de pago para el lote ── */}
         {combinado && (

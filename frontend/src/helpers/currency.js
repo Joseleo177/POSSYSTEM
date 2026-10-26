@@ -136,6 +136,83 @@ export const saleTotalAtRate = (sale, rate) => {
 };
 
 /**
+ * Cobro a tasa de divisas: el descuento, en moneda base, que deja la factura cobrada en Bs a la
+ * tasa especial `tasa` en el mismo total en bolívares que muestra la caja (`totalBs`, a la tasa
+ * del sistema). En divisas el cliente paga menos ($8 en vez de $10 con el dólar a 1000 y no a
+ * 800); en bolívares, a esa tasa, paga lo mismo de siempre.
+ *
+ * `lineas` van como se guardan en la factura ({ price, discount por unidad, quantity,
+ * line_discount_mode/value }); `manual` es el descuento de la venta y `recargo` el recargo, los
+ * dos en base. Espejo de descuentoDivisas en backend/src/services/sales/fxRate.js, que lo usa
+ * de tope.
+ */
+export const descuentoDivisas = ({ lineas = [], manual = 0, recargo = 0, totalBs, tasa }) => {
+  const r = parseFloat(tasa);
+  if (!(r > 0) || !(totalBs > 0)) return 0;
+  const bsLineas = lineas.reduce((acc, l) => acc + netoLineaEnTasa(l, r), 0);
+  const recargoBs = Math.round(recargo * r * 100) / 100;
+  const d = (bsLineas + recargoBs - totalBs) / r - manual;
+  // El descuento se guarda con 5 decimales, y a una tasa de 1000 eso ya es un céntimo de
+  // bolívar: de los dos vecinos se queda el que deja la factura en los mismos Bs.
+  const abajo = Math.floor(d * 1e5) / 1e5;
+  const arriba = Math.ceil(d * 1e5) / 1e5;
+  const bs = (f) => totalBsEnTasa({ lineas, descuento: manual + f, recargo, tasa: r });
+  const elegido = Math.abs(bs(abajo) - totalBs) <= Math.abs(bs(arriba) - totalBs) ? abajo : arriba;
+  return Math.max(0, parseFloat(elegido.toFixed(5)));
+};
+
+/**
+ * Total en bolívares de una factura todavía en el carrito, a una tasa: la cuenta de
+ * saleTotalAtRate sobre las líneas como se guardan, con el descuento redondeado a 5 decimales
+ * como lo guarda la base. Es lo que va a pedir el cobro.
+ */
+export const totalBsEnTasa = ({ lineas = [], descuento = 0, recargo = 0, tasa }) => {
+  const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const r = parseFloat(tasa) || 1;
+  const desc = parseFloat((parseFloat(descuento) || 0).toFixed(5));
+  return round2(lineas.reduce((acc, l) => acc + netoLineaEnTasa(l, r), 0) - round2(desc * r) + round2(recargo * r));
+};
+
+/**
+ * Qué parte del precio de sus líneas se cobró de verdad, para valorar lo que se devuelve: el
+ * descuento de la venta (el de la caja y el de la tasa de divisas) y la rebaja por pagar en
+ * divisas aplicada al cobrar rebajan la factura entera, y cada línea devuelta se lleva su parte.
+ * Espejo de factorDevolucion en backend/src/services/returns/shared.js: es lo que sale en la NC.
+ */
+export const factorDevolucion = (sale) => {
+  const neto = (sale?.items || []).reduce(
+    (acc, i) => acc + (parseFloat(i.price) - parseFloat(i.discount || 0)) * parseFloat(i.quantity || 0), 0
+  );
+  const rebaja = (parseFloat(sale?.discount_amount) || 0) + (parseFloat(sale?.fx_forgiven) || 0);
+  if (!(neto > 0) || !(rebaja > 0)) return 1;
+  return Math.min(1, Math.max(0, (neto - rebaja) / neto));
+};
+
+/**
+ * Tasa a la que se pasan a bolívares los montos de una venta: la de divisas si la factura la
+ * tiene, y si no la que se pida (la del día). Solo vale para la pista en Bs (tasa > 1): en
+ * divisas no hay conversión.
+ */
+export const tasaDeVenta = (sale, rate) =>
+  (parseFloat(sale?.fx_rate) > 0 && parseFloat(rate) > 1) ? parseFloat(sale.fx_rate) : rate;
+
+/**
+ * Avance de efectivo: lo que entra por la cuenta que recibe (punto, pago móvil…) por un
+ * efectivo entregado, con la comisión ENCIMA. Lo entregado está en la moneda de la caja de
+ * efectivo; si la cuenta es de otra moneda se pasa con las tasas del sistema. Espejo de
+ * registrarAvance en backend/src/services/cashAdvances: es lo que el servidor va a asentar.
+ * Devuelve montos en la moneda de la cuenta que recibe.
+ */
+export const calcularAvance = ({ efectivo, pct = 0, rateCaja = 1, rateCuenta = 1, mismaMoneda = true }) => {
+  const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const e = round2(efectivo);
+  if (!(e > 0)) return { avance: 0, comision: 0, total: 0 };
+  const avance = mismaMoneda ? e : round2((e / (parseFloat(rateCaja) || 1)) * (parseFloat(rateCuenta) || 1));
+  const comision = round2(avance * (parseFloat(pct) || 0) / 100);
+  return { avance, comision, total: round2(avance + comision) };
+};
+
+/**
  * Formatea una tasa de cambio con precisión configurable.
  * @param {number} rate
  * @param {number} decimals

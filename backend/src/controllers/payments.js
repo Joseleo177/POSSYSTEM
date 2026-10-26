@@ -70,9 +70,14 @@ const create = async (req, res) => {
       balance: result.balance,
       invoice_number: result.invoice_number,
       duplicated: result.duplicated || false,
+      // Se le aplicó la tasa de divisas en este cobro: la caja recarga la factura.
+      fx_aplicada: result.fx_aplicada || false,
+      // Avance de efectivo registrado con este cobro: la caja dice cuánto entregar.
+      cash_advance: result.cash_advance || null,
     });
   } catch (err) {
-    const status = /requerido|no encontrada|ya fue|anulada|excede|mayor/i.test(err.message) ? 400 : 500;
+    // Los errores con código propio (permiso, tasa de divisas…) lo conservan.
+    const status = err.status || (/requerido|no encontrada|ya fue|anulada|excede|mayor/i.test(err.message) ? 400 : 500);
     res.status(status).json({ ok: false, message: err.message });
   }
 };

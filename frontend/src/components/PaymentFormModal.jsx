@@ -4,10 +4,10 @@ import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 import { agregarCobro } from "../services/offline/outbox";
 import Modal from "./ui/Modal";
-import { saleTotalAtRate, todayISO, PAYMENT_TOLERANCE, settleTolerance } from "../helpers";
+import { saleTotalAtRate, tasaDeVenta, todayISO, PAYMENT_TOLERANCE, settleTolerance } from "../helpers";
 import DatePicker from "./ui/DatePicker";
 import RateField, { resolveRate } from "./ui/RateField";
-import { journalsForWarehouse, toNameCase } from "../helpers";
+import { journalsForWarehouse, toNameCase, calcularAvance } from "../helpers";
 import Money from "./ui/Money";
 import ImmediatePayPicker from "./cobro/ImmediatePayPicker";
 import JournalPickerButton from "./cobro/JournalPickerButton";
@@ -34,11 +34,15 @@ const getEmpty = () => ({
   pay_parts: [],
 });
 
-export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJournalId = null, lockedMethod = null }) {
-  const { notify, baseCurrency, activeCurrencies, activeJournals: allActiveJournals, can } = useApp();
+export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, onSaleChange, lockedJournalId = null, lockedMethod = null, avanceInicial = null }) {
+  const { notify, baseCurrency, activeCurrencies, activeJournals: allActiveJournals, can, settings } = useApp();
+  // La venta puede cambiar sin salir del modal: al quitarle la tasa de divisas vuelve del
+  // servidor con su precio normal (ver quitarTasa). Se conserva lo que la pantalla le agregó.
+  const [ventaActual, setVentaActual] = useState(null);
+  const venta = ventaActual ? { ...ventaProp, ...ventaActual } : ventaProp;
   // Solo los diarios de la sucursal de esta venta (más los compartidos): un cajero de la
   // sucursal A no debe poder cobrar contra la caja de la B.
-  const activeJournals = journalsForWarehouse(allActiveJournals, sale?.warehouse_id);
+  const activeJournals = journalsForWarehouse(allActiveJournals, venta?.warehouse_id);
   const [form, setForm] = useState(getEmpty);
   const [loading, setLoading] = useState(false);
   // Pago combinado activo. Se necesitan AL MENOS dos formas de pago: con una sola es un pago
@@ -55,22 +59,80 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // delante — no en una pantalla aparte a la que habría que ir a buscar la factura.
   const [forgiveMode, setForgiveMode] = useState(false);
   const [forgiveReason, setForgiveReason] = useState("");
+  // Cobro en divisas sobre una factura que no trae tasa (ver más abajo).
+  const [fxCobroOn, setFxCobroOn] = useState(false);
+  const [fxCobroText, setFxCobroText] = useState("");
+  // Avance de efectivo en el mismo pase del punto (ver más abajo). Llega prellenado si se pidió
+  // en la revisión del pedido.
+  const [avance, setAvance] = useState(() => ({
+    on: !!avanceInicial,
+    monto: avanceInicial?.cash_amount ? String(avanceInicial.cash_amount) : "",
+    pct: avanceInicial ? String(avanceInicial.fee_pct ?? "") : (settings?.cash_advance_pct || ""),
+    cash_journal_id: "",
+  }));
 
   useEffect(() => {
-    if (!sale?.customer_id) { setCustomerCredit(0); setCreditToApply(""); return; }
+    if (!venta?.customer_id) { setCustomerCredit(0); setCreditToApply(""); return; }
     // Solo lo que esta sucursal puede aplicar: lo compartido más lo que ella misma generó. El
     // crédito de otra sucursal no cuenta acá (ver creditLedger.js en el backend).
-    api.customers.getOne(sale.customer_id, sale.warehouse_id ? { warehouse_id: sale.warehouse_id } : {})
+    api.customers.getOne(venta.customer_id, venta.warehouse_id ? { warehouse_id: venta.warehouse_id } : {})
       .then(r => setCustomerCredit(parseFloat(r.data?.credit_available ?? r.data?.credit_balance ?? 0)))
       .catch(() => setCustomerCredit(0));
-  }, [sale?.customer_id, sale?.warehouse_id]);
+  }, [venta?.customer_id, venta?.warehouse_id]);
+
+  // ── Cobro en divisas sobre una factura sin tasa ──────────────────────────────
+  // La factura que se fue a crédito pierde la tasa especial (es de contado). Si mañana paga en
+  // divisas, se le aplica aquí: su total no se toca —es el documento emitido— y la diferencia
+  // se exonera en el mismo cobro (createPayment, `fx_cobro`). Hoy debe Bs.8100 a 810; en
+  // divisas, a 1000, paga $8,10 y se perdona el resto. Desde ahí el modal trabaja con la
+  // factura como si ya tuviera la tasa: sus bolívares van a esa tasa y pide algo en divisas.
+  const monedaBs = activeCurrencies.find(c => !c.is_base) || null;
+  const tasaSistemaBs = parseFloat(monedaBs?.exchange_rate) || 0;
+  // Opción de la empresa (Configuración → Punto de venta) más el permiso. Las facturas que ya
+  // traen tasa se siguen cobrando con ella aunque la opción se apague.
+  const puedeFxCobro = settings?.pos_fx_cobro === "true" && can("sales.fx")
+    && !(parseFloat(venta?.fx_rate) > 0) && !venta?.offline
+    && tasaSistemaBs > 1 && venta?.items?.length > 0
+    && parseFloat(venta?.balance ?? venta?.total ?? 0) > 0;
+  const fxCobroTasa = parseFloat(String(fxCobroText).replace(",", ".")) || 0;
+  const fxCobroActivo = puedeFxCobro && fxCobroOn && fxCobroTasa > tasaSistemaBs;
+  const fxPerdon = (() => {
+    if (!fxCobroActivo) return 0;
+    const r2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
+    const pagado = parseFloat(venta.amount_paid || 0);
+    const devuelto = parseFloat(venta.total_returned || 0);
+    const perdonado = parseFloat(venta.forgiven_amount || 0);
+    const debeHoyBs = Math.max(0, r2(saleTotalAtRate(venta, tasaSistemaBs)
+      - r2(pagado * tasaSistemaBs) - r2(devuelto * tasaSistemaBs) - r2(perdonado * tasaSistemaBs)));
+    // Lo exonerado a la tasa especial tiene que dejar la deuda en esos mismos bolívares.
+    const objetivo = r2(saleTotalAtRate(venta, fxCobroTasa) - r2(pagado * fxCobroTasa) - r2(devuelto * fxCobroTasa) - debeHoyBs);
+    // Exacto: en bolívares la deuda queda en los mismos Bs de hoy, al céntimo. En divisas el
+    // saldo puede traer medio céntimo (11,0528): se muestra y se cobra en céntimos, y esa
+    // fracción la absorbe el margen de redondeo de la factura.
+    return Math.max(0, parseFloat((objetivo / fxCobroTasa - perdonado).toFixed(6)));
+  })();
+  const sale = fxCobroActivo && fxPerdon > 0
+    ? {
+        ...venta,
+        fx_rate: fxCobroTasa,
+        fx_currency_id: monedaBs.id,
+        forgiven_amount: parseFloat(venta.forgiven_amount || 0) + fxPerdon,
+        fx_forgiven: parseFloat(venta.fx_forgiven || 0) + fxPerdon,
+        balance: Math.max(0, parseFloat(venta.balance ?? venta.total ?? 0) - fxPerdon),
+        // Sin ningún cobro previo seguro que no hay uno en divisas; con cobros, decide el servidor.
+        fx_pago_divisas: parseFloat(venta.amount_paid || 0) > 0 ? undefined : false,
+      }
+    : venta;
 
   const displayCur = activeCurrencies.find(c => !c.is_base) || baseCurrency;
-  const defaultRate = (!displayCur || displayCur.is_base) ? 1 : parseFloat(displayCur.exchange_rate || 1);
+  // Factura con tasa de divisas (ver services/sales/fxRate.js en el backend): todo lo que se
+  // cobre en bolívares va a esa tasa, ahora o en un abono posterior, y no se escribe a mano.
+  const tasaFx = parseFloat(sale?.fx_rate) > 0 ? parseFloat(sale.fx_rate) : null;
+  const defaultRate = (!displayCur || displayCur.is_base) ? 1 : tasaDeVenta(sale, parseFloat(displayCur.exchange_rate || 1));
   const defaultSym = displayCur?.symbol || baseCurrency?.symbol || "Ref.";
 
   const payCur = activeCurrencies.find(c => c.id === parseInt(form.pay_currency_id));
-  const payCurRate = (!payCur || payCur.is_base) ? 1 : parseFloat(payCur.exchange_rate || 1);
+  const payCurRate = (!payCur || payCur.is_base) ? 1 : tasaDeVenta(sale, parseFloat(payCur.exchange_rate || 1));
   // Tasa de ESTE cobro. Arranca en la del sistema y se puede escribir a mano: la deuda se pacta
   // en divisas y el cliente paga con la tasa del día en que paga, que no siempre es la que está
   // cargada —una factura vieja se cobra semanas después, o el negocio trabaja con una tasa y el
@@ -84,7 +146,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // Lo que en su momento rompió el cuadre no fue la tasa manual en sí, sino mezclarla: el total
   // se convertía con la tecleada y lo ya pagado con la oficial. Por eso `pendingBsAt` convierte
   // ahora TODOS sus términos con la misma tasa (ver más abajo).
-  const payRate = (!payCur || payCur.is_base) ? 1 : resolveRate(form.rate, payCurRate);
+  const payRate = (!payCur || payCur.is_base) ? 1 : (tasaFx ? payCurRate : resolveRate(form.rate, payCurRate));
   const baseSym = baseCurrency?.symbol || "Ref.";
   // En pago combinado el resumen (abono, sobrante, "después de este pago") va SIEMPRE en la
   // moneda base: cada tramo tiene su propia moneda, así que no hay una única "moneda del pago".
@@ -107,7 +169,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   const partesComb = (form.pay_parts || []).map(p => {
     const j = activeJournals.find(x => x.id === p.journal_id);
     const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
-    const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
+    const r = (!cur || cur.is_base) ? 1 : tasaDeVenta(sale, parseFloat(cur.exchange_rate || 1));
     const n = parseFloat(String(p.amount).replace(",", "."));
     return {
       ...p, j, cur, rate: r,
@@ -125,7 +187,34 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   // La referencia de cada tramo es OPCIONAL, igual que en el cobro simple.
   const combNoUltimoExcede = noUltimoComb > pendingAfterCredit + PAYMENT_TOLERANCE;
 
-  const receivedNum = parseFloat(String(form.received_amount).replace(",", "."));
+  // ── Avance de efectivo junto al cobro ──────────────────────────────────────
+  // El cliente paga la factura y además se lleva billetes, todo en un pase del punto: se cobra
+  // por esta cuenta lo de la factura más el avance con su comisión, y el efectivo sale de una
+  // caja de efectivo. El servidor lo registra en la misma transacción que el cobro
+  // (createPayment → services/cashAdvances). Solo con una forma de pago que no sea efectivo.
+  const cajasEfectivo = activeJournals.filter(j => j.type === "efectivo");
+  const puedeAvance = settings?.pos_cash_advance === "true" && can("sales.advance") && !venta?.offline
+    && !combinado && !!selectedJournal && selectedJournal.type !== "efectivo";
+  const cajaAvance = cajasEfectivo.find(j => j.id === avance.cash_journal_id)
+    || cajasEfectivo.find(j => { const c = activeCurrencies.find(x => x.id === parseInt(j.currency_id)); return c && !c.is_base; })
+    || cajasEfectivo[0] || null;
+  const curCajaAvance = cajaAvance?.currency_id ? activeCurrencies.find(c => c.id === parseInt(cajaAvance.currency_id)) : baseCurrency;
+  const avanceEfectivo = parseFloat(String(avance.monto).replace(",", ".")) || 0;
+  const avancePct = parseFloat(String(avance.pct).replace(",", ".")) || 0;
+  const avanceCalc = calcularAvance({
+    efectivo: avanceEfectivo, pct: avancePct,
+    rateCaja: (!curCajaAvance || curCajaAvance.is_base) ? 1 : parseFloat(curCajaAvance.exchange_rate || 1),
+    rateCuenta: (!payCur || payCur.is_base) ? 1 : parseFloat(payCur.exchange_rate || 1),
+    mismaMoneda: String(curCajaAvance?.id ?? "") === String(payCur?.id ?? baseCurrency?.id ?? ""),
+  });
+  const avanceActivo = puedeAvance && avance.on && avanceEfectivo > 0 && !!cajaAvance;
+  const avanceInvalido = puedeAvance && avance.on && avanceEfectivo > 0 && (!cajaAvance || avancePct < 0 || avancePct > 100);
+  // Con avance, lo que pasa por el punto trae también el avance y su comisión: esa parte no es
+  // de la factura ni sobrante. El "monto recibido" se lee sin ella; el avance va aparte.
+  const avanceEnPago = avanceActivo ? avanceCalc.total : 0;
+
+  const recibidoTecleado = parseFloat(String(form.received_amount).replace(",", "."));
+  const receivedNum = isNaN(recibidoTecleado) ? NaN : Math.max(0, parseFloat((recibidoTecleado - avanceEnPago).toFixed(2)));
   const amountNum   = parseFloat(String(form.amount).replace(",", "."));
 
   const historicalRate = parseFloat(sale?.exchange_rate) > 1 ? parseFloat(sale.exchange_rate) : defaultRate;
@@ -255,7 +344,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   const datosCaja = (journalId) => {
     const j = journalId ? activeJournals.find(x => x.id === journalId) : null;
     const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
-    const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
+    const r = (!cur || cur.is_base) ? 1 : tasaDeVenta(sale, parseFloat(cur.exchange_rate || 1));
     return { journal: j, rate: r, sym: cur?.symbol || baseCurrency?.symbol || "Ref." };
   };
 
@@ -343,8 +432,9 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
     const newCurId = j.currency_id || baseCurrency?.id;
     const newCur = activeCurrencies.find(c => c.id === parseInt(newCurId));
     const isNonBase = newCur && !newCur.is_base;
-    const newRate = isNonBase ? parseFloat(newCur.exchange_rate || 1) : 1;
+    const newRate = isNonBase ? tasaDeVenta(sale, parseFloat(newCur.exchange_rate || 1)) : 1;
     const newAmt = isNonBase ? pendingBsAt(newRate).toFixed(2) : pendingAfterCredit.toFixed(2);
+    avanceEnRecibidoRef.current = 0;
     setForm(p => ({
       ...p,
       payment_journal_id: id,
@@ -358,6 +448,22 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
     }));
   };
 
+  // El monto recibido prellenado incluye el avance: al prenderlo, cambiarlo o quitarlo, se
+  // ajusta. Solo si el cajero no lo tocó (recibido = abono + avance anterior): una cifra suya
+  // no se pisa.
+  const avanceEnRecibidoRef = useRef(0);
+  useEffect(() => {
+    const previo = avanceEnRecibidoRef.current;
+    if (Math.abs(previo - avanceEnPago) < 0.005) return;
+    avanceEnRecibidoRef.current = avanceEnPago;
+    setForm(p => {
+      const rec = parseFloat(String(p.received_amount).replace(",", "."));
+      const abono = parseFloat(String(p.amount).replace(",", "."));
+      if (isNaN(rec) || isNaN(abono) || Math.abs(rec - previo - abono) > 0.009) return p;
+      return { ...p, received_amount: (abono + avanceEnPago).toFixed(2) };
+    });
+  }, [avanceEnPago, form.payment_journal_id]);
+
   // Cobro inmediato: el diario ya viene elegido de la botonera. Se aplica una sola vez, al
   // abrir; el campo "MÉTODO DE PAGO" no se muestra (ver más abajo).
   const lockedRef = useRef(false);
@@ -369,6 +475,13 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lockedJournalId, activeJournals]);
   const methodLocked = !!lockedJournalId && form.payment_journal_id === lockedJournalId;
+
+  // Prender, apagar o cambiar la tasa de divisas cambia lo que se debe (y la tasa de los Bs):
+  // el monto sugerido se rehace con la caja que ya estaba elegida.
+  useEffect(() => {
+    if (form.payment_journal_id && !combinado) selectJournal(form.payment_journal_id, form.payment_method || null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fxCobroActivo, fxPerdon, ventaActual]);
 
   // Con el diario ya fijado ("Pago Inmediato"), el cajero solo tiene que teclear lo que
   // recibió: se le lleva el foco a ese campo. Doble rAF para pasar por detrás del auto-foco
@@ -490,6 +603,11 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
         surplus_kept:       (!combinado && changeBase > 0 && form.keep_change) ? changeBase : undefined,
         change_to_credit:   (changeBase > 0 && form.credit_change) ? changeBase : undefined,
         credit_amount:      creditApplied > 0 ? creditApplied : undefined,
+        // Tasa de divisas aplicada en este cobro: el servidor exonera la diferencia y fija la tasa
+        // en la misma transacción.
+        fx_cobro:           sale !== venta ? { rate: fxCobroTasa, forgive: fxPerdon, currency_id: monedaBs.id } : undefined,
+        // Avance de efectivo en el mismo pase: entra por la cuenta de este cobro.
+        cash_advance:       avanceActivo ? { cash_amount: avanceEfectivo, fee_pct: avancePct, cash_journal_id: cajaAvance.id } : undefined,
       };
       const res = sale.offline
         ? await cobroSinConexion(cuerpo)
@@ -498,8 +616,10 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
       // guardado. Se le dice al cajero para que no crea que se cobró dos veces.
       if (sale.offline) notify("Cobro guardado en este equipo: se envía solo al volver la conexión");
       else if (res.duplicated) notify("Ese cobro ya estaba registrado");
+      else if (res.cash_advance) notify(`Cobro registrado. Entrega ${curCajaAvance?.symbol || ""} ${parseFloat(res.cash_advance.cash_amount || avanceEfectivo).toFixed(2)} en efectivo`);
       else if (res.sale_status === "pagado") notify("¡Factura pagada completamente!");
       else notify("Pago parcial registrado");
+      setAvance(p => ({ ...p, on: false, monto: "" }));
       payKeyRef.current = null; // cobro cerrado: el próximo abono lleva clave nueva
       setForm(getEmpty());
       setCreditToApply("");
@@ -522,6 +642,8 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   const forgiveSoloBs = balanceUsd <= settleTolerance(sale) && forgiveBs >= 0.01;
   const canForgive = can("sales.forgive")
     && !sale?.offline
+    // Con la tasa de divisas aplicada en este cobro ya hay un perdón en curso: no se mezclan.
+    && sale === venta
     && (balanceUsd > settleTolerance(sale) || forgiveSoloBs)
     && !["pagado", "exonerado", "anulado", "devuelto"].includes(sale?.status);
   // Sin fmtBase: se declara más abajo y acá todavía no existe.
@@ -546,7 +668,36 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
   };
 
   const vueltoResuelto = changeBase <= 0 || form.keep_change || form.credit_change || (hayCajaDeCambio && !faltaCajaEnCambio);
-  const canSubmit = !loading && form.reference_date && (
+  // Tasa de divisas: al menos un cobro de la factura tiene que entrar en divisas (el servidor lo
+  // exige, ver sales/fxRate.js). Se avisa antes solo cuando la venta dice que aún no hubo
+  // ninguno; si no trae el dato, decide el servidor.
+  const esDeLaTasa = (cur) => !!cur && parseInt(cur.id) === parseInt(sale?.fx_currency_id);
+  // Una factura ya emitida a crédito ('pendiente' o 'parcial') con tasa y sin cobros en divisas
+  // se fió antes de la regla de contado: se cobra en Bs a su tasa (exentaDeDivisas en el
+  // backend). Salvo que la tasa se le esté aplicando en este cobro (sale !== venta).
+  const exenta = sale === venta && ["pendiente", "parcial"].includes(venta?.status);
+
+  // Quitar la tasa a una venta de contado (borrador) que al final paga todo en bolívares.
+  const [quitandoTasa, setQuitandoTasa] = useState(false);
+  const puedeQuitarTasa = sale === venta && venta?.status === "borrador" && !venta?.invoice_number && !venta?.offline;
+  const quitarTasa = async () => {
+    setQuitandoTasa(true);
+    try {
+      const res = await api.sales.removeFxRate(venta.id);
+      const nueva = res.data ?? res;
+      setVentaActual(nueva);
+      onSaleChange?.(nueva);
+      notify("Venta a precio normal: ya se puede cobrar en bolívares");
+    } catch (e) {
+      notify(e.message, "err");
+    } finally {
+      setQuitandoTasa(false);
+    }
+  };
+  const faltaDivisas = !!tasaFx && !exenta && sale?.fx_pago_divisas === false && !creditCoversAll && (combinado
+    ? partesComb.every(s => esDeLaTasa(s.cur))
+    : esDeLaTasa(payCur));
+  const canSubmit = !loading && form.reference_date && !faltaDivisas && !avanceInvalido && (
     creditCoversAll ||
     (combinado
       ? (!combParteFalta && !combNoUltimoExcede && recibidoComb > 0 && vueltoResuelto)
@@ -633,11 +784,20 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
     <div className="rounded-xl bg-surface-2 dark:bg-white/[0.04] p-4 space-y-2">
       <Row label="Factura" value={sale.invoice_number || sale.offline_ref || `#${sale.id}`} />
       {sale.customer_name && <Row label="Cliente" value={sale.customer_name} />}
+      {sale !== venta ? (<>
+        {/* Tasa de divisas aplicada en este cobro: en bolívares a la tasa especial el total
+            sale inflado, y lo que se lee es la cuenta en la base —total, lo pagado y lo que se
+            rebaja por pagar en divisas—. */}
+        <Row label="Total" value={fmtBase(venta.total)} />
+        {parseFloat(venta.amount_paid || 0) > 0 && <Row label="Ya pagado" value={fmtBase(venta.amount_paid)} />}
+        <Row label="Pago en divisas" value={`−${fmtBase(fxPerdon)}`} valueClass="text-brand-700 dark:text-brand-300" />
+      </>) : (
       <Row label="Total" value={hasBsRate ? `${defaultSym}${totalPreciseBs.toFixed(2)}` : fmt(sale.total)} />
+      )}
       {/* Lo pagado y el crédito van a la MISMA tasa que el total y el saldo (ver pendingBsAt).
           Con fmt salían a la tasa de la factura y la resta no cuadraba: A-0007150 mostraba
           Total Bs.61685,25 (a 887,302), Ya pagado Bs.61500,00 (a 884,75) y Saldo Bs.7,86. */}
-      {sale.amount_paid > 0 && (
+      {sale === venta && sale.amount_paid > 0 && (
         <Row label="Ya pagado" value={hasBsRate ? `${defaultSym}${roundBs2(sale.amount_paid * bsRate).toFixed(2)}` : fmt(sale.amount_paid)} />
       )}
       {creditApplied > 0 && (
@@ -663,6 +823,59 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
 
         {/* ── Columna principal: lo que el cajero teclea ── */}
         <div className="flex-1 min-w-0 space-y-4">
+
+        {/* La factura ya trae tasa de divisas (puesta en la caja al facturar, o en un cobro
+            anterior): se dice siempre, no solo al elegir una caja en bolívares. Sin esto el
+            interruptor desaparecía y parecía que la factura no tenía tasa. */}
+        {parseFloat(venta?.fx_rate) > 0 && (
+          <div className="rounded-xl border border-border/70 dark:border-white/[0.08] px-3.5 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[13px] font-medium text-content dark:text-white">Cobro en divisas</span>
+              <span className="text-[13px] font-semibold tabular-nums text-brand-700 dark:text-brand-300">
+                Tasa {parseFloat(venta.fx_rate).toFixed(2)}
+              </span>
+            </div>
+            <p className="mt-1 text-[12px] text-content-subtle leading-snug">
+              {["pendiente", "parcial"].includes(venta.status)
+                ? `Esta factura se fió con tasa de divisas: sus bolívares se cobran a ${parseFloat(venta.fx_rate).toFixed(2)}.`
+                : `Esta factura ya tiene tasa de divisas: sus bolívares se cobran a ${parseFloat(venta.fx_rate).toFixed(2)} y al menos una parte del pago va en divisas.`}
+            </p>
+          </div>
+        )}
+
+        {/* Cobro en divisas sobre una factura sin tasa (a crédito, o facturada sin ella). */}
+        {puedeFxCobro && (
+          <div className="rounded-xl border border-border/70 dark:border-white/[0.08]">
+            <label className="flex items-center justify-between gap-3 px-3.5 h-11 cursor-pointer">
+              <span className="text-[13px] font-medium text-content dark:text-white">Cobro en divisas</span>
+              <span className="relative inline-flex items-center shrink-0">
+                <input type="checkbox" className="sr-only peer" checked={fxCobroOn}
+                  onChange={() => setFxCobroOn(v => !v)} />
+                <span className="block w-10 h-6 rounded-full bg-border dark:bg-white/15 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500/40 peer-checked:bg-brand-600 dark:peer-checked:bg-brand-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-4" />
+              </span>
+            </label>
+            {fxCobroOn && (
+              <div className="px-3.5 pb-3.5 space-y-2">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">{monedaBs.symbol}</span>
+                  <input type="text" inputMode="decimal" autoComplete="off" autoFocus
+                    value={fxCobroText}
+                    onChange={e => setFxCobroText(e.target.value.replace(",", "."))}
+                    placeholder={tasaSistemaBs.toFixed(2)}
+                    aria-label="Tasa de divisas"
+                    className={`w-full h-10 pl-11 pr-3 rounded-lg border bg-white dark:bg-white/[0.04] text-[13px] text-right tabular-nums text-content dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 ${fxCobroTasa > 0 && fxCobroTasa <= tasaSistemaBs ? "border-red-500" : "border-border dark:border-white/10 focus:border-brand-500"}`} />
+                </div>
+                <p className={`text-[12px] leading-snug ${fxCobroTasa > 0 && fxCobroTasa <= tasaSistemaBs ? "text-red-600 dark:text-red-400" : "text-content-subtle"}`}>
+                  {fxCobroTasa > 0 && fxCobroTasa <= tasaSistemaBs
+                    ? `Tiene que ser mayor que la del sistema (${tasaSistemaBs.toFixed(2)})`
+                    : fxCobroActivo
+                      ? `En divisas debe ${baseCurrency?.symbol || "Ref."} ${Math.max(0, parseFloat(sale.balance || 0)).toFixed(2)}. Se exoneran ${baseCurrency?.symbol || "Ref."} ${fxPerdon.toFixed(2)} al cobrar.`
+                      : `Tasa a la que recibes la divisa. La del sistema es ${monedaBs.symbol} ${tasaSistemaBs.toFixed(2)}.`}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Crédito de cliente */}
         {customerCredit > 0.001 && (
@@ -729,7 +942,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                         onSelect={(j) => setForm(p => {
                           const parts = [...p.pay_parts];
                           const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
-                          const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
+                          const r = (!cur || cur.is_base) ? 1 : tasaDeVenta(sale, parseFloat(cur.exchange_rate || 1));
                           // Se sugiere lo que falta por cubrir, en la moneda de esta caja.
                           parts[idx] = { ...parts[idx], journal_id: j.id, payment_method: j.payment_method || null, amount: faltaEnMoneda(parts, idx, r).toFixed(2) };
                           return { ...p, pay_parts: parts };
@@ -834,7 +1047,15 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
             pacta en divisas y el cliente paga a la tasa del día en que paga —una factura vieja
             se cobra semanas después—. Mismo campo que ya usan ingresos y egresos, así que se
             comporta igual en todo el sistema: al tocarlo se pone en ámbar y ofrece restaurar. */}
-        {isNonBasePay && (
+        {isNonBasePay && tasaFx && (
+          <Field label={`Tasa de cambio (${payCur.code})`}>
+            <p className="h-10 px-3 flex items-center rounded-lg bg-surface-2 dark:bg-white/[0.04] text-[13px] text-content dark:text-white tabular-nums">
+              {payCur.symbol} {tasaFx.toFixed(2)}
+              <span className="ml-2 text-[12px] text-content-subtle">tasa de divisas de esta factura</span>
+            </p>
+          </Field>
+        )}
+        {isNonBasePay && !tasaFx && (
           <Field label={`Tasa de cambio (${payCur.code})`}>
             <RateField
               value={form.rate}
@@ -848,7 +1069,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
                 const seguiaAlSaldo = !isNaN(tecleado) && Math.abs(tecleado - prevPend) < 0.01;
                 if (!seguiaAlSaldo || !(nextRate > 1)) return { ...p, rate: v };
                 const nuevo = pendingBsAt(nextRate).toFixed(2);
-                return { ...p, rate: v, amount: nuevo, received_amount: nuevo };
+                return { ...p, rate: v, amount: nuevo, received_amount: (parseFloat(nuevo) + avanceEnPago).toFixed(2) };
               })}
               configuredRate={payCurRate}
               currency={payCur}
@@ -857,7 +1078,7 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
         )}
 
         {!combinado && (<>
-        <Field label="Monto recibido del cliente *">
+        <Field label={avanceEnPago > 0 ? "Monto recibido del cliente, con el avance *" : "Monto recibido del cliente *"}>
           <input
             ref={receivedRef}
             type="text"
@@ -869,7 +1090,9 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
               // Tope en la moneda de pago: en Bs → saldo línea por línea (9000); en $ → saldo
               // oficial (12.21), o el equivalente a tasa de efectivo cuando se usa.
               // Coincide con lo mostrado en "Saldo pendiente" y con el auto-relleno.
-              const abono = !isNaN(num) && num > 0 ? Math.min(num, maxInPayCur).toFixed(2) : "";
+              // Con avance, lo recibido trae el avance encima: a la factura va el resto.
+              const neto = !isNaN(num) ? num - avanceEnPago : NaN;
+              const abono = !isNaN(neto) && neto > 0 ? Math.min(neto, maxInPayCur).toFixed(2) : "";
               setForm(p => ({ ...p, received_amount: val, amount: abono }));
             }}
             placeholder={`${paySym}0.00`}
@@ -909,6 +1132,76 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
           </button>
         )}
         </>)}
+
+        {/* Se pidió un avance en la revisión pero se eligió una forma de pago que no lo admite:
+            se avisa en vez de perderlo sin decir nada. */}
+        {avanceInicial && !puedeAvance && !!selectedJournal && (
+          <p className="rounded-lg bg-amber-500/10 text-amber-800 dark:text-amber-300 px-3 py-2.5 text-[12px] leading-snug">
+            El avance de efectivo va por punto, pago móvil o transferencia, con una sola forma de pago. Con esta no se registra.
+          </p>
+        )}
+
+        {/* Avance de efectivo en el mismo pase: el punto cobra la factura más el avance y su
+            comisión, y los billetes salen de una caja de efectivo. */}
+        {puedeAvance && (
+          <div className="rounded-xl border border-border/70 dark:border-white/[0.08]">
+            <label className="flex items-center justify-between gap-3 px-3.5 h-11 cursor-pointer">
+              <span className="text-[13px] font-medium text-content dark:text-white">Avance de efectivo</span>
+              <span className="relative inline-flex items-center shrink-0">
+                <input type="checkbox" className="sr-only peer" checked={avance.on}
+                  onChange={() => setAvance(p => ({ ...p, on: !p.on }))} />
+                <span className="block w-10 h-6 rounded-full bg-border dark:bg-white/15 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500/40 peer-checked:bg-brand-600 dark:peer-checked:bg-brand-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-4" />
+              </span>
+            </label>
+            {avance.on && (
+              <div className="px-3.5 pb-3.5 space-y-3">
+                <div className="grid grid-cols-[1fr_96px] gap-2">
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">{curCajaAvance?.symbol || baseCurrency?.symbol}</span>
+                    <input type="text" inputMode="decimal" autoComplete="off"
+                      value={avance.monto}
+                      onChange={e => setAvance(p => ({ ...p, monto: e.target.value.replace(/[^\d.,]/g, "").replace(",", ".") }))}
+                      placeholder="0.00" aria-label="Efectivo a entregar"
+                      className="w-full h-10 pl-11 pr-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] text-right tabular-nums text-content dark:text-white focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                  </div>
+                  <div className="relative">
+                    <input type="text" inputMode="decimal" autoComplete="off"
+                      value={avance.pct}
+                      onChange={e => setAvance(p => ({ ...p, pct: e.target.value.replace(/[^\d.,]/g, "").replace(",", ".") }))}
+                      placeholder="0" aria-label="Comisión en porcentaje"
+                      className="w-full h-10 pl-3 pr-8 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] text-right tabular-nums text-content dark:text-white focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">%</span>
+                  </div>
+                </div>
+                {cajasEfectivo.length > 1 && (
+                  <JournalPickerButton value={cajaAvance?.id || ""} journals={cajasEfectivo} outflowOnly
+                    onSelect={(j) => setAvance(p => ({ ...p, cash_journal_id: j.id }))}
+                    placeholder="Caja de efectivo…" methodPrompt={{ tag: "Avance", title: "¿De qué caja sale el efectivo?" }} />
+                )}
+                {!cajaAvance ? (
+                  <p className="text-[12px] text-red-600 dark:text-red-400">No hay una caja de efectivo en esta sucursal de la que sacar el avance.</p>
+                ) : avanceEfectivo > 0 ? (
+                  <dl className="rounded-lg bg-surface-2 dark:bg-white/[0.04] px-3 py-2.5 space-y-1 text-[12px]">
+                    <div className="flex justify-between gap-3 text-content-subtle">
+                      <dt>Entregas de {cajaAvance.name}</dt>
+                      <dd><Money value={`${curCajaAvance?.symbol || ""} ${avanceEfectivo.toFixed(2)}`} /></dd>
+                    </div>
+                    <div className="flex justify-between gap-3 text-content-subtle">
+                      <dt>Avance más comisión ({avancePct.toLocaleString("es-VE", { maximumFractionDigits: 3 })} %)</dt>
+                      <dd><Money value={`${paySym} ${avanceCalc.total.toFixed(2)}`} /></dd>
+                    </div>
+                    <div className="flex justify-between items-baseline gap-3 pt-1.5 mt-1 border-t border-border/60 dark:border-white/[0.06]">
+                      <dt className="font-semibold text-content dark:text-white">Pasar por {selectedJournal?.name || "el punto"}</dt>
+                      <dd><Money value={`${paySym} ${((parseFloat(form.amount) || 0) + avanceCalc.total).toFixed(2)}`} className="text-[14px] font-bold text-content dark:text-white" /></dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <p className="text-[12px] text-content-subtle leading-snug">El cliente pasa por el punto la factura más el avance con su comisión, y se lleva el efectivo de la caja.</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Sobrante */}
         {changeBase > 0 && (
@@ -1153,6 +1446,24 @@ export default function PaymentFormModal({ sale, onClose, onSuccess, lockedJourn
           </Field>
         </aside>
       </div>
+
+      {faltaDivisas && (
+        <div className="mt-5 flex items-start gap-2 rounded-lg bg-amber-500/10 text-amber-800 dark:text-amber-300 px-3 py-2.5 text-[12px] leading-snug">
+          <svg className="w-4 h-4 shrink-0 mt-px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <div className="flex-1 min-w-0">
+            <p>Esta factura lleva tasa de divisas: al menos una parte del pago tiene que ser en divisas. Cobra en una caja en divisas o usa un pago combinado.</p>
+            {/* Venta de contado que al final paga todo en Bs: vuelve a precio normal. Solo un
+                borrador, que aún no tiene número fiscal (removeFxRate en el backend). */}
+            {puedeQuitarTasa && (
+              <button type="button" onClick={quitarTasa} disabled={quitandoTasa}
+                className="mt-2 h-8 px-3 rounded-lg text-[12px] font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-900 dark:text-amber-200 inline-flex items-center gap-2 disabled:opacity-60">
+                {quitandoTasa && <Spinner />}
+                Quitar la tasa y cobrar a precio normal
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Acciones */}
       <div className="flex gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">

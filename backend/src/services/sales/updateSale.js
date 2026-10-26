@@ -10,6 +10,7 @@ const {
 const getOneSale = require("./getOneSale");
 const { cargarPromosActivas, calcLineDiscount } = require("./promoDiscounts");
 const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = require("./lineDiscount");
+const { leerTasaDivisas } = require("./fxRate");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 
 const bad = (msg, status = 400, code = null) => Object.assign(new Error(msg), { status, code });
@@ -118,6 +119,8 @@ module.exports = async function updateSale(saleId, body, req) {
     }
     let subtotalBruto = 0;
     const descuentosNuevos = [];
+    // Las líneas tal como se guardan, para el tope de la tasa de divisas (ver fxRate.js).
+    const lineasGuardadas = [];
 
     let total = 0;
     for (const item of items) {
@@ -232,6 +235,10 @@ module.exports = async function updateSale(saleId, body, req) {
         },
         { transaction }
       );
+      lineasGuardadas.push({
+        price: unitPrice, quantity: qty, discount: unitDiscount,
+        line_discount_mode: manual ? manual.mode : null, line_discount_value: manual ? manual.value : null,
+      });
 
       total += round2(unitPrice) * qty - lineDiscountUsd;
     }
@@ -259,15 +266,37 @@ module.exports = async function updateSale(saleId, body, req) {
     }
 
     const discAmt = parseFloat(discount_amount ?? sale.discount_amount) || 0;
-    // Permiso y tope de los descuentos nuevos. El global solo si cambió: la cuenta pudo
-    // pausarla alguien con más permisos que quien la cobra.
-    const globalCambio = Math.abs(discAmt - (parseFloat(sale.discount_amount) || 0)) > 0.000005;
-    await assertDescuentosPermitidos(
-      req, { lineas: descuentosNuevos, subtotal: subtotalBruto, global: globalCambio ? discAmt : 0 }, transaction
-    );
     // El recargo se conserva si el body no lo trae: reabrir una cuenta para agregarle una
     // ronda no debe borrar la propina que ya se le había cargado.
     const chargeAmt = Math.max(0, parseFloat(service_charge ?? sale.service_charge) || 0);
+
+    // Tasa de divisas: la decide quien manda `fx_rate` (null la quita). Quien reescribe la
+    // cuenta sin nombrarla —la vista BARRA suma una ronda— conserva la que tenía, igual que el
+    // recargo. Su parte del descuento no es un descuento manual (ver fxRate.js).
+    const fxBody = body.fx_rate !== undefined ? body : {
+      fx_rate: sale.fx_rate, fx_discount: sale.fx_discount, fx_currency_id: sale.fx_currency_id,
+    };
+    const fxCambio = body.fx_rate !== undefined && (
+      Math.abs((parseFloat(body.fx_rate) || 0) - (parseFloat(sale.fx_rate) || 0)) > 0.000005
+      || Math.abs((parseFloat(body.fx_discount) || 0) - (parseFloat(sale.fx_discount) || 0)) > 0.000005
+    );
+    const { fx, manual: discManual } = fxCambio
+      ? await leerTasaDivisas(req, fxBody, { lineas: lineasGuardadas, descuentoTotal: discAmt, recargo: chargeAmt, transaction })
+      : {
+          fx: {
+            fx_rate: fxBody.fx_rate ?? null, fx_currency_id: fxBody.fx_currency_id ?? null, fx_discount: parseFloat(fxBody.fx_discount) || 0,
+            fx_base_rate: fxBody.fx_rate ? (body.fx_base_rate ?? sale.fx_base_rate ?? null) : null,
+          },
+          manual: Math.max(0, discAmt - (parseFloat(fxBody.fx_discount) || 0)),
+        };
+
+    // Permiso y tope de los descuentos nuevos. El global solo si cambió: la cuenta pudo
+    // pausarla alguien con más permisos que quien la cobra.
+    const manualPrevioGlobal = Math.max(0, (parseFloat(sale.discount_amount) || 0) - (parseFloat(sale.fx_discount) || 0));
+    const globalCambio = Math.abs(discManual - manualPrevioGlobal) > 0.000005;
+    await assertDescuentosPermitidos(
+      req, { lineas: descuentosNuevos, subtotal: subtotalBruto, global: globalCambio ? discManual : 0 }, transaction
+    );
     const chargeLabel = chargeAmt > 0
       ? ((service_charge_label ?? sale.service_charge_label)?.trim().slice(0, 40) || "Servicio")
       : null;
@@ -292,6 +321,7 @@ module.exports = async function updateSale(saleId, body, req) {
         discount_amount: discAmt,
         service_charge: chargeAmt,
         service_charge_label: chargeLabel,
+        ...fx,
         held_by_employee_id: null,
         held_at: null,
         ...headerPatch,

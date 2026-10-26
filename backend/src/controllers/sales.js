@@ -117,7 +117,9 @@ const create = async (req, res) => {
     broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
     res.status(201).json({ ok: true, data });
   } catch (err) {
-    const status = /insuficiente|no encontrado/i.test(err.message) ? 400 : 500;
+    // Los rechazos con código propio (permiso, tope, tasa de divisas) lo conservan: un 500 lo
+    // lee la caja como servidor caído, no como "no se puede".
+    const status = err.status || (/insuficiente|no encontrado/i.test(err.message) ? 400 : 500);
     res.status(status).json({ ok: false, message: err.message });
   }
 };
@@ -154,6 +156,17 @@ const confirmCredit = async (req, res) => {
     const result = await salesService.confirmCreditSale(req.params.id, req);
     broadcast(req.employee?.company_id ?? 0, 'sales:updated', {});
     res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ ok: false, message: err.message });
+  }
+};
+
+// DELETE /api/sales/:id/fx-rate — quita la tasa de divisas a una venta de contado aún sin cobrar
+const removeFxRate = async (req, res) => {
+  try {
+    const data = await salesService.removeFxRate(req.params.id, req);
+    broadcast(req.employee?.company_id ?? 0, 'sales:updated', {});
+    res.json({ ok: true, data });
   } catch (err) {
     res.status(err.status || 500).json({ ok: false, message: err.message });
   }
@@ -207,4 +220,4 @@ const setDueDate = async (req, res) => {
   }
 };
 
-module.exports = { getOne, getAll, getStats, create, syncOffline, cancel, update, confirmCredit, acceptOrder, claim, release, forgive, unforgive, receivables, setDueDate };
+module.exports = { getOne, getAll, getStats, create, syncOffline, cancel, update, confirmCredit, removeFxRate, acceptOrder, claim, release, forgive, unforgive, receivables, setDueDate };

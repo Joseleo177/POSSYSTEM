@@ -19,6 +19,11 @@ const { sanitizeDate, localDate } = require("./shared");
 const CAMBIO = "Cambio / Vuelto";
 const COMPRA = "Pagos a Proveedores";
 const DEVOLUCION = "Devolución de Crédito";
+// El avance de efectivo (services/cashAdvances) cambia el dinero de forma de pago: sale en
+// billetes y entra por el punto con la comisión. Va en la matriz como el vuelto: se resta de la
+// columna de la caja que lo entregó y se suma en la de la cuenta por la que entró (avance y
+// comisión). Así cada columna cuadra con su caja y con el banco, y el total del día solo crece
+// en la comisión. No es un egreso ni un "otro ingreso". Se reconoce por cash_advance_id.
 
 // "Factura 1234", "Nota de entrega 208432", "NE-55", "45020490"… El número del documento del
 // proveedor vive en el texto libre de la compra ("Notas o factura del proveedor") o en la
@@ -118,6 +123,32 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
        ${rango(diaManual("e"))}
      GROUP BY day, metodo, pj.currency_id`);
 
+  // Avances de efectivo: lo que salió de cada caja (egreso) y lo que entró por cada cuenta
+  // (ingresos del avance y de su comisión), por día y método.
+  const avances = await q(`
+    SELECT day, metodo, currency_id, SUM(amount_in_j)::float AS in_journal, SUM(amount_in_b)::float AS in_base,
+           SUM(amount_out_j)::float AS out_journal, SUM(amount_out_b)::float AS out_base
+      FROM (
+        SELECT ${diaManual("i")} AS day, ${metodo("i")} AS metodo, pj.currency_id,
+               i.amount * COALESCE(i.rate, 1) AS amount_in_j, i.amount AS amount_in_b, 0 AS amount_out_j, 0 AS amount_out_b
+          FROM incomes i
+          JOIN payment_journals pj ON pj.id = i.payment_journal_id
+         WHERE i.status = 'activo' AND i.cash_advance_id IS NOT NULL
+           ${scoped ? "AND i.company_id = :cid" : ""}
+           ${manualWh("i")}
+           ${rango(diaManual("i"))}
+        UNION ALL
+        SELECT ${diaManual("e")}, ${metodo("e")}, pj.currency_id,
+               0, 0, e.amount * COALESCE(e.rate, 1), e.amount
+          FROM expenses e
+          JOIN payment_journals pj ON pj.id = e.payment_journal_id
+         WHERE e.status = 'activo' AND e.cash_advance_id IS NOT NULL
+           ${scoped ? "AND e.company_id = :cid" : ""}
+           ${manualWh("e")}
+           ${rango(diaManual("e"))}
+      ) av
+     GROUP BY day, metodo, currency_id`);
+
   const otros = await q(`
     SELECT ${diaManual("i")} AS day,
            COUNT(i.id)::int AS tx_count,
@@ -128,7 +159,7 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
       FROM incomes i
       LEFT JOIN payment_journals pj ON pj.id = i.payment_journal_id
       LEFT JOIN currencies c ON c.id = pj.currency_id
-     WHERE i.status = 'activo'
+     WHERE i.status = 'activo' AND i.cash_advance_id IS NULL
        ${scoped ? "AND i.company_id = :cid" : ""}
        ${manualWh("i")}
        ${rango(diaManual("i"))}
@@ -154,7 +185,7 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
         JOIN expense_categories ec ON ec.id = e.category_id
         LEFT JOIN payment_journals pj ON pj.id = e.payment_journal_id
         LEFT JOIN banks b ON b.id = pj.bank_id
-       WHERE e.status = 'activo' AND ec.name <> :cambio
+       WHERE e.status = 'activo' AND ec.name <> :cambio AND e.cash_advance_id IS NULL
          ${scoped ? "AND e.company_id = :cid" : ""}
          ${manualWh("e")}
          ${rango(diaManual("e"))}
@@ -198,7 +229,7 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
      ORDER BY ex.day ASC, ex.created_at ASC, ex.id ASC`);
 
   // ── Catálogos: monedas y nombres de los métodos ────────────────────────────────────────
-  const currencyIds = [...new Set([...cobros, ...vueltos, ...egresos].map(r => r.currency_id).filter(Boolean))];
+  const currencyIds = [...new Set([...cobros, ...vueltos, ...avances, ...egresos].map(r => r.currency_id).filter(Boolean))];
   const monedas = await q(`
     SELECT id, symbol, code, is_base FROM currencies
      WHERE (${currencyIds.length ? `id IN (${currencyIds.map(Number).filter(Number.isInteger).join(",")}) OR ` : ""} is_base = true)
@@ -222,6 +253,7 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
   };
   cobros.forEach(addCol);
   vueltos.forEach(addCol);
+  avances.forEach(addCol);
   // El mismo método en dos monedas (efectivo en Bs y en divisas) se nombra con la moneda.
   const porMetodo = {};
   for (const c of colMap.values()) porMetodo[c.method_code] = (porMetodo[c.method_code] || 0) + 1;
@@ -243,7 +275,7 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
     if (!days.has(k)) days.set(k, { date: k, rate: null, cells: {}, other: { amount_journal: 0, amount_base: 0, amount_local: 0, amount_base_cur: 0, tx_count: 0 }, tx_count: 0 });
     return days.get(k);
   };
-  const celda = (d, k) => d.cells[k] || (d.cells[k] = { amount_journal: 0, amount_base: 0, tx_count: 0, change_journal: 0, change_base: 0 });
+  const celda = (d, k) => d.cells[k] || (d.cells[k] = { amount_journal: 0, amount_base: 0, tx_count: 0, change_journal: 0, change_base: 0, advance_in_journal: 0, advance_in_base: 0, advance_out_journal: 0, advance_out_base: 0 });
 
   for (const r of cobros) {
     const c = celda(dia(r.day), keyOf(r));
@@ -254,6 +286,12 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
     const c = celda(dia(r.day), keyOf(r));
     c.amount_journal -= r.amount_journal; c.amount_base -= r.amount_base;
     c.change_journal += r.amount_journal; c.change_base += r.amount_base;
+  }
+  for (const r of avances) {
+    const c = celda(dia(r.day), keyOf(r));
+    c.amount_journal += r.in_journal - r.out_journal; c.amount_base += r.in_base - r.out_base;
+    c.advance_in_journal += r.in_journal; c.advance_in_base += r.in_base;
+    c.advance_out_journal += r.out_journal; c.advance_out_base += r.out_base;
   }
   for (const r of otros) Object.assign(dia(r.day).other, r);
   for (const r of tasas) dia(r.day).rate = r.rate;
@@ -278,13 +316,16 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
     d.total_local = local + (d.rate ? baseCur * d.rate : 0);
   }
 
-  const totals = { cells: {}, other: { amount_journal: 0, amount_base: 0, amount_local: 0, tx_count: 0 }, total_base: 0, total_local: 0, change_base: 0, tx_count: 0 };
+  const totals = { cells: {}, other: { amount_journal: 0, amount_base: 0, amount_local: 0, tx_count: 0 }, total_base: 0, total_local: 0, change_base: 0, advance_in_base: 0, advance_out_base: 0, tx_count: 0 };
   for (const d of lista) {
     for (const [k, c] of Object.entries(d.cells)) {
-      const t = totals.cells[k] || (totals.cells[k] = { amount_journal: 0, amount_base: 0, tx_count: 0, change_journal: 0, change_base: 0 });
+      const t = totals.cells[k] || (totals.cells[k] = { amount_journal: 0, amount_base: 0, tx_count: 0, change_journal: 0, change_base: 0, advance_in_journal: 0, advance_in_base: 0, advance_out_journal: 0, advance_out_base: 0 });
       t.amount_journal += c.amount_journal; t.amount_base += c.amount_base; t.tx_count += c.tx_count;
       t.change_journal += c.change_journal; t.change_base += c.change_base;
+      t.advance_in_journal += c.advance_in_journal; t.advance_in_base += c.advance_in_base;
+      t.advance_out_journal += c.advance_out_journal; t.advance_out_base += c.advance_out_base;
       totals.change_base += c.change_base;
+      totals.advance_in_base += c.advance_in_base; totals.advance_out_base += c.advance_out_base;
     }
     totals.other.amount_base += d.other.amount_base;
     totals.other.amount_local += d.other.amount_local;
@@ -350,6 +391,10 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
       // Bs por cada Ref. de ingreso: la "tasa promedio" del período (en la hoja, "% de rep.").
       avg_rate: totals.total_base > 0 && totals.total_local > 0 ? totals.total_local / totals.total_base : null,
       change_base: totals.change_base,
+      // Avances de efectivo del período: lo entregado en billetes y lo que entró por el punto
+      // (con la comisión). La diferencia es la comisión, lo único que suma al ingreso.
+      advance_out_base: totals.advance_out_base,
+      advance_in_base: totals.advance_in_base,
     },
     income: { columns, days: lista, totals },
     expenses: {

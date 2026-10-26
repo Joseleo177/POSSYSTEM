@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "../ui/Modal";
+import ConfirmModal from "../ui/ConfirmModal";
 import CustomSelect from "../ui/CustomSelect";
 import { Spinner } from "../ui/Spinner";
 import { api } from "../../services/api";
@@ -97,6 +98,15 @@ export default function DeliverPieceModal({ open, order, materials, initial = nu
         })
         .filter(u => u.rinde > 0);
 
+    // La pieza más chica que cubre todos los cortes que faltan (la lista viene de la más chica
+    // a la más grande). Entregar otra más grande deja material en el taller sin necesidad.
+    const best = planId && hasFit ? rows.find(p => cutsIn(p, initial.w_mm, initial.l_mm) >= initial.missing) : null;
+    const [askBig, setAskBig] = useState(null);
+    const tryDeliver = (p) => {
+        if (best && p.id !== best.id && (p.size || 0) > (best.size || 0) * 1.5) { setAskBig(p); return; }
+        deliver(p);
+    };
+
     const deliver = (p) => run(p.id, async () => {
         try {
             const r = await api.factory.deliverPiece(order.id, { piece_id: p.id, plan_id: planId });
@@ -116,7 +126,8 @@ export default function DeliverPieceModal({ open, order, materials, initial = nu
     });
 
     return (
-        <Modal open={open} onClose={onClose} title={`Entregar material · ${order.code}`} width={620}>
+        <>
+        <Modal open={open} onClose={askBig ? () => {} : onClose} title={`Entregar material · ${order.code}`} width={620}>
             <div className="space-y-4">
                 {planId && (
                     <div className="rounded-xl bg-surface-2/70 dark:bg-white/[0.04] px-4 py-3 text-[13px]">
@@ -201,6 +212,7 @@ export default function DeliverPieceModal({ open, order, materials, initial = nu
                                         <div className="flex items-baseline gap-2">
                                             <span className="text-[14px] font-semibold text-content dark:text-white tabular-nums">#{p.code}</span>
                                             <span className="text-[13px] text-content dark:text-white tabular-nums">{fmtDims(p)}</span>
+                                            {best?.id === p.id && <span className="text-[12px] font-semibold text-brand-700 dark:text-brand-300">Sugerida</span>}
                                         </div>
                                         <div className="text-[12px] text-content-subtle truncate">
                                             {fmtSize(p.size, p.unit)} · {toNameCase(p.product_name)} · {ORIGIN_LABEL[p.origin] || p.origin}
@@ -214,7 +226,7 @@ export default function DeliverPieceModal({ open, order, materials, initial = nu
                                             </div>
                                         )}
                                     </div>
-                                    <button onClick={() => deliver(p)} disabled={busy(p.id)}
+                                    <button onClick={() => tryDeliver(p)} disabled={busy(p.id)}
                                         className="btn-accent h-9 px-3 rounded-lg text-[13px] font-semibold shrink-0 flex items-center gap-2">
                                         {busy(p.id) && <Spinner />} Entregar
                                     </button>
@@ -226,5 +238,17 @@ export default function DeliverPieceModal({ open, order, materials, initial = nu
                 </div>
             </div>
         </Modal>
+
+        <ConfirmModal
+            isOpen={!!askBig}
+            type="warning"
+            title="Hay una pieza más chica que alcanza"
+            message={askBig && best ? "#" + best.code + " (" + fmtDims(best) + ") cubre los " + initial.missing + " cortes. Si entregas #" + askBig.code + " (" + fmtDims(askBig) + "), se abre una pieza más grande de lo necesario." : ""}
+            confirmText={askBig ? "Entregar #" + askBig.code + " igual" : "Entregar igual"}
+            cancelText="Volver"
+            onConfirm={() => { const p = askBig; setAskBig(null); deliver(p); }}
+            onCancel={() => setAskBig(null)}
+        />
+        </>
     );
 }

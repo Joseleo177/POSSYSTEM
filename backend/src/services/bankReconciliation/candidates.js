@@ -11,6 +11,9 @@ const { sequelize, QT, localDate, r2, cents, TOL, dayDiff, shiftDay, refMatches,
  *     por varias facturas, y el banco lo muestra como un solo abono (ver project-cobro-conjunto).
  *   · Un vuelto entregado por el banco (payments.amount < 0) es una salida.
  *   · Ingresos manuales entran; egresos (incluidos los pagos a proveedor) salen.
+ *   · Un avance de efectivo es una unidad (el avance y su comisión entraron en un solo pase). Si
+ *     fue junto a un cobro, se suma a la unidad de ese cobro: el punto pasó la factura y el
+ *     avance juntos. Esas unidades traen `parts` [{ type, id }] con cada movimiento.
  *
  * El monto va en la moneda del diario —la del extracto—: amount × tasa, igual que el Estado
  * de Cuenta. La fecha es la que dijo el cajero (reference_date) o, si no la puso, el día del
@@ -45,9 +48,11 @@ async function loadUnits(companyId, journalIds, dateFrom, dateTo) {
       SELECT i.id, i.payment_journal_id AS journal_id, pj.name AS journal_name,
              COALESCE(i.payment_method, pj.type) AS method, pm.name AS method_name,
              (i.amount * COALESCE(i.rate, 1)) AS amount_local, i.amount AS amount_base,
-             ${movDay("i")} AS day, i.created_at, i.reference AS ref, i.description
+             ${movDay("i")} AS day, i.created_at, i.reference AS ref, i.description,
+             i.cash_advance_id, ca.payment_id AS advance_payment_id
         FROM incomes i
         JOIN payment_journals pj ON pj.id = i.payment_journal_id
+        LEFT JOIN cash_advances ca ON ca.id = i.cash_advance_id
         LEFT JOIN payment_methods pm ON pm.code = COALESCE(i.payment_method, pj.type) AND pm.company_id = i.company_id
        WHERE i.company_id = :company_id
          AND i.payment_journal_id IN (:journals)
@@ -135,7 +140,37 @@ async function loadUnits(companyId, journalIds, dateFrom, dateTo) {
     delete u.amount_raw; delete u.invoices;
   }
 
+  // Avances de efectivo: sus ingresos (avance + comisión) son un solo pase. Con cobro, van a la
+  // unidad de ese cobro si sigue pendiente y es de la misma cuenta.
+  const unidadDeCobro = new Map();
+  for (const u of units) if (u.type === "payment") for (const id of u.ids) unidadDeCobro.set(id, u);
+  const avances = new Map();
+  const sueltos = [];
   for (const i of incomes) {
+    if (!i.cash_advance_id) { sueltos.push(i); continue; }
+    const cobro = i.advance_payment_id ? unidadDeCobro.get(i.advance_payment_id) : null;
+    const destino = cobro && cobro.journal_id === i.journal_id ? cobro : avances.get(i.cash_advance_id);
+    if (destino) {
+      if (!destino.parts) destino.parts = destino.ids.map(id => ({ type: destino.type, id }));
+      destino.parts.push({ type: "income", id: i.id });
+      destino.amount = r2(destino.amount + parseFloat(i.amount_local));
+      if (destino.type === "payment" && !destino.con_avance) {
+        destino.con_avance = true;
+        destino.title = `${destino.title} + avance de efectivo`;
+      }
+      continue;
+    }
+    const u = {
+      key: `a:${i.cash_advance_id}`, type: "income", ids: [i.id], parts: [{ type: "income", id: i.id }], dir: "in",
+      amount: r2(i.amount_local), day: day(i.day), created_at: i.created_at, ref: i.ref,
+      title: `Avance de efectivo #${i.cash_advance_id}`, sub: `INC-${i.id}`,
+      journal_id: i.journal_id, journal_name: i.journal_name, method: i.method, method_name: i.method_name || i.method,
+    };
+    avances.set(i.cash_advance_id, u);
+    units.push(u);
+  }
+
+  for (const i of sueltos) {
     units.push({
       key: `i:${i.id}`, type: "income", ids: [i.id], dir: "in",
       amount: r2(i.amount_local), day: day(i.day), created_at: i.created_at, ref: i.ref,

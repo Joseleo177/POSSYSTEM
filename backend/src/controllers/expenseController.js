@@ -6,6 +6,7 @@ const { resolveMethod } = require("../utils/journalMethod");
 const { visibleWarehouseIds, assertWarehouseAccess } = require('../middleware/auth');
 const { assertJournalsInWarehouse } = require('../utils/journalWarehouse');
 const { expenseRefSql } = require('../utils/expenseReference');
+const { anularAvance } = require('../services/cashAdvances');
 
 // ── Listar egresos (paginado + filtros) ──────────────────────
 exports.getAll = async (req, res, next) => {
@@ -178,6 +179,12 @@ exports.voidExpense = async (req, res, next) => {
     if (!expense) return res.status(404).json({ ok: false, message: 'Egreso no encontrado' });
     await assertWarehouseAccess(req, expense.warehouse_id, { optional: true });
     if (expense.status === 'anulado') return res.status(400).json({ ok: false, message: 'Ya está anulado' });
+
+    // Parte de un avance de efectivo: se anula el avance entero (sus ingresos también).
+    if (expense.cash_advance_id) {
+      await anularAvance(expense.cash_advance_id);
+      return res.json({ ok: true, message: 'Avance de efectivo anulado completo (egreso, avance y comisión)' });
+    }
 
     await expense.update({ status: 'anulado' });
 

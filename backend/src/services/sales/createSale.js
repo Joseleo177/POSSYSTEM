@@ -17,6 +17,7 @@ const {
 const { Quotation, QuotationItem } = require("../../models");
 const { cargarPromosActivas, calcLineDiscount } = require("./promoDiscounts");
 const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = require("./lineDiscount");
+const { leerTasaDivisas, tienePagoEnDivisas } = require("./fxRate");
 
 // Devuelve la venta con todas sus relaciones, en el formato plano que
 // espera el frontend. Reutilizado por la respuesta normal y la idempotente.
@@ -48,6 +49,9 @@ async function formatSale(saleId) {
     data.items.reduce((s, si) => s + parseFloat(si.subtotal || 0), 0).toFixed(5)
   );
   ["Customer", "Employee", "Currency", "Warehouse", "Serie", "SaleItems"].forEach((k) => delete data[k]);
+  // Con tasa de divisas: si ya entró algún cobro en divisas (una venta recién creada, no; la
+  // devuelta por un reintento, quizá).
+  data.fx_pago_divisas = parseFloat(data.fx_rate) > 0 ? await tienePagoEnDivisas(data) : false;
   return data;
 }
 
@@ -273,10 +277,23 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
       }
     }
 
+    // Cobro a tasa de divisas: su parte del descuento lleva permiso propio y no pasa por el
+    // tope de descuentos (ver fxRate.js). Las líneas van como quedan guardadas más abajo.
+    const { fx, manual: discManual } = await leerTasaDivisas(req, body, {
+      lineas: enrichedItems.map(e => ({
+        price: e.unitPrice,
+        quantity: e.qty,
+        discount: e.qty > 0 ? parseFloat(((e.lineDiscountBs || 0) / e.qty).toFixed(5)) : 0,
+        line_discount_mode: e.manual?.mode ?? null,
+        line_discount_value: e.manual?.value ?? null,
+      })),
+      descuentoTotal: discAmt, recargo: chargeAmt, offline: !!offline, transaction,
+    });
+
     // Descuentos: permiso y tope de quien factura. Sin conexión no se controla: la venta ya
     // ocurrió en el mostrador y se registra tal como se cobró, igual que su precio.
     if (!offline) {
-      await assertDescuentosPermitidos(req, { lineas: descuentosManuales, subtotal: subtotalBruto, global: discAmt }, transaction);
+      await assertDescuentosPermitidos(req, { lineas: descuentosManuales, subtotal: subtotalBruto, global: discManual }, transaction);
     }
 
     // 2 decimales: sale.total es el monto "oficial" de la factura en $.
@@ -298,6 +315,7 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
         discount_amount: discAmt,
         service_charge: chargeAmt,
         service_charge_label: chargeLabel,
+        ...fx,
         payment_method: method,
         warehouse_id,
         serie_id: serie.id,
