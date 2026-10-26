@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const { Employee, Role, EmployeeWarehouse, Warehouse, Sequelize } = require("../models");
 const { isAdmin, employeeWarehouseIds } = require("../middleware/auth");
 const { MODULES, ALL_KEYS } = require("../config/permissions");
+const { invalidateEmployee } = require("../utils/loginEvents");
 
 const { Op } = Sequelize;
 
@@ -78,6 +79,25 @@ const getAll = async (req, res) => {
         return emp;
       })
       .filter(emp => isAdmin(req) || !emp.is_admin);
+
+    // Intentos rechazados de los últimos 30 días: es la señal que se pinta en la lista. Una
+    // sola consulta agrupada sobre el índice (company_id, created_at).
+    if (req.company_id && data.length) {
+      const { sequelize } = require("../models");
+      const rows = await sequelize.query(
+        `SELECT employee_id, COUNT(*)::int AS failed, MAX(created_at) AS last_failed_at
+           FROM login_events
+          WHERE company_id = :cid AND result <> 'ok' AND employee_id IS NOT NULL
+            AND created_at > NOW() - INTERVAL '30 days'
+          GROUP BY employee_id`,
+        { replacements: { cid: req.company_id }, type: sequelize.QueryTypes.SELECT }
+      );
+      const byEmp = new Map(rows.map(r => [r.employee_id, r]));
+      for (const emp of data) {
+        emp.failed_logins_30d   = byEmp.get(emp.id)?.failed ?? 0;
+        emp.last_failed_login_at = byEmp.get(emp.id)?.last_failed_at ?? null;
+      }
+    }
 
     res.json({ ok: true, data });
   } catch (err) {
@@ -210,6 +230,8 @@ const update = async (req, res) => {
     }
 
     await employee.update(updates);
+    // Si se acaba de inactivar, su próxima request ya no espera los 30 s de la caché.
+    invalidateEmployee(employee.id);
     if (warehouse_ids !== undefined) await syncWarehouses(req, employee.id, warehouse_ids);
 
     res.json({ ok: true, data: safeEmp(employee) });
@@ -229,9 +251,39 @@ const remove = async (req, res) => {
     if (error) return res.status(error.status).json({ ok: false, message: error.message });
 
     await employee.destroy();
+    invalidateEmployee(employee.id);
     res.json({ ok: true, message: "Empleado eliminado" });
   } catch (err) {
     res.status(500).json({ ok: false, message: "Error al eliminar empleado" });
+  }
+};
+
+// GET /api/employees/:id/access — últimos accesos e intentos de un empleado.
+// Mismo alcance que editarlo: un encargado ve el historial de su sucursal y nunca el de un
+// administrador.
+const getAccess = async (req, res) => {
+  try {
+    const { employee, error } = await targetEditable(req, req.params.id);
+    if (error) return res.status(error.status).json({ ok: false, message: error.message });
+
+    const { sequelize } = require("../models");
+    const events = await sequelize.query(
+      `SELECT id, kind, result, ip, user_agent, created_at
+         FROM login_events
+        WHERE employee_id = :id
+        ORDER BY created_at DESC
+        LIMIT 100`,
+      { replacements: { id: employee.id }, type: sequelize.QueryTypes.SELECT }
+    );
+    res.json({ ok: true, data: {
+      last_login_at: employee.last_login_at,
+      last_seen_at:  employee.last_seen_at,
+      active:        employee.active,
+      events,
+    } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, message: "Error al obtener los accesos" });
   }
 };
 
@@ -265,4 +317,4 @@ const updateRole = async (req, res) => {
   }
 };
 
-module.exports = { getAll, getRoles, create, update, remove, updateRole, getPermissionCatalog };
+module.exports = { getAll, getRoles, create, update, remove, updateRole, getPermissionCatalog, getAccess };

@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const { tenantStorage } = require("../utils/tenantStorage");
 const { getCompanyStatus, setCompanyStatus } = require("../utils/companyStatusCache");
 const { LEGACY_MAP } = require("../config/permissions");
+const { isEmployeeActive, recordLoginEvent, RESULT } = require("../utils/loginEvents");
 
 const SECRET = process.env.JWT_SECRET;
 if (!SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -23,6 +24,20 @@ const auth = async (req, res, next) => {
   req.employee = decoded;
   req.company_id = decoded.company_id;
   req.is_superuser = !!decoded.is_superuser;
+
+  // El empleado tiene que seguir activo. Antes inactivar no cerraba la sesión abierta: el
+  // token valía sus 12 h completas. Con el 401 la app intenta renovar, /auth/refresh también lo
+  // rechaza y la caja vuelve al login. El intento queda anotado (una vez, no por request).
+  try {
+    const { active, fresh } = await isEmployeeActive(decoded.id);
+    if (!active) {
+      if (fresh) await recordLoginEvent(req, { employee: decoded, kind: "session", result: RESULT.INACTIVE });
+      return res.status(401).json({ ok: false, message: "Tu usuario fue desactivado. Habla con el administrador." });
+    }
+  } catch (err) {
+    // Mismo criterio que la suscripción: un tropiezo de la base no deja sin sistema a la caja.
+    console.error("Auth employee check error:", err.message);
+  }
 
   // Verificación de suscripción universal.
   //

@@ -12,6 +12,7 @@ router.get("/permissions", auth, ctrl.getPermissionCatalog);
 router.get("/roles",       auth,                                ctrl.getRoles);
 router.put("/roles/:id",   auth, permit("admin"),               ctrl.updateRole);
 router.get("/",            auth, permit("employees.view"),  ctrl.getAll);
+router.get("/:id/access",  auth, permit("employees.view"),  ctrl.getAccess);
 router.post("/",           auth, permit("employees.create"),  ctrl.create);
 router.put("/:id",         auth, permit("employees.edit"),  ctrl.update);
 router.delete("/:id",      auth, permit("employees.delete"),  ctrl.remove);

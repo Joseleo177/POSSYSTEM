@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt    = require("jsonwebtoken");
 const { Employee, Role, Warehouse, Company } = require("../models");
+const { recordLoginEvent, invalidateEmployee, RESULT } = require("../utils/loginEvents");
 
 const SECRET  = process.env.JWT_SECRET;
 if (!SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -21,12 +22,23 @@ const login = async (req, res) => {
       ]
     });
 
-    if (!emp || !emp.active)
+    // Cada intento queda anotado, también los rechazados: lo que el dueño quiere saber de un
+    // usuario inactivo es justamente si sigue intentando entrar. Al inactivo se le comprueba
+    // la contraseña para distinguir a la persona de alguien que solo prueba su usuario.
+    if (!emp) {
+      await recordLoginEvent(req, { username, kind: "login", result: RESULT.UNKNOWN });
       return res.status(401).json({ ok: false, message: "Usuario no encontrado o inactivo" });
+    }
 
     const valid = await bcrypt.compare(password, emp.password_hash);
-    if (!valid)
+    if (!emp.active) {
+      await recordLoginEvent(req, { employee: emp, kind: "login", result: valid ? RESULT.INACTIVE : RESULT.BAD_PASSWORD });
+      return res.status(401).json({ ok: false, message: "Usuario no encontrado o inactivo" });
+    }
+    if (!valid) {
+      await recordLoginEvent(req, { employee: emp, kind: "login", result: RESULT.BAD_PASSWORD });
       return res.status(401).json({ ok: false, message: "Contraseña incorrecta" });
+    }
 
     // Verificación de suscripción de la empresa
     if (!emp.is_superuser && emp.company_id) {
@@ -34,14 +46,17 @@ const login = async (req, res) => {
         attributes: ['id', 'active', 'subscription_status', 'expires_at']
       });
 
+      let bloqueo = null;
       if (!company || !company.active) {
-        return res.status(403).json({ ok: false, message: "Tu empresa ha sido desactivada. Contacta al administrador." });
+        bloqueo = "Tu empresa ha sido desactivada. Contacta al administrador.";
+      } else if (company.subscription_status === 'Suspendida') {
+        bloqueo = "La suscripción de tu empresa está suspendida. Contacta al administrador.";
+      } else if (company.expires_at && new Date(company.expires_at) < new Date()) {
+        bloqueo = "La suscripción de tu empresa ha expirado. Renueva tu plan para continuar.";
       }
-      if (company.subscription_status === 'Suspendida') {
-        return res.status(403).json({ ok: false, message: "La suscripción de tu empresa está suspendida. Contacta al administrador." });
-      }
-      if (company.expires_at && new Date(company.expires_at) < new Date()) {
-        return res.status(403).json({ ok: false, message: "La suscripción de tu empresa ha expirado. Renueva tu plan para continuar." });
+      if (bloqueo) {
+        await recordLoginEvent(req, { employee: emp, kind: "login", result: RESULT.BLOCKED });
+        return res.status(403).json({ ok: false, message: bloqueo });
       }
     }
 
@@ -59,6 +74,8 @@ const login = async (req, res) => {
 
     const token = jwt.sign(payload, SECRET, { expiresIn: EXPIRES });
     const refresh_token = jwt.sign({ id: emp.id, company_id: emp.company_id }, SECRET, { expiresIn: '7d' });
+    await recordLoginEvent(req, { employee: emp, kind: "login", result: RESULT.OK });
+    invalidateEmployee(emp.id);
     res.json({ ok: true, token, refresh_token, employee: payload });
   } catch (err) {
     // El detalle queda en el log; al cliente solo un mensaje genérico. El login es un
@@ -128,7 +145,12 @@ const refresh = async (req, res) => {
       ]
     });
 
-    if (!emp || !emp.active) return res.status(401).json({ ok: false, message: "Usuario inválido o inactivo" });
+    if (!emp || !emp.active) {
+      // Una sesión abierta de un usuario inactivo que intenta seguir: es el caso que más
+      // interesa ver en su historial.
+      if (emp) await recordLoginEvent(req, { employee: emp, kind: "refresh", result: RESULT.INACTIVE });
+      return res.status(401).json({ ok: false, message: "Usuario inválido o inactivo" });
+    }
 
     const payload = {
       id:           emp.id,
@@ -144,6 +166,7 @@ const refresh = async (req, res) => {
 
     const token = jwt.sign(payload, SECRET, { expiresIn: EXPIRES });
     const new_refresh_token = jwt.sign({ id: emp.id, company_id: emp.company_id }, SECRET, { expiresIn: '7d' });
+    await recordLoginEvent(req, { employee: emp, kind: "refresh", result: RESULT.OK });
 
     res.json({ ok: true, token, refresh_token: new_refresh_token });
   } catch (err) {

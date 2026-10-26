@@ -438,6 +438,7 @@ export const api = {
     create:      (body)      => request("/employees",            { method: "POST",   body: JSON.stringify(body) }),
     update:      (id, body)  => request(`/employees/${id}`,      { method: "PUT",    body: JSON.stringify(body) }),
     remove:      (id)        => request(`/employees/${id}`,      { method: "DELETE" }),
+    getAccess:   (id)        => request(`/employees/${id}/access`),
     updateRole:  (id, body)  => request(`/employees/roles/${id}`,{ method: "PUT",    body: JSON.stringify(body) }),
   },
   currencies: {

@@ -10,6 +10,9 @@ import StatusMark, { ACTIVE_STATUS } from "./ui/StatusMark";
 import { ledgerRow, stopRow, LedgerEmpty, RowIcon, ICONS } from "./ui/Ledger";
 import { useApp } from "../context/AppContext";
 import { toNameCase } from "../helpers";
+import EmployeeAccessModal, { haceCuanto } from "./EmployeeAccessModal";
+
+const CLOCK = "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z";
 
 const EMPTY = { username: "", password: "", full_name: "", email: "", phone: "", role_id: "", warehouse_ids: [] };
 
@@ -35,6 +38,7 @@ export default function EmployeesTab({ notify }) {
     const [loading, setLoading]     = useState(false);
     const [modal, setModal]         = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const [accessOf, setAccessOf] = useState(null);
     const nameRef = useRef(null);
 
     const load = async () => {
@@ -185,9 +189,30 @@ export default function EmployeesTab({ notify }) {
             {iniciales(e.full_name)}
         </span>
     );
+    // Intentos rechazados de un usuario inactivo: es lo que la dueña quiere ver de un vistazo
+    // (alguien a quien ya le quitaron el acceso y sigue probando). En un activo es ámbar: una
+    // contraseña mal tecleada pasa todos los días.
+    const alerta = (e) => e.failed_logins_30d > 0 ? (e.active ? "warning" : "danger") : null;
+    const ultimoAcceso = (e) => {
+        const a = alerta(e);
+        return (
+            <>
+                <div className="text-[13px] text-content dark:text-white tabular-nums whitespace-nowrap">
+                    {haceCuanto(e.last_seen_at || e.last_login_at) || <span className="text-content-subtle">Sin registro</span>}
+                </div>
+                {a && (
+                    <div className={`text-[12px] font-medium tabular-nums whitespace-nowrap ${a === "danger" ? "text-red-600 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}>
+                        {e.failed_logins_30d} {e.failed_logins_30d === 1 ? "intento fallido" : "intentos fallidos"}
+                    </div>
+                )}
+            </>
+        );
+    };
+
     // Acciones siempre a la vista: en una tablet no hay hover que las descubra.
     const acciones = (e) => (
         <div className="flex items-center justify-end gap-0.5" onClick={stopRow}>
+            <RowIcon icon={CLOCK} title="Ver accesos" onClick={() => setAccessOf(e)} />
             <RowIcon icon="edit" title="Editar empleado" onClick={() => openEdit(e)} />
             <RowIcon icon="trash" tone="danger" title="Eliminar empleado" onClick={() => setDeleteConfirm(e)} />
         </div>
@@ -209,22 +234,23 @@ export default function EmployeesTab({ notify }) {
                 <>
                     {/* Libro (escritorio) */}
                     <div className="hidden md:block card-premium overflow-auto flex-1">
-                        <table className="table-ledger min-w-[760px]">
+                        <table className="table-ledger min-w-[880px]">
                             <thead className="sticky top-0 z-10">
                                 <tr>
                                     <th className="pl-4">Empleado</th>
                                     <th>Rol</th>
                                     <th>Sucursales</th>
                                     <th>Contacto</th>
+                                    <th>Último acceso</th>
                                     <th>Estado</th>
                                     <th className="pr-4 w-px"><span className="sr-only">Acciones</span></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {employees.length === 0 ? (
-                                    <LedgerEmpty cols={6} title="Sin empleados" hint="Agrega a las personas que van a usar el sistema." />
+                                    <LedgerEmpty cols={7} title="Sin empleados" hint="Agrega a las personas que van a usar el sistema." />
                                 ) : employees.map(e => (
-                                    <tr key={e.id} {...ledgerRow(() => openEdit(e))}>
+                                    <tr key={e.id} {...ledgerRow(() => openEdit(e), alerta(e) === "danger" ? "#ef4444" : undefined)}>
                                         <td className="pl-4">
                                             <div className="flex items-center gap-3 min-w-0">
                                                 {avatar(e)}
@@ -245,6 +271,9 @@ export default function EmployeesTab({ notify }) {
                                                 {e.email || <span className="text-content-subtle">Sin correo</span>}
                                             </div>
                                             {e.phone && <div className="text-[12px] text-content-subtle tabular-nums truncate">{e.phone}</div>}
+                                        </td>
+                                        <td className="cursor-pointer" onClick={ev => { stopRow(ev); setAccessOf(e); }} title="Ver accesos">
+                                            {ultimoAcceso(e)}
                                         </td>
                                         <td><StatusMark status={e.active ? "activo" : "inactivo"} map={ACTIVE_STATUS} /></td>
                                         <td className="pr-4 whitespace-nowrap cursor-default">{acciones(e)}</td>
@@ -270,6 +299,14 @@ export default function EmployeesTab({ notify }) {
                                 <div className="min-w-0 flex-1">
                                     <div className={`text-[14px] font-semibold truncate ${e.active ? "text-content dark:text-white" : "text-content-subtle"}`}>{toNameCase(e.full_name)}</div>
                                     <div className="text-[12px] text-content-subtle truncate">{e.role_label || "Sin rol"} · @{e.username}</div>
+                                    <div className="text-[12px] text-content-subtle tabular-nums truncate">
+                                        {(() => { const h = haceCuanto(e.last_seen_at || e.last_login_at); return h ? `Último acceso: ${h}` : "Sin accesos registrados"; })()}
+                                    </div>
+                                    {alerta(e) && (
+                                        <div className={`text-[12px] font-medium tabular-nums ${alerta(e) === "danger" ? "text-red-600 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}>
+                                            {e.failed_logins_30d} {e.failed_logins_30d === 1 ? "intento fallido" : "intentos fallidos"}
+                                        </div>
+                                    )}
                                     {!e.active && <div className="mt-0.5"><StatusMark status="inactivo" map={ACTIVE_STATUS} /></div>}
                                 </div>
                                 {acciones(e)}
@@ -570,6 +607,8 @@ export default function EmployeesTab({ notify }) {
                     </Button>
                 </div>
             </Modal>
+
+            <EmployeeAccessModal employee={accessOf} onClose={() => setAccessOf(null)} />
 
             <ConfirmModal
                 isOpen={!!deleteConfirm}
