@@ -449,15 +449,17 @@ export default function PriceLabelsView({ products, onClose }) {
                         margin: 0 !important;
                         padding: 0 !important;
                         width: 100%;
-                        visibility: hidden !important;
+                        height: auto !important;
+                        overflow: visible !important;
                         background: white !important;
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
                     }
-                    #print-section, #print-section * { visibility: visible !important; }
+                    /* El resto de la app sale del flujo: con visibility seguía ocupando su alto
+                       y su overflow-hidden recortaba las etiquetas a una sola página. */
+                    body > *:not(#print-section) { display: none !important; }
                     #print-section {
-                        position: absolute !important;
-                        left: 0 !important; top: 0 !important;
+                        position: static !important;
                         margin: 0 !important; padding: 0 !important;
                         background: white !important;
                     }

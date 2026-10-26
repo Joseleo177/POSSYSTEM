@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useCatalog } from "../hooks/useCatalog";
 import { useDebounce } from "../hooks/useDebounce";
 import { useApp } from "../context/AppContext";
@@ -528,10 +529,12 @@ export default function CatalogPage() {
                 type="danger"
             />
 
-            {printingLabels && (
+            {/* Fuera del Page: su h-full overflow-hidden recortaba la impresión a una sola página. */}
+            {printingLabels && createPortal(
                 <div id="print-section">
                     <PriceLabelsView products={selectedProducts} onClose={() => setPrintingLabels(false)} />
-                </div>
+                </div>,
+                document.body
             )}
         </Page>
     );
