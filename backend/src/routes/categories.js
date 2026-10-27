@@ -8,7 +8,7 @@ const { upload } = require("../middleware/upload");
 // categoría desde el POS sigue mandando su objeto normal.
 const image = upload.single("image");
 
-router.get("/",       auth, permit("products.view", "inventory.view", "sales.create"), ctrl.getAll);
+router.get("/",       auth, permit("products.view", "inventory.view", "sales.create", "tables.serve"), ctrl.getAll);
 router.post("/",      auth, permit("products.edit"), image, ctrl.create);
 router.put("/:id",    auth, permit("products.edit"), image, ctrl.update);
 router.delete("/:id", auth, permit("products.edit"), ctrl.remove);

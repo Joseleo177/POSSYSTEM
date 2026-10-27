@@ -12,6 +12,9 @@ export const ALL_TABS = [
     // `companyFlag`: además del permiso, la empresa tiene que tener el módulo contratado
     // (lo enciende el superusuario en Empresas, como la vitrina).
     { key: "Fábrica",       label: "Fábrica",       mobileLabel: "Fábrica",    perm: "factory.view",    companyFlag: "fabrica_enabled", color: "from-stone-500 to-stone-700" },
+    { key: "Cocina",        label: "Cocina",        mobileLabel: "Cocina",     perm: "kitchen.view",    companyFlag: "cocina_enabled",  color: "from-red-500 to-red-700" },
+    // Mismo interruptor de restaurante que Cocina.
+    { key: "Mesas",         label: "Mesas",         mobileLabel: "Mesas",      perm: "tables.view",     companyFlag: "cocina_enabled",  color: "from-orange-500 to-orange-700" },
     { key: "Contabilidad",  label: "Contabilidad",  mobileLabel: "Contab.",    perm: "accounting.view", color: "from-green-500 to-green-700" },
     { key: "Reportes",      label: "Reportes",      mobileLabel: "Reportes",   perm: "reports.view",    color: "from-indigo-500 to-indigo-700" },
     // Deja de ser exclusivo del admin: con el permiso `employees` un encargado gestiona el

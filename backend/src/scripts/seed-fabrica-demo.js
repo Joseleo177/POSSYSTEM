@@ -147,10 +147,10 @@ async function product(fields) {
   // Servilletero de mesa: estándar, una pieza doblada en U.
   const servilletero = await product({ category_id: catVenta.id, warehouse_id: WH, name: "Servilletero inox de mesa", price: 25, unit: "UNIDAD" });
   await call("PUT", `/factory/recipes/${servilletero.id}`, {
-    unit: "cm",
-    instructions: "Una pieza de 20 × 32 cm doblada en U, bordes pulidos.",
+    unit: "m",
+    instructions: "Una pieza de 0,20 × 0,32 m doblada en U, bordes pulidos.",
     items: [
-      { component_id: lam304.id, width_expr: "20", length_expr: "32", cuts_expr: "1" },
+      { component_id: lam304.id, width_expr: "0,20", length_expr: "0,32", cuts_expr: "1" },
       ...proc("Corte", "5"),
       ...proc("Doblez", "8"),
       ...proc("Pulido", "6"),
@@ -207,12 +207,12 @@ async function product(fields) {
   // Gabinete aéreo con puertas: estándar, con número de puertas como variable.
   const gabinete = await product({ category_id: catVenta.id, warehouse_id: WH, name: "Gabinete aéreo inox con puertas batientes", price: 320, unit: "UNIDAD" });
   await call("PUT", `/factory/recipes/${gabinete.id}`, {
-    unit: "cm",
+    unit: "m",
     params: [{ key: "P", label: "Puertas", kind: "numero", default: 2 }],
-    instructions: "Cuerpo de 100 × 60 × 35 cm en 430 con una repisa interna. Puertas con tirador y dos bisagras cada una.",
+    instructions: "Cuerpo de 1,00 × 0,60 × 0,35 m en 430 con una repisa interna. Puertas con tirador y dos bisagras cada una.",
     items: [
-      { component_id: lam430.id, width_expr: "120", length_expr: "140", cuts_expr: "1" },
-      { component_id: lam430.id, width_expr: "100 / P", length_expr: "60", cuts_expr: "P" },
+      { component_id: lam430.id, width_expr: "1,20", length_expr: "1,40", cuts_expr: "1" },
+      { component_id: lam430.id, width_expr: "1 / P", length_expr: "0,60", cuts_expr: "P" },
       { component_id: bisagra.id, quantity_expr: "P * 2" },
       { component_id: tirador.id, quantity_expr: "P" },
       { component_id: tornillo.id, quantity_expr: "12 + P * 4" },

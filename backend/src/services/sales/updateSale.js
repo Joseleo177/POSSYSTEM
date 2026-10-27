@@ -11,7 +11,9 @@ const getOneSale = require("./getOneSale");
 const { cargarPromosActivas, calcLineDiscount } = require("./promoDiscounts");
 const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = require("./lineDiscount");
 const { leerTasaDivisas } = require("./fxRate");
+const { assertTable } = require("../tables");
 const { assertWarehouseAccess } = require("../../middleware/auth");
+const { componentesConStock } = require("../products/comboStock");
 
 const bad = (msg, status = 400, code = null) => Object.assign(new Error(msg), { status, code });
 
@@ -29,9 +31,16 @@ async function syncTotalStock(productId, transaction) {
 }
 
 module.exports = async function updateSale(saleId, body, req) {
-  const { items, discount_amount, service_charge, service_charge_label } = body;
+  const { discount_amount, service_charge, service_charge_label } = body;
+  // `append`: líneas que se SUMAN a las que ya tiene la cuenta, en vez de reemplazarlas. Es la
+  // ronda del mesonero (services/tables.js). Las líneas actuales se leen más abajo, con la venta
+  // ya bloqueada: si se leyeran antes, dos rondas a la misma mesa al mismo tiempo se pisarían y
+  // una quedaría en la cocina sin cobrarse.
+  const append = Array.isArray(body.append) ? body.append : null;
+  let items = append ? null : body.items;
 
-  if (!items?.length) throw bad("Debes incluir al menos un producto");
+  if (!append && !items?.length) throw bad("Debes incluir al menos un producto");
+  if (append && !append.length) throw bad("La ronda está vacía");
 
   const transaction = await sequelize.transaction();
   try {
@@ -51,7 +60,20 @@ module.exports = async function updateSale(saleId, body, req) {
     }
 
     const warehouseId = sale.warehouse_id;
-    const previousItems = await SaleItem.findAll({ where: { sale_id: saleId }, transaction });
+    const previousItems = await SaleItem.findAll({ where: { sale_id: saleId }, transaction, order: [["id", "ASC"]] });
+
+    if (append) {
+      if (previousItems.some(it => !it.product_id)) {
+        throw bad("Esta cuenta tiene líneas que no se pueden rehacer desde una ronda");
+      }
+      // Lo que ya estaba conserva su precio, su nota y su descuento; lo nuevo entra al precio
+      // de la sucursal y sin descuento manual (null explícito: si no, heredaría el de otra
+      // línea del mismo producto).
+      items = [
+        ...previousItems.map(it => ({ product_id: it.product_id, price: it.price, qty: it.quantity, note: it.note || null })),
+        ...append.map(it => ({ product_id: it.product_id, qty: it.qty, note: it.note, line_discount: null })),
+      ];
+    }
 
     // ── Devolver al inventario lo que la venta tenía apartado ──
     // Un combo no descuenta de sí mismo: al venderlo se restaron sus ingredientes (ver
@@ -65,7 +87,7 @@ module.exports = async function updateSale(saleId, body, req) {
       if (!product || product.is_service) continue;
 
       if (product.is_combo) {
-        const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
+        const comboItems = await componentesConStock(product.id, transaction);
         for (const cItem of comboItems) {
           const qtyToRestore = parseFloat(item.quantity) * parseFloat(cItem.quantity);
           const [stockEntry] = await ProductStock.findOrCreate({
@@ -117,6 +139,19 @@ module.exports = async function updateSale(saleId, body, req) {
         });
       }
     }
+    // Notas de cocina de cada línea ("sin cebolla"). La caja reescribe la cuenta entera sin
+    // mandarlas, y se perdían en cuanto alguien la pausaba o la cobraba. Una línea que no trae
+    // `note` toma la de la línea anterior del mismo producto, en orden.
+    const notasPrevias = new Map();
+    for (const it of previousItems) {
+      if (!it.product_id) continue;
+      if (!notasPrevias.has(it.product_id)) notasPrevias.set(it.product_id, []);
+      notasPrevias.get(it.product_id).push(it.note || null);
+    }
+    const notaDe = (item) => (item.note !== undefined
+      ? (String(item.note || "").replace(/[\r\n]+/g, " ").trim().slice(0, 200) || null)
+      : (notasPrevias.get(parseInt(item.product_id, 10))?.shift() ?? null));
+
     let subtotalBruto = 0;
     const descuentosNuevos = [];
     // Las líneas tal como se guardan, para el tope de la tasa de divisas (ver fxRate.js).
@@ -183,6 +218,12 @@ module.exports = async function updateSale(saleId, body, req) {
           if (!ingredient) throw bad(`Un ingrediente del combo "${product.name}" ya no existe`, 404);
 
           const qtyNeeded = qty * parseFloat(cItem.quantity);
+          // Servicio dentro del combo: suma su costo, no mueve existencias (ver comboStock.js).
+          if (ingredient.is_service) {
+            const ficha = await ProductStock.findOne({ where: { warehouse_id: warehouseId, product_id: ingredient.id }, transaction });
+            ingredientsData.push({ ingredient, qtyNeeded, stockEntry: ficha, servicio: true });
+            continue;
+          }
           const stockEntry = await ProductStock.findOne({
             where: { warehouse_id: warehouseId, product_id: ingredient.id },
             transaction,
@@ -203,6 +244,7 @@ module.exports = async function updateSale(saleId, body, req) {
         unitCost = qty > 0 ? parseFloat((comboCost / qty).toFixed(5)) : null;
 
         for (const ing of ingredientsData) {
+          if (ing.servicio) continue;
           await ing.stockEntry.decrement("qty", { by: ing.qtyNeeded, transaction });
           await syncTotalStock(ing.ingredient.id, transaction);
         }
@@ -232,6 +274,7 @@ module.exports = async function updateSale(saleId, body, req) {
           line_discount_value: manual ? manual.value : null,
           discount_by:         manual ? (mismo ? previo.by : (req?.employee?.id || null)) : null,
           cost_price: unitCost,
+          note: notaDe(item),
         },
         { transaction }
       );
@@ -252,6 +295,12 @@ module.exports = async function updateSale(saleId, body, req) {
     const headerPatch = {};
     for (const k of ["customer_id", "currency_id", "exchange_rate", "serie_id"]) {
       if (body[k] !== undefined) headerPatch[k] = body[k];
+    }
+
+    // Mesa: se asigna, se cambia o se quita (null) solo si el body la nombra. Quien re-pausa
+    // sin nombrarla —la vista BARRA— no se la quita.
+    if (body.table_id !== undefined) {
+      headerPatch.table_id = body.table_id ? (await assertTable(body.table_id, sale.warehouse_id, transaction)).id : null;
     }
 
     // Cambiar de serie no puede saltar de sucursal: la serie pertenece a un almacén.
@@ -311,6 +360,12 @@ module.exports = async function updateSale(saleId, body, req) {
     const statusPatch = (sale.status === "espera" && body.status === "borrador")
       ? { status: "borrador" }
       : {};
+    // Una cuenta que atendió un mesonero se factura a nombre de quien la cobra. Los mesoneros
+    // no cobran, y el resumen del turno cuenta las ventas por employee_id: sin esto, el cajero
+    // cobraría ventas que no aparecen en su turno. El mesonero queda en waiter_id.
+    if (statusPatch.status && sale.waiter_id && req?.employee?.id) {
+      statusPatch.employee_id = req.employee.id;
+    }
 
     // Se suelta el bloqueo: los dos flujos que llegan aquí —pausar la cuenta y cobrarla—
     // terminan vaciando el carrito de la caja, así que a partir de este punto ya no la está

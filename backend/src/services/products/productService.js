@@ -279,7 +279,7 @@ async function anotarVariantes(rows, warehouseId) {
 
 // visible_ids: almacenes de quien consulta (null = admin, toda la empresa). Sin una sucursal
 // elegida, acota la lista a lo de esos almacenes y la existencia a lo que hay en ellos.
-async function getAll({ search, barcode, category_id, is_combo, is_service, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, for_purchase, variant_view, limit = 100, offset = 0, company_id, visible_ids = null }) {
+async function getAll({ search, barcode, category_id, is_combo, is_service, is_addon, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, for_purchase, variant_view, limit = 100, offset = 0, company_id, visible_ids = null }) {
   if (visible_ids && !visible_ids.length) return { data: [], total: 0, limit: parseInt(limit, 10), offset: parseInt(offset, 10) };
   const porVisibles = visible_ids && !warehouse_id;
   // Catálogo, POS y promociones usan warehouse_id para acotar a lo que ESA sucursal
@@ -296,6 +296,9 @@ async function getAll({ search, barcode, category_id, is_combo, is_service, ware
   if (barcode) where.barcode = String(barcode).trim();
   if (is_combo !== undefined) where.is_combo = is_combo === 'true';
   if (is_service !== undefined) where.is_service = is_service === 'true';
+  // El Catálogo no lista los adicionales ("Queso extra"): son la línea que se cobra, no el
+  // queso, y se manejan en su pestaña. Editarlos como producto los dejaba sin poder venderse.
+  if (is_addon !== undefined) where.is_addon = is_addon === 'true' || is_addon === true;
   if (visible_in_catalog !== undefined) where.visible_in_catalog = visible_in_catalog === 'true' || visible_in_catalog === true;
   // El buscador de venta pide sellable=true; compras, inventario y transferencias no filtran,
   // porque un insumo se compra y se mueve igual que cualquier otro producto.

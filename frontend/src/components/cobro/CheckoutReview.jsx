@@ -5,6 +5,7 @@ import Money from "../ui/Money";
 import { fmtQtyUnit } from "../../helpers/unitFormatter";
 import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import { useApp } from "../../context/AppContext";
+import { cartKey } from "../../helpers/cartLine";
 
 // Mismo redondeo por línea que CartContext y CartSidebar: las líneas tienen que sumar el
 // total que se factura, al céntimo.
@@ -157,7 +158,7 @@ export default function CheckoutReview({
     if (!open) return null;
 
     const sym = currentCurrency?.symbol || currSym;
-    const unidades = cart.length;
+    const unidades = cart.filter(i => !i.parentKey).length;   // los adicionales cuelgan del plato
 
     const linea = (i) => {
         const descuento = promoLineDiscountDisplay ? promoLineDiscountDisplay(i) : 0;
@@ -174,8 +175,8 @@ export default function CheckoutReview({
 
     const brutoDisplay = (i) => round2(convertToDisplay(i.price)) * (parseFloat(i.qty) || 0);
     const abrirDescuento = (i) => {
-        if (ldEdit === i.id) { setLdEdit(null); return; }
-        setLdEdit(i.id);
+        if (ldEdit === cartKey(i)) { setLdEdit(null); return; }
+        setLdEdit(cartKey(i));
         setLdError("");
         setLdDraft(i.ld_mode
             ? { mode: i.ld_mode, text: i.ld_mode === "pct" ? String(i.ld_value) : String(round2(convertToDisplay(i.ld_value))) }
@@ -186,7 +187,7 @@ export default function CheckoutReview({
     const aplicarDescuento = (i, mode, text) => {
         setLdDraft({ mode, text });
         const n = parseFloat(String(text).replace(",", "."));
-        if (!(n > 0)) { setLdError(""); setLineDiscount(i.id, null); return; }
+        if (!(n > 0)) { setLdError(""); setLineDiscount(cartKey(i), null); return; }
         const bruto = brutoDisplay(i);
         const pct = mode === "pct" ? n : (bruto > 0 ? (n / bruto) * 100 : 0);
         if (mode === "pct" && n > 100) return setLdError("No puede pasar del 100 %");
@@ -194,7 +195,7 @@ export default function CheckoutReview({
         if (tope && pct > tope + 0.005) return setLdError(`Tu tope es ${tope} % por línea`);
         setLdError("");
         // El monto se guarda en la moneda base; el porcentaje, tal cual.
-        setLineDiscount(i.id, mode, mode === "pct" ? n : convertToBase(n));
+        setLineDiscount(cartKey(i), mode, mode === "pct" ? n : convertToBase(n));
     };
     const etiquetaDescuento = (i) => i.ld_mode === "pct"
         ? `-${parseFloat(i.ld_value).toLocaleString("es-VE", { maximumFractionDigits: 2 })} %`
@@ -202,7 +203,7 @@ export default function CheckoutReview({
 
     const botonDescuento = (i, className = "") => canDiscount && (
         <button type="button" onClick={() => abrirDescuento(i)} aria-label={`Descuento de ${i.name}`} title="Descuento de esta línea"
-            className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${i.ld_mode || ldEdit === i.id
+            className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${i.ld_mode || ldEdit === cartKey(i)
                 ? "bg-brand-500/10 text-brand-700 dark:text-brand-300"
                 : "text-content-subtle hover:text-content hover:bg-surface-2 dark:hover:text-white dark:hover:bg-white/[0.06]"} ${className}`}>
             <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={ICON_TAG} /></svg>
@@ -235,7 +236,7 @@ export default function CheckoutReview({
                         ))}
                         <div className="ml-auto flex items-center gap-1">
                             {i.ld_mode && (
-                                <button type="button" onClick={() => { setLineDiscount(i.id, null); setLdDraft({ mode: ldDraft.mode, text: "" }); setLdError(""); }}
+                                <button type="button" onClick={() => { setLineDiscount(cartKey(i), null); setLdDraft({ mode: ldDraft.mode, text: "" }); setLdError(""); }}
                                     className="h-10 px-3 rounded-lg text-[13px] font-semibold text-content-subtle hover:text-content dark:hover:text-white">
                                     Quitar
                                 </button>
@@ -260,7 +261,7 @@ export default function CheckoutReview({
     // se vuelve a montar en cada tecla y el campo de cantidad perdía el foco.
     const stepper = (i) => (
         <div className="flex items-center h-10 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] shrink-0">
-            <button type="button" onClick={() => changeQty(i.id, -1)} aria-label="Restar uno" className="w-10 h-full flex items-center justify-center text-content-muted dark:text-white/70 hover:text-content dark:hover:text-white rounded-l-lg active:bg-surface-2 dark:active:bg-white/[0.06]">
+            <button type="button" onClick={() => changeQty(cartKey(i), -1)} aria-label="Restar uno" className="w-10 h-full flex items-center justify-center text-content-muted dark:text-white/70 hover:text-content dark:hover:text-white rounded-l-lg active:bg-surface-2 dark:active:bg-white/[0.06]">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeWidth={2.2} d="M5 12h14" /></svg>
             </button>
             <input
@@ -268,25 +269,25 @@ export default function CheckoutReview({
                 inputMode="decimal"
                 autoComplete="off"
                 value={i.qty}
-                onChange={e => setQtyDirect(i.id, e.target.value.replace(",", "."))}
+                onChange={e => setQtyDirect(cartKey(i), e.target.value.replace(",", "."))}
                 onBlur={() => {
                     // Igual que en el carrito: vacío o cero se tolera al teclear "0,5", pero la
                     // línea no se queda en cero al salir del campo.
                     const q = parseFloat(i.qty);
-                    if (!(q > 0)) setQtyDirect(i.id, String(parseFloat(i.qty_step) || 1), true);
+                    if (!(q > 0)) setQtyDirect(cartKey(i), String(parseFloat(i.qty_step) || 1), true);
                 }}
                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); panelRef.current?.focus(); } }}
                 aria-label={`Cantidad de ${i.name}`}
                 className="w-12 h-full bg-transparent text-center text-[14px] font-semibold tabular-nums text-content dark:text-white border-x border-border dark:border-white/10 outline-none focus:bg-brand-500/[0.06]"
             />
-            <button type="button" onClick={() => changeQty(i.id, 1)} aria-label="Sumar uno" className="w-10 h-full flex items-center justify-center text-content-muted dark:text-white/70 hover:text-content dark:hover:text-white rounded-r-lg active:bg-surface-2 dark:active:bg-white/[0.06]">
+            <button type="button" onClick={() => changeQty(cartKey(i), 1)} aria-label="Sumar uno" className="w-10 h-full flex items-center justify-center text-content-muted dark:text-white/70 hover:text-content dark:hover:text-white rounded-r-lg active:bg-surface-2 dark:active:bg-white/[0.06]">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeWidth={2.2} d="M12 5v14M5 12h14" /></svg>
             </button>
         </div>
     );
 
     const quitar = (i, className = "") => (
-        <button type="button" onClick={() => removeFromCart(i.id)} aria-label={`Quitar ${i.name}`} title="Quitar del pedido"
+        <button type="button" onClick={() => removeFromCart(cartKey(i))} aria-label={`Quitar ${i.name}`} title="Quitar del pedido"
             className={`w-10 h-10 rounded-lg flex items-center justify-center text-content-subtle hover:text-red-600 hover:bg-red-500/10 dark:hover:text-red-400 shrink-0 ${className}`}>
             <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={ICON_TRASH} /></svg>
         </button>
@@ -348,8 +349,20 @@ export default function CheckoutReview({
                         {cart.map(i => {
                             const l = linea(i);
                             const promo = promoDe(i);
+                            // Extra con precio de un plato: colgado de él, sin cantidad propia. El
+                            // contorno incluido (a 0, solo descuenta inventario) ya va en el plato.
+                            if (i.parentKey && i.incluido) return null;
+                            if (i.parentKey) return (
+                                <div key={cartKey(i)} className="flex items-center gap-2 pl-[76px] lg:pl-[88px] pr-4 sm:pr-5 py-2">
+                                    <span className="flex-1 min-w-0 text-[13px] text-content dark:text-white/85">
+                                        + {i.name}{parseFloat(i.qty) !== 1 ? <span className="text-content-subtle"> × {fmtQtyUnit(i.qty, i.unit).toLowerCase()}</span> : null}
+                                    </span>
+                                    <Money value={fmt(l.total, currSym)} className="text-[13px] font-semibold text-content dark:text-white whitespace-nowrap" />
+                                    {quitar(i)}
+                                </div>
+                            );
                             return (
-                              <div key={i.id}>
+                              <div key={cartKey(i)}>
                                 <div className="flex items-start lg:items-center gap-3 px-4 sm:px-5 py-3">
                                     <div className="w-12 h-12 lg:w-14 lg:h-14 rounded-xl bg-surface-2 dark:bg-white/[0.05] overflow-hidden shrink-0 flex items-center justify-center">
                                         {i.image_url
@@ -362,6 +375,14 @@ export default function CheckoutReview({
                                             <div className="text-[14px] font-semibold text-content dark:text-white leading-snug break-words min-w-0">{i.name}</div>
                                             <Money value={fmt(l.total, currSym)} className="lg:hidden text-[14px] font-semibold text-content dark:text-white whitespace-nowrap" />
                                         </div>
+                                        {(i.addon_text || (i.addon_options ? i.kitchen_note : i.note)) && (
+                                            <div className="text-[13px] text-content dark:text-white/80 leading-snug">
+                                                {i.addon_text}
+                                                {(i.addon_options ? i.kitchen_note : i.note) && (
+                                                    <span className="text-amber-700 dark:text-amber-400">{i.addon_text ? " · " : ""}{i.addon_options ? i.kitchen_note : i.note}</span>
+                                                )}
+                                            </div>
+                                        )}
                                         <div className="mt-0.5 text-[13px] text-content-subtle tabular-nums flex flex-wrap items-center gap-x-1.5">
                                             <span>{fmtQtyUnit(i.qty, i.unit).toLowerCase()} × {fmt(convertToDisplay(i.price), currSym)}</span>
                                             {/* El descuento manual reemplaza a la promoción: se muestra uno u otro. */}
@@ -394,7 +415,7 @@ export default function CheckoutReview({
                                     {botonDescuento(i, "hidden lg:flex")}
                                     {quitar(i, "hidden lg:flex")}
                                 </div>
-                                {ldEdit === i.id && editorDescuento(i)}
+                                {ldEdit === cartKey(i) && editorDescuento(i)}
                               </div>
                             );
                         })}

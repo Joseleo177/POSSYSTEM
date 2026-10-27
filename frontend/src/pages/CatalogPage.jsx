@@ -13,6 +13,7 @@ import ProductTable from "../components/Catalog/ProductTable";
 import ProductCards from "../components/Catalog/ProductCards";
 import CategoriesTab from "../components/Catalog/CategoriesTab";
 import PromotionsTab from "../components/Catalog/PromotionsTab";
+import AddonsTab from "../components/Catalog/AddonsTab";
 import ProductModal from "../components/ProductModal";
 import PublicLinkModal from "../components/Catalog/PublicLinkModal";
 import PriceLabelsView from "../components/Catalog/PriceLabelsView";
@@ -58,6 +59,9 @@ export default function CatalogPage() {
     const [priceCurrency, setPriceCurrency] = useState("base");
     const [triggerNewCategory, setTriggerNewCategory] = useState(0);
     const [triggerNewPromo, setTriggerNewPromo] = useState(0);
+    const [triggerNewAddon, setTriggerNewAddon] = useState(0);
+    // Adicionales (término, extras) solo en empresas con restaurante.
+    const tabs = company?.cocina_enabled ? [...TABS, { id: "addons", label: "Adicionales" }] : TABS;
     const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
 
     const availableWarehouses = employee?.warehouses || [];
@@ -160,7 +164,7 @@ export default function CatalogPage() {
     // ── Subheader: tabs ───────────────────────────────────────
     const subheader = (
         <div className="flex gap-1 px-4 border-b border-border/20 dark:border-white/5">
-            {TABS.map(tab => (
+            {tabs.map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                     className={["px-4 py-2 text-[13px] font-semibold border-b-2 transition-all",
                         activeTab === tab.id ? "border-brand-500 text-brand-700 dark:text-brand-300" : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
@@ -259,6 +263,12 @@ export default function CatalogPage() {
             {activeTab === "promotions" && can("products.edit") && (
                 <Button onClick={() => setTriggerNewPromo(prev => prev + 1)} className="h-8 px-2.5 sm:px-3 text-[11px] shadow-none">
                     + <span className="hidden sm:inline">Nueva promoción</span><span className="sm:hidden">Nueva</span>
+                </Button>
+            )}
+
+            {activeTab === "addons" && can("products.edit") && (
+                <Button onClick={() => setTriggerNewAddon(prev => prev + 1)} className="h-8 px-2.5 sm:px-3 text-[11px] shadow-none">
+                    + <span className="hidden sm:inline">Nuevo grupo</span><span className="sm:hidden">Nuevo</span>
                 </Button>
             )}
         </>
@@ -518,6 +528,11 @@ export default function CatalogPage() {
             {/* Tab: Promociones */}
             {activeTab === "promotions" && (
                 <PromotionsTab notify={notify} can={can} triggerNew={triggerNewPromo} />
+            )}
+
+            {/* Tab: Adicionales (restaurante) */}
+            {activeTab === "addons" && company?.cocina_enabled && (
+                <AddonsTab notify={notify} can={can} triggerNew={triggerNewAddon} />
             )}
 
             <ProductModal

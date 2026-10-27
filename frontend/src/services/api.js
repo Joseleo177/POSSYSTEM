@@ -684,7 +684,46 @@ export const api = {
     finish:         (id, body={})      => request(`/factory/orders/${id}/finish`, { method: "POST", body: JSON.stringify(body) }),
     reopen:         (id)               => request(`/factory/orders/${id}/reopen`, { method: "POST" }),
     cancel:         (id, body)         => request(`/factory/orders/${id}/cancel`, { method: "POST", body: JSON.stringify(body) }),
+    deleteOrder:    (id)               => request(`/factory/orders/${id}`, { method: "DELETE" }),
+    setPlan:        (id, body)         => request(`/factory/orders/${id}/plan`, { method: "PUT", body: JSON.stringify(body) }),
     invoice:        (id, body)         => request(`/factory/orders/${id}/invoice`, { method: "POST", body: JSON.stringify(body) }),
+  },
+  // Pantalla de cocina: las comandas vivas y el paso de cada una (nueva → preparando → lista
+  // → entregada). Solo con companies.cocina_enabled.
+  kitchen: {
+    board:     (params={})     => request("/kitchen/orders?" + new URLSearchParams(params)),
+    setStatus: (id, status)    => request(`/kitchen/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    // Lo que la caja acaba de cobrar, a cocina (restaurante donde se paga antes de pedir).
+    fromSale:  (saleId, body)  => request(`/kitchen/sales/${saleId}/ticket`, { method: "POST", body: JSON.stringify(body) }),
+  },
+  // Adicionales de los platos (Catálogo → Adicionales).
+  addons: {
+    list:   ()         => request("/addons"),
+    create: (body)     => request("/addons", { method: "POST", body: JSON.stringify(body) }),
+    update: (id, body) => request(`/addons/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    remove: (id)       => request(`/addons/${id}`, { method: "DELETE" }),
+    // Adicionales de un plato con precio y existencia de la sucursal (caja y mesonero).
+    forProduct: (id, params = {}) => request(`/addons/product/${id}?` + new URLSearchParams(params)),
+    // Agotado a mano (cocina o catálogo).
+    setSoldOut: (optionId, soldOut) => request(`/addons/options/${optionId}`, { method: "PATCH", body: JSON.stringify({ sold_out: soldOut }) }),
+  },
+  // Mapa de mesas: el plano (áreas y mesas) de cada sucursal. La ocupación sale de las
+  // cuentas en espera (sales.getHeld), que traen table_id.
+  tables: {
+    areas:      (params={})    => request("/tables/areas?" + new URLSearchParams(params)),
+    createArea: (body)         => request("/tables/areas", { method: "POST", body: JSON.stringify(body) }),
+    renameArea: (id, name)     => request(`/tables/areas/${id}`, { method: "PUT", body: JSON.stringify({ name }) }),
+    deleteArea: (id)           => request(`/tables/areas/${id}`, { method: "DELETE" }),
+    saveLayout: (id, tables)   => request(`/tables/areas/${id}/layout`, { method: "PUT", body: JSON.stringify({ tables }) }),
+    // Lo del mesonero: qué mesas están ocupadas, las cuentas de una mesa y mandar una ronda.
+    occupancy:  (params={})    => request("/tables/occupancy?" + new URLSearchParams(params)),
+    accounts:   (id)           => request(`/tables/${id}/accounts`),
+    sendRound:  (id, body)     => request(`/tables/${id}/rounds`, { method: "POST", body: JSON.stringify(body) }),
+    dish:       (productId, params={}) => request(`/tables/menu/${productId}?` + new URLSearchParams(params)),
+    // Antes de cobrar: cambiar de mesa (o juntar con otra cuenta), dividir y "pidió la cuenta".
+    moveAccount:  (saleId, body)      => request(`/tables/accounts/${saleId}/move`,  { method: "POST", body: JSON.stringify(body) }),
+    splitAccount: (saleId, items)     => request(`/tables/accounts/${saleId}/split`, { method: "POST", body: JSON.stringify({ items }) }),
+    requestBill:  (saleId, requested) => request(`/tables/accounts/${saleId}/bill`,  { method: "POST", body: JSON.stringify({ requested }) }),
   },
   companies: {
     getAll: ()          => request("/companies"),

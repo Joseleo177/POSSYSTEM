@@ -1,5 +1,6 @@
-const { Sale, SaleItem, Product, ProductComboItem, ProductStock, Serie, sequelize } = require("./shared");
+const { Sale, SaleItem, Product, ProductStock, Serie, sequelize } = require("./shared");
 const getOneSale = require("./getOneSale");
+const { componentesConStock } = require("../products/comboStock");
 
 // Convierte un pedido del catálogo público (status 'pedido', sin efecto en inventario) en
 // una cuenta en espera normal. Aquí sí se descuenta el stock: es el momento en que una
@@ -49,7 +50,7 @@ module.exports = async function acceptWebOrder(saleId, { warehouse_id, serie_id,
       const qty = parseFloat(item.quantity);
 
       if (product.is_combo) {
-        const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
+        const comboItems = await componentesConStock(product.id, transaction);
         for (const cItem of comboItems) {
           const ingredient = await Product.findByPk(cItem.product_id, { transaction, lock: true });
           const needed = qty * parseFloat(cItem.quantity);

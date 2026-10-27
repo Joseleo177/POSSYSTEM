@@ -46,7 +46,7 @@ const create = async (req, res) => {
   try {
     if (!req.is_superuser) return res.status(403).json({ ok: false, message: "Acceso denegado" });
 
-    const { name, tax_id, address, phone, email, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled, admin_username, admin_password } = req.body;
+    const { name, tax_id, address, phone, email, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled, cocina_enabled, admin_username, admin_password } = req.body;
     if (!name) return res.status(400).json({ ok: false, message: "Nombre es requerido" });
 
     const wantedUser = admin_username?.trim() || null;
@@ -83,7 +83,8 @@ const create = async (req, res) => {
         expires_at: expDate,
         max_users: max_users || 5,
         catalog_enabled: !!catalog_enabled,
-        fabrica_enabled: !!fabrica_enabled
+        fabrica_enabled: !!fabrica_enabled,
+        cocina_enabled: !!cocina_enabled
       }, { transaction });
 
       // Los roles son de cada empresa: la nueva recibe su copia de las plantillas (los roles
@@ -92,8 +93,10 @@ const create = async (req, res) => {
       const plantillas = await runWithoutTenant(() =>
         Role.findAll({ where: { company_id: null }, order: [['id', 'ASC']], transaction })
       );
+      // El Mesonero solo tiene sentido en un restaurante: se copia si la empresa nace con él
+      // (o al encenderlo después, ver asegurarRolMesonero).
       const semillas = plantillas.length
-        ? plantillas.map(t => ({ name: t.name, label: t.label, permissions: t.permissions }))
+        ? plantillas.filter(t => t.name !== ROL_MESONERO || !!cocina_enabled).map(t => ({ name: t.name, label: t.label, permissions: t.permissions }))
         : [{ name: 'admin', label: 'Administrador', permissions: { all: true } }];
       const roles = await Role.bulkCreate(
         semillas.map(r => ({ ...r, company_id: company.id })),
@@ -178,11 +181,26 @@ const create = async (req, res) => {
 };
 
 // PUT /api/companies/:id
+// Rol Mesonero (ver migración 20261031120000-comandas): toma pedidos en las mesas y nada más —
+// los mesoneros no cobran ni abren caja—. Se copia de la plantilla al encender Restaurante.
+const ROL_MESONERO = "waiter";
+async function asegurarRolMesonero(companyId) {
+  const existe = await runWithoutTenant(() => Role.findOne({ where: { company_id: companyId, name: ROL_MESONERO } }));
+  if (existe) return;
+  const plantilla = await runWithoutTenant(() => Role.findOne({ where: { company_id: null, name: ROL_MESONERO } }));
+  await runWithoutTenant(() => Role.create({
+    name: ROL_MESONERO,
+    label: plantilla?.label || "Mesonero",
+    permissions: plantilla?.permissions || { "tables.view": true, "tables.serve": true },
+    company_id: companyId,
+  }));
+}
+
 const update = async (req, res) => {
   try {
     if (!req.is_superuser) return res.status(403).json({ ok: false, message: "Acceso denegado" });
     const { id } = req.params;
-    const { name, tax_id, address, phone, email, active, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled } = req.body;
+    const { name, tax_id, address, phone, email, active, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled, cocina_enabled } = req.body;
 
     const company = await Company.findByPk(id);
     if (!company) return res.status(404).json({ ok: false, message: "Empresa no encontrada" });
@@ -191,8 +209,10 @@ const update = async (req, res) => {
       name, tax_id, address, phone, email, active,
       plan_name, subscription_status, expires_at: normalizeExpiry(expires_at), max_users,
       catalog_enabled: !!catalog_enabled,
-      fabrica_enabled: !!fabrica_enabled
+      fabrica_enabled: !!fabrica_enabled,
+      cocina_enabled: !!cocina_enabled
     });
+    if (company.cocina_enabled) await asegurarRolMesonero(company.id);
     // Suspender o reactivar tiene que notarse ya: sin esto, la caché del middleware seguiría
     // dejando pasar (o bloqueando) a esa empresa hasta que venciera el TTL.
     invalidateCompanyStatus(company.id);
@@ -221,11 +241,14 @@ const DELETE_ORDER = [
   'ProductComboItem',                            // RESTRICT sobre products
   'Payment', 'ReturnItem', 'Return',
   'Sale', 'Purchase',
+  'KitchenTicket',                               // sus líneas caen en cascada; antes de sales
+  'DiningTable', 'DiningArea',                   // después de sales (table_id) y antes de warehouses
   'StockTransfer', 'ProductStock', 'ProductLot',
   'CashSessionJournal', 'CashSession', 'StockSession',
   'UserSerie', 'Serie',
   'EmployeeWarehouse', 'Warehouse',
   'Promotion',
+  'ProductModifierGroup', 'ModifierOption', 'ModifierGroup', // adicionales: antes de products
   'Product', 'Category',
   'Customer',
   'PaymentJournal', 'PaymentMethod', 'Bank',

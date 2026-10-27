@@ -21,6 +21,7 @@ import { CutPreview } from "./CutLayout";
 import ReturnPieceModal from "./ReturnPieceModal";
 import InvoiceModal from "./InvoiceModal";
 import StageMoveModal from "./StageMoveModal";
+import OrderPlanModal from "./OrderPlanModal";
 
 const fmtMin = (m) => {
     const n = Number(m || 0);
@@ -66,6 +67,8 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
     const [invoicing, setInvoicing] = useState(false);
     const [cancelling, setCancelling] = useState(false);
     const [cancelReason, setCancelReason] = useState("");
+    const [deleting, setDeleting] = useState(false);
+    const [planning, setPlanning] = useState(false);
     const [undoUse, setUndoUse] = useState(null);
     const [moving, setMoving] = useState(null);     // null · { finish }
 
@@ -109,7 +112,11 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
     const costoBase = o ? (estimada ? Math.max(o.total_cost, o.plan.estimated_cost) : o.total_cost) : 0;
     const margen = o && o.sale_price != null ? o.sale_price - costoBase : null;
     const porFacturar = o && o.destination === "cliente" && !o.invoiced && o.status !== "anulada";
-    const encima = editing || !!delivering || !!returning || invoicing || cancelling || !!undoUse || !!moving;
+    const encima = editing || !!delivering || !!returning || invoicing || cancelling || deleting || planning || !!undoUse || !!moving;
+    // Sin factura, material, accesorios ni mano de obra, la orden se hizo por error y se borra;
+    // con algún movimiento se anula, que deja rastro (mismo criterio que el servidor).
+    const borrable = !!o && o.status !== "terminada" && !o.sale_id && !(o.uses || []).length
+        && !(o.items || []).length && !(o.labor_cost > 0);
 
     const action = (key, fn, okMsg) => run(key, async () => {
         try {
@@ -133,7 +140,12 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
     // Acción principal según el momento de la orden: una sola en tinta, el resto en borde.
     const footer = o && (
         <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2">
-            {canManage && open && (
+            {canManage && borrable ? (
+                <button onClick={() => setDeleting(true)}
+                    className="h-12 sm:h-10 px-3 rounded-lg text-[13px] font-medium text-content-subtle hover:text-red-600 dark:hover:text-red-400 sm:mr-auto">
+                    Eliminar orden
+                </button>
+            ) : canManage && open && (
                 <button onClick={() => { setCancelReason(""); setCancelling(true); }}
                     className="h-12 sm:h-10 px-3 rounded-lg text-[13px] font-medium text-content-subtle hover:text-red-600 dark:hover:text-red-400 sm:mr-auto">
                     Anular orden
@@ -212,10 +224,28 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
                                     <p className="text-[13px] text-content-subtle">Anulada: {o.cancel_reason}</p>
                                 )}
 
+                                {/* Sin plan la orden no dice qué lleva: ni el taller sabe qué cortar ni hay costo
+                                    contra el cual medir. Se le da antes de entregar material. */}
+                                {!o.plan && open && canManage && (o.uses || []).length === 0 && (
+                                    <div className={`${CARD} px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 border-l-[3px] border-l-amber-500`}>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-[13px] font-semibold text-content dark:text-white">Esta orden no dice qué lleva</div>
+                                            <p className="text-[12px] text-content-subtle">
+                                                {o.has_recipe ? "El producto tiene receta: aplícala con las medidas del cliente." : "Escribe los cortes, accesorios y tiempo que pidió el cliente."}
+                                            </p>
+                                        </div>
+                                        <button onClick={() => setPlanning(true)} className="btn-outline h-12 sm:h-10 px-4 rounded-lg text-[13px] font-medium shrink-0">
+                                            {o.has_recipe ? "Aplicar receta" : "Definir qué lleva"}
+                                        </button>
+                                    </div>
+                                )}
+
                                 {/* Receta: lo que debía llevar contra lo que se gastó */}
                                 {o.plan && (
                                     <section>
-                                        <SectionTitle>Receta</SectionTitle>
+                                        <SectionTitle right={canManage && open && (o.uses || []).length === 0 && (
+                                            <button onClick={() => setPlanning(true)} className="text-[12px] font-medium text-content-subtle hover:text-content dark:hover:text-white">Cambiar</button>
+                                        )}>Qué lleva</SectionTitle>
                                         {o.instructions && (
                                             <p className="text-[13px] text-content-muted dark:text-white/70 whitespace-pre-line mb-2">{o.instructions}</p>
                                         )}
@@ -544,6 +574,28 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
                         notify("Devolución deshecha");
                         setUndoUse(null);
                         await changed();
+                    } catch (e) { notify(errMsg(e), "err"); }
+                }}
+            />
+
+            <OrderPlanModal order={planning ? o : null} materials={materials} stages={stages}
+                onClose={() => setPlanning(false)}
+                onDone={async () => { setPlanning(false); await changed(); }} />
+
+            <ConfirmModal
+                isOpen={deleting}
+                title={o ? `Eliminar ${o.code}` : "Eliminar orden"}
+                message="La orden se borra por completo, como si no se hubiera creado. No tiene material, accesorios ni factura, así que nada vuelve al inventario."
+                confirmText="Eliminar"
+                type="danger"
+                onCancel={() => setDeleting(false)}
+                onConfirm={async () => {
+                    try {
+                        await api.factory.deleteOrder(o.id);
+                        notify(`Orden ${o.code} eliminada`);
+                        setDeleting(false);
+                        onChanged?.();
+                        onClose();
                     } catch (e) { notify(errMsg(e), "err"); }
                 }}
             />

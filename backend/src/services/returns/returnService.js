@@ -1,9 +1,10 @@
 const {
   Sale, SaleItem, Product, ProductStock, Employee,
-  Return, ReturnItem, ProductComboItem, Serie, SerieRange, sequelize, Sequelize,
+  Return, ReturnItem, Serie, SerieRange, sequelize, Sequelize,
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { excludeAnnulledReturns, factorDevolucion, saleDebt, refreshSaleStatus, settleSurplus, defaultSurplusMode } = require("./shared");
+const { componentesConStock } = require("../products/comboStock");
 
 async function createReturn({ saleId, items, reason, employee_id, refund, surplus_mode }, req) {
   if (!items?.length) { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
@@ -149,7 +150,7 @@ async function createReturn({ saleId, items, reason, employee_id, refund, surplu
         const product = await Product.findByPk(line.product_id, { transaction });
 
         if (product && !product.is_service && product.is_combo) {
-          const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
+          const comboItems = await componentesConStock(product.id, transaction);
           for (const cItem of comboItems) {
             const qtyToRestore = line.qty * parseFloat(cItem.quantity);
             const [stockEntry] = await ProductStock.findOrCreate({

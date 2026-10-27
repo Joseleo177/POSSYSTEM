@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "../ui/Modal";
 import Money from "../ui/Money";
-import Segmented from "../ui/Segmented";
 import ConfirmModal from "../ui/ConfirmModal";
 import CustomSelect from "../ui/CustomSelect";
 import { Button } from "../ui/Button";
@@ -13,20 +12,10 @@ import { toNameCase, fmtBase } from "../../helpers";
 import {
     INPUT, AGREGAR, QUITAR, CARD, Field, PlusIcon, XIcon, SearchPick, fmtDims, fmtSize, errMsg,
 } from "./shared";
+import RecipeLines, { linesToItems, newCut } from "./RecipeLines";
 
 const NARROW = INPUT.replace("w-full ", "");
-const RECIPE_UNITS = [{ key: "m", label: "m" }, { key: "cm", label: "cm" }, { key: "mm", label: "mm" }];
-
-// Campo de fórmula: acepta un número ("0,40") o una cuenta con las variables ("L + 0,10").
-function Formula({ value, onChange, placeholder, suffix, className = "" }) {
-    return (
-        <div className={`relative ${className}`}>
-            <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} spellCheck={false} autoComplete="off"
-                className={`${INPUT} ${suffix ? "pr-14" : ""} tabular-nums font-medium`} />
-            {suffix && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">{suffix}</span>}
-        </div>
-    );
-}
+const RECIPE_UNITS = [{ key: "m", name: "metros" }, { key: "cm", name: "centímetros" }, { key: "mm", name: "milímetros" }];
 
 const fmtMin = (m) => `${Number(m || 0).toLocaleString("es-VE", { maximumFractionDigits: 1 })} min`;
 
@@ -40,30 +29,29 @@ const fmtMin = (m) => `${Number(m || 0).toLocaleString("es-VE", { maximumFractio
  * usará la orden, así que lo que se ve aquí es exactamente lo que va a salir.
  *
  * `productId`: null cerrado · "new" receta nueva · id del producto para editar la suya.
+ * `initialProduct`: con "new", el producto ya elegido (la receta se crea desde una orden).
  */
-export default function RecipeModal({ productId, materials, stages = [], onClose, onSaved }) {
+export default function RecipeModal({ productId, initialProduct = null, materials, stages = [], onClose, onSaved }) {
     const { notify, baseCurrency } = useApp();
     const [loading, setLoading] = useState(false);
     const [product, setProduct] = useState(null);
     const [unit, setUnit] = useState("m");
     const [params, setParams] = useState([]);
     const [instructions, setInstructions] = useState("");
-    const [cuts, setCuts] = useState([]);
-    const [accs, setAccs] = useState([]);
-    const [procs, setProcs] = useState([]);
+    const [lines, setLines] = useState({ cuts: [], accs: [], procs: [] });
     const [deleting, setDeleting] = useState(false);
     const [calc, setCalc] = useState(null);
     const [calcError, setCalcError] = useState(null);
     const open = productId != null;
     const editing = open && productId !== "new";
-    const activeStages = stages.filter(s => s.active !== false);
 
     useEffect(() => {
         if (!open) return;
         setProduct(null); setInstructions(""); setUnit("m"); setParams([]);
-        setCuts([]); setAccs([]); setProcs([]); setCalc(null); setCalcError(null);
+        setLines({ cuts: [], accs: [], procs: [] }); setCalc(null); setCalcError(null);
         if (!editing) {
-            setCuts(materials[0] ? [{ material_id: String(materials[0].id), w: "", l: "", cuts: "1" }] : []);
+            setProduct(initialProduct);
+            setLines({ cuts: materials[0] ? [newCut(materials)] : [], accs: [], procs: [] });
             return;
         }
         setLoading(true);
@@ -74,13 +62,15 @@ export default function RecipeModal({ productId, materials, stages = [], onClose
                 setUnit(d.unit || "m");
                 setParams((d.params || []).map(p => ({ ...p, default: String(p.default).replace(".", ",") })));
                 setInstructions(d.instructions || "");
-                setCuts(d.items.filter(i => i.kind === "material").map(i => ({
-                    material_id: String(i.component_id), w: i.width_expr || "", l: i.length_expr || "", cuts: i.cuts_expr || "1",
-                })));
-                setAccs(d.items.filter(i => i.kind === "accesorio").map(i => ({
-                    product: { id: i.component_id, name: i.name, unit: i.unit }, quantity: i.quantity_expr || "",
-                })));
-                setProcs(d.items.filter(i => i.kind === "proceso").map(i => ({ stage_id: String(i.stage_id), minutes: i.minutes_expr || "" })));
+                setLines({
+                    cuts: d.items.filter(i => i.kind === "material").map(i => ({
+                        material_id: String(i.component_id), w: i.width_expr || "", l: i.length_expr || "", cuts: i.cuts_expr || "1",
+                    })),
+                    accs: d.items.filter(i => i.kind === "accesorio").map(i => ({
+                        product: { id: i.component_id, name: i.name, unit: i.unit }, quantity: i.quantity_expr || "",
+                    })),
+                    procs: d.items.filter(i => i.kind === "proceso").map(i => ({ stage_id: String(i.stage_id), minutes: i.minutes_expr || "" })),
+                });
             })
             .catch(e => notify(errMsg(e, "No se pudo abrir la receta"), "err"))
             .finally(() => setLoading(false));
@@ -91,10 +81,8 @@ export default function RecipeModal({ productId, materials, stages = [], onClose
         return (r.data || []).filter(p => !p.piece_mode && !p.is_variant_parent);
     }, []);
 
-    const matOf = (id) => materials.find(m => String(m.id) === String(id));
-    const upd = (setter) => (i, patch) => setter(rows => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-    const setCut = upd(setCuts), setAcc = upd(setAccs), setProc = upd(setProcs), setParam = upd(setParams);
-    const drop = (setter, i) => setter(rows => rows.filter((_, j) => j !== i));
+    const setParam = (i, patch) => setParams(rows => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+    const dropParam = (i) => setParams(rows => rows.filter((_, j) => j !== i));
 
     // El borrador tal como lo recibe el servidor.
     const draft = useMemo(() => ({
@@ -102,12 +90,8 @@ export default function RecipeModal({ productId, materials, stages = [], onClose
         unit,
         params: params.map(p => ({ key: p.key.trim(), label: p.label.trim() || p.key.trim(), kind: p.kind, default: String(p.default).replace(",", ".") })),
         instructions: instructions.trim() || null,
-        items: [
-            ...cuts.map(c => ({ component_id: parseInt(c.material_id) || 0, width_expr: c.w, length_expr: c.l, cuts_expr: c.cuts })),
-            ...accs.filter(a => a.product).map(a => ({ component_id: a.product.id, quantity_expr: a.quantity })),
-            ...procs.map(p => ({ stage_id: parseInt(p.stage_id) || 0, minutes_expr: p.minutes })),
-        ],
-    }), [product, unit, params, instructions, cuts, accs, procs]);
+        items: linesToItems(lines),
+    }), [product, unit, params, instructions, lines]);
 
     // Cálculo en vivo con los valores por defecto.
     const dDraft = useDebounce(draft, 500);
@@ -128,12 +112,11 @@ export default function RecipeModal({ productId, materials, stages = [], onClose
         try {
             await api.factory.saveRecipe(product.id, draft);
             notify("Receta guardada");
-            onSaved?.();
+            onSaved?.(product);
         } catch (e) { notify(errMsg(e), "err"); }
     };
 
     const keys = params.map(p => p.key.trim().toUpperCase()).filter(Boolean);
-    const ejemplo = keys.length ? `${keys[0]} + 0,10` : "0,40";
 
     return (
         <>
@@ -167,7 +150,7 @@ export default function RecipeModal({ productId, materials, stages = [], onClose
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
                             <Field label="Producto que se fabrica">
-                                <SearchPick searchFn={searchProducts} value={product} onChange={setProduct} disabled={editing}
+                                <SearchPick searchFn={searchProducts} value={product} onChange={setProduct} disabled={editing || !!initialProduct}
                                     placeholder="Vaso, mesón, fregadero…" autoFocus={!editing}
                                     renderItem={p => (
                                         <span className="flex items-center justify-between gap-3">
@@ -176,10 +159,31 @@ export default function RecipeModal({ productId, materials, stages = [], onClose
                                         </span>
                                     )} />
                             </Field>
-                            <Field label="Medidas en">
-                                <Segmented value={unit} onChange={setUnit} options={RECIPE_UNITS} />
-                            </Field>
+                            {/* El taller mide en metros: las recetas nuevas van en metros sin preguntar. Una
+                                receta vieja guardada en cm o mm conserva su unidad (cambiarla sin
+                                convertir las fórmulas cambiaría los cortes), y se dice en cuál está. */}
+                            {unit !== "m" && (
+                                <Field label="Medidas en">
+                                    <div className="h-10 flex items-center text-[13px] text-content-subtle">
+                                        {RECIPE_UNITS.find(u => u.key === unit)?.name}
+                                    </div>
+                                </Field>
+                            )}
                         </div>
+
+                        {/* Receta vieja en cm o mm: se pasa a metros sin convertir los números, porque muchas
+                            se escribieron pensando en metros con el selector en cm (1,62 leído como 1,62 cm).
+                            Quien la pasa revisa cada medida, con el cálculo en vivo de abajo. */}
+                        {unit !== "m" && (
+                            <div className="rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                                <p className="flex-1 min-w-0 text-[13px] text-amber-900 dark:text-amber-200">
+                                    Esta receta está en {RECIPE_UNITS.find(u => u.key === unit)?.name}. El taller mide en metros: pásala a metros y
+                                    revisa que cada medida quede en metros (por ejemplo, 72,5 cm se escribe 0,725).
+                                </p>
+                                <button type="button" onClick={() => setUnit("m")}
+                                    className="btn-outline h-9 px-3 rounded-lg text-[13px] font-medium shrink-0">Pasar a metros</button>
+                            </div>
+                        )}
 
                         {/* Variables */}
                         <section>
@@ -198,7 +202,7 @@ export default function RecipeModal({ productId, materials, stages = [], onClose
                                             options={[{ value: "medida", label: `Medida (${unit})` }, { value: "numero", label: "Número" }]} />
                                         <input value={p.default} onChange={e => setParam(i, { default: e.target.value })} inputMode="decimal"
                                             placeholder="Por defecto" aria-label="Valor por defecto" className={`${NARROW} w-28 shrink-0 tabular-nums`} />
-                                        <button onClick={() => drop(setParams, i)} aria-label="Quitar variable" className={QUITAR}><XIcon /></button>
+                                        <button onClick={() => dropParam(i)} aria-label="Quitar variable" className={QUITAR}><XIcon /></button>
                                     </div>
                                 ))}
                             </div>
@@ -209,86 +213,7 @@ export default function RecipeModal({ productId, materials, stages = [], onClose
                             )}
                         </section>
 
-                        {/* Cortes */}
-                        <section>
-                            <h3 className="text-[14px] font-semibold text-content dark:text-white mb-2">Cortes de material por unidad</h3>
-                            {materials.length === 0 && <p className="text-[13px] text-content-subtle mb-2">No hay materiales con control por piezas todavía.</p>}
-                            <div className="space-y-2">
-                                {cuts.map((c, i) => {
-                                    const m = matOf(c.material_id);
-                                    const area = m?.piece_mode !== "length";
-                                    return (
-                                        <div key={i} className="rounded-xl border border-border/60 dark:border-white/[0.06] p-3 space-y-2">
-                                            <div className="flex items-center gap-2">
-                                                <CustomSelect className="flex-1 min-w-0" value={c.material_id} onChange={v => setCut(i, { material_id: v })} placeholder="Material…"
-                                                    options={materials.map(x => ({ value: String(x.id), label: toNameCase(x.name) }))} />
-                                                <button onClick={() => drop(setCuts, i)} aria-label="Quitar corte" className={QUITAR}><XIcon /></button>
-                                            </div>
-                                            <div className={`grid gap-2 ${area ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2"}`}>
-                                                {area && <Formula value={c.w} onChange={v => setCut(i, { w: v })} placeholder={`Ancho: ${ejemplo}`} suffix={unit} />}
-                                                <Formula value={c.l} onChange={v => setCut(i, { l: v })} placeholder="Largo" suffix={unit} />
-                                                <Formula value={c.cuts} onChange={v => setCut(i, { cuts: v })} placeholder="1" suffix="cortes" />
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                            {materials.length > 0 && (
-                                <button onClick={() => setCuts(cs => [...cs, { material_id: String(materials[0].id), w: "", l: "", cuts: "1" }])} className={`${AGREGAR} mt-2`}>
-                                    <PlusIcon /> Agregar corte
-                                </button>
-                            )}
-                        </section>
-
-                        {/* Accesorios */}
-                        <section>
-                            <h3 className="text-[14px] font-semibold text-content dark:text-white mb-2">Accesorios por unidad</h3>
-                            <div className="space-y-2">
-                                {accs.map((a, i) => (
-                                    <div key={i} className="flex items-center gap-2">
-                                        <div className="flex-1 min-w-0">
-                                            <SearchPick searchFn={searchProducts} value={a.product} onChange={p => setAcc(i, { product: p })}
-                                                placeholder="Tornillos, bisagras…"
-                                                renderItem={p => (
-                                                    <span className="flex items-center justify-between gap-3">
-                                                        <span className="truncate">{toNameCase(p.name)}</span>
-                                                        <span className="text-[11px] text-content-subtle shrink-0">{p.unit}</span>
-                                                    </span>
-                                                )} />
-                                        </div>
-                                        <Formula value={a.quantity} onChange={v => setAcc(i, { quantity: v })} placeholder={keys.includes("P") ? "P * 2" : "2"} className="w-32 shrink-0" />
-                                        <button onClick={() => drop(setAccs, i)} aria-label="Quitar accesorio" className={QUITAR}><XIcon /></button>
-                                    </div>
-                                ))}
-                            </div>
-                            <button onClick={() => setAccs(as => [...as, { product: null, quantity: "1" }])} className={`${AGREGAR} mt-2`}>
-                                <PlusIcon /> Agregar accesorio
-                            </button>
-                        </section>
-
-                        {/* Procesos */}
-                        <section>
-                            <h3 className="text-[14px] font-semibold text-content dark:text-white mb-2">Tiempo de taller por unidad</h3>
-                            {activeStages.length === 0 ? (
-                                <p className="text-[13px] text-content-subtle">Define las etapas del taller (pestaña Etapas) para calcular la mano de obra.</p>
-                            ) : (
-                                <>
-                                    <div className="space-y-2">
-                                        {procs.map((p, i) => (
-                                            <div key={i} className="flex items-center gap-2">
-                                                <CustomSelect className="flex-1 min-w-0" value={p.stage_id} onChange={v => setProc(i, { stage_id: v })} placeholder="Etapa…"
-                                                    options={activeStages.map(s => ({ value: String(s.id), label: s.name }))} />
-                                                <Formula value={p.minutes} onChange={v => setProc(i, { minutes: v })} placeholder={keys.length ? `20 + ${keys[0]} * 10` : "30"} suffix="min" className="w-40 shrink-0" />
-                                                <button onClick={() => drop(setProcs, i)} aria-label="Quitar proceso" className={QUITAR}><XIcon /></button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <button onClick={() => setProcs(ps => [...ps, { stage_id: String(activeStages.find(s => !ps.some(x => x.stage_id === String(s.id)))?.id ?? activeStages[0].id), minutes: "" }])} className={`${AGREGAR} mt-2`}>
-                                        <PlusIcon /> Agregar etapa
-                                    </button>
-                                </>
-                            )}
-                        </section>
+                        <RecipeLines materials={materials} stages={stages} unit={unit} keys={keys} lines={lines} setLines={setLines} />
 
                         <Field label="Instrucciones para el taller" hint="Opcional">
                             <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={3} maxLength={4000}

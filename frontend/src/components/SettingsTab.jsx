@@ -58,7 +58,7 @@ const snap = (s) => {
 export default function SettingsTab({ notify }) {
     // La tasa vive en Monedas, su propio módulo; acá solo se necesita el símbolo de la
     // moneda base para el tope de exoneración, que ya trae el contexto global.
-    const { loadSettings, employee, baseCurrency } = useApp();
+    const { loadSettings, employee, baseCurrency, company } = useApp();
     const [settings, setSettings] = useState({});
     const [saved, setSaved] = useState(snap({}));
     const [companyInfo, setCompanyInfo] = useState(null);
@@ -208,6 +208,7 @@ export default function SettingsTab({ notify }) {
     // Sin la clave guardada es "apagado": así siguen las empresas que ya existían. Las nuevas
     // la reciben encendida al darse de alta (ver controllers/companies.js).
     const reviewOn = settings.pos_review_checkout === "true";
+    const cocinaAlCobrarOn = settings.pos_kitchen_on_charge === "true";
     const fxCobroOn = settings.pos_fx_cobro === "true";
     const avanceOn = settings.pos_cash_advance === "true";
     const usados   = companyInfo?.current_users || 0;
@@ -460,6 +461,22 @@ export default function SettingsTab({ notify }) {
                                 />
                             </div>
                         </Seccion>
+
+                        {/* Restaurante donde se cobra antes de pedir (comida rápida, para llevar): lo
+                            que la caja cobra sale a la pantalla de cocina. Apagado por defecto: con
+                            mesoneros, lo que va a cocina son sus rondas. */}
+                        {company?.cocina_enabled && (
+                            <Seccion titulo="Cocina" detalle="Para restaurantes donde se paga antes de pedir." className="h-full">
+                                <div className="rounded-xl border border-border/70 dark:border-white/[0.08]">
+                                    <Interruptor
+                                        titulo="Enviar a cocina al cobrar"
+                                        detalle="Cada venta que se factura en la caja aparece en la pantalla de cocina con sus platos y adicionales. Las cuentas que ya pasaron por cocina (mesoneros, pedidos del catálogo) no se repiten."
+                                        checked={cocinaAlCobrarOn}
+                                        onChange={() => setSettings(p => ({ ...p, pos_kitchen_on_charge: cocinaAlCobrarOn ? "false" : "true" }))}
+                                    />
+                                </div>
+                            </Seccion>
+                        )}
 
                         {/* Cobro a tasa de divisas: opción de cada comercio, apagada por defecto. Sin
                             ella no aparece el interruptor ni al facturar ni al cobrar, y el servidor

@@ -5,6 +5,7 @@ import { fmtQtyUnit } from "../../helpers/unitFormatter";
 import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
+import { cartKey } from "../../helpers/cartLine";
 
 export default function CartSidebar({
     mobileTab, setMobileTab,
@@ -25,6 +26,7 @@ export default function CartSidebar({
     selectedCustIdx, setSelectedCustIdx,
     setCustomerEditData, setCustomerModal,
     cashSession, setShowCierre, setShowApertura, setShowHeldModal, heldCarts, setShowPendingSales, setShowReturns,
+    cartTable, onOpenTables, onClearTable,
     setShowAdvance,
     loading, setShowConfirmCheckout, holdCart,
     openQtyModal,
@@ -105,7 +107,7 @@ export default function CartSidebar({
                     <button onClick={() => setMobileTab("cart")} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[12px] font-bold transition-all relative ${mobileTab === "cart" ? "bg-brand-500 text-white" : "bg-surface-2 dark:bg-white/5 text-content-subtle"}`}>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
                         Carrito
-                        {cart.length > 0 && <span className="w-4 h-4 bg-danger text-white text-[12px] font-bold rounded-full flex items-center justify-center">{cart.length}</span>}
+                        {cart.length > 0 && <span className="w-4 h-4 bg-danger text-white text-[12px] font-bold rounded-full flex items-center justify-center">{cart.filter(i => !i.parentKey).length}</span>}
                     </button>
                 </div>
 
@@ -300,6 +302,32 @@ export default function CartSidebar({
                     </div>
                 </div>
 
+                {/* Mesa (restaurante): abre el mapa y dice de qué mesa es la venta en pantalla.
+                    Un solo control para las dos cosas, encima del cliente. */}
+                {onOpenTables && (
+                    <div className="flex items-center gap-1.5">
+                        <button onClick={onOpenTables}
+                            className="btn-outline flex-1 min-w-0 h-11 px-3 rounded-xl flex items-center gap-2.5 text-left active:scale-[0.99]">
+                            <svg className="w-5 h-5 shrink-0 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg>
+                            {cartTable ? (
+                                <span className="min-w-0 flex-1">
+                                    <span className="block text-[11px] text-content-subtle leading-none">Mesa</span>
+                                    <span className="block text-[14px] font-semibold text-content dark:text-white truncate">{cartTable.name}</span>
+                                </span>
+                            ) : (
+                                <span className="flex-1 text-[13px] font-medium text-content-subtle">Elegir mesa</span>
+                            )}
+                            <span className="text-[12px] text-content-subtle shrink-0">Ver mapa</span>
+                        </button>
+                        {cartTable && (
+                            <button onClick={onClearTable} title="Quitar la mesa de esta venta" aria-label="Quitar la mesa de esta venta"
+                                className="btn-outline w-11 h-11 shrink-0 rounded-xl flex items-center justify-center">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        )}
+                    </div>
+                )}
+
                 {/* Cliente */}
                 <div className="space-y-4 relative">
                     <div className="relative group">
@@ -457,11 +485,28 @@ export default function CartSidebar({
                             const lineTotalSecondary = secondaryCurrency
                                 ? round2(convertToSecondary(i.price)) * i.qty * (1 - discountRatio)
                                 : null;
+                            // Extra con precio de un plato ("+ Tocineta"): renglón colgado del plato,
+                            // sin cantidad propia —sigue la del plato— pero con su importe, que es
+                            // una línea más de la factura. Se puede quitar solo. El contorno incluido
+                            // (a 0, solo descuenta inventario) no se muestra: ya va en el texto del plato.
+                            if (i.parentKey && i.incluido) return null;
+                            if (i.parentKey) return (
+                                <div key={cartKey(i)} className="-mt-1 ml-7 pl-3 pr-1 py-1 flex items-center gap-2 border-l-2 border-border dark:border-white/10">
+                                    <span className="flex-1 min-w-0 text-[12px] text-content dark:text-white/85 truncate">
+                                        + {i.name}{parseFloat(i.qty) !== 1 ? <span className="text-content-subtle"> × {fmtQtyUnit(i.qty, i.unit).toLowerCase()}</span> : null}
+                                    </span>
+                                    <span className="text-[12px] font-bold text-content dark:text-white tabular-nums whitespace-nowrap">{fmt(lineTotal, currSym)}</span>
+                                    <button onClick={() => removeFromCart(cartKey(i))} aria-label={`Quitar ${i.name}`} title={`Quitar ${i.name}`}
+                                        className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-content-subtle hover:text-red-600">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                    </button>
+                                </div>
+                            );
                             return (
-                            <div key={i.id} className="bg-surface-2 dark:bg-white/5 p-2.5 lg:p-3 rounded-2xl flex items-center gap-3 group transition-all border border-black/5 dark:border-white/5">
+                            <div key={cartKey(i)} className="bg-surface-2 dark:bg-white/5 p-2.5 lg:p-3 rounded-2xl flex items-center gap-3 group transition-all border border-black/5 dark:border-white/5">
                                 <div className="w-12 h-12 rounded-xl bg-surface-2 dark:bg-white/5 flex items-center justify-center shrink-0 overflow-hidden relative">
                                     {i.image_url ? <img src={resolveImageUrl(i.image_url)} className="w-full h-full object-cover" alt={i.name} onError={imgRetryOnError} /> :<div className="text-sm opacity-20 dark:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>}
-                                    <button onClick={() => removeFromCart(i.id)} className="absolute inset-0 bg-danger/80 text-white opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                                    <button onClick={() => removeFromCart(cartKey(i))} className="absolute inset-0 bg-danger/80 text-white opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                                     </button>
                                 </div>
@@ -488,6 +533,14 @@ export default function CartSidebar({
                                             );
                                         })()}
                                     </div>
+                                    {/* Adicionales del plato y la nota para la cocina. */}
+                                    {(i.addon_text || i.note) && (
+                                        <div className="text-[11px] text-content dark:text-white/80 leading-snug mt-0.5 break-words">
+                                            {i.addon_text || ""}
+                                            {i.addon_options && i.kitchen_note && <span className="text-amber-700 dark:text-amber-400">{i.addon_text ? " · " : ""}{i.kitchen_note}</span>}
+                                            {!i.addon_options && i.note && <span className="text-amber-700 dark:text-amber-400">{i.note}</span>}
+                                        </div>
+                                    )}
                                     <div className="flex flex-col mt-0.5">
                                         <div className="text-[11px] text-content-subtle tabular-nums flex items-center gap-1 flex-wrap">
                                             <span>{fmtQtyUnit(i.qty, i.unit).toLowerCase()}</span>
@@ -510,27 +563,27 @@ export default function CartSidebar({
                                     </div>
                                 </div>
                                 <div className="flex items-center bg-surface-2 dark:bg-black/20 p-1 rounded-xl border border-black/5 dark:border-white/5 shrink-0">
-                                    <button onClick={() => changeQty(i.id, -1)} className="hidden lg:block w-7 h-7 rounded-lg font-bold dark:text-white hover:bg-white/10">-</button>
+                                    <button onClick={() => changeQty(cartKey(i), -1)} className="hidden lg:block w-7 h-7 rounded-lg font-bold dark:text-white hover:bg-white/10">-</button>
                                     <input
-                                        id={`qty-input-${i.id}`}
+                                        id={`qty-input-${cartKey(i)}`}
                                         type="number"
                                         inputMode="decimal"
                                         min="0"
                                         value={i.qty}
                                         readOnly={window.innerWidth < 1024}
                                         onClick={() => handleQtyModal(i)}
-                                        onChange={e => setQtyDirect(i.id, e.target.value)}
+                                        onChange={e => setQtyDirect(cartKey(i), e.target.value)}
                                         onBlur={() => {
                                             // Vacío y cero se permiten MIENTRAS se escribe —hacen
                                             // falta para teclear "0,5"—, pero al salir del campo la
                                             // línea no puede quedarse en cero: vuelve al mínimo.
                                             const q = parseFloat(i.qty);
-                                            if (!(q > 0)) setQtyDirect(i.id, String(parseFloat(i.qty_step) || 1), true);
+                                            if (!(q > 0)) setQtyDirect(cartKey(i), String(parseFloat(i.qty_step) || 1), true);
                                         }}
                                         onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); searchInputRef.current?.focus(); } }}
                                         className="w-10 bg-transparent text-center text-[12px] font-bold border-none outline-none dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none cursor-pointer lg:cursor-text"
                                     />
-                                    <button onClick={() => changeQty(i.id, 1)} className="hidden lg:block w-7 h-7 rounded-lg font-bold dark:text-white hover:bg-white/10">+</button>
+                                    <button onClick={() => changeQty(cartKey(i), 1)} className="hidden lg:block w-7 h-7 rounded-lg font-bold dark:text-white hover:bg-white/10">+</button>
                                 </div>
                             </div>
                             );

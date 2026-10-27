@@ -117,6 +117,30 @@ const MODULES = [
     ],
   },
   {
+    // Pantalla de cocina: solo aparece en empresas con companies.cocina_enabled (ver
+    // routes/kitchen.js). Es nuevo, así que tampoco va en ningún LEGACY_MAP.
+    key: 'kitchen',
+    label: 'Cocina',
+    actions: [
+      { key: 'view',   label: 'Ver comandas' },
+      { key: 'manage', label: 'Marcar comandas (en preparación, lista, entregada)' },
+    ],
+  },
+  {
+    // Mapa de mesas: va con el mismo interruptor de restaurante (companies.cocina_enabled).
+    // Ver el mapa se concedió por migración a quien ya cobraba; el plano solo lo edita quien
+    // lo reciba aparte.
+    key: 'tables',
+    label: 'Mesas',
+    actions: [
+      { key: 'view',   label: 'Ver el mapa de mesas' },
+      // Lo del mesonero: abrir mesas, sumar rondas y mandarlas a cocina. No cobra: eso sigue
+      // siendo sales.create, que el rol Mesonero no tiene.
+      { key: 'serve',  label: 'Tomar pedidos en las mesas' },
+      { key: 'layout', label: 'Editar el plano (áreas y mesas)' },
+    ],
+  },
+  {
     key: 'reports',
     label: 'Reportes',
     actions: [

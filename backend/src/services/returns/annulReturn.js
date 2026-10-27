@@ -1,10 +1,11 @@
 const {
   Sale, SaleItem, Product, ProductStock, Customer, CustomerCreditMovement, Expense,
-  Return, ReturnItem, Payment, ProductComboItem, sequelize, Sequelize,
+  Return, ReturnItem, Payment, sequelize, Sequelize,
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { resolveSaleStatus, saleSettleTolerance } = require("../../utils/saleBalance");
 const { creditAvailable, addCreditMovement } = require("../customers/creditLedger");
+const { componentesConStock } = require("../products/comboStock");
 
 const Op = Sequelize.Op;
 const err = (message, status) => Object.assign(new Error(message), { status, isOperational: true });
@@ -136,7 +137,7 @@ module.exports = async function annulReturn(returnId, { employeeId }, req) {
       const product = await Product.findByPk(line.product_id, { transaction: t });
       if (!product || product.is_service) continue;
       if (product.is_combo) {
-        const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction: t });
+        const comboItems = await componentesConStock(product.id, t);
         for (const ci of comboItems) {
           const need = parseFloat(line.qty) * parseFloat(ci.quantity);
           aDescontar.set(ci.product_id, (aDescontar.get(ci.product_id) || 0) + need);

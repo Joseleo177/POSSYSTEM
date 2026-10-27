@@ -39,7 +39,7 @@ export default function CatalogLayout({ catalog, token }) {
         baseCur, altCur, fmt, ordersEnabled, gated,
         warehouses, branch, branchGate, chooseBranch, openBranchGate,
         cart, cartTotal, cartOpen, setCartOpen,
-        setCartItem, changeQty, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,
+        setCartItem, addAddonItem, changeQty, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,
         delivery, setDelivery,
         identity, saveIdentity,
         requestLogout, logoutAsk, confirmLogout, cancelLogout,
@@ -146,9 +146,10 @@ export default function CatalogLayout({ catalog, token }) {
             <>
                 <ProductAddModal
                     product={addingProduct}
-                    existing={addingProduct ? cart.find(it => it.id === addingProduct.id) : null}
+                    // Un plato con adicionales no se "reabre": cada combinación entra como línea nueva.
+                    existing={addingProduct && !addingProduct.addons?.length ? cart.find(it => it.id === addingProduct.id) : null}
                     onClose={() => setAddingProduct(null)}
-                    onConfirm={(p, qty, note) => setCartItem(p, qty, note)}
+                    onConfirm={(p, qty, note, opciones) => (p.addons?.length ? addAddonItem(p, qty, note, opciones) : setCartItem(p, qty, note))}
                     fmt={fmt} baseCur={baseCur} altCur={altCur}
                     panelColor={store?.panel_color}
                 />

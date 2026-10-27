@@ -12,6 +12,8 @@ import MonedasPage from "../pages/MonedasPage";
 import ReportesPage from "../pages/ReportesPage";
 import CompaniesPage from "../pages/CompaniesPage";
 import FabricaPage from "../pages/FabricaPage";
+import CocinaPage from "../pages/CocinaPage";
+import MesasPage from "../pages/MesasPage";
 
 export const PAGE_COMPONENTS = {
     Dashboard: DashboardPage,
@@ -19,6 +21,8 @@ export const PAGE_COMPONENTS = {
     "Catálogo": CatalogPage,
     Compras: PurchasesPage,
     "Fábrica": FabricaPage,
+    Cocina: CocinaPage,
+    Mesas: MesasPage,
     Inventario: InventarioPage,
     Clientes: ClientesPage,
     Contabilidad: ContabilidadPage,

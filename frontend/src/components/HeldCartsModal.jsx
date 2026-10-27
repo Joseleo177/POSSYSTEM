@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { fmtMoney, toNameCase, fmtTime } from "../helpers";
 import { api } from "../services/api";
 import OrderPreviewModal from "./OrderPreviewModal";
+import KitchenMark from "./KitchenMark";
 import HeldCartBarCard, { totalCuentaEn } from "./HeldCartBarCard";
 
 // La pestaña elegida se recuerda entre sesiones: en un bar la vista de barra es la de todos
@@ -333,6 +334,7 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                                     Web
                                                 </span>
                                             )}
+                                            <KitchenMark status={c.kitchen_status} />
                                             {/* "Cliente:" delante del nombre: sin la etiqueta se confundía
                                                 con el cajero de la línea de abajo. Se muestra el nombre de
                                                 la ficha, no el que el cliente tecleó: es el que va a salir

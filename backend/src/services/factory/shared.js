@@ -36,6 +36,9 @@ const unitOfMode = (m) => MODES[m]?.unit;
 // Tamaño de una pieza en la unidad del producto, con los tres decimales de la existencia.
 const sizeOf = (mode, w, l) => (mode === "length" ? r3(parseInt(l) / 1000) : r3((parseInt(w) * parseInt(l)) / 1e6));
 
+// Las medidas se guardan en mm, pero al taller se le habla en metros: "1,22 × 2,44 m".
+const fmtM = (n) => (n / 1000).toLocaleString("es-VE", { maximumFractionDigits: 3 });
+
 const companyOf = (req) => {
   const c = req.employee?.company_id ?? null;
   if (!c) throw fail("Elige una empresa para trabajar en Fábrica");
@@ -49,7 +52,7 @@ const employeeOf = (req) => req.employee?.id ?? null;
 function mm(value, label) {
   const n = Math.round(parseFloat(value));
   if (!isFinite(n) || n <= 0) throw fail(`${label}: escribe una medida mayor que cero`);
-  if (n > 20000) throw fail(`${label}: ${n} mm parece un error de unidad`);
+  if (n > 20000) throw fail(`${label}: ${fmtM(n)} m es demasiado largo; revisa que esté en metros`);
   return n;
 }
 
@@ -232,7 +235,7 @@ async function inTransaction(fn) {
 module.exports = {
   ...models, sequelize, Sequelize, Op,
   fail, r3, r4, r5, MAX_QTY, MAX_MONEY, TOL,
-  MODES, isMode, unitOfMode, sizeOf, pieceSpec, cutsInPiece, cutsLeft, hasShape, mm, money, text,
+  MODES, isMode, unitOfMode, sizeOf, pieceSpec, cutsInPiece, cutsLeft, hasShape, mm, fmtM, money, text,
   companyOf, employeeOf, orderCode, ownWarehouse,
   moveStock, unitCostOf, anyUnitCost, COST_ANY_SQL, lockNumbering, inTransaction,
   assertWarehouseAccess, visibleWarehouseIds,

@@ -136,6 +136,15 @@ export default function CartDrawer({
                                                 <p className="text-[11px] font-medium text-content-muted mt-0.5">
                                                     {fmtQtyUnit(it.qty || 0, it.unit)}
                                                 </p>
+                                                {/* Adicionales del plato (término, extras). */}
+                                                {it.options?.length > 0 && (
+                                                    <p className="text-[11px] text-content-muted mt-0.5 leading-snug">
+                                                        {it.options.map(o => (o.price > 0 ? `+ ${o.name}` : o.name)).join(" · ")}
+                                                    </p>
+                                                )}
+                                                {it.note && (
+                                                    <p className="text-[11px] text-content-muted italic mt-0.5 leading-snug">"{it.note}"</p>
+                                                )}
 
                                                 {/* Solo aparece al cruzar el mínimo de la promo
                                                     ("compra 10 lleva 12"), no antes: prometer un

@@ -45,6 +45,7 @@ router.get   ("/orders",                          ver,       c.orders);
 router.post  ("/orders",                          gestionar, c.createOrder);
 router.get   ("/orders/:id",                      ver,       c.order);
 router.patch ("/orders/:id",                      gestionar, c.updateOrder);
+router.put   ("/orders/:id/plan",                 gestionar, c.setOrderPlan);
 router.post  ("/orders/:id/pieces",               gestionar, c.deliverPiece);
 router.delete("/orders/:id/pieces/:useId",        gestionar, c.cancelDelivery);
 router.post  ("/orders/:id/pieces/:useId/return", gestionar, c.returnPiece);
@@ -55,6 +56,7 @@ router.post  ("/orders/:id/finish",               gestionar, c.finishOrder);
 router.post  ("/orders/:id/stage",                gestionar, c.moveStage);
 router.post  ("/orders/:id/reopen",               gestionar, c.reopenOrder);
 router.post  ("/orders/:id/cancel",               gestionar, c.cancelOrder);
+router.delete("/orders/:id",                      gestionar, c.deleteOrder);
 router.post  ("/orders/:id/invoice",              permit("factory.invoice"), c.invoiceOrder);
 
 module.exports = router;

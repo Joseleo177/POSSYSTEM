@@ -4,13 +4,13 @@ const {
   sequelize, Sequelize, Op, Product, Customer, Sale, SaleItem, Serie, Warehouse, Employee,
   MaterialPiece, FabricationOrder, FabricationOrderPiece, FabricationOrderItem, FabricationOrderPlan,
   FabricationStage, FabricationOrderStage, FabricationOrderCut,
-  fail, r3, r4, r5, TOL, MAX_QTY, MAX_MONEY, sizeOf, cutsLeft, hasShape, mm, money, text,
+  fail, r3, r4, r5, TOL, MAX_QTY, MAX_MONEY, sizeOf, cutsLeft, hasShape, mm, fmtM, money, text,
   companyOf, employeeOf, orderCode, ownWarehouse,
   moveStock, unitCostOf, lockNumbering, inTransaction, assertWarehouseAccess, visibleWarehouseIds,
 } = require("./shared");
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
 const { isIntegerUnit } = require("../../utils/units");
-const { readRecipe, computeRecipe, estimate } = require("./recipes");
+const { readRecipe, computeRecipe, estimate, parseRecipeBody, writeRecipe } = require("./recipes");
 
 const QT = Sequelize.QueryTypes;
 const TYPES = ["estandar", "medida"];
@@ -177,6 +177,8 @@ async function getOrder(req, id) {
       accessories_cost: parseFloat(d.accessories_cost),
       labor_cost: parseFloat(d.labor_cost || 0),
       current_stage: current ? { id: current.id, name: current.name } : null,
+      // Para darle o cambiarle el plan: si el producto tiene receta, se ofrece aplicarla.
+      has_recipe: d.product_id ? !!(await readRecipe(company, d.product_id)) : false,
       stages,
       sale_price: d.sale_price != null ? parseFloat(d.sale_price) : null,
       total_cost: totalCost(d),
@@ -314,6 +316,51 @@ async function findCustomer(id, transaction) {
   return c.id;
 }
 
+/**
+ * Lo que lleva la orden. Estándar: la receta del producto, sin excepción (es lo que la hace
+ * estándar). A medida: la receta con las medidas del cliente si el producto la tiene, o lo
+ * que se escribe para esta orden sola (`plan`: { unit, items, instructions }, mismas líneas
+ * que una receta pero con números). Una orden sin nada que diga qué lleva no se acepta.
+ */
+async function resolvePlan(company, product, type, body, quantity, warehouseId, transaction) {
+  const recipe = product ? await readRecipe(company, product.id, transaction) : null;
+  const own = body.plan && Array.isArray(body.plan.items) && body.plan.items.length ? body.plan : null;
+  if (type === "estandar" && !recipe) {
+    throw fail(`"${product.name}" no tiene receta, y una orden estándar se hace con ella: créala primero`);
+  }
+  if (recipe && (type === "estandar" || !own)) {
+    const computed = await computeRecipe(recipe, { values: body.params || {}, quantity, warehouseId }, transaction);
+    return { computed, instructions: recipe.instructions || null };
+  }
+  if (!own) throw fail("Di qué lleva la orden: al menos un corte, un accesorio o una etapa del taller");
+  const parsed = await parseRecipeBody(company, product || { id: 0 }, { unit: own.unit, items: own.items, params: [] }, transaction);
+  const computed = await computeRecipe({ unit: parsed.unit, params: [], items: parsed.lines }, { values: {}, quantity, warehouseId }, transaction);
+  const instructions = text(own.instructions, 4000);
+  // Lo hecho a mano puede quedar como receta del producto, para la próxima vez.
+  const saveAs = own.save_recipe && product && !recipe ? { parsed, instructions } : null;
+  return { computed, instructions, saveAs };
+}
+
+// Copia en la orden las líneas ya calculadas (por unidad), sus valores y las instrucciones.
+async function writePlan(order, { computed, instructions }, transaction) {
+  await FabricationOrderPlan.destroy({ where: { order_id: order.id }, transaction });
+  for (let i = 0; i < computed.lines.length; i++) {
+    const l = computed.lines[i];
+    await FabricationOrderPlan.create({
+      company_id: order.company_id, order_id: order.id, kind: l.kind,
+      component_id: l.component_id || null, stage_id: l.stage_id || null, name: String(l.name).slice(0, 200),
+      cut_width_mm: l.cut_width_mm ?? null, cut_length_mm: l.cut_length_mm ?? null, cuts: l.cuts ?? null,
+      quantity: l.kind === "accesorio" ? l.quantity : null,
+      minutes: l.kind === "proceso" ? l.minutes : null,
+      position: i,
+    }, { transaction });
+  }
+  await order.update({
+    instructions: instructions || null,
+    params: computed.params.length ? computed.params : null,
+  }, { transaction });
+}
+
 async function createOrder(req, body = {}) {
   const company = companyOf(req);
   const type = TYPES.includes(body.type) ? body.type : "medida";
@@ -332,12 +379,9 @@ async function createOrder(req, body = {}) {
     const customerId = body.customer_id && destination === "cliente" ? await findCustomer(body.customer_id, transaction) : null;
     const salePrice = destination === "cliente" ? money(body.sale_price, "Precio del lote") : null;
 
-    // Receta del producto, calculada con los valores de esta orden (el mesón de 1,80 × 0,60).
-    // Se calcula antes de numerar: una fórmula que no cuadra no debe gastar un número de orden.
-    const recipe = product ? await readRecipe(company, product.id, transaction) : null;
-    const computed = recipe
-      ? await computeRecipe(recipe, { values: body.params || {}, quantity, warehouseId }, transaction)
-      : null;
+    // Receta del producto con los valores de esta orden (el mesón de 1,80 × 0,60), o lo escrito
+    // para ella. Se calcula antes de numerar: una fórmula que no cuadra no gasta un número.
+    const plan = await resolvePlan(company, product, type, body, quantity, warehouseId, transaction);
 
     await lockNumbering("ordenes", company, transaction);
     const max = await FabricationOrder.max("number", { where: { company_id: company }, transaction });
@@ -357,27 +401,27 @@ async function createOrder(req, body = {}) {
       employee_id: employeeOf(req),
     }, { transaction });
 
-    // Con receta, la orden se lleva una copia ya calculada (por unidad), los valores usados
-    // y las instrucciones.
-    if (computed) {
-      for (let i = 0; i < computed.lines.length; i++) {
-        const l = computed.lines[i];
-        await FabricationOrderPlan.create({
-          company_id: company, order_id: order.id, kind: l.kind,
-          component_id: l.component_id || null, stage_id: l.stage_id || null, name: String(l.name).slice(0, 200),
-          cut_width_mm: l.cut_width_mm ?? null, cut_length_mm: l.cut_length_mm ?? null, cuts: l.cuts ?? null,
-          quantity: l.kind === "accesorio" ? l.quantity : null,
-          minutes: l.kind === "proceso" ? l.minutes : null,
-          position: i,
-        }, { transaction });
-      }
-      await order.update({
-        instructions: recipe.instructions || null,
-        params: computed.params.length ? computed.params : null,
-      }, { transaction });
-    }
+    await writePlan(order, plan, transaction);
+    if (plan.saveAs) await writeRecipe(company, product, plan.saveAs.parsed, plan.saveAs.instructions, employeeOf(req), transaction);
 
     return { data: { ...order.toJSON(), code: orderCode(order.number) } };
+  });
+}
+
+// Le da (o le cambia) lo que lleva a una orden abierta: la receta del producto con sus valores,
+// o un plan propio. Solo antes de entregar material: las piezas entregadas cubren cortes del plan.
+async function setOrderPlan(req, id, body = {}) {
+  const company = companyOf(req);
+  return inTransaction(async (transaction) => {
+    const order = await lockedOrder(req, id, transaction);
+    mustBeOpen(order);
+    const uses = await FabricationOrderPiece.count({ where: { order_id: order.id }, transaction });
+    if (uses) throw fail("Ya se entregó material para esta orden: cancela esas entregas para cambiar lo que lleva");
+    const product = order.product_id ? await Product.findByPk(order.product_id, { transaction }) : null;
+    const plan = await resolvePlan(company, product, order.type, body, parseFloat(order.quantity), order.warehouse_id, transaction);
+    await writePlan(order, plan, transaction);
+    if (plan.saveAs) await writeRecipe(company, product, plan.saveAs.parsed, plan.saveAs.instructions, employeeOf(req), transaction);
+    return { data: { id: order.id } };
   });
 }
 
@@ -655,7 +699,7 @@ async function returnPiece(req, id, useId, { remnants = [], note, layout = null 
       if (!r || typeof r !== "object") throw fail(`${label}: no válido`);
       if (mode === "length") {
         const l = mm(r.length_mm, `${label}, largo`);
-        if (l > piece.length_mm) throw fail(`${label}: ${l} mm es más largo que la pieza #${piece.code} (${piece.length_mm} mm)`);
+        if (l > piece.length_mm) throw fail(`${label}: ${fmtM(l)} m es más largo que la pieza #${piece.code} (${fmtM(piece.length_mm)} m)`);
         return { is_irregular: false, width_mm: null, length_mm: l, size: sizeOf(mode, null, l) };
       }
       if (r.irregular === true) {
@@ -666,7 +710,7 @@ async function returnPiece(req, id, useId, { remnants = [], note, layout = null 
       const w = mm(r.width_mm, `${label}, ancho`);
       const l = mm(r.length_mm, `${label}, largo`);
       if (!piece.is_irregular && (Math.max(w, l) > big || Math.min(w, l) > small)) {
-        throw fail(`${label}: ${w} × ${l} mm no cabe en la pieza #${piece.code} (${piece.width_mm} × ${piece.length_mm} mm)`);
+        throw fail(`${label}: ${fmtM(w)} × ${fmtM(l)} m no cabe en la pieza #${piece.code} (${fmtM(piece.width_mm)} × ${fmtM(piece.length_mm)} m)`);
       }
       return { is_irregular: false, width_mm: w, length_mm: l, size: sizeOf(mode, w, l) };
     });
@@ -969,6 +1013,23 @@ async function cancelOrder(req, id, { reason } = {}) {
   });
 }
 
+// Borrar es para la orden hecha por error: sin factura (ni anulada), sin material entregado,
+// sin accesorios y sin mano de obra cargada. La que ya tuvo movimiento se anula, que deja
+// rastro. Plan, etapas y cortes se van con ella (ON DELETE CASCADE).
+async function deleteOrder(req, id) {
+  return inTransaction(async (transaction) => {
+    const order = await lockedOrder(req, id, transaction);
+    if (order.status === "terminada") throw fail("La orden ya está terminada: no se puede eliminar");
+    if (order.sale_id) throw fail("La orden se facturó alguna vez: anúlala en vez de eliminarla");
+    const uses = await FabricationOrderPiece.count({ where: { order_id: order.id }, transaction });
+    const items = await FabricationOrderItem.count({ where: { order_id: order.id }, transaction });
+    if (uses || items) throw fail("La orden ya tiene material o accesorios: anúlala en vez de eliminarla");
+    if (parseFloat(order.labor_cost || 0) > 0) throw fail("La orden ya tiene mano de obra cargada: anúlala en vez de eliminarla");
+    await order.destroy({ transaction });
+    return { data: { id: order.id, code: orderCode(order.number) } };
+  });
+}
+
 /**
  * Factura una orden para cliente. Queda como venta por cobrar ('pendiente') con su
  * correlativo, igual que una cotización convertida; el cobro sigue por Cobro o Cuentas.
@@ -1036,7 +1097,7 @@ async function invoiceOrder(req, id, { serie_id, sale_price } = {}) {
 }
 
 module.exports = {
-  listOrders, getOrder, createOrder, updateOrder,
+  listOrders, getOrder, createOrder, updateOrder, setOrderPlan,
   deliverPiece, cancelDelivery, returnPiece, undoReturn,
-  addItem, removeItem, finishOrder, reopenOrder, cancelOrder, invoiceOrder, moveStage,
+  addItem, removeItem, finishOrder, reopenOrder, cancelOrder, deleteOrder, invoiceOrder, moveStage,
 };

@@ -1,5 +1,7 @@
 const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, ProductStock, Warehouse, CatalogBanner, Promotion, BenefitTag, Company, Sequelize, sequelize } = require("../models");
+const { crearComanda } = require("./kitchen");
 const { tenantStorage } = require("../utils/tenantStorage");
+const addons = require("./addons");
 const { imageUrl } = require("../utils/imageStorage");
 const { calculateComboStockAndCost } = require("./products/productService");
 const { getVariants } = require("./products/variantService");
@@ -537,7 +539,8 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
     // única barrera: sin él, cualquier alta de inventario aparecería publicada.
     // sellable es cinturón y tirantes: al marcar un producto como insumo se lo despublica,
     // pero un registro viejo o tocado a mano no debe poder colarse en la vitrina.
-    const where = { visible_in_catalog: true, sellable: true };
+    // is_addon: un adicional ("Queso extra") se pide desde la ficha del plato, nunca suelto.
+    const where = { visible_in_catalog: true, sellable: true, is_addon: false };
     // La sucursal llega del selector de la vitrina. Se revalida contra la empresa y contra
     // que atienda público: un id inventado no debe convertirse en un filtro cualquiera.
     const whPedido = parseInt(warehouse_id, 10) || null;
@@ -650,6 +653,8 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
     // consultas, no una por producto.
     const comboStock = await comboAvailability(rows.filter((r) => r.is_combo).map((r) => r.id), whId);
     const modelos = await modelosDisponibles(rows.filter((r) => r.is_variant_parent).map((r) => r.id), whId);
+    // Adicionales (restaurante): término, contorno, extras. Con ellos, "Agregar" abre la ficha.
+    const adicionales = await addons.paraVarios(rows.map((r) => r.id), whId);
 
     return {
       total: count,
@@ -700,6 +705,7 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
           available,
           // Con variantes, "Agregar" abre el selector de talla y color en vez de sumarlo.
           has_variants: !!j.is_variant_parent,
+          addons: adicionales.get(j.id) || [],
         };
       }),
     };
@@ -856,6 +862,7 @@ async function getProduct(token, productId, { warehouse_id } = {}) {
       available,
       has_variants: !!p.is_variant_parent,
       variants,
+      addons: await addons.forProduct(p.id, tienda ? tienda.id : null, false),
     };
   });
 }
@@ -1100,12 +1107,30 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
       // térmico: recortado y sin más control que el salto de línea, que ahí no sirve de nada.
       const lineNote = String(line.note || "").replace(/[\r\n]+/g, " ").trim().slice(0, 200) || null;
 
-      enriched.push({ product: p, qty, price, discount: lineDiscount, note: lineNote });
+      // Adicionales del plato: lo que no cuesta va como texto en la línea; lo que cuesta, como
+      // líneas aparte al precio de la tienda, igual que en la mesa (ver services/addons.js).
+      const ad = await addons.resolver(p.id, line.options, { warehouseId: tienda ? tienda.id : null, nombrePlato: `"${p.name}"` });
+      const notaPlato = [ad.texto, lineNote].filter(Boolean).join(" · ").slice(0, 200) || null;
+
+      enriched.push({ product: p, qty, price, discount: lineDiscount, note: notaPlato, cocina: ad.cocina, notaCliente: lineNote });
       total += round2(price - lineDiscount) * qty;
+
+      if (ad.extras.length) {
+        const extraProds = await Product.findAll({ where: { id: { [Op.in]: ad.extras.map((e) => e.product_id) } } });
+        const extraPorId = Object.fromEntries(extraProds.map((x) => [x.id, x]));
+        for (const e of ad.extras) {
+          enriched.push({ product: extraPorId[e.product_id], qty, price: e.price, discount: 0, note: null, esExtra: true });
+          total += round2(e.price) * qty;
+        }
+      }
     }
 
     total = parseFloat(total.toFixed(2));
     const baseCurrency = await Currency.findOne({ where: { is_base: true } });
+    // En un restaurante con pantalla de cocina, el pedido que el mesonero manda desde la
+    // tablet es la comanda: entra al tablero en el acto, sin esperar a que caja lo acepte.
+    const empresa = await Company.findByPk(company_id, { attributes: ["cocina_enabled"] });
+    const aCocina = !!empresa?.cocina_enabled;
 
     const t = await sequelize.transaction();
     try {
@@ -1172,6 +1197,17 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
           cost_price: e.product.cost_price != null ? parseFloat(e.product.cost_price) : null,
           note: e.note,
         }, { transaction: t });
+      }
+
+      // Restaurante: el pedido entra a la cocina como su primera comanda.
+      if (aCocina) {
+        await crearComanda({
+          sale,
+          // La cocina ve el plato con sus adicionales debajo; los extras no van como líneas sueltas.
+          items: enriched.filter(e => !e.esExtra).map(e => ({ product_id: e.product.id, name: e.product.name, quantity: e.qty, note: e.notaCliente, modifiers: e.cocina })),
+          label: name,
+          note: sale.web_note,
+        }, t);
       }
 
       await t.commit();

@@ -11,8 +11,10 @@ export function freeUnitsFor(item) {
 }
 
 // Lo que esa línea cobra de verdad: precio × cantidad, menos el valor de las unidades gratis.
+// Los adicionales con precio de un plato (extras_price, por unidad) se suman aparte: la promo
+// es del plato, no de sus extras, igual que en la venta, donde cada extra es su propia línea.
 export function lineTotalFor(item) {
     const qty = parseFloat(item.qty) || 0;
     const price = parseFloat(item.price) || 0;
-    return price * qty - freeUnitsFor(item) * price;
+    return price * qty - freeUnitsFor(item) * price + (parseFloat(item.extras_price) || 0) * qty;
 }

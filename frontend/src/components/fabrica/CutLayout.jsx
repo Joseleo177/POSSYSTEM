@@ -182,13 +182,80 @@ function outline(rects) {
     return segs;
 }
 
-function Drawing({ piece, mode, regions, selected = null, cut = null, onPick, label, maxHeight }) {
+// Paso de las marcas de la regla: el más fino que deje al menos ~56 px entre rótulos.
+const STEPS = [10, 20, 50, 100, 200, 250, 500, 1000, 2000, 5000, 10000];
+const rulerStep = (k) => STEPS.find(s => s / k >= 56) || STEPS[STEPS.length - 1];
+
+// Regla a lo largo de un lado de la lámina, por fuera del dibujo. `along`: "x" arriba, "y" a
+// la izquierda. `mark`: el tramo del pedazo elegido, resaltado sobre la regla.
+function Ruler({ along, total, k, fmt, unit, mark }) {
+    const step = rulerStep(k);
+    const minor = step / 5 / k >= 7 ? step / 5 : step / 2 / k >= 7 ? step / 2 : null;
+    const ticks = [];
+    for (let v = 0; v < total - 1e-6; v += minor || step) ticks.push(v);
+    const top = along === "x";
+    const at = (v, d) => (top ? { x: v, y: -d * k } : { x: -d * k, y: v });
+    const line = (v, d0, d1, cls, w = 1) => {
+        const a = at(v, d0), b = at(v, d1);
+        return <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} vectorEffect="non-scaling-stroke" strokeWidth={w} className={cls} />;
+    };
+    const text = (v, t, anchor, strong) => {
+        const p = at(v, top ? 14 : 13);
+        return (
+            <text x={p.x} y={p.y} fontSize={10 * k} textAnchor={top ? anchor : "end"} dominantBaseline={top ? "auto" : "middle"}
+                className={strong ? "fill-content dark:fill-white font-semibold" : "fill-content-subtle dark:fill-white/50"}>{t}</text>
+        );
+    };
+    // El rótulo del final lleva la medida total; los que quedan muy cerca de él se omiten.
+    const labels = ticks.filter(v => Math.abs(v / step - Math.round(v / step)) < 1e-6 && total - v >= step * 0.6);
+    return (
+        <g pointerEvents="none">
+            {top
+                ? <line x1={0} y1={-3 * k} x2={total} y2={-3 * k} vectorEffect="non-scaling-stroke" strokeWidth={1} className="stroke-content-subtle/50 dark:stroke-white/25" />
+                : <line x1={-3 * k} y1={0} x2={-3 * k} y2={total} vectorEffect="non-scaling-stroke" strokeWidth={1} className="stroke-content-subtle/50 dark:stroke-white/25" />}
+            {mark && (top
+                ? <line x1={mark[0]} y1={-3 * k} x2={mark[1]} y2={-3 * k} vectorEffect="non-scaling-stroke" strokeWidth={3} className="stroke-brand-500 dark:stroke-brand-400" />
+                : <line x1={-3 * k} y1={mark[0]} x2={-3 * k} y2={mark[1]} vectorEffect="non-scaling-stroke" strokeWidth={3} className="stroke-brand-500 dark:stroke-brand-400" />)}
+            {ticks.map(v => {
+                const major = Math.abs(v / step - Math.round(v / step)) < 1e-6;
+                return <g key={v}>{line(v, 3, major ? 9 : 6, "stroke-content-subtle/60 dark:stroke-white/30")}</g>;
+            })}
+            {line(total, 3, 9, "stroke-content-subtle/60 dark:stroke-white/30")}
+            {labels.map(v => <g key={`l${v}`}>{text(v, fmt(v), v === 0 ? "start" : "middle")}</g>)}
+            {text(total, `${fmt(total)} ${unit}`, "end", true)}
+        </g>
+    );
+}
+
+// Rótulo con fondo sobre el dibujo (las medidas a cada lado de la línea de corte).
+function Tag({ x, y, k, text, anchor = "middle", tone = "cut" }) {
+    const w = (text.length * 6.6 + 12) * k, h = 18 * k;
+    const left = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2;
+    return (
+        <g pointerEvents="none">
+            <rect x={left} y={y - h / 2} width={w} height={h} rx={4 * k} vectorEffect="non-scaling-stroke" strokeWidth={1}
+                className={tone === "cut"
+                    ? "fill-white dark:fill-surface-dark-2 stroke-red-500/60 dark:stroke-red-400/60"
+                    : "fill-white dark:fill-surface-dark-2 stroke-content-subtle/40 dark:stroke-white/20"} />
+            <text x={left + w / 2} y={y} textAnchor="middle" dominantBaseline="central" fontSize={11 * k}
+                className="fill-content dark:fill-white font-semibold tabular-nums">{text}</text>
+        </g>
+    );
+}
+
+function Drawing({ piece, mode, regions, selected = null, cut = null, onPick, label, maxHeight, guide = null, unit = null, rulers = false }) {
     const svg = useRef(null);
     const hatch = `rayado-${useId().replace(/:/g, "")}`;
     const size = useBox(svg);
     const { length, rot, Lv, Hv } = viewOf(piece, mode);
     const k = Math.max(Lv / size.w, size.h ? Hv / size.h : 0);   // milímetros por pixel
     const view = regions.map(r => (length ? { ...r, y: 0, dy: Hv } : swap(r, rot)));
+    // Medidas en la unidad que usa el taller (m, cm o mm).
+    const u = unit || "m";
+    const num = (mm) => (unit ? fromMm(mm, unit) || "0" : fmtM(mm));
+    const fmtU = (mm) => `${num(mm)} ${u}`;
+    // Guía que sigue al mouse dentro del pedazo elegido: dice dónde caería el corte antes de tocar.
+    const [hover, setHover] = useState(null);
 
     // Retazos unidos: se dibuja el contorno de la pieza entera, sin la raya entre sus partes.
     const groups = new Map();
@@ -203,17 +270,51 @@ function Drawing({ piece, mode, regions, selected = null, cut = null, onPick, la
     };
 
     const sel = selected != null ? view[selected] : null;
-    let line = null;
-    if (sel && cut && cut.pos > 0) {
-        line = cut.dir === "v"
-            ? { x1: sel.x + cut.pos, y1: sel.y, x2: sel.x + cut.pos, y2: sel.y + sel.dy }
-            : { x1: sel.x, y1: sel.y + cut.pos, x2: sel.x + sel.dx, y2: sel.y + cut.pos };
-    }
+    const lineAt = (dir, pos) => (dir === "v"
+        ? { x1: sel.x + pos, y1: sel.y, x2: sel.x + pos, y2: sel.y + sel.dy }
+        : { x1: sel.x, y1: sel.y + pos, x2: sel.x + sel.dx, y2: sel.y + pos });
+    const line = sel && cut && cut.pos > 0 ? lineAt(cut.dir, cut.pos) : null;
+    const ghost = sel && guide && hover != null && hover !== cut?.pos ? lineAt(guide, hover) : null;
+
+    // Solo con mouse: en el táctil arrastrar desplaza la página, y el toque ya pone la línea.
+    const onMove = (e) => {
+        if (!guide || !sel || e.pointerType !== "mouse") return;
+        const p = pointAt(e);
+        if (p.x < sel.x || p.x > sel.x + sel.dx || p.y < sel.y || p.y > sel.y + sel.dy) { setHover(null); return; }
+        const span = guide === "v" ? sel.dx : sel.dy;
+        const raw = guide === "v" ? p.x - sel.x : p.y - sel.y;
+        setHover(Math.min(Math.max(Math.round(raw / 10) * 10, 10), span - 10));
+    };
+
+    // Las medidas a cada lado de la línea: lo que el taller lee en la cinta antes de picar.
+    const tags = (dir, pos, tone) => {
+        const span = dir === "v" ? sel.dx : sel.dy;
+        if (dir === "v") {
+            const x = sel.x + pos, y = sel.y + Math.min(16 * k, sel.dy / 2);
+            return (
+                <>
+                    <Tag k={k} x={x - 5 * k} y={y} anchor="end" text={`← ${fmtU(pos)}`} tone={tone} />
+                    <Tag k={k} x={x + 5 * k} y={y} anchor="start" text={`${fmtU(span - pos)} →`} tone={tone} />
+                </>
+            );
+        }
+        const y = sel.y + pos, x = sel.x + 8 * k;
+        return (
+            <>
+                <Tag k={k} x={x} y={y - 13 * k} anchor="start" text={`↑ ${fmtU(pos)}`} tone={tone} />
+                <Tag k={k} x={x} y={y + 13 * k} anchor="start" text={`↓ ${fmtU(span - pos)}`} tone={tone} />
+            </>
+        );
+    };
+
+    // Con reglas, el dibujo deja sitio arriba (y a la izquierda en láminas) para las medidas.
+    const pad = rulers ? `pt-6 ${length ? "px-1" : "pl-11 pr-1"}` : "";
 
     return (
-        <div className="w-full">
-            <svg ref={svg} viewBox={`0 0 ${Lv} ${Hv}`} className="w-full h-auto block text-content-subtle/40 dark:text-white/25 select-none"
-                style={maxHeight ? { maxHeight } : undefined} preserveAspectRatio="xMidYMid meet">
+        <div className={`w-full ${pad}`}>
+            <svg ref={svg} viewBox={`0 0 ${Lv} ${Hv}`} className="w-full h-auto block text-content-subtle/40 dark:text-white/25 select-none overflow-visible"
+                style={maxHeight ? { maxHeight } : undefined} preserveAspectRatio="xMidYMid meet"
+                onPointerMove={guide ? onMove : undefined} onPointerLeave={guide ? () => setHover(null) : undefined}>
                 <defs>
                     <pattern id={hatch} patternUnits="userSpaceOnUse" width={10 * k} height={10 * k} patternTransform="rotate(45)">
                         <line x1="0" y1="0" x2="0" y2={10 * k} stroke="currentColor" strokeWidth={2.5 * k} />
@@ -266,6 +367,17 @@ function Drawing({ piece, mode, regions, selected = null, cut = null, onPick, la
                 {line && (
                     <line x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} vectorEffect="non-scaling-stroke" strokeWidth={2}
                         strokeDasharray="6 4" pointerEvents="none" className="stroke-red-600 dark:stroke-red-400" />
+                )}
+                {ghost && (
+                    <line x1={ghost.x1} y1={ghost.y1} x2={ghost.x2} y2={ghost.y2} vectorEffect="non-scaling-stroke" strokeWidth={1.5}
+                        strokeDasharray="4 4" pointerEvents="none" className="stroke-content dark:stroke-white" />
+                )}
+                {sel && (ghost ? tags(guide, hover, "guide") : line ? tags(cut.dir, cut.pos, "cut") : null)}
+                {rulers && size.w > 0 && (
+                    <>
+                        <Ruler along="x" total={Lv} k={k} fmt={num} unit={u} mark={sel && view.length > 1 ? [sel.x, sel.x + sel.dx] : null} />
+                        {!length && <Ruler along="y" total={Hv} k={k} fmt={num} unit={u} mark={sel && view.length > 1 ? [sel.y, sel.y + sel.dy] : null} />}
+                    </>
                 )}
             </svg>
         </div>
@@ -398,6 +510,7 @@ export function CutEditor({ piece, mode, value, onChange, unit, setUnit }) {
             <div ref={drawRef} className="scroll-mt-4">
                 <Drawing piece={piece} mode={mode} regions={value} selected={selected} onPick={pick}
                     cut={valid && !joining ? { dir: length ? "v" : dir, pos: posMm } : null}
+                    guide={joining ? null : (length ? "v" : dir)} unit={unit} rulers
                     label={label} maxHeight="46vh" />
             </div>
 

@@ -340,9 +340,13 @@ export function usePublicCatalog(token, initialProductId = null) {
     // Producto con variantes en el que se tocó "Agregar": se elige talla o color en el
     // selector (VariantChooserModal, montado en PublicCatalogPage) y entra la variante.
     const [variantPick, setVariantPick] = useState(null);
+    // Plato con adicionales (término, extras): "Agregar" abre la ficha para elegirlos
+    // (AddonChooserModal, montado en PublicCatalogPage). El tema de menú usa su propia ficha.
+    const [addonPick, setAddonPick] = useState(null);
 
     const addToCart = (p, honorPromo = false) => {
         if (p?.has_variants) { setVariantPick(p); return; }
+        if (p?.addons?.length) { setAddonPick(p); return; }
         const grupo = (p.promo_buy_qty && p.promo_get_qty) ? p.promo_buy_qty + p.promo_get_qty : null;
         setCart(prev => {
             const found = prev.find(it => it.id === p.id);
@@ -376,6 +380,29 @@ export function usePublicCatalog(token, initialProductId = null) {
                 id: p.id, name: p.name, price: p.price, unit: p.unit, image_url: p.image_url,
                 promo_buy_qty: p.promo_buy_qty ?? null, promo_get_qty: p.promo_get_qty ?? null,
                 qty: cantidad, note: note || undefined,
+            }];
+        });
+    };
+
+    // Plato con adicionales: cada combinación (opciones + nota) es su propia línea, con id propio
+    // ("32:1,4:sin hielo"), así dos hamburguesas con distinto término no se mezclan. El precio de
+    // la línea es el del plato; los extras van aparte en extras_price (ver lineTotalFor), igual
+    // que en la venta, donde cada extra es una línea propia.
+    const addAddonItem = (p, qty, rawNote, options = []) => {
+        const note = String(rawNote || "").trim().slice(0, 200) || null;
+        const cantidad = parseFloat(qty);
+        if (!(cantidad > 0)) return;
+        const ids = options.map(o => o.id).sort((a, b) => a - b);
+        const key = `${p.id}:${ids.join(",")}:${(note || "").toLowerCase()}`;
+        const extras = options.reduce((s, o) => s + (Math.round((parseFloat(o.price) || 0) * 100) / 100), 0);
+        setCart(prev => {
+            const found = prev.find(it => it.id === key);
+            if (found) return prev.map(it => it.id === key ? { ...it, qty: round3((parseFloat(it.qty) || 0) + cantidad) } : it);
+            return [...prev, {
+                id: key, product_id: p.id, name: p.name, price: p.price, unit: p.unit, image_url: p.image_url,
+                promo_buy_qty: p.promo_buy_qty ?? null, promo_get_qty: p.promo_get_qty ?? null,
+                qty: cantidad, note: note || undefined,
+                options: options.map(o => ({ id: o.id, name: o.name, price: o.price })), extras_price: extras,
             }];
         });
     };
@@ -440,7 +467,7 @@ export function usePublicCatalog(token, initialProductId = null) {
         setSendError(null);
         try {
             const r = await publicApi.createOrder(token, {
-                items: cart.map(it => ({ product_id: it.id, quantity: it.qty, note: it.note || null })),
+                items: cart.map(it => ({ product_id: it.product_id ?? it.id, quantity: it.qty, note: it.note || null, options: it.options?.map(o => o.id) })),
                 customer_name: identity.name,
                 customer_phone: identity.phone,
                 customer_document: identity.document,
@@ -552,6 +579,7 @@ export function usePublicCatalog(token, initialProductId = null) {
         cart, cartTotal, cartOpen, setCartOpen,
         addToCart, setCartItem, changeQty,
         variantPick, setVariantPick, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,
+        addonPick, setAddonPick, addAddonItem,
         showCats, setShowCats, delivery, setDelivery,
         // identidad y perfil
         identity, saveIdentity, forgetIdentity,

@@ -39,7 +39,7 @@ export function printKitchenOrder(order, companyInfo, printerWidth = 80) {
     const rows = items.map(i => `
         <tr>
             <td class="qty">${fmtQty(i.quantity)}</td>
-            <td class="name">${esc(i.name)}${i.note ? `<div class="line-note">${esc(i.note)}</div>` : ""}</td>
+            <td class="name">${esc(i.name)}${i.modifiers ? `<div class="line-mod">${esc(i.modifiers)}</div>` : ""}${i.note ? `<div class="line-note">${esc(i.note)}</div>` : ""}</td>
         </tr>`).join("");
 
     const html = `<!DOCTYPE html>
@@ -83,6 +83,8 @@ export function printKitchenOrder(order, companyInfo, printerWidth = 80) {
         /* Sin mayúsculas ni negrita: distingue la nota del plato de un vistazo, y en
            mayúscula "SIN CEBOLLA" se confunde con el nombre del propio plato. */
         .line-note { font-weight: 500; text-transform: none; font-style: italic; margin-top: 0.5mm; }
+        /* Adicionales (término, extras): lo que se cocina, en letra normal; la nota va en cursiva. */
+        .line-mod { font-weight: 600; text-transform: none; margin-top: 0.5mm; }
 
         .note { margin-top: 2mm; border: 1px solid #000; padding: 1.5mm; font-size: ${w58 ? "9px" : "11px"}; font-weight: 700; overflow-wrap: break-word; }
         .note-label { font-size: ${w58 ? "7px" : "8.5px"}; letter-spacing: 1px; text-transform: uppercase; }

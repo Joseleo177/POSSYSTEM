@@ -110,18 +110,20 @@ const getAll = async (req, res) => {
 // La pantalla de Roles se dibuja con esto: agregar un permiso al catálogo lo hace aparecer
 // en la interfaz sin tocar el frontend.
 //
-// Fábrica solo se ofrece a la empresa que tiene el módulo: en las demás sería una casilla que
-// no abre nada.
+// Fábrica y Cocina solo se ofrecen a la empresa que tiene el módulo: en las demás serían
+// casillas que no abren nada.
 const getPermissionCatalog = async (req, res) => {
-  let fabrica = false;
+  let fabrica = false, cocina = false;
   try {
     if (req.company_id) {
       const { Company } = require("../models");
-      const c = await Company.findByPk(req.company_id, { attributes: ['fabrica_enabled'] });
+      const c = await Company.findByPk(req.company_id, { attributes: ['fabrica_enabled', 'cocina_enabled'] });
       fabrica = !!c?.fabrica_enabled;
+      cocina = !!c?.cocina_enabled;
     }
-  } catch { /* sin la empresa, el catálogo sale sin Fábrica */ }
-  res.json({ ok: true, data: fabrica ? MODULES : MODULES.filter(m => m.key !== 'factory') });
+  } catch { /* sin la empresa, el catálogo sale sin los módulos extra */ }
+  const data = MODULES.filter(m => (m.key !== 'factory' || fabrica) && (!['kitchen', 'tables'].includes(m.key) || cocina));
+  res.json({ ok: true, data });
 };
 
 // GET /api/employees/roles

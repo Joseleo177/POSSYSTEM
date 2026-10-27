@@ -208,6 +208,9 @@ async function getProducts(req) {
   // insumo se cuenta, se corrige y se mueve entre almacenes como cualquier producto.
   if (sellable_only === 'true') {
     filters.push(`p.sellable = true`);
+    // Los adicionales con precio ("Queso extra") se piden desde la ficha del plato, no sueltos.
+    // Al recuperar una cuenta la caja pide por `ids` sin este filtro, así que sus líneas vuelven.
+    filters.push(`p.is_addon = false`);
   }
   // La caja pide un puñado de ids al recuperar una cuenta en espera: filtro directo, sin
   // paginar ni traer el catálogo entero para rehidratar tres líneas.
@@ -241,14 +244,17 @@ async function getProducts(req) {
 
   const productsRaw = await sequelize.query(`
     SELECT
-      p.id, p.name, p.unit, p.qty_step,
+      p.id, p.name, p.unit, p.qty_step, p.short_description,
+      -- Tiene grupos de adicionales: el menú abre la ficha del plato en vez de sumarlo directo.
+      EXISTS (SELECT 1 FROM product_modifier_groups pmg JOIN modifier_groups mg ON mg.id = pmg.group_id AND mg.active
+               WHERE pmg.product_id = p.id) AS has_addons,
       -- La variante sin foto propia muestra la del modelo.
       -- Y el modelo sin foto muestra la del primer color que tenga una.
       COALESCE(p.image_filename,
         (SELECT pp.image_filename FROM products pp WHERE pp.id = p.parent_id),
         CASE WHEN p.is_variant_parent THEN (SELECT v.image_filename FROM products v
           WHERE v.parent_id = p.id AND v.image_filename IS NOT NULL ORDER BY v.id LIMIT 1) END) AS image_filename,
-      p.is_combo, p.is_service, p.barcode, p.is_variant_parent, p.parent_id,
+      p.is_combo, p.is_service, p.barcode, p.is_variant_parent, p.parent_id, p.is_addon,
       COALESCE(ps.cost_price, p.cost_price) AS cost_price,
       -- Precio y mínimo son los de esta sucursal si los definió. De acá come la caja, así que
       -- con esto el POS cobra el precio de la tienda sin saber que existe una herencia detrás.
@@ -389,6 +395,10 @@ async function getProducts(req) {
     is_combo:     p.is_combo,
     is_service:   p.is_service,
     combo_items:  p.is_combo ? (comboItemsMap[p.id] || []) : [],
+    // Lo que el mesonero lee en la tarjeta del menú (ver components/mesas/WaiterOrder).
+    short_description: p.short_description || null,
+    has_addons:   !!p.has_addons,
+    is_addon:     !!p.is_addon,
     image_url:    p.image_filename ? (p.image_filename.startsWith('http') ? p.image_filename : `/uploads/${p.image_filename}`) : null
   }));
 

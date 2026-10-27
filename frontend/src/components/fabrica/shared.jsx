@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchDropdown } from "../../hooks/useSearchDropdown";
 import { toNameCase } from "../../helpers";
-import Segmented from "../ui/Segmented";
 
 // Piezas comunes del módulo Fábrica: campos, medidas, estados y el buscador con selección.
 
@@ -36,25 +35,19 @@ export const XIcon = ({ className = "w-4 h-4" }) => (
 export const SHEET_ICON = "M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 9h9V4m0 10v6";
 
 // ── Medidas ─────────────────────────────────────────────────────────────────────────────
-// En el sistema todo va en milímetros; en pantalla se escribe en la unidad que use el taller
-// ("una silla de 1,50 × 1,22" o "150 × 122 cm"). La elegida se recuerda en el equipo.
+// En el sistema todo va en milímetros (cálculos exactos), pero en pantalla se escribe y se lee
+// en METROS, que es como el taller nombra una lámina: "1,22 × 2,44", no 1220 × 2440. Antes había
+// un selector m / cm / mm que se recordaba en el equipo: alguien lo pasaba a mm en una prueba y
+// el taller veía milímetros. Ya no se ofrece.
 
 export const UNITS = [
     { key: "m",  label: "m",  factor: 1000 },
     { key: "cm", label: "cm", factor: 10 },
     { key: "mm", label: "mm", factor: 1 },
 ];
-const UNIT_KEY = "fabrica_unidad";
 
 export function useMeasureUnit() {
-    const [unit, setUnitState] = useState(() => {
-        try { return localStorage.getItem(UNIT_KEY) || "m"; } catch { return "m"; }
-    });
-    const setUnit = (u) => {
-        setUnitState(u);
-        try { localStorage.setItem(UNIT_KEY, u); } catch { /* modo privado */ }
-    };
-    return [unit, setUnit];
+    return ["m", () => {}];
 }
 
 export const parseNum = (s) => {
@@ -99,8 +92,9 @@ export const unitLabel = (unit) => (String(unit || "").toUpperCase() === "M2" ? 
 export const fmtSize = (n, unit = "M2") =>
     `${Number(n || 0).toLocaleString("es-VE", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${unitLabel(unit)}`;
 
-export function UnitSwitch({ unit, setUnit, className = "" }) {
-    return <Segmented className={className} value={unit} onChange={setUnit} options={UNITS.map(u => ({ key: u.key, label: u.label }))} />;
+// Las medidas van siempre en metros (ver useMeasureUnit): el selector ya no se muestra.
+export function UnitSwitch() {
+    return null;
 }
 
 // Ancho × largo en una sola fila, con la unidad dentro de cada campo. Por longitud, solo el largo.
@@ -160,10 +154,17 @@ export const orderCode = (n) => `OF-${String(n).padStart(4, "0")}`;
 // ── Buscador con selección ──────────────────────────────────────────────────────────────
 // Escribe, elige de la lista y queda la ficha elegida con una X para cambiarla.
 
-export function SearchPick({ searchFn, value, onChange, placeholder, renderItem, renderValue, autoFocus = false, disabled = false }) {
+// onCreate: si se pasa, la lista termina en "Crear «lo tecleado»" para dar de alta lo que no
+// existe sin salir del formulario. onTermChange: avisa del texto escrito y aún sin elegir, para
+// que el formulario no guarde como vacío algo que el usuario sí tecleó.
+export function SearchPick({ searchFn, value, onChange, placeholder, renderItem, renderValue, autoFocus = false, disabled = false, onCreate, createLabel = "Crear", onTermChange }) {
     const { term, setTerm, results, searching, clear } = useSearchDropdown(searchFn, { limit: 8 });
     const [open, setOpen] = useState(false);
     const boxRef = useRef(null);
+
+    // Elegido (o recién creado) un valor, lo tecleado deja de estar pendiente.
+    useEffect(() => { if (value) clear(); }, [value]);
+    useEffect(() => { onTermChange?.(value ? "" : term.trim()); }, [term, value]);
 
     useEffect(() => {
         const onDown = (e) => { if (!boxRef.current?.contains(e.target)) setOpen(false); };
@@ -210,6 +211,14 @@ export function SearchPick({ searchFn, value, onChange, placeholder, renderItem,
                             {renderItem ? renderItem(r) : toNameCase(r.name)}
                         </button>
                     ))}
+                    {onCreate && !searching && (
+                        <button type="button"
+                            onClick={() => { setOpen(false); onCreate(term.trim()); }}
+                            className="w-full text-left px-3 py-2.5 text-[13px] font-medium text-brand-600 dark:text-brand-400 hover:bg-surface-2 dark:hover:bg-white/5 border-t border-border/40 dark:border-white/[0.04] flex items-center gap-2">
+                            <PlusIcon />
+                            <span className="truncate">{createLabel} «{term.trim()}»</span>
+                        </button>
+                    )}
                 </div>
             )}
         </div>

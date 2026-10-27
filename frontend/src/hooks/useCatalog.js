@@ -32,7 +32,7 @@ export function useCatalog() {
         try {
             // El catálogo muestra el modelo ("Franela Básica") y no cada talla suelta: las
             // variantes se editan desde la ficha del modelo.
-            const q = { limit, offset: (p - 1) * limit, variant_view: "models" };
+            const q = { limit, offset: (p - 1) * limit, variant_view: "models", is_addon: false };   // los adicionales van en su pestaña
             if (search?.trim()) q.search = search.trim();
             if (warehouseId) q.warehouse_id = warehouseId;
 

@@ -36,6 +36,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
         payDateFrom, setPayDateFrom,
         payDateTo, setPayDateTo,
         journalFilter, setJournalFilter,
+        methodFilter, setMethodFilter,
         employeeFilter, setEmployeeFilter, employees,
         warehouseFilter, setWarehouseFilter, warehouses,
         verifiedFilter, setVerifiedFilter,
@@ -51,7 +52,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
     // Moneda en la que están hechos los cobros del filtro, cuando es una sola. El id lo dice el
     // servidor junto con los totales, así que el pie rotula con el símbolo correcto sin suponer
     // que la moneda secundaria del sistema es la del filtro.
-    const { activeCurrencies } = useApp();
+    const { activeCurrencies, paymentMethods } = useApp();
     const filterCurrency = currencyId ? (activeCurrencies || []).find(c => c.id === currencyId) : null;
     const filtrosBtnRef = useRef(null);
 
@@ -61,6 +62,24 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
     const visibleJournals  = journalsForWarehouse(journals, warehouseFilter);
     const visibleEmployees = (employees || []).filter(e =>
         !warehouseFilter || (e.warehouses || []).some(w => w.id === Number(warehouseFilter)));
+
+    // El diario es la cuenta y recibe por varios métodos: el punto y el pago móvil del mismo
+    // banco caen en la misma cuenta. El método se filtra aparte: con una cuenta elegida, solo
+    // los suyos; sin cuenta, los de todas ("todo el pago móvil", sea del banco que sea).
+    const methodName = (code) => (paymentMethods || []).find(m => m.code === code)?.name || code;
+    const metodosDe = (j) => (j.methods?.length
+        ? j.methods.filter(m => m.allows_inflow !== false).map(m => m.method_code)
+        : (j.type ? [j.type] : []));
+    const cuentaSel = visibleJournals.find(j => String(j.id) === String(journalFilter));
+    const orden = (code) => { const i = (paymentMethods || []).findIndex(m => m.code === code); return i < 0 ? 999 : i; };
+    const visibleMethods = [...new Set((cuentaSel ? [cuentaSel] : visibleJournals).flatMap(metodosDe))]
+        .sort((a, b) => orden(a) - orden(b));
+    const elegirCuenta = (v) => {
+        setJournalFilter(v);
+        // Un método que la cuenta nueva no recibe dejaría la lista vacía sin motivo aparente.
+        const j = visibleJournals.find(x => String(x.id) === String(v));
+        if (j && methodFilter && !metodosDe(j).includes(methodFilter)) setMethodFilter("");
+    };
 
     const subheader = (
         <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2">
@@ -96,7 +115,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                         en el catálogo: lista abierta, select; lista corta y fija, botones. */}
                                     <CustomSelect
                                         value={journalFilter}
-                                        onChange={setJournalFilter}
+                                        onChange={elegirCuenta}
                                         height="h-9"
                                         placeholder="Todos los diarios"
                                         options={[
@@ -106,6 +125,23 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                                 label: j.name,
                                                 color: j.color || undefined,
                                             })),
+                                        ]}
+                                    />
+                                </div>
+                            )}
+                            {/* Con un solo método no hay nada que separar: el selector no aparece,
+                                salvo que quede uno elegido (para poder quitarlo). */}
+                            {(visibleMethods.length > 1 || methodFilter) && (
+                                <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                    <div className="text-[12px] font-medium text-content-subtle mb-2">Método</div>
+                                    <CustomSelect
+                                        value={methodFilter}
+                                        onChange={setMethodFilter}
+                                        height="h-9"
+                                        placeholder="Todos los métodos"
+                                        options={[
+                                            { value: "", label: "Todos los métodos" },
+                                            ...visibleMethods.map(code => ({ value: code, label: methodName(code) })),
                                         ]}
                                     />
                                 </div>
@@ -244,6 +280,9 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                             ) : item.journal_name ? (
                                                 <>
                                                     <JournalDot name={item.journal_name} color={item.journal_color} />
+                                                    {item.payment_method && (
+                                                        <div className="text-[12px] text-content-subtle">{methodName(item.payment_method)}</div>
+                                                    )}
                                                     {item.verified && (
                                                         <div className="mt-0.5"><StatusMark status="ok" map={VERIFIED} /></div>
                                                     )}
@@ -371,7 +410,10 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                         {isInvoice
                                             ? <StatusMark status={item.status === "parcial" ? "parcial" : "pendiente"} />
                                             : item.journal_name
-                                                ? <JournalDot name={item.journal_name} color={item.journal_color} />
+                                                ? <>
+                                                    <JournalDot name={item.journal_name} color={item.journal_color} />
+                                                    {item.payment_method && <span className="text-[12px] text-content-subtle truncate">{methodName(item.payment_method)}</span>}
+                                                </>
                                                 : <span className="text-[12px] font-medium text-content-subtle">Devolución</span>}
                                         {!isInvoice && item.verified && <StatusMark status="ok" map={VERIFIED} />}
                                     </div>
@@ -494,6 +536,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                     !conjunto && ["Factura", p.invoice_number || `#${p.sale_id}`],
                                     p.customer_name && ["Cliente", toNameCase(p.customer_name)],
                                     p.created_at && ["Fecha", fmtDate(p.created_at)],
+                                    p.payment_method && ["Método", methodName(p.payment_method)],
                                     p.reference_number && ["N° de referencia", p.reference_number],
                                     p.journal_name && ["Banco", p.verified ? "Conciliado con el extracto" : "Sin conciliar"],
                                     p.notes && ["Notas", p.notes],

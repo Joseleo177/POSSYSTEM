@@ -41,4 +41,6 @@ exports.removeItem     = handle(req => svc.removeItem(req, req.params.id, req.pa
 exports.finishOrder    = handle(req => svc.finishOrder(req, req.params.id, req.body));
 exports.reopenOrder    = handle(req => svc.reopenOrder(req, req.params.id));
 exports.cancelOrder    = handle(req => svc.cancelOrder(req, req.params.id, req.body));
+exports.deleteOrder    = handle(req => svc.deleteOrder(req, req.params.id));
+exports.setOrderPlan   = handle(req => svc.setOrderPlan(req, req.params.id, req.body));
 exports.invoiceOrder   = handle(req => svc.invoiceOrder(req, req.params.id, req.body));

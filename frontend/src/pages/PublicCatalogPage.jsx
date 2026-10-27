@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { usePublicCatalog } from "../hooks/usePublicCatalog";
 import { resolveTheme } from "./catalogThemes";
 import VariantChooserModal from "../components/PublicCatalog/VariantChooserModal";
+import AddonChooserModal from "../components/PublicCatalog/AddonChooserModal";
 
 // Página que ve el cliente final. Vive fuera de AppProvider/CartProvider: no hay sesión
 // ni permisos, y el carrito de aquí no es el del punto de venta — es una lista que solo
@@ -52,6 +53,16 @@ export default function PublicCatalogPage({ token, initialProductId = null }) {
                     product={catalog.variantPick}
                     onClose={() => catalog.setVariantPick(null)}
                     onPick={(v) => { catalog.addToCart(v); catalog.setVariantPick(null); }}
+                    fmt={catalog.fmt}
+                    baseCur={catalog.baseCur}
+                    altCur={catalog.altCur}
+                />
+            )}
+            {catalog.addonPick && (
+                <AddonChooserModal
+                    product={catalog.addonPick}
+                    onClose={() => catalog.setAddonPick(null)}
+                    onPick={(p, qty, nota, opciones) => catalog.addAddonItem(p, qty, nota, opciones)}
                     fmt={catalog.fmt}
                     baseCur={catalog.baseCur}
                     altCur={catalog.altCur}

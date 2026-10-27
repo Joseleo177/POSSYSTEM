@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import { fmtMoney } from "../helpers";
 import { isIntegerUnit } from "../helpers/unitFormatter";
+import KitchenMark from "./KitchenMark";
 
 // Cuánto se espera desde el último toque antes de mandar la ronda al servidor. Cada guardado
 // reescribe las líneas de la venta y mueve inventario (ver updateSale), así que agrupar los
@@ -310,6 +311,7 @@ export default function HeldCartBarCard({
                         {isWebOrder && (
                             <span className="text-[9px] font-bold bg-info text-white px-1.5 py-0.5 rounded shrink-0">Web</span>
                         )}
+                        <KitchenMark status={cart.kitchen_status} />
                         <span className={`text-[11px] font-bold uppercase tracking-widest truncate ${isWebOrder ? "text-info" : "text-brand-500"}`}>
                             {cart.customer_name || cart.web_customer_name || "Cliente General"}
                         </span>

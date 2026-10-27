@@ -6,11 +6,12 @@ import { useApp } from "./AppContext";
 import { isOffline, esSinServidor } from "../services/offline/network";
 import { guardarVenta, descartarSinCobro, siguienteNumeroProvisional } from "../services/offline/outbox";
 import { descontarDeCatalogo } from "../services/offline/catalog";
+import { cartKey, textoAdicionales } from "../helpers/cartLine";
 
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
-  const { employee, notify, baseCurrency, activeCurrencies } = useApp();
+  const { employee, notify, baseCurrency, activeCurrencies, settings, company } = useApp();
 
   // ── Carrito ────────────────────────────────────────────────
   const [cart, setCart] = useState([]);
@@ -32,6 +33,11 @@ export function CartProvider({ children }) {
   // Espejo en ref: loadHeldCarts se ejecuta desde efectos y respuestas asíncronas, donde
   // el valor del estado puede estar desfasado. La ref siempre tiene el actual.
   const heldSaleIdRef = useRef(null);
+  // Paso por cocina de cada cuenta en la vuelta anterior, para avisar cuando una queda lista.
+  const kitchenRef = useRef(null);
+  // Mesa de la venta en pantalla (mapa de mesas). Viaja al pausar y al cobrar; se limpia con
+  // el carrito.
+  const [cartTable, setCartTable] = useState(null);
   const setHeldSale = useCallback((id) => { heldSaleIdRef.current = id; setHeldSaleId(id); }, []);
   const [quotationId, setQuotationId] = useState(null);
 
@@ -314,6 +320,10 @@ export function CartProvider({ children }) {
 
   const addToCart = useCallback((product, customQty = null, silentError = false) => {
     if (!activeWarehouse) { if (!silentError) notify("Selecciona una sucursal antes de cobrar", "err"); return false; }
+    // Plato con adicionales (término, extras): se eligen en su ficha antes de entrar al carrito.
+    // Pasa por aquí venga de donde venga —toque en la grilla, lector de código, cantidad—, así
+    // que ningún camino lo mete sin elegir lo obligatorio.
+    if (product.has_addons) { setAddonPick({ product, qty: customQty }); return false; }
     // stock === null significa combo de solo-servicios (sin límite de stock)
     const hasUnlimitedStock = product.is_service || (product.is_combo && product.stock === null);
     if (!hasUnlimitedStock && parseFloat(product.stock) <= 0) { if (!silentError) notify("Sin stock disponible", "err"); return false; }
@@ -321,11 +331,13 @@ export function CartProvider({ children }) {
     const step = parseFloat(product.qty_step) || 1;
     const initialQty = customQty !== null ? parseFloat(customQty) : step;
 
-    const ex = cart.find(i => i.id === product.id);
+    // Solo se suma sobre la línea "simple" del producto: no sobre un plato con adicionales ni
+    // sobre el extra de otro plato, que tienen su propia clave (ver helpers/cartLine.js).
+    const ex = cart.find(i => !i.key && i.id === product.id);
     let newCart;
     if (ex) {
       const nq = parseFloat((ex.qty + initialQty).toFixed(3));
-      newCart = cart.map(i => i.id === product.id ? { ...i, qty: nq } : i);
+      newCart = cart.map(i => !i.key && i.id === product.id ? { ...i, qty: nq } : i);
     } else {
       newCart = [...cart, { ...product, qty: initialQty }];
     }
@@ -368,14 +380,68 @@ export function CartProvider({ children }) {
       : `Se actualizaron los precios de ${cambiados} productos del carrito`);
   }, [notify]);
 
+  // Plato con adicionales que entra al carrito desde su ficha (PosAddonModal). El plato va en su
+  // propia línea, con la nota de cocina; cada extra con precio va en otra línea, con su producto
+  // y su precio de sucursal, igual que el servidor arma la venta: así el total de la pantalla es
+  // el de la factura sin un cálculo aparte.
+  const [addonPick, setAddonPick] = useState(null);   // { product, qty } cuya ficha está abierta
+  const addAddonLine = useCallback((product, qty, rawNote, options = []) => {
+    const cantidad = parseFloat(qty) || 1;
+    const nota = String(rawNote || "").trim().slice(0, 200);
+    const texto = options.filter(o => !(o.price > 0)).map(o => o.name).join(" · ");
+    const key = `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const plato = {
+      ...product,
+      key,
+      qty: cantidad,
+      // Nota de la línea en la venta: lo que no cuesta y lo que se escribió.
+      note: [texto, nota].filter(Boolean).join(" · ") || undefined,
+      // Para la caja y la comanda: lo elegido, con los extras incluidos.
+      addon_options: options,
+      addon_text: textoAdicionales(options),
+      kitchen_note: nota || undefined,
+    };
+    // Un contorno sin precio que gasta inventario también va como línea, a 0 (`incluido`): es la
+    // que descuenta los 150 g de papa. En pantalla no se muestra; ya se lee en el plato.
+    const extras = options.filter(o => o.product_id).map(o => ({
+      id: o.product_id,
+      name: o.name,
+      price: o.price,
+      incluido: !(o.price > 0),
+      unit: "unidad",
+      qty_step: 1,
+      is_service: !!o.is_service,
+      // Sin existencia conocida (combo, servicio) no limita aquí: lo revisa el servidor.
+      is_combo: !!o.is_combo,
+      stock: o.is_service || o.is_combo ? null : o.stock,
+      key: `${key}+${o.product_id}`,
+      parentKey: key,
+      qty: cantidad,
+    }));
+    const newCart = [...cart, plato, ...extras];
+    if (!validateCartStock(newCart)) {
+      notify("No hay existencia suficiente de uno de los adicionales", "err");
+      return false;
+    }
+    setCart(newCart);
+    return true;
+  }, [cart, validateCartStock, notify]);
+
+  // Quitar un plato con adicionales se lleva sus extras.
   const removeFromCart = useCallback((id) => {
-    setCart(prev => prev.filter(i => i.id !== id));
+    setCart(prev => prev.filter(i => cartKey(i) !== id && i.parentKey !== id));
   }, []);
+
+  // Los extras de un plato siguen su cantidad: un "+ Tocineta" por cada hamburguesa.
+  const conExtras = (lineas) => {
+    const qtyDe = new Map(lineas.filter(i => i.key && !i.parentKey).map(i => [i.key, i.qty]));
+    return lineas.map(i => (i.parentKey && qtyDe.has(i.parentKey) && i.qty !== qtyDe.get(i.parentKey) ? { ...i, qty: qtyDe.get(i.parentKey) } : i));
+  };
 
   const changeQty = useCallback((id, dir) => {
     let changeOccurred = false;
-    const newCart = cart.map(i => {
-      if (i.id !== id) return i;
+    const mapped = cart.map(i => {
+      if (cartKey(i) !== id) return i;
       const step = parseFloat(i.qty_step) || 1;
       let nq = parseFloat((i.qty + dir * step).toFixed(3));
 
@@ -388,6 +454,7 @@ export function CartProvider({ children }) {
     });
 
     if (!changeOccurred) return;
+    const newCart = conExtras(mapped);
     if (!validateCartStock(newCart)) {
       return notify("Stock límite alcanzado", "err");
     }
@@ -396,15 +463,15 @@ export function CartProvider({ children }) {
 
   const setQtyDirect = useCallback((id, raw, silentError = false) => {
     if (raw === "") {
-      setCart(cart.map(i => i.id === id ? { ...i, qty: "" } : i));
+      setCart(cart.map(i => cartKey(i) === id ? { ...i, qty: "" } : i));
       return true;
     }
     let targetNq = parseFloat(raw);
     if (isNaN(targetNq) || targetNq < 0) return false;
 
     let changeOccurred = false;
-    const newCart = cart.map(i => {
-      if (i.id !== id) return i;
+    const mapped = cart.map(i => {
+      if (cartKey(i) !== id) return i;
       const isIntegerUnit = ["unidad", "uds", "pieza"].includes(i.unit?.toLowerCase());
       // Tecleado a mano y no por el paso a paso (que ya redondea, ver changeQty): sin este
       // límite el campo aceptaba cualquier cantidad de decimales escritos, y KG/L/M solo
@@ -417,6 +484,7 @@ export function CartProvider({ children }) {
     });
 
     if (!changeOccurred) return true;
+    const newCart = conExtras(mapped);
     if (!validateCartStock(newCart)) {
       if (!silentError) notify("Stock límite alcanzado", "err");
       return false;
@@ -427,6 +495,7 @@ export function CartProvider({ children }) {
 
   const clearCart = useCallback(() => {
     setCart([]);
+    setCartTable(null);
     setSelectedCustomer(null);
     // La moneda NO se resetea: es la preferencia de visualización del cajero y se mantiene
     // entre ventas. El cliente y la serie sí, porque pertenecen a la venta que se cerró.
@@ -731,7 +800,7 @@ export function CartProvider({ children }) {
   // vuelve redondo). Sin modo o sin valor se quita y la línea vuelve a su promoción.
   const setLineDiscount = useCallback((id, mode, value) => {
     setCart(prev => prev.map(i => {
-      if (i.id !== id) return i;
+      if (cartKey(i) !== id) return i;
       const v = parseFloat(value);
       if (!mode || !(v > 0)) {
         const { ld_mode, ld_value, ...rest } = i; // eslint-disable-line no-unused-vars
@@ -783,13 +852,26 @@ export function CartProvider({ children }) {
     if (!employee) return;
     try {
       const res = await api.sales.getHeld(activeWarehouse ? { warehouse_id: activeWarehouse.id } : {});
+      // Aviso de la pantalla de cocina: un pedido que en la vuelta anterior seguía en cocina y
+      // ahora está listo para llevarlo a la mesa. La primera carga no avisa nada.
+      const previo = kitchenRef.current;
+      const actual = new Map((res.data || []).map(s => [s.id, s.kitchen_status]));
+      if (previo) {
+        for (const s of res.data || []) {
+          const antes = previo.get(s.id);
+          if (s.kitchen_status === "lista" && (antes === "nueva" || antes === "preparando")) {
+            notify(`Pedido listo para entregar: ${s.web_customer_name || s.customer_name || `#${s.id}`}`, "ok");
+          }
+        }
+      }
+      kitchenRef.current = actual;
       // La cuenta que esta caja tiene abierta en el carrito no se lista: sigue en 'espera'
       // en el servidor, pero aquí ya está "en uso".
       setHeldCarts((res.data || []).filter(s => s.id !== heldSaleIdRef.current));
     } catch {
       // Silencioso: es una carga de fondo, no debe interrumpir el cobro en curso.
     }
-  }, [employee, activeWarehouse]);
+  }, [employee, activeWarehouse, notify]);
 
   // El carrito vive solo en memoria: al recargar la página se pierde, pero el bloqueo que
   // esta caja puso al recuperar una cuenta sigue en el servidor. Sin esto, un F5 dejaba la
@@ -866,7 +948,7 @@ export function CartProvider({ children }) {
     setLoading(true);
     try {
       const createHold = () => api.sales.create({
-        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty), line_discount: ldPayload(i) })),
+        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty), line_discount: ldPayload(i), note: i.note })),
         paid: 0,
         customer_id: selectedCustomer?.id || null,
         employee_id: employee?.id || null,
@@ -877,6 +959,7 @@ export function CartProvider({ children }) {
         discount_amount: discountAmount,
         service_charge: chargeAmountBase,
         service_charge_label: chargeLabel,
+        table_id: cartTable?.id || null,
         hold: true,
       });
 
@@ -886,7 +969,7 @@ export function CartProvider({ children }) {
       if (heldSaleId) {
         try {
           await api.sales.update(heldSaleId, {
-            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty), line_discount: ldPayload(i) })),
+            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty), line_discount: ldPayload(i), note: i.note ?? null })),
             discount_amount: discountAmount,
             // La tasa de divisas se elige al cobrar: una cuenta en espera no la guarda.
             fx_rate: null,
@@ -899,6 +982,7 @@ export function CartProvider({ children }) {
             currency_id: currentCurrency?.id || null,
             exchange_rate: exchangeRate,
             serie_id: selectedSerieId,
+            table_id: cartTable?.id ?? null,
           });
         } catch (e) {
           // Otra caja la eliminó o la cobró mientras se atendía: se guarda como cuenta
@@ -924,7 +1008,7 @@ export function CartProvider({ children }) {
       setLoading(false);
     }
   }, [cart, heldSaleId, activeWarehouse, selectedSerieId, selectedCustomer, employee,
-    currentCurrency, exchangeRate, discountAmount, chargeAmountBase, chargeLabel,
+    currentCurrency, exchangeRate, discountAmount, chargeAmountBase, chargeLabel, cartTable,
     clearCart, loadHeldCarts, notify]);
 
   // Dos cajas pueden acabar sobre la misma cuenta en espera: una la recupera y otra la
@@ -1006,19 +1090,49 @@ export function CartProvider({ children }) {
         return { ...prod, stock: parseFloat(prod.stock || 0) + qty };
       };
 
+      // Los adicionales vuelven colgados del plato que tienen delante (la venta los guarda
+      // detrás de él): siguen su cantidad y se van con él, igual que al armarlo en la caja.
+      const platoDe = new Map();
+      let ultimoPlato = null;
+      for (const item of held.items || []) {
+        const prod = productMap[item.product_id];
+        if (!prod) continue;
+        if (prod.is_addon && ultimoPlato) platoDe.set(item.id, ultimoPlato);
+        else if (!prod.is_addon) ultimoPlato = item;
+      }
+      const conAdicional = new Set([...platoDe.values()].map(p => p.id));
+
       const newCart = (held.items || []).reduce((acc, item) => {
         const prod = productMap[item.product_id];
         if (!prod) return acc;
+        const plato = platoDe.get(item.id);
+        if (plato) {
+          const precio = parseFloat(item.price);
+          return [...acc, {
+            ...withOwnStock(prod, parseFloat(item.quantity) || 1), price: precio, price_locked: true,
+            qty: parseFloat(item.quantity) || 1, incluido: !(precio > 0),
+            key: `h${item.id}`, parentKey: `h${plato.id}`,
+          }];
+        }
         const qty = parseFloat(item.quantity) || 1;
         // El precio con que se abrió la cuenta manda: es el que updateSale vuelve a grabar
         // al cobrarla, así que el refresco de precios no debe cambiarlo por debajo.
         // El descuento manual que se le dio vuelve con la línea (ver sale_items.line_discount_*).
         const ld = item.line_discount_mode ? { ld_mode: item.line_discount_mode, ld_value: parseFloat(item.line_discount_value) } : {};
-        return [...acc, { ...withOwnStock(prod, qty), price: parseFloat(item.price), price_locked: true, qty, ...ld }];
+        // Una cuenta puede traer el mismo producto en varias líneas (dos hamburguesas con distinto
+        // término, o el extra de dos platos): desde la segunda llevan clave propia para que cada una
+        // se maneje sola (ver helpers/cartLine.js). La nota vuelve con la línea.
+        const repetido = acc.some(l => l.id === prod.id);
+        return [...acc, {
+          ...withOwnStock(prod, qty), price: parseFloat(item.price), price_locked: true, qty, ...ld,
+          note: item.note || undefined,
+          ...(repetido || conAdicional.has(item.id) ? { key: `h${item.id}` } : {}),
+        }];
       }, []);
 
       setCart(newCart);
       setHeldSale(held.id);
+      setCartTable(held.table_id ? { id: held.table_id, name: held.table_name } : null);
       if (held.customer_id) {
         setSelectedCustomer({ id: held.customer_id, name: held.customer_name, rif: held.customer_rif });
       }
@@ -1252,7 +1366,7 @@ export function CartProvider({ children }) {
       // líneas (por si se agregaron rondas) y se pasa a 'borrador' para que el cobro le
       // asigne el correlativo. Crear una nueva duplicaría la venta y el descuento de stock.
       const createPayload = () => ({
-        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty), line_discount: ldPayload(i) })),
+        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty), line_discount: ldPayload(i), note: i.note })),
         paid: 0,
         customer_id: selectedCustomer?.id || null,
         employee_id: employee?.id || null,
@@ -1267,13 +1381,14 @@ export function CartProvider({ children }) {
         service_charge_label: chargeLabel,
         idempotency_key: pendingKeyRef.current,
         quotation_id: quotationId || null,
+        table_id: cartTable?.id || null,
       });
 
       let res;
       if (heldSaleId) {
         try {
           res = await api.sales.update(heldSaleId, {
-            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty), line_discount: ldPayload(i) })),
+            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty), line_discount: ldPayload(i), note: i.note ?? null })),
             discount_amount: parseFloat((discountAmount + fxDiscount).toFixed(5)),
             ...fxPayload(),
             service_charge: chargeAmountBase,
@@ -1313,6 +1428,24 @@ export function CartProvider({ children }) {
           : null,
       });
 
+      // Restaurante donde se cobra antes de pedir: lo cobrado sale a cocina en el acto, con cada
+      // plato y sus adicionales debajo (los extras no van sueltos). Si la cuenta ya pasó por
+      // cocina —rondas del mesonero, pedido del catálogo— el servidor no la repite. Un fallo
+      // aquí no deshace la venta: se avisa para imprimir la comanda a mano.
+      if (company?.cocina_enabled && settings?.pos_kitchen_on_charge === "true" && res?.data?.id) {
+        const platos = cart.filter(i => !i.parentKey && parseFloat(i.qty) > 0).map(i => ({
+          product_id: i.id,
+          name: i.name,
+          quantity: parseFloat(i.qty),
+          note: i.addon_options ? (i.kitchen_note || null) : (i.note || null),
+          modifiers: i.addon_text || null,
+        }));
+        const nombre = selectedCustomer?.name && !/^cliente general$/i.test(selectedCustomer.name) ? selectedCustomer.name : null;
+        const label = cartTable?.name || (nombre ? `Para llevar · ${nombre}` : undefined);
+        api.kitchen.fromSale(res.data.id, { items: platos, label })
+          .catch(e => notify(`La venta se cobró, pero no llegó a la cocina: ${e.message || "sin conexión"}. Imprime la comanda.`, "err"));
+      }
+
       // Venta concretada: invalidamos la clave para que el próximo
       // cobro use una nueva (en errores la dejamos viva para reintentos).
       pendingKeyRef.current = null;
@@ -1335,7 +1468,8 @@ export function CartProvider({ children }) {
   }, [cart, activeWarehouse, selectedCustomer, selectedSerieId,
     employee, currentCurrency, exchangeRate, heldSaleId, loadHeldCarts,
     discountAmount, chargeAmountBase, chargeLabel, quotationId,
-    mySeries, notify, clearCart, saveCart, activePromos, fxDiscount, fxRate, avanceEfectivo, avancePct]);
+    mySeries, notify, clearCart, saveCart, activePromos, fxDiscount, fxRate, avanceEfectivo, avancePct, cartTable,
+    company, settings]);
 
   // Venta sin conexión que no llegó a cobrarse (el cliente se fue, o hay que corregirla): se
   // saca de la cola y su carrito vuelve a la pantalla, como si no se hubiera finalizado.
@@ -1386,6 +1520,10 @@ export function CartProvider({ children }) {
       loadFromQuotation, quotationId,
       // Hold Cart
       heldCarts, holdCart, takeHeldCart, removeHeldCart, releaseHeldCart, loadHeldCarts, heldSaleId,
+      // Mapa de mesas
+      cartTable, setCartTable,
+      // Adicionales de los platos
+      addonPick, setAddonPick, addAddonLine,
       // Pedidos del catálogo público
       acceptWebOrder,
     }}>

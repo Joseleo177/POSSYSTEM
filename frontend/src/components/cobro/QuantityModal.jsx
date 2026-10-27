@@ -3,6 +3,7 @@ import Modal from "../ui/Modal";
 import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import StockQty, { splitQty } from "../ui/StockQty";
 import { fmtQtyUnit } from "../../helpers/unitFormatter";
+import { cartKey } from "../../helpers/cartLine";
 
 export default function QuantityModal({ isOpen, onClose, item, onSave, convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt }) {
     const [val, setVal] = useState("");
@@ -56,7 +57,7 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
         // Para sacar un producto está la X de su fila.
         if (num <= 0) return setError("La cantidad debe ser mayor que cero");
 
-        const ok = onSave(item.id, parseFloat(num.toFixed(3)));
+        const ok = onSave(cartKey(item), parseFloat(num.toFixed(3)));
         if (ok !== false) {
             setError(null);
             onClose();

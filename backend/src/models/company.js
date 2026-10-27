@@ -28,6 +28,9 @@ module.exports = (sequelize, DataTypes) => {
     // Módulo Fábrica (láminas y órdenes de fabricación). Igual que la vitrina: lo enciende
     // el superusuario para la empresa que lo contrata.
     fabrica_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Pantalla de cocina para restaurantes (ver routes/kitchen.js). Mismo criterio: un extra
+    // que el superusuario enciende.
+    cocina_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

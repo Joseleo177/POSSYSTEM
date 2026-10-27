@@ -124,6 +124,9 @@ app.use("/api/incomes",          require("./routes/incomes"));            // aut
 app.use("/api/cash-advances",    require("./routes/cashAdvances"));       // auth+permit dentro
 app.use("/api/bank-reconciliations", require("./routes/bankReconciliation")); // auth+permit dentro
 app.use("/api/factory",          require("./routes/factory"));             // auth+permit+módulo dentro
+app.use("/api/kitchen",          require("./routes/kitchen"));             // auth+permit+módulo dentro
+app.use("/api/tables",           require("./routes/tables"));              // auth+permit+módulo dentro
+app.use("/api/addons",           require("./routes/addons"));              // auth+permit+módulo dentro
 app.use("/api/backup",           require("./routes/backup"));             // auth+config dentro
 app.use("/api/catalog-link",     require("./routes/publicCatalog").adminRouter); // auth+config dentro
 app.use("/api/catalog-banners",  require("./routes/catalogBanners"));       // auth+config dentro

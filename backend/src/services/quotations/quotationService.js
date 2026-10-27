@@ -205,6 +205,11 @@ async function convert(quotationId, body, employeeId, req) {
         for (const ci of comboItems) {
           const ingredient = await Product.findByPk(ci.product_id, { transaction: t, lock: true });
           const qtyNeeded = parseFloat(qi.quantity) * parseFloat(ci.quantity);
+          // Servicio dentro del combo: no mueve existencias (ver products/comboStock.js).
+          if (ingredient.is_service) {
+            ingredientsData.push({ ingredient, qtyNeeded, stockEntry: null, servicio: true });
+            continue;
+          }
           const stockEntry = await ProductStock.findOne({
             where: { warehouse_id: warehouseId, product_id: ingredient.id },
             transaction: t, lock: true,
@@ -262,6 +267,7 @@ async function convert(quotationId, body, employeeId, req) {
         // no-op
       } else if (entry.isCombo) {
         for (const ing of entry.ingredientsData) {
+          if (ing.servicio) continue;
           await ing.stockEntry.decrement("qty", { by: ing.qtyNeeded, transaction: t });
           const totalStock = await ProductStock.sum("qty", { where: { product_id: ing.ingredient.id }, transaction: t });
           await ing.ingredient.update({ stock: totalStock || 0 }, { transaction: t });

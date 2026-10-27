@@ -18,6 +18,8 @@ const { Quotation, QuotationItem } = require("../../models");
 const { cargarPromosActivas, calcLineDiscount } = require("./promoDiscounts");
 const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = require("./lineDiscount");
 const { leerTasaDivisas, tienePagoEnDivisas } = require("./fxRate");
+const { assertTable } = require("../tables");
+const { componentesConStock } = require("../products/comboStock");
 
 // Devuelve la venta con todas sus relaciones, en el formato plano que
 // espera el frontend. Reutilizado por la respuesta normal y la idempotente.
@@ -83,11 +85,18 @@ function promoDeLinea(productId, promo) {
   return [];
 }
 
+// Nota de la línea ("sin cebolla"), para la comanda: una sola línea y recortada, como la del
+// catálogo (publicCatalogService.createOrder).
+const notaLinea = (n) => String(n || "").replace(/[\r\n]+/g, " ").trim().slice(0, 200) || null;
+
 // `offline` solo lo pasa syncOfflineSale, nunca el cuerpo de la petición: { sold_at, ref }.
 // Con él, la venta ya ocurrió en una caja sin internet —la mercancía salió y el dinero entró—,
 // así que se registra tal como se cobró: precio y promoción de cada línea los trae la caja, y
 // las existencias se descuentan aunque queden en negativo.
-module.exports = async function createSale(body, req, { offline = null } = {}) {
+//
+// `waiterId` solo lo pasa la ronda del mesonero (services/tables.js), tampoco el cuerpo de la
+// petición: el mesonero queda en waiter_id y la venta pasa al cajero al cobrarla.
+module.exports = async function createSale(body, req, { offline = null, waiterId = null } = {}) {
   const { items, paid, customer_id, employee_id, currency_id, exchange_rate, payment_method, serie_id, discount_amount, service_charge, service_charge_label, warehouse_id, idempotency_key, hold } =
     body;
   // Una cotización no se recupera sin conexión: su precio pactado vive en el servidor.
@@ -122,6 +131,9 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
     if (serie.warehouse_id && parseInt(serie.warehouse_id) !== parseInt(warehouse_id)) {
       throw new Error("La serie seleccionada no pertenece al almacén de la venta");
     }
+
+    // Mesa de la cuenta (mapa de mesas). Tiene que ser de la misma sucursal que la venta.
+    const mesa = !offline && body.table_id ? await assertTable(body.table_id, warehouse_id, transaction) : null;
 
     const method = PAYMENT_METHODS.includes(payment_method) ? payment_method : "efectivo";
     const discAmt = parseFloat(discount_amount) || 0;
@@ -230,7 +242,7 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
         total += roundedPrice * item.quantity - lineDiscountUsd;
         // stockEntry va solo para congelar el costo de esta sucursal (el servicio no mueve
         // existencias): mismo criterio que el precio, y que el COALESCE que ve la caja.
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, stockEntry: fichaSucursal, lineDiscountBs, unitPrice: rawPrice, manual });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, stockEntry: fichaSucursal, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note) });
       } else if (product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
         if (!comboItems || comboItems.length === 0) {
@@ -241,6 +253,14 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
         for (const cItem of comboItems) {
           const ingredient = await Product.findByPk(cItem.product_id, { transaction, lock: true });
           const qtyNeeded = item.quantity * parseFloat(cItem.quantity);
+
+          // Un servicio dentro del combo (el corte en "corte + refresco") no tiene existencia:
+          // suma su costo, pero no se valida ni se descuenta (ver products/comboStock.js).
+          if (ingredient.is_service) {
+            const ficha = await ProductStock.findOne({ where: { warehouse_id, product_id: ingredient.id }, transaction });
+            ingredientsData.push({ ingredient, qtyNeeded, stockEntry: ficha, servicio: true });
+            continue;
+          }
 
           let stockEntry = await ProductStock.findOne({
             where: { warehouse_id, product_id: ingredient.id },
@@ -260,7 +280,7 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
         }
 
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs, unitPrice: rawPrice, manual });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note) });
       } else {
         // La ficha ya se cargó arriba con lock para leer el precio de la sucursal.
         const stockEntry = fichaSucursal || (offline ? await fichaEnCero(warehouse_id, product.id, transaction) : null);
@@ -273,7 +293,7 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
         }
 
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs, unitPrice: rawPrice, manual });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note) });
       }
     }
 
@@ -323,6 +343,8 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
         // 'borrador' para que NO aparezca en Facturas Pendientes: se gestiona desde
         // "Cuentas en espera" y es visible para cualquier caja de la empresa.
         status: hold ? 'espera' : 'borrador',
+        table_id: mesa ? mesa.id : null,
+        waiter_id: waiterId,
         idempotency_key: idempotency_key || null,
         // created_at queda en la hora en que llega: es cuando se factura y toma correlativo,
         // así los números siguen el orden de las fechas. La hora real de la venta va aparte.
@@ -371,6 +393,7 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
           line_discount_value: entry.manual ? entry.manual.value : null,
           discount_by:         entry.manual ? (employee_id || req?.employee?.id || null) : null,
           cost_price: unitCost,
+          note: entry.note,
         },
         { transaction }
       );
@@ -379,6 +402,7 @@ module.exports = async function createSale(body, req, { offline = null } = {}) {
         // no-op
       } else if (entry.isCombo) {
         for (const ing of entry.ingredientsData) {
+          if (ing.servicio) continue;
           await ing.stockEntry.decrement("qty", { by: ing.qtyNeeded, transaction });
           const totalStock = await ProductStock.sum("qty", { where: { product_id: ing.ingredient.id }, transaction });
           await ing.ingredient.update({ stock: totalStock || 0 }, { transaction });

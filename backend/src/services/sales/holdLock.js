@@ -110,4 +110,4 @@ async function annotateHolders(sales, currentEmployeeId) {
   });
 }
 
-module.exports = { claimSale, releaseSale, annotateHolders, DEFAULT_TIMEOUT_MIN, TIMEOUT_SETTING_KEY };
+module.exports = { claimSale, releaseSale, annotateHolders, timeoutMinutes, isExpired, DEFAULT_TIMEOUT_MIN, TIMEOUT_SETTING_KEY };

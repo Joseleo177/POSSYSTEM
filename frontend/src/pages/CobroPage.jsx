@@ -16,6 +16,9 @@ import ProductGrid         from "../components/cobro/ProductGrid";
 import SaleConfirmModal    from "../components/cobro/SaleConfirmModal";
 import CustomerModal       from "../components/Customers/CustomerModal";
 import HeldCartsModal      from "../components/HeldCartsModal";
+import TableMapModal       from "../components/mesas/TableMapModal";
+import PosAddonModal       from "../components/cobro/PosAddonModal";
+import { cartKey }         from "../helpers/cartLine";
 import PendingSalesModal   from "../components/cobro/PendingSalesModal";
 import ReturnableSalesModal from "../components/cobro/ReturnableSalesModal";
 import CashAdvanceModal from "../components/cobro/CashAdvanceModal";
@@ -31,7 +34,8 @@ import VariantPickerModal     from "../components/cobro/VariantPickerModal";
 const fmt = fmtMoney;
 
 export default function CobroPage() {
-    const { notify, employee, baseCurrency, activeCurrencies, categories, loadCategories, can, settings } = useApp();
+    const { notify, employee, baseCurrency, activeCurrencies, categories, loadCategories, can, settings, company } = useApp();
+    const conMesas = !!company?.cocina_enabled && can("tables.view");
     // Configuración → Punto de venta. Sin la clave (empresas de antes) sigue el modal de siempre.
     const revisarAntes = settings?.pos_review_checkout === "true";
 
@@ -53,6 +57,7 @@ export default function CobroPage() {
         employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
         checkout, saveQuotation, loading, receipt, setReceipt, deshacerVentaSinConexion,
         heldCarts, holdCart, takeHeldCart, removeHeldCart, releaseHeldCart, loadHeldCarts, acceptWebOrder,
+        cartTable, setCartTable, addonPick, setAddonPick, addAddonLine,
         activePromos, promoLineDiscount, promoDiscount,
     } = useCart();
 
@@ -70,13 +75,16 @@ export default function CobroPage() {
     const [mobileTab, setMobileTab]               = useState("products");
     const [showConfirmCheckout, setShowConfirmCheckout] = useState(false);
     const [showHeldModal, setShowHeldModal]        = useState(false);
+    // Mapa de mesas (restaurante): solo con el módulo encendido y permiso para verlo.
+    const [showTables, setShowTables]              = useState(false);
     const [saleBalance, setSaleBalance]            = useState(null);
     const [savedQuotation, setSavedQuotation]      = useState(null);
     const [qtyModalItem, setQtyModalItem]          = useState(null);
     // Modelo con variantes elegido en la grilla: primero se elige talla o color, y recién
     // esa variante pasa al modal de cantidad.
     const [variantModel, setVariantModel]          = useState(null);
-    const openProduct = (p) => (p?.is_variant_parent ? setVariantModel(p) : setQtyModalItem(p));
+    // Un plato con adicionales va directo a su ficha: la cantidad se elige ahí, junto con el término.
+    const openProduct = (p) => (p?.is_variant_parent ? setVariantModel(p) : p?.has_addons ? setAddonPick({ product: p, qty: 1 }) : setQtyModalItem(p));
     const [showPendingSales, setShowPendingSales]  = useState(false);
     const [showReturns, setShowReturns]            = useState(false);
     // Avance de efectivo sin venta: opción de la empresa, permiso propio y turno abierto (el
@@ -171,7 +179,7 @@ export default function CobroPage() {
         // buscador de productos: lo que se teclea es para su propio buscador de clientes, y
         // si el foco se perdió (un clic en una tarjeta) las letras se colaban en la grilla
         // de fondo.
-        modalOpen: !!qtyModalItem || !!variantModel || !!customer.debtAlert || showHeldModal || showReturns || showAdvance || showConfirmCheckout,
+        modalOpen: !!qtyModalItem || !!variantModel || !!addonPick || !!customer.debtAlert || showHeldModal || showTables || showReturns || showAdvance || showConfirmCheckout,
         notify,
         setShowHeldModal,
         // Sin sales.pending el F5 queda mudo: el hook lo llama con ?. y no abre nada.
@@ -306,6 +314,9 @@ export default function CobroPage() {
                 setShowReturns={setShowReturns}
                 setShowAdvance={puedeAvance ? setShowAdvance : undefined}
                 heldCarts={heldCarts}
+                cartTable={conMesas ? cartTable : null}
+                onOpenTables={conMesas ? () => setShowTables(true) : undefined}
+                onClearTable={() => setCartTable(null)}
                 loading={loading}
                 setShowConfirmCheckout={setShowConfirmCheckout}
                 holdCart={holdCart}
@@ -404,6 +415,20 @@ export default function CobroPage() {
                 warehouseId={activeWarehouse?.id}
                 notify={notify}
             />
+            {conMesas && (
+                <TableMapModal
+                    open={showTables}
+                    onClose={() => setShowTables(false)}
+                    warehouseId={activeWarehouse?.id}
+                    heldCarts={heldCarts}
+                    cartTable={cartTable}
+                    cartHasItems={cart.length > 0}
+                    fmtTotal={cs => fmt(cs.reduce((s, c) => s + (convertToDisplay ? convertToDisplay(parseFloat(c.total || 0)) : parseFloat(c.total || 0)), 0), currSym)}
+                    onPickFree={t => { setCartTable({ id: t.id, name: t.name }); setMobileTab("cart"); }}
+                    onTake={id => { takeHeldCart(id); setMobileTab("cart"); }}
+                    notify={notify}
+                />
+            )}
             <HeldCartsModal
                 open={showHeldModal}
                 onClose={() => setShowHeldModal(false)}
@@ -517,6 +542,16 @@ export default function CobroPage() {
                     currSym={currSym}
                 />
             )}
+            {addonPick && (
+                <PosAddonModal
+                    pick={addonPick}
+                    warehouseId={activeWarehouse?.id}
+                    onClose={() => setAddonPick(null)}
+                    onConfirm={(p, q, nota, opciones) => { const ok = addAddonLine(p, q, nota, opciones); if (ok) setMobileTab("cart"); return ok; }}
+                    fmtDisplay={n => fmt(convertToDisplay ? convertToDisplay(parseFloat(n) || 0) : parseFloat(n) || 0, currSym)}
+                    notify={notify}
+                />
+            )}
             <QuantityModal
                 isOpen={!!qtyModalItem}
                 onClose={() => setQtyModalItem(null)}
@@ -527,9 +562,13 @@ export default function CobroPage() {
                 secondaryCurrency={secondaryCurrency}
                 fmt={fmt}
                 onSave={(id, q) => {
-                    const isInCart = cart.find(i => i.id === id);
+                    const isInCart = cart.find(i => cartKey(i) === id);
                     if (isInCart) {
                         return setQtyDirect(id, q, true);
+                    } else if (qtyModalItem?.has_addons) {
+                        // Plato con adicionales: la cantidad pasa a su ficha y este modal se cierra.
+                        setAddonPick({ product: qtyModalItem, qty: q });
+                        return true;
                     } else {
                         return addToCart(qtyModalItem, q, true);
                     }

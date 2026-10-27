@@ -46,7 +46,8 @@ const tenantModels = [
   'MaterialPiece', 'FabricationOrder', 'FabricationOrderPiece', 'FabricationOrderItem',
   'FabricationRecipe', 'FabricationRecipeItem', 'FabricationOrderPlan',
   'FabricationStage', 'FabricationOrderStage', 'FabricationOrderCut',
-  'CashAdvance',
+  'CashAdvance', 'DiningArea', 'DiningTable', 'KitchenTicket',
+  'ModifierGroup', 'ModifierOption', 'ProductModifierGroup',
 ];
 
 const applyTenantFilter = (modelName, options) => {
@@ -309,6 +310,26 @@ if (PaymentJournal && PaymentJournalMethod) {
 if (Warehouse) {
   Warehouse.belongsTo(Warehouse, { as: 'ParentWarehouse',  foreignKey: 'parent_warehouse_id' });
   Warehouse.hasMany(Warehouse,   { as: 'ChildWarehouses',  foreignKey: 'parent_warehouse_id' });
+}
+
+// Mapa de mesas: áreas con sus mesas, y la mesa y el mesonero de cada cuenta.
+{
+  const { DiningArea, DiningTable } = db;
+  if (DiningArea && DiningTable) {
+    DiningArea.hasMany(DiningTable, { foreignKey: 'area_id', as: 'tables' });
+    DiningTable.belongsTo(DiningArea, { foreignKey: 'area_id', as: 'area' });
+    Sale.belongsTo(DiningTable, { foreignKey: 'table_id', as: 'DiningTable' });
+    Sale.belongsTo(Employee, { foreignKey: 'waiter_id', as: 'Waiter' });
+  }
+  const { ModifierGroup, ModifierOption } = db;
+  if (ModifierGroup && ModifierOption) {
+    ModifierGroup.hasMany(ModifierOption, { foreignKey: 'group_id', as: 'options' });
+    ModifierOption.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+  }
+  const { KitchenTicket, KitchenTicketItem } = db;
+  if (KitchenTicket && KitchenTicketItem) {
+    KitchenTicket.hasMany(KitchenTicketItem, { foreignKey: 'ticket_id', as: 'items' });
+  }
 }
 
 if (Sale && Serie && SerieRange) {

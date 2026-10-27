@@ -1,6 +1,7 @@
-const { Sale, SaleItem, Product, ProductComboItem, ProductStock, sequelize } = require("./shared");
+const { Sale, SaleItem, Product, ProductStock, sequelize } = require("./shared");
 
 const { assertWarehouseAccess } = require("../../middleware/auth");
+const { componentesConStock } = require("../products/comboStock");
 
 module.exports = async function cancelSale(id, req) {
   const transaction = await sequelize.transaction();
@@ -26,7 +27,7 @@ module.exports = async function cancelSale(id, req) {
       if (product && product.is_service) {
         // no-op
       } else if (product && product.is_combo) {
-        const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
+        const comboItems = await componentesConStock(product.id, transaction);
         for (const cItem of comboItems) {
           const qtyToRestore = item.quantity * parseFloat(cItem.quantity);
           const [stockEntry] = await ProductStock.findOrCreate({

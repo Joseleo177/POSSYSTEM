@@ -2,7 +2,7 @@
 
 const {
   sequelize, Sequelize, Product, FabricationRecipe, FabricationRecipeItem, FabricationStage,
-  fail, r3, r4, MAX_QTY, sizeOf, text, companyOf, employeeOf, ownWarehouse,
+  fail, r3, r4, MAX_QTY, sizeOf, fmtM, text, companyOf, employeeOf, ownWarehouse,
   unitCostOf, anyUnitCost, COST_ANY_SQL, inTransaction,
 } = require("./shared");
 const { evaluate, variablesIn, FormulaError } = require("./formula");
@@ -147,7 +147,7 @@ function computeLines(lines, unit, vars) {
     if (l.kind === "material") {
       const mmOf = (expr, what) => {
         const v = Math.round(ev(expr, what) * f);
-        if (!(v > 0) || v > 20000) throw fail(`${label}: el ${what} da ${v} mm, fuera de rango`);
+        if (!(v > 0) || v > 20000) throw fail(`${label}: el ${what} da ${fmtM(v)} m, fuera de rango`);
         return v;
       };
       const cut_length_mm = mmOf(l.length_expr, "largo");
@@ -310,24 +310,30 @@ async function saveRecipe(req, productId, body = {}) {
     // cortes se detecta al guardar, no al crear la primera orden.
     computeLines(lines, unit, valuesFor(params, {}));
 
-    let recipe = await FabricationRecipe.findOne({ where: { company_id: company, product_id: product.id }, transaction, lock: true });
-    const instructions = text(body.instructions, 4000);
-    if (recipe) {
-      await recipe.update({ unit, params, instructions, employee_id: employeeOf(req) }, { transaction });
-      await FabricationRecipeItem.destroy({ where: { recipe_id: recipe.id }, transaction });
-    } else {
-      recipe = await FabricationRecipe.create({
-        company_id: company, product_id: product.id, unit, params, instructions, employee_id: employeeOf(req),
-      }, { transaction });
-    }
-    for (let i = 0; i < lines.length; i++) {
-      const l = lines[i];
-      const row = { company_id: company, recipe_id: recipe.id, kind: l.kind, component_id: l.component_id, stage_id: l.stage_id, position: i };
-      for (const k of EXPR_FIELDS) row[k] = l[k] ?? null;
-      await FabricationRecipeItem.create(row, { transaction });
-    }
+    await writeRecipe(company, product, { unit, params, lines }, text(body.instructions, 4000), employeeOf(req), transaction);
     return { data: await readRecipe(company, product.id, transaction) };
   });
+}
+
+// Guarda (o reemplaza) la receta de un producto con líneas ya validadas por parseRecipeBody.
+// También la usa la orden que, hecha a mano, se guarda como receta del producto.
+async function writeRecipe(company, product, { unit, params, lines }, instructions, employeeId, transaction) {
+  let recipe = await FabricationRecipe.findOne({ where: { company_id: company, product_id: product.id }, transaction, lock: true });
+  if (recipe) {
+    await recipe.update({ unit, params, instructions, employee_id: employeeId }, { transaction });
+    await FabricationRecipeItem.destroy({ where: { recipe_id: recipe.id }, transaction });
+  } else {
+    recipe = await FabricationRecipe.create({
+      company_id: company, product_id: product.id, unit, params, instructions, employee_id: employeeId,
+    }, { transaction });
+  }
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const row = { company_id: company, recipe_id: recipe.id, kind: l.kind, component_id: l.component_id, stage_id: l.stage_id, position: i };
+    for (const k of EXPR_FIELDS) row[k] = l[k] ?? null;
+    await FabricationRecipeItem.create(row, { transaction });
+  }
+  return recipe;
 }
 
 async function deleteRecipe(req, productId) {
@@ -344,5 +350,5 @@ async function deleteRecipe(req, productId) {
 
 module.exports = {
   listRecipes, getRecipe, previewRecipe, evaluateDraft, saveRecipe, deleteRecipe,
-  readRecipe, computeRecipe, estimate,
+  readRecipe, computeRecipe, estimate, parseRecipeBody, writeRecipe,
 };

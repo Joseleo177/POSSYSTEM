@@ -38,6 +38,9 @@ module.exports = (sequelize, DataTypes) => {
     // false = insumo: entra por compras y se consume en combos, pero no se vende en caja ni
     // se publica. Sigue siendo un producto normal para inventario y transferencias.
     sellable: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    // Adicional con precio de un plato ("Queso extra"): se vende solo como adicional, así que
+    // no aparece en los menús. Ver migración 20261031130000-adicionales.
+    is_addon: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     // Variantes (talla, color): la variante es un producto con parent_id hacia su modelo. El
     // modelo (is_variant_parent) es la plantilla: no se vende ni lleva existencias. variant_key
     // son los ids de sus valores ordenados, únicos por modelo. own_price = no sigue el precio

@@ -4,6 +4,7 @@ const {
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { excludeAnnulledReturns, factorDevolucion, saleDebt, refreshSaleStatus, settleSurplus, defaultSurplusMode } = require("./shared");
+const { componentesConStock } = require("../products/comboStock");
 
 module.exports = async function createExchange({ saleId, returnItems, replacementItems, reason, employeeId, surplusMode, refund }, req) {
   if (!returnItems?.length)      { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
@@ -112,7 +113,7 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
       if (line.product_id) {
         const product = await Product.findByPk(line.product_id, { transaction: t });
         if (product && !product.is_service && product.is_combo) {
-          const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction: t });
+          const comboItems = await componentesConStock(product.id, t);
           for (const ci of comboItems) {
             const [stockEntry] = await ProductStock.findOrCreate({ where: { warehouse_id: sale.warehouse_id, product_id: ci.product_id }, defaults: { qty: 0 }, transaction: t, lock: true });
             await stockEntry.increment("qty", { by: line.qty * parseFloat(ci.quantity), transaction: t });
@@ -176,6 +177,8 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
           for (const cItem of comboItems) {
             const ingredient = await Product.findByPk(cItem.product_id, { transaction: t, lock: true });
             const qtyNeeded = parsedQty * parseFloat(cItem.quantity);
+            // Servicio dentro del combo: no mueve existencias (ver products/comboStock.js).
+            if (ingredient.is_service) continue;
 
             const stockEntry = await ProductStock.findOne({ where: { warehouse_id: sale.warehouse_id, product_id: ingredient.id }, transaction: t, lock: true });
             const currentQty = parseFloat(stockEntry?.qty || 0);

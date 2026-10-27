@@ -73,6 +73,28 @@ export const TAB_ICONS = {
             />
         </svg>
     ),
+    // Cuatro mesas vistas desde arriba.
+    Mesas: (cls = "w-5 h-5") => (
+        <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.8}
+                d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
+            />
+        </svg>
+    ),
+    // Un gorro de cocinero.
+    Cocina: (cls = "w-5 h-5") => (
+        <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.8}
+                d="M7 14a4 4 0 01-.9-7.9A5 5 0 0112 3a5 5 0 015.9 3.1A4 4 0 0117 14M7 14v5a1 1 0 001 1h8a1 1 0 001-1v-5M7 17h10"
+            />
+        </svg>
+    ),
     Contabilidad: (cls = "w-5 h-5") => (
         <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

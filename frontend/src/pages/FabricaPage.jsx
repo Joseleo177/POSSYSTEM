@@ -110,7 +110,7 @@ export default function FabricaPage() {
                     onEdit={canManage ? m => setMaterial(m) : null} onNew={canManage ? () => setMaterial({}) : null} />
             )}
 
-            <OrderFormModal open={newOrder} warehouses={warehouses}
+            <OrderFormModal open={newOrder} warehouses={warehouses} materials={materials} stages={stages}
                 onClose={() => setNewOrder(false)}
                 onSaved={o => { setNewOrder(false); refresh(); setOpenOrderId(o.id); }} />
 

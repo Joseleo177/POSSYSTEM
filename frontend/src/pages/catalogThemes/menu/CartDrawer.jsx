@@ -132,6 +132,11 @@ export default function CartDrawer({
                                                 <p className="text-[11px] font-medium text-neutral-500 mt-0.5">
                                                     {fmtQtyUnit(it.qty || 0, it.unit)}
                                                 </p>
+                                                {it.options?.length > 0 && (
+                                                    <p className="text-[11px] font-medium text-neutral-600 mt-0.5 leading-snug">
+                                                        {it.options.map(o => (o.price > 0 ? `+ ${o.name}` : o.name)).join(" · ")}
+                                                    </p>
+                                                )}
                                                 {it.note && (
                                                     <p className="text-[11px] font-medium text-brand-500 italic mt-0.5 leading-snug">
                                                         "{it.note}"

@@ -20,6 +20,9 @@ export function usePagos({ notify }) {
     const [payDateFrom, setPayDateFrom] = useState("");
     const [payDateTo, setPayDateTo] = useState("");
     const [journalFilter, setJournalFilter] = useState("");
+    // Método dentro de la cuenta (punto, pago móvil…). "" = todos. Va aparte del diario: una
+    // cuenta recibe por varios, y también sirve sin cuenta ("todo el pago móvil").
+    const [methodFilter, setMethodFilter] = useState("");
     // Quién cobró. "" = todos. La lista se pide una vez; si el usuario no tiene permiso para
     // ver empleados llega vacía y el filtro no se ofrece, en vez de reventar la pestaña.
     const [employeeFilter, setEmployeeFilter] = useState("");
@@ -58,7 +61,7 @@ export function usePagos({ notify }) {
     const [deleteDialog, setDeleteDialog] = useState(null);
 
     // Query unificado — cualquier cambio recarga desde página 1
-    const [query, setQuery] = useState({ viewType: "historial", search: "", dateFrom: "", dateTo: "", journalId: "", employeeId: "", warehouseId: "", verified: "", page: 1, refresh: 0 });
+    const [query, setQuery] = useState({ viewType: "historial", search: "", dateFrom: "", dateTo: "", journalId: "", method: "", employeeId: "", warehouseId: "", verified: "", page: 1, refresh: 0 });
 
     useEffect(() => {
         const timer = setTimeout(() => setQuery(q => {
@@ -70,10 +73,10 @@ export function usePagos({ notify }) {
 
     useEffect(() => {
         setQuery(q => {
-            if (q.viewType === viewType && q.dateFrom === payDateFrom && q.dateTo === payDateTo && q.journalId === journalFilter && q.employeeId === employeeFilter && q.warehouseId === warehouseFilter && q.verified === verifiedFilter) return q;
-            return { ...q, viewType, dateFrom: payDateFrom, dateTo: payDateTo, journalId: journalFilter, employeeId: employeeFilter, warehouseId: warehouseFilter, verified: verifiedFilter, page: 1 };
+            if (q.viewType === viewType && q.dateFrom === payDateFrom && q.dateTo === payDateTo && q.journalId === journalFilter && q.method === methodFilter && q.employeeId === employeeFilter && q.warehouseId === warehouseFilter && q.verified === verifiedFilter) return q;
+            return { ...q, viewType, dateFrom: payDateFrom, dateTo: payDateTo, journalId: journalFilter, method: methodFilter, employeeId: employeeFilter, warehouseId: warehouseFilter, verified: verifiedFilter, page: 1 };
         });
-    }, [viewType, payDateFrom, payDateTo, journalFilter, employeeFilter, warehouseFilter, verifiedFilter]); // eslint-disable-line
+    }, [viewType, payDateFrom, payDateTo, journalFilter, methodFilter, employeeFilter, warehouseFilter, verifiedFilter]); // eslint-disable-line
 
     useEffect(() => {
         let cancelled = false;
@@ -85,6 +88,7 @@ export function usePagos({ notify }) {
                 if (query.dateFrom) params.date_from = query.dateFrom;
                 if (query.dateTo)   params.date_to   = query.dateTo;
                 if (query.journalId) params.payment_journal_id = query.journalId;
+                if (query.method) params.payment_method = query.method;
                 if (query.employeeId) params.employee_id = query.employeeId;
                 if (query.warehouseId) params.warehouse_id = query.warehouseId;
                 if (query.verified) params.verified = query.verified;
@@ -111,6 +115,7 @@ export function usePagos({ notify }) {
         setPayDateFrom("");
         setPayDateTo("");
         setJournalFilter("");
+        setMethodFilter("");
         setEmployeeFilter("");
         setWarehouseFilter("");
         setVerifiedFilter("");
@@ -137,7 +142,7 @@ export function usePagos({ notify }) {
     };
 
     const totalPages = Math.ceil(total / LIMIT);
-    const filterCount = (viewType !== "historial" ? 1 : 0) + (payDateFrom || payDateTo ? 1 : 0) + (journalFilter ? 1 : 0) + (employeeFilter ? 1 : 0) + (warehouseFilter ? 1 : 0) + (verifiedFilter ? 1 : 0);
+    const filterCount = (viewType !== "historial" ? 1 : 0) + (payDateFrom || payDateTo ? 1 : 0) + (journalFilter ? 1 : 0) + (methodFilter ? 1 : 0) + (employeeFilter ? 1 : 0) + (warehouseFilter ? 1 : 0) + (verifiedFilter ? 1 : 0);
     const hasFilters = filterCount > 0;
 
     return {
@@ -147,6 +152,7 @@ export function usePagos({ notify }) {
         payDateFrom, setPayDateFrom,
         payDateTo, setPayDateTo,
         journalFilter, setJournalFilter,
+        methodFilter, setMethodFilter,
         employeeFilter, setEmployeeFilter, employees,
         warehouseFilter, setWarehouseFilter, warehouses,
         verifiedFilter, setVerifiedFilter,

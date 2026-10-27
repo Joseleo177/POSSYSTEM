@@ -33,7 +33,8 @@ router.delete("/:id/stock/:productId",permit("inventory.adjust"),             ow
 // productos hay, a qué precio y cuántos quedan. Un cajero no administra existencias —no
 // ajusta, no transfiere— pero no puede vender a ciegas, así que `sales.create` alcanza.
 // Pedir solo `inventory.view` dejaba al cajero con la grilla vacía y un 403 en consola.
-router.get  ("/:id/products", permit("inventory.view", "sales.create"), ownWarehouse, wh.getProducts);
+// El mesonero (tables.serve) arma rondas con el menú de su sucursal, sin acceso a la caja.
+router.get  ("/:id/products", permit("inventory.view", "sales.create", "tables.serve"), ownWarehouse, wh.getProducts);
 
 // ── Empleados por almacén ─────────────────────────────────────
 // Esta ruta reparte visibilidad: `employee_warehouses` es lo que decide qué sucursales ve

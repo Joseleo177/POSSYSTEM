@@ -25,6 +25,16 @@ module.exports = async function getAllPayments(query, tenant = {}) {
   const pj = parseInt(query.payment_journal_id, 10);
   if (Number.isInteger(pj)) andClauses.push({ payment_journal_id: pj });
 
+  // Filtro por método (punto, pago móvil…). El diario es la cuenta y recibe por varios: sin
+  // esto no se separa el punto del pago móvil de un mismo banco. Los cobros viejos sin
+  // método toman el tipo de su diario, igual que en el reporte de diarios.
+  const metodo = String(query.payment_method || "");
+  if (/^[a-z0-9_-]{1,40}$/i.test(metodo)) {
+    andClauses.push(Sequelize.literal(
+      `COALESCE("Payment"."payment_method", (SELECT type FROM payment_journals WHERE id = "Payment"."payment_journal_id")) = ${sequelize.escape(metodo)}`
+    ));
+  }
+
   // Quién cobró. El cobro guarda su propio empleado —no lo hereda de la venta—, que es lo
   // correcto aquí: una factura la puede emitir un cajero y cobrarla otro al día siguiente.
   // Va en andClauses, así que el pie totaliza lo de ese empleado y no lo de toda la caja.

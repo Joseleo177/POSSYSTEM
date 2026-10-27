@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
 import { freeUnitsFor, lineTotalFor } from "../../../helpers/promo";
+import AddonPicker, { faltante, precioExtras } from "../../../components/mesas/AddonPicker";
 
 // Ficha de "agregar al pedido" del tema de menú: se abre en CADA toque de "+", no solo
 // cuando el cliente quiere escribir algo. Es la decisión que se tomó al construir esto —en
@@ -21,6 +22,8 @@ const PANEL_POR_DEFECTO = "#F4FAF6";
 export default function ProductAddModal({ product, existing, onClose, onConfirm, fmt, baseCur, altCur, panelColor }) {
     const [qty, setQty] = useState(1);
     const [note, setNote] = useState("");
+    // Adicionales del plato (término, extras): vienen en el producto, ver services/addons.js.
+    const [opciones, setOpciones] = useState([]);
 
     // Se recarga cada vez que se abre para OTRO producto (o para el mismo, si ya tenía algo
     // en el carrito) — no al tipear, por eso depende de la identidad del producto y no del
@@ -35,6 +38,8 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
             : 1;
         setQty(existing?.qty || inicial);
         setNote(existing?.note || "");
+        setOpciones([]);
+        setOpciones([]);
     }, [product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (!product) return null;
@@ -43,10 +48,11 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
     const hasPrice = price > 0;
     const enOferta = hasPrice && product.price_before != null;
     const freeUnits = freeUnitsFor({ ...product, qty });
-    const totalLinea = hasPrice ? lineTotalFor({ ...product, qty }) : 0;
+    const totalLinea = hasPrice ? lineTotalFor({ ...product, qty, extras_price: precioExtras(opciones) }) : 0;
+    const falta = faltante(product.addons, opciones);
 
     const confirmar = () => {
-        onConfirm(product, qty, note);
+        onConfirm(product, qty, note, opciones);
         onClose();
     };
 
@@ -110,6 +116,11 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
                             )}
                         </div>
 
+                        {product.addons?.length > 0 && (
+                            <AddonPicker groups={product.addons} value={opciones} onChange={setOpciones}
+                                sym={baseCur?.symbol || "Ref."} tone="catalog" />
+                        )}
+
                         <div>
                             <label className="text-[11px] font-black uppercase tracking-widest text-neutral-500">Nota</label>
                             <textarea
@@ -164,11 +175,11 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
                     )}
                     <button
                         onClick={confirmar}
-                        disabled={!hasPrice}
+                        disabled={!hasPrice || !!falta}
                         className="w-full h-14 rounded-full bg-brand-500 text-white flex items-center justify-between px-6 hover:brightness-110 active:scale-[0.99] transition-all disabled:opacity-40"
                     >
                         <span className="text-[12px] font-black uppercase tracking-widest">
-                            {existing ? "Actualizar pedido" : "Agregar al pedido"}
+                            {falta ? `Elige ${falta.name.toLowerCase()}` : existing ? "Actualizar pedido" : "Agregar al pedido"}
                         </span>
                         {hasPrice && (
                             <span className="flex items-baseline gap-1.5">

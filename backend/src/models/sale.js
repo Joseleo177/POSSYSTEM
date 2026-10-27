@@ -72,6 +72,19 @@ module.exports = (sequelize, DataTypes) => {
     web_customer_name:  { type: DataTypes.STRING(120), allowNull: true },
     web_customer_phone: { type: DataTypes.STRING(30),  allowNull: true },
     web_note:           { type: DataTypes.TEXT,        allowNull: true },
+    // Paso de la comanda por la pantalla de cocina (ver migración 20261031100000-cocina):
+    // NULL si no pasa por cocina · nueva · preparando · lista · entregada.
+    kitchen_status:     { type: DataTypes.STRING(12),  allowNull: true },
+    kitchen_status_at:  { type: DataTypes.DATE,        allowNull: true },
+    kitchen_ready_at:   { type: DataTypes.DATE,        allowNull: true },
+    // Mesa de la cuenta y mesonero que la atiende (ver migración 20261031110000-mesas). El
+    // mesonero NO va en employee_id: los mesoneros no cobran, y el turno de la caja cuenta
+    // sus ventas por employee_id.
+    table_id:           { type: DataTypes.INTEGER,     allowNull: true },
+    waiter_id:          { type: DataTypes.INTEGER,     allowNull: true },
+    // "Pidió la cuenta" (ver migración 20261031150000-pedir-cuenta): lo marca el mesonero y la
+    // caja lo ve en el mapa.
+    bill_requested_at:  { type: DataTypes.DATE,        allowNull: true },
     created_at:         { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

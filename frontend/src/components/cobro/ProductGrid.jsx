@@ -86,7 +86,7 @@ export default function ProductGrid({
                 <button onClick={() => setMobileTab("cart")} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[12px] font-bold transition-all relative ${mobileTab === "cart" ? "bg-brand-500 text-white" : "bg-white dark:bg-white/5 text-content-subtle"}`}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
                     Carrito
-                    {cart.length > 0 && <span className="w-4 h-4 bg-danger text-white text-[12px] font-bold rounded-full flex items-center justify-center">{cart.length}</span>}
+                    {cart.length > 0 && <span className="w-4 h-4 bg-danger text-white text-[12px] font-bold rounded-full flex items-center justify-center">{cart.filter(i => !i.parentKey).length}</span>}
                 </button>
             </div>
 
