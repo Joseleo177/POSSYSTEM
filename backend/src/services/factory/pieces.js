@@ -45,9 +45,20 @@ async function listMaterials(req, { warehouse_id } = {}) {
 
 // Crea un material nuevo (un producto de insumo) o configura el control por piezas de uno
 // que ya está en el catálogo. Es el mismo dato que la ficha del producto edita.
+//
+// `warehouse_id` le abre la ficha en ese almacén, como hace Catálogo al crear un producto. Sin
+// ella el material existía pero no aparecía en el Catálogo ni en el stock de ninguna sucursal
+// hasta la primera compra.
 async function saveMaterial(req, body = {}) {
-  companyOf(req);
+  const company = companyOf(req);
   return inTransaction(async (transaction) => {
+    const wid = body.warehouse_id ? await ownWarehouse(req, body.warehouse_id, transaction) : null;
+    const abrirFicha = (productId) => wid && ProductStock.findOrCreate({
+      where: { product_id: productId, warehouse_id: wid },
+      defaults: { qty: 0, company_id: company },
+      transaction,
+    });
+
     if (body.product_id) {
       const product = await Product.findByPk(body.product_id, { transaction, lock: true });
       if (!product) throw fail("Producto no encontrado", 404);
@@ -56,6 +67,7 @@ async function saveMaterial(req, body = {}) {
       const name = text(body.name, 200);
       if (name) changes.name = name;
       await product.update(changes, { transaction });
+      await abrirFicha(product.id);
       return { data: product.toJSON() };
     }
 
@@ -69,6 +81,7 @@ async function saveMaterial(req, body = {}) {
       sellable: false,
       ...changes,
     }, { transaction });
+    await abrirFicha(product.id);
     return { data: product.toJSON() };
   });
 }

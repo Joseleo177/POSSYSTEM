@@ -29,7 +29,10 @@ function Muestra({ color, image, name, size = "w-9 h-9", text = "text-[14px]" })
 }
 
 export default function CategoriesTab({ notify, can, triggerNew }) {
-    const { company } = useApp();
+    // `loadCategories` refresca la lista global (ficha del producto, filtros, caja). Esta
+    // pestaña lleva la suya propia, con conteos, y sin avisar a la otra lo nuevo no aparecía
+    // en el resto de la app hasta recargar la página.
+    const { company, loadCategories } = useApp();
     const catalogEnabled = !!company?.catalog_enabled;
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -89,6 +92,7 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
             }
             setModal(false);
             load();
+            loadCategories();
         } catch (e) { notify(e.message, "err"); }
         finally { setSaving(false); }
     };
@@ -103,6 +107,7 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
             notify("Categoría eliminada");
             setDeleteDialog(null);
             load();
+            loadCategories();
         } catch (e) { notify(e.message, "err"); }
     };
 

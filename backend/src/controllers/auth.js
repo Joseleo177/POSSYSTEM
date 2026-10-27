@@ -93,13 +93,19 @@ const login = async (req, res) => {
 // aceptaba. Si la consulta falla, se responde con lo del token, como antes.
 const me = async (req, res) => {
   try {
+    // Los almacenes también se leen de la base y no del token: el token se firma al entrar, y
+    // un almacén creado o asignado después no aparecía en Catálogo hasta cerrar sesión.
     const emp = await Employee.findByPk(req.employee.id, {
-      attributes: ["id"], include: [{ model: Role, attributes: ["name", "label", "permissions"] }],
+      attributes: ["id"], include: [
+        { model: Role, attributes: ["name", "label", "permissions"] },
+        { model: Warehouse, attributes: ["id", "name"], through: { attributes: [] } },
+      ],
     });
     if (emp?.Role) {
       return res.json({ ok: true, employee: {
         ...req.employee,
         role: emp.Role.name, role_label: emp.Role.label, permissions: emp.Role.permissions || {},
+        warehouses: (emp.Warehouses || []).map(w => ({ id: w.id, name: w.name })),
       } });
     }
   } catch { /* se cae a lo del token */ }

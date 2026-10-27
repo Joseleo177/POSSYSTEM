@@ -26,7 +26,7 @@ const TABS = [
 ];
 
 export default function CatalogPage() {
-    const { employee, activeCurrencies, company } = useApp();
+    const { employee, activeCurrencies, company, refreshEmployee, loadCategories } = useApp();
     const {
         products, setProducts, search, setSearch, loadProducts, can,
         categories, notify, loading,
@@ -62,6 +62,17 @@ export default function CatalogPage() {
 
     const availableWarehouses = employee?.warehouses || [];
     const [warehouseId, setWarehouseId] = useState(() => availableWarehouses[0]?.id ?? null);
+
+    // La asignación pudo cambiar en otra pantalla (Empleados) o la pudo hacer otro admin; lo
+    // mismo las categorías, que la app carga una sola vez al entrar.
+    useEffect(() => { refreshEmployee(); loadCategories(); }, [refreshEmployee, loadCategories]);
+
+    // Si la lista llega o cambia después de montar (almacén recién creado o asignado), se toma
+    // el primero; antes el estado inicial quedaba en null y la grilla salía vacía sin aviso.
+    const warehouseKey = availableWarehouses.map(w => w.id).join(",");
+    useEffect(() => {
+        setWarehouseId(prev => availableWarehouses.some(w => w.id === prev) ? prev : (availableWarehouses[0]?.id ?? null));
+    }, [warehouseKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (warehouseId) loadProducts(1, warehouseId);
@@ -439,7 +450,23 @@ export default function CatalogPage() {
 
                     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                         <div className="card-premium overflow-auto flex-1">
-                            {viewMode === "grid" ? (
+                            {(!warehouseId || (!loading && products.length === 0)) ? (
+                                <div className="py-20 px-4 text-center">
+                                    <div className="w-11 h-11 mx-auto mb-3 rounded-xl bg-surface-2 dark:bg-white/[0.06] flex items-center justify-center text-content-subtle">
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                                    </div>
+                                    <div className="text-[14px] font-semibold text-content dark:text-white">
+                                        {!warehouseId ? "No tienes un almacén asignado" : (activeFilterCount > 0 || search) ? "Ningún producto coincide" : "Todavía no hay productos"}
+                                    </div>
+                                    <div className="text-[12px] text-content-subtle mt-1">
+                                        {!warehouseId
+                                            ? "Asígnate uno en Inventario → Almacenes para ver su catálogo."
+                                            : (activeFilterCount > 0 || search)
+                                                ? "Prueba con otra búsqueda o quita los filtros."
+                                                : "Crea el primero con «Nuevo producto» o impórtalos desde un archivo."}
+                                    </div>
+                                </div>
+                            ) : viewMode === "grid" ? (
                                 <ProductCards
                                     products={products}
                                     canEditProducts={can("products.edit")}

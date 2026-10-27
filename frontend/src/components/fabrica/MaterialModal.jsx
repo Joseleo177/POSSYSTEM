@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Modal from "../ui/Modal";
 import Segmented from "../ui/Segmented";
+import CustomSelect from "../ui/CustomSelect";
 import { Button } from "../ui/Button";
 import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
@@ -13,8 +14,10 @@ import { INPUT, Field, DimsInput, UnitSwitch, useMeasureUnit, toMm, fromMm, fmtS
  * la vía rápida desde Fábrica; lo mismo se configura en la ficha del producto.
  *
  * `material`: null cerrado · {} nuevo · fila de Materiales para editar su nombre y formato.
+ * `warehouses`: al darlo de alta se le abre la ficha en uno, como hace Catálogo; si no, el
+ * material no aparecía en ningún almacén hasta la primera compra.
  */
-export default function MaterialModal({ material, onClose, onSaved }) {
+export default function MaterialModal({ material, warehouses = [], onClose, onSaved }) {
     const { notify } = useApp();
     const [unit, setUnit] = useMeasureUnit();
     const [source, setSource] = useState("nuevo");
@@ -23,6 +26,7 @@ export default function MaterialModal({ material, onClose, onSaved }) {
     const [product, setProduct] = useState(null);
     const [w, setW] = useState("");
     const [l, setL] = useState("");
+    const [warehouseId, setWarehouseId] = useState("");
     const open = material != null;
     const editing = !!material?.id;
 
@@ -35,6 +39,7 @@ export default function MaterialModal({ material, onClose, onSaved }) {
         setName(material?.name ? toNameCase(material.name) : "");
         setW(m === "area" ? fromMm(material?.piece_width_mm || 1220, unit) : "");
         setL(fromMm(material?.piece_length_mm || (m === "area" ? 2440 : 6000), unit));
+        setWarehouseId(warehouses.length ? String(warehouses[0].id) : "");
     }, [open]);
 
     const changeUnit = (u) => {
@@ -68,6 +73,10 @@ export default function MaterialModal({ material, onClose, onSaved }) {
         } else {
             if (!name.trim()) return notify("Escribe el nombre del material", "err");
             body.name = name.trim();
+        }
+        if (!editing) {
+            if (warehouses.length && !warehouseId) return notify("Elige el almacén", "err");
+            if (warehouseId) body.warehouse_id = parseInt(warehouseId);
         }
         try {
             await api.factory.saveMaterial(body);
@@ -107,6 +116,13 @@ export default function MaterialModal({ material, onClose, onSaved }) {
                     </Field>
                 )}
 
+                {!editing && warehouses.length > 1 && (
+                    <Field label="Almacén" hint="Donde se guarda y se compra">
+                        <CustomSelect value={warehouseId} onChange={setWarehouseId} placeholder="Elegir…"
+                            options={warehouses.map(x => ({ value: String(x.id), label: toNameCase(x.name) }))} />
+                    </Field>
+                )}
+
                 <Field label="Cómo se mide" hint={MODES.find(m => m.key === mode)?.hint}>
                     <Segmented className="w-full [&>button]:flex-1 [&>button]:justify-center" value={mode} onChange={changeMode}
                         options={MODES.map(m => ({ key: m.key, label: m.label }))} />
@@ -123,6 +139,7 @@ export default function MaterialModal({ material, onClose, onSaved }) {
                     Es un producto del catálogo: se compra en Compras y cada pieza que entra queda numerada.
                     La existencia se lleva en {mode === "area" ? "m²" : "metros"}. El formato solo prellena la compra:
                     cada pieza guarda sus propias medidas, porque según el proveedor llegan de otros tamaños.
+                    {!editing && warehouses.length === 1 && <> Se agrega a <span className="font-semibold text-content dark:text-white">{toNameCase(warehouses[0].name)}</span>.</>}
                 </p>
             </div>
         </Modal>

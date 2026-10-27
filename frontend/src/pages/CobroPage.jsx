@@ -31,7 +31,7 @@ import VariantPickerModal     from "../components/cobro/VariantPickerModal";
 const fmt = fmtMoney;
 
 export default function CobroPage() {
-    const { notify, employee, baseCurrency, activeCurrencies, categories, can, settings } = useApp();
+    const { notify, employee, baseCurrency, activeCurrencies, categories, loadCategories, can, settings } = useApp();
     // Configuración → Punto de venta. Sin la clave (empresas de antes) sigue el modal de siempre.
     const revisarAntes = settings?.pos_review_checkout === "true";
 
@@ -48,7 +48,7 @@ export default function CobroPage() {
         currentCurrency, setSelectedCurrency, secondaryCurrency,
         convertToDisplay, convertToSecondary, convertToBase,
         setLineDiscount, lineManualDiscountDisplay,
-        selectedSerieId, selectSerie, mySeries,
+        selectedSerieId, selectSerie, mySeries, loadMySeries,
         selectedCustomer, setSelectedCustomer,
         employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
         checkout, saveQuotation, loading, receipt, setReceipt, deshacerVentaSinConexion,
@@ -60,6 +60,11 @@ export default function CobroPage() {
     // Las series y las promociones las carga el propio contexto al fijarse el almacén activo:
     // son del almacén, no del usuario suelto.
     useEffect(() => { loadEmployeeWarehouses(); }, [loadEmployeeWarehouses]);
+    // El contexto vive toda la sesión y el almacén activo no cambia al volver a la caja, así
+    // que una serie creada en Contabilidad (o una categoría nueva) no aparecía hasta cerrar
+    // sesión. Se vuelven a pedir cada vez que se entra a esta pantalla.
+    useEffect(() => { loadCategories(); }, [loadCategories]);
+    useEffect(() => { if (activeWarehouse?.id) loadMySeries(activeWarehouse.id); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Estado local ───────────────────────────────────────────
     const [mobileTab, setMobileTab]               = useState("products");

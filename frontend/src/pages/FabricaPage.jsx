@@ -123,7 +123,7 @@ export default function FabricaPage() {
                 onSaved={() => { setRegistering(false); refresh(); }}
                 onNewMaterial={() => { setRegistering(false); setMaterial({}); }} />
 
-            <MaterialModal material={material}
+            <MaterialModal material={material} warehouses={warehouses}
                 onClose={() => setMaterial(null)}
                 onSaved={() => { setMaterial(null); refresh(); }} />
 

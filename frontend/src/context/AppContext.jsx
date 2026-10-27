@@ -45,6 +45,18 @@ export function AppProvider({ children }) {
   const login  = (emp) => { recordarSesion(emp); setEmployee(emp); };
   const logout = () => { localStorage.removeItem("pos_token"); setEmployee(null); };
 
+  // Vuelve a pedir los almacenes del usuario tras crear o asignar uno. Solo se reemplaza el
+  // empleado si la lista cambió: muchos efectos dependen de `employee` y recargarían todo.
+  const refreshEmployee = useCallback(async () => {
+    try {
+      const res = await api.auth.me();
+      const fresh = res.employee?.warehouses;
+      if (!Array.isArray(fresh)) return;
+      const firma = (ws) => (ws || []).map(w => `${w.id}:${w.name}`).sort().join("|");
+      setEmployee(prev => (!prev || firma(prev.warehouses) === firma(fresh)) ? prev : { ...prev, warehouses: fresh });
+    } catch {}
+  }, []);
+
   // Delegado en el mismo evaluador que usa el backend: si la pantalla y la API no coinciden,
   // el usuario ve botones que después le rebotan.
   const can = useCallback((perm) => hasPermission(employee?.permissions, perm), [employee]);
@@ -211,7 +223,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       // Auth
-      employee, authChecked, login, logout, can,
+      employee, authChecked, login, logout, can, refreshEmployee,
       // Nav
       pendingNav, setPendingNav, navigateTo,
       // Actions

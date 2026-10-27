@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
+import { useApp } from "../context/AppContext";
 
 const EMPTY_FORM = { name: "", description: "", active: true, parent_warehouse_id: null };
 
@@ -9,6 +10,9 @@ const EMPTY_FORM = { name: "", description: "", active: true, parent_warehouse_i
  * @param {function} notify - Función de notificación de AppContext
  */
 export function useWarehouses(notify) {
+  // Catálogo y la caja leen los almacenes del propio usuario desde la sesión: tras crear,
+  // borrar o asignar hay que refrescarla, o el cambio no se ve hasta volver a entrar.
+  const { refreshEmployee } = useApp();
   const [warehouses, setWarehouses] = useState([]);
   const [form, setForm]             = useState(EMPTY_FORM);
   const [editId, setEditId]         = useState(null);
@@ -62,17 +66,19 @@ export function useWarehouses(notify) {
       setForm(EMPTY_FORM);
       setEditId(null);
       await load();
+      refreshEmployee();
     } catch (e) { notify(e.message, "err"); }
     finally { setLoading(false); }
-  }, [form, editId, notify, load]);
+  }, [form, editId, notify, load, refreshEmployee]);
 
   const remove = useCallback(async (id) => {
     try {
       await api.warehouses.remove(id);
       notify("Almacén eliminado");
       await load();
+      refreshEmployee();
     } catch (e) { notify(e.message, "err"); }
-  }, [notify, load]);
+  }, [notify, load, refreshEmployee]);
 
   const startEdit  = useCallback((w) => {
     setEditId(w.id);
@@ -103,8 +109,9 @@ export function useWarehouses(notify) {
       notify("Empleados asignados ✓");
       setAssignModal(null);
       await load();
+      refreshEmployee();
     } catch (e) { notify(e.message, "err"); }
-  }, [assignModal, assignSelected, notify, load]);
+  }, [assignModal, assignSelected, notify, load, refreshEmployee]);
 
   return {
     warehouses, load,
