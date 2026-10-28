@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchDropdown } from "../../hooks/useSearchDropdown";
 import { toNameCase } from "../../helpers";
+import { useApp } from "../../context/AppContext";
 
 // Piezas comunes del módulo Fábrica: campos, medidas, estados y el buscador con selección.
 
@@ -35,10 +36,25 @@ export const XIcon = ({ className = "w-4 h-4" }) => (
 export const SHEET_ICON = "M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 9h9V4m0 10v6";
 
 // ── Medidas ─────────────────────────────────────────────────────────────────────────────
-// En el sistema todo va en milímetros (cálculos exactos), pero en pantalla se escribe y se lee
-// en METROS, que es como el taller nombra una lámina: "1,22 × 2,44", no 1220 × 2440. Antes había
-// un selector m / cm / mm que se recordaba en el equipo: alguien lo pasaba a mm en una prueba y
-// el taller veía milímetros. Ya no se ofrece.
+// En el sistema todo va en milímetros (cálculos exactos). En pantalla hay dos unidades:
+//
+//   Formato de la pieza   la lámina se nombra en METROS: "1,22 × 2,44" (compras, ficha del
+//                         producto, materiales, carga inicial, listados de piezas).
+//   Cortes                en la unidad en que mide el taller, que la elige la EMPRESA
+//                         (Fábrica → Materiales): centímetros por defecto, "162 × 92".
+//                         Recetas, "Qué lleva", dibujo del corte, retazos que vuelven.
+//
+// Antes había un selector m / cm / mm que cada equipo recordaba: alguien lo pasaba a mm en una
+// prueba y el taller veía milímetros. Por eso la unidad de los cortes es de la empresa.
+
+export const CUT_UNIT_KEY = "fabrica_unidad_corte";
+export const UNIT_NAME = { m: "metros", cm: "centímetros", mm: "milímetros" };
+
+// Unidad en que el taller mide los cortes.
+export function useCutUnit() {
+    const { settings } = useApp();
+    return settings?.[CUT_UNIT_KEY] === "m" ? "m" : "cm";
+}
 
 export const UNITS = [
     { key: "m",  label: "m",  factor: 1000 },
@@ -87,6 +103,12 @@ export const fmtDims = (p) => {
     if (!p.width_mm) return p.length_mm ? `${fmtM(p.length_mm)} m` : "—";
     return `${fmtM(p.width_mm)} × ${fmtM(p.length_mm)} m`;
 };
+// Un corte (o un retazo medido en el taller) en la unidad de los cortes: "162 × 92 cm".
+export const fmtLen = (mm, unit) => fromMm(mm, unit) || "0";
+export const fmtCut = (p, unit) => (p.width_mm
+    ? `${fmtLen(p.width_mm, unit)} × ${fmtLen(p.length_mm, unit)} ${unit}`
+    : `${fmtLen(p.length_mm, unit)} ${unit}`);
+
 // Tamaño en la unidad del material: m² para láminas, m para tubos.
 export const unitLabel = (unit) => (String(unit || "").toUpperCase() === "M2" ? "m²" : "m");
 export const fmtSize = (n, unit = "M2") =>

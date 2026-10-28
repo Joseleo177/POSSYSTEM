@@ -4,7 +4,7 @@ const {
   sequelize, Sequelize, Op, Product, Customer, Sale, SaleItem, Serie, Warehouse, Employee,
   MaterialPiece, FabricationOrder, FabricationOrderPiece, FabricationOrderItem, FabricationOrderPlan,
   FabricationStage, FabricationOrderStage, FabricationOrderCut,
-  fail, r3, r4, r5, TOL, MAX_QTY, MAX_MONEY, sizeOf, cutsLeft, hasShape, mm, fmtM, money, text,
+  fail, r3, r4, r5, TOL, MAX_QTY, MAX_MONEY, sizeOf, cutsLeft, hasShape, mm, fmtM, fmtCutLen, cutUnitOf, money, text,
   companyOf, employeeOf, orderCode, ownWarehouse,
   moveStock, unitCostOf, lockNumbering, inTransaction, assertWarehouseAccess, visibleWarehouseIds,
 } = require("./shared");
@@ -465,7 +465,6 @@ async function updateOrder(req, id, body = {}) {
 
 // ── Piezas en el taller ─────────────────────────────────────────────────────────────────
 
-const fmtCut = (w, l) => (w ? `${(w / 1000).toLocaleString("es-VE")} × ${(l / 1000).toLocaleString("es-VE")} m` : `${(l / 1000).toLocaleString("es-VE")} m`);
 
 /**
  * Cuántos cortes de la línea `plan_id` cubre `piece`, validado: mismo material, que la pieza dé
@@ -480,7 +479,7 @@ async function coverCut(order, piece, use, plan_id, transaction) {
   }
   const product = await Product.findByPk(piece.product_id, { attributes: ["piece_mode"], transaction });
   const mode = product?.piece_mode || (planLine.cut_width_mm ? "area" : "length");
-  const cutLabel = fmtCut(planLine.cut_width_mm, planLine.cut_length_mm);
+  const cutLabel = fmtCutLen(planLine.cut_width_mm, planLine.cut_length_mm, await cutUnitOf(order.company_id, transaction));
 
   const needed = planLine.cuts * Math.ceil(parseFloat(order.quantity));
   const [{ done }] = await sequelize.query(
@@ -688,6 +687,7 @@ async function returnPiece(req, id, useId, { remnants = [], note, layout = null 
     if (drawing && drawing.pieces.length > 20) throw fail("Son demasiados retazos para una sola pieza");
 
     const parentSize = parseFloat(piece.size);
+    const cutUnit = await cutUnitOf(order.company_id, transaction);   // lo que vuelve se mide en el taller
     const big = Math.max(piece.width_mm || 0, piece.length_mm || 0);
     const small = Math.min(piece.width_mm || 0, piece.length_mm || 0);
 
@@ -699,7 +699,7 @@ async function returnPiece(req, id, useId, { remnants = [], note, layout = null 
       if (!r || typeof r !== "object") throw fail(`${label}: no válido`);
       if (mode === "length") {
         const l = mm(r.length_mm, `${label}, largo`);
-        if (l > piece.length_mm) throw fail(`${label}: ${fmtM(l)} m es más largo que la pieza #${piece.code} (${fmtM(piece.length_mm)} m)`);
+        if (l > piece.length_mm) throw fail(`${label}: ${fmtCutLen(null, l, cutUnit)} es más largo que la pieza #${piece.code} (${fmtM(piece.length_mm)} m)`);
         return { is_irregular: false, width_mm: null, length_mm: l, size: sizeOf(mode, null, l) };
       }
       if (r.irregular === true) {
@@ -710,7 +710,7 @@ async function returnPiece(req, id, useId, { remnants = [], note, layout = null 
       const w = mm(r.width_mm, `${label}, ancho`);
       const l = mm(r.length_mm, `${label}, largo`);
       if (!piece.is_irregular && (Math.max(w, l) > big || Math.min(w, l) > small)) {
-        throw fail(`${label}: ${fmtM(w)} × ${fmtM(l)} m no cabe en la pieza #${piece.code} (${fmtM(piece.width_mm)} × ${fmtM(piece.length_mm)} m)`);
+        throw fail(`${label}: ${fmtCutLen(w, l, cutUnit)} no cabe en la pieza #${piece.code} (${fmtM(piece.width_mm)} × ${fmtM(piece.length_mm)} m)`);
       }
       return { is_irregular: false, width_mm: w, length_mm: l, size: sizeOf(mode, w, l) };
     });
@@ -1042,7 +1042,11 @@ async function deleteOrder(req, id) {
  * de la factura es la suma de la línea: lo que se guarda en la orden es ese total, no lo
  * tecleado, para que orden, factura y cobro digan la misma cifra.
  */
-async function invoiceOrder(req, id, { serie_id, sale_price } = {}) {
+// La factura lleva el producto, no el nombre del trabajo; sin producto, la descripción.
+const invoiceLineName = (productName, description) =>
+  ((productName || "").trim() || (description || "").trim()).slice(0, 200);
+
+async function invoiceOrder(req, id, { serie_id, sale_price, currency_id } = {}) {
   return inTransaction(async (transaction) => {
     const order = await lockedOrder(req, id, transaction);
     if (order.status === "anulada") throw fail("La orden está anulada");
@@ -1060,6 +1064,14 @@ async function invoiceOrder(req, id, { serie_id, sale_price } = {}) {
       throw fail("La serie elegida no pertenece al almacén de la orden");
     }
 
+    // Moneda de la pantalla, como en la caja: el monto sigue en base; solo cambia cómo se muestra.
+    const { Currency } = require("../../models");
+    const currency = currency_id ? await Currency.findByPk(parseInt(currency_id) || 0, { transaction }) : null;
+    if (currency_id && (!currency || currency.active === false)) throw fail("Elige una moneda activa");
+
+    const product = order.product_id ? await Product.findByPk(order.product_id, { attributes: ["name"], transaction }) : null;
+    const lineName = invoiceLineName(product?.name, order.description);
+
     const qty = parseFloat(order.quantity);
     const unitPrice = r5(price / qty);
     const total = r5(unitPrice * qty);
@@ -1070,8 +1082,8 @@ async function invoiceOrder(req, id, { serie_id, sale_price } = {}) {
       change: 0,
       customer_id: order.customer_id,
       employee_id: employeeOf(req),
-      currency_id: null,
-      exchange_rate: 1,
+      currency_id: currency?.id ?? null,
+      exchange_rate: currency && !currency.is_base ? parseFloat(currency.exchange_rate) || 1 : 1,
       discount_amount: 0,
       payment_method: "efectivo",
       warehouse_id: order.warehouse_id,
@@ -1083,7 +1095,7 @@ async function invoiceOrder(req, id, { serie_id, sale_price } = {}) {
     await SaleItem.create({
       sale_id: sale.id,
       product_id: null,
-      name: order.description.slice(0, 200),
+      name: lineName,
       price: unitPrice,
       quantity: qty,
       discount: 0,

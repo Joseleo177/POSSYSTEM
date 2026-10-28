@@ -8,7 +8,7 @@ import { useApp } from "../../context/AppContext";
 import { useDebounce } from "../../hooks/useDebounce";
 import { toNameCase } from "../../helpers";
 import {
-    INPUT, Field, DimsInput, UnitSwitch, useMeasureUnit, toMm, fromMm, fmtDims, fmtSize, ORIGIN_LABEL, errMsg, useKeyedAction,
+    INPUT, Field, DimsInput, useCutUnit, toMm, fromMm, fmtDims, fmtCut, fmtSize, ORIGIN_LABEL, errMsg, useKeyedAction,
 } from "./shared";
 
 /**
@@ -45,7 +45,8 @@ function cutsLeft(p, w, l, taken) {
 }
 export default function DeliverPieceModal({ open, order, materials, initial = null, onClose, onDone }) {
     const { notify } = useApp();
-    const [unit, setUnit] = useMeasureUnit();
+    // La medida del corte se escribe como la mide el taller (cm por defecto).
+    const unit = useCutUnit();
     const [productId, setProductId] = useState("");
     const [w, setW] = useState("");
     const [l, setL] = useState("");
@@ -85,7 +86,7 @@ export default function DeliverPieceModal({ open, order, materials, initial = nu
     }, [open, key]);
 
     const planId = initial?.planId || null;
-    const cutLabel = planId ? fmtDims({ width_mm: initial.w_mm, length_mm: initial.l_mm }) : null;
+    const cutLabel = planId ? fmtCut({ width_mm: initial.w_mm, length_mm: initial.l_mm }, unit) : null;
 
     // Piezas del mismo material que ya están en el taller para esta orden y todavía rinden este
     // corte: de una lámina salen a la vez el cuerpo y las puertas, sin entregarla otra vez.
@@ -155,7 +156,6 @@ export default function DeliverPieceModal({ open, order, materials, initial = nu
                 <Field label="¿Qué medida necesitas cortar?" hint="Opcional">
                     <div className="flex flex-col sm:flex-row gap-2">
                         <div className="flex-1 min-w-0"><DimsInput mode={fitMode} w={w} l={l} onW={setW} onL={setL} unit={unit} /></div>
-                        <UnitSwitch unit={unit} setUnit={setUnit} className="self-start" />
                     </div>
                 </Field>
 
@@ -171,7 +171,7 @@ export default function DeliverPieceModal({ open, order, materials, initial = nu
                                             <span className="text-[13px] text-content dark:text-white tabular-nums">{fmtDims(u)}</span>
                                         </div>
                                         <div className="text-[12px] text-content-subtle truncate">
-                                            Ya cubre {u.taken.map(t => `${t.cuts} de ${fmtDims({ width_mm: t.w, length_mm: t.l })}`).join(" y ")}
+                                            Ya cubre {u.taken.map(t => `${t.cuts} de ${fmtCut({ width_mm: t.w, length_mm: t.l }, unit)}`).join(" y ")}
                                         </div>
                                         <div className={`text-[12px] font-medium ${u.rinde >= initial.missing ? "text-content dark:text-white" : "text-amber-700 dark:text-amber-400"}`}>
                                             {u.rinde >= initial.missing

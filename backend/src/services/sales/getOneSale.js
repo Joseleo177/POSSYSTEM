@@ -24,7 +24,8 @@ module.exports = async function getOneSale(id, req) {
     const returned_qty = si.ReturnItems?.reduce((acc, ri) => acc + parseFloat(ri.qty), 0) || 0;
     return {
       ...si,
-      name: si.Product?.name || "Producto",
+      // Las líneas sin producto (la factura de una orden de Fábrica) traen su propio nombre.
+      name: si.Product?.name || si.name || "Producto",
       returned_qty
     };
   }) ?? [];

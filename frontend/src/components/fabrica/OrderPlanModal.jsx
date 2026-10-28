@@ -9,14 +9,18 @@ import { useApp } from "../../context/AppContext";
 import { useDebounce } from "../../hooks/useDebounce";
 import { toNameCase, fmtBase } from "../../helpers";
 import RecipeModal from "./RecipeModal";
-import RecipeLines, { linesToItems, newCut } from "./RecipeLines";
-import { INPUT, CARD, Field, fmtDims, fmtSize, errMsg } from "./shared";
+import RecipeLines, { linesToItems, newCut, planToLines } from "./RecipeLines";
+import { INPUT, CARD, Field, fmtCut, fmtSize, useCutUnit, errMsg } from "./shared";
 
 
 /**
  * Qué lleva una orden ya creada: la receta del producto (con las medidas del cliente si tiene
  * variables) o, en una orden a medida, lo que se escribe para ella sola. Sirve para las
  * órdenes que se crearon sin plan y para corregirlo antes de entregar material.
+ *
+ * "Solo para esta orden" arranca con lo que la orden ya lleva, para cambiar solo lo distinto.
+ * Una orden estándar sigue la receta: si la receta está mal, se corrige aquí mismo (Editar
+ * receta) y se vuelve a aplicar.
  */
 export default function OrderPlanModal({ order, materials = [], stages = [], onClose, onDone }) {
     const { notify, baseCurrency } = useApp();
@@ -27,9 +31,11 @@ export default function OrderPlanModal({ order, materials = [], stages = [], onC
     const [mode, setMode] = useState("receta");
     const [values, setValues] = useState({});
     const [lines, setLines] = useState({ cuts: [], accs: [], procs: [] });
-    const unit = "m";   // el taller mide en metros
+    const unit = useCutUnit();   // los cortes, como los mide el taller
     const [saveRecipe, setSaveRecipe] = useState(true);
-    const [creatingRecipe, setCreatingRecipe] = useState(false);
+    // Receta que se crea ("new") o se corrige (id del producto) sin salir de aquí.
+    const [recipeEdit, setRecipeEdit] = useState(null);
+    const [recipeVersion, setRecipeVersion] = useState(0);
     const [calc, setCalc] = useState(null);
     const [calcError, setCalcError] = useState(null);
 
@@ -39,8 +45,11 @@ export default function OrderPlanModal({ order, materials = [], stages = [], onC
         setHasRecipe(tiene);
         setMode(estandar || tiene ? "receta" : "propio");
         setValues({});
-        setLines({ cuts: materials[0] ? [newCut(materials)] : [], accs: [], procs: [] });
+        setLines(order.plan?.lines?.length
+            ? planToLines(order.plan.lines, unit)
+            : { cuts: materials[0] ? [newCut(materials)] : [], accs: [], procs: [] });
         setSaveRecipe(true);
+        setRecipeEdit(null);
         setCalc(null); setCalcError(null);
     }, [open]);
 
@@ -65,7 +74,7 @@ export default function OrderPlanModal({ order, materials = [], stages = [], onC
         req.then(r => { if (vivo) { setCalc(r.data); setCalcError(null); } })
             .catch(e => { if (vivo) { setCalc(null); setCalcError(errMsg(e)); } });
         return () => { vivo = false; };
-    }, [draft, open, hasRecipe]);
+    }, [draft, open, hasRecipe, recipeVersion]);
 
     const save = async () => {
         if (mode === "receta" && !hasRecipe) return notify("Crea primero la receta del producto", "err");
@@ -84,7 +93,7 @@ export default function OrderPlanModal({ order, materials = [], stages = [], onC
 
     return (
         <>
-            <Modal open={open} onClose={creatingRecipe ? () => {} : onClose} title={order ? `Qué lleva ${order.code}` : "Qué lleva"} width={mode === "propio" ? 680 : 520}
+            <Modal open={open} onClose={recipeEdit ? () => {} : onClose} title={order ? `Qué lleva ${order.code}` : "Qué lleva"} width={mode === "propio" ? 680 : 520}
                 footer={
                     <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
                         <button type="button" onClick={onClose} className="btn-outline h-12 sm:h-10 px-5 rounded-lg text-[13px] font-medium">Cancelar</button>
@@ -107,7 +116,7 @@ export default function OrderPlanModal({ order, materials = [], stages = [], onC
                                     <div className="text-[13px] font-semibold text-content dark:text-white">{toNameCase(product?.name || "")} no tiene receta</div>
                                     <p className="text-[12px] text-content-subtle">Una orden estándar se hace con la receta del producto.</p>
                                 </div>
-                                <button type="button" onClick={() => setCreatingRecipe(true)}
+                                <button type="button" onClick={() => setRecipeEdit("new")}
                                     className="btn-outline h-12 sm:h-10 px-4 rounded-lg text-[13px] font-medium shrink-0">Crear receta</button>
                             </div>
                         )}
@@ -142,6 +151,18 @@ export default function OrderPlanModal({ order, materials = [], stages = [], onC
                             </>
                         )}
 
+                        {mode === "receta" && hasRecipe && (
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                <p className="flex-1 min-w-0 text-[12px] text-content-subtle">
+                                    {estandar
+                                        ? "Una orden estándar sigue la receta del producto. Si algo está mal, corrige la receta y vuelve a aplicarla."
+                                        : "Si la receta está mal, corrígela aquí y vuelve a aplicarla."}
+                                </p>
+                                <button type="button" onClick={() => setRecipeEdit(product.id)}
+                                    className="btn-outline h-9 px-3 rounded-lg text-[13px] font-medium shrink-0">Editar receta</button>
+                            </div>
+                        )}
+
                         {calcError && <p className="text-[12px] text-red-600 dark:text-red-400">{calcError}</p>}
                         {calc && !calcError && (
                             <div className={`${CARD} px-4 py-3`}>
@@ -157,7 +178,7 @@ export default function OrderPlanModal({ order, materials = [], stages = [], onC
                                         <li key={i} className="text-[12px] text-content-muted dark:text-white/70 flex justify-between gap-3">
                                             <span className="truncate">
                                                 {l.kind === "material"
-                                                    ? `${l.total_cuts} corte${l.total_cuts === 1 ? "" : "s"} de ${fmtDims({ width_mm: l.cut_width_mm, length_mm: l.cut_length_mm })} · ${toNameCase(l.name)}`
+                                                    ? `${l.total_cuts} corte${l.total_cuts === 1 ? "" : "s"} de ${fmtCut({ width_mm: l.cut_width_mm, length_mm: l.cut_length_mm }, unit)} · ${toNameCase(l.name)}`
                                                     : l.kind === "proceso"
                                                     ? `${l.name} · ${Number(l.expected).toLocaleString("es-VE")} min`
                                                     : `${Number(l.expected).toLocaleString("es-VE")} × ${toNameCase(l.name)}`}
@@ -173,9 +194,9 @@ export default function OrderPlanModal({ order, materials = [], stages = [], onC
                 )}
             </Modal>
 
-            <RecipeModal productId={creatingRecipe ? "new" : null} initialProduct={product} materials={materials} stages={stages}
-                onClose={() => setCreatingRecipe(false)}
-                onSaved={() => { setCreatingRecipe(false); setHasRecipe(true); setMode("receta"); }} />
+            <RecipeModal productId={recipeEdit} initialProduct={product} materials={materials} stages={stages}
+                onClose={() => setRecipeEdit(null)}
+                onSaved={() => { setRecipeEdit(null); setHasRecipe(true); setMode("receta"); setRecipeVersion(v => v + 1); }} />
         </>
     );
 }

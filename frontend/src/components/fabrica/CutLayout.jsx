@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Segmented from "../ui/Segmented";
-import { INPUT, UnitSwitch, fmtM, toMm, fromMm } from "./shared";
+import { INPUT, UnitSwitch, fmtM, toMm, fromMm, fmtLen, useCutUnit } from "./shared";
 
 /**
  * El dibujo de cómo se picó una pieza. La lámina se pica de borde a borde, a lo largo o a lo
@@ -131,7 +131,8 @@ export const regionDims = (r, mode) => (mode === "length"
     ? { width_mm: null, length_mm: r.dx }
     : { width_mm: r.dy, length_mm: r.dx });
 
-const dimsLabel = (r, mode) => (mode === "length" ? `${fmtM(r.dx)} m` : `${fmtM(r.dy)} × ${fmtM(r.dx)} m`);
+// En la unidad en que mide el taller (cm por defecto): "122 × 140 cm".
+const dimsLabel = (r, mode, unit = "cm") => (mode === "length" ? `${fmtLen(r.dx, unit)} ${unit}` : `${fmtLen(r.dy, unit)} × ${fmtLen(r.dx, unit)} ${unit}`);
 const m2 = (n) => `${n.toLocaleString("es-VE", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} m²`;
 
 // Pantalla ↔ pieza: girar es cambiar x por y; aplicado dos veces vuelve a quedar igual.
@@ -385,16 +386,16 @@ function Drawing({ piece, mode, regions, selected = null, cut = null, onPick, la
 }
 
 // Rótulo de cada zona: el retazo (suelto, o unido en su parte más grande) o "Se usó".
-function labeler(regions, mode, name) {
+function labeler(regions, mode, name, unit = "cm") {
     const rems = remnantsOf(regions, mode);
     const byIdx = new Map();
     rems.forEach((p, n) => p.idx.forEach(i => byIdx.set(i, { p, n })));
     return (r, i) => {
-        if (r.kind !== "retazo") return ["Se usó", dimsLabel(r, mode)];
+        if (r.kind !== "retazo") return ["Se usó", dimsLabel(r, mode, unit)];
         const { p, n } = byIdx.get(i);
-        if (p.idx.length === 1) return [name(r, n), dimsLabel(r, mode)];
+        if (p.idx.length === 1) return [name(r, n), dimsLabel(r, mode, unit)];
         if (i !== p.main) return null;
-        return [name(r, n), p.irregular ? `Una pieza · ${m2(p.size)}` : `Una pieza · ${dimsLabel(regionDims({ dx: p.length_mm, dy: p.width_mm }, mode), mode)}`];
+        return [name(r, n), p.irregular ? `Una pieza · ${m2(p.size)}` : `Una pieza · ${dimsLabel(regionDims({ dx: p.length_mm, dy: p.width_mm }, mode), mode, unit)}`];
     };
 }
 
@@ -500,7 +501,7 @@ export function CutEditor({ piece, mode, value, onChange, unit, setUnit }) {
     };
 
     const from = length || dir === "v" ? "desde la izquierda" : "desde arriba";
-    const label = labeler(value, mode, (r, n) => `Retazo ${n + 1}`);
+    const label = labeler(value, mode, (r, n) => `Retazo ${n + 1}`, unit);
     const current = value[selected];
     const united = current && current.kind === "retazo" && current.group != null;
     const canJoin = current && current.kind === "retazo" && value.filter(r => r.kind === "retazo").length > 1;
@@ -519,7 +520,7 @@ export function CutEditor({ piece, mode, value, onChange, unit, setUnit }) {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="text-[13px]">
                             <span className="font-semibold text-content dark:text-white">Pedazo elegido</span>
-                            <span className="text-content-subtle tabular-nums"> · {dimsLabel(current, mode)}{united ? " · parte de un retazo unido" : ""}</span>
+                            <span className="text-content-subtle tabular-nums"> · {dimsLabel(current, mode, unit)}{united ? " · parte de un retazo unido" : ""}</span>
                         </div>
                         <Segmented value={current.kind} onChange={toggle}
                             options={[{ key: "usado", label: "Se usó" }, { key: "retazo", label: "Vuelve como retazo" }]} />
@@ -554,7 +555,7 @@ export function CutEditor({ piece, mode, value, onChange, unit, setUnit }) {
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                         <p className={`text-[12px] flex-1 min-w-0 ${msg ? "text-amber-700 dark:text-amber-400" : "text-content-subtle"}`}>
                             {msg || (valid
-                                ? `Quedan ${fmtM(posMm)} m y ${fmtM(span - posMm)} m. Lo medido queda como usado.`
+                                ? `Quedan ${fmtLen(posMm, unit)} ${unit} y ${fmtLen(span - posMm, unit)} ${unit}. Lo medido queda como usado.`
                                 : "Toca el pedazo para elegirlo y vuelve a tocar donde fue el corte, o escribe la medida.")}
                         </p>
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -585,9 +586,10 @@ export function CutEditor({ piece, mode, value, onChange, unit, setUnit }) {
 
 // El dibujo guardado, para el historial y el detalle de la orden: cada retazo con su número.
 export function CutPreview({ piece, mode, layout, maxHeight = "180px" }) {
+    const unit = useCutUnit();
     if (!layout?.regions?.length || !canDraw(piece, mode)) return null;
     return (
         <Drawing piece={piece} mode={mode} regions={layout.regions} maxHeight={maxHeight}
-            label={labeler(layout.regions, mode, (r) => `#${r.code || "retazo"}`)} />
+            label={labeler(layout.regions, mode, (r) => `#${r.code || "retazo"}`, unit)} />
     );
 }

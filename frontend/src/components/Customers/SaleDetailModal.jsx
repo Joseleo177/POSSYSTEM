@@ -84,7 +84,7 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
     return (
         /* Backdrop */
         <div
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] overlay-in"
+            className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] overlay-in"
             onClick={onClose}
         >
             {/* Panel */}

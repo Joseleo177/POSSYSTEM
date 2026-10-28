@@ -10,7 +10,7 @@ import { useApp } from "../../context/AppContext";
 import { useDebounce } from "../../hooks/useDebounce";
 import { toNameCase, fmtBase } from "../../helpers";
 import {
-    INPUT, AGREGAR, QUITAR, CARD, Field, PlusIcon, XIcon, SearchPick, fmtDims, fmtSize, errMsg,
+    INPUT, AGREGAR, QUITAR, CARD, Field, PlusIcon, XIcon, SearchPick, fmtCut, fmtSize, useCutUnit, UNIT_NAME, errMsg,
 } from "./shared";
 import RecipeLines, { linesToItems, newCut } from "./RecipeLines";
 
@@ -35,7 +35,9 @@ export default function RecipeModal({ productId, initialProduct = null, material
     const { notify, baseCurrency } = useApp();
     const [loading, setLoading] = useState(false);
     const [product, setProduct] = useState(null);
-    const [unit, setUnit] = useState("m");
+    // Las recetas nuevas van en la unidad en que mide el taller (configuración de la empresa).
+    const cutUnit = useCutUnit();
+    const [unit, setUnit] = useState(cutUnit);
     const [params, setParams] = useState([]);
     const [instructions, setInstructions] = useState("");
     const [lines, setLines] = useState({ cuts: [], accs: [], procs: [] });
@@ -47,7 +49,7 @@ export default function RecipeModal({ productId, initialProduct = null, material
 
     useEffect(() => {
         if (!open) return;
-        setProduct(null); setInstructions(""); setUnit("m"); setParams([]);
+        setProduct(null); setInstructions(""); setUnit(cutUnit); setParams([]);
         setLines({ cuts: [], accs: [], procs: [] }); setCalc(null); setCalcError(null);
         if (!editing) {
             setProduct(initialProduct);
@@ -159,10 +161,10 @@ export default function RecipeModal({ productId, initialProduct = null, material
                                         </span>
                                     )} />
                             </Field>
-                            {/* El taller mide en metros: las recetas nuevas van en metros sin preguntar. Una
-                                receta vieja guardada en cm o mm conserva su unidad (cambiarla sin
-                                convertir las fórmulas cambiaría los cortes), y se dice en cuál está. */}
-                            {unit !== "m" && (
+                            {/* Las recetas nuevas van en la unidad del taller sin preguntar. Una receta en
+                                otra unidad la conserva (cambiarla sin convertir las fórmulas cambiaría
+                                los cortes), y se dice en cuál está. */}
+                            {unit !== cutUnit && (
                                 <Field label="Medidas en">
                                     <div className="h-10 flex items-center text-[13px] text-content-subtle">
                                         {RECIPE_UNITS.find(u => u.key === unit)?.name}
@@ -171,17 +173,18 @@ export default function RecipeModal({ productId, initialProduct = null, material
                             )}
                         </div>
 
-                        {/* Receta vieja en cm o mm: se pasa a metros sin convertir los números, porque muchas
-                            se escribieron pensando en metros con el selector en cm (1,62 leído como 1,62 cm).
-                            Quien la pasa revisa cada medida, con el cálculo en vivo de abajo. */}
-                        {unit !== "m" && (
+                        {/* Receta en otra unidad: se pasa a la del taller SIN convertir los números, porque
+                            muchas se escribieron con el selector viejo en la unidad equivocada (1,62 leído
+                            como cm). Quien la pasa revisa cada medida, con el cálculo en vivo de abajo. */}
+                        {unit !== cutUnit && (
                             <div className="rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
                                 <p className="flex-1 min-w-0 text-[13px] text-amber-900 dark:text-amber-200">
-                                    Esta receta está en {RECIPE_UNITS.find(u => u.key === unit)?.name}. El taller mide en metros: pásala a metros y
-                                    revisa que cada medida quede en metros (por ejemplo, 72,5 cm se escribe 0,725).
+                                    Esta receta está en {RECIPE_UNITS.find(u => u.key === unit)?.name}. El taller mide los cortes en {UNIT_NAME[cutUnit]}:
+                                    pásala y revisa que cada medida quede en {UNIT_NAME[cutUnit]}
+                                    {cutUnit === "cm" ? " (por ejemplo, 1,62 m se escribe 162)." : " (por ejemplo, 72,5 cm se escribe 0,725)."}
                                 </p>
-                                <button type="button" onClick={() => setUnit("m")}
-                                    className="btn-outline h-9 px-3 rounded-lg text-[13px] font-medium shrink-0">Pasar a metros</button>
+                                <button type="button" onClick={() => setUnit(cutUnit)}
+                                    className="btn-outline h-9 px-3 rounded-lg text-[13px] font-medium shrink-0">Pasar a {UNIT_NAME[cutUnit]}</button>
                             </div>
                         )}
 
@@ -232,7 +235,7 @@ export default function RecipeModal({ productId, initialProduct = null, material
                                         <li key={i} className="text-[12px] text-content-muted dark:text-white/70 flex justify-between gap-3">
                                             <span className="truncate">
                                                 {l.kind === "material"
-                                                    ? `${l.cuts} corte${l.cuts === 1 ? "" : "s"} de ${fmtDims({ width_mm: l.cut_width_mm, length_mm: l.cut_length_mm })} · ${toNameCase(l.name)} · ${fmtSize(l.expected, l.unit)}`
+                                                    ? `${l.cuts} corte${l.cuts === 1 ? "" : "s"} de ${fmtCut({ width_mm: l.cut_width_mm, length_mm: l.cut_length_mm }, cutUnit)} · ${toNameCase(l.name)} · ${fmtSize(l.expected, l.unit)}`
                                                     : l.kind === "proceso"
                                                     ? `${l.name} · ${fmtMin(l.expected)}`
                                                     : `${Number(l.expected).toLocaleString("es-VE")} × ${toNameCase(l.name)}`}

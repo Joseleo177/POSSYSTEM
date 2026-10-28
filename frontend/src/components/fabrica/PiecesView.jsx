@@ -9,7 +9,7 @@ import CustomSelect from "../ui/CustomSelect";
 import StatusMark from "../ui/StatusMark";
 import { LedgerSkeleton, LedgerEmpty, ledgerRow, stopRow, RowIcon } from "../ui/Ledger";
 import {
-    DimsInput, UnitSwitch, useMeasureUnit, toMm, fmtDims, fmtSize, PIECE_STATUS, ORIGIN_LABEL, orderCode, errMsg,
+    DimsInput, useCutUnit, toMm, fmtDims, fmtSize, PIECE_STATUS, ORIGIN_LABEL, orderCode, errMsg,
 } from "./shared";
 
 const FILTROS = [
@@ -26,7 +26,8 @@ const donde = (p) => p.status === "en_taller" && p.shop_order_number
 
 export default function PiecesView({ warehouses, materials, version, onOpen, onRegister }) {
     const { notify, printerWidth } = useApp();
-    const [unit, setUnit] = useMeasureUnit();
+    // "¿Dónde cabe?" busca un corte: en la unidad en que mide el taller.
+    const unit = useCutUnit();
     const [status, setStatus] = useState("activas");
     const [productId, setProductId] = useState("");
     const [warehouseId, setWarehouseId] = useState("");
@@ -97,7 +98,6 @@ export default function PiecesView({ warehouses, materials, version, onOpen, onR
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                         <span className="text-[12px] text-content-subtle shrink-0">Necesito cortar</span>
                         <div className="flex-1 sm:max-w-sm"><DimsInput mode={fitMode} w={w} l={l} onW={setW} onL={setL} unit={unit} /></div>
-                        <UnitSwitch unit={unit} setUnit={setUnit} className="self-start sm:self-auto" />
                         {hasFit && <span className="text-[12px] text-content-subtle">{fitMode === "area" ? "De la más chica a la más grande, también girada" : "De la más corta a la más larga"}</span>}
                     </div>
                 )}

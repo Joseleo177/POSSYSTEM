@@ -14,8 +14,8 @@ import CustomerModal from "../Customers/CustomerModal";
 import ProductModal from "../ProductModal";
 import Check from "../ui/Check";
 import RecipeModal from "./RecipeModal";
-import RecipeLines, { linesToItems, newCut } from "./RecipeLines";
-import { INPUT, CARD, Field, Prefijo, SearchPick, parseNum, fmtDims, fmtSize, fromMm, errMsg } from "./shared";
+import RecipeLines, { linesToItems, newCut, planToLines } from "./RecipeLines";
+import { INPUT, CARD, Field, Prefijo, SearchPick, parseNum, fmtCut, fmtSize, useCutUnit, errMsg } from "./shared";
 
 
 // Lo tecleado en el buscador de clientes: un número es la cédula o el RIF, lo demás el nombre
@@ -67,7 +67,7 @@ export default function OrderFormModal({ open, order = null, warehouses, materia
     const [categories, setCategories] = useState(null);
     // Lo que lleva una orden a medida sin receta, y si queda como receta del producto.
     const [lines, setLines] = useState({ cuts: [], accs: [], procs: [] });
-    const planUnit = "m";   // el taller mide en metros
+    const planUnit = useCutUnit();   // los cortes, como los mide el taller
     const [saveRecipe, setSaveRecipe] = useState(true);
     // Receta creada desde aquí para el producto elegido.
     const [recipeFor, setRecipeFor] = useState(null);
@@ -181,23 +181,7 @@ export default function OrderFormModal({ open, order = null, warehouses, materia
     const fromRecipe = !editing && form.type === "medida" && !!recipe && !recipeError && !recipe.params?.length;
     const ownPlan = !editing && form.type === "medida" && (!form.product || noRecipe || fromRecipe);
 
-    // Las líneas de la receta, ya calculadas por unidad, como líneas editables en metros.
-    const recipeToLines = (r) => {
-        const num = (n) => Number(n).toLocaleString("es-VE", { maximumFractionDigits: 3, useGrouping: false });
-        const ls = r.lines || [];
-        return {
-            cuts: ls.filter(l => l.kind === "material").map(l => ({
-                material_id: String(l.component_id),
-                w: l.cut_width_mm ? fromMm(l.cut_width_mm, "m") : "",
-                l: fromMm(l.cut_length_mm, "m"),
-                cuts: String(l.cuts),
-            })),
-            accs: ls.filter(l => l.kind === "accesorio").map(l => ({
-                product: { id: l.component_id, name: l.name, unit: l.unit }, quantity: num(l.quantity),
-            })),
-            procs: ls.filter(l => l.kind === "proceso").map(l => ({ stage_id: String(l.stage_id), minutes: num(l.minutes) })),
-        };
-    };
+    const recipeToLines = (r) => planToLines(r.lines, planUnit);
     useEffect(() => {
         if (!fromRecipe || loadedFor === form.product?.id) return;
         setLines(recipeToLines(recipe));
@@ -301,7 +285,7 @@ export default function OrderFormModal({ open, order = null, warehouses, materia
                     <li key={i} className="text-[12px] text-content-muted dark:text-white/70 flex justify-between gap-3">
                         <span className="truncate">
                             {l.kind === "material"
-                                ? `${l.total_cuts} corte${l.total_cuts === 1 ? "" : "s"} de ${fmtDims({ width_mm: l.cut_width_mm, length_mm: l.cut_length_mm })} · ${toNameCase(l.name)}`
+                                ? `${l.total_cuts} corte${l.total_cuts === 1 ? "" : "s"} de ${fmtCut({ width_mm: l.cut_width_mm, length_mm: l.cut_length_mm }, planUnit)} · ${toNameCase(l.name)}`
                                 : l.kind === "proceso"
                                 ? `${l.name} · ${Number(l.expected).toLocaleString("es-VE")} min`
                                 : `${Number(l.expected).toLocaleString("es-VE")} × ${toNameCase(l.name)}`}

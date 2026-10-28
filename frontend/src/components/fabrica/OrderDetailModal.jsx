@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import Modal from "../ui/Modal";
 import Money from "../ui/Money";
 import StatusMark from "../ui/StatusMark";
+import Segmented from "../ui/Segmented";
 import ConfirmModal from "../ui/ConfirmModal";
 import { Button } from "../ui/Button";
 import { Spinner } from "../ui/Spinner";
@@ -13,13 +14,14 @@ import { fmtQtyUnit, isIntegerUnit } from "../../helpers/unitFormatter";
 import { printPieceLabels } from "../../helpers/printPieceLabels";
 import {
     INPUT, AGREGAR, CARD, Field, PlusIcon, XIcon, SHEET_ICON,
-    ORDER_STATUS, SearchPick, fmtDims, fmtSize, parseNum, errMsg,
+    ORDER_STATUS, SearchPick, fmtDims, fmtCut, fmtLen, fmtSize, parseNum, useCutUnit, errMsg,
 } from "./shared";
 import OrderFormModal from "./OrderFormModal";
 import DeliverPieceModal from "./DeliverPieceModal";
 import { CutPreview } from "./CutLayout";
 import ReturnPieceModal from "./ReturnPieceModal";
 import InvoiceModal from "./InvoiceModal";
+import SaleDetailModal from "../Customers/SaleDetailModal";
 import StageMoveModal from "./StageMoveModal";
 import OrderPlanModal from "./OrderPlanModal";
 
@@ -56,6 +58,7 @@ const SectionTitle = ({ children, right }) => (
  */
 export default function OrderDetailModal({ orderId, materials, warehouses, stages = [], onClose, onChanged, onOpenPiece }) {
     const { notify, baseCurrency, can, printerWidth } = useApp();
+    const cutUnit = useCutUnit();   // los cortes, como los mide el taller
     const canManage = can("factory.manage");
     const canInvoice = can("factory.invoice");
     const [order, setOrder] = useState(null);
@@ -65,6 +68,8 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
     const [delivering, setDelivering] = useState(null);   // null · {} · { productId, w_mm, l_mm }
     const [returning, setReturning] = useState(null);
     const [invoicing, setInvoicing] = useState(false);
+    // La factura de la orden: se abre al emitirla y desde "Factura N" en la cabecera.
+    const [viewSale, setViewSale] = useState(null);
     const [cancelling, setCancelling] = useState(false);
     const [cancelReason, setCancelReason] = useState("");
     const [deleting, setDeleting] = useState(false);
@@ -74,6 +79,9 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
 
     const [itemProduct, setItemProduct] = useState(null);
     const [itemQty, setItemQty] = useState("");
+    // El detalle en pestañas: todo seguido (receta, comparación, taller, piezas, accesorios)
+    // obligaba a recorrer un modal muy largo.
+    const [tab, setTab] = useState("lleva");
     const { run, busy } = useKeyedAction();
 
     const load = useCallback(async () => {
@@ -90,6 +98,7 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
         if (!orderId) { setOrder(null); return; }
         setLoading(true);
         setItemProduct(null); setItemQty("");
+        setTab("lleva");
         load().finally(() => setLoading(false));
     }, [orderId]);
 
@@ -105,6 +114,24 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
     const o = order;
     const open = o?.status === "abierta";
     const enTaller = (o?.uses || []).filter(u => !u.returned_at).length;
+
+    // Lo que debe usar un material, dicho en cortes ("2 cortes de 80 × 210 cm"), y al gastarlo
+    // cuánto se pasó o se ahorró. Los tubos se comparan en largo; las láminas, por porcentaje:
+    // nadie en el taller habla en m².
+    const materialLine = (c) => {
+        const cuts = (o?.plan?.lines || []).filter(l => l.kind === "material" && l.component_id === c.component_id)
+            .map(l => `${l.total_cuts} corte${l.total_cuts === 1 ? "" : "s"} de ${fmtCut({ width_mm: l.cut_width_mm, length_mm: l.cut_length_mm }, cutUnit)}`)
+            .join(" + ");
+        if (!(c.actual > 0)) return `Debe usar ${cuts}`;
+        const pct = c.diff_pct != null ? ` (${c.diff_pct > 0 ? "+" : ""}${c.diff_pct.toLocaleString("es-VE")}%)` : "";
+        if (String(c.unit).toUpperCase() !== "M2") {
+            return `Debía ${fmtLen(c.expected * 1000, cutUnit)} ${cutUnit} · usó ${fmtLen(c.actual * 1000, cutUnit)} ${cutUnit}${pct}`;
+        }
+        if (c.diff_pct == null || Math.abs(c.diff_pct) < 0.5) return `${cuts} · se usó lo previsto`;
+        return c.diff_pct > 0
+            ? `${cuts} · se usó ${c.diff_pct.toLocaleString("es-VE")}% más`
+            : `${cuts} · se usó ${Math.abs(c.diff_pct).toLocaleString("es-VE")}% menos`;
+    };
     // Abierta y con receta, la utilidad se mide contra lo que la receta dice que va a costar
     // (o lo ya gastado, si pasó de eso): contra lo consumido hasta ahora, una orden recién
     // empezada mostraba 100% de utilidad.
@@ -112,7 +139,7 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
     const costoBase = o ? (estimada ? Math.max(o.total_cost, o.plan.estimated_cost) : o.total_cost) : 0;
     const margen = o && o.sale_price != null ? o.sale_price - costoBase : null;
     const porFacturar = o && o.destination === "cliente" && !o.invoiced && o.status !== "anulada";
-    const encima = editing || !!delivering || !!returning || invoicing || cancelling || deleting || planning || !!undoUse || !!moving;
+    const encima = editing || !!delivering || !!returning || invoicing || !!viewSale || cancelling || deleting || planning || !!undoUse || !!moving;
     // Sin factura, material, accesorios ni mano de obra, la orden se hizo por error y se borra;
     // con algún movimiento se anula, que deja rastro (mismo criterio que el servidor).
     const borrable = !!o && o.status !== "terminada" && !o.sale_id && !(o.uses || []).length
@@ -190,7 +217,11 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
                                     <span className="text-[12px] text-content-subtle">
                                         {o.type === "estandar" ? "Estándar" : "A medida"} · {o.destination === "stock" ? "Para inventario" : "Para un cliente"}
                                     </span>
-                                    {o.Sale && <span className="text-[12px] text-content-subtle tabular-nums">Factura {o.Sale.invoice_number}{o.invoiced ? "" : " (anulada)"}</span>}
+                                    {o.Sale && (
+                                        <button onClick={() => setViewSale(o.Sale.id)} className="text-[12px] font-medium text-content-subtle hover:text-content dark:hover:text-white underline underline-offset-2 tabular-nums">
+                                            Factura {o.Sale.invoice_number}{o.invoiced ? "" : " (anulada)"}
+                                        </button>
+                                    )}
                                     {open && <span className="text-[12px] font-medium text-content dark:text-white">{o.current_stage ? `En ${o.current_stage.name}` : "Por empezar"}</span>}
                                 </div>
                             </div>
@@ -240,8 +271,18 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
                                     </div>
                                 )}
 
+                                <div className="overflow-x-auto -mx-1 px-1">
+                                    <Segmented className="sm:w-full sm:[&>button]:flex-1 sm:[&>button]:justify-center" value={tab} onChange={setTab}
+                                        options={[
+                                            { key: "lleva", label: "Qué lleva" },
+                                            { key: "piezas", label: "Piezas y retazos", count: o.uses.length || null },
+                                            { key: "accesorios", label: "Accesorios", count: o.items.length || null },
+                                            { key: "taller", label: "Taller", count: o.stages?.length || null },
+                                        ]} />
+                                </div>
+
                                 {/* Receta: lo que debía llevar contra lo que se gastó */}
-                                {o.plan && (
+                                {tab === "lleva" && o.plan && (
                                     <section>
                                         <SectionTitle right={canManage && open && (o.uses || []).length === 0 && (
                                             <button onClick={() => setPlanning(true)} className="text-[12px] font-medium text-content-subtle hover:text-content dark:hover:text-white">Cambiar</button>
@@ -249,20 +290,44 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
                                         {o.instructions && (
                                             <p className="text-[13px] text-content-muted dark:text-white/70 whitespace-pre-line mb-2">{o.instructions}</p>
                                         )}
+                                        {/* Resumen por material, arriba: debía contra usado. Lo de más es la merma. */}
+                                        <div className={`${CARD} px-4 py-3 mb-3 space-y-1.5`}>
+                                            {o.plan.by_component.map(c => {
+                                                const falta = c.kind === "accesorio" && c.actual < c.expected;
+                                                // Mismo umbral que el texto: un redondeo no es merma.
+                                                const merma = (c.kind === "material" || c.kind === "proceso") && c.actual > 0 && c.diff_pct >= 0.5;
+                                                return (
+                                                    <div key={c.key} className="text-[12px] flex flex-wrap justify-between gap-x-3">
+                                                        <span className="font-medium text-content dark:text-white/90">{c.kind === "proceso" ? c.name : toNameCase(c.name)}</span>
+                                                        <span className={`tabular-nums ml-auto text-right ${merma ? "text-amber-700 dark:text-amber-400" : "text-content-subtle"}`}>
+                                                            {c.kind === "proceso"
+                                                                ? (c.actual > 0
+                                                                    ? `Debía ${fmtMin(c.expected)} · tomó ${fmtMin(c.actual)}${c.diff_pct != null ? ` (${c.diff_pct > 0 ? "+" : ""}${c.diff_pct.toLocaleString("es-VE")}%)` : ""}`
+                                                                    : `Debe tomar ${fmtMin(c.expected)}`)
+                                                                : c.kind === "material"
+                                                                ? materialLine(c)
+                                                                : (falta && open
+                                                                    ? `Anotados ${Number(c.actual).toLocaleString("es-VE")} de ${Number(c.expected).toLocaleString("es-VE")} · el resto sale al terminar`
+                                                                    : `Anotados ${Number(c.actual).toLocaleString("es-VE")} de ${Number(c.expected).toLocaleString("es-VE")}`)}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                         <div className={`${CARD} divide-y divide-border/60 dark:divide-white/[0.06]`}>
                                             {o.plan.lines.map(l => (
                                                 <div key={l.id} className="px-4 py-2.5 flex items-center gap-3">
                                                     <div className="min-w-0 flex-1">
                                                         <div className="text-[13px] font-medium text-content dark:text-white truncate">
                                                             {l.kind === "material"
-                                                                ? `${l.total_cuts} corte${l.total_cuts === 1 ? "" : "s"} de ${fmtDims({ width_mm: l.cut_width_mm, length_mm: l.cut_length_mm })}`
+                                                                ? `${l.total_cuts} corte${l.total_cuts === 1 ? "" : "s"} de ${fmtCut({ width_mm: l.cut_width_mm, length_mm: l.cut_length_mm }, cutUnit)}`
                                                                 : l.kind === "proceso"
                                                                 ? `${l.name} · ${fmtMin(l.expected)}`
                                                                 : `${Number(l.expected).toLocaleString("es-VE")} × ${toNameCase(l.name)}`}
                                                         </div>
                                                         <div className="text-[12px] text-content-subtle truncate">
                                                             {l.kind === "material"
-                                                                ? `${toNameCase(l.name)} · ${fmtSize(l.expected, l.unit)}`
+                                                                ? (l.cut_width_mm ? toNameCase(l.name) : `${toNameCase(l.name)} · ${fmtLen(l.expected * 1000, cutUnit)} ${cutUnit} en total`)
                                                                 : l.kind === "proceso" ? "Mano de obra" : "Accesorio"}
                                                         </div>
                                                         {/* Qué piezas cubren este corte y cuánto falta */}
@@ -276,7 +341,10 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
                                                             </div>
                                                         )}
                                                     </div>
-                                                    <Money value={money(l.cost)} className="text-[13px] text-content-subtle" />
+                                                    {/* Sin costo cargado el material no suma: mejor decirlo que mostrar 0,00 */}
+                                                    {l.kind !== "proceso" && !(l.unit_cost > 0)
+                                                        ? <span className="text-[12px] font-medium text-amber-700 dark:text-amber-400 shrink-0">Sin costo</span>
+                                                        : <Money value={money(l.cost)} className="text-[13px] text-content-subtle" />}
                                                     {canManage && open && l.kind === "material" && l.cuts_missing > 0 && (
                                                         <button onClick={() => setDelivering({
                                                             productId: l.component_id, w_mm: l.cut_width_mm, l_mm: l.cut_length_mm,
@@ -289,36 +357,14 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
                                                 </div>
                                             ))}
                                         </div>
-                                        {/* Por componente: debía contra usado. Lo de más es la merma. */}
-                                        <div className="mt-2 space-y-1">
-                                            {o.plan.by_component.map(c => {
-                                                const falta = c.kind === "accesorio" && c.actual < c.expected;
-                                                const merma = (c.kind === "material" || c.kind === "proceso") && c.actual > 0 && c.diff > 0;
-                                                return (
-                                                    <div key={c.key} className="text-[12px] flex justify-between gap-3">
-                                                        <span className="text-content-subtle truncate">{c.kind === "proceso" ? c.name : toNameCase(c.name)}</span>
-                                                        <span className={`tabular-nums shrink-0 ${merma ? "text-amber-700 dark:text-amber-400" : "text-content-subtle"}`}>
-                                                            {c.kind === "proceso"
-                                                                ? (c.actual > 0
-                                                                    ? `Debía ${fmtMin(c.expected)} · tomó ${fmtMin(c.actual)}${c.diff_pct != null ? ` (${c.diff_pct > 0 ? "+" : ""}${c.diff_pct.toLocaleString("es-VE")}%)` : ""}`
-                                                                    : `Debe tomar ${fmtMin(c.expected)}`)
-                                                                : c.kind === "material"
-                                                                ? (c.actual > 0
-                                                                    ? `Debía ${fmtSize(c.expected, c.unit)} · usó ${fmtSize(c.actual, c.unit)}${c.diff_pct != null ? ` (${c.diff_pct > 0 ? "+" : ""}${c.diff_pct.toLocaleString("es-VE")}%)` : ""}`
-                                                                    : `Debe usar ${fmtSize(c.expected, c.unit)}`)
-                                                                : (falta && open
-                                                                    ? `Anotados ${Number(c.actual).toLocaleString("es-VE")} de ${Number(c.expected).toLocaleString("es-VE")} · el resto sale al terminar`
-                                                                    : `Anotados ${Number(c.actual).toLocaleString("es-VE")} de ${Number(c.expected).toLocaleString("es-VE")}`)}
-                                                        </span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
                                     </section>
                                 )}
 
                                 {/* Paso por el taller: cada etapa con su tiempo y su costo */}
-                                {o.stages?.length > 0 && (
+                                {tab === "taller" && o.stages?.length === 0 && (
+                                    <p className="text-[13px] text-content-subtle">La orden todavía no ha pasado por ninguna etapa del taller.</p>
+                                )}
+                                {tab === "taller" && o.stages?.length > 0 && (
                                     <section>
                                         <SectionTitle right={<Money value={money(o.labor_cost)} className="text-[13px] font-semibold text-content dark:text-white" />}>Taller</SectionTitle>
                                         <div className={`${CARD} divide-y divide-border/60 dark:divide-white/[0.06]`}>
@@ -343,6 +389,7 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
                                 )}
 
                                 {/* Piezas */}
+                                {tab === "piezas" && (
                                 <section>
                                     <SectionTitle right={enTaller > 0 && (
                                         <span className="text-[12px] text-amber-700 dark:text-amber-400">{enTaller === 1 ? "1 en el taller" : `${enTaller} en el taller`}</span>
@@ -370,7 +417,7 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
                                                             {(() => {
                                                                 const para = (u.cuts || []).map(c => {
                                                                     const pl = o.plan?.lines.find(x => x.id === c.plan_id);
-                                                                    return pl ? `${c.cuts} corte${c.cuts === 1 ? "" : "s"} de ${fmtDims({ width_mm: pl.cut_width_mm, length_mm: pl.cut_length_mm })}` : null;
+                                                                    return pl ? `${c.cuts} corte${c.cuts === 1 ? "" : "s"} de ${fmtCut({ width_mm: pl.cut_width_mm, length_mm: pl.cut_length_mm }, cutUnit)}` : null;
                                                                 }).filter(Boolean);
                                                                 return para.length ? <div className="text-[12px] text-content-subtle">Para {para.join(" y ")}</div> : null;
                                                             })()}
@@ -439,8 +486,10 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
                                         </button>
                                     )}
                                 </section>
+                                )}
 
                                 {/* Accesorios */}
+                                {tab === "accesorios" && (
                                 <section>
                                     <SectionTitle>Accesorios</SectionTitle>
                                     {o.items.length === 0 && !(canManage && open) && (
@@ -489,6 +538,7 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
                                         </div>
                                     )}
                                 </section>
+                                )}
                             </div>
 
                             {/* Costo contra precio */}
@@ -556,8 +606,9 @@ export default function OrderDetailModal({ orderId, materials, warehouses, stage
                         finish={!!moving?.finish} stages={stages}
                         onClose={() => setMoving(null)} onDone={async () => { setMoving(null); await changed(); }} />
                     <InvoiceModal open={invoicing} order={o}
-                        onClose={() => setInvoicing(false)} onDone={async () => { setInvoicing(false); await changed(); }}
+                        onClose={() => setInvoicing(false)} onDone={async (saleId) => { setInvoicing(false); await changed(); if (saleId) setViewSale(saleId); }}
                         onEdit={() => { setInvoicing(false); setEditing(true); }} />
+                    {viewSale && <SaleDetailModal saleId={viewSale} onClose={() => setViewSale(null)} />}
                 </>
             )}
 

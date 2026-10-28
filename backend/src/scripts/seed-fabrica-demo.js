@@ -109,11 +109,11 @@ async function product(fields) {
   // Fregadero de una poza: estándar. Tope, poza y escurridor salen de un solo desarrollo.
   const fregadero = await product({ category_id: catVenta.id, warehouse_id: WH, name: "Fregadero inox de 1 poza con escurridor 1,00 × 0,55 m", price: 380, unit: "UNIDAD" });
   await call("PUT", `/factory/recipes/${fregadero.id}`, {
-    unit: "m",
-    instructions: "Tope, poza de 50 × 40 × 25 cm y escurridor salen de un solo desarrollo de 1,22 × 1,40 m. Escurridor con nervios marcados. Patas con regatón.",
+    unit: "cm",
+    instructions: "Tope, poza de 50 × 40 × 25 cm y escurridor salen de un solo desarrollo de 122 × 140 cm. Escurridor con nervios marcados. Patas con regatón.",
     items: [
-      { component_id: lam304.id, width_expr: "1,22", length_expr: "1,40", cuts_expr: "1" },
-      { component_id: tubo.id, length_expr: "0,85", cuts_expr: "4" },
+      { component_id: lam304.id, width_expr: "122", length_expr: "140", cuts_expr: "1" },
+      { component_id: tubo.id, length_expr: "85", cuts_expr: "4" },
       { component_id: regaton.id, quantity_expr: "4" },
       { component_id: tornillo.id, quantity_expr: "6" },
       { component_id: varilla.id, quantity_expr: "0,08" },
@@ -128,29 +128,29 @@ async function product(fields) {
   // Repisa de pared: a medida (largo y fondo). Pestaña de 4 cm por lado.
   const repisa = await product({ category_id: catVenta.id, warehouse_id: WH, name: "Repisa de pared inox a medida", price: 60, unit: "UNIDAD" });
   await call("PUT", `/factory/recipes/${repisa.id}`, {
-    unit: "m",
+    unit: "cm",
     params: [
-      { key: "L", label: "Largo", kind: "medida", default: 0.9 },
-      { key: "F", label: "Fondo", kind: "medida", default: 0.25 },
+      { key: "L", label: "Largo", kind: "medida", default: 90 },
+      { key: "F", label: "Fondo", kind: "medida", default: 25 },
     ],
     instructions: "Pestaña de 4 cm doblada en los cuatro lados. Dos escuadras por repisa, atornilladas.",
     items: [
-      { component_id: lam304.id, width_expr: "F + 0,08", length_expr: "L + 0,08", cuts_expr: "1" },
+      { component_id: lam304.id, width_expr: "F + 8", length_expr: "L + 8", cuts_expr: "1" },
       { component_id: escuadra.id, quantity_expr: "2" },
       { component_id: tornillo.id, quantity_expr: "4" },
-      ...proc("Corte", "5 + L * 5"),
+      ...proc("Corte", "5 + L * 0,05"),
       ...proc("Doblez", "10"),
-      ...proc("Pulido", "8 + L * 5"),
+      ...proc("Pulido", "8 + L * 0,05"),
     ],
   });
 
   // Servilletero de mesa: estándar, una pieza doblada en U.
   const servilletero = await product({ category_id: catVenta.id, warehouse_id: WH, name: "Servilletero inox de mesa", price: 25, unit: "UNIDAD" });
   await call("PUT", `/factory/recipes/${servilletero.id}`, {
-    unit: "m",
-    instructions: "Una pieza de 0,20 × 0,32 m doblada en U, bordes pulidos.",
+    unit: "cm",
+    instructions: "Una pieza de 20 × 32 cm doblada en U, bordes pulidos.",
     items: [
-      { component_id: lam304.id, width_expr: "0,20", length_expr: "0,32", cuts_expr: "1" },
+      { component_id: lam304.id, width_expr: "20", length_expr: "32", cuts_expr: "1" },
       ...proc("Corte", "5"),
       ...proc("Doblez", "8"),
       ...proc("Pulido", "6"),
@@ -160,45 +160,45 @@ async function product(fields) {
   // Mesón de trabajo: a medida (largo, ancho, alto).
   const meson = await product({ category_id: catVenta.id, warehouse_id: WH, name: "Mesón de trabajo inox con entrepaño", price: 450, unit: "UNIDAD" });
   await call("PUT", `/factory/recipes/${meson.id}`, {
-    unit: "m",
+    unit: "cm",
     params: [
-      { key: "L", label: "Largo", kind: "medida", default: 1.8 },
-      { key: "A", label: "Ancho", kind: "medida", default: 0.6 },
-      { key: "H", label: "Alto", kind: "medida", default: 0.9 },
+      { key: "L", label: "Largo", kind: "medida", default: 180 },
+      { key: "A", label: "Ancho", kind: "medida", default: 60 },
+      { key: "H", label: "Alto", kind: "medida", default: 90 },
     ],
     instructions: "Tope en 304 con pestaña de 5 cm doblada hacia abajo. Entrepaño en 430. Patas soldadas al tope, travesaños a 20 cm del piso. Pulir uniones.",
     items: [
-      { component_id: lam304.id, width_expr: "A + 0,10", length_expr: "L + 0,10", cuts_expr: "1" },
-      { component_id: lam430.id, width_expr: "A - 0,05", length_expr: "L - 0,05", cuts_expr: "1" },
-      { component_id: tubo.id, length_expr: "H - 0,04", cuts_expr: "4" },
-      { component_id: tubo.id, length_expr: "L - 0,10", cuts_expr: "2" },
-      { component_id: tubo.id, length_expr: "A - 0,10", cuts_expr: "2" },
+      { component_id: lam304.id, width_expr: "A + 10", length_expr: "L + 10", cuts_expr: "1" },
+      { component_id: lam430.id, width_expr: "A - 5", length_expr: "L - 5", cuts_expr: "1" },
+      { component_id: tubo.id, length_expr: "H - 4", cuts_expr: "4" },
+      { component_id: tubo.id, length_expr: "L - 10", cuts_expr: "2" },
+      { component_id: tubo.id, length_expr: "A - 10", cuts_expr: "2" },
       { component_id: regaton.id, quantity_expr: "4" },
       { component_id: tornillo.id, quantity_expr: "8" },
-      { component_id: varilla.id, quantity_expr: "0,05 * (L + A)" },
-      ...proc("Corte", "15 + L * 5"),
+      { component_id: varilla.id, quantity_expr: "0,0005 * (L + A)" },
+      ...proc("Corte", "15 + L * 0,05"),
       ...proc("Doblez", "20"),
-      ...proc("Soldadura", "30 + L * 15"),
-      ...proc("Pulido", "25 + L * 10"),
+      ...proc("Soldadura", "30 + L * 0,15"),
+      ...proc("Pulido", "25 + L * 0,1"),
     ],
   });
 
   // Campana extractora: a medida (ancho y fondo).
   const campana = await product({ category_id: catVenta.id, warehouse_id: WH, name: "Campana extractora inox a medida", price: 290, unit: "UNIDAD" });
   await call("PUT", `/factory/recipes/${campana.id}`, {
-    unit: "m",
+    unit: "cm",
     params: [
-      { key: "A", label: "Ancho", kind: "medida", default: 0.9 },
-      { key: "F", label: "Fondo", kind: "medida", default: 0.6 },
+      { key: "A", label: "Ancho", kind: "medida", default: 90 },
+      { key: "F", label: "Fondo", kind: "medida", default: 60 },
     ],
     instructions: "Cuerpo piramidal en 430, ducto de salida de 25 × 25 cm. Filtro removible con tornillos.",
     items: [
-      { component_id: lam430.id, width_expr: "F + 0,40", length_expr: "A + 0,20", cuts_expr: "1" },
-      { component_id: lam430.id, width_expr: "0,30", length_expr: "1,00", cuts_expr: "1" },
+      { component_id: lam430.id, width_expr: "F + 40", length_expr: "A + 20", cuts_expr: "1" },
+      { component_id: lam430.id, width_expr: "30", length_expr: "100", cuts_expr: "1" },
       { component_id: tornillo.id, quantity_expr: "10" },
-      { component_id: varilla.id, quantity_expr: "0,03 * (A + F)" },
+      { component_id: varilla.id, quantity_expr: "0,0003 * (A + F)" },
       ...proc("Corte", "15"),
-      ...proc("Doblez", "20 + A * 15"),
+      ...proc("Doblez", "20 + A * 0,15"),
       ...proc("Soldadura", "25"),
       ...proc("Pulido", "20"),
     ],
@@ -207,12 +207,12 @@ async function product(fields) {
   // Gabinete aéreo con puertas: estándar, con número de puertas como variable.
   const gabinete = await product({ category_id: catVenta.id, warehouse_id: WH, name: "Gabinete aéreo inox con puertas batientes", price: 320, unit: "UNIDAD" });
   await call("PUT", `/factory/recipes/${gabinete.id}`, {
-    unit: "m",
+    unit: "cm",
     params: [{ key: "P", label: "Puertas", kind: "numero", default: 2 }],
-    instructions: "Cuerpo de 1,00 × 0,60 × 0,35 m en 430 con una repisa interna. Puertas con tirador y dos bisagras cada una.",
+    instructions: "Cuerpo de 100 × 60 × 35 cm en 430 con una repisa interna. Puertas con tirador y dos bisagras cada una.",
     items: [
-      { component_id: lam430.id, width_expr: "1,20", length_expr: "1,40", cuts_expr: "1" },
-      { component_id: lam430.id, width_expr: "1 / P", length_expr: "0,60", cuts_expr: "P" },
+      { component_id: lam430.id, width_expr: "120", length_expr: "140", cuts_expr: "1" },
+      { component_id: lam430.id, width_expr: "100 / P", length_expr: "60", cuts_expr: "P" },
       { component_id: bisagra.id, quantity_expr: "P * 2" },
       { component_id: tirador.id, quantity_expr: "P" },
       { component_id: tornillo.id, quantity_expr: "12 + P * 4" },
@@ -278,7 +278,7 @@ async function product(fields) {
     .sort((a, b) => a.root_number - b.root_number);
   await deliver(of1.id, tubos[0].code, tubo.id);
   await giveBack(of1.id, "51", { regions: [zona("usado", 0, 1400, 0, 1220), zona("retazo", 1400, 1040, 0, 1220)] },
-    "Se fabricó el fregadero de 1 poza (desarrollo de 1,22 × 1,40 m). Quedó casi la mitad de la lámina: 1,22 × 1,04 m");
+    "Se fabricó el fregadero de 1 poza (desarrollo de 122 × 140 cm). Quedó casi la mitad de la lámina: 1,22 × 1,04 m");
   await giveBack(of1.id, tubos[0].code, { regions: [zona("usado", 0, 3400), zona("retazo", 3400, 2600)] }, "4 patas de 85 cm; quedan 2,60 m de tubo");
   await fabricate(of1.id, { Corte: 25, Doblez: 30, Soldadura: 50, Pulido: 35, Empaque: 10 }, "Carlos");
   await invoice(of1.id, 380);
@@ -286,7 +286,7 @@ async function product(fields) {
   // ── OF-0002 · 3 repisas para Panadería El Trigal: salen del pedazo #51-1 ──────────────
   const of2 = (await call("POST", "/factory/orders", {
     warehouse_id: WH, type: "medida", destination: "cliente", product_id: repisa.id, quantity: 3,
-    customer_id: trigal.id, sale_price: 180, params: { L: 0.9, F: 0.25 },
+    customer_id: trigal.id, sale_price: 180, params: { L: 90, F: 25 },
     description: "3 repisas de 0,90 × 0,25 m para el área de hornos", assignee: "Luis",
   })).data;
   await deliver(of2.id, "51-1", lam304.id);
@@ -315,7 +315,7 @@ async function product(fields) {
   const due = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
   const of4 = (await call("POST", "/factory/orders", {
     warehouse_id: WH, type: "medida", destination: "cliente", product_id: meson.id, quantity: 2,
-    customer_id: esquina.id, sale_price: 980, params: { L: 2.0, A: 0.7, H: 0.9 },
+    customer_id: esquina.id, sale_price: 980, params: { L: 200, A: 70, H: 90 },
     description: "Mesón de trabajo 2,00 × 0,70 m para cocina", due_date: due(6), assignee: "Carlos",
   })).data;
   if (st.Corte) await call("POST", `/factory/orders/${of4.id}/stage`, { stage_id: st.Corte });

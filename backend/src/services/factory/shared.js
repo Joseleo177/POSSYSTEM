@@ -4,7 +4,7 @@ const models = require("../../models");
 const { ensureOpenSession } = require("../warehouses/sessionService");
 const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
 
-const { sequelize, Sequelize, ProductStock, Product, StockSessionLine, Warehouse } = models;
+const { sequelize, Sequelize, ProductStock, Product, StockSessionLine, Warehouse, Setting } = models;
 const { Op } = Sequelize;
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status, isOperational: true });
@@ -36,8 +36,19 @@ const unitOfMode = (m) => MODES[m]?.unit;
 // Tamaño de una pieza en la unidad del producto, con los tres decimales de la existencia.
 const sizeOf = (mode, w, l) => (mode === "length" ? r3(parseInt(l) / 1000) : r3((parseInt(w) * parseInt(l)) / 1e6));
 
-// Las medidas se guardan en mm, pero al taller se le habla en metros: "1,22 × 2,44 m".
+// Las medidas se guardan en mm. La lámina se nombra en metros ("1,22 × 2,44 m"); los cortes,
+// en la unidad en que mide el taller, que la elige la empresa (cm por defecto).
 const fmtM = (n) => (n / 1000).toLocaleString("es-VE", { maximumFractionDigits: 3 });
+const UNIT_MM = { m: 1000, cm: 10, mm: 1 };
+const fmtLen = (n, unit = "cm") => `${(n / (UNIT_MM[unit] || 10)).toLocaleString("es-VE", { maximumFractionDigits: 3 })} ${unit}`;
+const fmtCutLen = (w, l, unit = "cm") => (w
+  ? `${(w / UNIT_MM[unit]).toLocaleString("es-VE", { maximumFractionDigits: 3 })} × ${fmtLen(l, unit)}`
+  : fmtLen(l, unit));
+const CUT_UNIT_KEY = "fabrica_unidad_corte";
+async function cutUnitOf(companyId, transaction) {
+  const s = await Setting.findOne({ where: { key: CUT_UNIT_KEY, company_id: companyId }, attributes: ["value"], transaction });
+  return s?.value === "m" ? "m" : "cm";
+}
 
 const companyOf = (req) => {
   const c = req.employee?.company_id ?? null;
@@ -235,7 +246,7 @@ async function inTransaction(fn) {
 module.exports = {
   ...models, sequelize, Sequelize, Op,
   fail, r3, r4, r5, MAX_QTY, MAX_MONEY, TOL,
-  MODES, isMode, unitOfMode, sizeOf, pieceSpec, cutsInPiece, cutsLeft, hasShape, mm, fmtM, money, text,
+  MODES, isMode, unitOfMode, sizeOf, pieceSpec, cutsInPiece, cutsLeft, hasShape, mm, fmtM, fmtLen, fmtCutLen, cutUnitOf, money, text,
   companyOf, employeeOf, orderCode, ownWarehouse,
   moveStock, unitCostOf, anyUnitCost, COST_ANY_SQL, lockNumbering, inTransaction,
   assertWarehouseAccess, visibleWarehouseIds,

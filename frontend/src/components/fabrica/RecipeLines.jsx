@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import CustomSelect from "../ui/CustomSelect";
 import { api } from "../../services/api";
 import { toNameCase } from "../../helpers";
-import { INPUT, AGREGAR, QUITAR, PlusIcon, XIcon, SearchPick } from "./shared";
+import { INPUT, AGREGAR, QUITAR, PlusIcon, XIcon, SearchPick, fromMm } from "./shared";
 
 /**
  * Las líneas de lo que lleva un producto: cortes de material, accesorios y minutos por etapa,
@@ -22,6 +22,24 @@ export function Formula({ value, onChange, placeholder, suffix, className = "" }
 }
 
 export const newCut = (materials) => ({ material_id: materials[0] ? String(materials[0].id) : "", w: "", l: "", cuts: "1" });
+
+// Líneas ya calculadas por unidad (las de una receta o las del plan de una orden) como líneas
+// editables en la unidad del taller: para ajustar lo que pidió un cliente partiendo de lo que ya había.
+export const planToLines = (calculated = [], unit = "cm") => {
+    const num = (n) => Number(n).toLocaleString("es-VE", { maximumFractionDigits: 3, useGrouping: false });
+    return {
+        cuts: calculated.filter(l => l.kind === "material").map(l => ({
+            material_id: String(l.component_id),
+            w: l.cut_width_mm ? fromMm(l.cut_width_mm, unit) : "",
+            l: fromMm(l.cut_length_mm, unit),
+            cuts: String(l.cuts),
+        })),
+        accs: calculated.filter(l => l.kind === "accesorio").map(l => ({
+            product: { id: l.component_id, name: l.name, unit: l.unit }, quantity: num(l.quantity),
+        })),
+        procs: calculated.filter(l => l.kind === "proceso").map(l => ({ stage_id: String(l.stage_id), minutes: num(l.minutes) })),
+    };
+};
 
 // Las líneas tal como las recibe el servidor (receta o plan de la orden).
 export const linesToItems = ({ cuts, accs, procs }) => [

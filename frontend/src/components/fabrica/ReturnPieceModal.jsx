@@ -10,8 +10,8 @@ import { useApp } from "../../context/AppContext";
 import { toNameCase, fmtBase } from "../../helpers";
 import { printPieceLabels } from "../../helpers/printPieceLabels";
 import {
-    INPUT, AGREGAR, QUITAR, CARD, Field, PlusIcon, XIcon, DimsInput, UnitSwitch, useMeasureUnit,
-    toMm, parseNum, fmtDims, fmtSize, unitLabel, errMsg,
+    INPUT, AGREGAR, QUITAR, CARD, Field, PlusIcon, XIcon, DimsInput, useCutUnit,
+    toMm, parseNum, fmtDims, fmtCut, fmtSize, unitLabel, errMsg,
 } from "./shared";
 import { CutEditor, canDraw, initialRegions, remnantsOf, suggestLayout } from "./CutLayout";
 
@@ -33,7 +33,8 @@ const irregular = () => ({ kind: "irregular", size: "" });
  */
 export default function ReturnPieceModal({ use, order, onClose, onDone }) {
     const { notify, baseCurrency, printerWidth } = useApp();
-    const [unit, setUnit] = useMeasureUnit();
+    // Lo que vuelve se mide en el taller: en la unidad de los cortes (cm por defecto).
+    const unit = useCutUnit();
     const [rows, setRows] = useState([]);
     const [note, setNote] = useState("");
     const [print, setPrint] = useState(true);
@@ -65,7 +66,7 @@ export default function ReturnPieceModal({ use, order, onClose, onDone }) {
     }, [use]);
 
     const startOver = () => { setSuggested(null); setRegions(initialRegions(use, mode)); setFresh(n => n + 1); };
-    const cutsText = planCuts.map(c => `${c.count} corte${c.count === 1 ? "" : "s"} de ${fmtDims({ width_mm: c.w, length_mm: c.l })}`).join(" y ");
+    const cutsText = planCuts.map(c => `${c.count} corte${c.count === 1 ? "" : "s"} de ${fmtCut({ width_mm: c.w, length_mm: c.l }, unit)}`).join(" y ");
 
     if (!use) return null;
 
@@ -186,7 +187,7 @@ export default function ReturnPieceModal({ use, order, onClose, onDone }) {
                             <button onClick={startOver} className="h-[36px] px-3 rounded-lg text-[13px] font-medium btn-outline shrink-0">Empezar de cero</button>
                         </div>
                     )}
-                    <CutEditor key={fresh} piece={use} mode={mode} value={regions} onChange={setRegions} unit={unit} setUnit={setUnit} />
+                    <CutEditor key={fresh} piece={use} mode={mode} value={regions} onChange={setRegions} unit={unit} />
                     <div className="text-[13px]">
                         <span className="text-[12px] font-medium text-content-subtle">Retazos que vuelven</span>
                         {retazos.length === 0 ? (
@@ -195,7 +196,7 @@ export default function ReturnPieceModal({ use, order, onClose, onDone }) {
                             <ul className="mt-1 space-y-0.5">
                                 {retazos.map((r, i) => (
                                     <li key={i} className="flex justify-between gap-3 tabular-nums">
-                                        <span className="text-content dark:text-white">Retazo {i + 1} · {r.irregular ? `una pieza irregular de ${fmtDims(r)} por fuera` : fmtDims(r)}</span>
+                                        <span className="text-content dark:text-white">Retazo {i + 1} · {r.irregular ? `una pieza irregular de ${fmtCut(r, unit)} por fuera` : fmtCut(r, unit)}</span>
                                         <span className="text-content-subtle">{fmtSize(r.size, use.unit)}</span>
                                     </li>
                                 ))}
@@ -207,7 +208,6 @@ export default function ReturnPieceModal({ use, order, onClose, onDone }) {
                 <div>
                     <div className="flex items-center justify-between gap-3 mb-1.5">
                         <span className="text-[12px] font-medium text-content-subtle">Retazos que vuelven</span>
-                        <UnitSwitch unit={unit} setUnit={setUnit} />
                     </div>
                     {rows.length === 0 && (
                         <p className="text-[13px] text-content-subtle mb-2">Sin retazos: la pieza se gastó completa.</p>

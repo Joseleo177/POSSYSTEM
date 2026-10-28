@@ -3,8 +3,9 @@ import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
 import { toNameCase } from "../../helpers";
 import CustomSelect from "../ui/CustomSelect";
+import Segmented from "../ui/Segmented";
 import { LedgerSkeleton, LedgerEmpty, ledgerRow } from "../ui/Ledger";
-import { fmtDims, fmtSize, errMsg } from "./shared";
+import { fmtDims, fmtSize, errMsg, useCutUnit, CUT_UNIT_KEY, UNIT_NAME } from "./shared";
 
 const formato = (m) => fmtDims({ width_mm: m.piece_width_mm, length_mm: m.piece_length_mm });
 
@@ -20,8 +21,21 @@ function SinNumerar({ n, unit }) {
 }
 
 export default function MaterialsView({ warehouses, version, onEdit, onNew }) {
-    const { notify } = useApp();
+    const { notify, can, loadSettings } = useApp();
     const [warehouseId, setWarehouseId] = useState("");
+    // En qué mide el taller los cortes: lo elige la empresa y lo ven todos igual (ver shared.jsx).
+    const cutUnit = useCutUnit();
+    const [savingUnit, setSavingUnit] = useState(false);
+    const changeCutUnit = async (u) => {
+        if (u === cutUnit || savingUnit) return;
+        setSavingUnit(true);
+        try {
+            await api.settings.update({ [CUT_UNIT_KEY]: u });
+            await loadSettings();
+            notify(`Los cortes se miden en ${UNIT_NAME[u]}`);
+        } catch (e) { notify(errMsg(e), "err"); }
+        finally { setSavingUnit(false); }
+    };
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -39,12 +53,21 @@ export default function MaterialsView({ warehouses, version, onEdit, onNew }) {
 
     return (
         <div className="flex-1 flex flex-col overflow-y-auto lg:overflow-hidden -mx-3 sm:-mx-4 -my-2">
-            {warehouses.length > 1 && (
-                <div className="shrink-0 px-4 py-2 flex items-center gap-2 border-b border-border/20 dark:border-white/5">
+            <div className="shrink-0 px-4 py-2 flex flex-wrap items-center gap-2 border-b border-border/20 dark:border-white/5">
+                {warehouses.length > 1 && (
                     <CustomSelect value={warehouseId} onChange={setWarehouseId} height="h-9" className="w-48"
                         options={[{ value: "", label: "Todos los almacenes" }, ...warehouses.map(w => ({ value: String(w.id), label: toNameCase(w.name) }))]} />
+                )}
+                <div className="ml-auto flex items-center gap-2">
+                    <span className="text-[12px] text-content-subtle">Los cortes se miden en</span>
+                    {can("config.edit") ? (
+                        <Segmented value={cutUnit} onChange={changeCutUnit}
+                            options={[{ key: "cm", label: "Centímetros" }, { key: "m", label: "Metros" }]} />
+                    ) : (
+                        <span className="text-[13px] font-medium text-content dark:text-white">{UNIT_NAME[cutUnit]}</span>
+                    )}
                 </div>
-            )}
+            </div>
 
             <div className="hidden lg:flex flex-1 min-h-0 flex-col py-3 px-4">
                 <div className="card-premium overflow-auto flex-1">

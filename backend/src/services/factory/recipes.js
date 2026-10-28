@@ -2,7 +2,7 @@
 
 const {
   sequelize, Sequelize, Product, FabricationRecipe, FabricationRecipeItem, FabricationStage,
-  fail, r3, r4, MAX_QTY, sizeOf, fmtM, text, companyOf, employeeOf, ownWarehouse,
+  fail, r3, r4, MAX_QTY, sizeOf, fmtLen, text, companyOf, employeeOf, ownWarehouse,
   unitCostOf, anyUnitCost, COST_ANY_SQL, inTransaction,
 } = require("./shared");
 const { evaluate, variablesIn, FormulaError } = require("./formula");
@@ -147,7 +147,7 @@ function computeLines(lines, unit, vars) {
     if (l.kind === "material") {
       const mmOf = (expr, what) => {
         const v = Math.round(ev(expr, what) * f);
-        if (!(v > 0) || v > 20000) throw fail(`${label}: el ${what} da ${fmtM(v)} m, fuera de rango`);
+        if (!(v > 0) || v > 20000) throw fail(`${label}: el ${what} da ${fmtLen(v, unit)}, fuera de rango`);
         return v;
       };
       const cut_length_mm = mmOf(l.length_expr, "largo");
