@@ -8,7 +8,7 @@ import Segmented from "../components/ui/Segmented";
 import CustomSelect from "../components/ui/CustomSelect";
 import { Button } from "../components/ui/Button";
 import { Spinner } from "../components/ui/Spinner";
-import TablePlan, { TableGrid, agruparPorMesa, minutosDesde, COLS, ROWS } from "../components/mesas/TablePlan";
+import TablePlan, { TableGrid, agruparPorMesa, minutosDesde, COLS, ROWS, TAMANOS, GIROS, huella, tamanoDe, giroDe } from "../components/mesas/TablePlan";
 import KitchenMark from "../components/KitchenMark";
 import WaiterOrder from "../components/mesas/WaiterOrder";
 import CuentaAcciones from "../components/mesas/CuentaAcciones";
@@ -22,13 +22,17 @@ const REFRESCO_MS = 15_000;
 const LABEL = "text-[12px] font-medium text-content-subtle";
 const INPUT = "w-full h-10 px-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] font-medium text-content dark:text-white placeholder:text-content-subtle/50 dark:placeholder:text-white/25 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-colors";
 
-// Tamaños del editor, en celdas, según la forma.
-const TAMANOS = {
-    square: { S: [3, 3], M: [4, 4], L: [5, 5] },
-    round:  { S: [3, 3], M: [4, 4], L: [5, 5] },
-    rect:   { S: [6, 3], M: [8, 4], L: [12, 4] },
-};
-const tamanoDe = (t) => Object.entries(TAMANOS[t.shape] || TAMANOS.square).find(([, [w, h]]) => w === t.w && h === t.h)?.[0] || "M";
+// Icono de cada giro: la mesa misma, girada igual que quedará en el plano.
+const IconoGiro = ({ shape, rot }) => (
+    <svg className="w-5 h-5" viewBox="0 0 20 20" aria-hidden="true">
+        <g transform={`rotate(${rot} 10 10)`}>
+            {shape === "rect"
+                ? <rect x="2.5" y="7" width="15" height="6" rx="1.5" fill="currentColor" opacity="0.85" />
+                : <rect x="5" y="5" width="10" height="10" rx="1.5" fill="currentColor" opacity="0.85" />}
+        </g>
+    </svg>
+);
+const NOMBRE_GIRO = { 0: "Recta", 90: "Vertical", 45: "Diagonal", 135: "Diagonal invertida" };
 
 const leer = (k, def) => { try { return localStorage.getItem(k) ?? def; } catch { return def; } };
 const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch { /* modo privado */ } };
@@ -156,26 +160,36 @@ export default function MesasPage() {
         const [w, h] = TAMANOS.square.M;
         const pos = hueco(borrador, w, h);
         // Id provisional negativo: el servidor la crea al guardar.
-        const nueva = { id: -Date.now(), name: siguienteNombre(todasLasMesas), seats: 4, shape: "square", w, h, ...pos };
+        const nueva = { id: -Date.now(), name: siguienteNombre(todasLasMesas), seats: 4, shape: "square", rotation: 0, w, h, ...pos };
         setBorrador(b => [...b, nueva]);
         setSelId(nueva.id);
     };
 
+    // Forma, tamaño y giro cambian la huella: se recalcula alrededor del mismo centro, para
+    // que la mesa gire o crezca en su lugar, sin salirse del plano.
+    const rehacer = (shape, k, rotation) => {
+        const [w, h] = huella(shape, TAMANOS[shape][k] || TAMANOS[shape].M, rotation);
+        const cx = sel.x + sel.w / 2, cy = sel.y + sel.h / 2;
+        cambiar(sel.id, {
+            shape, rotation, w, h,
+            x: Math.min(Math.max(Math.round(cx - w / 2), 0), COLS - w),
+            y: Math.min(Math.max(Math.round(cy - h / 2), 0), ROWS - h),
+        });
+    };
     const cambiarForma = (shape) => {
         if (!sel) return;
-        const [w, h] = TAMANOS[shape][tamanoDe(sel)] || TAMANOS[shape].M;
-        cambiar(sel.id, { shape, w, h, x: Math.min(sel.x, COLS - w), y: Math.min(sel.y, ROWS - h) });
+        // Lo que esa forma no admite se lleva al giro más parecido (la cuadrada a 90° es recta).
+        const rot = giroDe(sel);
+        const giro = GIROS[shape].includes(rot) ? rot : GIROS[shape].includes(rot % 90) ? rot % 90 : 0;
+        rehacer(shape, tamanoDe(sel), giro);
     };
-    const cambiarTamano = (k) => {
-        if (!sel) return;
-        const [w, h] = TAMANOS[sel.shape][k];
-        cambiar(sel.id, { w, h, x: Math.min(sel.x, COLS - w), y: Math.min(sel.y, ROWS - h) });
-    };
+    const cambiarTamano = (k) => { if (sel) rehacer(sel.shape, k, giroDe(sel)); };
+    const cambiarGiro = (rot) => { if (sel) rehacer(sel.shape, tamanoDe(sel), Number(rot)); };
 
     const guardarPlano = async () => {
         try {
-            const r = await api.tables.saveLayout(area.id, borrador.map(({ id, name, seats, shape, x, y, w, h }) => ({
-                id: id > 0 ? id : undefined, name, seats: parseInt(seats, 10) || 1, shape, x, y, w, h,
+            const r = await api.tables.saveLayout(area.id, borrador.map(({ id, name, seats, shape, rotation, x, y, w, h }) => ({
+                id: id > 0 ? id : undefined, name, seats: parseInt(seats, 10) || 1, shape, rotation: rotation || 0, x, y, w, h,
             })));
             setAreas(r.data || []);
             setEditando(false);
@@ -315,6 +329,13 @@ export default function MesasPage() {
                                     <Segmented value={tamanoDe(sel)} onChange={cambiarTamano}
                                         options={[{ key: "S", label: "Chica" }, { key: "M", label: "Mediana" }, { key: "L", label: "Grande" }]} />
                                 </div>
+                                {GIROS[sel.shape].length > 1 && (
+                                    <div className="space-y-1">
+                                        <span className={LABEL}>Giro · {NOMBRE_GIRO[giroDe(sel)]}</span>
+                                        <Segmented value={String(giroDe(sel))} onChange={cambiarGiro}
+                                            options={GIROS[sel.shape].map(r => ({ key: String(r), label: <span title={NOMBRE_GIRO[r]}><IconoGiro shape={sel.shape} rot={r} /></span> }))} />
+                                    </div>
+                                )}
                                 <button onClick={() => { setBorrador(b => b.filter(t => t.id !== sel.id)); setSelId(null); }}
                                     className="w-full h-9 rounded-lg text-[13px] font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10">
                                     Quitar mesa
@@ -322,7 +343,7 @@ export default function MesasPage() {
                             </div>
                         ) : (
                             <p className="text-[12px] text-content-subtle px-1">
-                                Arrastra las mesas para acomodarlas. Toca una para cambiarle el nombre, los puestos, la forma o el tamaño.
+                                Arrastra las mesas para acomodarlas. Toca una para cambiarle el nombre, los puestos, la forma, el tamaño o el giro.
                             </p>
                         )}
 

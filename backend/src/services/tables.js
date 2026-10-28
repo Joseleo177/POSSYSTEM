@@ -11,6 +11,7 @@ const { Op } = Sequelize;
 const COLS = 40;
 const ROWS = 24;
 const SHAPES = ["square", "round", "rect"];
+const GIROS = [0, 45, 90, 135];
 // Una cuenta sigue en la mesa mientras no se cobre: en espera, o en borrador mientras la
 // caja la está cobrando.
 const ABIERTA = ["espera", "borrador"];
@@ -121,11 +122,12 @@ async function saveLayout(req, areaId, { tables } = {}) {
     const seats = int(t.seats);
     const shape = SHAPES.includes(t.shape) ? t.shape : null;
     const [x, y, w, h] = [t.x, t.y, t.w, t.h].map(int);
+    const rotation = GIROS.includes(int(t.rotation)) ? int(t.rotation) : 0;
     if (!(seats >= 1 && seats <= 99)) throw fail(`${name}: los puestos van de 1 a 99`);
     if (!shape) throw fail(`${name}: forma no válida`);
     if (!(w >= 2 && w <= 12 && h >= 2 && h <= 12)) throw fail(`${name}: tamaño no válido`);
     if (!(x >= 0 && y >= 0 && x + w <= COLS && y + h <= ROWS)) throw fail(`${name} se sale del plano`);
-    return { id: t.id ? int(t.id) : null, name, seats, shape, x, y, w, h };
+    return { id: t.id ? int(t.id) : null, name, seats, shape, rotation, x, y, w, h };
   });
 
   return sequelize.transaction(async (transaction) => {

@@ -16,6 +16,8 @@ module.exports = (sequelize, DataTypes) => {
     y:          { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     w:          { type: DataTypes.INTEGER, allowNull: false, defaultValue: 4 },
     h:          { type: DataTypes.INTEGER, allowNull: false, defaultValue: 4 },
+    // Giro en grados (0, 45, 90, 135); w y h ya son la huella girada.
+    rotation:   { type: DataTypes.SMALLINT, allowNull: false, defaultValue: 0 },
     active:     { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   }, {
