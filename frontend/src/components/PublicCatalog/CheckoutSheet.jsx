@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import CustomSelect from "../ui/CustomSelect";
 import Money from "../ui/Money";
 import { Spinner } from "../ui/Spinner";
 import PaymentFields, { OptionCard, pagoVacio, faltaEnPago } from "./PaymentFields";
 import CatalogSheet, { SheetHeader, sheetSkin } from "./CatalogSheet";
-import MapPicker from "./MapPicker";
+import MapPicker, { direccionDePunto } from "./MapPicker";
 import { toNameCase } from "../../helpers";
 
 // Paso final del pedido: cómo lo recibe (retiro o delivery con su zona, dirección y punto GPS)
@@ -47,6 +47,27 @@ export default function CheckoutSheet({
     const [alRecibir, setAlRecibir] = useState(false);
     const [nota, setNota] = useState("");
     const [falta, setFalta] = useState(null);
+    // Dirección sacada del punto del mapa: 'buscando' mientras llega, 'auto' si se llenó sola
+    // (se le pide al cliente que la complete), null si la escribió él.
+    const [dirOrigen, setDirOrigen] = useState(null);
+    const dirRef = useRef("");
+    dirRef.current = direccion;
+
+    // Con el punto marcado y la dirección vacía, se busca la del punto y se escribe sola. Nunca
+    // se pisa lo que el cliente ya tecleó: si escribió mientras llegaba la respuesta, gana él.
+    useEffect(() => {
+        if (!open || !punto || direccion.trim()) return;
+        let vivo = true;
+        setDirOrigen("buscando");
+        direccionDePunto(punto.lat, punto.lng).then((texto) => {
+            if (!vivo) return;
+            if (!texto || dirRef.current.trim()) { setDirOrigen(null); return; }
+            setDireccion(texto);
+            setDirOrigen("auto");
+        });
+        return () => { vivo = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, punto?.lat, punto?.lng]);
 
     // Al abrir: la única forma de entrega si solo hay una, y la última dirección usada.
     useEffect(() => {
@@ -170,9 +191,12 @@ export default function CheckoutSheet({
                                 )}
                                 <label className="block">
                                     <span className={skin.label}>Dirección</span>
-                                    <textarea value={direccion} onChange={e => setDireccion(e.target.value.slice(0, 300))} rows={2}
-                                        placeholder="Calle, edificio o casa, piso y apartamento"
+                                    <textarea value={direccion} onChange={e => { setDireccion(e.target.value.slice(0, 300)); setDirOrigen(null); }} rows={2}
+                                        placeholder={dirOrigen === "buscando" ? "Buscando la dirección del punto..." : "Calle, edificio o casa, piso y apartamento"}
                                         className={`${skin.field} h-auto py-2.5 mt-1.5 resize-none`} />
+                                    {dirOrigen === "auto" && (
+                                        <span className={`block mt-1 text-[12px] ${skin.subtle}`}>Tomada del punto del mapa. Agrega el piso, apartamento o número de casa.</span>
+                                    )}
                                 </label>
                                 <label className="block">
                                     <span className="flex items-center justify-between">

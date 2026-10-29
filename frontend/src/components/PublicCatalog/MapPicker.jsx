@@ -12,6 +12,29 @@ import CatalogSheet, { SheetHeader } from "./CatalogSheet";
 const CENTRO_POR_DEFECTO = { lat: 10.4806, lng: -66.9036, zoom: 12 }; // Caracas
 const redondear = (n) => Math.round(n * 1e6) / 1e6;
 
+/**
+ * La dirección de un punto, para prellenar el campo cuando el cliente lo marca en el mapa o
+ * comparte su ubicación (Nominatim al revés). Corta: calle y número, sector y ciudad; el resto
+ * (piso, apartamento) lo completa el cliente. null si no hay respuesta.
+ */
+export async function direccionDePunto(lat, lng) {
+    try {
+        const params = new URLSearchParams({ format: "json", lat: String(lat), lon: String(lng), zoom: "18", addressdetails: "1", "accept-language": "es" });
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`);
+        if (!r.ok) return null;
+        const j = await r.json();
+        const a = j.address || {};
+        const calle = [a.road || a.pedestrian || a.footway, a.house_number].filter(Boolean).join(" ");
+        const sector = a.neighbourhood || a.suburb || a.quarter || a.residential || a.hamlet;
+        const ciudad = a.city || a.town || a.village || a.municipality || a.county;
+        const partes = [a.building || a.amenity || a.shop, calle, sector, ciudad].filter(Boolean);
+        const unicas = partes.filter((p, i) => partes.indexOf(p) === i);
+        return (unicas.length ? unicas.join(", ") : String(j.display_name || "").split(",").slice(0, 3).join(",")).slice(0, 300) || null;
+    } catch {
+        return null;
+    }
+}
+
 export default function MapPicker({ skin, initial = null, onClose, onPick }) {
     const boxRef = useRef(null);
     const mapRef = useRef(null);
