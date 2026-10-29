@@ -1,5 +1,4 @@
-import BranchGate from "../../../components/PublicCatalog/BranchGate";
-import IdentityGate from "../../../components/PublicCatalog/IdentityGate";
+import { IdentitySheet, BranchSheet } from "../../../components/PublicCatalog/WelcomeSheets";
 import LogoutConfirm from "../../../components/PublicCatalog/LogoutConfirm";
 import OrderDetailModal from "../../../components/PublicCatalog/OrderDetailModal";
 import ProductGrid from "../../../components/PublicCatalog/ProductGrid";
@@ -56,15 +55,29 @@ export default function CatalogLayout({ catalog, token }) {
         );
     }
 
-    // Puerta de entrada: la tienda pidió que nadie vea el catálogo sin identificarse.
-    if (gated) {
-        return <IdentityGate token={token} store={store} onIdentified={saveIdentity} />;
-    }
-
-    // Y recién después, dónde va a comprar. Al revés, quien cerraba sesión volvía a la
-    // cédula pero ya no podía cambiar de tienda: la elección anterior seguía guardada.
-    if (branchGate) {
-        return <BranchGate store={store} warehouses={warehouses} onChoose={chooseBranch} currentId={branch?.id || null} />;
+    // Puerta de entrada (la tienda pidió que nadie pida sin identificarse) y, recién después,
+    // dónde va a comprar —al revés, quien cerraba sesión volvía a la cédula pero ya no podía
+    // cambiar de tienda—. Las dos van como hojas sobre la tienda de fondo (su cabecera y la
+    // rejilla esperando), no como pantallas sueltas: el cliente ve dónde está antes de dar su
+    // cédula. El fondo no se toca (inert).
+    if (gated || branchGate) {
+        return (
+            <div className="min-h-screen bg-surface-2 dark:bg-surface-dark">
+                <div className="pointer-events-none select-none" aria-hidden="true" {...{ inert: "" }}>
+                    <StoreHeader
+                        store={store} dark={dark} toggle={toggle}
+                        search="" setSearch={() => {}}
+                        categories={categories} category="" setCategory={() => {}}
+                        showCats={false} setShowCats={() => {}}
+                    />
+                    <ProductGrid products={[]} total={0} loading loadingMore={false} loadMore={() => {}}
+                        cart={[]} fmt={fmt} baseCur={baseCur} altCur={altCur} ordersEnabled={false} onAdd={() => {}} />
+                </div>
+                {gated
+                    ? <IdentitySheet token={token} store={store} onIdentified={saveIdentity} />
+                    : <BranchSheet store={store} warehouses={warehouses} onChoose={chooseBranch} currentId={branch?.id || null} />}
+            </div>
+        );
     }
 
     return (

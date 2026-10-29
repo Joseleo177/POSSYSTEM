@@ -1,9 +1,9 @@
-import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../../helpers";
-import { useIdentityGate } from "../../../hooks/useIdentityGate";
-import CatalogSheet, { sheetSkin } from "../../../components/PublicCatalog/CatalogSheet";
-import { DOC_PREFIXES, docMaxLen, MENU_PANEL_DEFAULT } from "../../../components/PublicCatalog/shared";
+import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
+import { useIdentityGate } from "../../hooks/useIdentityGate";
+import CatalogSheet, { sheetSkin } from "./CatalogSheet";
+import { DOC_PREFIXES, docMaxLen } from "./shared";
 
-// Bienvenida del tema de menú: identificarse y elegir sucursal como hojas ENCIMA de la carta,
+// Bienvenida del catálogo público (empezó en el tema de menú y la usan los tres temas): identificarse y elegir sucursal como hojas ENCIMA de la carta,
 // no como pantallas sueltas. Antes eran las puertas claras del tema estándar —un logo sobre
 // fondo gris y un formulario—, y el cliente que abría el enlace no veía la tienda hasta haber
 // dado su cédula: "debería verse la tienda de fondo, para que se vea más creíble" (29-10-2026).
@@ -12,6 +12,11 @@ import { DOC_PREFIXES, docMaxLen, MENU_PANEL_DEFAULT } from "../../../components
 //
 // La lógica de los pasos es la misma de siempre (useIdentityGate); aquí solo cambia la cara.
 // Ninguna de las dos se cierra tocando fuera: son puertas, no avisos.
+//
+// Cada tema decide dos cosas: `panel`, el color del papel de la hoja (el panel de la carta en
+// el menú, blanco en boutique y estándar), y `logoBg`, el recuadro del logo. La carta usa el
+// fondo oscuro de su página porque sus logos están hechos para ir sobre él; en boutique y
+// estándar el logo va suelto (null): un logo negro sobre un recuadro negro desaparece.
 
 const VELO = "bg-black/35 backdrop-blur-[2px]";
 
@@ -32,15 +37,21 @@ const Ico = ({ d, className = "w-4 h-4", w = 1.9 }) => (
 
 // Marca de la tienda arriba de la hoja: el logo en su recuadro del color de la página (los
 // logos de la carta suelen estar hechos para fondo oscuro), el nombre y el lema.
-function Marca({ store, skin }) {
+function Marca({ store, skin, logoBg }) {
     return (
         <div className="px-5 pt-3 sm:pt-6 pb-1 flex items-center gap-3">
-            <span className="h-14 min-w-[56px] max-w-[150px] px-2 rounded-2xl flex items-center justify-center shrink-0 shadow-[0_8px_20px_-10px_rgba(0,0,0,.6)]"
-                style={{ backgroundColor: store?.bg_color || "#0A0A0A" }}>
-                {store?.logo_url
-                    ? <img src={resolveImageUrl(store.logo_url)} alt={store.name} onError={imgRetryOnError} className="max-h-11 w-auto object-contain" />
-                    : <span className="font-display text-[22px] font-bold text-white">{(store?.name || "T").charAt(0)}</span>}
-            </span>
+            {logoBg ? (
+                <span className="h-14 min-w-[56px] max-w-[150px] px-2 rounded-2xl flex items-center justify-center shrink-0 shadow-[0_8px_20px_-10px_rgba(0,0,0,.6)]"
+                    style={{ backgroundColor: logoBg }}>
+                    {store?.logo_url
+                        ? <img src={resolveImageUrl(store.logo_url)} alt={store.name} onError={imgRetryOnError} className="max-h-11 w-auto object-contain" />
+                        : <span className="font-display text-[22px] font-bold text-white">{(store?.name || "T").charAt(0)}</span>}
+                </span>
+            ) : store?.logo_url ? (
+                <img src={resolveImageUrl(store.logo_url)} alt={store.name} onError={imgRetryOnError} className="h-14 max-w-[160px] w-auto object-contain shrink-0" />
+            ) : (
+                <span className="w-14 h-14 rounded-2xl bg-brand-500 text-brand-ink flex items-center justify-center font-display text-[22px] font-bold shrink-0">{(store?.name || "T").charAt(0)}</span>
+            )}
             <div className="min-w-0">
                 <div className={`font-display text-[18px] font-bold ${skin.ink} leading-tight truncate`}>{store?.name || "Bienvenido"}</div>
                 {store?.slogan && <div className={`text-[12px] ${skin.subtle} truncate`}>{store.slogan}</div>}
@@ -75,8 +86,8 @@ function Ayuda({ store, skin }) {
     return <p className={`text-center text-[12px] ${skin.subtle}`}>¿Problemas? Escríbenos al <span className="font-semibold tabular-nums">{store.phone}</span></p>;
 }
 
-export function IdentitySheet({ token, store, onIdentified }) {
-    const skin = sheetSkin(store?.panel_color || MENU_PANEL_DEFAULT);
+export function IdentitySheet({ token, store, onIdentified, panel = "#FFFFFF", logoBg = null }) {
+    const skin = sheetSkin(panel);
     const {
         step, prefix, setPrefix, number, setNumber, match, name, setName, phone, setPhone,
         busy, err, fullDocument, phoneOk,
@@ -89,7 +100,7 @@ export function IdentitySheet({ token, store, onIdentified }) {
 
     return (
         <CatalogSheet skin={skin} onClose={null} label="Identifícate" overlay={VELO} width="sm:max-w-md">
-            <Marca store={store} skin={skin} />
+            <Marca store={store} skin={skin} logoBg={logoBg} />
 
             <div className="overflow-y-auto px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
                 {/* key={step}: cada paso entra con su animación, no aparece de golpe. */}
@@ -178,7 +189,7 @@ export function IdentitySheet({ token, store, onIdentified }) {
                                 <input value={phone} onChange={e => setPhone(e.target.value)} onKeyDown={e => e.key === "Enter" && submitPhone()}
                                     type="tel" inputMode="tel" autoComplete="tel" autoFocus placeholder="0414 5550000" className={`${campo} tabular-nums`} />
                             </Campo>
-                            <Primario onClick={submitPhone} disabled={!phoneOk} skin={skin}>Entrar a la carta</Primario>
+                            <Primario onClick={submitPhone} disabled={!phoneOk} skin={skin}>Entrar a la tienda</Primario>
                             {volver("Volver")}
                         </>
                     )}
@@ -197,7 +208,7 @@ export function IdentitySheet({ token, store, onIdentified }) {
                                 <input value={phone} onChange={e => setPhone(e.target.value)} onKeyDown={e => e.key === "Enter" && submitRegister()}
                                     type="tel" inputMode="tel" autoComplete="tel" placeholder="0414 5550000" className={`${campo} tabular-nums`} />
                             </Campo>
-                            <Primario onClick={submitRegister} disabled={name.trim().length < 2 || !phoneOk} skin={skin}>Entrar a la carta</Primario>
+                            <Primario onClick={submitRegister} disabled={name.trim().length < 2 || !phoneOk} skin={skin}>Entrar a la tienda</Primario>
                             {volver("Corregir la cédula")}
                         </>
                     )}
@@ -210,11 +221,11 @@ export function IdentitySheet({ token, store, onIdentified }) {
     );
 }
 
-export function BranchSheet({ store, warehouses, onChoose, currentId = null }) {
-    const skin = sheetSkin(store?.panel_color || MENU_PANEL_DEFAULT);
+export function BranchSheet({ store, warehouses, onChoose, currentId = null, panel = "#FFFFFF", logoBg = null }) {
+    const skin = sheetSkin(panel);
     return (
         <CatalogSheet skin={skin} onClose={null} label="Elige tu tienda" overlay={VELO} width="sm:max-w-md">
-            <Marca store={store} skin={skin} />
+            <Marca store={store} skin={skin} logoBg={logoBg} />
             <div className="overflow-y-auto px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-4">
                 <div className="rise-in">
                     <h2 className={`${skin.title} ${skin.ink}`}>¿Dónde vas a pedir?</h2>

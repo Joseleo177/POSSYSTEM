@@ -13,7 +13,7 @@ import MenuProductList from "./MenuProductList";
 import ProductAddModal from "./ProductAddModal";
 import CartDrawer from "./CartDrawer";
 import ProfileModal from "./ProfileModal";
-import { IdentitySheet, BranchSheet } from "./WelcomeSheets";
+import { IdentitySheet, BranchSheet } from "../../../components/PublicCatalog/WelcomeSheets";
 import { MENU_PANEL_DEFAULT } from "../../../components/PublicCatalog/shared";
 
 // Tema "menú": la vitrina con forma de carta de restaurante —mosaicos de "tipos de comida"
@@ -27,8 +27,8 @@ import { MENU_PANEL_DEFAULT } from "../../../components/PublicCatalog/shared";
 // existía para los chips de filtro de los otros temas — aquí no hay chips, pero es la misma
 // pieza de estado, así que no hizo falta inventar una nueva.
 //
-// Las puertas de identificación y sucursal son hojas propias del tema (WelcomeSheets) sobre la
-// portada de la carta; las de pantalla completa siguen siendo las de los otros dos temas.
+// Las puertas de identificación y sucursal son hojas (WelcomeSheets) sobre la portada de la
+// carta, en el papel del panel.
 const DEFAULT_BG = "#0A0A0A";
 
 export default function CatalogLayout({ catalog, token }) {
@@ -87,8 +87,8 @@ export default function CatalogLayout({ catalog, token }) {
                     </div>
                 </div>
                 {gated
-                    ? <IdentitySheet token={token} store={store} onIdentified={saveIdentity} />
-                    : <BranchSheet store={store} warehouses={warehouses} onChoose={chooseBranch} currentId={branch?.id || null} />}
+                    ? <IdentitySheet token={token} store={store} onIdentified={saveIdentity} panel={store?.panel_color || MENU_PANEL_DEFAULT} logoBg={store?.bg_color || DEFAULT_BG} />
+                    : <BranchSheet store={store} warehouses={warehouses} onChoose={chooseBranch} currentId={branch?.id || null} panel={store?.panel_color || MENU_PANEL_DEFAULT} logoBg={store?.bg_color || DEFAULT_BG} />}
             </div>
         );
     }

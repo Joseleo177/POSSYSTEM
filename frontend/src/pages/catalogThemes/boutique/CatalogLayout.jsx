@@ -1,5 +1,4 @@
-import BranchGate from "./BranchGate";
-import IdentityGate from "./IdentityGate";
+import { IdentitySheet, BranchSheet } from "../../../components/PublicCatalog/WelcomeSheets";
 import LogoutConfirm from "../../../components/PublicCatalog/LogoutConfirm";
 import OrderDetailModal from "../../../components/PublicCatalog/OrderDetailModal";
 import CartBar from "./CartBar";
@@ -70,9 +69,29 @@ export default function CatalogLayout({ catalog, token }) {
         );
     }
 
-    if (gated) return <IdentityGate token={token} store={store} onIdentified={saveIdentity} />;
-    if (branchGate) {
-        return <BranchGate store={store} warehouses={warehouses} onChoose={chooseBranch} currentId={branch?.id || null} />;
+    // Identificarse y elegir tienda van como hojas ENCIMA de la portada real —cabecera,
+    // carrusel, lema y categorías, que cargan sin identidad— y no como pantallas sueltas: el
+    // cliente ve la tienda antes de dar su cédula, y eso la hace creíble. La portada de fondo
+    // no se toca (inert) y no pide productos: los carriles quedan fuera hasta tener sucursal.
+    if (gated || branchGate) {
+        return (
+            <div className="min-h-screen bg-surface-2 dark:bg-surface-dark flex flex-col">
+                <div className="flex-1 flex flex-col pointer-events-none select-none" aria-hidden="true" {...{ inert: "" }}>
+                    <StorefrontHeader
+                        store={store} dark={dark} toggle={toggle}
+                        categories={categories} menu={menu}
+                        search="" setSearch={() => {}} category="" setCategory={() => {}}
+                        ordersEnabled={false} onGoHome={() => {}}
+                    />
+                    <HeroCarousel banners={banners} />
+                    <BrandStatement slogan={store?.slogan} highlights={store?.highlights} />
+                    <CategoryStrip categories={categories} onPick={() => {}} />
+                </div>
+                {gated
+                    ? <IdentitySheet token={token} store={store} onIdentified={saveIdentity} />
+                    : <BranchSheet store={store} warehouses={warehouses} onChoose={chooseBranch} currentId={branch?.id || null} />}
+            </div>
+        );
     }
 
     // La portada —carrusel, categorías, cómo comprar— solo se muestra cuando el cliente
