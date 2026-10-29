@@ -501,6 +501,14 @@ export const api = {
     updateZone:   (id, body)              => request(`/catalog-checkout/zones/${id}`, { method: "PUT", body: JSON.stringify(body) }),
     removeZone:   (id)                    => request(`/catalog-checkout/zones/${id}`, { method: "DELETE" }),
   },
+  // Módulo Pedidos: la bandeja de los pedidos del catálogo.
+  webOrders: {
+    list:        (params = {}) => request("/web-orders?" + new URLSearchParams(params)),
+    get:         (id)          => request(`/web-orders/${id}`),
+    saveCharges: (id, body)    => request(`/web-orders/${id}/charges`, { method: "PUT", body: JSON.stringify(body) }),
+    accept:      (id, body={}) => request(`/web-orders/${id}/accept`, { method: "POST", body: JSON.stringify(body) }),
+    reject:      (id, reason)  => request(`/web-orders/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+  },
   // Pagos que los clientes reportan desde el catálogo.
   paymentReports: {
     list:    (params = {})  => request("/payment-reports?" + new URLSearchParams(params)),

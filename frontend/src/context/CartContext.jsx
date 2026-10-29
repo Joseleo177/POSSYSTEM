@@ -867,11 +867,14 @@ export function CartProvider({ children }) {
       kitchenRef.current = actual;
       // La cuenta que esta caja tiene abierta en el carrito no se lista: sigue en 'espera'
       // en el servidor, pero aquí ya está "en uso".
-      setHeldCarts((res.data || []).filter(s => s.id !== heldSaleIdRef.current));
+      // Con el módulo Pedidos (extra pedidos web), los pedidos del catálogo sin aceptar viven allá:
+      // aquí solo llegan ya aceptados, como cuenta en espera.
+      const conPedidos = !!company?.pedidos_web_enabled;
+      setHeldCarts((res.data || []).filter(s => s.id !== heldSaleIdRef.current && !(conPedidos && s.status === "pedido")));
     } catch {
       // Silencioso: es una carga de fondo, no debe interrumpir el cobro en curso.
     }
-  }, [employee, activeWarehouse, notify]);
+  }, [employee, activeWarehouse, notify, company?.pedidos_web_enabled]);
 
   // El carrito vive solo en memoria: al recargar la página se pierde, pero el bloqueo que
   // esta caja puso al recuperar una cuenta sigue en el servidor. Sin esto, un F5 dejaba la

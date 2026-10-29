@@ -73,6 +73,17 @@ export const TAB_ICONS = {
             />
         </svg>
     ),
+    // Una bolsa de compra: lo que el cliente pidió desde el catálogo.
+    Pedidos: (cls = "w-5 h-5") => (
+        <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.8}
+                d="M6 7h12l-1 12.2a2 2 0 01-2 1.8H9a2 2 0 01-2-1.8L6 7zm3 3V6a3 3 0 016 0v4"
+            />
+        </svg>
+    ),
     // Cuatro mesas vistas desde arriba.
     Mesas: (cls = "w-5 h-5") => (
         <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">

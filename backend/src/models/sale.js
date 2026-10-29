@@ -81,6 +81,11 @@ module.exports = (sequelize, DataTypes) => {
     delivery_reference: { type: DataTypes.STRING(200), allowNull: true },
     delivery_lat:       { type: DataTypes.DECIMAL(9, 6), allowNull: true },
     delivery_lng:       { type: DataTypes.DECIMAL(9, 6), allowNull: true },
+    // Desglose del recargo de un pedido web: service_charge = delivery_fee + extra_charge. El
+    // adicional lo suma la tienda al revisarlo (módulo Pedidos) y el cliente ve el motivo.
+    delivery_fee:        { type: DataTypes.DECIMAL(14, 2), allowNull: true },
+    extra_charge:        { type: DataTypes.DECIMAL(14, 2), allowNull: true },
+    extra_charge_reason: { type: DataTypes.STRING(120),    allowNull: true },
     // Paso de la comanda por la pantalla de cocina (ver migración 20261031100000-cocina):
     // NULL si no pasa por cocina · nueva · preparando · lista · entregada.
     kitchen_status:     { type: DataTypes.STRING(12),  allowNull: true },

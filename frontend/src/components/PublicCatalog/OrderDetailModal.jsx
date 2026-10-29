@@ -212,10 +212,19 @@ export default function OrderDetailModal({ order, onClose, fmt, baseCur, altCur,
 
             {/* Desglose y total */}
             <div className={`px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] border-t ${skin.line} shrink-0 space-y-1 ${skin.carta ? "bg-white/50" : ""}`}>
-                {order.delivery_fee > 0 && (
+                {(order.delivery_fee > 0 || order.extra_charge > 0) && (
                     <>
                         <div className="flex justify-between text-[13px]"><span className={skin.subtle}>Productos</span><Money value={fmt(productos, baseCur)} className={skin.ink} /></div>
-                        <div className="flex justify-between text-[13px]"><span className={skin.subtle}>Delivery</span><Money value={fmt(order.delivery_fee, baseCur)} className={skin.ink} /></div>
+                        {order.delivery_fee > 0 && (
+                            <div className="flex justify-between text-[13px]"><span className={skin.subtle}>Delivery</span><Money value={fmt(order.delivery_fee, baseCur)} className={skin.ink} /></div>
+                        )}
+                        {/* Lo que sumó la tienda al revisar el pedido, con su motivo. */}
+                        {order.extra_charge > 0 && (
+                            <div className="flex justify-between gap-3 text-[13px]">
+                                <span className={`${skin.subtle} min-w-0`}>Recargo{order.extra_charge_reason ? ` · ${order.extra_charge_reason}` : ""}</span>
+                                <Money value={fmt(order.extra_charge, baseCur)} className={`${skin.ink} shrink-0`} />
+                            </div>
+                        )}
                     </>
                 )}
                 <div className="flex items-center justify-between gap-3 pt-1">

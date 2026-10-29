@@ -15,10 +15,12 @@ import FabricaPage from "../pages/FabricaPage";
 import CocinaPage from "../pages/CocinaPage";
 import MesasPage from "../pages/MesasPage";
 import RecetasPage from "../pages/RecetasPage";
+import PedidosPage from "../pages/PedidosPage";
 
 export const PAGE_COMPONENTS = {
     Dashboard: DashboardPage,
     Cobro: CobroPage,
+    Pedidos: PedidosPage,
     "Catálogo": CatalogPage,
     Compras: PurchasesPage,
     "Fábrica": FabricaPage,

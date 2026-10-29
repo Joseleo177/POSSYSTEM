@@ -13,6 +13,7 @@ import { TAB_ICONS } from "../constants/icons";
 // Clases completas y fijas: Tailwind solo genera las que ve escritas.
 const APPS = {
     Cobro:           { tone: "bg-emerald-500/[0.12] text-emerald-600 dark:text-emerald-400", hint: "Vender y cobrar" },
+    Pedidos:         { tone: "bg-sky-500/[0.12] text-sky-600 dark:text-sky-400",             hint: "Pedidos del catálogo por aceptar" },
     "Catálogo":      { tone: "bg-violet-500/[0.12] text-violet-600 dark:text-violet-400",    hint: "Productos y precios" },
     Inventario:      { tone: "bg-amber-500/[0.12] text-amber-600 dark:text-amber-400",       hint: "Stock y transferencias" },
     Compras:         { tone: "bg-orange-500/[0.12] text-orange-600 dark:text-orange-400",    hint: "Mercancía de proveedores" },
@@ -31,7 +32,7 @@ const APPS = {
 };
 
 const SECCIONES = [
-    { label: "Operación",      keys: ["Cobro", "Mesas", "Cocina", "Recetas", "Catálogo", "Inventario", "Compras", "Fábrica", "Clientes"] },
+    { label: "Operación",      keys: ["Cobro", "Pedidos", "Mesas", "Cocina", "Recetas", "Catálogo", "Inventario", "Compras", "Fábrica", "Clientes"] },
     { label: "Finanzas",       keys: ["Dashboard", "Contabilidad", "Reportes", "Monedas"] },
     { label: "Administración", keys: ["Empleados", "Empresas", "Configuración"] },
 ];

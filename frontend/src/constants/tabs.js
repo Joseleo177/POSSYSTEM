@@ -5,6 +5,9 @@ export const ALL_TABS = [
     // cajero no debe verla, y antes la veía porque el tab no pedía permiso alguno.
     { key: "Dashboard",     label: "Dashboard",     mobileLabel: "Inicio",     perm: "reports.view",    color: "from-teal-500 to-teal-700" },
     { key: "Cobro",         label: "Venta (POS)",   mobileLabel: "Venta",      perm: "sales.view",      color: "from-emerald-500 to-emerald-700" },
+    // Bandeja de los pedidos del catálogo: se revisan y se aceptan antes de pasar a la caja.
+    // Solo con el extra de pedidos web.
+    { key: "Pedidos",       label: "Pedidos",       mobileLabel: "Pedidos",    perm: "sales.create",    companyFlag: "pedidos_web_enabled", color: "from-sky-500 to-sky-700" },
     { key: "Catálogo",      label: "Catálogo",      mobileLabel: "Catálogo",   perm: "products.view",   color: "from-violet-500 to-violet-700" },
     { key: "Clientes",      label: "Contactos",     mobileLabel: "Contactos",   perm: "customers.view",  color: "from-sky-500 to-sky-700" },
     { key: "Inventario",    label: "Inventario / Sucursales", mobileLabel: "Inventario", perm: "inventory.view",  color: "from-amber-500 to-amber-700" },

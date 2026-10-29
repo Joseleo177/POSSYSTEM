@@ -944,6 +944,7 @@ async function getMyOrders(token, document) {
       attributes: [
         "id", "total", "status", "invoice_number", "created_at",
         "fulfillment", "delivery_address", "delivery_reference", "service_charge", "service_charge_label",
+        "delivery_fee", "extra_charge", "extra_charge_reason",
         "warehouse_id", "requested_warehouse_id",
       ],
       // Se incluye el precio de cada línea: el cliente que abre un pedido viejo quiere ver
@@ -983,8 +984,26 @@ async function getMyOrders(token, document) {
       ? new Map((await Warehouse.findAll({ where: { id: { [Op.in]: almIds } }, attributes: ["id", "name"], raw: true })).map((w) => [w.id, w.name]))
       : new Map();
 
+    // Pedidos que la tienda rechazó (módulo Pedidos): la venta se borró, pero el cliente ve el
+    // motivo en vez de un pedido que desaparece sin explicación.
+    const rechazos = (await sequelize.query(`
+      SELECT sale_id, reason, total, items, ordered_at, created_at FROM web_order_rejections
+       WHERE customer_id = :cid ORDER BY created_at DESC LIMIT 10
+    `, { replacements: { cid: customer.id }, type: Sequelize.QueryTypes.SELECT })).map((r) => ({
+      id: r.sale_id,
+      total: parseFloat(r.total),
+      created_at: r.ordered_at || r.created_at,
+      invoice_number: null,
+      stage: "rechazado",
+      stage_label: "Rechazado",
+      stage_detail: `La tienda no pudo procesarlo: ${r.reason}`,
+      payments: [],
+      owed: null,
+      items: (r.items || []).map((i) => ({ name: i.name, quantity: parseFloat(i.quantity) })),
+    }));
+
     return {
-      orders: sales.map((s) => {
+      orders: [...rechazos, ...sales.map((s) => {
         const j = s.toJSON();
         const stage = ORDER_STAGES[j.status];
         return {
@@ -999,7 +1018,12 @@ async function getMyOrders(token, document) {
           branch: sucursales.get(j.warehouse_id || j.requested_warehouse_id) || null,
           delivery_address: j.delivery_address || null,
           delivery_reference: j.delivery_reference || null,
-          delivery_fee: parseFloat(j.service_charge || 0) > 0 && j.fulfillment === "delivery" ? parseFloat(j.service_charge) : 0,
+          // Desglose del recargo: el delivery y el adicional que sumó la tienda al revisarlo, con
+          // su motivo. Los pedidos de antes del desglose traen todo el recargo como delivery.
+          delivery_fee: j.fulfillment !== "delivery" ? 0
+            : (j.delivery_fee != null ? parseFloat(j.delivery_fee) : parseFloat(j.service_charge || 0)),
+          extra_charge: j.extra_charge != null ? parseFloat(j.extra_charge) : 0,
+          extra_charge_reason: j.extra_charge_reason || null,
           payments: reportes.get(j.id) || [],
           // Lo que todavía puede pagar desde el catálogo (null = ya no aplica).
           owed: faltaPorId.has(j.id) ? faltaPorId.get(j.id) : null,
@@ -1013,7 +1037,7 @@ async function getMyOrders(token, document) {
             image_url: fotos.get(i.product_id) || null,
           })),
         };
-      }),
+      })].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
     };
   });
 }
@@ -1298,6 +1322,7 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
         web_note: String(note || "").trim().slice(0, 500) || null,
         service_charge: entrega.recargo,
         service_charge_label: entrega.label,
+        delivery_fee: entrega.campos.fulfillment === "delivery" ? entrega.recargo : null,
         ...entrega.campos,
       }, { transaction: t });
 

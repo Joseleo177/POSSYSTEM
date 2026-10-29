@@ -29,6 +29,24 @@ ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_address VARCHAR(300);
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_reference VARCHAR(200);
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_lat NUMERIC(9,6);
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_lng NUMERIC(9,6);
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_fee NUMERIC(14,2);
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS extra_charge NUMERIC(14,2);
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS extra_charge_reason VARCHAR(120);
+
+CREATE TABLE IF NOT EXISTS web_order_rejections (
+  id            SERIAL PRIMARY KEY,
+  company_id    INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  sale_id       INTEGER NOT NULL,
+  customer_id   INTEGER,
+  reason        VARCHAR(200) NOT NULL,
+  total         NUMERIC(14,2) NOT NULL DEFAULT 0,
+  items         JSONB,
+  ordered_at    TIMESTAMPTZ,
+  employee_id   INTEGER,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS web_order_rejections_customer ON web_order_rejections (customer_id, created_at);
+ALTER TABLE web_order_rejections ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS payment_reports (
   id                SERIAL PRIMARY KEY,
@@ -71,7 +89,7 @@ SELECT '20261101150000-pedidos-web-entrega-pago.js'
 
 COMMIT;
 
--- Verificación: dos filas con relrowsecurity = true y seis columnas nuevas en sales.
-SELECT relname, relrowsecurity FROM pg_class WHERE relname IN ('delivery_zones', 'payment_reports');
+-- Verificación: tres filas con relrowsecurity = true y nueve columnas nuevas en sales.
+SELECT relname, relrowsecurity FROM pg_class WHERE relname IN ('delivery_zones', 'payment_reports', 'web_order_rejections');
 SELECT column_name FROM information_schema.columns
- WHERE table_name = 'sales' AND column_name IN ('fulfillment', 'delivery_zone_id', 'delivery_address', 'delivery_reference', 'delivery_lat', 'delivery_lng');
+ WHERE table_name = 'sales' AND column_name IN ('fulfillment', 'delivery_zone_id', 'delivery_address', 'delivery_reference', 'delivery_lat', 'delivery_lng', 'delivery_fee', 'extra_charge', 'extra_charge_reason');

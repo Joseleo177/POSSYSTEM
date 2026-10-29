@@ -47,6 +47,29 @@ module.exports = {
       await q(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_reference VARCHAR(200)`);
       await q(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_lat NUMERIC(9,6)`);
       await q(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_lng NUMERIC(9,6)`);
+      // El recargo de la venta (service_charge) es la suma de estos dos: el delivery y lo que
+      // la tienda le sume al revisar el pedido (módulo Pedidos), con su motivo para el cliente.
+      await q(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_fee NUMERIC(14,2)`);
+      await q(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS extra_charge NUMERIC(14,2)`);
+      await q(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS extra_charge_reason VARCHAR(120)`);
+
+      // Un pedido rechazado se borra (nunca fue documento), pero el cliente tiene que ver por
+      // qué: queda aquí lo mínimo para mostrárselo en "Mis pedidos".
+      await q(`
+        CREATE TABLE IF NOT EXISTS web_order_rejections (
+          id            SERIAL PRIMARY KEY,
+          company_id    INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+          sale_id       INTEGER NOT NULL,
+          customer_id   INTEGER,
+          reason        VARCHAR(200) NOT NULL,
+          total         NUMERIC(14,2) NOT NULL DEFAULT 0,
+          items         JSONB,
+          ordered_at    TIMESTAMPTZ,
+          employee_id   INTEGER,
+          created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      await q(`CREATE INDEX IF NOT EXISTS web_order_rejections_customer ON web_order_rejections (customer_id, created_at)`);
 
       await q(`
         CREATE TABLE IF NOT EXISTS payment_reports (
@@ -94,7 +117,8 @@ module.exports = {
       const q = (sql) => queryInterface.sequelize.query(sql, { transaction });
       await q(`DROP TABLE IF EXISTS payment_reports`);
       await q(`DROP TABLE IF EXISTS delivery_zones`);
-      for (const c of ["fulfillment", "delivery_zone_id", "delivery_address", "delivery_reference", "delivery_lat", "delivery_lng"]) {
+      await q(`DROP TABLE IF EXISTS web_order_rejections`);
+      for (const c of ["fulfillment", "delivery_zone_id", "delivery_address", "delivery_reference", "delivery_lat", "delivery_lng", "delivery_fee", "extra_charge", "extra_charge_reason"]) {
         await q(`ALTER TABLE sales DROP COLUMN IF EXISTS ${c}`);
       }
       await q(`ALTER TABLE payment_journal_methods DROP COLUMN IF EXISTS catalog_visible`);
