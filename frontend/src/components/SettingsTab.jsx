@@ -497,6 +497,24 @@ export default function SettingsTab({ notify }) {
                                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">%</span>
                                         </span>
                                     </label>
+                                    <div className="border-t border-border/60 dark:border-white/[0.06]" />
+                                    {/* Pedir desde el QR de la mesa. Sin la clave guardada es "Confirmar", igual que
+                                        en el servidor (services/mesaPublica.js). */}
+                                    <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <span className="min-w-0">
+                                            <span className="block text-[13px] font-medium text-content dark:text-white">Pedidos desde el QR de la mesa</span>
+                                            <span className="block text-[12px] text-content-subtle mt-0.5 leading-snug">
+                                                {(settings.mesa_qr_pedidos || "confirmar") === "directo"
+                                                    ? "El pedido del cliente sale a cocina apenas lo envía."
+                                                    : (settings.mesa_qr_pedidos || "confirmar") === "apagado"
+                                                    ? "El QR solo muestra cómo va el pedido y la cuenta."
+                                                    : "El mesonero lo acepta en el mapa de mesas antes de que vaya a cocina: una foto del QR desde la calle no manda pedidos."}
+                                            </span>
+                                        </span>
+                                        <Segmented className="shrink-0" value={settings.mesa_qr_pedidos || "confirmar"}
+                                            onChange={v => setSettings(p => ({ ...p, mesa_qr_pedidos: v }))}
+                                            options={[{ key: "confirmar", label: "Confirmar" }, { key: "directo", label: "Directo" }, { key: "apagado", label: "Apagado" }]} />
+                                    </div>
                                 </div>
                             </Seccion>
                         )}

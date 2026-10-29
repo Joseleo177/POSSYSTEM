@@ -745,6 +745,11 @@ export const api = {
     moveAccount:  (saleId, body)      => request(`/tables/accounts/${saleId}/move`,  { method: "POST", body: JSON.stringify(body) }),
     splitAccount: (saleId, items)     => request(`/tables/accounts/${saleId}/split`, { method: "POST", body: JSON.stringify({ items }) }),
     requestBill:  (saleId, requested) => request(`/tables/accounts/${saleId}/bill`,  { method: "POST", body: JSON.stringify({ requested }) }),
+    // QR de la mesa: código nuevo (el viejo deja de servir).
+    newQrCode:    (tableId)           => request(`/tables/${tableId}/qr`, { method: "POST" }),
+    // Pedidos que el cliente hizo desde el QR: aceptar (sale como ronda) o rechazar.
+    acceptQrOrder: (id, body = {})    => request(`/tables/qr-orders/${id}/accept`, { method: "POST", body: JSON.stringify(body) }),
+    rejectQrOrder: (id, reason)       => request(`/tables/qr-orders/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
   },
   companies: {
     getAll: ()          => request("/companies"),
@@ -825,6 +830,15 @@ export const publicApi = {
       body: JSON.stringify(body),
     }),
   // QR de la mesa: cómo va el pedido y pedir la cuenta (por el código de la mesa).
-  mesa: (token) => publicRequest(`/public/mesa/${encodeURIComponent(token)}`),
+  // `v`: la huella de lo que ya se tiene; si no cambió nada, responde { unchanged: true }.
+  mesa: (token, v) => publicRequest(`/public/mesa/${encodeURIComponent(token)}${v ? `?v=${encodeURIComponent(v)}` : ""}`),
   pedirCuenta: (token) => publicRequest(`/public/mesa/${encodeURIComponent(token)}/cuenta`, { method: "POST" }),
+  // Pedir desde el QR: el menú de la sucursal, los adicionales de un plato y mandar el pedido.
+  mesaMenu:   (token)     => publicRequest(`/public/mesa/${encodeURIComponent(token)}/menu`),
+  mesaPlato:  (token, id) => publicRequest(`/public/mesa/${encodeURIComponent(token)}/menu/${encodeURIComponent(id)}`),
+  mesaPedir:  (token, body) => publicRequest(`/public/mesa/${encodeURIComponent(token)}/pedido`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }),
 };

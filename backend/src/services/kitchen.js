@@ -1,5 +1,9 @@
 const { sequelize, Sequelize, KitchenTicket, KitchenTicketItem, Sale } = require("../models");
 const { visibleWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
+const { huella, olvidar } = require("../utils/huella");
+
+// Lo que cambia la cocina cambia también el mapa de mesas y el QR de la mesa.
+const olvidarHuellas = (companyId) => { olvidar(`cocina:${companyId}:`); olvidar(`mesas:${companyId}:`); olvidar("mesa:"); };
 
 const QT = Sequelize.QueryTypes;
 
@@ -53,6 +57,7 @@ async function crearComanda({ sale, items, label, note, waiterId = null, tableId
     modifiers: i.modifiers ? String(i.modifiers).slice(0, 400) : null,
   })), { transaction });
   await resumirCuenta(sale.id, transaction);
+  olvidarHuellas(sale.company_id);
   return ticket;
 }
 
@@ -67,7 +72,7 @@ async function crearComanda({ sale, items, label, note, waiterId = null, tableId
  * - Las de cuentas anuladas o devueltas salen; un pedido rechazado se borra y sus comandas
  *   con él (ON DELETE CASCADE).
  */
-async function board(req, { warehouse_id } = {}) {
+async function board(req, { warehouse_id, v } = {}) {
   if (!req.company_id) throw fail("Selecciona una empresa", 400);
 
   const rep = { cid: req.company_id };
@@ -86,6 +91,24 @@ async function board(req, { warehouse_id } = {}) {
     }
   }
 
+  // Primero la huella (ver utils/huella.js): la pantalla pregunta cada 5 s y casi siempre no
+  // cambió nada. Mismo WHERE que el tablero, así que una comanda que se vence (listas a las 2 h)
+  // también la cambia. Sin cambios, no se arma la lista de platos de cada comanda.
+  const DONDE = `
+     WHERE k.company_id = :cid
+       AND k.status IN ('nueva', 'preparando', 'lista')
+       AND s.status NOT IN ('anulado', 'devuelto')
+       AND k.created_at > NOW() - INTERVAL '18 hours'
+       AND (k.status <> 'lista' OR k.status_at > NOW() - INTERVAL '2 hours')
+       ${filtros.map(f => `AND ${f}`).join("\n       ")}`;
+  const huellaActual = await huella(
+    `cocina:${req.company_id}:${rep.wid || (rep.permitidos ? rep.permitidos.join(".") : "todas")}`,
+    `SELECT md5(COALESCE(string_agg(k.id || ':' || k.status || ':' || s.status || ':' || COALESCE(k.table_id, 0), ',' ORDER BY k.id), '')) AS v
+       FROM kitchen_tickets k JOIN sales s ON s.id = k.sale_id ${DONDE}`,
+    rep, 2000,
+  );
+  if (v && v === huellaActual) return { unchanged: true, v: huellaActual, now: new Date().toISOString() };
+
   const data = await sequelize.query(`
     SELECT k.id, k.sale_id, k.round_no, k.label, k.note, k.created_at,
            k.status AS kitchen_status, k.status_at AS kitchen_status_at,
@@ -97,18 +120,13 @@ async function board(req, { warehouse_id } = {}) {
       JOIN sales s ON s.id = k.sale_id
       LEFT JOIN dining_tables t ON t.id = k.table_id
       LEFT JOIN employees e ON e.id = k.waiter_id
-     WHERE k.company_id = :cid
-       AND k.status IN ('nueva', 'preparando', 'lista')
-       AND s.status NOT IN ('anulado', 'devuelto')
-       AND k.created_at > NOW() - INTERVAL '18 hours'
-       AND (k.status <> 'lista' OR k.status_at > NOW() - INTERVAL '2 hours')
-       ${filtros.map(f => `AND ${f}`).join("\n       ")}
+     ${DONDE}
      ORDER BY k.created_at
      LIMIT 200`, { replacements: rep, type: QT.SELECT });
 
   // La hora del servidor viaja con el tablero: los minutos de espera se cuentan contra ella y
   // no contra el reloj de la tablet, que en una cocina nadie pone en hora.
-  return { data, now: new Date().toISOString() };
+  return { data, v: huellaActual, now: new Date().toISOString() };
 }
 
 async function setStatus(req, id, { status } = {}) {
@@ -127,6 +145,7 @@ async function setStatus(req, id, { status } = {}) {
     }, { transaction });
     await resumirCuenta(ticket.sale_id, transaction);
   });
+  olvidarHuellas(req.company_id);
 
   return { data: { id: ticket.id, kitchen_status: status } };
 }

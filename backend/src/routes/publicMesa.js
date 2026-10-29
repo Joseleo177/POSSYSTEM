@@ -26,7 +26,20 @@ const handle = (fn) => async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-router.get ("/:token",        verLimiter,    handle(req => svc.ver(req.params.token)));
-router.post("/:token/cuenta", cuentaLimiter, handle(req => svc.pedirCuenta(req.params.token)));
+// Pedir desde el QR. Todo el local sale por la misma IP: el tope de pedidos es por IP pero
+// holgado; el que frena el abuso es el de pedidos pendientes por mesa (ver mesaPublica.pedir).
+const pedidoLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 150,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, message: "Demasiados pedidos seguidos. Espera un momento." },
+});
+
+router.get ("/:token",                verLimiter,    handle(req => svc.ver(req.params.token, req.query.v || null)));
+router.post("/:token/cuenta",         cuentaLimiter, handle(req => svc.pedirCuenta(req.params.token)));
+router.get ("/:token/menu",           verLimiter,    handle(req => svc.menu(req.params.token)));
+router.get ("/:token/menu/:productId", verLimiter,   handle(req => svc.adicionales(req.params.token, req.params.productId)));
+router.post("/:token/pedido",         pedidoLimiter, handle(req => svc.pedir(req.params.token, req.body)));
 
 module.exports = router;

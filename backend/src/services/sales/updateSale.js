@@ -60,19 +60,17 @@ module.exports = async function updateSale(saleId, body, req) {
     }
 
     const warehouseId = sale.warehouse_id;
-    const previousItems = await SaleItem.findAll({ where: { sale_id: saleId }, transaction, order: [["id", "ASC"]] });
 
+    // Ronda INCREMENTAL (append): lo que ya estaba no se toca. Antes la ronda rehacía la cuenta
+    // entera —reponía todo, borraba las líneas y las volvía a crear y descontar—, y bloqueaba en
+    // el camino la ficha de cada insumo: en hora pico las rondas de mesas distintas hacían fila
+    // por el mismo candado (la papa, el aceite) y una mesa grande eran cientos de consultas. Ahora
+    // solo se procesan las líneas nuevas, al precio de la sucursal y sin descuento manual (null
+    // explícito), y el total se suma sobre el que ya tenía. La caja, al cobrar, sigue rehaciendo
+    // la cuenta completa (sin append), así que el total final se recalcula como siempre.
+    const previousItems = append ? [] : await SaleItem.findAll({ where: { sale_id: saleId }, transaction, order: [["id", "ASC"]] });
     if (append) {
-      if (previousItems.some(it => !it.product_id)) {
-        throw bad("Esta cuenta tiene líneas que no se pueden rehacer desde una ronda");
-      }
-      // Lo que ya estaba conserva su precio, su nota y su descuento; lo nuevo entra al precio
-      // de la sucursal y sin descuento manual (null explícito: si no, heredaría el de otra
-      // línea del mismo producto).
-      items = [
-        ...previousItems.map(it => ({ product_id: it.product_id, price: it.price, qty: it.quantity, note: it.note || null })),
-        ...append.map(it => ({ product_id: it.product_id, qty: it.qty, note: it.note, line_discount: null })),
-      ];
+      items = append.map(it => ({ product_id: it.product_id, qty: it.qty, note: it.note, line_discount: null }));
     }
 
     // ── Devolver al inventario lo que la venta tenía apartado ──
@@ -115,8 +113,8 @@ module.exports = async function updateSale(saleId, body, req) {
       }
     }
 
-    // Delete all existing items
-    await SaleItem.destroy({ where: { sale_id: saleId }, transaction });
+    // Delete all existing items (una ronda incremental no borra nada)
+    if (!append) await SaleItem.destroy({ where: { sale_id: saleId }, transaction });
 
     // ── Volver a apartar el inventario según el carrito nuevo ──
     // Igual criterio que createSale.js: $ acumula con el precio redondeado a 2 decimales
@@ -159,7 +157,11 @@ module.exports = async function updateSale(saleId, body, req) {
     // Las líneas tal como se guardan, para el tope de la tasa de divisas (ver fxRate.js).
     const lineasGuardadas = [];
 
-    let total = 0;
+    // En una ronda incremental se parte de lo que ya sumaban las líneas de la cuenta: su total
+    // sin el descuento ni el recargo de cabecera, que se vuelven a aplicar abajo (no cambian).
+    let total = append
+      ? (parseFloat(sale.total) || 0) + (parseFloat(sale.discount_amount) || 0) - (parseFloat(sale.service_charge) || 0)
+      : 0;
     // Restaurante: el plato se vende aunque no alcance un ingrediente (ver recipeStock.js).
     let sinInsumo;
     for (const item of items) {

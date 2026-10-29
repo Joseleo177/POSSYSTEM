@@ -46,5 +46,11 @@ router.post  ("/areas",            editar, handle(req => svc.saveArea(req, req.b
 router.put   ("/areas/:id",        editar, handle(req => svc.saveArea(req, { ...req.body, id: req.params.id })));
 router.delete("/areas/:id",        editar, handle(req => svc.deleteArea(req, req.params.id)));
 router.put   ("/areas/:id/layout", editar, handle(req => svc.saveLayout(req, req.params.id, req.body)));
+// QR de la mesa: código nuevo (el viejo deja de servir).
+router.post  ("/:id/qr",           editar, handle(req => svc.nuevoCodigoQr(req, req.params.id)));
+// Pedidos que el cliente hizo desde el QR: el mesonero los acepta (salen como su ronda) o rechaza.
+const pedidosQr = require("../services/pedidosQr");
+router.post  ("/qr-orders/:id/accept", servir, handle(req => pedidosQr.aceptar(req, req.params.id, req.body)));
+router.post  ("/qr-orders/:id/reject", servir, handle(req => pedidosQr.rechazar(req, req.params.id, req.body)));
 
 module.exports = router;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { publicApi } from "../services/api";
 import { fmtTime } from "../helpers/dates";
 import { resolveImageUrl } from "../helpers/image";
+import MenuMesaPublico from "../components/mesas/MenuMesaPublico";
 
 // La página del QR de la mesa (/mesa/<código>): el cliente, desde su teléfono, ve cómo va cada
 // ronda en la cocina, lo que lleva pedido y cuánto va la cuenta, y la pide sin levantar la
@@ -75,11 +76,18 @@ export default function MesaPublicPage({ token }) {
     const [error, setError] = useState(null);
     const [pidiendo, setPidiendo] = useState(false);
     const [avisoError, setAvisoError] = useState(null);
+    const [menuAbierto, setMenuAbierto] = useState(false);
+    const [enviado, setEnviado] = useState(null);   // aviso tras mandar un pedido
 
     const yaCargo = useRef(false);
+    // Huella de lo que se ve: si nada cambió, el servidor responde con una consulta liviana y
+    // aquí no se toca nada (ver utils/huella.js en el backend).
+    const huella = useRef(null);
     const cargar = useCallback(async () => {
         try {
-            const r = await publicApi.mesa(token);
+            const r = await publicApi.mesa(token, huella.current);
+            if (r.unchanged) return;
+            huella.current = r.v || null;
             setD(r.data);
             setError(null);
             yaCargo.current = true;
@@ -107,6 +115,7 @@ export default function MesaPublicPage({ token }) {
         setAvisoError(null);
         try {
             const r = await publicApi.pedirCuenta(token);
+            huella.current = r.v || null;
             setD(r.data);
         } catch (e) {
             setAvisoError(e?.message || "No se pudo avisar. Intenta de nuevo.");
@@ -151,16 +160,53 @@ export default function MesaPublicPage({ token }) {
                     </div>
                 </header>
 
-                {!d.open ? (
-                    <div className="rounded-2xl border border-border/70 bg-white px-5 py-8 text-center">
-                        <div className="text-[16px] font-semibold">Todavía no hay un pedido en esta mesa</div>
-                        <div className="text-[14px] text-content-subtle mt-1.5">
-                            Cuando el mesonero tome tu pedido, aquí vas a ver cómo va en la cocina.
-                        </div>
-                        {d.store.menu_url && (
-                            <a href={d.store.menu_url} className="btn-accent inline-flex items-center justify-center h-12 px-6 rounded-xl text-[15px] font-semibold mt-5">Ver el menú</a>
+                {/* Pedir desde el QR (si el restaurante lo permite) */}
+                {d.ordering && (
+                    <div className="mb-5">
+                        {/* Con la cuenta abierta lo principal es "Pedir la cuenta": este va con borde. */}
+                        <button onClick={() => { setEnviado(null); setMenuAbierto(true); }}
+                            className={`${d.open ? "btn-outline bg-white" : "btn-accent"} w-full h-12 rounded-xl text-[15px] font-semibold flex items-center justify-center gap-2`}>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14M5 12h14" /></svg>
+                            {d.open ? "Pedir algo más" : "Hacer mi pedido"}
+                        </button>
+                        {enviado && (
+                            <div className="mt-2.5 rounded-2xl bg-white border border-border/70 px-4 py-3 text-[14px] flex items-center gap-2">
+                                <Check /> {enviado}
+                            </div>
                         )}
                     </div>
+                )}
+
+                {/* Pedidos hechos desde aquí que todavía no son una ronda */}
+                {d.qr_orders?.length > 0 && (
+                    <section className="mb-5 space-y-2">
+                        {d.qr_orders.map(o => (
+                            <div key={o.id} className={`rounded-2xl border px-4 py-3 ${o.status === "rechazado" ? "bg-white border-red-500/40" : "bg-amber-50 border-amber-500/40"}`}>
+                                <div className={`text-[13px] font-semibold ${o.status === "rechazado" ? "text-red-700" : "text-amber-800"} flex items-center gap-1.5`}>
+                                    {o.status === "pendiente" && <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />}
+                                    {o.status === "rechazado" ? "El mesonero no pudo tomar este pedido" : "Esperando que el mesonero lo confirme"}
+                                </div>
+                                <div className="text-[14px] text-content mt-1">{o.summary}</div>
+                                {o.status === "rechazado" && o.reason && <div className="text-[13px] text-content-subtle mt-0.5">{o.reason}</div>}
+                            </div>
+                        ))}
+                    </section>
+                )}
+
+                {!d.open ? (
+                    d.qr_orders?.length ? null : (
+                        <div className="rounded-2xl border border-border/70 bg-white px-5 py-8 text-center">
+                            <div className="text-[16px] font-semibold">Todavía no hay un pedido en esta mesa</div>
+                            <div className="text-[14px] text-content-subtle mt-1.5">
+                                {d.ordering
+                                    ? "Pide desde aquí o al mesonero: después vas a ver cómo va en la cocina."
+                                    : "Cuando el mesonero tome tu pedido, aquí vas a ver cómo va en la cocina."}
+                            </div>
+                            {!d.ordering && d.store.menu_url && (
+                                <a href={d.store.menu_url} className="btn-accent inline-flex items-center justify-center h-12 px-6 rounded-xl text-[15px] font-semibold mt-5">Ver el menú</a>
+                            )}
+                        </div>
+                    )
                 ) : (
                     <div className="space-y-5">
                         {hayListas && (
@@ -220,12 +266,24 @@ export default function MesaPublicPage({ token }) {
                             </div>
                         )}
 
-                        {d.store.menu_url && (
+                        {!d.ordering && d.store.menu_url && (
                             <a href={d.store.menu_url} className="block text-center text-[14px] font-medium text-brand-700 py-2">Ver el menú</a>
                         )}
                     </div>
                 )}
             </div>
+
+            {menuAbierto && (
+                <MenuMesaPublico token={token} mesa={d.table.name} sym={sym} modo={d.ordering}
+                    onClose={() => setMenuAbierto(false)}
+                    onEnviado={(r) => {
+                        huella.current = r.v || null;
+                        setD(r.data);
+                        setMenuAbierto(false);
+                        setEnviado(d.ordering === "directo" ? "Tu pedido salió a la cocina." : "Pedido enviado: el mesonero lo confirma en un momento.");
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                    }} />
+            )}
         </div>
     );
 }

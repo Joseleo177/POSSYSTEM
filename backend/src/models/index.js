@@ -48,7 +48,7 @@ const tenantModels = [
   'FabricationStage', 'FabricationOrderStage', 'FabricationOrderCut',
   'CashAdvance', 'DiningArea', 'DiningTable', 'KitchenTicket',
   'ModifierGroup', 'ModifierOption', 'ProductModifierGroup', 'RecipeSheet',
-  'PreparationItem', 'ProductionBatch', 'ProductionBatchItem',
+  'PreparationItem', 'ProductionBatch', 'ProductionBatchItem', 'TableOrder',
 ];
 
 const applyTenantFilter = (modelName, options) => {

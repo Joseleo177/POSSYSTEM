@@ -244,6 +244,7 @@ const DELETE_ORDER = [
   'Payment', 'ReturnItem', 'Return',
   'Sale', 'Purchase',
   'KitchenTicket',                               // sus líneas caen en cascada; antes de sales
+  'TableOrder',                                  // pedidos del QR; antes de las mesas
   'DiningTable', 'DiningArea',                   // después de sales (table_id) y antes de warehouses
   'StockTransfer', 'ProductStock', 'ProductLot',
   'CashSessionJournal', 'CashSession', 'StockSession',

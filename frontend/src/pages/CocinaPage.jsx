@@ -106,6 +106,7 @@ export default function CocinaPage() {
     const [sonido, setSonidoState] = useState(() => leer(`cocina_sonido_${cid}`, "1") === "1");
     const { preparar, sonar } = useCampana();
     const vistasRef = useRef(null);
+    const huellaRef = useRef(null);   // huella del tablero que se ve (ver cargar)
 
     useEffect(() => {
         api.warehouses.getAll()
@@ -131,9 +132,13 @@ export default function CocinaPage() {
 
     const cargar = useCallback(async () => {
         try {
-            const r = await api.kitchen.board(almacen ? { warehouse_id: almacen } : {});
-            const data = r.data || [];
+            // Con la huella de lo que ya se ve, el servidor responde "sin cambios" con una sola
+            // consulta liviana: esta pantalla pregunta cada 5 s (ver utils/huella.js).
+            const r = await api.kitchen.board({ ...(almacen ? { warehouse_id: almacen } : {}), ...(huellaRef.current ? { v: huellaRef.current } : {}) });
             if (r.now) setDesfase(new Date(r.now).getTime() - Date.now());
+            if (r.unchanged) { setSinConexion(false); return; }
+            huellaRef.current = r.v || null;
+            const data = r.data || [];
             // Suena solo por comandas que no estaban en la vuelta anterior; la primera carga
             // no cuenta, o sonaría cada vez que se abre la pantalla.
             const nuevas = data.filter(o => o.kitchen_status === "nueva" && vistasRef.current && !vistasRef.current.has(o.id));
@@ -152,6 +157,7 @@ export default function CocinaPage() {
     useEffect(() => {
         setLoading(true);
         vistasRef.current = null;
+        huellaRef.current = null;
         cargar();
     }, [almacen]); // eslint-disable-line react-hooks/exhaustive-deps
 

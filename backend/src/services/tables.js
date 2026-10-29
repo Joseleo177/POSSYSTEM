@@ -201,10 +201,28 @@ const UNIDADES_FRACCIONABLES = ["KG", "KILOGRAMO", "L", "LITRO", "M", "METRO", "
  * Cuentas abiertas con mesa de una sucursal: lo que pinta el mapa. Una sola consulta liviana,
  * sin líneas ni totales del pie, porque la pantalla del mesonero la repite cada pocos segundos.
  */
-async function occupancy(req, { warehouse_id } = {}) {
+async function occupancy(req, { warehouse_id, v } = {}) {
   const wid = parseInt(warehouse_id, 10);
   if (!wid) throw fail("Elige la sucursal");
   await assertWarehouseAccess(req, wid);
+  // Huella primero (ver utils/huella.js): el mapa pregunta cada 15 s desde cada tablet de
+  // mesonero y casi siempre no cambió nada. Cubre todo lo que el mapa pinta de cada cuenta.
+  const { huella } = require("../utils/huella");
+  const huellaActual = await huella(`mesas:${req.company_id}:${wid}`, `
+    SELECT md5(COALESCE(string_agg(
+             s.id || ':' || s.table_id || ':' || s.total || ':' || COALESCE(s.kitchen_status, '') || ':' || s.status
+             || ':' || COALESCE(extract(epoch FROM s.bill_requested_at)::bigint, 0) || ':' || COALESCE(s.held_by_employee_id, 0)
+             || ':' || COALESCE(s.customer_id, 0) || ':' || COALESCE(s.waiter_id, 0) || ':' || COALESCE(s.employee_id, 0),
+             ',' ORDER BY s.id), '')
+           -- Los pedidos del QR que esperan al mesonero (índice parcial de pendientes).
+           || '|' || COALESCE((SELECT string_agg(o.id::text, ',' ORDER BY o.id) FROM table_orders o
+                                WHERE o.company_id = :cid AND o.warehouse_id = :wid AND o.status = 'pendiente'), '')) AS v
+      FROM sales s
+     WHERE s.company_id = :cid AND s.warehouse_id = :wid
+       AND s.table_id IS NOT NULL
+       AND s.status IN ('espera', 'borrador')`, { cid: req.company_id, wid }, 3000);
+  if (v && v === huellaActual) return { unchanged: true, v: huellaActual };
+
   const data = await sequelize.query(`
     SELECT s.id, s.table_id, s.total, s.created_at, s.kitchen_status, s.status, s.bill_requested_at,
            c.name AS customer_name, COALESCE(w.full_name, e.full_name) AS waiter_name,
@@ -217,7 +235,8 @@ async function occupancy(req, { warehouse_id } = {}) {
        AND s.table_id IS NOT NULL
        AND s.status IN ('espera', 'borrador')
      ORDER BY s.created_at`, { replacements: { cid: req.company_id, wid }, type: QT.SELECT });
-  return { data };
+  const qr_orders = await require("./pedidosQr").pendientes(req.company_id, wid);
+  return { data, qr_orders, v: huellaActual };
 }
 
 // Cuentas abiertas de una mesa, con la venta bloqueada o no.
@@ -462,4 +481,17 @@ async function dish(req, productId, { warehouse_id } = {}) {
   };
 }
 
-module.exports = { listAreas, saveArea, deleteArea, saveLayout, assertTable, occupancy, accounts, sendRound, dish, COLS, ROWS };
+/**
+ * Código nuevo para el QR de una mesa: el viejo deja de servir al instante (una foto del QR que
+ * salió del local ya no ve la mesa ni puede pedir desde ella). Hay que imprimir el QR de nuevo.
+ */
+async function nuevoCodigoQr(req, tableId) {
+  const mesa = await assertTable(tableId);
+  await assertWarehouseAccess(req, mesa.area.warehouse_id);
+  const viejo = mesa.public_token;
+  await mesa.update({ public_token: require("crypto").randomBytes(15).toString("base64url") });
+  if (viejo) require("../utils/huella").olvidar(`mesa:${viejo}`);
+  return { data: { id: mesa.id, public_token: mesa.public_token } };
+}
+
+module.exports = { listAreas, saveArea, deleteArea, saveLayout, assertTable, occupancy, accounts, sendRound, dish, nuevoCodigoQr, COLS, ROWS };

@@ -12,13 +12,15 @@ import TablePlan, { TableGrid, agruparPorMesa, minutosDesde, COLS, ROWS, TAMANOS
 import KitchenMark from "../components/KitchenMark";
 import WaiterOrder from "../components/mesas/WaiterOrder";
 import CuentaAcciones from "../components/mesas/CuentaAcciones";
-import { printMesaQrs } from "../components/mesas/mesaQrPrint";
+import MesaQrModal from "../components/mesas/MesaQrModal";
 import { fmtMoney, fmtTime, toNameCase } from "../helpers";
 
 // Mapa de mesas: el plano de cada área con lo que pasa en cada mesa, y el editor del plano.
 // Las cuentas se cobran desde Venta (POS) → Mesas; aquí se mira y se arma el salón.
 // El mesonero mira el mapa para saber qué llevar: cada 15 s alcanza y es una consulta liviana.
-const REFRESCO_MS = 15_000;
+// Con la huella (ver cargarCuentas) cada vuelta sin cambios es una consulta liviana: se puede
+// mirar más seguido, que es lo que pide un pedido del QR esperando al mesonero.
+const REFRESCO_MS = 10_000;
 
 const LABEL = "text-[12px] font-medium text-content-subtle";
 const INPUT = "w-full h-10 px-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] font-medium text-content dark:text-white placeholder:text-content-subtle/50 dark:placeholder:text-white/25 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-colors";
@@ -65,6 +67,7 @@ export default function MesasPage() {
     const setAlmacen = (v) => { setAlmacenState(v); guardar(`mesas_almacen_${cid}`, v); };
 
     const [areas, setAreas] = useState([]);
+    const [verQr, setVerQr] = useState(false);   // ventana con los QR de las mesas del área
     const [areaId, setAreaIdState] = useState(() => leer(`mesas_area_${cid}`, ""));
     const setAreaId = (v) => { setAreaIdState(String(v)); guardar(`mesas_area_${cid}`, String(v)); };
     const [loading, setLoading] = useState(true);
@@ -112,10 +115,16 @@ export default function MesasPage() {
     // tiene permiso de ventas. Cuando una mesa pasa a "lista" en cocina se le avisa a quien
     // mira el mapa, que es el que tiene que llevarla.
     const estadoPrevio = useRef(null);
-    const cargarCuentas = useCallback(async () => {
+    // Huella del mapa: el refresco periódico la manda y, si nada cambió, el servidor responde
+    // con una consulta liviana (ver utils/huella.js). Las recargas después de una acción (mandar
+    // una ronda, mover una cuenta) piden todo: la huella vive unos segundos en el servidor.
+    const huellaRef = useRef(null);
+    const cargarCuentas = useCallback(async (conHuella = false) => {
         if (!almacen) return;
         try {
-            const r = await api.tables.occupancy({ warehouse_id: almacen });
+            const r = await api.tables.occupancy({ warehouse_id: almacen, ...(conHuella === true && huellaRef.current ? { v: huellaRef.current } : {}) });
+            if (r.unchanged) return;
+            huellaRef.current = r.v || null;
             const data = r.data || [];
             const previo = estadoPrevio.current;
             if (previo) {
@@ -129,14 +138,43 @@ export default function MesasPage() {
             }
             estadoPrevio.current = new Map(data.map(c => [c.id, c.kitchen_status]));
             setCuentas(data);
+            // Pedidos nuevos desde el QR: se avisan una vez (la primera carga no cuenta).
+            const qr = r.qr_orders || [];
+            if (qrVistos.current) {
+                const nombres = new Map(areas.flatMap(a => a.tables.map(t => [t.id, t.name])));
+                for (const o of qr) if (!qrVistos.current.has(o.id)) notify(`${nombres.get(o.table_id) || "Una mesa"} pidió desde el QR`);
+            }
+            qrVistos.current = new Set(qr.map(o => o.id));
+            setPedidosQr(qr);
         } catch { /* carga de fondo */ }
     }, [almacen, areas, notify]);
+
+    // ── Pedidos desde el QR ──
+    const [pedidosQr, setPedidosQr] = useState([]);
+    const qrVistos = useRef(null);
+    const [rechazarQr, setRechazarQr] = useState(null);   // pedido que se está rechazando
+    const [motivo, setMotivo] = useState("");
+    const aceptarQr = async (o) => {
+        try {
+            await api.tables.acceptQrOrder(o.id);
+            notify("Pedido enviado a cocina");
+        } catch (e) { notify(e.message || "No se pudo enviar el pedido", "err"); }
+        cargarCuentas();
+    };
+    const confirmarRechazo = async () => {
+        try {
+            await api.tables.rejectQrOrder(rechazarQr.id, motivo);
+            notify("Pedido rechazado: el cliente ve el motivo");
+            setRechazarQr(null); setMotivo("");
+        } catch (e) { notify(e.message || "No se pudo rechazar", "err"); setRechazarQr(null); }
+        cargarCuentas();
+    };
 
     useEffect(() => { setLoading(true); estadoPrevio.current = null; cargarAreas(); }, [cargarAreas]);
     useEffect(() => { cargarCuentas(); }, [almacen]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
-        const t = setInterval(() => { if (document.visibilityState === "visible") cargarCuentas(); }, REFRESCO_MS);
+        const t = setInterval(() => { if (document.visibilityState === "visible") cargarCuentas(true); }, REFRESCO_MS);
         return () => clearInterval(t);
     }, [cargarCuentas]);
 
@@ -243,21 +281,13 @@ export default function MesasPage() {
             {warehouses.length > 1 && (
                 <CustomSelect value={almacen} onChange={v => { setAlmacen(v); setAreaId(""); }} options={opcionesAlmacen} className="w-44" height="h-9" />
             )}
-            {/* El QR de cada mesa del área: el cliente ve cómo va su pedido y pide la cuenta. */}
+            {/* El QR de cada mesa del área: verlo, abrirlo, copiar el enlace o imprimirlo. */}
             {puedeEditar && area?.tables?.length > 0 && (
-                <button onClick={() => {
-                    // El QR lleva la dirección con que se abrió el sistema: desde "localhost" los
-                    // teléfonos de los clientes no llegan a ninguna parte.
-                    if (/^(localhost|127\.|0\.0\.0\.0)/.test(window.location.hostname)) {
-                        notify("Abre el sistema con la dirección que usan los teléfonos (la del dominio o la IP de la red) y vuelve a imprimir: con «localhost» el QR no abre en el teléfono del cliente.", "err");
-                        return;
-                    }
-                    printMesaQrs({ storeName: storeName || company?.name || "", areaName: area.name, tables: area.tables });
-                }}
-                    title="Imprimir el QR de cada mesa de esta área"
+                <button onClick={() => setVerQr(true)}
+                    title="Ver e imprimir el QR de cada mesa de esta área"
                     className="btn-outline h-9 px-3 rounded-lg text-[13px] font-medium hidden sm:flex items-center gap-1.5 whitespace-nowrap">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 2h2" /></svg>
-                    Imprimir QR
+                    QR de mesas
                 </button>
             )}
             {puedeEditar && area && (
@@ -387,6 +417,33 @@ export default function MesasPage() {
                 </div>
             ) : (
                 <div className="flex-1 min-h-0 flex flex-col gap-2 py-1">
+                    {/* Pedidos que los clientes hicieron desde el QR y esperan al mesonero (de
+                        todas las áreas de la sucursal: el que está en Terraza también lo ve). */}
+                    {puedeServir && pedidosQr.length > 0 && (
+                        <div className="space-y-2">
+                            {pedidosQr.map(o => {
+                                const mesa = areas.flatMap(a => a.tables).find(t => t.id === o.table_id);
+                                return (
+                                    <div key={o.id} style={{ boxShadow: "inset 3px 0 0 #f59e0b" }}
+                                        className="rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-[13px] font-semibold text-amber-900 dark:text-amber-200">
+                                                {mesa?.name || "Una mesa"} pidió desde el QR · {minutosDesde(o.created_at, Date.now()) <= 0 ? "ahora" : `hace ${minutosDesde(o.created_at, Date.now())} min`}
+                                            </div>
+                                            <div className="text-[13px] text-content dark:text-white mt-0.5">{o.summary}</div>
+                                            <div className="text-[12px] text-content-subtle mt-0.5">
+                                                {fmtMoney(o.estimate, sym)}{o.note ? ` · «${o.note}»` : ""}
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2 shrink-0">
+                                            <button onClick={() => setRechazarQr(o)} className="btn-outline h-12 sm:h-9 px-4 rounded-lg text-[13px] font-medium flex-1 sm:flex-none">Rechazar</button>
+                                            <Button onClick={() => aceptarQr(o)} className="h-12 sm:h-9 px-4 flex-1 sm:flex-none">Enviar a cocina</Button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                     <div className="text-[12px] text-content-subtle tabular-nums">
                         {ocupadas === 0 ? "Todas las mesas libres" : `${ocupadas} de ${area.tables.length} ${area.tables.length === 1 ? "mesa ocupada" : "mesas ocupadas"}`}
                     </div>
@@ -426,6 +483,29 @@ export default function MesasPage() {
             <ConfirmModal isOpen={quitarArea} title={`Quitar ${area?.name || "el área"}`}
                 message="El área y sus mesas dejan de aparecer en el mapa. Las ventas ya cobradas conservan su mesa."
                 confirmText="Quitar área" onConfirm={borrarArea} onCancel={() => setQuitarArea(false)} />
+
+            <MesaQrModal open={verQr} area={area} storeName={storeName || company?.name || ""} notify={notify}
+                onClose={() => setVerQr(false)} onChanged={cargarAreas} />
+
+            <Modal open={!!rechazarQr} onClose={() => { setRechazarQr(null); setMotivo(""); }} title="Rechazar el pedido del QR" width={460}
+                footer={
+                    <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                        <button onClick={() => { setRechazarQr(null); setMotivo(""); }} className="btn-outline h-12 sm:h-10 px-5 rounded-lg text-[13px] font-medium">Volver</button>
+                        <Button onClick={confirmarRechazo} className="h-12 sm:h-10 px-5">Rechazar</Button>
+                    </div>
+                }>
+                <p className="text-[13px] text-content-subtle mb-3">{rechazarQr?.summary}</p>
+                <div className="flex flex-wrap gap-2 mb-3">
+                    {["La mesa no lo pidió", "Se acabó un plato", "Pídelo al mesonero"].map(m => (
+                        <button key={m} onClick={() => setMotivo(m)}
+                            className={`h-9 px-3 rounded-lg border text-[12px] font-medium ${motivo === m ? "border-brand-500 bg-brand-500/[0.08] text-brand-700 dark:text-brand-300" : "border-border dark:border-white/10 text-content dark:text-white"}`}>
+                            {m}
+                        </button>
+                    ))}
+                </div>
+                <input className={INPUT} value={motivo} onChange={e => setMotivo(e.target.value.slice(0, 200))} autoComplete="off"
+                    placeholder="Motivo que verá el cliente (opcional)" />
+            </Modal>
         </Page>
     );
 }
