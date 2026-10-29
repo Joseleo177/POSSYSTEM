@@ -8,22 +8,12 @@ export default function HeaderMobile({ settings, visibleTabs, safeTab, storeName
     return (
         <header className="md:hidden sticky top-0 z-50 bg-white dark:bg-surface-dark-2 border-b border-border dark:border-border-dark shadow-card">
             <div className="flex items-center gap-3 px-3 py-2">
-                <div className="flex items-center gap-2 shrink-0">
-                    {settings.logo_url ? (
+                {/* Sin logo, solo el nombre: sin icono de relleno (ver TopBar). */}
+                <div className="flex items-center gap-2 min-w-0">
+                    {settings.logo_url && (
                         <img src={resolveImageUrl(settings.logo_url)} alt="logo" className="h-9 w-auto object-contain shrink-0" />
-                    ) : (
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shrink-0 shadow-sm">
-                            <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2.5}
-                                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                                />
-                            </svg>
-                        </div>
                     )}
-                    <span className="text-sm font-bold text-content dark:text-content-dark tracking-tight">
+                    <span className="text-[15px] font-semibold text-content dark:text-content-dark tracking-tight truncate">
                         {activeTab?.mobileLabel || storeName}
                     </span>
                 </div>

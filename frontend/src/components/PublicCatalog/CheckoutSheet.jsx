@@ -4,6 +4,7 @@ import Money from "../ui/Money";
 import { Spinner } from "../ui/Spinner";
 import PaymentFields, { OptionCard, pagoVacio, faltaEnPago } from "./PaymentFields";
 import CatalogSheet, { SheetHeader, sheetSkin } from "./CatalogSheet";
+import MapPicker from "./MapPicker";
 import { toNameCase } from "../../helpers";
 
 // Paso final del pedido: cómo lo recibe (retiro o delivery con su zona, dirección y punto GPS)
@@ -41,6 +42,7 @@ export default function CheckoutSheet({
     const [referencia, setReferencia] = useState("");
     const [punto, setPunto] = useState(null);
     const [geo, setGeo] = useState({ loading: false, error: null });
+    const [mapa, setMapa] = useState(false);
     const [pago, setPago] = useState(pagoVacio);
     const [alRecibir, setAlRecibir] = useState(false);
     const [nota, setNota] = useState("");
@@ -59,6 +61,7 @@ export default function CheckoutSheet({
         }
         setPago(pagoVacio());
         setAlRecibir(false);
+        setMapa(false);
         setFalta(null);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
@@ -180,25 +183,39 @@ export default function CheckoutSheet({
                                         placeholder="Ej. Frente a la panadería" className={`${skin.field} mt-1.5`} />
                                 </label>
 
-                                {/* El punto exacto, para que el repartidor lo abra en su mapa. */}
+                                {/* El punto exacto, para que el repartidor lo abra en su mapa. No siempre es
+                                    donde está el cliente (pide desde el trabajo, o para otra persona):
+                                    por eso, además de su ubicación, puede marcarlo en el mapa. */}
                                 {punto ? (
                                     <div className={`flex items-center gap-3 px-3.5 py-2.5 ${skin.card}`}>
                                         <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 21s-7-6.2-7-11.5a7 7 0 1114 0C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" strokeWidth={1.8} /></svg>
                                         <div className="min-w-0 flex-1">
-                                            <div className={`text-[14px] font-medium ${skin.ink}`}>Ubicación guardada</div>
+                                            <div className={`text-[14px] font-medium ${skin.ink}`}>Punto de entrega marcado</div>
                                             <a href={`https://www.google.com/maps?q=${punto.lat},${punto.lng}`} target="_blank" rel="noopener noreferrer"
-                                                className="text-[12px] text-brand-600 dark:text-brand-400 underline-offset-2 hover:underline">Ver en el mapa</a>
+                                                className="text-[12px] text-brand-600 dark:text-brand-400 underline-offset-2 hover:underline">Ver en Google Maps</a>
                                         </div>
+                                        <button type="button" onClick={() => setMapa(true)} className={`text-[12px] font-semibold ${skin.ink} hover:underline underline-offset-2`}>Cambiar</button>
                                         <button type="button" onClick={() => setPunto(null)} className={`text-[12px] font-medium ${skin.subtle} hover:text-red-600`}>Quitar</button>
                                     </div>
                                 ) : (
-                                    <button type="button" onClick={usarUbicacion} disabled={geo.loading}
-                                        className={`w-full h-12 text-[14px] font-medium inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-60 ${skin.dashed}`}>
-                                        {geo.loading ? <Spinner /> : (
-                                            <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" strokeWidth={1.8} /><path strokeLinecap="round" strokeWidth={1.8} d="M12 2v3M12 19v3M2 12h3M19 12h3" /><circle cx="12" cy="12" r="7" strokeWidth={1.8} /></svg>
-                                        )}
-                                        {geo.loading ? "Buscando tu ubicación..." : "Usar mi ubicación actual"}
-                                    </button>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <button type="button" onClick={usarUbicacion} disabled={geo.loading}
+                                            className={`h-12 px-3 text-[14px] font-medium inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-60 ${skin.dashed}`}>
+                                            {geo.loading ? <Spinner /> : (
+                                                <svg className="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" strokeWidth={1.8} /><path strokeLinecap="round" strokeWidth={1.8} d="M12 2v3M12 19v3M2 12h3M19 12h3" /><circle cx="12" cy="12" r="7" strokeWidth={1.8} /></svg>
+                                            )}
+                                            {geo.loading ? "Buscando..." : "Mi ubicación actual"}
+                                        </button>
+                                        <button type="button" onClick={() => setMapa(true)}
+                                            className={`h-12 px-3 text-[14px] font-medium inline-flex items-center justify-center gap-2 transition-colors ${skin.dashed}`}>
+                                            <svg className="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14" /></svg>
+                                            Elegir en el mapa
+                                        </button>
+                                    </div>
+                                )}
+                                {mapa && (
+                                    <MapPicker skin={skin} initial={punto} onClose={() => setMapa(false)}
+                                        onPick={(p) => { setPunto(p); setMapa(false); setGeo({ loading: false, error: null }); }} />
                                 )}
                                 {geo.error && <p className="text-[12px] text-red-600 dark:text-red-400">{geo.error}</p>}
                             </div>

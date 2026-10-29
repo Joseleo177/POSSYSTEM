@@ -63,20 +63,17 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
                 </svg>
             </button>
 
-            {/* Logo + store name */}
-            <div className="flex items-center gap-2 shrink-0">
-                {settings?.logo_url ? (
+            {/* Logo + nombre de la empresa. Sin logo no va ningún icono de relleno: el rayito
+                que había se leía como marca de alguien y no era de nadie. El nombre es lo que
+                dice en qué empresa se trabaja, así que va a 16 px y con ancho para leerse; el
+                completo queda en el title por si una razón social larga se corta. */}
+            <div className="flex items-center gap-2.5 min-w-0 shrink">
+                {settings?.logo_url && (
                     // La barra mide h-14: con h-8 el logo quedaba nadando en el medio y no se
                     // leía. h-10 lo acerca al alto útil dejando el aire justo arriba y abajo.
                     <img src={resolveImageUrl(settings.logo_url)} alt="logo" className="h-10 w-auto object-contain shrink-0" />
-                ) : (
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-sm shrink-0">
-                        <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                    </div>
                 )}
-                <span className="text-sm font-bold text-content dark:text-content-dark tracking-tight truncate max-w-[160px]">
+                <span title={storeName} className="text-[16px] font-semibold text-content dark:text-content-dark tracking-tight truncate max-w-[200px] lg:max-w-[340px]">
                     {storeName}
                 </span>
             </div>

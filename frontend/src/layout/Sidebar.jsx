@@ -10,22 +10,12 @@ export default function Sidebar({ settings, storeName, visibleTabs, safeTab, goT
     return (
         <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-surface-dark-2 border-r border-border dark:border-border-dark shrink-0">
             <div className="flex items-center gap-2.5 px-4 py-4 border-b border-border dark:border-border-dark">
-                {settings.logo_url ? (
+                {/* Sin logo, solo el nombre: sin icono de relleno (ver TopBar). */}
+                {settings.logo_url && (
                     // Mismo criterio que TopBar: un logo de 32px en una cabecera de 56 se pierde.
                     <img src={resolveImageUrl(settings.logo_url)} alt="logo" className="h-10 w-auto object-contain shrink-0" />
-                ) : (
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shrink-0 shadow-sm">
-                        <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2.5}
-                                d="M13 10V3L4 14h7v7l9-11h-7z"
-                            />
-                        </svg>
-                    </div>
                 )}
-                <span className="text-sm font-semibold text-content dark:text-content-dark tracking-tight truncate">
+                <span title={storeName} className="text-[15px] font-semibold text-content dark:text-content-dark tracking-tight truncate">
                     {storeName}
                 </span>
             </div>
