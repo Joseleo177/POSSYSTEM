@@ -5,8 +5,9 @@
 // donde se ponga. La N va en el rosa de la marca, fijo: no cambia con el tema ni con el color que
 // cada empresa elige para su sistema. No se combina con cian.
 //
-// Los picos de la N (ingletes del trazo) quedan recortados a ras por el viewBox: es el corte
-// plano que se aprobó en el boceto, no un error.
+// Las puntas de la N (los ingletes del trazo) sobresalen por arriba a la izquierda y por abajo a
+// la derecha de las demás letras. Es a propósito: ese desequilibrio es lo que se eligió del
+// boceto. No "corregirlo" igualando alturas.
 
 export const NXUS_ROSA = "#FB7185";
 

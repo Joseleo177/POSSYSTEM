@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <!-- Favicon de NXUS ERP: la N de rayo del logo, en rosa, sobre un cuadro en la tinta de la
-       marca. El trazo es más grueso que en el logo para que el quiebre se lea a 16 px. -->
+       marca. El trazo es más grueso que en el logo para que el quiebre se lea a 16 px. Las puntas
+       que sobresalen son a propósito (ver ui/NxusLogo.jsx). -->
   <rect width="100" height="100" rx="22" fill="#0F2A33"/>
   <svg x="14" y="14" width="72" height="72" viewBox="222 659 200 200">
     <path d="M262 822V696L316 768L328 750L382 822V696" fill="none" stroke="#FB7185" stroke-width="28" stroke-linejoin="miter"/>
