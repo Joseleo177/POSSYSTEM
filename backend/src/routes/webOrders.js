@@ -1,11 +1,13 @@
 const router = require("express").Router();
 const { auth, permit } = require("../middleware/auth");
 const svc = require("../services/webOrders");
-const { moduloActivo: moduloEmpresa } = require("../services/catalogCheckout");
+const { Company } = require("../models");
 
-// Módulo Pedidos: la bandeja de los pedidos del catálogo. Atenderlos es trabajo de caja
-// (aceptar los pasa al POS), así que todo va con sales.create, y solo en empresas con el extra
-// de pedidos web.
+// Módulo Pedidos: la bandeja de los pedidos del catálogo, para toda empresa con el catálogo
+// público (no hace falta el extra de pedidos web: ese agrega delivery por zonas y pagos
+// reportados). Atenderlos es trabajo de caja (aceptar los pasa al POS), así que todo va con
+// sales.create.
+
 const handle = (fn) => async (req, res, next) => {
   try {
     res.json({ ok: true, ...(await fn(req)) });
@@ -14,8 +16,9 @@ const handle = (fn) => async (req, res, next) => {
 
 const moduloActivo = async (req, res, next) => {
   try {
-    if (!req.company_id || !(await moduloEmpresa(req.company_id))) {
-      return res.status(403).json({ ok: false, message: "Los pedidos web no están activos para esta empresa" });
+    const c = req.company_id ? await Company.findByPk(req.company_id, { attributes: ["catalog_enabled"] }) : null;
+    if (!c?.catalog_enabled) {
+      return res.status(403).json({ ok: false, message: "El catálogo público no está activo para esta empresa" });
     }
     next();
   } catch (err) { next(err); }

@@ -20,6 +20,7 @@ const { visibleWarehouseIds, assertWarehouseAccess, isAdmin } = require("../midd
 const acceptWebOrder = require("./sales/acceptWebOrder");
 const paymentReports = require("./paymentReports");
 const { zonasDe } = require("./catalogCheckout");
+const { imageUrl } = require("../utils/imageStorage");
 
 const QT = Sequelize.QueryTypes;
 const fail = (message, status = 400) => Object.assign(new Error(message), { status, isOperational: true });
@@ -59,6 +60,10 @@ async function list(req, query = {}) {
            (SELECT COUNT(*)::int FROM sale_items si WHERE si.sale_id = s.id) AS items_count,
            (SELECT string_agg(trim(to_char(si.quantity, 'FM999990.###')) || ' × ' || si.name, ', ' ORDER BY si.id)
               FROM sale_items si WHERE si.sale_id = s.id) AS resumen,
+           -- Las fotos de los primeros productos: la fila se reconoce de un vistazo.
+           (SELECT array_agg(f.image_filename) FROM (
+              SELECT p.image_filename FROM sale_items si JOIN products p ON p.id = si.product_id
+               WHERE si.sale_id = s.id AND p.image_filename IS NOT NULL ORDER BY si.id LIMIT 3) f) AS fotos,
            (SELECT CASE WHEN bool_or(r.status IN ('confirmado', 'aplicado')) THEN 'confirmado'
                         WHEN bool_or(r.status = 'pendiente') THEN 'pendiente' END
               FROM payment_reports r WHERE r.sale_id = s.id) AS pago
@@ -78,7 +83,12 @@ async function list(req, query = {}) {
   `, { replacements: { cid: companyId, ...f.rep }, type: QT.SELECT });
 
   return {
-    data: rows.map(r => ({ ...r, total: parseFloat(r.total), service_charge: parseFloat(r.service_charge || 0) })),
+    data: rows.map(r => ({
+      ...r,
+      total: parseFloat(r.total),
+      service_charge: parseFloat(r.service_charge || 0),
+      fotos: (r.fotos || []).map(imageUrl).filter(Boolean),
+    })),
     counts: { nuevos },
   };
 }
@@ -110,7 +120,7 @@ async function seriesPara(req, warehouseId) {
 async function detail(req, id) {
   const sale = await cargarVenta(req, id);
   const companyId = sale.company_id;
-  const [items, reportes, extra] = await Promise.all([
+  const [items, reportes, extra, fotos] = await Promise.all([
     SaleItem.findAll({
       where: { sale_id: sale.id },
       attributes: ["id", "product_id", "name", "quantity", "price", "discount", "subtotal", "note"],
@@ -126,7 +136,12 @@ async function detail(req, id) {
         LEFT JOIN delivery_zones z ON z.id = s.delivery_zone_id
        WHERE s.id = :id
     `, { replacements: { id: sale.id }, type: QT.SELECT }),
+    sequelize.query(`
+      SELECT p.id, p.image_filename FROM products p
+       WHERE p.id IN (SELECT product_id FROM sale_items WHERE sale_id = :id) AND p.image_filename IS NOT NULL
+    `, { replacements: { id: sale.id }, type: QT.SELECT }),
   ]);
+  const fotoDe = new Map(fotos.map(f => [f.id, imageUrl(f.image_filename)]));
   const j = sale.toJSON();
   const productos = r2(items.reduce((acc, i) => acc + parseFloat(i.subtotal ?? (i.price - (i.discount || 0)) * i.quantity), 0));
   const esNuevo = sale.status === "pedido";
@@ -141,6 +156,7 @@ async function detail(req, id) {
       products_total: productos,
       items: items.map(i => ({
         id: i.id, product_id: i.product_id, name: i.name, note: i.note,
+        image_url: fotoDe.get(i.product_id) || null,
         quantity: parseFloat(i.quantity), price: parseFloat(i.price),
         subtotal: parseFloat(i.subtotal ?? i.price * i.quantity),
       })),

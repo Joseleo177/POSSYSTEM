@@ -9,7 +9,8 @@ import Modal from "../components/ui/Modal";
 import CustomSelect from "../components/ui/CustomSelect";
 import { Button } from "../components/ui/Button";
 import PaymentReportList from "../components/PaymentReports/PaymentReportList";
-import { toNameCase, printKitchenOrder } from "../helpers";
+import MiniMapa from "../components/MiniMapa";
+import { toNameCase, printKitchenOrder, resolveImageUrl } from "../helpers";
 
 // Pedidos: la bandeja de los pedidos que llegan del catálogo (extra pedidos web). Antes se
 // atendían desde "Ventas en espera" del POS, con piezas pensadas para cuentas pausadas. Aquí se
@@ -61,28 +62,103 @@ function PagoMark({ pago }) {
     );
 }
 
+// Rótulo de campo con alto fijo: con "Opcional" a la derecha o sin él, todos los campos de una
+// fila arrancan a la misma altura (antes el del recargo quedaba más alto que el del motivo).
+function Rotulo({ children, opcional = false }) {
+    return (
+        <span className="flex items-center justify-between gap-2 h-[18px] text-[12px] font-medium text-content-subtle">
+            <span className="truncate">{children}</span>
+            {opcional && <span className="text-[11px] font-normal text-content-subtle/70 shrink-0">Opcional</span>}
+        </span>
+    );
+}
+
+// ── Piezas visuales ──────────────────────────────────────────────────────
+
+// Inicial del cliente en un círculo neutro: se reconoce la fila sin leer el nombre. Sin
+// colores por cliente: en este sistema el color es señal, no adorno.
+function Inicial({ nombre, size = "w-10 h-10 text-[15px]" }) {
+    const letras = String(nombre || "?").trim().split(/\s+/).slice(0, 2).map(p => p[0]).join("").toUpperCase();
+    return (
+        <span className={`${size} rounded-full bg-surface-3 dark:bg-white/[0.08] text-content-muted dark:text-white/80 font-semibold flex items-center justify-center shrink-0`}>
+            {letras || "?"}
+        </span>
+    );
+}
+
+// Foto del producto, o su inicial si no tiene.
+function Foto({ src, nombre, className = "w-11 h-11 rounded-lg" }) {
+    const [mala, setMala] = useState(false);
+    return (
+        <span className={`${className} shrink-0 overflow-hidden bg-surface-2 dark:bg-white/[0.06] ring-1 ring-black/[0.04] dark:ring-white/[0.06] flex items-center justify-center`}>
+            {src && !mala
+                ? <img src={resolveImageUrl(src)} alt="" loading="lazy" onError={() => setMala(true)} className="w-full h-full object-cover" />
+                : <span className="text-[12px] font-semibold text-content-subtle">{String(nombre || "?").charAt(0).toUpperCase()}</span>}
+        </span>
+    );
+}
+
+// Por dónde va el pedido. El módulo llega hasta aceptarlo; el cobro lo cierra la caja.
+const PASOS = ["Recibido", "Aceptado", "Cobrado"];
+function Avance({ status, creado }) {
+    const hecho = status === "pedido" ? 1 : ["pagado", "exonerado"].includes(status) ? 3 : status === "anulado" ? 0 : 2;
+    return (
+        <ol className="flex items-start">
+            {PASOS.map((p, i) => {
+                const listo = i < hecho;
+                const actual = i === hecho;
+                return (
+                    <li key={p} className="flex-1 min-w-0 flex flex-col items-center text-center relative">
+                        {i > 0 && <span className={`absolute top-[11px] right-1/2 w-full h-[2px] ${i < hecho ? "bg-emerald-500" : "bg-border dark:bg-white/10"}`} />}
+                        <span className={`relative z-[1] w-6 h-6 rounded-full flex items-center justify-center ${listo
+                            ? "bg-emerald-500 text-white"
+                            : actual ? "bg-white dark:bg-surface-dark-2 ring-2 ring-brand-500 text-brand-600 dark:text-brand-400" : "bg-surface-3 dark:bg-white/10 text-content-subtle"}`}>
+                            {listo
+                                ? <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                : <span className="text-[11px] font-bold">{i + 1}</span>}
+                        </span>
+                        <span className={`mt-1.5 text-[12px] ${listo || actual ? "font-medium text-content dark:text-white" : "text-content-subtle"}`}>{p}</span>
+                        {i === 0 && <span className="text-[11px] text-content-subtle tabular-nums">{hora(creado)}</span>}
+                        {actual && i === 1 && <span className="text-[11px] text-brand-600 dark:text-brand-400">Por aceptar</span>}
+                        {actual && i === 2 && <span className="text-[11px] text-brand-600 dark:text-brand-400">En la caja</span>}
+                    </li>
+                );
+            })}
+        </ol>
+    );
+}
+
 // ── Lista ────────────────────────────────────────────────────────────────
 
 function Fila({ o, activo, onClick, nuevos }) {
     // Lo que lleva más de 15 minutos sin aceptar pide atención: filete ámbar.
     const atrasado = nuevos && minutosDesde(o.created_at) >= 15;
+    const delivery = o.fulfillment === "delivery";
     return (
         <button type="button" onClick={onClick}
-            className={`w-full text-left px-4 py-3 flex items-start gap-3 transition-colors ${activo ? "bg-brand-500/[0.06] dark:bg-white/[0.05]" : "hover:bg-surface-2/70 dark:hover:bg-white/[0.03]"} ${atrasado ? "shadow-[inset_3px_0_0_#f59e0b]" : ""}`}>
-            <span className="w-9 h-9 mt-0.5 rounded-full bg-surface-2 dark:bg-white/[0.06] text-content-muted dark:text-white/70 flex items-center justify-center shrink-0">
-                <IconoEntrega delivery={o.fulfillment === "delivery"} />
-            </span>
+            className={`w-full text-left px-4 py-3.5 flex items-start gap-3 transition-colors ${activo ? "bg-brand-500/[0.06] dark:bg-white/[0.05]" : "hover:bg-surface-2/70 dark:hover:bg-white/[0.03]"} ${atrasado ? "shadow-[inset_3px_0_0_#f59e0b]" : ""}`}>
+            <Inicial nombre={toNameCase(o.customer_name)} />
             <span className="min-w-0 flex-1">
                 <span className="flex items-baseline justify-between gap-3">
                     <span className="text-[14px] font-semibold text-content dark:text-white truncate">{toNameCase(o.customer_name) || "Cliente"}</span>
                     <span className={`text-[12px] tabular-nums shrink-0 ${atrasado ? "text-amber-700 dark:text-amber-400 font-medium" : "text-content-subtle"}`}>{hace(o.created_at)}</span>
                 </span>
-                <span className="block text-[12px] text-content-subtle truncate mt-0.5">
-                    {o.fulfillment === "delivery" ? (o.delivery_address || "Delivery") : o.fulfillment === "retiro" ? `Retira en ${o.warehouse_name || "tienda"}` : (o.warehouse_name || "Sin entrega indicada")}
+                <span className="mt-0.5 flex items-center gap-1.5 text-[12px] text-content-subtle min-w-0">
+                    <IconoEntrega delivery={delivery} className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">
+                        {delivery ? (o.delivery_address || "Delivery") : o.fulfillment === "retiro" ? `Retira en ${toNameCase(o.warehouse_name) || "tienda"}` : (toNameCase(o.warehouse_name) || "Sin entrega indicada")}
+                    </span>
                 </span>
-                <span className="block text-[12px] text-content-muted dark:text-white/60 truncate mt-0.5">{o.resumen}</span>
-                <span className="mt-1.5 flex items-center justify-between gap-3">
-                    <Money value={ref(o.total)} className="text-[14px] font-semibold text-content dark:text-white" />
+                <span className="mt-2 flex items-center gap-2 min-w-0">
+                    {o.fotos?.length > 0 && (
+                        <span className="flex -space-x-2 shrink-0">
+                            {o.fotos.map((f, i) => <Foto key={i} src={f} className="w-7 h-7 rounded-md ring-2 ring-white dark:ring-surface-dark-2" />)}
+                        </span>
+                    )}
+                    <span className="text-[12px] text-content-muted dark:text-white/60 truncate">{o.resumen}</span>
+                </span>
+                <span className="mt-2 flex items-center justify-between gap-3">
+                    <Money value={ref(o.total)} className="text-[15px] font-bold tracking-tight text-content dark:text-white" />
                     {nuevos ? <PagoMark pago={o.pago} /> : <StatusMark status={o.status} map={PEDIDO_STATUS} />}
                 </span>
             </span>
@@ -200,19 +276,26 @@ function Detalle({ id, onChanged, onClose }) {
 
     return (
         <div className="flex flex-col flex-1 min-h-0">
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-5">
-                {/* Cabecera */}
-                <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                        <span className="w-10 h-10 rounded-full bg-surface-3 dark:bg-white/[0.06] text-content-muted dark:text-white/70 flex items-center justify-center shrink-0">
-                            <IconoEntrega delivery={delivery} className="w-5 h-5" />
-                        </span>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="p-4 sm:p-6 space-y-5 max-w-[920px] mx-auto">
+                {/* Cabecera: quién, qué pedido y cuánto, de un vistazo. */}
+                <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                        <Inicial nombre={toNameCase(o.customer_name || o.web_customer_name)} size="w-12 h-12 text-[17px]" />
                         <div className="min-w-0">
-                            <p className="text-[12px] text-content-subtle tabular-nums">{o.invoice_number || `Pedido #${o.id}`} · {hora(o.created_at)} · {hace(o.created_at).toLowerCase()}</p>
+                            <p className="text-[12px] text-content-subtle tabular-nums">{o.invoice_number || `Pedido #${o.id}`} · {hace(o.created_at).toLowerCase()}</p>
                             <h2 className="text-[20px] font-semibold tracking-tight text-content dark:text-white truncate">{toNameCase(o.customer_name || o.web_customer_name)}</h2>
+                            <div className="mt-0.5"><StatusMark status={o.status} map={PEDIDO_STATUS} /></div>
                         </div>
                     </div>
-                    <div className="pt-1 shrink-0"><StatusMark status={o.status} map={PEDIDO_STATUS} /></div>
+                    <div className="text-right shrink-0">
+                        <Money value={ref(nuevo ? totalVista : o.total)} className="block text-[24px] font-bold tracking-tight leading-none text-content dark:text-white" />
+                        {bs && <Money value={enBs(nuevo ? totalVista : o.total)} className="block mt-1.5 text-[12px] text-content-subtle" />}
+                    </div>
+                </div>
+
+                <div className={`${CARD} px-4 pt-4 pb-3`}>
+                    <Avance status={o.status} creado={o.created_at} />
                 </div>
 
                 {aceptado && (
@@ -236,20 +319,23 @@ function Detalle({ id, onChanged, onClose }) {
                         )}
                     </div>
                     <div className={`${CARD} p-4`}>
-                        <p className={LABEL}>{delivery ? `Delivery${o.zone_name ? ` · ${o.zone_name}` : ""}` : o.fulfillment === "retiro" ? "Retiro en tienda" : "Entrega"}</p>
+                        <p className={`${LABEL} flex items-center gap-1.5`}>
+                            <IconoEntrega delivery={delivery} className="w-3.5 h-3.5" />
+                            {delivery ? `Delivery${o.zone_name ? ` · ${o.zone_name}` : ""}` : o.fulfillment === "retiro" ? "Retiro en tienda" : "Entrega"}
+                        </p>
                         {delivery ? (
                             <>
                                 <p className="text-[14px] font-medium text-content dark:text-white mt-0.5 break-words">{o.delivery_address}</p>
                                 {o.delivery_reference && <p className="text-[13px] text-content-subtle break-words">{o.delivery_reference}</p>}
                                 {mapa
-                                    ? <a href={mapa} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 mt-2 text-[12px] font-semibold text-brand-600 dark:text-brand-400 hover:underline underline-offset-2">
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21s-7-6.2-7-11.5a7 7 0 1114 0C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" strokeWidth={2} /></svg>
-                                        Abrir en el mapa
-                                    </a>
-                                    : <p className="text-[12px] text-content-subtle mt-2">Sin punto en el mapa</p>}
+                                    ? <MiniMapa lat={parseFloat(o.delivery_lat)} lng={parseFloat(o.delivery_lng)} className="h-32 mt-3" />
+                                    : <p className="text-[12px] text-content-subtle mt-2">El cliente no marcó el punto en el mapa</p>}
                             </>
                         ) : (
-                            <p className="text-[14px] font-medium text-content dark:text-white mt-0.5">{o.requested_warehouse_name || "Sucursal no indicada"}</p>
+                            <>
+                                <p className="text-[14px] font-medium text-content dark:text-white mt-0.5">{toNameCase(o.requested_warehouse_name) || "Sucursal no indicada"}</p>
+                                <p className="text-[13px] text-content-subtle">El cliente lo busca en la tienda.</p>
+                            </>
                         )}
                     </div>
                 </div>
@@ -265,13 +351,16 @@ function Detalle({ id, onChanged, onClose }) {
                 <Seccion titulo="Productos" aside={<span className="text-[12px] text-content-subtle">{o.items.length} {o.items.length === 1 ? "línea" : "líneas"}</span>}>
                     <div className={`${CARD} divide-y divide-border/60 dark:divide-white/[0.06]`}>
                         {o.items.map(i => (
-                            <div key={i.id} className="px-4 py-2.5">
-                                <div className="flex items-baseline justify-between gap-3">
-                                    <span className="text-[13px] font-medium text-content dark:text-white min-w-0">{toNameCase(i.name)}</span>
-                                    <Money value={ref(i.subtotal)} className="text-[13px] font-semibold text-content dark:text-white shrink-0" />
+                            <div key={i.id} className="px-4 py-3 flex items-center gap-3">
+                                <Foto src={i.image_url} nombre={i.name} />
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-baseline justify-between gap-3">
+                                        <span className="text-[14px] font-medium text-content dark:text-white min-w-0">{toNameCase(i.name)}</span>
+                                        <Money value={ref(i.subtotal)} className="text-[14px] font-semibold text-content dark:text-white shrink-0" />
+                                    </div>
+                                    <div className="text-[12px] text-content-subtle tabular-nums">{i.quantity % 1 === 0 ? i.quantity : i.quantity.toFixed(3)} × {ref(i.price)}</div>
+                                    {i.note && <div className="text-[12px] italic text-content-muted dark:text-white/70">{i.note}</div>}
                                 </div>
-                                <div className="text-[12px] text-content-subtle tabular-nums">{i.quantity % 1 === 0 ? i.quantity : i.quantity.toFixed(3)} × {ref(i.price)}</div>
-                                {i.note && <div className="text-[12px] italic text-content-muted dark:text-white/70">{i.note}</div>}
                             </div>
                         ))}
                     </div>
@@ -285,7 +374,7 @@ function Detalle({ id, onChanged, onClose }) {
                                 <div className={`grid gap-3 ${o.zones?.length ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
                                     {o.zones?.length > 0 && (
                                         <div className="min-w-0">
-                                            <span className={LABEL}>Zona</span>
+                                            <Rotulo>Zona</Rotulo>
                                             <CustomSelect value={cargo.zone} className="mt-1.5" placeholder="Sin zona"
                                                 onChange={v => {
                                                     const z = o.zones.find(x => String(x.id) === String(v));
@@ -295,7 +384,7 @@ function Detalle({ id, onChanged, onClose }) {
                                         </div>
                                     )}
                                     <label className="block min-w-0">
-                                        <span className={LABEL}>Delivery</span>
+                                        <Rotulo>Delivery</Rotulo>
                                         <div className="relative mt-1.5">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">Ref.</span>
                                             <input value={cargo.fee} onChange={e => setCargo(p => ({ ...p, fee: e.target.value.replace(/[^\d.,]/g, "") }))}
@@ -306,7 +395,7 @@ function Detalle({ id, onChanged, onClose }) {
                             )}
                             <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-3">
                                 <label className="block min-w-0">
-                                    <span className="flex items-baseline justify-between"><span className={LABEL}>Recargo</span><span className="text-[11px] text-content-subtle/70">Opcional</span></span>
+                                    <Rotulo opcional>Recargo</Rotulo>
                                     <div className="relative mt-1.5">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">Ref.</span>
                                         <input value={cargo.extra} onChange={e => setCargo(p => ({ ...p, extra: e.target.value.replace(/[^\d.,]/g, "") }))}
@@ -314,7 +403,7 @@ function Detalle({ id, onChanged, onClose }) {
                                     </div>
                                 </label>
                                 <label className="block min-w-0">
-                                    <span className={LABEL}>Motivo · lo verá el cliente</span>
+                                    <Rotulo>Motivo · lo verá el cliente</Rotulo>
                                     <input value={cargo.reason} onChange={e => setCargo(p => ({ ...p, reason: e.target.value.slice(0, 120) }))}
                                         placeholder="Ej. Zona fuera de ruta, empaque especial" autoComplete="off" className={`${INPUT} mt-1.5`} />
                                 </label>
@@ -351,16 +440,21 @@ function Detalle({ id, onChanged, onClose }) {
                     </div>
                 </div>
             </div>
+            </div>
 
             {/* Acciones */}
-            <div className="shrink-0 px-4 sm:px-5 py-3 border-t border-border/60 dark:border-white/[0.06] space-y-2.5 bg-white dark:bg-surface-dark-2 lg:bg-transparent">
+            <div className="shrink-0 px-4 sm:px-6 py-3 border-t border-border/60 dark:border-white/[0.06] bg-white dark:bg-surface-dark-2 lg:bg-transparent">
+            <div className="max-w-[920px] mx-auto space-y-2.5">
                 {nuevo && o.series?.length > 1 && (
                     <CustomSelect value={serie} onChange={setSerie} placeholder="Serie con que se factura"
                         options={o.series.map(s => ({ value: String(s.id), label: `Serie ${s.name}` }))} />
                 )}
                 <div className="flex flex-col sm:flex-row gap-2">
-                    <Button variant="ghost" className="h-12 sm:h-10 sm:flex-1" onClick={imprimir}>Imprimir</Button>
-                    {nuevo && <Button variant="ghost" className="h-12 sm:h-10 sm:flex-1" onClick={() => { setMotivo(""); setRechazar(true); }}>Rechazar</Button>}
+                    {/* En el teléfono, las dos secundarias comparten fila y la principal va debajo a lo ancho. */}
+                    <div className="grid grid-cols-2 gap-2 sm:contents">
+                        <Button variant="ghost" className={`h-12 sm:h-10 sm:flex-1 ${nuevo ? "" : "col-span-2"}`} onClick={imprimir}>Imprimir</Button>
+                        {nuevo && <Button variant="ghost" className="h-12 sm:h-10 sm:flex-1" onClick={() => { setMotivo(""); setRechazar(true); }}>Rechazar</Button>}
+                    </div>
                     {nuevo && (
                         <Button className="h-12 sm:h-10 sm:flex-[1.6]" onClick={aceptar}
                             disabled={o.series?.length > 1 && !serie}>
@@ -372,6 +466,7 @@ function Detalle({ id, onChanged, onClose }) {
                     )}
                 </div>
                 {nuevo && <p className="text-[12px] text-content-subtle text-center">Al aceptarlo se descuenta el inventario y pasa a la caja para cobrarlo.</p>}
+            </div>
             </div>
 
             <Modal open={rechazar} onClose={() => setRechazar(false)} title="Rechazar pedido" width={440}
