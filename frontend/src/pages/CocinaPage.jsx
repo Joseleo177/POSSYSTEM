@@ -7,6 +7,7 @@ import CustomSelect from "../components/ui/CustomSelect";
 import { Spinner } from "../components/ui/Spinner";
 import { fmtTime, printKitchenOrder, toNameCase } from "../helpers";
 import AgotadosModal from "../components/mesas/AgotadosModal";
+import BatchFormModal from "../components/recetas/BatchFormModal";
 
 // Pantalla de cocina. Va en una tablet o un TV de la cocina, siempre abierta: las comandas
 // son los pedidos que los mesoneros mandan desde el catálogo en sus tablets, y aquí se
@@ -98,6 +99,9 @@ export default function CocinaPage() {
     const [movil, setMovil] = useState("nueva");
     const [ocupadas, setOcupadas] = useState({});
     const [agotados, setAgotados] = useState(false);
+    // "Hice una olla": la cocina registra su producción sin salir de esta pantalla.
+    const canProduce = can("production.manage");
+    const [produciendo, setProduciendo] = useState(false);
 
     const [sonido, setSonidoState] = useState(() => leer(`cocina_sonido_${cid}`, "1") === "1");
     const { preparar, sonar } = useCampana();
@@ -195,6 +199,13 @@ export default function CocinaPage() {
         <div className="flex items-center gap-2">
             {warehouses.length > 1 && (
                 <CustomSelect value={almacen} onChange={setAlmacen} options={opcionesAlmacen} className="w-48" height="h-9" />
+            )}
+            {canProduce && (
+                <button onClick={() => setProduciendo(true)} title="Registrar una tanda: la olla de sopa, la salsa"
+                    className="btn-outline h-9 px-3 rounded-lg text-[13px] font-medium flex items-center gap-1.5 whitespace-nowrap">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 10h16M5 10v7a3 3 0 003 3h8a3 3 0 003-3v-7M3 10h1m16 0h1M9 6.5c0-1 1-1.5 1-2.5m4 2.5c0-1 1-1.5 1-2.5" /></svg>
+                    <span className="hidden sm:inline">Producción</span>
+                </button>
             )}
             {canManage && (
                 <button onClick={() => setAgotados(true)} title="Marcar lo que se acabó (contornos, extras)"
@@ -353,6 +364,10 @@ export default function CocinaPage() {
                 </div>
             )}
             {agotados && <AgotadosModal notify={notify} onClose={() => setAgotados(false)} />}
+            {canProduce && (
+                <BatchFormModal open={produciendo} warehouseId={almacen} warehouses={warehouses}
+                    onClose={() => setProduciendo(false)} onSaved={() => setProduciendo(false)} />
+            )}
         </Page>
     );
 }

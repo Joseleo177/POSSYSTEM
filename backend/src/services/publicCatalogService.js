@@ -1,9 +1,10 @@
-const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, ProductStock, Warehouse, CatalogBanner, Promotion, BenefitTag, Company, Sequelize, sequelize } = require("../models");
+const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, ProductStock, Warehouse, CatalogBanner, Promotion, BenefitTag, Company, RecipeSheet, Sequelize, sequelize } = require("../models");
 const { crearComanda } = require("./kitchen");
 const { tenantStorage } = require("../utils/tenantStorage");
 const addons = require("./addons");
 const { imageUrl } = require("../utils/imageStorage");
 const { calculateComboStockAndCost } = require("./products/productService");
+const { vendeSinInsumoEmpresa } = require("./products/recipeStock");
 const { getVariants } = require("./products/variantService");
 
 const Op = Sequelize.Op;
@@ -392,6 +393,13 @@ async function getStore(token, { warehouse_id } = {}) {
 // negocio puede armarlo, no si puede armarlo una sucursal concreta.
 async function comboAvailability(comboIds, warehouseId) {
   if (!comboIds.length) return {};
+
+  // Restaurante que vende aunque falte el insumo: ningún plato sale agotado por inventario
+  // (null = sin límite). Ver products/recipeStock.js. La vitrina es de una sola empresa.
+  const uno = await Product.findByPk(comboIds[0], { attributes: ["company_id"] });
+  if (uno && await vendeSinInsumoEmpresa(uno.company_id)) {
+    return Object.fromEntries(comboIds.map((id) => [id, null]));
+  }
 
   const links = await ProductComboItem.findAll({
     where: { combo_id: { [Op.in]: comboIds } },
@@ -811,8 +819,12 @@ async function getProduct(token, productId, { warehouse_id } = {}) {
     // hecho, y es justo lo que el cliente quiere saber antes de comprarlo. Solo nombre, foto
     // y cantidad —nada de costos ni stock de cada pieza— y el id únicamente si esa pieza
     // también se vende suelta en la vitrina, para poder enlazarla.
+    //
+    // Un plato con ficha técnica (app Recetas) no publica lo que lleva: son los gramos y los
+    // insumos de la cocina, no el contenido de un kit, y no son para el cliente.
     let includes = [];
-    if (p.is_combo) {
+    const conFicha = p.is_combo && await RecipeSheet.count({ where: { product_id: p.id } });
+    if (p.is_combo && !conFicha) {
       const links = await ProductComboItem.findAll({
         where: { combo_id: p.id },
         attributes: ["product_id", "quantity"],

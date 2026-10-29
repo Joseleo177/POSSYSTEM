@@ -4,7 +4,7 @@ const {
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { excludeAnnulledReturns, factorDevolucion, saleDebt, refreshSaleStatus, settleSurplus, defaultSurplusMode } = require("./shared");
-const { componentesConStock } = require("../products/comboStock");
+const { consumoDeLinea } = require("../products/recipeStock");
 
 async function createReturn({ saleId, items, reason, employee_id, refund, surplus_mode }, req) {
   if (!items?.length) { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
@@ -148,10 +148,12 @@ async function createReturn({ saleId, items, reason, employee_id, refund, surplu
 
       if (line.product_id) {
         const product = await Product.findByPk(line.product_id, { transaction });
+        // Vuelve lo que la línea vendida descontó (su foto), no la receta de hoy.
+        const vendida = line.sale_item_id ? await SaleItem.findByPk(line.sale_item_id, { transaction }) : null;
+        const consumo = await consumoDeLinea(vendida, product, sale.created_at, transaction);
 
-        if (product && !product.is_service && product.is_combo) {
-          const comboItems = await componentesConStock(product.id, transaction);
-          for (const cItem of comboItems) {
+        if (consumo) {
+          for (const cItem of consumo) {
             const qtyToRestore = line.qty * parseFloat(cItem.quantity);
             const [stockEntry] = await ProductStock.findOrCreate({
               where:    { warehouse_id: sale.warehouse_id, product_id: cItem.product_id },

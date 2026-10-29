@@ -8,6 +8,7 @@ const { syncVariants, propagateModelToVariants, assertCanBecomeModel } = require
 const { condicionSucursal, existenciaEn, idsVisibles } = require("./productAccess");
 const { pieceConfigChanges } = require("../factory/numbering");
 const { unitOfMode } = require("../factory/shared");
+const { marcarRecetaDesde } = require("./recipeStock");
 
 // ¿La empresa tiene el módulo Fábrica? El control por piezas solo se acepta ahí.
 async function fabricaActiva(companyId, transaction) {
@@ -764,6 +765,7 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
 
     const isComboBool = !esModelo && (is_combo === 'true' || is_combo === true || (is_combo === undefined ? product.is_combo : false));
     const isServiceBool = !esModelo && (is_service === 'true' || is_service === true || (is_service === undefined ? product.is_service : false));
+    const eraCombo = !!product.is_combo;
 
     // Campo ausente = no se toca; campo presente pero vacío = se vacía a propósito.
     //
@@ -930,14 +932,28 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
     }
 
     if (isComboBool && combo_items !== undefined) {
+      // El editor del Catálogo solo conoce la cantidad. Una línea que no cambió conserva el
+      // neto y la merma que le puso la app Recetas; si cambió, el neto pasa a ser lo nuevo.
+      const previas = new Map((await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction: t }))
+        .map(ci => [ci.product_id, ci]));
       await ProductComboItem.destroy({ where: { combo_id: product.id }, transaction: t });
       const parsedItems = typeof combo_items === 'string' ? (combo_items ? JSON.parse(combo_items) : []) : combo_items;
       if (Array.isArray(parsedItems) && parsedItems.length > 0) {
         await ProductComboItem.bulkCreate(
-          parsedItems.map(i => ({ combo_id: product.id, product_id: i.product_id, quantity: i.quantity, company_id })),
+          parsedItems.map(i => {
+            const antes = previas.get(parseInt(i.product_id, 10));
+            const igual = antes && Math.abs(parseFloat(antes.quantity) - parseFloat(i.quantity)) < 0.0005;
+            return {
+              combo_id: product.id, product_id: i.product_id, quantity: i.quantity, company_id,
+              ...(igual ? { net_quantity: antes.net_quantity, waste_pct: antes.waste_pct } : {}),
+            };
+          }),
           { transaction: t }
         );
       }
+      // Pasó a combo: desde ahora descuenta su receta. Las ventas de antes no descontaron
+      // nada y anularlas no debe reponer (ver products/recipeStock.js).
+      if (!eraCombo) await marcarRecetaDesde(product.id, company_id, t);
     } else if (!isComboBool) {
       await ProductComboItem.destroy({ where: { combo_id: product.id }, transaction: t });
     }

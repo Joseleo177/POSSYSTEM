@@ -23,6 +23,12 @@ const fmtQty = (q) => {
     return n % 1 === 0 ? String(Math.round(n)) : n.toLocaleString("es-VE");
 };
 
+// "lomo de res, papa y huevo": como se le dice al cliente en la mesa.
+const listaNatural = (nombres) => {
+    const xs = nombres.map(n => String(n).trim().toLowerCase()).filter(Boolean);
+    return xs.length > 1 ? `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}` : (xs[0] || "");
+};
+
 const Icono = {
     mas:   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v14M5 12h14" />,
     menos: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14" />,
@@ -112,6 +118,12 @@ function FichaPlato({ p, warehouseId, sym, onAdd, onClose }) {
                             {detalle.description?.map((par, i) => (
                                 <p key={i} className="text-[14px] text-content-subtle leading-relaxed whitespace-pre-line">{par}</p>
                             ))}
+                            {/* Plato con ficha técnica: qué lleva, sin cantidades (sirve para las alergias). */}
+                            {detalle.lleva?.length > 0 && (
+                                <p className="text-[14px] text-content dark:text-white/90 leading-relaxed">
+                                    <span className="text-content-subtle">Lleva </span>{listaNatural(detalle.lleva)}.
+                                </p>
+                            )}
                             {detalle.incluye?.length > 0 && (
                                 <div>
                                     <div className="text-[12px] text-content-subtle mb-1.5">Incluye</div>
@@ -125,7 +137,7 @@ function FichaPlato({ p, warehouseId, sym, onAdd, onClose }) {
                                     </ul>
                                 </div>
                             )}
-                            {!corta && !detalle.description?.length && !detalle.incluye?.length && !detalle.groups?.length && (
+                            {!corta && !detalle.description?.length && !detalle.incluye?.length && !detalle.lleva?.length && !detalle.groups?.length && (
                                 <p className="text-[13px] text-content-subtle">Este plato todavía no tiene descripción. Se carga en Catálogo, en la ficha del producto.</p>
                             )}
                             {!agotado && detalle.groups?.length > 0 && (

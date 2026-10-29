@@ -4,6 +4,7 @@ import { CartProvider } from "./context/CartContext";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PosApp from "./components/PosApp";
 import PublicCatalogPage from "./pages/PublicCatalogPage";
+import MesaPublicPage from "./pages/MesaPublicPage";
 
 // El proyecto no usa react-router: PosApp maneja toda la navegación interna. Para el
 // catálogo público basta con mirar la URL una vez, antes de montar nada.
@@ -22,8 +23,24 @@ function getPublicCatalogRoute() {
     return m ? { slug: m[1].toLowerCase(), productId: m[2] ? parseInt(m[2], 10) : null } : null;
 }
 
+// QR de la mesa (/mesa/<código>): el cliente ve cómo va su pedido. Igual que el catálogo, va
+// fuera de la sesión.
+function getMesaRoute() {
+    const m = window.location.pathname.match(/^\/mesa\/([A-Za-z0-9_-]{12,32})\/?$/);
+    return m ? m[1] : null;
+}
+
 export default function App() {
     const catalogRoute = getPublicCatalogRoute();
+    const mesaToken = getMesaRoute();
+
+    if (mesaToken) {
+        return (
+            <ErrorBoundary>
+                <MesaPublicPage token={mesaToken} />
+            </ErrorBoundary>
+        );
+    }
 
     if (catalogRoute) {
         return (

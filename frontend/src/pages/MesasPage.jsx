@@ -12,6 +12,7 @@ import TablePlan, { TableGrid, agruparPorMesa, minutosDesde, COLS, ROWS, TAMANOS
 import KitchenMark from "../components/KitchenMark";
 import WaiterOrder from "../components/mesas/WaiterOrder";
 import CuentaAcciones from "../components/mesas/CuentaAcciones";
+import { printMesaQrs } from "../components/mesas/mesaQrPrint";
 import { fmtMoney, fmtTime, toNameCase } from "../helpers";
 
 // Mapa de mesas: el plano de cada área con lo que pasa en cada mesa, y el editor del plano.
@@ -53,7 +54,7 @@ function siguienteNombre(todas) {
 }
 
 export default function MesasPage() {
-    const { can, notify, company, baseCurrency, employee } = useApp();
+    const { can, notify, company, baseCurrency, employee, storeName } = useApp();
     const puedeEditar = can("tables.layout");
     const puedeServir = can("tables.serve");
     const cid = company?.id ?? "x";
@@ -241,6 +242,23 @@ export default function MesasPage() {
         <div className="flex items-center gap-2">
             {warehouses.length > 1 && (
                 <CustomSelect value={almacen} onChange={v => { setAlmacen(v); setAreaId(""); }} options={opcionesAlmacen} className="w-44" height="h-9" />
+            )}
+            {/* El QR de cada mesa del área: el cliente ve cómo va su pedido y pide la cuenta. */}
+            {puedeEditar && area?.tables?.length > 0 && (
+                <button onClick={() => {
+                    // El QR lleva la dirección con que se abrió el sistema: desde "localhost" los
+                    // teléfonos de los clientes no llegan a ninguna parte.
+                    if (/^(localhost|127\.|0\.0\.0\.0)/.test(window.location.hostname)) {
+                        notify("Abre el sistema con la dirección que usan los teléfonos (la del dominio o la IP de la red) y vuelve a imprimir: con «localhost» el QR no abre en el teléfono del cliente.", "err");
+                        return;
+                    }
+                    printMesaQrs({ storeName: storeName || company?.name || "", areaName: area.name, tables: area.tables });
+                }}
+                    title="Imprimir el QR de cada mesa de esta área"
+                    className="btn-outline h-9 px-3 rounded-lg text-[13px] font-medium hidden sm:flex items-center gap-1.5 whitespace-nowrap">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 2h2" /></svg>
+                    Imprimir QR
+                </button>
             )}
             {puedeEditar && area && (
                 <button onClick={empezarEdicion} className="btn-outline h-9 px-3 rounded-lg text-[13px] font-medium hidden lg:flex items-center gap-1.5 whitespace-nowrap">

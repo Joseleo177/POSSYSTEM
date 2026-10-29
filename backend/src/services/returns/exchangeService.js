@@ -4,7 +4,7 @@ const {
 } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { excludeAnnulledReturns, factorDevolucion, saleDebt, refreshSaleStatus, settleSurplus, defaultSurplusMode } = require("./shared");
-const { componentesConStock } = require("../products/comboStock");
+const { vendeSinInsumo, fichaEnCero, fotoConsumo, consumoDeLinea } = require("../products/recipeStock");
 
 module.exports = async function createExchange({ saleId, returnItems, replacementItems, reason, employeeId, surplusMode, refund }, req) {
   if (!returnItems?.length)      { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
@@ -112,9 +112,11 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
       /* Restaurar stock del producto devuelto */
       if (line.product_id) {
         const product = await Product.findByPk(line.product_id, { transaction: t });
-        if (product && !product.is_service && product.is_combo) {
-          const comboItems = await componentesConStock(product.id, t);
-          for (const ci of comboItems) {
+        // Vuelve lo que la línea vendida descontó (su foto), no la receta de hoy.
+        const vendida = line.sale_item_id ? await SaleItem.findByPk(line.sale_item_id, { transaction: t }) : null;
+        const consumo = await consumoDeLinea(vendida, product, sale.created_at, t);
+        if (consumo) {
+          for (const ci of consumo) {
             const [stockEntry] = await ProductStock.findOrCreate({ where: { warehouse_id: sale.warehouse_id, product_id: ci.product_id }, defaults: { qty: 0 }, transaction: t, lock: true });
             await stockEntry.increment("qty", { by: line.qty * parseFloat(ci.quantity), transaction: t });
             const total = await ProductStock.sum("qty", { where: { product_id: ci.product_id }, transaction: t });
@@ -141,6 +143,7 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
     /* ── 4. Calcular total de reemplazo y validar stock ── */
     let replacementTotal = 0;
     const replacementLines = [];
+    let sinInsumo;
 
     for (const item of replacementItems) {
       const { product_id, name, qty } = item;
@@ -174,15 +177,18 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
           const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction: t });
           if (!comboItems.length) { const e = new Error(`El producto compuesto "${product.name}" no tiene ingredientes.`); e.status = 400; throw e; }
 
+          // Restaurante: se vende aunque no alcance un ingrediente (ver recipeStock.js).
+          if (sinInsumo === undefined) sinInsumo = await vendeSinInsumo(sale.warehouse_id, t);
           for (const cItem of comboItems) {
             const ingredient = await Product.findByPk(cItem.product_id, { transaction: t, lock: true });
             const qtyNeeded = parsedQty * parseFloat(cItem.quantity);
             // Servicio dentro del combo: no mueve existencias (ver products/comboStock.js).
             if (ingredient.is_service) continue;
 
-            const stockEntry = await ProductStock.findOne({ where: { warehouse_id: sale.warehouse_id, product_id: ingredient.id }, transaction: t, lock: true });
+            let stockEntry = await ProductStock.findOne({ where: { warehouse_id: sale.warehouse_id, product_id: ingredient.id }, transaction: t, lock: true });
+            if (sinInsumo && !stockEntry) stockEntry = await fichaEnCero(sale.warehouse_id, ingredient.id, t);
             const currentQty = parseFloat(stockEntry?.qty || 0);
-            if (currentQty < qtyNeeded) {
+            if (currentQty < qtyNeeded && !sinInsumo) {
               const e = new Error(`Stock insuficiente del ingrediente "${ingredient.name}" para el combo "${product.name}". Disponible: ${currentQty}, Requerido: ${qtyNeeded}`);
               e.status = 400; throw e;
             }
@@ -260,6 +266,7 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
         sale_id: exchangeSale.id, product_id: line.product_id,
         name: line.name, price: line.price, quantity: line.qty,
         discount: 0,
+        components: line.is_combo && !line.is_service ? fotoConsumo(line.ingredientsData, line.qty) : null,
       }, { transaction: t });
 
       /* Decrementar stock del producto de reemplazo */

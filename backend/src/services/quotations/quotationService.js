@@ -7,6 +7,7 @@ const {
 } = require("../../models");
 const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
 const { toLocalDate, endOfLocalDay } = require("../../utils/localDate");
+const { vendeSinInsumo, fichaEnCero, fotoConsumo } = require("../products/recipeStock");
 const { Op } = Sequelize;
 
 // El vendedor sí se guarda al crear la cotización (create recibe employee_id), pero las
@@ -188,6 +189,7 @@ async function convert(quotationId, body, employeeId, req) {
 
     const warehouseId = quotation.warehouse_id;
     const enrichedItems = [];
+    let sinInsumo;
 
     for (const qi of quotationItems) {
       if (!qi.product_id) {
@@ -210,12 +212,15 @@ async function convert(quotationId, body, employeeId, req) {
             ingredientsData.push({ ingredient, qtyNeeded, stockEntry: null, servicio: true });
             continue;
           }
-          const stockEntry = await ProductStock.findOne({
+          // Restaurante: se vende aunque no alcance un ingrediente (ver recipeStock.js).
+          if (sinInsumo === undefined) sinInsumo = await vendeSinInsumo(warehouseId, t);
+          let stockEntry = await ProductStock.findOne({
             where: { warehouse_id: warehouseId, product_id: ingredient.id },
             transaction: t, lock: true,
           });
+          if (sinInsumo && !stockEntry) stockEntry = await fichaEnCero(warehouseId, ingredient.id, t);
           const currentQty = parseFloat(stockEntry?.qty || 0);
-          if (currentQty < qtyNeeded) {
+          if (currentQty < qtyNeeded && !sinInsumo) {
             const e = new Error(`Stock insuficiente de "${ingredient.name}" para el combo "${product.name}". Disponible: ${currentQty}`);
             e.status = 400; throw e;
           }
@@ -261,6 +266,7 @@ async function convert(quotationId, body, employeeId, req) {
         price:      entry.price,
         quantity:   entry.qty,
         discount:   0,
+        components: entry.isCombo ? fotoConsumo(entry.ingredientsData, entry.qty) : null,
       }, { transaction: t });
 
       if (entry.isService) {

@@ -19,6 +19,9 @@ module.exports = (sequelize, DataTypes) => {
     // Giro en grados (0, 45, 90, 135); w y h ya son la huella girada.
     rotation:   { type: DataTypes.SMALLINT, allowNull: false, defaultValue: 0 },
     active:     { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    // Código del QR de la mesa (/mesa/<código>): al azar, no el id. Ver migración
+    // 20261101120000-mesa-qr y services/mesaPublica.js.
+    public_token: { type: DataTypes.STRING(32), allowNull: true, defaultValue: () => require('crypto').randomBytes(15).toString('base64url') },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   }, {
     sequelize,

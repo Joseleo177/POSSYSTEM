@@ -10,6 +10,8 @@ const UNIT_PLURALS = {
     LITRO:     "LITROS",
     METRO:     "METROS",
     KILOGRAMO: "KILOGRAMOS",
+    // Preparaciones de cocina (app Recetas): la sopa se cuenta en platos.
+    PORCION:   "PORCIONES",
 };
 
 /**

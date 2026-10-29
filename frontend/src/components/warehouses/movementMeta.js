@@ -14,6 +14,8 @@ export const ICON = {
     search:   "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
     clock:    "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
     close:    "M6 18L18 6M6 6l12 12",
+    // Una olla: la producción de cocina.
+    pot:      "M4 10h16M5 10v7a3 3 0 003 3h8a3 3 0 003-3v-7M3 10h1m16 0h1M9 6.5c0-1 1-1.5 1-2.5m4 2.5c0-1 1-1.5 1-2.5",
 };
 
 // Motivos de las líneas de sesión: los que se eligen en Movimiento manual y los que pone el
@@ -45,6 +47,7 @@ export const GROUPS = [
     { key: "transferencia", label: "Transferencias" },
     { key: "ajuste",        label: "Ajustes" },
     { key: "fabricacion",   label: "Fabricación" },
+    { key: "produccion",    label: "Producción" },
 ];
 
 // Título, documento y contraparte de una fila del kardex.
@@ -68,6 +71,10 @@ export function describe(m) {
         // Fábrica: el documento es la orden; el detalle, la pieza, el accesorio o el terminado.
         case "fabricacion":
             return { icon: ICON.box, title: "Fabricación", doc: doc || "Fábrica", party: null, extra: m.notes };
+        // Cocina: la tanda (OP-0001). En el insumo, el detalle es la preparación; en la
+        // preparación, "Producción" o "Anulada".
+        case "produccion":
+            return { icon: ICON.pot, title: "Producción", doc: doc || "Cocina", party: null, extra: m.notes };
         case "compra_anulada":
             return { icon: ICON.ban, title: "Compra anulada", doc, party: m.party ? toNameCase(m.party) : null, extra: null };
         case "transferencia_salida":

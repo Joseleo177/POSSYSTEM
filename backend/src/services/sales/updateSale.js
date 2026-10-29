@@ -13,7 +13,7 @@ const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = r
 const { leerTasaDivisas } = require("./fxRate");
 const { assertTable } = require("../tables");
 const { assertWarehouseAccess } = require("../../middleware/auth");
-const { componentesConStock } = require("../products/comboStock");
+const { vendeSinInsumo, fichaEnCero, fotoConsumo, consumoDeLinea } = require("../products/recipeStock");
 
 const bad = (msg, status = 400, code = null) => Object.assign(new Error(msg), { status, code });
 
@@ -81,14 +81,15 @@ module.exports = async function updateSale(saleId, body, req) {
     // Restaurar sobre el combo dejaba los componentes descontados para siempre — y como la
     // validación de más abajo solo mira los productos nuevos, bastaba con quitar el combo
     // del carrito para perder inventario sin ningún aviso.
+    //
+    // Se devuelve lo que la línea descontó (su foto), no la receta de hoy: si el chef cambió
+    // los gramos entre una ronda y otra, devolver con la receta nueva descuadraba el insumo.
     for (const item of previousItems) {
       if (!item.product_id) continue;
       const product = await Product.findByPk(item.product_id, { transaction });
-      if (!product || product.is_service) continue;
-
-      if (product.is_combo) {
-        const comboItems = await componentesConStock(product.id, transaction);
-        for (const cItem of comboItems) {
+      const consumo = await consumoDeLinea(item, product, sale.created_at, transaction);
+      if (consumo) {
+        for (const cItem of consumo) {
           const qtyToRestore = parseFloat(item.quantity) * parseFloat(cItem.quantity);
           const [stockEntry] = await ProductStock.findOrCreate({
             where: { warehouse_id: warehouseId, product_id: cItem.product_id },
@@ -101,6 +102,7 @@ module.exports = async function updateSale(saleId, body, req) {
         }
         continue;
       }
+      if (!product || product.is_service) continue;
 
       const stockEntry = await ProductStock.findOne({
         where: { warehouse_id: warehouseId, product_id: item.product_id },
@@ -158,6 +160,8 @@ module.exports = async function updateSale(saleId, body, req) {
     const lineasGuardadas = [];
 
     let total = 0;
+    // Restaurante: el plato se vende aunque no alcance un ingrediente (ver recipeStock.js).
+    let sinInsumo;
     for (const item of items) {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
       if (!product) throw bad(`Producto ${item.product_id} no encontrado`, 404);
@@ -203,6 +207,7 @@ module.exports = async function updateSale(saleId, body, req) {
       // venta con el costo de reposición del día en que se consulte. En un combo el
       // producto no lleva costo propio: es la suma del costo de sus ingredientes.
       let unitCost = costoBase != null ? parseFloat(costoBase) : null;
+      let components = null;
 
       if (product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
@@ -224,17 +229,20 @@ module.exports = async function updateSale(saleId, body, req) {
             ingredientsData.push({ ingredient, qtyNeeded, stockEntry: ficha, servicio: true });
             continue;
           }
-          const stockEntry = await ProductStock.findOne({
+          if (sinInsumo === undefined) sinInsumo = await vendeSinInsumo(warehouseId, transaction);
+          let stockEntry = await ProductStock.findOne({
             where: { warehouse_id: warehouseId, product_id: ingredient.id },
             transaction,
             lock: true,
           });
+          if (sinInsumo && !stockEntry) stockEntry = await fichaEnCero(warehouseId, ingredient.id, transaction);
           const currentQty = parseFloat(stockEntry?.qty || 0);
-          if (currentQty < qtyNeeded) {
+          if (currentQty < qtyNeeded && !sinInsumo) {
             throw bad(`Stock insuficiente del ingrediente "${ingredient.name}" para el combo "${product.name}". Disponible: ${currentQty}, Requerido: ${qtyNeeded}`);
           }
           ingredientsData.push({ ingredient, qtyNeeded, stockEntry });
         }
+        components = fotoConsumo(ingredientsData, qty);
 
         // Cada ingrediente a lo que costó en esta sucursal.
         const comboCost = ingredientsData.reduce(
@@ -275,6 +283,7 @@ module.exports = async function updateSale(saleId, body, req) {
           discount_by:         manual ? (mismo ? previo.by : (req?.employee?.id || null)) : null,
           cost_price: unitCost,
           note: notaDe(item),
+          components,
         },
         { transaction }
       );

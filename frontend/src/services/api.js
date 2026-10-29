@@ -707,6 +707,27 @@ export const api = {
     // Agotado a mano (cocina o catálogo).
     setSoldOut: (optionId, soldOut) => request(`/addons/options/${optionId}`, { method: "PATCH", body: JSON.stringify({ sold_out: soldOut }) }),
   },
+  // App Recetas: fichas técnicas de los platos (costo, merma, food cost por sucursal).
+  recipes: {
+    list:   (params = {})     => request("/recipes?" + new URLSearchParams(params)),
+    get:    (id, params = {}) => request(`/recipes/${id}?` + new URLSearchParams(params)),
+    save:   (id, body)        => request(`/recipes/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    remove: (id)              => request(`/recipes/${id}`, { method: "DELETE" }),
+    ingredients:      (params = {}) => request("/recipes/ingredients?" + new URLSearchParams(params)),
+    createIngredient: (body)        => request("/recipes/ingredients", { method: "POST", body: JSON.stringify(body) }),
+  },
+  // Producción de cocina: preparaciones por tanda (la olla de sopa) y las tandas (OP-0001).
+  production: {
+    preparations:      (params = {})     => request("/production/preparations?" + new URLSearchParams(params)),
+    preparation:       (id, params = {}) => request(`/production/preparations/${id}?` + new URLSearchParams(params)),
+    createPreparation: (body)            => request("/production/preparations", { method: "POST", body: JSON.stringify(body) }),
+    savePreparation:   (id, body)        => request(`/production/preparations/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    removePreparation: (id)              => request(`/production/preparations/${id}`, { method: "DELETE" }),
+    batches:           (params = {})     => request("/production/batches?" + new URLSearchParams(params)),
+    batch:             (id)              => request(`/production/batches/${id}`),
+    createBatch:       (body)            => request("/production/batches", { method: "POST", body: JSON.stringify(body) }),
+    annulBatch:        (id)              => request(`/production/batches/${id}/annul`, { method: "POST" }),
+  },
   // Mapa de mesas: el plano (áreas y mesas) de cada sucursal. La ocupación sale de las
   // cuentas en espera (sales.getHeld), que traen table_id.
   tables: {
@@ -803,4 +824,7 @@ export const publicApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+  // QR de la mesa: cómo va el pedido y pedir la cuenta (por el código de la mesa).
+  mesa: (token) => publicRequest(`/public/mesa/${encodeURIComponent(token)}`),
+  pedirCuenta: (token) => publicRequest(`/public/mesa/${encodeURIComponent(token)}/cuenta`, { method: "POST" }),
 };

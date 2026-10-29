@@ -93,6 +93,8 @@ app.use("/api/auth",       require("./routes/auth"));
 // Catálogo público: se accede por token, sin sesión. Lleva su propio rate limit y
 // resuelve el company_id desde el token (ver services/publicCatalogService.js).
 app.use("/api/public/catalog", require("./routes/publicCatalog").publicRouter);
+// QR de la mesa: el cliente ve cómo va su pedido y pide la cuenta (por el código de la mesa).
+app.use("/api/public/mesa",    require("./routes/publicMesa"));
 
 // ── Protected routes ──────────────────────────────────────────
 const { auth, permit } = require("./middleware/auth");
@@ -127,6 +129,8 @@ app.use("/api/factory",          require("./routes/factory"));             // au
 app.use("/api/kitchen",          require("./routes/kitchen"));             // auth+permit+módulo dentro
 app.use("/api/tables",           require("./routes/tables"));              // auth+permit+módulo dentro
 app.use("/api/addons",           require("./routes/addons"));              // auth+permit+módulo dentro
+app.use("/api/recipes",          require("./routes/recipes"));             // auth+permit+módulo dentro
+app.use("/api/production",       require("./routes/production"));          // auth+permit+módulo dentro
 app.use("/api/backup",           require("./routes/backup"));             // auth+config dentro
 app.use("/api/catalog-link",     require("./routes/publicCatalog").adminRouter); // auth+config dentro
 app.use("/api/catalog-banners",  require("./routes/catalogBanners"));       // auth+config dentro

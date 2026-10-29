@@ -127,6 +127,17 @@ const MODULES = [
     ],
   },
   {
+    // Producción de cocina (app Recetas): registrar las tandas de las preparaciones (la olla de
+    // sopa, la salsa). Mismo interruptor de restaurante. Se concedió por migración a quien ya
+    // marcaba comandas o ajustaba inventario: producir es mover inventario.
+    key: 'production',
+    label: 'Producción de cocina',
+    actions: [
+      { key: 'view',   label: 'Ver la producción' },
+      { key: 'manage', label: 'Registrar y anular producción (ollas, salsas)' },
+    ],
+  },
+  {
     // Mapa de mesas: va con el mismo interruptor de restaurante (companies.cocina_enabled).
     // Ver el mapa se concedió por migración a quien ya cobraba; el plano solo lo edita quien
     // lo reciba aparte.

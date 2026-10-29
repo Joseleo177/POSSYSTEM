@@ -1,5 +1,6 @@
 const { ModifierGroup, ModifierOption, ProductModifierGroup, Product, ProductStock, ProductComboItem, sequelize, Sequelize } = require("../models");
 const { isIntegerUnit } = require("../utils/units");
+const { vendeSinInsumo } = require("./products/recipeStock");
 
 const { Op } = Sequelize;
 
@@ -252,7 +253,9 @@ async function preciosEn(productIds, warehouseId, transaction) {
   // puede saber y se da por disponible: el servidor lo vuelve a revisar al vender.
   const alcance = new Map();
   const combos = productos.filter(p => p.is_combo).map(p => p.id);
-  if (combos.length && warehouseId) {
+  // Restaurante que vende aunque falte el insumo: el adicional no se agota solo (ver
+  // products/recipeStock.js); queda el agotado manual.
+  if (combos.length && warehouseId && !(await vendeSinInsumo(warehouseId, transaction))) {
     const filas = await sequelize.query(`
       SELECT ci.combo_id, ci.quantity, i.is_service, COALESCE(ps.qty, 0) AS qty
         FROM product_combo_items ci

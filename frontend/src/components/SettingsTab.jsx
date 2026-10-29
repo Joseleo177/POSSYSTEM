@@ -209,6 +209,9 @@ export default function SettingsTab({ notify }) {
     // la reciben encendida al darse de alta (ver controllers/companies.js).
     const reviewOn = settings.pos_review_checkout === "true";
     const cocinaAlCobrarOn = settings.pos_kitchen_on_charge === "true";
+    // Sin la clave guardada vale lo mismo que en el servidor: encendido en un restaurante (ver
+    // services/products/recipeStock.js).
+    const sinInsumoOn = settings.recetas_vender_sin_insumo !== "false";
     const fxCobroOn = settings.pos_fx_cobro === "true";
     const avanceOn = settings.pos_cash_advance === "true";
     const usados   = companyInfo?.current_users || 0;
@@ -466,7 +469,7 @@ export default function SettingsTab({ notify }) {
                             que la caja cobra sale a la pantalla de cocina. Apagado por defecto: con
                             mesoneros, lo que va a cocina son sus rondas. */}
                         {company?.cocina_enabled && (
-                            <Seccion titulo="Cocina" detalle="Para restaurantes donde se paga antes de pedir." className="h-full">
+                            <Seccion titulo="Cocina" detalle="Comandas, recetas e inventario del restaurante." className="h-full">
                                 <div className="rounded-xl border border-border/70 dark:border-white/[0.08]">
                                     <Interruptor
                                         titulo="Enviar a cocina al cobrar"
@@ -474,6 +477,26 @@ export default function SettingsTab({ notify }) {
                                         checked={cocinaAlCobrarOn}
                                         onChange={() => setSettings(p => ({ ...p, pos_kitchen_on_charge: cocinaAlCobrarOn ? "false" : "true" }))}
                                     />
+                                    <div className="border-t border-border/60 dark:border-white/[0.06]" />
+                                    <Interruptor
+                                        titulo="Vender aunque falte un ingrediente"
+                                        detalle="Un plato con receta se vende aunque el sistema diga que no alcanza un insumo: el insumo queda en negativo y el plato nunca sale agotado por inventario. Apagado, la venta se bloquea como en cualquier combo."
+                                        checked={sinInsumoOn}
+                                        onChange={() => setSettings(p => ({ ...p, recetas_vender_sin_insumo: sinInsumoOn ? "false" : "true" }))}
+                                    />
+                                    <div className="border-t border-border/60 dark:border-white/[0.06]" />
+                                    <label className="flex items-center justify-between gap-4 px-4 py-3">
+                                        <span className="min-w-0">
+                                            <span className="block text-[13px] font-medium text-content dark:text-white">Meta de food cost</span>
+                                            <span className="block text-[12px] text-content-subtle mt-0.5 leading-snug">Lo que puede costar un plato frente a su precio. En Recetas se marca el que la pasa.</span>
+                                        </span>
+                                        <span className="relative w-24 shrink-0">
+                                            <input className={`${INPUT} pr-7 text-right tabular-nums`} inputMode="decimal" autoComplete="off" placeholder="35"
+                                                value={String(settings.recetas_food_cost_meta ?? "").replace(".", ",")}
+                                                onChange={e => setSettings(p => ({ ...p, recetas_food_cost_meta: e.target.value.replace(/[^\d.,]/g, "").replace(",", ".").slice(0, 5) }))} />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">%</span>
+                                        </span>
+                                    </label>
                                 </div>
                             </Seccion>
                         )}

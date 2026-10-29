@@ -5,7 +5,7 @@ const {
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { resolveSaleStatus, saleSettleTolerance } = require("../../utils/saleBalance");
 const { creditAvailable, addCreditMovement } = require("../customers/creditLedger");
-const { componentesConStock } = require("../products/comboStock");
+const { consumoDeLinea, vendeSinInsumo, fichaEnCero } = require("../products/recipeStock");
 
 const Op = Sequelize.Op;
 const err = (message, status) => Object.assign(new Error(message), { status, isOperational: true });
@@ -131,23 +131,32 @@ module.exports = async function annulReturn(returnId, { employeeId }, req) {
     // Anular significa que esa mercancía nunca volvió, así que hay que sacarla del almacén.
     // Si ya se vendió, descontarla dejaría existencias negativas: eso no es revertir, es
     // romper el inventario en silencio.
+    //
+    // Lo de un combo es lo que la línea vendida descontó (su foto), igual que al devolver. En
+    // un restaurante que vende aunque falte el insumo (ver recipeStock.js), un ingrediente ya
+    // puede estar en negativo: esta guarda no vale para ellos o la NC no se anularía nunca.
     const aDescontar = new Map(); // product_id -> qty
+    const deReceta = new Set();
     for (const line of lines) {
       if (!line.product_id) continue;
       const product = await Product.findByPk(line.product_id, { transaction: t });
-      if (!product || product.is_service) continue;
-      if (product.is_combo) {
-        const comboItems = await componentesConStock(product.id, t);
-        for (const ci of comboItems) {
+      const vendida = line.sale_item_id ? await SaleItem.findByPk(line.sale_item_id, { transaction: t }) : null;
+      const consumo = await consumoDeLinea(vendida, product, sale.created_at, t);
+      if (consumo) {
+        for (const ci of consumo) {
           const need = parseFloat(line.qty) * parseFloat(ci.quantity);
           aDescontar.set(ci.product_id, (aDescontar.get(ci.product_id) || 0) + need);
+          deReceta.add(ci.product_id);
         }
-      } else {
-        aDescontar.set(line.product_id, (aDescontar.get(line.product_id) || 0) + parseFloat(line.qty));
+        continue;
       }
+      if (!product || product.is_service) continue;
+      aDescontar.set(line.product_id, (aDescontar.get(line.product_id) || 0) + parseFloat(line.qty));
     }
+    const sinInsumo = deReceta.size ? await vendeSinInsumo(sale.warehouse_id, t) : false;
 
     for (const [productId, qty] of aDescontar) {
+      if (sinInsumo && deReceta.has(productId)) continue;
       const stockEntry = await ProductStock.findOne({
         where: { warehouse_id: sale.warehouse_id, product_id: productId },
         transaction: t, lock: true,
@@ -174,7 +183,7 @@ module.exports = async function annulReturn(returnId, { employeeId }, req) {
       const stockEntry = await ProductStock.findOne({
         where: { warehouse_id: sale.warehouse_id, product_id: productId },
         transaction: t, lock: true,
-      });
+      }) || await fichaEnCero(sale.warehouse_id, productId, t);
       await stockEntry.decrement("qty", { by: qty, transaction: t });
       const totalStock = await ProductStock.sum("qty", { where: { product_id: productId }, transaction: t });
       await Product.update({ stock: Math.max(0, totalStock || 0) }, { where: { id: productId }, transaction: t });

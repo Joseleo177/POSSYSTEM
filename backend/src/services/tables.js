@@ -411,13 +411,39 @@ async function dish(req, productId, { warehouse_id } = {}) {
   if (!p) throw fail("Ese plato ya no está a la venta", 404);
 
   const ficha = await ProductStock.findOne({ where: { warehouse_id: wid, product_id: p.id }, attributes: ["price"] });
-  const incluye = p.is_combo
+  const piezas = p.is_combo
     ? (await ProductComboItem.findAll({
         where: { combo_id: p.id },
         include: [{ model: Product, as: "ingredient", attributes: ["name", "unit"] }],
         order: [["id", "ASC"]],
-      })).map(ci => ({ name: ci.ingredient?.name, quantity: parseFloat(ci.quantity), unit: ci.ingredient?.unit }))
+      })).map(ci => ({ product_id: ci.product_id, name: ci.ingredient?.name, quantity: parseFloat(ci.quantity), unit: ci.ingredient?.unit }))
     : [];
+  // Un plato con ficha técnica (app Recetas) no muestra sus cantidades: "0,294 papa" son los
+  // kilos de la cocina y no le dicen nada al mesonero. Sí le sirve saber QUÉ lleva, por si el
+  // cliente pregunta por una alergia: va solo la lista de nombres. Un combo del Catálogo (el
+  // tobo de 10 cervezas) sigue con lo que incluye.
+  const { RecipeSheet, PreparationItem } = require("../models");
+  const conFicha = p.is_combo && await RecipeSheet.count({ where: { product_id: p.id } });
+  const incluye = conFicha ? [] : piezas.map(({ product_id, ...x }) => x);
+  // Si lleva una preparación de la cocina ("1 porción de sopa de res"), se dice lo que lleva
+  // la sopa: es lo que el cliente quiere saber.
+  let lleva = [];
+  if (conFicha) {
+    const preps = new Set((await RecipeSheet.findAll({
+      where: { product_id: piezas.map(x => x.product_id), kind: "preparacion" }, attributes: ["product_id"],
+    })).map(r => r.product_id));
+    const dePrep = preps.size ? await PreparationItem.findAll({
+      where: { prep_id: [...preps] }, attributes: ["prep_id", "product_id"], order: [["id", "ASC"]],
+    }) : [];
+    const nombre = new Map(dePrep.length ? (await Product.findAll({
+      where: { id: [...new Set(dePrep.map(d => d.product_id))] }, attributes: ["id", "name"],
+    })).map(n => [n.id, n.name]) : []);
+    for (const x of piezas) {
+      if (preps.has(x.product_id)) lleva.push(...dePrep.filter(d => d.prep_id === x.product_id).map(d => nombre.get(d.product_id)));
+      else lleva.push(x.name);
+    }
+    lleva = [...new Set(lleva.filter(Boolean))];
+  }
 
   return {
     data: {
@@ -429,6 +455,7 @@ async function dish(req, productId, { warehouse_id } = {}) {
       price: parseFloat(ficha?.price ?? p.price),
       image_url: p.image_filename ? (p.image_filename.startsWith("http") ? p.image_filename : `/uploads/${p.image_filename}`) : null,
       incluye,
+      lleva,
       // Adicionales del plato (término, extras…), con el precio de esta sucursal.
       groups: await require("./addons").forProduct(p.id, wid),
     },

@@ -145,7 +145,7 @@ const cancel = async (req, res) => {
     broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
     res.json({ ok: true, message: "Venta anulada y stock restaurado" });
   } catch (err) {
-    const status = /no encontrada/i.test(err.message) ? 404 : 500;
+    const status = /no encontrada/i.test(err.message) ? 404 : (err.status || 500);
     res.status(status).json({ ok: false, message: err.message });
   }
 };

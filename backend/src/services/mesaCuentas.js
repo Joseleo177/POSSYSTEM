@@ -220,6 +220,8 @@ async function dividir(req, saleId, body = {}) {
         discount_by: l.discount_by,
         cost_price: l.cost_price,
         note: l.note,
+        // La foto va por unidad: la parte que se separa repone lo mismo por plato.
+        components: l.components,
         company_id: l.company_id,
       }, { transaction });
       await l.update({

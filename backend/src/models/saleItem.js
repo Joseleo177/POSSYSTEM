@@ -25,7 +25,11 @@ module.exports = (sequelize, DataTypes) => {
     subtotal: { type: DataTypes.DECIMAL(14, 5) },
     // Nota de ESTA línea ("sin cebolla"), para la comanda. Distinta de sales.web_note, que es
     // del pedido entero.
-    note: { type: DataTypes.STRING(200), allowNull: true }
+    note: { type: DataTypes.STRING(200), allowNull: true },
+    // Lo que descontó la línea de un combo o plato con receta, por unidad vendida:
+    // [{ product_id, quantity }]. Anular, devolver y el kardex leen esto y no la receta de
+    // hoy. Null en las líneas de antes (ver services/products/recipeStock.js).
+    components: { type: DataTypes.JSONB, allowNull: true }
   }, {
     sequelize,
     tableName: 'sale_items',

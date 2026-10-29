@@ -95,6 +95,17 @@ export const TAB_ICONS = {
             />
         </svg>
     ),
+    // Un libro de recetas abierto.
+    Recetas: (cls = "w-5 h-5") => (
+        <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.8}
+                d="M12 6.5C10.5 5.2 8.3 4.5 6 4.5c-.7 0-1.4.1-2 .2v13.6c.6-.1 1.3-.2 2-.2 2.3 0 4.5.7 6 2m0-13.6c1.5-1.3 3.7-2 6-2 .7 0 1.4.1 2 .2v13.6c-.6-.1-1.3-.2-2-.2-2.3 0-4.5.7-6 2m0-13.6v13.6M7 9h2.5M7 12h2.5M14.5 9H17"
+            />
+        </svg>
+    ),
     Contabilidad: (cls = "w-5 h-5") => (
         <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

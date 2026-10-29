@@ -24,7 +24,7 @@ const { assertProductAccess } = require('../products/productAccess');
 const { imageUrl } = require('../../utils/imageStorage');
 const { TZ, sanitizeDate } = require('../reports/shared');
 
-const GRUPOS = ['venta', 'devolucion', 'compra', 'ajuste', 'transferencia', 'fabricacion'];
+const GRUPOS = ['venta', 'devolucion', 'compra', 'ajuste', 'transferencia', 'fabricacion', 'produccion'];
 
 const esAdmin = (req) => !!(req.is_superuser || req.employee?.permissions?.all);
 
@@ -36,6 +36,27 @@ const SCOPE_SQL = `
     AND (CAST(:wid AS int) IS NULL OR w.id = CAST(:wid AS int))
     AND (CAST(:eid AS int) IS NULL OR w.id IN (
           SELECT ew.warehouse_id FROM employee_warehouses ew WHERE ew.employee_id = CAST(:eid AS int)))`;
+
+// Lo que cada línea vendida descontó de :pid, por unidad. Con foto (sale_items.components), la
+// foto; sin ella (líneas de antes), la receta actual del combo, salvo las ventas de antes de
+// que el plato empezara a descontar su receta (recipe_sheets.combo_since): esas no
+// descontaron nada. Mismo criterio que consumoDeLinea en services/products/recipeStock.js.
+// La contención usa el índice GIN de la migración 20261101100000-recetas.
+const CONSUMO_SQL = `
+  SELECT si.id AS sale_item_id, SUM((e->>'quantity')::numeric) AS qty
+    FROM sale_items si
+    CROSS JOIN LATERAL jsonb_array_elements(si.components) e
+   WHERE si.components IS NOT NULL
+     AND si.components @> jsonb_build_array(jsonb_build_object('product_id', CAST(:pid AS int)))
+     AND (e->>'product_id')::int = :pid
+   GROUP BY si.id
+  UNION ALL
+  SELECT si.id, ci.quantity
+    FROM product_combo_items ci
+    JOIN sale_items si ON si.product_id = ci.combo_id AND si.components IS NULL
+    JOIN sales s ON s.id = si.sale_id
+    LEFT JOIN recipe_sheets rs ON rs.product_id = ci.combo_id
+   WHERE ci.product_id = :pid AND (rs.combo_since IS NULL OR s.created_at >= rs.combo_since)`;
 
 // Todas las fuentes, con las mismas columnas. `src` + `src_id` desempatan el orden de filas
 // con la misma hora (p. ej. dos líneas del mismo producto en una venta).
@@ -53,47 +74,48 @@ const MOV_SQL = `
     LEFT JOIN customers c ON c.id = s.customer_id
    WHERE si.product_id = :pid AND s.status <> 'pedido'
   UNION ALL
-  -- Ventas de combos que lo llevan como ingrediente
-  SELECT s.created_at, s.warehouse_id, -(si.quantity * ci.quantity),
+  -- Ventas de combos que lo llevan como ingrediente (ver CONSUMO_SQL)
+  SELECT s.created_at, s.warehouse_id, -(si.quantity * k.qty),
          'venta', NULL, s.invoice_number, s.id,
          COALESCE(c.name, s.web_customer_name),
          s.employee_id, NULL, si.name,
          (s.status = 'anulado'), s.status,
          2, si.id
-    FROM product_combo_items ci
-    JOIN sale_items si ON si.product_id = ci.combo_id
+    FROM (${CONSUMO_SQL}) k
+    JOIN sale_items si ON si.id = k.sale_item_id
     JOIN sales s ON s.id = si.sale_id
     LEFT JOIN customers c ON c.id = s.customer_id
-   WHERE ci.product_id = :pid AND s.status <> 'pedido'
+   WHERE s.status <> 'pedido'
   UNION ALL
   -- Devoluciones (NC). Una NC anulada sin fecha de anulación es de antes de guardarla: su
-  -- efecto neto es cero y se marca como la venta anulada.
-  SELECT r.created_at, s.warehouse_id, ri.qty * COALESCE(ci.quantity, 1),
+  -- efecto neto es cero y se marca como la venta anulada. La de un combo repone lo que su
+  -- línea vendida descontó.
+  SELECT r.created_at, s.warehouse_id, ri.qty * COALESCE(k.qty, 1),
          'devolucion', r.reason, r.nc_number, r.id,
          COALESCE(c.name, s.web_customer_name),
-         r.employee_id, NULL, CASE WHEN ci.id IS NOT NULL THEN ri.name END,
+         r.employee_id, NULL, CASE WHEN k.qty IS NOT NULL THEN ri.name END,
          (r.status = 'anulado' AND r.annulled_at IS NULL), r.status,
-         CASE WHEN ci.id IS NULL THEN 3 ELSE 4 END, ri.id
+         CASE WHEN k.qty IS NULL THEN 3 ELSE 4 END, ri.id
     FROM return_items ri
     JOIN returns r ON r.id = ri.return_id
     JOIN sales s ON s.id = r.sale_id
     LEFT JOIN customers c ON c.id = s.customer_id
-    LEFT JOIN product_combo_items ci ON ci.combo_id = ri.product_id AND ci.product_id = :pid
-   WHERE ri.product_id = :pid OR ci.id IS NOT NULL
+    LEFT JOIN (${CONSUMO_SQL}) k ON k.sale_item_id = ri.sale_item_id
+   WHERE (ri.product_id = :pid AND k.qty IS NULL) OR k.qty IS NOT NULL
   UNION ALL
   -- NC anulada: lo devuelto vuelve a salir del almacén
-  SELECT r.annulled_at, s.warehouse_id, -(ri.qty * COALESCE(ci.quantity, 1)),
+  SELECT r.annulled_at, s.warehouse_id, -(ri.qty * COALESCE(k.qty, 1)),
          'devolucion_anulada', r.reason, r.nc_number, r.id,
          COALESCE(c.name, s.web_customer_name),
-         r.annulled_by, NULL, CASE WHEN ci.id IS NOT NULL THEN ri.name END,
+         r.annulled_by, NULL, CASE WHEN k.qty IS NOT NULL THEN ri.name END,
          false, r.status,
-         CASE WHEN ci.id IS NULL THEN 5 ELSE 6 END, ri.id
+         CASE WHEN k.qty IS NULL THEN 5 ELSE 6 END, ri.id
     FROM return_items ri
     JOIN returns r ON r.id = ri.return_id
     JOIN sales s ON s.id = r.sale_id
     LEFT JOIN customers c ON c.id = s.customer_id
-    LEFT JOIN product_combo_items ci ON ci.combo_id = ri.product_id AND ci.product_id = :pid
-   WHERE (ri.product_id = :pid OR ci.id IS NOT NULL)
+    LEFT JOIN (${CONSUMO_SQL}) k ON k.sale_item_id = ri.sale_item_id
+   WHERE ((ri.product_id = :pid AND k.qty IS NULL) OR k.qty IS NOT NULL)
      AND r.status = 'anulado' AND r.annulled_at IS NOT NULL
   UNION ALL
   -- Líneas de sesión: ajustes manuales, ajuste directo y recepción de compras
@@ -103,15 +125,20 @@ const MOV_SQL = `
               -- Fábrica: consumo de piezas, accesorios y producto terminado. El documento es
               -- la orden (OF-0001) y el detalle, la pieza o el motivo.
               WHEN l.reason = 'fabricacion' THEN 'fabricacion'
+              -- Producción de cocina (la olla de sopa): el documento es la tanda (OP-0001). Un
+              -- ajuste manual con motivo 'produccion' no lleva el prefijo y sigue siendo ajuste.
+              WHEN l.reason = 'produccion' AND l.notes ~ '^OP-[0-9]+ · ' THEN 'produccion'
               ELSE 'ajuste' END,
          l.reason,
          CASE WHEN l.notes ~ '^Compra #[0-9]+' THEN substring(l.notes from '#[0-9]+')
-              WHEN l.reason = 'fabricacion' THEN substring(l.notes from '^(OF-[0-9]+)') END,
+              WHEN l.reason = 'fabricacion' THEN substring(l.notes from '^(OF-[0-9]+)')
+              WHEN l.reason = 'produccion' THEN substring(l.notes from '^(OP-[0-9]+)') END,
          p.id,
          p.supplier_name,
          ss.employee_id,
          CASE WHEN l.notes ~ '^Compra #[0-9]+' THEN NULL
               WHEN l.reason = 'fabricacion' AND l.notes ~ '^OF-[0-9]+ · ' THEN substring(l.notes from '^OF-[0-9]+ · (.*)$')
+              WHEN l.reason = 'produccion' AND l.notes ~ '^OP-[0-9]+ · ' THEN substring(l.notes from '^OP-[0-9]+ · (.*)$')
               ELSE l.notes END,
          NULL, false, NULL,
          7, l.id
@@ -180,6 +207,7 @@ const GRUPO_SQL = `CASE
     WHEN m.kind IN ('compra', 'compra_anulada') THEN 'compra'
     WHEN m.kind = 'ajuste' THEN 'ajuste'
     WHEN m.kind = 'fabricacion' THEN 'fabricacion'
+    WHEN m.kind = 'produccion' THEN 'produccion'
     ELSE 'transferencia' END`;
 
 const num = (v) => parseFloat(v) || 0;

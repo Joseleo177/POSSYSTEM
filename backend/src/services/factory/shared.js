@@ -159,7 +159,9 @@ async function ownWarehouse(req, warehouseId, transaction) {
  * consumió, y negarse a registrarlo dejaría al sistema mintiendo. El descuadre se ve en
  * Materiales y se corrige con un ajuste.
  */
-async function moveStock({ productId, warehouseId, delta, notes, req, transaction, setCost = null }) {
+// `reason`: 'produccion' para las tandas de cocina (services/production.js), que usan el mismo
+// camino con sus notas "OP-0001 · ...".
+async function moveStock({ productId, warehouseId, delta, notes, req, transaction, setCost = null, reason = "fabricacion" }) {
   const qty = r3(delta);
   if (!qty && setCost == null) return;
 
@@ -190,7 +192,7 @@ async function moveStock({ productId, warehouseId, delta, notes, req, transactio
       qty_adjusted: qty,
       qty_after:    r3(before + qty),
       type:         qty > 0 ? "in" : "out",
-      reason:       "fabricacion",
+      reason,
       notes:        text(notes, 500),
     }, { transaction });
   }

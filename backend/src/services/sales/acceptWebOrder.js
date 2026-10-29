@@ -1,6 +1,7 @@
 const { Sale, SaleItem, Product, ProductStock, Serie, sequelize } = require("./shared");
 const getOneSale = require("./getOneSale");
 const { componentesConStock } = require("../products/comboStock");
+const { vendeSinInsumo, fichaEnCero } = require("../products/recipeStock");
 
 // Convierte un pedido del catálogo público (status 'pedido', sin efecto en inventario) en
 // una cuenta en espera normal. Aquí sí se descuenta el stock: es el momento en que una
@@ -40,6 +41,7 @@ module.exports = async function acceptWebOrder(saleId, { warehouse_id, serie_id,
     const items = await SaleItem.findAll({ where: { sale_id: sale.id }, transaction });
     if (!items.length) throw Object.assign(new Error("El pedido no tiene líneas"), { status: 400 });
 
+    let sinInsumo;
     for (const item of items) {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
       if (!product) {
@@ -51,13 +53,16 @@ module.exports = async function acceptWebOrder(saleId, { warehouse_id, serie_id,
 
       if (product.is_combo) {
         const comboItems = await componentesConStock(product.id, transaction);
+        // Restaurante: se acepta aunque no alcance un ingrediente (ver recipeStock.js).
+        if (sinInsumo === undefined) sinInsumo = await vendeSinInsumo(warehouse_id, transaction);
         for (const cItem of comboItems) {
           const ingredient = await Product.findByPk(cItem.product_id, { transaction, lock: true });
           const needed = qty * parseFloat(cItem.quantity);
-          const stockEntry = await ProductStock.findOne({
+          let stockEntry = await ProductStock.findOne({
             where: { warehouse_id, product_id: cItem.product_id }, transaction, lock: true,
           });
-          if (parseFloat(stockEntry?.qty || 0) < needed) {
+          if (sinInsumo && !stockEntry) stockEntry = await fichaEnCero(warehouse_id, cItem.product_id, transaction);
+          if (parseFloat(stockEntry?.qty || 0) < needed && !sinInsumo) {
             throw Object.assign(
               new Error(`Stock insuficiente de "${ingredient?.name || item.name}" para el combo "${product.name}". Disponible: ${parseFloat(stockEntry?.qty || 0)}`),
               { status: 400 }
@@ -67,6 +72,10 @@ module.exports = async function acceptWebOrder(saleId, { warehouse_id, serie_id,
           const totalStock = await ProductStock.sum("qty", { where: { product_id: cItem.product_id }, transaction });
           await Product.update({ stock: totalStock || 0 }, { where: { id: cItem.product_id }, transaction });
         }
+        // La foto de lo que descontó, para anular y devolver (ver recipeStock.js).
+        await item.update({
+          components: comboItems.map(c => ({ product_id: c.product_id, quantity: parseFloat(c.quantity) })),
+        }, { transaction });
       } else {
         const stockEntry = await ProductStock.findOne({
           where: { warehouse_id, product_id: product.id }, transaction, lock: true,

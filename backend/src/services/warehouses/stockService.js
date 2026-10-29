@@ -3,6 +3,7 @@ const { floorToUnit } = require("../../utils/units");
 const { ensureOpenSession } = require("./sessionService");
 const { visibleWarehouseIds } = require("../../middleware/auth");
 const { idsVisibles, noEncontrado } = require("../products/productAccess");
+const { vendeSinInsumo } = require("../products/recipeStock");
 
 // Deja constancia de una entrada o salida que no pasa por Movimiento manual (alta con stock
 // inicial, retiro del almacén). Sin esta línea el kardex del producto no tenía cómo explicar
@@ -312,6 +313,9 @@ async function getProducts(req) {
   const ingredientStockMap = {};
   const comboCostMap = {};
   const comboItemsMap = {};
+  // Restaurante que vende aunque falte el insumo: el plato nunca sale agotado por inventario
+  // (null = sin límite, como el combo de puros servicios). Ver products/recipeStock.js.
+  const sinInsumo = comboIds.length ? await vendeSinInsumo(warehouseId) : false;
 
   if (comboIds.length > 0) {
     const comboData = await sequelize.query(`
@@ -382,7 +386,7 @@ async function getProducts(req) {
     // son "1 paquete" de 4 (la caja lo anunciaba y después lo rechazaba). null = sin límite
     // (combo de puros servicios).
     stock:        p.is_combo
-      ? (ingredientStockMap[p.id] === Infinity ? null : floorToUnit(ingredientStockMap[p.id] ?? 0, p.unit))
+      ? (sinInsumo || ingredientStockMap[p.id] === Infinity ? null : floorToUnit(ingredientStockMap[p.id] ?? 0, p.unit))
       : p.is_variant_parent
         ? parseFloat(modelStock[p.id]?.qty || 0)
         : (parseFloat(p.qty) || 0),

@@ -20,6 +20,7 @@ const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = r
 const { leerTasaDivisas, tienePagoEnDivisas } = require("./fxRate");
 const { assertTable } = require("../tables");
 const { componentesConStock } = require("../products/comboStock");
+const { vendeSinInsumo, fotoConsumo } = require("../products/recipeStock");
 
 // Devuelve la venta con todas sus relaciones, en el formato plano que
 // espera el frontend. Reutilizado por la respuesta normal y la idempotente.
@@ -149,6 +150,9 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
     const activePromos = offline ? [] : await cargarPromosActivas(warehouse_id, transaction);
     // Productos que la venta dejó en negativo: se devuelven para que la caja los señale.
     const stockNegativo = [];
+    // Restaurante: el plato se vende aunque no alcance un ingrediente (ver recipeStock.js).
+    // Se consulta solo si la venta lleva un combo.
+    let sinInsumo;
 
     // Dos pistas de cálculo en paralelo:
     // - $ (sale.total): round2 POR LÍNEA → sum(round2(price) × qty) → 3 × 4.07 = 12.21
@@ -262,16 +266,17 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
             continue;
           }
 
+          if (sinInsumo === undefined) sinInsumo = await vendeSinInsumo(warehouse_id, transaction);
           let stockEntry = await ProductStock.findOne({
             where: { warehouse_id, product_id: ingredient.id },
             transaction,
             lock: true,
           });
-          if (offline && !stockEntry) stockEntry = await fichaEnCero(warehouse_id, ingredient.id, transaction);
+          if ((offline || sinInsumo) && !stockEntry) stockEntry = await fichaEnCero(warehouse_id, ingredient.id, transaction);
           const currentQty = parseFloat(stockEntry?.qty || 0);
           if (offline) {
             if (currentQty < qtyNeeded) stockNegativo.push(ingredient.name);
-          } else if (currentQty < qtyNeeded) {
+          } else if (currentQty < qtyNeeded && !sinInsumo) {
             throw new Error(
               `Stock insuficiente del ingrediente "${ingredient.name}" para el combo "${product.name}". Disponible: ${currentQty}, Requerido: ${qtyNeeded}`
             );
@@ -394,6 +399,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
           discount_by:         entry.manual ? (employee_id || req?.employee?.id || null) : null,
           cost_price: unitCost,
           note: entry.note,
+          components: entry.isCombo ? fotoConsumo(entry.ingredientsData, entry.qty) : null,
         },
         { transaction }
       );

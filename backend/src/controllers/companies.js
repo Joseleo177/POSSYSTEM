@@ -237,6 +237,8 @@ const DELETE_ORDER = [
   // recetas a productos. Sin borrarlas primero, la empresa no se podía eliminar.
   'FabricationOrderCut', 'FabricationOrderStage', 'FabricationOrderPlan', 'FabricationOrderItem', 'FabricationOrderPiece',
   'FabricationOrder', 'FabricationRecipeItem', 'FabricationRecipe', 'MaterialPiece', 'FabricationStage',
+  // Producción de cocina: sus tandas apuntan a almacenes y productos con RESTRICT.
+  'ProductionBatchItem', 'ProductionBatch', 'PreparationItem',
   'Expense', 'Income', 'PurchasePayment',        // bloquean employees, currencies, journals y categorías
   'ProductComboItem',                            // RESTRICT sobre products
   'Payment', 'ReturnItem', 'Return',
@@ -249,6 +251,7 @@ const DELETE_ORDER = [
   'EmployeeWarehouse', 'Warehouse',
   'Promotion',
   'ProductModifierGroup', 'ModifierOption', 'ModifierGroup', // adicionales: antes de products
+  'RecipeSheet',                                 // fichas de Recetas; caería en cascada igual
   'Product', 'Category',
   'Customer',
   'PaymentJournal', 'PaymentMethod', 'Bank',
