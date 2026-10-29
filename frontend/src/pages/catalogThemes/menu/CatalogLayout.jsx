@@ -11,8 +11,8 @@ import MenuBanners from "./MenuBanners";
 import CategoryTiles from "./CategoryTiles";
 import MenuProductList from "./MenuProductList";
 import ProductAddModal from "./ProductAddModal";
-import CartDrawer from "./CartDrawer";
-import ProfileModal from "./ProfileModal";
+import CartDrawer from "../../../components/PublicCatalog/CartDrawer";
+import ProfileModal from "../../../components/PublicCatalog/ProfileModal";
 import { IdentitySheet, BranchSheet } from "../../../components/PublicCatalog/WelcomeSheets";
 import { MENU_PANEL_DEFAULT } from "../../../components/PublicCatalog/shared";
 
@@ -177,7 +177,8 @@ export default function CatalogLayout({ catalog, token }) {
                     fmt={fmt} baseCur={baseCur} altCur={altCur}
                     canSubmit={canSubmit} onSubmit={submitOrder} sending={sending} sendError={sendError}
                     placedOrder={placedOrder} waHref={waHref} onOpenMyOrders={openMyOrders}
-                    panelColor={store?.panel_color}
+                    panelColor={store?.panel_color || MENU_PANEL_DEFAULT}
+                    keepShoppingLabel="Seguir viendo el menú"
                 />
 
                 <MyOrdersModal
@@ -200,7 +201,7 @@ export default function CatalogLayout({ catalog, token }) {
                     onSave={handleSaveProfile}
                     onForget={requestLogout}
                     onOpenMyOrders={openMyOrders}
-                    panelColor={store?.panel_color}
+                    panelColor={store?.panel_color || MENU_PANEL_DEFAULT}
                     openOrdersCount={openOrdersCount}
                 />
 

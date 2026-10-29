@@ -5,6 +5,7 @@ import VariantChooserModal from "../components/PublicCatalog/VariantChooserModal
 import AddonChooserModal from "../components/PublicCatalog/AddonChooserModal";
 import CheckoutSheet from "../components/PublicCatalog/CheckoutSheet";
 import ReportPaymentModal from "../components/PublicCatalog/ReportPaymentModal";
+import { flyToCart } from "../components/PublicCatalog/flyToCart";
 
 // Página que ve el cliente final. Vive fuera de AppProvider/CartProvider: no hay sesión
 // ni permisos, y el carrito de aquí no es el del punto de venta — es una lista que solo
@@ -55,7 +56,7 @@ export default function PublicCatalogPage({ token, initialProductId = null }) {
                     branchId={catalog.branch?.id}
                     product={catalog.variantPick}
                     onClose={() => catalog.setVariantPick(null)}
-                    onPick={(v) => { catalog.addToCart(v); catalog.setVariantPick(null); }}
+                    onPick={(v) => { catalog.addToCart(v); catalog.setVariantPick(null); flyToCart(null, { image_url: v.image_url, name: v.name }); }}
                     fmt={catalog.fmt}
                     baseCur={catalog.baseCur}
                     altCur={catalog.altCur}
@@ -65,7 +66,7 @@ export default function PublicCatalogPage({ token, initialProductId = null }) {
                 <AddonChooserModal
                     product={catalog.addonPick}
                     onClose={() => catalog.setAddonPick(null)}
-                    onPick={(p, qty, nota, opciones) => catalog.addAddonItem(p, qty, nota, opciones)}
+                    onPick={(p, qty, nota, opciones) => { catalog.addAddonItem(p, qty, nota, opciones); flyToCart(null, { image_url: p.image_url, name: p.name, qty }); }}
                     fmt={catalog.fmt}
                     baseCur={catalog.baseCur}
                     altCur={catalog.altCur}

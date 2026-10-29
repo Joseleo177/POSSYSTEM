@@ -1,14 +1,13 @@
-import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../../helpers";
-import { isIntegerUnit, fmtQtyUnit } from "../../../helpers/unitFormatter";
-import { freeUnitsFor, lineTotalFor } from "../../../helpers/promo";
-import { Spinner } from "../../../components/ui/Spinner";
-import { PlacedPaymentNote } from "../../../components/PublicCatalog/PaymentFields";
-import { sheetSkin } from "../../../components/PublicCatalog/CatalogSheet";
-import { MENU_PANEL_DEFAULT } from "../../../components/PublicCatalog/shared";
+import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
+import { isIntegerUnit, fmtQtyUnit } from "../../helpers/unitFormatter";
+import { freeUnitsFor, lineTotalFor } from "../../helpers/promo";
+import { Spinner } from "../ui/Spinner";
+import { PlacedPaymentNote } from "./PaymentFields";
+import { sheetSkin } from "./CatalogSheet";
 
-// Carrito del tema de menú. Mismo contrato que el de boutique —recibe y devuelve exactamente
-// lo mismo, viene del mismo usePublicCatalog—, pero en el papel del panel que elige la tienda
-// (piel "carta" de CatalogSheet), como el resto de las hojas del tema.
+// Carrito del catálogo público, el mismo en los tres temas (antes cada tema tenía el suyo:
+// OrderPanel en el estándar, uno propio en boutique). Va en el papel que diga el tema
+// (`panelColor`): el panel de la carta en el menú, blanco en los otros dos.
 //
 // Segunda vuelta (29-10-2026, "no es algo que el cliente se meta y diga wao"): cada plato es
 // una tarjeta con su foto, el contador es una píldora con el + en el color de la tienda, el
@@ -25,7 +24,7 @@ const IconoBolsa = ({ className }) => (
 // Chispas alrededor del visto: ocho puntos que salen en abanico (el ángulo va en --a).
 const CHISPAS = Array.from({ length: 8 }, (_, i) => i * 45);
 
-function PedidoEnviado({ placedOrder, store, identity, fmt, baseCur, altCur, waHref, onClose, onOpenMyOrders, skin }) {
+function PedidoEnviado({ placedOrder, store, identity, fmt, baseCur, altCur, waHref, onClose, onOpenMyOrders, skin, keepShoppingLabel }) {
     return (
         <div className="flex-1 overflow-y-auto px-5 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center">
             <div className="relative w-24 h-24 mx-auto">
@@ -89,7 +88,7 @@ function PedidoEnviado({ placedOrder, store, identity, fmt, baseCur, altCur, waH
                     onClick={onClose}
                     className={`w-full h-11 rounded-full text-[14px] font-medium ${skin.subtle} hover:text-neutral-900 transition-colors`}
                 >
-                    Seguir viendo el menú
+                    {keepShoppingLabel}
                 </button>
             </div>
         </div>
@@ -104,10 +103,10 @@ export default function CartDrawer({
     fmt, baseCur, altCur,
     canSubmit, onSubmit, sending, sendError,
     placedOrder, waHref, onOpenMyOrders,
-    panelColor,
+    panelColor, keepShoppingLabel = "Seguir comprando",
 }) {
     if (!open) return null;
-    const skin = sheetSkin(panelColor || MENU_PANEL_DEFAULT);
+    const skin = sheetSkin(panelColor || "#FFFFFF");
     const unidades = cart.length;
 
     return (
@@ -152,7 +151,7 @@ export default function CartDrawer({
                     <PedidoEnviado
                         placedOrder={placedOrder} store={store} identity={identity}
                         fmt={fmt} baseCur={baseCur} altCur={altCur} waHref={waHref}
-                        onClose={onClose} onOpenMyOrders={onOpenMyOrders} skin={skin}
+                        onClose={onClose} onOpenMyOrders={onOpenMyOrders} skin={skin} keepShoppingLabel={keepShoppingLabel}
                     />
                 ) : (
                     <>

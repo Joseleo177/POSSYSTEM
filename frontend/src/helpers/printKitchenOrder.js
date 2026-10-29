@@ -23,8 +23,10 @@ const fmtQty = q => {
  * @param {object} order        venta en estado 'espera' o 'pedido' (tal como la lista el modal)
  * @param {object} companyInfo  datos de la tienda
  * @param {number} printerWidth 58 u 80 (mm)
+ * @param {string} titulo       "Comanda" en la pantalla de cocina; "Pedido" al imprimirlo desde
+ *                              la caja (cuentas en espera, pedidos web), donde lo pidió el usuario.
  */
-export function printKitchenOrder(order, companyInfo, printerWidth = 80) {
+export function printKitchenOrder(order, companyInfo, printerWidth = 80, { titulo = "Comanda" } = {}) {
     const w58 = printerWidth === 58;
 
     const isWebOrder = order.status === "pedido";
@@ -46,7 +48,7 @@ export function printKitchenOrder(order, companyInfo, printerWidth = 80) {
 <html>
 <head>
     <meta charset="utf-8" />
-    <title>Comanda ${esc(ref)}</title>
+    <title>${esc(titulo)} ${esc(ref)}</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap');
         @page { size: ${w58 ? "58mm" : "80mm"} auto; margin: 0; }
@@ -94,8 +96,8 @@ export function printKitchenOrder(order, companyInfo, printerWidth = 80) {
 <body>
     <div class="head">
         ${companyInfo?.name ? `<div class="store">${esc(companyInfo.name)}</div>` : ""}
-        <div class="title">Comanda</div>
-        ${isWebOrder ? `<div class="tag">Pedido Web</div>` : ""}
+        <div class="title">${esc(titulo)}</div>
+        ${isWebOrder ? `<div class="tag">${titulo === "Pedido" ? "Web" : "Pedido Web"}</div>` : ""}
     </div>
 
     <div class="meta">

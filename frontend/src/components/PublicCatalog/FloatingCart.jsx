@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { resolveImageUrl } from "../../helpers";
-import { CART_BUMP_EVENT, CART_TARGET_ATTR } from "./flyToCart";
+import { CART_BUMP_EVENT, CART_TARGET_ATTR, flyToCart } from "./flyToCart";
 
 // Carrito flotante: la burbuja de abajo a la derecha, como la de WhatsApp, que sigue al cliente
 // mientras recorre la carta. Vacío es solo el icono; con algo dentro se estira en una píldora
@@ -92,4 +92,32 @@ export default function FloatingCart({ count, total, fmt, baseCur, onOpen }) {
             </button>
         </div>
     );
+}
+
+// Agregar con vuelo, para los temas donde el "+" de la tarjeta agrega directo (boutique y
+// estándar: no hay ficha de la que salga el plato, como en el menú). Se recuerda el último
+// toque de la página y, al agregar, vuela la foto de la tarjeta donde se tocó: se sube desde el
+// botón hasta el primer contenedor que tenga UNA sola foto. Si encuentra más de una, ya salió
+// de la tarjeta (es la rejilla entera) y vuela el botón mismo.
+//
+// Lo que abre un selector (tallas, adicionales) no vuela todavía: el producto aún no entró.
+export function useFlyingAdd(addToCart) {
+    const ultimo = useRef(null);
+    useEffect(() => {
+        const toque = (e) => { ultimo.current = e.target; };
+        document.addEventListener("pointerdown", toque, true);
+        return () => document.removeEventListener("pointerdown", toque, true);
+    }, []);
+    return (p, ...resto) => {
+        addToCart(p, ...resto);
+        if (!p || p.has_variants || p.addons?.length) return;
+        let foto = null;
+        let el = ultimo.current;
+        for (let i = 0; el && i < 8; i++, el = el.parentElement) {
+            const fotos = el.querySelectorAll?.("img") || [];
+            if (fotos.length === 1) { foto = fotos[0]; break; }
+            if (fotos.length > 1) break;
+        }
+        flyToCart(foto || ultimo.current, { image_url: p.image_url, name: p.name });
+    };
 }

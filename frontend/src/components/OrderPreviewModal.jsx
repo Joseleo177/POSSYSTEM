@@ -32,7 +32,7 @@ export default function OrderPreviewModal({ open, onClose, order, convertToDispl
 
     // La pantalla sí muestra importes —el cajero necesita saber cuánto suma la cuenta—, pero
     // el papel sale siempre sin ellos: la comanda se despacha, no se cobra.
-    const imprimir = () => printKitchenOrder(order, companyInfo, printerWidth);
+    const imprimir = () => printKitchenOrder(order, companyInfo, printerWidth, { titulo: "Pedido" });
 
     return (
         <Modal open={open} onClose={onClose} title={`Pedido ${ref}`} width={420}>
@@ -137,10 +137,10 @@ export default function OrderPreviewModal({ open, onClose, order, convertToDispl
                 <button
                     onClick={imprimir}
                     className="btn-md btn-primary w-full"
-                    title="Comanda: cliente y productos, sin precios"
+                    title="Cliente y productos, sin precios"
                     style={{ flex: 1.8 }}
                 >
-                    IMPRIMIR COMANDA
+                    Imprimir
                 </button>
             </div>
         </Modal>

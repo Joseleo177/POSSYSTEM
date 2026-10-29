@@ -1,13 +1,13 @@
 import { IdentitySheet, BranchSheet } from "../../../components/PublicCatalog/WelcomeSheets";
 import LogoutConfirm from "../../../components/PublicCatalog/LogoutConfirm";
 import OrderDetailModal from "../../../components/PublicCatalog/OrderDetailModal";
-import CartBar from "./CartBar";
+import FloatingCart, { useFlyingAdd } from "../../../components/PublicCatalog/FloatingCart";
 import MyOrdersModal from "../../../components/PublicCatalog/MyOrdersModal";
 import ProfileModal from "../../../components/PublicCatalog/ProfileModal";
 import StoreWhatsAppButton from "../../../components/PublicCatalog/StoreWhatsAppButton";
 import { toNameCase } from "../../../helpers";
 
-import CartDrawer from "./CartDrawer";
+import CartDrawer from "../../../components/PublicCatalog/CartDrawer";
 import StorefrontHeader from "./StorefrontHeader";
 import HeroCarousel from "./HeroCarousel";
 import BrandStatement from "./BrandStatement";
@@ -56,6 +56,9 @@ export default function CatalogLayout({ catalog, token }) {
         placedOrder, closeConfirmation, waHref,
         productId, productDetail, productLoading, productError, openProduct, closeProduct,
     } = catalog;
+
+    // El "+" de cada tarjeta agrega directo: con vuelo de la foto al carrito flotante.
+    const agregar = useFlyingAdd(addToCart);
 
     if (error) {
         return (
@@ -114,7 +117,8 @@ export default function CatalogLayout({ catalog, token }) {
                 onOpenMyOrders={openMyOrders} onOpenProfile={openProfileModal}
                 branch={branch} canChangeBranch={warehouses.length > 1} onChangeBranch={openBranchGate}
                 cartCount={cart.length} cartTotal={cartTotal} fmt={fmt} baseCur={baseCur}
-                onOpenCart={() => setCartOpen(true)} ordersEnabled={ordersEnabled}
+                // El carrito ya no va en la cabecera: flota abajo (FloatingCart).
+                onOpenCart={() => setCartOpen(true)} ordersEnabled={false}
                 onGoHome={() => { setSearch(""); setCategory(""); closeProduct(); }}
             />
 
@@ -129,7 +133,7 @@ export default function CatalogLayout({ catalog, token }) {
                         inCart={cart.find(it => it.id === productId)}
                         cart={cart}
                         fmt={fmt} baseCur={baseCur} altCur={altCur}
-                        canOrder={ordersEnabled} onAdd={addToCart}
+                        canOrder={ordersEnabled} onAdd={agregar}
                         store={store}
                         onOpenProduct={(id) => { openProduct(id); window.scrollTo({ top: 0 }); }}
                     />
@@ -148,7 +152,7 @@ export default function CatalogLayout({ catalog, token }) {
                                 <FeaturedRow
                                     token={token} warehouseId={branch?.id}
                                     cart={cart} fmt={fmt} baseCur={baseCur} altCur={altCur}
-                                    ordersEnabled={ordersEnabled} onAdd={addToCart}
+                                    ordersEnabled={ordersEnabled} onAdd={agregar}
                                     onOpenProduct={openProduct}
                                 />
 
@@ -183,7 +187,7 @@ export default function CatalogLayout({ catalog, token }) {
                                                 category={{ ...cat, name: entry.label || cat.name }}
                                                 token={token} warehouseId={branch?.id}
                                                 cart={cart} fmt={fmt} baseCur={baseCur} altCur={altCur}
-                                                ordersEnabled={ordersEnabled} onAdd={addToCart}
+                                                ordersEnabled={ordersEnabled} onAdd={agregar}
                                                 onOpenProduct={openProduct} onSeeAll={setCategory}
                                             />
                                         );
@@ -194,7 +198,7 @@ export default function CatalogLayout({ catalog, token }) {
                                 <AllProductsSection
                                     categories={categories} token={token} warehouseId={branch?.id}
                                     cart={cart} fmt={fmt} baseCur={baseCur} altCur={altCur}
-                                    ordersEnabled={ordersEnabled} onAdd={addToCart}
+                                    ordersEnabled={ordersEnabled} onAdd={agregar}
                                     onOpenProduct={openProduct} onSeeAll={setCategory}
                                 />
 
@@ -205,7 +209,7 @@ export default function CatalogLayout({ catalog, token }) {
                                 products={products} total={total}
                                 loading={loading} loadingMore={loadingMore} loadMore={loadMore}
                                 cart={cart} fmt={fmt} baseCur={baseCur} altCur={altCur}
-                                ordersEnabled={ordersEnabled} onAdd={addToCart}
+                                ordersEnabled={ordersEnabled} onAdd={agregar}
                                 token={token} onOpenProduct={openProduct}
                                 title={tituloListado}
                             />
@@ -219,17 +223,14 @@ export default function CatalogLayout({ catalog, token }) {
                 pegado={!productId && enPortada && features?.length > 0}
             />
 
-            {/* Hueco para que la barra flotante del pedido no tape el pie. Con el mismo fondo
-                del pie (bg-surface) y no el de la página (bg-surface-2): sin esto se veía
-                como un bloque gris de más creciendo debajo del pie en cuanto había algo en
-                el carrito, en vez de leerse como parte del mismo pie. */}
-            {ordersEnabled && cart.length > 0 && <div className="h-24 bg-surface dark:bg-surface-dark-2" />}
+            {/* Hueco para que el carrito flotante no tape el pie. Con el mismo fondo del pie
+                (bg-surface) y no el de la página: si no, se leía como un bloque gris de más. */}
+            {ordersEnabled && <div className="h-24 bg-surface dark:bg-surface-dark-2" />}
 
-            <CartBar
-                visible={ordersEnabled && cart.length > 0 && !cartOpen}
-                cart={cart} cartTotal={cartTotal} fmt={fmt} baseCur={baseCur} altCur={altCur}
-                onOpen={() => setCartOpen(true)}
-            />
+            {ordersEnabled && (
+                <FloatingCart count={cart.length} total={cartTotal} fmt={fmt} baseCur={baseCur}
+                    onOpen={() => setCartOpen(true)} />
+            )}
 
             <MyOrdersModal
                 open={ordersOpen}
@@ -237,7 +238,7 @@ export default function CatalogLayout({ catalog, token }) {
                 orders={myOrders} loading={ordersLoading} error={ordersError}
                 rejectedIds={rejectedIds}
                 onSelectOrder={setSelectedOrder} onReload={loadMyOrders} identity={identity}
-                fmt={fmt} baseCur={baseCur}
+                fmt={fmt} baseCur={baseCur} panel="#FFFFFF"
             />
 
             <CartDrawer
@@ -262,6 +263,7 @@ export default function CatalogLayout({ catalog, token }) {
                 onSave={handleSaveProfile}
                 onForget={requestLogout}
                 onOpenMyOrders={openMyOrders}
+                openOrdersCount={openOrdersCount}
             />
 
             <LogoutConfirm
@@ -277,11 +279,14 @@ export default function CatalogLayout({ catalog, token }) {
                     onClose={() => setSelectedOrder(null)}
                     onReportPayment={canReportPayment ? setReportOrder : null}
                     fmt={fmt} baseCur={baseCur} altCur={altCur}
+                    panel="#FFFFFF" whatsapp={store?.whatsapp || null}
                 />
             )}
 
+            {/* Encima del carrito flotante, como una segunda burbuja más chica. */}
             <StoreWhatsAppButton
                 store={store}
+                stacked={ordersEnabled}
                 hidden={cartOpen || ordersOpen || profileOpen || !!selectedOrder}
             />
         </div>

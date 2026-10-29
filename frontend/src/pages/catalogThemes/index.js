@@ -33,10 +33,10 @@ export function resolveTheme(name) {
     return THEMES[name] || THEMES[DEFAULT_THEME];
 }
 
-// Color de papel de las hojas compartidas (checkout, pagos, pedidos) en este tema, o null para
-// la piel estándar del sistema. Solo el menú pinta las hojas en su panel: ver CatalogSheet.
+// Color de papel de las hojas compartidas (checkout, pagos, pedidos) en este tema: el panel de
+// la carta en el menú, blanco en los otros dos. Ver CatalogSheet.
 export function sheetPanelFor(name, store) {
-    return name === "menu" ? (store?.panel_color || MENU_PANEL_DEFAULT) : null;
+    return name === "menu" ? (store?.panel_color || MENU_PANEL_DEFAULT) : "#FFFFFF";
 }
 
 export default THEMES;
