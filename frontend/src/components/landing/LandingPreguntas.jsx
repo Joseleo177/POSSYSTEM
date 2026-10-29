@@ -15,7 +15,7 @@ const PREGUNTAS = [
     ["¿Mis empleados pueden ver todo?",
      "No, a menos que tú quieras. Cada rol tiene permisos por módulo y por acción: quién vende, quién anula, quién da crédito o quién ve los reportes."],
     ["¿Cómo consigo acceso?",
-     "Tu usuario lo crea el administrador de tu empresa desde el módulo de Empleados. Si tu negocio todavía no usa Nexus, pide información a quien te compartió este enlace."],
+     "Tu usuario lo crea el administrador de tu empresa desde el módulo de Empleados. Si tu negocio todavía no usa NXUS, pide información a quien te compartió este enlace."],
 ];
 
 export default function LandingPreguntas() {

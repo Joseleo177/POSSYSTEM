@@ -1,4 +1,8 @@
-/* Service worker de Nexus: permite abrir la app sin internet.
+/* Service worker de NXUS: permite abrir la app sin internet.
+ *
+ * Las claves internas siguen con el prefijo "nexus" (esta caché, la base "nexus-offline" y los
+ * nexus_* de localStorage): renombrarlas dejaría huérfanas las ventas en cola sin conexión y el
+ * código de cada equipo. No se ven en pantalla.
  *
  * Es una plantilla. El build (plugin `nexusServiceWorker` en vite.config.js) reemplaza
  * __VERSION__ y __PRECACHE__ por la versión y la lista exacta de archivos generados, y la

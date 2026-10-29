@@ -1,6 +1,8 @@
-# POS System v3
+# NXUS ERP
 
-Sistema de punto de venta (POS) con gestión de inventario, contabilidad y ventas.
+Sistema de punto de venta (POS) con gestión de inventario, contabilidad y ventas. Antes se
+llamaba Nexus; algunas claves internas (localStorage, IndexedDB, caché del service worker)
+conservan el prefijo `nexus` a propósito para no perder datos de los equipos ya instalados.
 
 ## Modos de ejecución
 
@@ -27,14 +29,13 @@ Todo corre en tu PC: backend, frontend y base de datos PostgreSQL.
 ### 1. Clonar el repositorio
 
 ```bash
-git clone <URL_DEL_REPO>
-cd pos-system-v3
+git clone https://github.com/Joseleo177/nxus.git
+cd nxus
 ```
 
 ### 2. Configurar variables de entorno
 
 ```bash
-cd POSSYSTEM
 cp .env.example .env
 ```
 
@@ -45,7 +46,6 @@ Edita `.env` y cambia al menos:
 ### 3. Levantar los contenedores
 
 ```bash
-cd POSSYSTEM
 docker compose up -d --build
 ```
 
@@ -90,7 +90,6 @@ Usa una base de datos Supabase en la nube. Útil para producción o para trabaja
 ### 2. Configurar variables de entorno
 
 ```bash
-cd POSSYSTEM
 cp .env.example .env
 ```
 
@@ -109,7 +108,7 @@ SUPABASE_SERVICE_KEY=sb_secret_...
 Antes de levantar los contenedores, ejecuta las migraciones contra Supabase:
 
 ```bash
-cd POSSYSTEM/backend
+cd backend
 # Exporta las variables necesarias
 export DATABASE_URL="postgresql://postgres:<password>@<host>:5432/postgres"
 npx sequelize-cli db:migrate --env production
@@ -118,7 +117,6 @@ npx sequelize-cli db:migrate --env production
 ### 4. Levantar los servicios
 
 ```bash
-cd POSSYSTEM
 docker compose up -d --build
 ```
 
@@ -133,7 +131,7 @@ Para trabajar en el código con hot-reload:
 ### Backend
 
 ```bash
-cd POSSYSTEM/backend
+cd backend
 npm install
 # Asegúrate de tener PostgreSQL corriendo o usa el contenedor db
 npm run dev
@@ -142,7 +140,7 @@ npm run dev
 ### Frontend
 
 ```bash
-cd POSSYSTEM/frontend
+cd frontend
 npm install
 # Por defecto hace proxy a http://localhost:4000
 npm run dev
@@ -159,32 +157,31 @@ VITE_BACKEND_URL=http://localhost:4000
 ## Estructura del proyecto
 
 ```
-pos-system-v3/
-└── POSSYSTEM/
-    ├── backend/          # API Node.js + Express + Sequelize
-    │   ├── src/
-    │   │   ├── controllers/
-    │   │   ├── models/
-    │   │   ├── migrations/
-    │   │   ├── routes/
-    │   │   └── services/
-    │   └── Dockerfile
-    ├── frontend/         # React + Vite + Tailwind
-    │   ├── src/
-    │   │   ├── components/
-    │   │   ├── pages/
-    │   │   └── api/
-    │   ├── nginx.conf
-    │   └── Dockerfile
-    ├── docker-compose.yml
-    └── .env.example
+nxus/
+├── backend/          # API Node.js + Express + Sequelize
+│   ├── src/
+│   │   ├── controllers/
+│   │   ├── models/
+│   │   ├── migrations/
+│   │   ├── routes/
+│   │   └── services/
+│   └── Dockerfile
+├── frontend/         # React + Vite + Tailwind
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   └── api/
+│   ├── nginx.conf
+│   └── Dockerfile
+├── docker-compose.yml
+└── .env.example
 ```
 
 ---
 
 ## Variables de entorno — referencia completa
 
-Ver [POSSYSTEM/.env.example](POSSYSTEM/.env.example) para la lista completa con descripciones.
+Ver [.env.example](.env.example) para la lista completa con descripciones.
 
 | Variable | Descripción | Requerida |
 |----------|-------------|-----------|

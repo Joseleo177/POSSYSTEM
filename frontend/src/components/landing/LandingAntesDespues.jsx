@@ -1,7 +1,8 @@
-// "Antes y con Nexus": cada problema del día a día emparejado con lo que lo resuelve. Va en
-// una franja oscura, sea cual sea el tema, para cortar el ritmo de la portada clara.
+// "Antes y con NXUS": cada problema del día a día emparejado con lo que lo resuelve. Va en
+// una franja oscura (la tinta de la marca, #0F2A33), sea cual sea el tema, para cortar el
+// ritmo de la portada clara. Los acentos son el rosa del logo y el hielo #ECFEFF.
 //
-// Solo se promete lo que el sistema hace hoy; cada "con Nexus" corresponde a una función real.
+// Solo se promete lo que el sistema hace hoy; cada "con NXUS" corresponde a una función real.
 
 const PARES = [
     ["La tasa cambia y toca recalcular los precios a mano.", "Precio en referencia: el cobro en bolívares sale a la tasa del día."],
@@ -25,7 +26,7 @@ function Ico({ d, className }) {
 
 export default function LandingAntesDespues() {
     return (
-        <section className="relative overflow-hidden bg-[#0B1220] text-white">
+        <section className="relative overflow-hidden bg-[#0F2A33] text-white">
             <div aria-hidden="true" className="absolute inset-0 pointer-events-none
                 bg-[linear-gradient(to_right,rgb(255_255_255/0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgb(255_255_255/0.04)_1px,transparent_1px)]
                 bg-[size:56px_56px] [mask-image:radial-gradient(ellipse_80%_70%_at_50%_40%,black,transparent)]" />
@@ -33,10 +34,10 @@ export default function LandingAntesDespues() {
 
             <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-16 lg:py-24">
                 <div className="max-w-3xl">
-                    <p className="text-[14px] font-semibold text-cyan-300">El día a día, antes y después</p>
+                    <p className="text-[14px] font-semibold text-brand-300">El día a día, antes y después</p>
                     <h2 className="mt-2 text-[30px] sm:text-[40px] font-bold tracking-[-0.02em] leading-[1.1]">
                         Del cuaderno y la calculadora a{" "}
-                        <span className="bg-gradient-to-r from-brand-300 to-cyan-300 bg-clip-text text-transparent">un sistema que cuadra solo</span>.
+                        <span className="bg-gradient-to-r from-[#ECFEFF] to-brand-300 bg-clip-text text-transparent">un sistema que cuadra solo</span>.
                     </h2>
                 </div>
 
@@ -44,7 +45,7 @@ export default function LandingAntesDespues() {
                 <div className="hidden md:grid grid-cols-[minmax(0,1fr)_48px_minmax(0,1fr)] gap-4 mt-12 mb-3 text-[13px] font-medium">
                     <span className="text-white/45">Antes</span>
                     <span />
-                    <span className="text-cyan-300">Con Nexus</span>
+                    <span className="text-brand-300">Con NXUS</span>
                 </div>
 
                 <ul className="mt-8 md:mt-0 space-y-3">
@@ -59,8 +60,8 @@ export default function LandingAntesDespues() {
                             <div className="hidden md:flex items-center justify-center text-white/25">
                                 <Ico d={FLECHA} className="w-5 h-5" />
                             </div>
-                            <div className="rounded-2xl border border-cyan-300/20 bg-gradient-to-br from-brand-500/[0.18] to-cyan-400/[0.06] px-5 py-4 flex items-start gap-3">
-                                <span className="mt-0.5 w-6 h-6 shrink-0 rounded-full bg-cyan-300 text-[#0B1220] flex items-center justify-center">
+                            <div className="rounded-2xl border border-brand-300/20 bg-gradient-to-br from-brand-400/[0.16] to-[#ECFEFF]/[0.04] px-5 py-4 flex items-start gap-3">
+                                <span className="mt-0.5 w-6 h-6 shrink-0 rounded-full bg-brand-400 text-[#0F2A33] flex items-center justify-center">
                                     <Ico d={CHECK} className="w-3.5 h-3.5" />
                                 </span>
                                 <span className="text-[15px] font-medium text-white leading-relaxed">{con}</span>

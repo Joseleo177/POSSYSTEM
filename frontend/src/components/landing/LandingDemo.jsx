@@ -71,7 +71,7 @@ export default function LandingDemo() {
 
     return (
         <section id="demo" className="scroll-mt-16 max-w-6xl mx-auto px-4 sm:px-6 py-16 lg:py-24">
-            <div className="relative rounded-[28px] p-[1px] bg-gradient-to-br from-brand-500/40 via-border/40 to-cyan-400/30 dark:via-white/10">
+            <div className="relative rounded-[28px] p-[1px] bg-gradient-to-br from-brand-500/40 via-border/40 to-brand-300/30 dark:via-white/10">
                 <div className="relative overflow-hidden rounded-[27px] bg-white dark:bg-surface-dark-2 grid lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-10 lg:gap-12 p-6 sm:p-10">
                     <div aria-hidden="true" className="absolute -bottom-32 -left-24 w-[420px] h-[420px] rounded-full bg-brand-500/10 blur-[100px] pointer-events-none" />
 
@@ -82,7 +82,7 @@ export default function LandingDemo() {
                             Cobra una venta en tres toques
                         </h2>
                         <p className="mt-3 text-[16px] text-content-muted dark:text-white/70 leading-relaxed">
-                            Así trabaja un cajero con Nexus. Toca los productos de la derecha y termina la venta.
+                            Así trabaja un cajero con NXUS. Toca los productos de la derecha y termina la venta.
                         </p>
 
                         <ol className="mt-8 space-y-5">

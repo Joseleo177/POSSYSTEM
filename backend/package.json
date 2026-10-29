@@ -1,5 +1,5 @@
 {
-  "name": "pos-backend",
+  "name": "nxus-backend",
   "version": "1.0.0",
   "description": "POS System — API REST con Node.js + Express + PostgreSQL",
   "main": "src/index.js",

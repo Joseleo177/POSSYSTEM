@@ -9,7 +9,9 @@
 // la impone LIGHTNESS_MAP. Es lo que evita que un amarillo claro deje ilegible el texto
 // blanco de los botones: brand-500 siempre cae en 40% de luminosidad, sea cual sea el tono.
 
-export const DEFAULT_BRAND = "#06b6d4"; // cyan-500 (antes el teal-500 #14b8a6)
+// El rosa de NXUS: es el brand-500 de la escala por defecto de index.css (antes cian #06b6d4
+// y, antes, teal #14b8a6). Las empresas que guardaron un color propio lo conservan.
+export const DEFAULT_BRAND = "#e11d48";
 
 // Luminosidad por escalón, medida sobre la escala teal original de Tailwind para que una
 // marca nueva mantenga el mismo ritmo de claros y oscuros que tenía el verde.

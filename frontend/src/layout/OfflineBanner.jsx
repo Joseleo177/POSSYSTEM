@@ -117,7 +117,7 @@ export default function OfflineBanner() {
             </svg>
             <p className="flex-1 min-w-[200px] text-[13px] leading-snug text-content dark:text-white">
               {inst.puedeInstalar
-                ? "Instala Nexus en este equipo para que la caja abra aunque se caiga internet."
+                ? "Instala NXUS en este equipo para que la caja abra aunque se caiga internet."
                 : <>Para que la caja abra sin internet, añádela a la pantalla de inicio: botón <span className="font-semibold">Compartir</span> y luego <span className="font-semibold">Añadir a pantalla de inicio</span>.</>}
             </p>
             <div className="flex items-center gap-2 shrink-0">

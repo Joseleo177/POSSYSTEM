@@ -3,7 +3,7 @@ import { api } from "../services/api";
 import { recordarAcceso, entrarSinConexion } from "../services/offline/session";
 import { esSinServidor } from "../services/offline/network";
 import { useTheme } from "../hooks/useTheme";
-import { NexusLogo, NexusMark } from "./ui/NexusLogo";
+import { NxusLogo, NxusMark } from "./ui/NxusLogo";
 import LandingDemo from "./landing/LandingDemo";
 import LandingTour from "./landing/LandingTour";
 import LandingAntesDespues from "./landing/LandingAntesDespues";
@@ -65,11 +65,30 @@ function Icono({ d, className = "w-5 h-5" }) {
     );
 }
 
-// Logo oficial: letras en el color del texto (negro en claro, blanco en oscuro) y el rayo
-// turquesa de la marca, fijo.
+// Logo oficial: letras en el color del texto (negro en claro, blanco en oscuro) y la N de
+// rayo en el rosa de la marca, fijo.
 function Logo({ className = "h-8" }) {
-    return <NexusLogo className={`${className} w-auto text-content dark:text-white`} />;
+    return <NxusLogo className={`${className} w-auto text-content dark:text-white`} />;
 }
+
+// La portada es de NXUS, no de una empresa: lleva el rosa de la marca aunque el navegador
+// recuerde el color de la última empresa que entró. Reescribe las variables de brand-* solo
+// dentro de esta pantalla (la variable más cercana gana sobre la del <html>); al entrar, el
+// sistema vuelve al color de cada empresa. Es la misma escala por defecto de index.css:
+// brand-400 es el rosa del logo (#FB7185) y brand-500 el #E11D48 de los botones.
+const MARCA_NXUS = {
+    "--c-brand-50":  "255 241 242",
+    "--c-brand-100": "255 228 230",
+    "--c-brand-200": "254 205 211",
+    "--c-brand-300": "253 164 175",
+    "--c-brand-400": "251 113 133",
+    "--c-brand-500": "225 29 72",
+    "--c-brand-600": "190 18 60",
+    "--c-brand-700": "159 18 57",
+    "--c-brand-800": "136 19 55",
+    "--c-brand-900": "76 5 25",
+    "--c-brand-ink": "255 255 255",
+};
 
 const INPUT = "w-full h-11 rounded-xl border border-border dark:border-white/15 bg-white dark:bg-white/[0.04] text-[15px] text-content dark:text-white placeholder:text-content-subtle/60 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition-colors";
 
@@ -92,7 +111,7 @@ function Vista() {
     const barras = [38, 52, 44, 70, 58, 86, 64];
     return (
         <div aria-hidden="true" className="relative mx-auto w-full max-w-md lg:max-w-none select-none">
-            <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-brand-500/25 via-cyan-400/10 to-transparent blur-2xl" />
+            <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-brand-500/25 via-brand-300/10 to-transparent blur-2xl" />
             <div className="relative rounded-3xl border border-border/70 dark:border-white/10 bg-white/95 dark:bg-surface-dark-2/95 backdrop-blur shadow-[0_30px_80px_-30px_rgb(0_0_0/0.45)] overflow-hidden">
                 <div className="h-10 px-4 flex items-center gap-1.5 border-b border-border/60 dark:border-white/[0.06]">
                     <span className="w-2.5 h-2.5 rounded-full bg-content-subtle/25" />
@@ -219,7 +238,7 @@ export default function LoginScreen({ onLogin }) {
     const anio = new Date().getFullYear();
 
     return (
-        <div className="min-h-screen bg-surface-2 dark:bg-surface-dark text-content dark:text-white">
+        <div className="min-h-screen bg-surface-2 dark:bg-surface-dark text-content dark:text-white" style={MARCA_NXUS}>
 
             {/* ── Cabecera ── */}
             <header className="sticky top-0 z-40 bg-surface-2/80 dark:bg-surface-dark/80 backdrop-blur-md border-b border-border/50 dark:border-white/[0.06]">
@@ -256,13 +275,13 @@ export default function LoginScreen({ onLogin }) {
 
             {/* ── Hero ── */}
             <section className="relative overflow-hidden">
-                {/* Fondo: rejilla tenue que se desvanece y dos halos del color de la marca. */}
+                {/* Fondo: rejilla tenue que se desvanece y dos halos del rosa de la marca. */}
                 <div aria-hidden="true" className="absolute inset-0 pointer-events-none
                     bg-[linear-gradient(to_right,rgb(0_0_0/0.045)_1px,transparent_1px),linear-gradient(to_bottom,rgb(0_0_0/0.045)_1px,transparent_1px)]
                     dark:bg-[linear-gradient(to_right,rgb(255_255_255/0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgb(255_255_255/0.05)_1px,transparent_1px)]
                     bg-[size:56px_56px] [mask-image:radial-gradient(ellipse_70%_60%_at_50%_0%,black,transparent)]" />
                 <div aria-hidden="true" className="absolute -top-40 -left-32 w-[560px] h-[560px] rounded-full bg-brand-500/20 dark:bg-brand-500/25 blur-[120px] pointer-events-none" />
-                <div aria-hidden="true" className="absolute top-20 -right-40 w-[480px] h-[480px] rounded-full bg-cyan-400/15 dark:bg-cyan-400/10 blur-[120px] pointer-events-none" />
+                <div aria-hidden="true" className="absolute top-20 -right-40 w-[480px] h-[480px] rounded-full bg-brand-200/40 dark:bg-brand-400/10 blur-[120px] pointer-events-none" />
 
                 <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-12 pb-20 lg:pt-20 lg:pb-28 grid gap-14 lg:gap-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] items-center">
                     <div>
@@ -272,7 +291,7 @@ export default function LoginScreen({ onLogin }) {
                         </span>
                         <h1 className="mt-5 text-[36px] sm:text-[48px] lg:text-[56px] font-bold tracking-[-0.03em] leading-[1.04] text-content dark:text-white">
                             Tu negocio en orden, en{" "}
-                            <span className="bg-gradient-to-r from-brand-600 via-brand-500 to-cyan-500 dark:from-brand-400 dark:via-brand-300 dark:to-cyan-300 bg-clip-text text-transparent">
+                            <span className="bg-gradient-to-r from-brand-700 via-brand-600 to-brand-500 dark:from-brand-300 dark:via-brand-400 dark:to-brand-300 bg-clip-text text-transparent">
                                 bolívares y dólares
                             </span>
                             , desde un solo lugar.
@@ -308,7 +327,7 @@ export default function LoginScreen({ onLogin }) {
                 </div>
             </section>
 
-            {/* ── Antes y con Nexus (franja oscura) ── */}
+            {/* ── Antes y con NXUS (franja oscura) ── */}
             <LandingAntesDespues />
 
             {/* ── Pruébalo: caja de demostración ── */}
@@ -360,7 +379,7 @@ export default function LoginScreen({ onLogin }) {
                     <ol className="mt-10 grid md:grid-cols-3 gap-4">
                         {PASOS.map((p, i) => (
                             <li key={p.titulo} className="relative rounded-2xl border border-border/70 dark:border-white/[0.08] bg-white dark:bg-white/[0.03] p-6">
-                                <span className="text-[44px] font-bold leading-none tracking-tight bg-gradient-to-br from-brand-500 to-cyan-400 bg-clip-text text-transparent tabular-nums">
+                                <span className="text-[44px] font-bold leading-none tracking-tight bg-gradient-to-br from-brand-600 to-brand-400 bg-clip-text text-transparent tabular-nums">
                                     {String(i + 1).padStart(2, "0")}
                                 </span>
                                 <h3 className="mt-4 text-[17px] font-semibold text-content dark:text-white">{p.titulo}</h3>
@@ -394,7 +413,7 @@ export default function LoginScreen({ onLogin }) {
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3">
                     <Logo />
                     <p className="text-[13px] text-content-subtle text-center sm:text-right">
-                        Versión {VERSION} · © {anio} Nexus Global Technologies
+                        Versión {VERSION} · © {anio} NXUS
                     </p>
                 </div>
             </footer>
@@ -416,7 +435,7 @@ export default function LoginScreen({ onLogin }) {
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
 
-                        <NexusMark className="w-11 h-11 text-content dark:text-white" />
+                        <NxusMark className="w-11 h-11" />
                         <h2 id="titulo-acceso" className="mt-4 text-[22px] font-bold tracking-tight text-content dark:text-white">
                             Inicia sesión
                         </h2>

@@ -66,31 +66,32 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
     --c-content-muted:  75 85 99;    /* #4b5563 — 7.5:1 sobre blanco */
     --c-content-subtle: 107 114 128; /* #6b7280 — 4.8:1 sobre blanco */
 
-    /* Color de marca por defecto: cian (la escala cyan de Tailwind). Era el teal histórico;
-       se cambió al volver el color de acento del sistema (29-09-2026). Cuando la empresa
-       configura su propio color, helpers/brandColor.js escribe estas mismas variables en el
-       <html> y gana por especificidad; al restaurar el color por defecto las borra y vuelve
-       a mandar esta declaración. */
-    --c-brand-50:  236 254 255;
-    --c-brand-100: 207 250 254;
-    --c-brand-200: 165 243 252;
-    --c-brand-300: 103 232 249;
-    --c-brand-400: 34 211 238;
-    --c-brand-500: 6 182 212;
-    --c-brand-600: 8 145 178;
-    --c-brand-700: 14 116 144;
-    --c-brand-800: 21 94 117;
-    --c-brand-900: 22 78 99;
-    /* Texto sobre brand-500 (el botón principal). Con el cian va casi negro —blanco daba
-       2,4:1—; brandColor.js lo recalcula para cada marca y elige el que más contraste dé. */
-    --c-brand-ink: 8 51 68;        /* #083344 */
+    /* Color de marca por defecto: el rosa de NXUS (29-10-2026; antes cian y, antes, teal).
+       Es la escala rose de Tailwind corrida un paso: brand-400 es el rosa del logo (#FB7185)
+       y brand-500 el rose-600 (#E11D48), que sostiene texto blanco en los botones. La misma
+       escala fija la portada (MARCA_NXUS en LoginScreen). Cuando la empresa configura su
+       propio color, helpers/brandColor.js escribe estas mismas variables en el <html> y gana
+       por especificidad; al restaurar el color por defecto las borra y vuelve a mandar esta
+       declaración. */
+    --c-brand-50:  255 241 242;
+    --c-brand-100: 255 228 230;
+    --c-brand-200: 254 205 211;
+    --c-brand-300: 253 164 175;
+    --c-brand-400: 251 113 133;
+    --c-brand-500: 225 29 72;
+    --c-brand-600: 190 18 60;
+    --c-brand-700: 159 18 57;
+    --c-brand-800: 136 19 55;
+    --c-brand-900: 76 5 25;
+    /* Texto sobre brand-500 (el botón principal): blanco, 4,7:1 sobre el rosa. brandColor.js
+       lo recalcula para cada marca y elige el que más contraste dé. */
+    --c-brand-ink: 255 255 255;
   }
 
   /* Color de los gráficos: el de la marca, un paso más profundo en claro (brand-600, que pasa
      contraste sobre blanco) y uno más luminoso en oscuro (brand-400). Así cada empresa ve
      sus gráficos en su color. El gris es la parte secundaria de una barra apilada (el costo
-     frente a la utilidad). Con el cian por defecto: #0891B2 y #22D3EE, validados con
-     validate_palette; el cian puro que se pidió (#00E9FF) daba 1,5:1 sobre blanco. */
+     frente a la utilidad). Con el rosa por defecto: #E11D48 en claro y #FB7185 en oscuro. */
   :root {
     /* brand-500 y no 600: con 600 las barras salían petróleo apagado. brandColor.js fija
        brand-500 en 40% de luminosidad, que sobre blanco da ~3:1, el mínimo para gráficos. */
@@ -178,7 +179,7 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
            dark:hover:bg-surface-dark-3/50 dark:text-content-dark-muted dark:hover:text-content-dark;
   }
   /* ── Botón de acento y botón de borde ──
-     La acción principal va en el color de marca (cian por defecto). Solo en tinta el sistema
+     La acción principal va en el color de marca (rosa por defecto). Solo en tinta el sistema
      se leía apagado. El texto no es blanco fijo: es --c-brand-ink, que brandColor.js calcula
      para cada marca (casi negro sobre cian o amarillo, blanco sobre azul o rojo), así ningún
      color elegido deja el botón ilegible. Un relleno plano se leía como plantilla: un

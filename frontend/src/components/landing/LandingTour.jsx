@@ -253,7 +253,7 @@ export default function LandingTour() {
                     </div>
 
                     <div key={activa} className="relative modal-in" aria-hidden="true">
-                        <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-brand-500/15 via-cyan-400/10 to-transparent blur-2xl" />
+                        <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-brand-500/15 via-brand-300/10 to-transparent blur-2xl" />
                         <div className="relative"><Vista /></div>
                     </div>
                 </div>

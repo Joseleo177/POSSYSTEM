@@ -47,7 +47,7 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                     <div className="sm:col-span-2">
                         <label className={LABEL}>Nombre de la empresa</label>
                         <input required data-autofocus className="input h-10" value={form.name}
-                            onChange={e => set("name", e.target.value)} placeholder="Ej. Inversiones Nexus C.A." autoComplete="off" />
+                            onChange={e => set("name", e.target.value)} placeholder="Ej. Inversiones Los Andes C.A." autoComplete="off" />
                     </div>
                     <div>
                         <label className={LABEL}>RIF <Opcional /></label>

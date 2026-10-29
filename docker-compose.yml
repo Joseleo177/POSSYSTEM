@@ -1,3 +1,8 @@
+# Nombre fijo del proyecto: los volúmenes (base de datos y fotos) se llaman possystem_*.
+# Sin esta línea Docker toma el nombre de la carpeta, y al renombrarla (por ejemplo a "nxus")
+# levantaría volúmenes nuevos y vacíos: la base aparecería en blanco.
+name: possystem
+
 services:
   db:
     image: postgres:16-alpine
