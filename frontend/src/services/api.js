@@ -492,6 +492,22 @@ export const api = {
   },
   // Carrusel de la vitrina pública. Los banners llevan archivos, así que van por multipart:
   // `fields` son los datos y `files` las imágenes que se hayan cambiado en esta edición.
+  // Configuración → Pedidos web: entrega (retiro, delivery por zonas) y métodos publicados.
+  catalogCheckout: {
+    get:          ()                      => request("/catalog-checkout"),
+    saveSettings: (body)                  => request("/catalog-checkout/settings", { method: "PUT", body: JSON.stringify(body) }),
+    saveMethod:   (journalId, code, body) => request(`/catalog-checkout/methods/${journalId}/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify(body) }),
+    createZone:   (body)                  => request("/catalog-checkout/zones", { method: "POST", body: JSON.stringify(body) }),
+    updateZone:   (id, body)              => request(`/catalog-checkout/zones/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    removeZone:   (id)                    => request(`/catalog-checkout/zones/${id}`, { method: "DELETE" }),
+  },
+  // Pagos que los clientes reportan desde el catálogo.
+  paymentReports: {
+    list:    (params = {})  => request("/payment-reports?" + new URLSearchParams(params)),
+    confirm: (id)           => request(`/payment-reports/${id}/confirm`, { method: "POST" }),
+    reject:  (id, reason)   => request(`/payment-reports/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+    apply:   (id)           => request(`/payment-reports/${id}/apply`, { method: "POST" }),
+  },
   catalogBanners: {
     getAll: () => request("/catalog-banners"),
     create: (fields, files) => request("/catalog-banners", { method: "POST", body: bannerForm(fields, files) }),
@@ -825,6 +841,13 @@ export const publicApi = {
     publicRequest(`/public/catalog/${encodeURIComponent(token)}/my-orders?` + new URLSearchParams({ document })),
   createOrder: (token, body) =>
     publicRequest(`/public/catalog/${encodeURIComponent(token)}/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  // Pago de un pedido ya enviado (desde "Mis pedidos"). La cédula prueba que es suyo.
+  reportPayment: (token, orderId, body) =>
+    publicRequest(`/public/catalog/${encodeURIComponent(token)}/orders/${encodeURIComponent(orderId)}/payments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

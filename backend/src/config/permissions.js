@@ -102,6 +102,10 @@ const MODULES = [
       // movimientos desde el extracto, así que se concedió a quien ya registraba egresos. No
       // va en ningún LEGACY_MAP: es una facultad nueva y nadie la hereda en silencio.
       { key: 'reconcile', label: 'Conciliar bancos' },
+      // Decir que el pago que reportó un cliente desde el catálogo está (o no) en el banco. Lo
+      // que casa con un extracto se confirma solo; esto es para revisarlo a mano. Se concedió a
+      // quien ya conciliaba (migración 20261101150000-pedidos-web-entrega-pago).
+      { key: 'confirm',   label: 'Confirmar pagos reportados por clientes' },
     ],
   },
   {

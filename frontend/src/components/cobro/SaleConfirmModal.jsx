@@ -10,6 +10,7 @@ import { useApp } from "../../context/AppContext";
 import StatusMark from "../ui/StatusMark";
 import Money from "../ui/Money";
 import Kbd from "../ui/Kbd";
+import PaymentReportList from "../PaymentReports/PaymentReportList";
 
 // Número de atajo dentro del botón. Se dibuja como tecla para que se lea como "pulsa el 1"
 // y no como parte del texto de la acción.
@@ -22,7 +23,7 @@ function KeyHint({ n }) {
 }
 
 export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay, onUndo, onRefresh }) {
-    const { notify, activeCurrencies, activeJournals, companyInfo, printerWidth } = useApp();
+    const { notify, activeCurrencies, activeJournals, companyInfo, printerWidth, company } = useApp();
     const [showReceiptModal, setShowReceiptModal] = useState(false);
     const [showPayModal, setShowPayModal] = useState(false);
     // Cobro inmediato en dos toques: primero la botonera de método/diario (showPicker), y
@@ -239,6 +240,29 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     ].filter(Boolean);
     const numOf = (key) => actionKeys.indexOf(key) + 1;
 
+    // Pedido del catálogo que el cliente ya pagó (ver PaymentReports/PaymentReportList): el
+    // pago confirmado aparece aquí listo para registrarse con su cuenta, método y referencia.
+    // Solo se pregunta por los pedidos web, que son los únicos que pueden tenerlo.
+    const esPedidoWeb = !offline && !!company?.pedidos_web_enabled && !!(receipt?.web_customer_name || receipt?.fulfillment);
+    const [reportes, setReportes] = useState([]);
+    const cargarReportes = () => {
+        if (!esPedidoWeb || !receipt?.id) return;
+        api.paymentReports.list({ sale_id: receipt.id, status: "pendiente,confirmado" })
+            .then(r => setReportes(r.data || []))
+            .catch(() => setReportes([]));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(cargarReportes, [receipt?.id, esPedidoWeb]);
+    const reportesConfirmados = canSettle ? reportes.filter(r => r.status === "confirmado") : [];
+    const aplicarReporte = async (r) => {
+        try {
+            const res = await api.paymentReports.apply(r.id);
+            onPay(res.data);
+            notify(res.data?.sale_status === "pagado" ? "Pago del cliente registrado: factura pagada" : "Pago del cliente registrado");
+        } catch (e) { notify(e.message, "err"); }
+        cargarReportes();
+    };
+
     // Impresión directa, sin abrir la vista previa: en caja con cola, el cajero no necesita
     // ver el ticket, necesita el papel.
     //
@@ -355,7 +379,8 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     const saldada = ["pagado", "exonerado"].includes(currentStatus);
     // Un solo botón de tinta: la acción que sigue. Si falta dinero, cobrar; si no, pasar a la
     // siguiente venta. Antes Imprimir y Siguiente iban los dos en negro y competían.
-    const principal = canSettle ? "pay" : "next";
+    // Con un pago del cliente ya confirmado, lo principal es registrarlo (en su propia tarjeta).
+    const principal = reportesConfirmados.length ? "reporte" : canSettle ? "pay" : "next";
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] overlay-in">
@@ -488,6 +513,18 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             <p className="pt-1 text-[12px] text-content-subtle leading-snug">
                                 Entregas <Money value={`${simboloAvance} ${avancePedido.cash_amount.toFixed(2)}`} /> en efectivo. Se registra con <span className="font-semibold text-content dark:text-white">Cobrar ahora</span> por punto o pago móvil; en efectivo o a crédito no.
                             </p>
+                        </div>
+                    )}
+
+                    {/* Pagos que el cliente reportó desde el catálogo. */}
+                    {canSettle && reportes.length > 0 && (
+                        <div className="mt-3 rounded-xl border border-border/70 dark:border-white/[0.08] overflow-hidden">
+                            <div className="px-4 pt-3 pb-1">
+                                <p className="text-[13px] font-semibold text-content dark:text-white">
+                                    {reportesConfirmados.length ? "El cliente ya pagó" : "El cliente reportó un pago"}
+                                </p>
+                            </div>
+                            <PaymentReportList reports={reportes} onChanged={cargarReportes} onApply={aplicarReporte} />
                         </div>
                     )}
                 </div>

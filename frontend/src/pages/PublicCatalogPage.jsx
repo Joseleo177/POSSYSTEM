@@ -1,8 +1,10 @@
 import { useEffect } from "react";
 import { usePublicCatalog } from "../hooks/usePublicCatalog";
-import { resolveTheme } from "./catalogThemes";
+import { resolveTheme, sheetPanelFor } from "./catalogThemes";
 import VariantChooserModal from "../components/PublicCatalog/VariantChooserModal";
 import AddonChooserModal from "../components/PublicCatalog/AddonChooserModal";
+import CheckoutSheet from "../components/PublicCatalog/CheckoutSheet";
+import ReportPaymentModal from "../components/PublicCatalog/ReportPaymentModal";
 
 // Página que ve el cliente final. Vive fuera de AppProvider/CartProvider: no hay sesión
 // ni permisos, y el carrito de aquí no es el del punto de venta — es una lista que solo
@@ -40,6 +42,7 @@ export default function PublicCatalogPage({ token, initialProductId = null }) {
     }, [catalog.store?.theme, token]);
 
     const Layout = resolveTheme(nombreTema);
+    const panel = sheetPanelFor(nombreTema, catalog.store);
 
     // El selector de talla y color va fuera del tema: así sirve igual en todos, que agregan
     // por el mismo addToCart.
@@ -63,6 +66,35 @@ export default function PublicCatalogPage({ token, initialProductId = null }) {
                     product={catalog.addonPick}
                     onClose={() => catalog.setAddonPick(null)}
                     onPick={(p, qty, nota, opciones) => catalog.addAddonItem(p, qty, nota, opciones)}
+                    fmt={catalog.fmt}
+                    baseCur={catalog.baseCur}
+                    altCur={catalog.altCur}
+                />
+            )}
+            {/* Entrega y pago: el paso final del pedido y el pago de un pedido ya enviado. */}
+            <CheckoutSheet
+                open={catalog.checkoutOpen}
+                onClose={() => catalog.setCheckoutOpen(false)}
+                token={token}
+                checkout={catalog.checkout}
+                cartTotal={catalog.cartTotal}
+                identity={catalog.identity}
+                branch={catalog.branch}
+                fmt={catalog.fmt}
+                baseCur={catalog.baseCur}
+                altCur={catalog.altCur}
+                sending={catalog.sending}
+                sendError={catalog.sendError}
+                onSend={(datos) => catalog.submitOrder({ ...datos, fromCheckout: true })}
+                panel={panel}
+            />
+            {catalog.reportOrder && (
+                <ReportPaymentModal
+                    order={catalog.reportOrder}
+                    options={catalog.checkout?.payment_options || []}
+                    onClose={() => catalog.setReportOrder(null)}
+                    onSend={catalog.sendPaymentReport}
+                    panel={panel}
                     fmt={catalog.fmt}
                     baseCur={catalog.baseCur}
                     altCur={catalog.altCur}

@@ -51,9 +51,73 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
 .overlay-in { animation: catalog-fade-in .15s ease-out; }
 .popover-in { animation: popover-in .14s ease-out; }
 
+/* Vitrina pública: lo que hace que comprar se sienta vivo. Es la cara que ve el cliente final,
+   no el ERP, así que aquí sí hay rebote y celebración — medidos, sin hacer esperar a nadie.
+   - catalog-sheet-in: las hojas de la vitrina suben desde abajo en el teléfono y aparecen con
+     un leve zoom en escritorio (antes el perfil entraba de lado, como el carrito, siendo un
+     diálogo centrado).
+   - cart-bump / badge-pop: el carrito flotante "recibe" el plato que le cae encima.
+   - cart-toast-in: el aviso "Agregado" que asoma junto al carrito.
+   - rise-in: las filas de una lista entran escalonadas (--i es su posición).
+   - check-draw / burst: el visto de "pedido enviado" se dibuja y suelta chispas. */
+@keyframes catalog-sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes catalog-pop-in   { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
+.catalog-sheet-in { animation: catalog-sheet-up .34s cubic-bezier(.32, .72, 0, 1); }
+@media (min-width: 640px) {
+  .catalog-sheet-in { animation: catalog-pop-in .26s cubic-bezier(.2, .9, .25, 1.05); }
+}
+@keyframes cart-bump {
+  0% { transform: scale(1); } 30% { transform: scale(1.18) rotate(-6deg); }
+  55% { transform: scale(.94) rotate(4deg); } 80% { transform: scale(1.04); } 100% { transform: scale(1); }
+}
+@keyframes badge-pop { 0% { transform: scale(.4); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
+@keyframes cart-toast-in { from { opacity: 0; transform: translateX(10px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes fab-in { from { opacity: 0; transform: translateY(24px) scale(.8); } to { opacity: 1; transform: none; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes check-draw { from { stroke-dashoffset: 30; } to { stroke-dashoffset: 0; } }
+@keyframes ring-grow { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes burst {
+  0% { transform: rotate(var(--a)) translateY(0) scale(1); opacity: 1; }
+  100% { transform: rotate(var(--a)) translateY(-58px) scale(.3); opacity: 0; }
+}
+/* fab-in antes que cart-bump: la burbuja lleva las dos clases y la que va después gana. */
+.fab-in        { animation: fab-in .4s cubic-bezier(.2, .9, .25, 1.1); }
+.cart-bump     { animation: cart-bump .55s cubic-bezier(.3, .7, .3, 1); }
+.badge-pop     { animation: badge-pop .4s cubic-bezier(.3, .7, .3, 1.4); }
+.cart-toast-in { animation: cart-toast-in .22s ease-out; }
+.rise-in       { animation: rise-in .32s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 40ms); }
+.check-draw    { stroke-dasharray: 30; animation: check-draw .45s .25s ease-out both; }
+.ring-grow     { animation: ring-grow .45s cubic-bezier(.2, .9, .25, 1.2) both; }
+.burst-dot     { animation: burst .7s .2s cubic-bezier(.1, .7, .3, 1) both; }
+
+/* Página del QR de la mesa: la cocina "se ve" trabajar.
+   - bell-ring: la campana del "ya está listo" y de "pediste la cuenta".
+   - bar-shimmer: brillo que recorre la barra mientras el plato se prepara.
+   - flame-flicker: la llama del paso "En preparación".
+   - dot-wave: los tres puntos de "viene en camino". */
+@keyframes bell-ring {
+  0%, 55%, 100% { transform: rotate(0); }
+  8% { transform: rotate(16deg); } 16% { transform: rotate(-14deg); } 24% { transform: rotate(10deg); }
+  32% { transform: rotate(-8deg); } 40% { transform: rotate(4deg); }
+}
+@keyframes bar-shimmer { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+@keyframes flame-flicker { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14) translateY(-1px); } }
+@keyframes dot-wave { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+.bell-ring     { display: inline-flex; animation: bell-ring 2s ease-in-out infinite; transform-origin: 50% 10%; }
+.bar-shimmer   { background-image: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / .6) 50%, transparent 100%);
+                 background-size: 50% 100%; background-repeat: no-repeat; animation: bar-shimmer 1.3s linear infinite; }
+.flame-flicker { display: inline-flex; animation: flame-flicker .9s ease-in-out infinite; transform-origin: 50% 90%; }
+.dot-wave > span { display: inline-block; animation: dot-wave 1.2s ease-in-out infinite; }
+.dot-wave > span:nth-child(2) { animation-delay: .15s; }
+.dot-wave > span:nth-child(3) { animation-delay: .3s; }
+
 /* Quien pidió menos movimiento en su sistema no debería recibir un panel deslizándose. */
 @media (prefers-reduced-motion: reduce) {
   .catalog-drawer-in, .catalog-overlay-in, .sheet-up, .modal-in, .overlay-in, .popover-in { animation: none; }
+  .catalog-sheet-in, .cart-bump, .badge-pop, .cart-toast-in, .fab-in, .rise-in, .ring-grow { animation: none; }
+  .bell-ring, .bar-shimmer, .flame-flicker, .dot-wave > span { animation: none; }
+  .check-draw { animation: none; stroke-dasharray: none; }
+  .burst-dot { display: none; }
 }
 
 @layer base {

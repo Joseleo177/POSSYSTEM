@@ -8,6 +8,16 @@ const { statementJournals, defaultJournal } = require("./accounts");
 const { loadUnits, lotSuggestions } = require("./candidates");
 const { createDocForLine, createDocForLines, groupedLineIds, voidCreatedDocs } = require("./documents");
 const { loadStatement, pruneStale } = require("./statements");
+const { lineaReservada } = require("../paymentReports");
+
+// La línea es el pago que un cliente reportó desde el catálogo y la caja todavía no registró:
+// casarla con otro movimiento, o registrarla como ingreso suelto, contaría ese dinero dos veces.
+async function assertNoReservada(lineId, t) {
+  const r = await lineaReservada(lineId, t);
+  if (!r) return;
+  const pedido = r.invoice_number || (r.sale_id ? `el pedido #${r.sale_id}` : "un pedido");
+  throw fail(`Esta línea es el pago que reportó el cliente de ${pedido}. Se concilia sola al registrarlo en la caja; si ya se cobró de otra forma, recházalo en Pagos reportados.`);
+}
 
 async function loadLine(st, lineId, t) {
   const line = await BankStatementLine.findOne({
@@ -99,6 +109,7 @@ async function match(req, id, lineId, body = {}) {
   return sequelize.transaction(async (t) => {
     const line = await loadLine(st, lineId, t);
     if (line.status !== "pendiente") throw fail("Esta línea ya está resuelta");
+    await assertNoReservada(line.id, t);
     const pl = plainLine(line);
     const date = String(pl.date).slice(0, 10);
 
@@ -166,6 +177,7 @@ async function register(req, id, lineId, body = {}) {
   return sequelize.transaction(async (t) => {
     const line = await loadLine(st, lineId, t);
     if (line.status !== "pendiente") throw fail("Esta línea ya está resuelta");
+    await assertNoReservada(line.id, t);
     const pl = plainLine(line);
     const dir = lineDir(pl);
     const journal = pickJournal(journals, body.journal_id, dir);

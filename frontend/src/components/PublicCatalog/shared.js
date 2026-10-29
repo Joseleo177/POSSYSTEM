@@ -19,15 +19,33 @@ export const docMaxLen = (prefix) => (["J", "G"].includes(prefix) ? 9 : 8);
 // Antes "facturado" iba en el color de la tienda, que no le decía al cliente nada.
 // "rechazado" no viene del servidor: lo deduce el navegador cuando un pedido que envió ya no
 // aparece en la lista (ver rejectedIds).
+// `pill` es el fondo de la pastilla que usa la carta del tema de menú (ver StageMark).
 export const STAGE_TONE = {
-    enviado:    { dot: "bg-sky-500",   text: "text-sky-700 dark:text-sky-400" },
-    confirmado: { dot: "bg-sky-500",   text: "text-sky-700 dark:text-sky-400" },
-    facturado:  { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" },
-    pagado:     { check: true,         text: "text-emerald-700 dark:text-emerald-400" },
-    anulado:    { dot: "bg-content-subtle/60", text: "text-content-subtle" },
-    rechazado:  { dot: "bg-red-500",   text: "text-red-600 dark:text-red-400" },
+    enviado:    { dot: "bg-sky-500",   text: "text-sky-700 dark:text-sky-400",         pill: "bg-sky-500/10" },
+    confirmado: { dot: "bg-sky-500",   text: "text-sky-700 dark:text-sky-400",         pill: "bg-sky-500/10" },
+    facturado:  { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400",     pill: "bg-amber-500/15" },
+    pagado:     { check: true,         text: "text-emerald-700 dark:text-emerald-400", pill: "bg-emerald-500/15" },
+    anulado:    { dot: "bg-neutral-400", text: "text-neutral-500",                     pill: "bg-black/[0.05]" },
+    rechazado:  { dot: "bg-red-500",   text: "text-red-600 dark:text-red-400",         pill: "bg-red-500/10" },
 };
+
+// Estado de un pago que el cliente reportó. Ámbar mientras la tienda no lo ve en su banco,
+// verde con visto cuando ya lo vio, rojo si lo rechazó (con el motivo debajo).
+export const PAYMENT_TONE = {
+    pendiente:  { label: "Por confirmar", dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" },
+    confirmado: { label: "Confirmado", check: true, text: "text-emerald-700 dark:text-emerald-400" },
+    rechazado:  { label: "Rechazado", dot: "bg-red-500", text: "text-red-600 dark:text-red-400" },
+};
+
+// Campo de los formularios del catálogo. 16 px en el teléfono: con menos, Safari de iOS
+// acerca la página al tocar el campo y el cliente queda con la vista desencuadrada.
+export const FIELD = "w-full h-11 px-3.5 rounded-xl border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[16px] sm:text-[14px] text-content dark:text-white outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 placeholder:text-content-subtle";
+export const FIELD_LABEL = "text-[12px] font-medium text-content-subtle";
 
 // Cantidades: enteras para unidades contables, 3 decimales para peso y volumen. Aquí no
 // llega la unidad del producto, así que se decide por el propio número.
 export const fmtQty = (q) => (q % 1 === 0 ? String(q) : q.toFixed(3));
+
+// Color de papel por defecto del tema de menú, cuando la tienda no eligió uno en Ajustes →
+// Vitrina. Las hojas compartidas lo usan para la piel "carta" (ver CatalogSheet).
+export const MENU_PANEL_DEFAULT = "#F4FAF6";

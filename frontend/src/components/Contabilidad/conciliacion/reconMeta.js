@@ -19,6 +19,8 @@ export const MODE_LABEL = {
     auto:       "Casada sola",
     manual:     "Casada a mano",
     registrado: "Registrada desde el extracto",
+    // Pago que el cliente reportó desde el catálogo: se casó al registrarlo en la caja.
+    reporte:    "Pago reportado por el cliente",
 };
 
 export const SOURCE_LABEL = { payment: "Cobro", income: "Ingreso", expense: "Egreso" };

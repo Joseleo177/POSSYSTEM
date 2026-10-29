@@ -9,6 +9,7 @@ import { resolveImageUrl } from "../helpers";
 import { applyBrandColor, clearBrandColor, DEFAULT_BRAND } from "../helpers/brandColor";
 import { useApp } from "../context/AppContext";
 import StorefrontSettings from "./Settings/StorefrontSettings";
+import WebOrdersSettings from "./Settings/WebOrdersSettings";
 
 // El respaldo es de la base entera, no de una empresa: solo el superusuario. El backend
 // lo exige igual (ver routes/backup.js); esto es para no ofrecer una pestaña que va a
@@ -25,6 +26,9 @@ const SECTIONS = [
     // Contenido del catálogo público: banners, anuncio y menú destacado. Va aquí y no en el
     // módulo Catálogo porque es configuración de la tienda, no gestión de productos.
     ["vitrina", "Vitrina"],
+    // Entrega (retiro, delivery por zonas) y qué métodos de cada cuenta se publican para que el
+    // cliente pague su pedido del catálogo.
+    ["pedidos_web", "Pedidos web"],
     ["respaldo", "Respaldo", { superuserOnly: true }],
 ];
 
@@ -69,6 +73,8 @@ export default function SettingsTab({ notify }) {
     const visibleSections = SECTIONS.filter(([key, , opts]) => {
         if (opts?.superuserOnly) return !!employee?.is_superuser;
         if (key === "vitrina") return !!companyInfo?.catalog_enabled;
+        // Extra aparte del catálogo: no todas las tiendas lo tienen.
+        if (key === "pedidos_web") return !!companyInfo?.catalog_enabled && !!companyInfo?.pedidos_web_enabled;
         return true;
     });
     const [loading, setLoading] = useState(false);
@@ -606,6 +612,7 @@ export default function SettingsTab({ notify }) {
 
                 {/* ── Vitrina ── */}
                 {section === "vitrina" && <StorefrontSettings notify={notify} />}
+                {section === "pedidos_web" && <WebOrdersSettings notify={notify} />}
 
                 {/* ── Respaldo ── */}
                 {section === "respaldo" && (

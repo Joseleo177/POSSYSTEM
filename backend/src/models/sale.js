@@ -72,6 +72,15 @@ module.exports = (sequelize, DataTypes) => {
     web_customer_name:  { type: DataTypes.STRING(120), allowNull: true },
     web_customer_phone: { type: DataTypes.STRING(30),  allowNull: true },
     web_note:           { type: DataTypes.TEXT,        allowNull: true },
+    // Cómo recibe el cliente un pedido del catálogo: 'retiro' en tienda o 'delivery' a la
+    // dirección de abajo (ver migración 20261101150000-pedidos-web-entrega-pago). El costo del
+    // delivery va en service_charge. NULL en las ventas de caja.
+    fulfillment:        { type: DataTypes.STRING(10),  allowNull: true },
+    delivery_zone_id:   { type: DataTypes.INTEGER,     allowNull: true },
+    delivery_address:   { type: DataTypes.STRING(300), allowNull: true },
+    delivery_reference: { type: DataTypes.STRING(200), allowNull: true },
+    delivery_lat:       { type: DataTypes.DECIMAL(9, 6), allowNull: true },
+    delivery_lng:       { type: DataTypes.DECIMAL(9, 6), allowNull: true },
     // Paso de la comanda por la pantalla de cocina (ver migración 20261031100000-cocina):
     // NULL si no pasa por cocina · nueva · preparando · lista · entregada.
     kitchen_status:     { type: DataTypes.STRING(12),  allowNull: true },

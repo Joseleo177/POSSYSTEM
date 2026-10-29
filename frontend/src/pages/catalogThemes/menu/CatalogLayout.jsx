@@ -1,10 +1,9 @@
 import { useState } from "react";
-import BranchGate from "../../../components/PublicCatalog/BranchGate";
-import IdentityGate from "../../../components/PublicCatalog/IdentityGate";
 import LogoutConfirm from "../../../components/PublicCatalog/LogoutConfirm";
 import OrderDetailModal from "../../../components/PublicCatalog/OrderDetailModal";
 import MyOrdersModal from "../../../components/PublicCatalog/MyOrdersModal";
 import StoreWhatsAppButton from "../../../components/PublicCatalog/StoreWhatsAppButton";
+import FloatingCart from "../../../components/PublicCatalog/FloatingCart";
 import ProductDetail from "../boutique/ProductDetail";
 
 import MenuHeader from "./MenuHeader";
@@ -14,6 +13,8 @@ import MenuProductList from "./MenuProductList";
 import ProductAddModal from "./ProductAddModal";
 import CartDrawer from "./CartDrawer";
 import ProfileModal from "./ProfileModal";
+import { IdentitySheet, BranchSheet } from "./WelcomeSheets";
+import { MENU_PANEL_DEFAULT } from "../../../components/PublicCatalog/shared";
 
 // Tema "menú": la vitrina con forma de carta de restaurante —mosaicos de "tipos de comida"
 // como puerta de entrada, en vez de una rejilla con buscador arriba—. Se elige de la misma
@@ -26,9 +27,8 @@ import ProfileModal from "./ProfileModal";
 // existía para los chips de filtro de los otros temas — aquí no hay chips, pero es la misma
 // pieza de estado, así que no hizo falta inventar una nueva.
 //
-// Las puertas de identificación y sucursal (IdentityGate/BranchGate) todavía son las claras
-// del tema estándar: quedan pendientes de una versión oscura propia, igual que le pasó a
-// boutique hasta que se vieron y se ajustaron con lo que en pantalla no convencía.
+// Las puertas de identificación y sucursal son hojas propias del tema (WelcomeSheets) sobre la
+// portada de la carta; las de pantalla completa siguen siendo las de los otros dos temas.
 const DEFAULT_BG = "#0A0A0A";
 
 export default function CatalogLayout({ catalog, token }) {
@@ -40,7 +40,7 @@ export default function CatalogLayout({ catalog, token }) {
         warehouses, branch, branchGate, chooseBranch, openBranchGate,
         cart, cartTotal, cartOpen, setCartOpen,
         setCartItem, addAddonItem, changeQty, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,
-        delivery, setDelivery,
+        delivery, setDelivery, usesCheckout, canReportPayment, setReportOrder,
         identity, saveIdentity,
         requestLogout, logoutAsk, confirmLogout, cancelLogout,
         profileOpen, setProfileOpen, openProfileModal, handleSaveProfile,
@@ -72,9 +72,25 @@ export default function CatalogLayout({ catalog, token }) {
         );
     }
 
-    if (gated) return <IdentityGate token={token} store={store} onIdentified={saveIdentity} />;
-    if (branchGate) {
-        return <BranchGate store={store} warehouses={warehouses} onChoose={chooseBranch} currentId={branch?.id || null} />;
+    // Identificarse y elegir sucursal van como hojas ENCIMA de la portada real de la carta
+    // (banners y categorías ya cargan sin identidad), no como pantallas sueltas: el cliente ve
+    // la tienda desde el primer segundo. La portada de fondo no se puede tocar (inert): hasta
+    // tener cédula y sucursal no hay productos que mostrar al entrar a una categoría.
+    if (gated || branchGate) {
+        return (
+            <div className="min-h-screen flex flex-col" style={{ backgroundColor: store?.bg_color || DEFAULT_BG }}>
+                <div className="flex-1 flex flex-col pointer-events-none select-none" aria-hidden="true" {...{ inert: "" }}>
+                    <MenuHeader store={store} bgColor={store?.bg_color} />
+                    <div className="flex-1 pb-10">
+                        <MenuBanners banners={banners} />
+                        <CategoryTiles categories={categories} onPick={() => {}} />
+                    </div>
+                </div>
+                {gated
+                    ? <IdentitySheet token={token} store={store} onIdentified={saveIdentity} />
+                    : <BranchSheet store={store} warehouses={warehouses} onChoose={chooseBranch} currentId={branch?.id || null} />}
+            </div>
+        );
     }
 
     // Un producto abierto por enlace directo (compartido por WhatsApp) también se ve aquí,
@@ -82,11 +98,9 @@ export default function CatalogLayout({ catalog, token }) {
     // morir en blanco solo porque la tienda cambió de tema después de compartirlo.
     if (productId) {
         return (
-            <div className="min-h-screen" style={{ backgroundColor: store?.bg_color || DEFAULT_BG }}>
+            <div className="min-h-screen pb-28" style={{ backgroundColor: store?.bg_color || DEFAULT_BG }}>
                 <MenuHeader
                     store={store} showBack onBack={closeProduct}
-                    cartCount={cart.length} cartTotal={cartTotal} fmt={fmt} baseCur={baseCur}
-                    onOpenCart={() => setCartOpen(true)} ordersEnabled={ordersEnabled}
                     identity={identity} openOrdersCount={openOrdersCount} onOpenProfile={openProfileModal} onLogout={requestLogout}
                     bgColor={store?.bg_color}
                 />
@@ -109,14 +123,13 @@ export default function CatalogLayout({ catalog, token }) {
         <div className="min-h-screen flex flex-col" style={{ backgroundColor: store?.bg_color || DEFAULT_BG }}>
             <MenuHeader
                 store={store} showBack={!!category} onBack={() => setCategory("")}
-                cartCount={cart.length} cartTotal={cartTotal} fmt={fmt} baseCur={baseCur}
-                onOpenCart={() => setCartOpen(true)} ordersEnabled={ordersEnabled}
                 bgColor={store?.bg_color}
                 identity={identity} openOrdersCount={openOrdersCount} onOpenProfile={openProfileModal} onLogout={requestLogout}
                 branch={branch} canChangeBranch={warehouses.length > 1} onChangeBranch={openBranchGate}
             />
 
-            <div className="flex-1 pb-10">
+            {/* pb-28: lo último de la lista no queda bajo el carrito flotante. */}
+            <div className="flex-1 pb-28">
                 {category ? (
                     <MenuProductList
                         category={categoriaActual}
@@ -160,7 +173,7 @@ export default function CatalogLayout({ catalog, token }) {
                     cart={cart} cartTotal={cartTotal} identity={identity} store={store}
                     changeQty={changeQty} setQtyDirect={setQtyDirect} handleQtyBlur={handleQtyBlur}
                     removeFromCart={removeFromCart} clearCart={clearCart}
-                    delivery={delivery} setDelivery={setDelivery}
+                    delivery={delivery} setDelivery={setDelivery} usesCheckout={usesCheckout}
                     fmt={fmt} baseCur={baseCur} altCur={altCur}
                     canSubmit={canSubmit} onSubmit={submitOrder} sending={sending} sendError={sendError}
                     placedOrder={placedOrder} waHref={waHref} onOpenMyOrders={openMyOrders}
@@ -174,6 +187,7 @@ export default function CatalogLayout({ catalog, token }) {
                     rejectedIds={rejectedIds}
                     onSelectOrder={setSelectedOrder} onReload={loadMyOrders} identity={identity}
                     fmt={fmt} baseCur={baseCur}
+                    panel={store?.panel_color || MENU_PANEL_DEFAULT}
                 />
 
                 <ProfileModal
@@ -187,6 +201,7 @@ export default function CatalogLayout({ catalog, token }) {
                     onForget={requestLogout}
                     onOpenMyOrders={openMyOrders}
                     panelColor={store?.panel_color}
+                    openOrdersCount={openOrdersCount}
                 />
 
                 <LogoutConfirm
@@ -200,13 +215,25 @@ export default function CatalogLayout({ catalog, token }) {
                     <OrderDetailModal
                         order={selectedOrder}
                         onClose={() => setSelectedOrder(null)}
+                        onReportPayment={canReportPayment ? setReportOrder : null}
                         fmt={fmt} baseCur={baseCur} altCur={altCur}
+                        panel={store?.panel_color || MENU_PANEL_DEFAULT}
+                        whatsapp={store?.whatsapp || null}
                     />
                 )}
 
+                {ordersEnabled && (
+                    <FloatingCart
+                        count={cart.length} total={cartTotal} fmt={fmt} baseCur={baseCur}
+                        onOpen={() => setCartOpen(true)}
+                    />
+                )}
+
+                {/* Encima del carrito flotante, como una segunda burbuja más chica. */}
                 <StoreWhatsAppButton
                     store={store}
-                    hidden={cartOpen || ordersOpen || profileOpen || !!selectedOrder}
+                    stacked={ordersEnabled}
+                    hidden={cartOpen || ordersOpen || profileOpen || !!selectedOrder || !!addingProduct}
                 />
             </>
         );

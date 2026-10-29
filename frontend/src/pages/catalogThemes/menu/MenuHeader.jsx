@@ -6,6 +6,10 @@ import { resolveImageUrl } from "../../../helpers";
 //
 // "Atrás" solo aparece dentro de una categoría, para volver a los mosaicos. En la portada no
 // hay a dónde volver.
+//
+// El carrito ya no vive aquí: flota abajo a la derecha (FloatingCart), al alcance del pulgar y
+// a la vista mientras se recorre la carta. Arriba, con la cabecera fuera de pantalla al bajar,
+// el cliente perdía de vista lo que llevaba.
 // Mismo tono que usa el fondo de página por defecto (ver DEFAULT_BG en CatalogLayout): sin
 // color propio configurado, la cabecera y la página tienen que verse como una sola pieza, no
 // como dos negros ligeramente distintos.
@@ -13,7 +17,6 @@ const DEFAULT_BG = "#0A0A0A";
 
 export default function MenuHeader({
     store, showBack, onBack,
-    cartCount, cartTotal, fmt, baseCur, onOpenCart, ordersEnabled,
     identity, openOrdersCount, onOpenProfile, onLogout,
     branch, canChangeBranch, onChangeBranch,
     bgColor,
@@ -95,26 +98,6 @@ export default function MenuHeader({
                             className="w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
                         >
                             <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                        </button>
-                    )}
-
-                    {ordersEnabled && (
-                        <button
-                            type="button"
-                            onClick={onOpenCart}
-                            className="h-10 pl-3 pr-3.5 rounded-full bg-brand-500 text-white flex items-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all"
-                        >
-                            <span className="relative">
-                                <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17M17 17a2 2 0 100 4 2 2 0 000-4zM9 19a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                                {cartCount > 0 && (
-                                    <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] px-1 rounded-full bg-white text-brand-500 text-[9px] font-black flex items-center justify-center tabular-nums">
-                                        {cartCount}
-                                    </span>
-                                )}
-                            </span>
-                            {cartCount > 0 && (
-                                <span className="hidden sm:block text-[12px] font-black tabular-nums">{fmt(cartTotal, baseCur)}</span>
-                            )}
                         </button>
                     )}
                 </div>

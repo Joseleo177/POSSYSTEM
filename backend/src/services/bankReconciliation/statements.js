@@ -1,13 +1,14 @@
 'use strict';
 
 const {
-  sequelize, QT, localDate, fail, r2, companyOf, ISO_DAY,
+  sequelize, Sequelize, QT, localDate, fail, r2, companyOf, ISO_DAY,
   Bank, BankStatement, BankStatementLine, BankReconciliationMatch,
 } = require("./shared");
 const { statementJournals, journalRows, assertAccountAccess, defaultJournal } = require("./accounts");
 const { loadUnits, autoMatch, windowFor } = require("./candidates");
 const { voidCreatedDocs } = require("./documents");
 const { visibleWarehouseIds, assertWarehouseAccess } = require("../../middleware/auth");
+const { casarPendientes } = require("../paymentReports");
 
 const KINDS = ["movimiento", "comision", "impuesto", "interes"];
 const MAX_LINES = 5000;
@@ -74,8 +75,14 @@ const dupKey = (l) => [String(l.date).slice(0, 10), l.reference || "", r2(l.debi
 // Casa automáticamente las líneas pendientes de un extracto. Devuelve cuántas casó.
 async function runAuto(companyId, statement) {
   const journals = await statementJournals(companyId, statement);
+  // Las líneas que ya son el pago confirmado de un pedido del catálogo no se casan con otra
+  // cosa: se concilian solas cuando la caja registra ese pago (ver services/paymentReports.js).
   const pending = await BankStatementLine.findAll({
-    where: { statement_id: statement.id, status: "pendiente" }, order: [["line_no", "ASC"]], raw: true,
+    where: {
+      statement_id: statement.id, status: "pendiente",
+      id: { [Sequelize.Op.notIn]: Sequelize.literal(`(SELECT statement_line_id FROM payment_reports WHERE status = 'confirmado' AND statement_line_id IS NOT NULL)`) },
+    },
+    order: [["line_no", "ASC"]], raw: true,
   });
   if (!pending.length || !journals.length) return 0;
   const win = windowFor(pending);
@@ -173,9 +180,12 @@ async function create(req, body) {
   });
 
   const matched = await runAuto(companyId, statement);
+  // Después del auto-casado: si la caja ya registró ese pago a mano, la línea quedó con su cobro
+  // y el reporte sigue pendiente para que alguien lo revise, en vez de reservarla dos veces.
+  const reportes = await casarPendientes(companyId, journalId);
   return {
     data: { id: statement.id },
-    stats: { created: fresh.length, duplicated, invalid, matched },
+    stats: { created: fresh.length, duplicated, invalid, matched, reports_confirmed: reportes },
   };
 }
 

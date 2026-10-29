@@ -2,6 +2,7 @@ import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
 import { isIntegerUnit, fmtQtyUnit } from "../../../helpers/unitFormatter";
 import { freeUnitsFor, lineTotalFor } from "../../../helpers/promo";
 import { Spinner } from "../../../components/ui/Spinner";
+import { PlacedPaymentNote } from "../../../components/PublicCatalog/PaymentFields";
 
 // Carrito lateral de la vitrina de marca.
 //
@@ -20,7 +21,7 @@ export default function CartDrawer({
     open, onClose,
     cart, cartTotal, identity, store,
     changeQty, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,
-    delivery, setDelivery,
+    delivery, setDelivery, usesCheckout,
     fmt, baseCur, altCur,
     canSubmit, onSubmit, sending, sendError,
     placedOrder, waHref, onOpenMyOrders,
@@ -70,6 +71,7 @@ export default function CartDrawer({
                             Total {fmt(placedOrder.total, baseCur)}
                             {altCur && <span className="text-content-muted font-bold"> · {fmt(placedOrder.total, altCur)}</span>}
                         </div>
+                        <PlacedPaymentNote payment={placedOrder.payment} />
                         <div className="space-y-2 pt-2">
                             {waHref && (
                                 <a
@@ -195,7 +197,8 @@ export default function CartDrawer({
                                 </ul>
                             )}
 
-                            {cart.length > 0 && (
+                            {/* Con entrega o pago configurados, la nota va en el paso final. */}
+                            {cart.length > 0 && !usesCheckout && (
                                 <div className="py-4 border-t border-border/50 dark:border-white/[0.06]">
                                     <label className="text-[10px] font-bold uppercase tracking-widest text-content-subtle">
                                         Entrega o nota (opcional)
@@ -230,7 +233,7 @@ export default function CartDrawer({
                                     se calculan al pagar", aquí va lo que de verdad pasa después. */}
                                 <p className="text-[10px] font-medium text-content-muted leading-relaxed">
                                     {canSubmit
-                                        ? "Al enviarlo, la tienda lo confirma y te contacta para coordinar el pago y la entrega."
+                                        ? (usesCheckout ? "En el siguiente paso eliges cómo lo recibes y cómo pagas." : "Al enviarlo, la tienda lo confirma y te contacta para coordinar el pago y la entrega.")
                                         : "Completa cédula, nombre y teléfono para poder enviarlo."}
                                 </p>
 
@@ -244,7 +247,7 @@ export default function CartDrawer({
                                     className="w-full h-12 rounded-full bg-brand-500 text-white text-[11px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 active:scale-[0.99] transition-transform disabled:opacity-40"
                                 >
                                     {sending && <Spinner />}
-                                    {sending ? "Enviando..." : "Enviar pedido"}
+                                    {sending ? "Enviando..." : usesCheckout ? "Continuar" : "Enviar pedido"}
                                 </button>
 
                                 {/* Vaciar como enlace y no como botón: es una acción destructiva que

@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
 import { freeUnitsFor, lineTotalFor } from "../../../helpers/promo";
 import AddonPicker, { faltante, precioExtras } from "../../../components/mesas/AddonPicker";
+import { flyToCart } from "../../../components/PublicCatalog/flyToCart";
 
 // Ficha de "agregar al pedido" del tema de menú: se abre en CADA toque de "+", no solo
 // cuando el cliente quiere escribir algo. Es la decisión que se tomó al construir esto —en
@@ -24,6 +25,8 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
     const [note, setNote] = useState("");
     // Adicionales del plato (término, extras): vienen en el producto, ver services/addons.js.
     const [opciones, setOpciones] = useState([]);
+    // La foto es de donde sale el plato que "vuela" al carrito flotante al confirmar.
+    const fotoRef = useRef(null);
 
     // Se recarga cada vez que se abre para OTRO producto (o para el mismo, si ya tenía algo
     // en el carrito) — no al tipear, por eso depende de la identidad del producto y no del
@@ -39,7 +42,6 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
         setQty(existing?.qty || inicial);
         setNote(existing?.note || "");
         setOpciones([]);
-        setOpciones([]);
     }, [product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (!product) return null;
@@ -52,6 +54,7 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
     const falta = faltante(product.addons, opciones);
 
     const confirmar = () => {
+        flyToCart(fotoRef.current, { image_url: product.image_url, name: product.name, qty });
         onConfirm(product, qty, note, opciones);
         onClose();
     };
@@ -66,11 +69,11 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
             <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px] catalog-overlay-in" onClick={onClose} />
 
             <div
-                className="relative w-full sm:max-w-md max-h-[92vh] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col catalog-drawer-in shadow-2xl shadow-black/40"
+                className="relative w-full sm:max-w-md max-h-[92vh] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col catalog-sheet-in shadow-2xl shadow-black/40"
                 style={{ backgroundColor: panelColor || PANEL_POR_DEFECTO }}
             >
                 <div className="overflow-y-auto">
-                    <div className="aspect-[4/3] relative bg-black/5">
+                    <div ref={fotoRef} className="aspect-[4/3] relative bg-black/5">
                         {product.image_url ? (
                             <img
                                 src={resolveImageUrl(product.image_url)}
@@ -122,53 +125,53 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
                         )}
 
                         <div>
-                            <label className="text-[11px] font-black uppercase tracking-widest text-neutral-500">Nota</label>
+                            <label className="flex items-center justify-between text-[13px] font-semibold text-neutral-800">Nota <span className="text-[12px] font-normal text-neutral-500">Opcional</span></label>
                             <textarea
                                 value={note}
                                 onChange={(e) => setNote(e.target.value)}
                                 placeholder="Escribe aquí si quieres quitar o cambiar algo"
                                 maxLength={200}
                                 rows={2}
-                                className="w-full mt-1.5 px-3.5 py-2.5 rounded-2xl bg-white border border-black/10 text-[13px] font-medium text-neutral-900 outline-none focus:border-brand-500/60 placeholder:text-neutral-400 resize-none"
+                                className="w-full mt-1.5 px-4 py-3 rounded-2xl bg-white border border-black/10 text-[16px] sm:text-[14px] text-neutral-900 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 placeholder:text-neutral-400 resize-none transition-shadow"
                             />
                         </div>
 
                         <div className="flex items-center justify-between">
-                            <label className="text-[11px] font-black uppercase tracking-widest text-neutral-500">Cantidad</label>
-                            <div className="flex items-center gap-4">
+                            <label className="text-[13px] font-semibold text-neutral-800">Cantidad</label>
+                            <div className="flex items-center gap-1 rounded-full bg-white ring-1 ring-black/[0.08] p-1">
                                 <button
                                     type="button"
                                     onClick={() => setQty((q) => Math.max(1, q - 1))}
                                     disabled={qty <= 1}
                                     aria-label="Quitar uno"
-                                    className="w-9 h-9 rounded-full bg-black/5 text-neutral-900 flex items-center justify-center text-lg font-bold hover:bg-black/10 active:scale-90 transition-all disabled:opacity-30"
+                                    className="w-9 h-9 rounded-full text-neutral-800 flex items-center justify-center hover:bg-black/5 active:scale-90 transition-all disabled:opacity-30"
                                 >
-                                    −
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeWidth={3} d="M5 12h14" /></svg>
                                 </button>
-                                <span className="w-6 text-center text-[16px] font-black text-neutral-900 tabular-nums">{qty}</span>
+                                <span key={qty} className="badge-pop w-8 text-center text-[17px] font-bold text-neutral-900 tabular-nums">{qty}</span>
                                 <button
                                     type="button"
                                     onClick={() => setQty((q) => q + 1)}
                                     aria-label="Agregar uno"
-                                    className="w-9 h-9 rounded-full bg-black/5 text-neutral-900 flex items-center justify-center text-lg font-bold hover:bg-black/10 active:scale-90 transition-all"
+                                    className="w-9 h-9 rounded-full bg-brand-500 text-brand-ink flex items-center justify-center hover:brightness-110 active:scale-90 transition-all"
                                 >
-                                    +
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeWidth={3} d="M12 5v14M5 12h14" /></svg>
                                 </button>
                             </div>
                         </div>
                         {freeUnits > 0 && (
-                            <p className="text-[11px] font-bold text-success text-right -mt-1">
+                            <p className="text-[12px] font-semibold text-emerald-700 text-right -mt-1">
                                 +{freeUnits} gratis por la promo
                             </p>
                         )}
                     </div>
                 </div>
 
-                <div className="p-5 pt-0 space-y-2">
+                <div className="p-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-2 border-t border-black/[0.06] bg-white/50">
                     {existing && (
                         <button
                             onClick={quitarDelCarrito}
-                            className="w-full text-[11px] font-bold uppercase tracking-widest text-neutral-400 hover:text-danger transition-colors"
+                            className="w-full h-9 text-[13px] font-medium text-neutral-500 hover:text-red-600 transition-colors"
                         >
                             Quitar del pedido
                         </button>
@@ -176,14 +179,14 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
                     <button
                         onClick={confirmar}
                         disabled={!hasPrice || !!falta}
-                        className="w-full h-14 rounded-full bg-brand-500 text-white flex items-center justify-between px-6 hover:brightness-110 active:scale-[0.99] transition-all disabled:opacity-40"
+                        className="w-full h-14 rounded-full bg-brand-500 text-brand-ink flex items-center justify-between px-6 shadow-[0_10px_24px_-10px_rgb(var(--c-brand-600)/0.9)] hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-40 disabled:shadow-none"
                     >
-                        <span className="text-[12px] font-black uppercase tracking-widest">
+                        <span className="text-[15px] font-semibold">
                             {falta ? `Elige ${falta.name.toLowerCase()}` : existing ? "Actualizar pedido" : "Agregar al pedido"}
                         </span>
                         {hasPrice && (
                             <span className="flex items-baseline gap-1.5">
-                                <span className="text-[16px] font-black tabular-nums">{fmt(totalLinea, baseCur)}</span>
+                                <span className="text-[17px] font-bold tabular-nums">{fmt(totalLinea, baseCur)}</span>
                                 {enOferta && (
                                     <span className="text-[11px] font-bold text-white/60 line-through tabular-nums">
                                         {fmt(product.price_before * qty, baseCur)}

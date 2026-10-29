@@ -133,6 +133,28 @@ router.post("/:slug/orders", orderLimiter, async (req, res) => {
   }
 });
 
+// Reportar el pago de un pedido ya enviado. Mismo tope que enviar pedidos: cada reporte es
+// trabajo de revisión para la tienda, y un cliente real reporta uno o dos.
+const paymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, message: "Demasiados intentos. Espera unos minutos." },
+});
+
+router.post("/:slug/orders/:id/payments", paymentLimiter, async (req, res) => {
+  try {
+    const data = await svc.reportPayment(req.params.slug, req.params.id, req.body || {});
+    if (!data) return res.status(404).json({ ok: false, message: "Catálogo no disponible" });
+    res.status(201).json({ ok: true, data });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ ok: false, message: err.message });
+    console.error("[public-catalog:payment]", err.message);
+    res.status(500).json({ ok: false, message: "No se pudo registrar el pago" });
+  }
+});
+
 // ── Administración del enlace (autenticado) ───────────────────
 // Va en un router aparte, montado en otra ruta base, para que estos endpoints nunca
 // queden colgando del prefijo público por accidente.

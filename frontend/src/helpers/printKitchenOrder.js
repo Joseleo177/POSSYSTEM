@@ -109,6 +109,8 @@ export function printKitchenOrder(order, companyInfo, printerWidth = 80) {
 
     <table><tbody>${rows}</tbody></table>
 
+    ${order.fulfillment === "delivery" ? `<div class="note"><div class="note-label">Delivery</div>${esc(order.delivery_address)}${order.delivery_reference ? `<div style="font-weight:500">${esc(order.delivery_reference)}</div>` : ""}</div>` : ""}
+    ${order.fulfillment === "retiro" ? `<div class="note"><div class="note-label">Entrega</div>Retira en tienda</div>` : ""}
     ${order.web_note ? `<div class="note"><div class="note-label">Nota</div>${esc(order.web_note)}</div>` : ""}
 
     <div class="foot">${items.length} ${items.length === 1 ? "línea" : "líneas"} · ${fmtQty(totalUnidades)} und.</div>

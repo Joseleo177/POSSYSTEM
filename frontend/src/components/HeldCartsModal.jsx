@@ -4,6 +4,25 @@ import { api } from "../services/api";
 import OrderPreviewModal from "./OrderPreviewModal";
 import KitchenMark from "./KitchenMark";
 import HeldCartBarCard, { totalCuentaEn } from "./HeldCartBarCard";
+import Modal from "./ui/Modal";
+import { useApp } from "../context/AppContext";
+import PaymentReportList from "./PaymentReports/PaymentReportList";
+
+// Marca del pago que reportó el cliente desde el catálogo: ámbar mientras nadie lo ve en el
+// banco, verde con visto cuando ya está confirmado. Abre la lista para confirmarlo o rechazarlo.
+function PagoReportadoMark({ reportes, onClick }) {
+    if (!reportes?.length) return null;
+    const confirmado = reportes.some(r => r.status === "confirmado");
+    return (
+        <button type="button" onClick={onClick}
+            className={`inline-flex items-center gap-1.5 text-[12px] font-semibold whitespace-nowrap ${confirmado ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"} hover:underline underline-offset-2`}>
+            {confirmado
+                ? <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                : <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+            {confirmado ? "Pagó · confirmado" : "Pago por confirmar"}
+        </button>
+    );
+}
 
 // La pestaña elegida se recuerda entre sesiones: en un bar la vista de barra es la de todos
 // los días, y volver a la lista cada vez que se abre el modal es un clic de peaje.
@@ -83,6 +102,23 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
     const rememberProduct = useCallback((p) => {
         setProducts(prev => prev.some(x => x.id === p.id) ? prev : [...prev, p]);
     }, []);
+
+    // Pagos reportados de los pedidos web abiertos: una consulta al abrir el listado, y solo si
+    // hay algún pedido del catálogo en él.
+    const [reportes, setReportes] = useState({});
+    const [verPagos, setVerPagos] = useState(null);
+    const { company } = useApp();
+    const hayWeb = !!company?.pedidos_web_enabled && carts.some(c => c.web_customer_name || c.fulfillment);
+    const cargarReportes = useCallback(() => {
+        api.paymentReports.list({ status: "pendiente,confirmado" })
+            .then(r => {
+                const porVenta = {};
+                for (const x of r.data || []) (porVenta[x.sale_id] ||= []).push(x);
+                setReportes(porVenta);
+            })
+            .catch(() => setReportes({}));
+    }, []);
+    useEffect(() => { if (open && hayWeb) cargarReportes(); }, [open, hayWeb, cargarReportes]);
 
     const visibles = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -362,6 +398,20 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                                                 Abrió {toNameCase(c.employee_name)}
                                             </div>
                                         )}
+                                        {/* Pedido del catálogo: cómo se entrega y si ya pagó. Sigue
+                                            visible después de aceptarlo, que es cuando se cobra. */}
+                                        {(c.fulfillment || reportes[c.id]?.length > 0) && (
+                                            <div className="flex items-center gap-x-3 gap-y-0.5 flex-wrap mt-0.5">
+                                                {c.fulfillment && (
+                                                    <span className="text-[12px] text-content-subtle truncate max-w-full" title={c.delivery_address || undefined}>
+                                                        {c.fulfillment === "delivery"
+                                                            ? `Delivery${c.delivery_address ? ` · ${c.delivery_address}` : ""}`
+                                                            : "Retiro en tienda"}
+                                                    </span>
+                                                )}
+                                                <PagoReportadoMark reportes={reportes[c.id]} onClick={() => setVerPagos(c)} />
+                                            </div>
+                                        )}
                                         {/* El importe no se trunca: un total a medias ("Ref. ...") no
                                             informa nada y es justo el dato que se viene a mirar. */}
                                         <div className="text-base font-bold tracking-tight text-content dark:text-white tabular-nums leading-tight">
@@ -459,6 +509,25 @@ export default function HeldCartsModal({ open, onClose, carts, onTake, onRemove,
                 currSym={currSym}
                 secondaryCurrency={secondaryCurrency}
             />
+
+            {/* Pagos que reportó el cliente de ese pedido: confirmarlos o rechazarlos. Se
+                registran como cobro al cobrar la cuenta (SaleConfirmModal). */}
+            <Modal open={!!verPagos} onClose={() => setVerPagos(null)} width={480}
+                title={verPagos ? `Pagos de ${toNameCase(verPagos.customer_name || verPagos.web_customer_name) || "el cliente"}` : ""}>
+                {verPagos && (
+                    <div className="-mx-1 rounded-xl border border-border/70 dark:border-white/[0.08] overflow-hidden">
+                        <PaymentReportList reports={reportes[verPagos.id] || []}
+                            onChanged={() => { cargarReportes(); }} />
+                    </div>
+                )}
+                {verPagos && (
+                    <p className="mt-3 text-[12px] text-content-subtle leading-relaxed">
+                        {verPagos.status === "pedido"
+                            ? "Acepta el pedido y cóbralo: el pago confirmado aparece listo para registrarse."
+                            : "Recupera la cuenta y cóbrala: el pago confirmado aparece listo para registrarse."}
+                    </p>
+                )}
+            </Modal>
         </div>
     );
 }

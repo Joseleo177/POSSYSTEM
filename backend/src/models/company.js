@@ -31,6 +31,9 @@ module.exports = (sequelize, DataTypes) => {
     // Pantalla de cocina para restaurantes (ver routes/kitchen.js). Mismo criterio: un extra
     // que el superusuario enciende.
     cocina_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Pedidos del catálogo con delivery y pago reportado (ver services/catalogCheckout.js). Un
+    // extra más, y solo tiene sentido con el catálogo encendido.
+    pedidos_web_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

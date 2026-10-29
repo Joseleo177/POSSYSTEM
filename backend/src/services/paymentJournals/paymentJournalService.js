@@ -257,10 +257,16 @@ function leerCuenta(body, actual = {}) {
   return out;
 }
 
+// Los métodos se reescriben enteros, pero lo que el método publica en el catálogo (Configuración
+// → Pedidos web) no viene en este formulario: se copia del método que ya existía con ese código.
 async function guardarMetodos(journal, metodos, transaction) {
+  const previos = await PaymentJournalMethod.findAll({
+    where: { journal_id: journal.id }, attributes: ["method_code", "catalog_visible", "catalog_info"], transaction,
+  });
+  const catalogo = new Map(previos.map(p => [p.method_code, { catalog_visible: p.catalog_visible, catalog_info: p.catalog_info }]));
   await PaymentJournalMethod.destroy({ where: { journal_id: journal.id }, transaction });
   await PaymentJournalMethod.bulkCreate(
-    metodos.map(m => ({ ...m, journal_id: journal.id, company_id: journal.company_id })),
+    metodos.map(m => ({ ...m, ...catalogo.get(m.method_code), journal_id: journal.id, company_id: journal.company_id })),
     { transaction },
   );
 }

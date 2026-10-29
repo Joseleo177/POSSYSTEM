@@ -21,8 +21,9 @@ import NotasCreditoTab from "../components/Contabilidad/NotasCreditoTab";
 import CuentasPorPagarTab from "../components/Contabilidad/CuentasPorPagarTab";
 import CuentasPorCobrarTab from "../components/Contabilidad/CuentasPorCobrarTab";
 import ConciliacionTab from "../components/Contabilidad/conciliacion/ConciliacionTab";
+import PagosReportadosTab from "../components/Contabilidad/PagosReportadosTab";
 
-const SUB_PAGES = ["Estado de Cuenta", "Ingresos", "Egresos", "Facturas", "Notas de Crédito", "Cotizaciones", "Por Cobrar", "Por Pagar", "Pagos", "Conciliación", "Series", "Diarios", "Tipos de pago", "Bancos"];
+const SUB_PAGES = ["Estado de Cuenta", "Ingresos", "Egresos", "Facturas", "Notas de Crédito", "Cotizaciones", "Por Cobrar", "Por Pagar", "Pagos", "Pagos reportados", "Conciliación", "Series", "Diarios", "Tipos de pago", "Bancos"];
 
 export default function ContabilidadPage() {
  const {
@@ -32,6 +33,7 @@ export default function ContabilidadPage() {
  banks, loadBanks,
  paymentMethods, loadPaymentMethods,
  pendingAction, setPendingAction,
+ company,
  } = useApp();
 
  const [allSeries, setAllSeries] = useState([]);
@@ -80,6 +82,8 @@ export default function ContabilidadPage() {
  const canPayables    = can("purchases.view");
  const canReceivables = can("sales.view") || can("accounting.view");
  const canReconcile   = can("accounting.reconcile");
+ // Pagos que los clientes reportan desde el catálogo: los revisa quien puede confirmarlos.
+ const canConfirmPay  = can("accounting.confirm") && !!company?.pedidos_web_enabled;
 
  useEffect(() => {
  if (!canConfig) return;
@@ -122,7 +126,9 @@ export default function ContabilidadPage() {
      ...(canReceivables ? ["Por Cobrar"] : []),
      ...(canPayables    ? ["Por Pagar"]  : []),
    ] }] : []),
-   { label: "Pagos",       items: null },
+   // Con permiso para confirmar pagos del catálogo, "Pagos" se abre en los registrados y los
+   // reportados por clientes; sin él, sigue siendo una sola pantalla.
+   { label: "Pagos",       items: canConfirmPay ? ["Pagos", "Pagos reportados"] : null },
    // Casar el extracto del banco con los cobros: lo que verifica que el dinero llegó.
    ...(canReconcile ? [{ label: "Conciliación", items: null }] : []),
    // Solo se listan las pantallas que el rol puede abrir de verdad: ofrecer "Series" a quien
@@ -205,6 +211,8 @@ export default function ContabilidadPage() {
  journals={journals}
  />
  );
+ case "Pagos reportados":
+ return <PagosReportadosTab notify={notify} />;
  case "Conciliación":
  return <ConciliacionTab notify={notify} />;
  case "Series":

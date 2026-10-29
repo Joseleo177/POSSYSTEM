@@ -113,16 +113,20 @@ const getAll = async (req, res) => {
 // Fábrica y Cocina solo se ofrecen a la empresa que tiene el módulo: en las demás serían
 // casillas que no abren nada.
 const getPermissionCatalog = async (req, res) => {
-  let fabrica = false, cocina = false;
+  let fabrica = false, cocina = false, pedidosWeb = false;
   try {
     if (req.company_id) {
       const { Company } = require("../models");
-      const c = await Company.findByPk(req.company_id, { attributes: ['fabrica_enabled', 'cocina_enabled'] });
+      const c = await Company.findByPk(req.company_id, { attributes: ['fabrica_enabled', 'cocina_enabled', 'pedidos_web_enabled'] });
       fabrica = !!c?.fabrica_enabled;
       cocina = !!c?.cocina_enabled;
+      pedidosWeb = !!c?.pedidos_web_enabled;
     }
   } catch { /* sin la empresa, el catálogo sale sin los módulos extra */ }
-  const data = MODULES.filter(m => (m.key !== 'factory' || fabrica) && (!['kitchen', 'tables'].includes(m.key) || cocina));
+  const data = MODULES
+    .filter(m => (m.key !== 'factory' || fabrica) && (!['kitchen', 'tables'].includes(m.key) || cocina))
+    // Confirmar pagos reportados es del extra de pedidos web: sin él la casilla no abriría nada.
+    .map(m => (m.key === 'accounting' && !pedidosWeb ? { ...m, actions: m.actions.filter(a => a.key !== 'confirm') } : m));
   res.json({ ok: true, data });
 };
 

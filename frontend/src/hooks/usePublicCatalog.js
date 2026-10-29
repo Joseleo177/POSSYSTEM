@@ -27,6 +27,9 @@ export function usePublicCatalog(token, initialProductId = null) {
     const [banners, setBanners] = useState([]);
     const [features, setFeatures] = useState([]);
     const [menu, setMenu] = useState([]);
+    // Entrega y pago que ofrece la tienda (Configuración → Pedidos web). Depende de la sucursal:
+    // cada una tiene sus zonas y sus cuentas, así que se renueva al elegirla.
+    const [checkout, setCheckout] = useState(null);
     const [products, setProducts] = useState([]);
     const [total, setTotal] = useState(0);
     const [search, setSearch] = useState("");
@@ -287,6 +290,7 @@ export function usePublicCatalog(token, initialProductId = null) {
                 if (!alive) return;
                 setCategories(r.data.categories || []);
                 setMenu(r.data.menu || []);
+                setCheckout(r.data.checkout || null);
             })
             .catch(() => { /* si falla, se queda con la lista de la carga inicial */ });
         return () => { alive = false; };
@@ -455,11 +459,19 @@ export function usePublicCatalog(token, initialProductId = null) {
     // carrito: pedirlos otra vez en el panel sería repetir el mismo formulario.
     const canSubmit = !!identity && cart.length > 0;
 
+    // Con entrega o pago configurados, "Enviar" abre el paso final (CheckoutSheet) y es ese paso
+    // el que envía, con lo que eligió el cliente. Sin nada configurado, se envía directo.
+    const [checkoutOpen, setCheckoutOpen] = useState(false);
+    const usesCheckout = !!checkout?.enabled;
+
     // Envía el pedido al comercio. El detalle viaja a su sistema, no por WhatsApp: allá
     // queda como una cuenta pendiente que pueden facturar. El carrito se vacía solo
     // cuando el servidor confirma; si algo falla, el cliente no pierde lo que armó.
-    const submitOrder = async () => {
+    const submitOrder = async (arg = null) => {
+        // Los temas lo llaman desde un onClick (llega el evento); solo el paso final manda datos.
+        const extra = arg?.fromCheckout ? arg : null;
         if (!canSubmit || sending) return;
+        if (usesCheckout && !extra) { setSendError(null); setCheckoutOpen(true); return; }
         if (!orderKeyRef.current) {
             orderKeyRef.current = crypto?.randomUUID?.() ?? `o-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         }
@@ -471,21 +483,40 @@ export function usePublicCatalog(token, initialProductId = null) {
                 customer_name: identity.name,
                 customer_phone: identity.phone,
                 customer_document: identity.document,
-                note: delivery.trim(),
+                note: extra ? extra.note : delivery.trim(),
                 idempotency_key: orderKeyRef.current,
                 // El pedido nace en la tienda que el cliente eligió: es contra ese stock que
                 // se valida y es esa caja la que lo verá.
                 warehouse_id: branch?.id || null,
+                ...(extra ? { fulfillment: extra.fulfillment, delivery: extra.delivery, payment: extra.payment } : {}),
             });
             orderKeyRef.current = null;
-            setPlacedOrder({ id: r.data.id, total: r.data.total });
+            setPlacedOrder({ id: r.data.id, total: r.data.total, payment: r.data.payment || null, fulfillment: extra?.fulfillment || null });
             setCart([]);
+            setCheckoutOpen(false);
+            // La confirmación vive en el carrito de cada tema.
+            setCartOpen(true);
             rememberPlaced(r.data.id);
             loadMyOrders();
         } catch (e) {
             setSendError(e.message || "No se pudo enviar el pedido. Intenta de nuevo.");
         } finally {
             setSending(false);
+        }
+    };
+
+    // Reportar el pago de un pedido ya enviado, desde su detalle en "Mis pedidos".
+    const [reportOrder, setReportOrder] = useState(null);
+    const canReportPayment = !!checkout?.payment_options?.length;
+    const sendPaymentReport = async (order, pago) => {
+        await publicApi.reportPayment(token, order.id, { ...pago, document: identity.document });
+        setReportOrder(null);
+        // El detalle abierto se refresca con el estado nuevo del pago.
+        const r = await publicApi.myOrders(token, identity.document).catch(() => null);
+        if (r) {
+            const orders = r.data.orders || [];
+            setMyOrders(orders);
+            setSelectedOrder(prev => (prev ? orders.find(o => o.id === prev.id) || prev : prev));
         }
     };
 
@@ -519,6 +550,7 @@ export function usePublicCatalog(token, initialProductId = null) {
                 setBanners(r.data.banners || []);
                 setFeatures(r.data.features || []);
                 setMenu(r.data.menu || []);
+                setCheckout(r.data.checkout || null);
             })
             .catch(() => alive && setError("Este catálogo no está disponible."));
         return () => { alive = false; };
@@ -595,5 +627,8 @@ export function usePublicCatalog(token, initialProductId = null) {
         // envío
         canSubmit, submitOrder, sending, sendError,
         placedOrder, closeConfirmation, waHref,
+        // entrega y pago
+        checkout, usesCheckout, checkoutOpen, setCheckoutOpen,
+        reportOrder, setReportOrder, canReportPayment, sendPaymentReport,
     };
 }

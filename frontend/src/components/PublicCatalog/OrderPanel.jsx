@@ -1,5 +1,6 @@
 import { resolveImageUrl, imgRetryOnError } from "../../helpers";
 import { isIntegerUnit, fmtQtyUnit } from "../../helpers/unitFormatter";
+import { PlacedPaymentNote } from "./PaymentFields";
 
 // Panel del pedido: el carrito que el cliente armó y, una vez enviado, la confirmación con el
 // número que le asignó la tienda. Mientras placedOrder exista se muestra esa confirmación en
@@ -8,7 +9,7 @@ export default function OrderPanel({
     open, onClose,
     cart, cartTotal, identity, store,
     changeQty, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,
-    delivery, setDelivery,
+    delivery, setDelivery, usesCheckout,
     fmt, baseCur, altCur,
     canSubmit, onSubmit, sending, sendError,
     placedOrder, waHref, onOpenMyOrders,
@@ -62,6 +63,7 @@ export default function OrderPanel({
                                     Total {fmt(placedOrder.total, baseCur)}
                                     {altCur && ` · ${fmt(placedOrder.total, altCur)}`}
                                 </div>
+                                <PlacedPaymentNote payment={placedOrder.payment} />
                                 <div className="space-y-2 pt-2">
                                     {waHref && (
                                         <a
@@ -149,7 +151,8 @@ export default function OrderPanel({
                                         </div>
                                     ))}
 
-                                    <div className="pt-2">
+                                    {/* Con entrega o pago configurados, la nota va en el paso final. */}
+                                    {!usesCheckout && <div className="pt-2">
                                         <div>
                                             <label className="text-[9px] font-black uppercase tracking-widest text-content-subtle">Entrega o nota (opcional)</label>
                                             <input
@@ -159,7 +162,7 @@ export default function OrderPanel({
                                                 className="w-full h-11 mt-1.5 px-3.5 rounded-2xl bg-surface-2 dark:bg-white/5 border border-border dark:border-white/10 text-[12px] font-bold text-content dark:text-white outline-none focus:border-brand-500/60 placeholder:text-content-subtle"
                                             />
                                         </div>
-                                    </div>
+                                    </div>}
                                 </div>
 
                                 <div className="px-5 py-4 border-t border-border dark:border-white/5 space-y-3">
@@ -195,7 +198,7 @@ export default function OrderPanel({
                                             disabled={!canSubmit || sending}
                                             className="flex-1 h-11 rounded-2xl bg-brand-500 text-black text-[12px] font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-[0.99] transition-transform disabled:opacity-40"
                                         >
-                                            {sending ? "Enviando..." : "Realizar pedido"}
+                                            {sending ? "Enviando..." : usesCheckout ? "Continuar" : "Realizar pedido"}
                                         </button>
                                     </div>
 

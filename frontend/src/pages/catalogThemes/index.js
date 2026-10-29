@@ -1,6 +1,7 @@
 import DefaultLayout from "./default/CatalogLayout";
 import BoutiqueLayout from "./boutique/CatalogLayout";
 import MenuLayout from "./menu/CatalogLayout";
+import { MENU_PANEL_DEFAULT } from "../../components/PublicCatalog/shared";
 
 // Temas del catálogo público. Cada tienda elige el suyo con el ajuste `catalog_theme`, y
 // aquí se traduce ese nombre al juego de componentes que se monta.
@@ -30,6 +31,12 @@ export const DEFAULT_THEME = "default";
 
 export function resolveTheme(name) {
     return THEMES[name] || THEMES[DEFAULT_THEME];
+}
+
+// Color de papel de las hojas compartidas (checkout, pagos, pedidos) en este tema, o null para
+// la piel estándar del sistema. Solo el menú pinta las hojas en su panel: ver CatalogSheet.
+export function sheetPanelFor(name, store) {
+    return name === "menu" ? (store?.panel_color || MENU_PANEL_DEFAULT) : null;
 }
 
 export default THEMES;

@@ -43,7 +43,7 @@ export default function CatalogLayout({ catalog, token }) {
         warehouses, branch, branchGate, chooseBranch, openBranchGate,
         cart, cartTotal, cartOpen, setCartOpen,
         addToCart, changeQty, setQtyDirect, handleQtyBlur, removeFromCart, clearCart,
-        delivery, setDelivery,
+        delivery, setDelivery, usesCheckout, canReportPayment, setReportOrder,
         identity, saveIdentity,
         requestLogout, logoutAsk, confirmLogout, cancelLogout,
         profileOpen, setProfileOpen, openProfileModal, handleSaveProfile,
@@ -227,7 +227,7 @@ export default function CatalogLayout({ catalog, token }) {
                 cart={cart} cartTotal={cartTotal} identity={identity} store={store}
                 changeQty={changeQty} setQtyDirect={setQtyDirect} handleQtyBlur={handleQtyBlur}
                 removeFromCart={removeFromCart} clearCart={clearCart}
-                delivery={delivery} setDelivery={setDelivery}
+                delivery={delivery} setDelivery={setDelivery} usesCheckout={usesCheckout}
                 fmt={fmt} baseCur={baseCur} altCur={altCur}
                 canSubmit={canSubmit} onSubmit={submitOrder} sending={sending} sendError={sendError}
                 placedOrder={placedOrder} waHref={waHref} onOpenMyOrders={openMyOrders}
@@ -256,6 +256,7 @@ export default function CatalogLayout({ catalog, token }) {
                 <OrderDetailModal
                     order={selectedOrder}
                     onClose={() => setSelectedOrder(null)}
+                    onReportPayment={canReportPayment ? setReportOrder : null}
                     fmt={fmt} baseCur={baseCur} altCur={altCur}
                 />
             )}

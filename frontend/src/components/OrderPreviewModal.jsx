@@ -74,6 +74,30 @@ export default function OrderPreviewModal({ open, onClose, order, convertToDispl
                 </div>
             </div>
 
+            {/* Entrega del pedido del catálogo: a dónde va y el punto exacto para el repartidor. */}
+            {order.fulfillment && (
+                <div className="bg-surface-2 dark:bg-surface-dark-3 rounded-2xl p-4 mb-3">
+                    <span className="text-[12px] font-medium text-content-subtle block mb-1">
+                        {order.fulfillment === "delivery" ? "Delivery" : "Retiro en tienda"}
+                        {order.fulfillment === "delivery" && parseFloat(order.service_charge) > 0 && order.service_charge_label
+                            ? ` · ${order.service_charge_label.replace(/^Delivery · /, "")}` : ""}
+                    </span>
+                    {order.fulfillment === "delivery" && (
+                        <>
+                            <span className="text-[13px] font-semibold text-content dark:text-white break-words block">{order.delivery_address}</span>
+                            {order.delivery_reference && <span className="text-[12px] text-content-subtle break-words block mt-0.5">{order.delivery_reference}</span>}
+                            {order.delivery_lat != null && order.delivery_lng != null && (
+                                <a href={`https://www.google.com/maps?q=${order.delivery_lat},${order.delivery_lng}`} target="_blank" rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 mt-2 text-[12px] font-semibold text-brand-600 dark:text-brand-400 hover:underline underline-offset-2">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21s-7-6.2-7-11.5a7 7 0 1114 0C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" strokeWidth={2} /></svg>
+                                    Abrir ubicación en el mapa
+                                </a>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
+
             {/* Nota del cliente: en un pedido web es media comanda (sin cebolla, para llevar…). */}
             {order.web_note && (
                 <div className="rounded-2xl p-4 mb-3 bg-warning/10 border border-warning/25">

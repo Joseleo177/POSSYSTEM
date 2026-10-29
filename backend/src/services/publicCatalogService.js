@@ -1,4 +1,4 @@
-const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, ProductStock, Warehouse, CatalogBanner, Promotion, BenefitTag, Company, RecipeSheet, Sequelize, sequelize } = require("../models");
+const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, ProductStock, Warehouse, CatalogBanner, Promotion, BenefitTag, Company, RecipeSheet, PaymentReport, Sequelize, sequelize } = require("../models");
 const { crearComanda } = require("./kitchen");
 const { tenantStorage } = require("../utils/tenantStorage");
 const addons = require("./addons");
@@ -6,6 +6,8 @@ const { imageUrl } = require("../utils/imageStorage");
 const { calculateComboStockAndCost } = require("./products/productService");
 const { vendeSinInsumoEmpresa } = require("./products/recipeStock");
 const { getVariants } = require("./products/variantService");
+const catalogCheckout = require("./catalogCheckout");
+const paymentReports = require("./paymentReports");
 
 const Op = Sequelize.Op;
 
@@ -380,6 +382,9 @@ async function getStore(token, { warehouse_id } = {}) {
         attributes: ["id", "name"],
         order: [["sort_order", "ASC"], ["name", "ASC"]],
       })).map((w) => ({ id: w.id, name: w.name })),
+      // Entrega (retiro, delivery por zonas) y los métodos con que se puede pagar el pedido.
+      // Depende de la sucursal: cada una tiene sus zonas y sus cuentas.
+      checkout: ordersEnabled ? await catalogCheckout.configPublica(company_id, whId) : null,
     };
   });
 }
@@ -936,13 +941,47 @@ async function getMyOrders(token, document) {
 
     const sales = await Sale.findAll({
       where: { customer_id: customer.id, status: { [Op.in]: Object.keys(ORDER_STAGES) } },
-      attributes: ["id", "total", "status", "invoice_number", "created_at"],
+      attributes: [
+        "id", "total", "status", "invoice_number", "created_at",
+        "fulfillment", "delivery_address", "delivery_reference", "service_charge", "service_charge_label",
+        "warehouse_id", "requested_warehouse_id",
+      ],
       // Se incluye el precio de cada línea: el cliente que abre un pedido viejo quiere ver
       // qué pagó por cada cosa, no solo qué se llevó.
-      include: [{ model: SaleItem, attributes: ["name", "quantity", "price", "subtotal", "note"], required: false }],
+      include: [{ model: SaleItem, attributes: ["name", "quantity", "price", "subtotal", "note", "product_id"], required: false }],
       order: [["created_at", "DESC"]],
       limit: 15,
     });
+
+    // Pagos que reportó y cuánto le falta, en dos consultas para toda la página. Lo que falta
+    // solo se calcula para lo que sigue por pagar; lo devuelto no entra (un pedido web con
+    // nota de crédito pendiente de pago es un caso que la tienda resuelve en caja).
+    const ids = sales.map((s) => s.id);
+    const reportes = await paymentReports.paraCliente(ids);
+    const porPagar = sales.filter((s) => paymentReports.POR_PAGAR.includes(s.status)).map((s) => s.id);
+    const faltas = porPagar.length ? await sequelize.query(`
+      SELECT s.id, GREATEST(0, s.total
+             - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.sale_id = s.id AND p.amount > 0), 0)
+             + COALESCE((SELECT SUM(p.change_given) FROM payments p WHERE p.sale_id = s.id AND p.change_journal_id IS NOT NULL), 0)
+             - COALESCE(s.credit_applied, 0) - COALESCE(s.forgiven_amount, 0)
+             - COALESCE((SELECT SUM(r.amount_base) FROM payment_reports r WHERE r.sale_id = s.id AND r.status IN ('pendiente', 'confirmado')), 0)
+           ) AS falta
+        FROM sales s WHERE s.id IN (:ids)
+    `, { replacements: { ids: porPagar }, type: Sequelize.QueryTypes.SELECT }) : [];
+    const faltaPorId = new Map(faltas.map((f) => [f.id, Math.round(parseFloat(f.falta) * 100) / 100]));
+
+    // La foto de cada producto y el nombre de la sucursal, para que "Mis pedidos" se lea como
+    // lo que el cliente pidió y no como una lista de texto. Una consulta para todas las fotos
+    // y otra para las sucursales de toda la página, no una por pedido.
+    const prodIds = [...new Set(sales.flatMap((s) => (s.SaleItems || []).map((i) => i.product_id)).filter(Boolean))];
+    const fotos = prodIds.length
+      ? new Map((await Product.findAll({ where: { id: { [Op.in]: prodIds } }, attributes: ["id", "image_filename"], raw: true }))
+        .map((p) => [p.id, p.image_filename ? imageUrl(p.image_filename) : null]))
+      : new Map();
+    const almIds = [...new Set(sales.map((s) => s.warehouse_id || s.requested_warehouse_id).filter(Boolean))];
+    const sucursales = almIds.length
+      ? new Map((await Warehouse.findAll({ where: { id: { [Op.in]: almIds } }, attributes: ["id", "name"], raw: true })).map((w) => [w.id, w.name]))
+      : new Map();
 
     return {
       orders: sales.map((s) => {
@@ -956,6 +995,14 @@ async function getMyOrders(token, document) {
           stage: stage.stage,
           stage_label: stage.label,
           stage_detail: stage.detail,
+          fulfillment: j.fulfillment || null,
+          branch: sucursales.get(j.warehouse_id || j.requested_warehouse_id) || null,
+          delivery_address: j.delivery_address || null,
+          delivery_reference: j.delivery_reference || null,
+          delivery_fee: parseFloat(j.service_charge || 0) > 0 && j.fulfillment === "delivery" ? parseFloat(j.service_charge) : 0,
+          payments: reportes.get(j.id) || [],
+          // Lo que todavía puede pagar desde el catálogo (null = ya no aplica).
+          owed: faltaPorId.has(j.id) ? faltaPorId.get(j.id) : null,
           items: (j.SaleItems || []).map((i) => ({
             name: i.name,
             quantity: parseFloat(i.quantity),
@@ -963,6 +1010,7 @@ async function getMyOrders(token, document) {
             // subtotal es columna generada en la BD; si faltara se recompone aquí.
             subtotal: i.subtotal != null ? parseFloat(i.subtotal) : parseFloat(i.price) * parseFloat(i.quantity),
             note: i.note || null,
+            image_url: fotos.get(i.product_id) || null,
           })),
         };
       }),
@@ -975,7 +1023,47 @@ async function getMyOrders(token, document) {
 // público, así que cualquiera podría dejar el stock en cero con pedidos falsos si el
 // descuento ocurriera aquí. El inventario se mueve cuando el comercio acepta el pedido
 // desde la caja (ver services/sales/acceptWebOrder.js).
-async function createOrder(token, { items, customer_name, customer_phone, customer_document, note, idempotency_key, warehouse_id }) {
+// Entrega del pedido según lo que ofrece la tienda (ver services/catalogCheckout.js). Devuelve
+// los campos de la venta y el recargo del delivery, que va en service_charge como en la caja.
+function leerEntrega(checkout, fulfillment, delivery) {
+  const bad = (m) => { const e = new Error(m); e.status = 400; return e; };
+  // Una tienda sin nada configurado sigue como antes: el pedido no dice cómo se entrega.
+  if (!checkout?.enabled) return { campos: {}, recargo: 0, label: null };
+
+  let modo = fulfillment === "delivery" ? "delivery" : fulfillment === "retiro" ? "retiro" : null;
+  if (!modo) {
+    if (checkout.delivery) throw bad("Elige cómo recibes tu pedido: retiro en tienda o delivery.");
+    modo = "retiro";
+  }
+  if (modo === "delivery" && !checkout.delivery) throw bad("Esta tienda no hace delivery.");
+  if (modo === "retiro" && !checkout.pickup) throw bad("Esta tienda solo entrega por delivery.");
+  if (modo === "retiro") return { campos: { fulfillment: "retiro" }, recargo: 0, label: null };
+
+  const d = delivery || {};
+  let zona = null;
+  if (checkout.zones.length) {
+    zona = checkout.zones.find((z) => z.id === parseInt(d.zone_id, 10));
+    if (!zona) throw bad("Elige la zona de entrega.");
+  }
+  const address = String(d.address || "").replace(/\s+/g, " ").trim().slice(0, 300);
+  if (address.length < 5) throw bad("Escribe la dirección de entrega.");
+  const lat = parseFloat(d.lat), lng = parseFloat(d.lng);
+  const conPunto = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat || lng);
+  return {
+    campos: {
+      fulfillment: "delivery",
+      delivery_zone_id: zona ? zona.id : null,
+      delivery_address: address,
+      delivery_reference: String(d.reference || "").replace(/\s+/g, " ").trim().slice(0, 200) || null,
+      delivery_lat: conPunto ? Math.round(lat * 1e6) / 1e6 : null,
+      delivery_lng: conPunto ? Math.round(lng * 1e6) / 1e6 : null,
+    },
+    recargo: zona ? zona.price : 0,
+    label: zona && zona.price > 0 ? `Delivery · ${zona.name}`.slice(0, 40) : null,
+  };
+}
+
+async function createOrder(token, { items, customer_name, customer_phone, customer_document, note, idempotency_key, warehouse_id, fulfillment, delivery, payment }) {
   const company_id = await resolveCompanyId(token);
   if (!company_id) return null;
 
@@ -992,7 +1080,10 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
     if (idempotency_key) {
       const key = `web_${String(idempotency_key).slice(0, 58)}`;
       const existing = await Sale.findOne({ where: { idempotency_key: key } });
-      if (existing) return { id: existing.id, total: parseFloat(existing.total) };
+      if (existing) {
+        const rep = await PaymentReport.findOne({ where: { sale_id: existing.id }, order: [["id", "DESC"]], attributes: ["status"] });
+        return { id: existing.id, total: parseFloat(existing.total), payment: rep ? { status: rep.status } : null };
+      }
     }
 
     const name = String(customer_name || "").trim().slice(0, 120);
@@ -1137,7 +1228,16 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
       }
     }
 
-    total = parseFloat(total.toFixed(2));
+    // Cómo lo recibe y si paga ahora. El delivery entra al total como recargo.
+    const checkout = await catalogCheckout.configPublica(company_id, tienda ? tienda.id : null);
+    const entrega = leerEntrega(checkout, fulfillment, delivery);
+    // Sin el extra de pedidos web (checkout apagado) un pago que llegue en el cuerpo se ignora.
+    const pagaAhora = checkout.enabled && !!payment?.option_id;
+    if (checkout.enabled && !checkout.pay_later && !pagaAhora) {
+      const e = new Error("Reporta tu pago para enviar el pedido."); e.status = 400; throw e;
+    }
+
+    total = parseFloat((total + entrega.recargo).toFixed(2));
     const baseCurrency = await Currency.findOne({ where: { is_base: true } });
     // En un restaurante con pantalla de cocina, el pedido que el mesonero manda desde la
     // tablet es la comanda: entra al tablero en el acto, sin esperar a que caja lo acepte.
@@ -1196,6 +1296,9 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
         web_customer_name: name,
         web_customer_phone: phone || null,
         web_note: String(note || "").trim().slice(0, 500) || null,
+        service_charge: entrega.recargo,
+        service_charge_label: entrega.label,
+        ...entrega.campos,
       }, { transaction: t });
 
       for (const e of enriched) {
@@ -1217,13 +1320,17 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
           sale,
           // La cocina ve el plato con sus adicionales debajo; los extras no van como líneas sueltas.
           items: enriched.filter(e => !e.esExtra).map(e => ({ product_id: e.product.id, name: e.product.name, quantity: e.qty, note: e.notaCliente, modifiers: e.cocina })),
-          label: name,
+          label: entrega.campos.fulfillment === "delivery" ? `Delivery · ${name}` : name,
           note: sale.web_note,
         }, t);
       }
 
+      // El pago que reporta junto al pedido. Si la referencia ya se usó, el pedido no entra:
+      // el cliente corrige la referencia (o elige pagar al recibir) y lo vuelve a enviar.
+      const pago = pagaAhora ? await paymentReports.reportar({ companyId: company_id, sale, body: payment }, t) : null;
+
       await t.commit();
-      return { id: sale.id, total };
+      return { id: sale.id, total, payment: pago ? { status: pago.status } : null };
     } catch (err) {
       await t.rollback();
       throw err;
@@ -1231,7 +1338,35 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
   });
 }
 
+// Pago que el cliente reporta después de pedir, desde "Mis pedidos" (la tienda ajustó el total
+// al aceptarlo, o eligió pagar luego). La cédula prueba que el pedido es suyo, igual que para
+// verlo; la venta se bloquea para que dos reportes simultáneos no pasen ambos el control de lo
+// que falta por pagar.
+async function reportPayment(token, saleId, body = {}) {
+  const company_id = await resolveCompanyId(token);
+  if (!company_id) return null;
+
+  return tenantStorage.run({ company_id }, async () => {
+    if (!(await catalogCheckout.moduloActivo(company_id))) {
+      const e = new Error("Esta tienda no recibe pagos en línea."); e.status = 403; throw e;
+    }
+    const doc = parseDocument(body.document);
+    if (!doc) { const e = new Error("Cédula o RIF inválido."); e.status = 400; throw e; }
+    const noEsTuyo = () => { const e = new Error("Pedido no encontrado."); e.status = 404; return e; };
+    const customer = await findCustomerByDocument(doc.normalized);
+    const id = parseInt(saleId, 10);
+    if (!customer || !Number.isInteger(id)) throw noEsTuyo();
+
+    return sequelize.transaction(async (t) => {
+      const sale = await Sale.findOne({ where: { id, customer_id: customer.id }, transaction: t, lock: true });
+      if (!sale) throw noEsTuyo();
+      const rep = await paymentReports.reportar({ companyId: company_id, sale, body }, t);
+      return { id: rep.id, status: rep.status };
+    });
+  });
+}
+
 module.exports = {
-  getStore, getProducts, getProduct, identifyCustomer, getMyOrders, createOrder,
+  getStore, getProducts, getProduct, identifyCustomer, getMyOrders, createOrder, reportPayment,
   SLUG_KEY, LEGACY_TOKEN_KEY, slugify, isValidSlug,
 };

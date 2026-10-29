@@ -15,6 +15,10 @@ module.exports = (sequelize, DataTypes) => {
     allows_inflow:  { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     allows_outflow: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     sort_order:     { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    // Se ofrece en el catálogo público para que el cliente pague su pedido, con los datos que
+    // necesita para hacerlo: { titular, documento, telefono, cuenta, correo, instrucciones }.
+    catalog_visible: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    catalog_info:    { type: DataTypes.JSONB, allowNull: true },
   }, {
     sequelize,
     tableName: 'payment_journal_methods',

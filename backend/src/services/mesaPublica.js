@@ -3,6 +3,8 @@ const { runWithoutTenant } = require("../utils/tenantStorage");
 const { huella, olvidar } = require("../utils/huella");
 
 const { Op } = Sequelize;
+// Color en hex de seis dígitos o nada: termina en una variable CSS del navegador del cliente.
+const colorDe = (raw) => (/^#?[0-9a-fA-F]{6}$/.test(String(raw || "").trim()) ? String(raw).trim() : null);
 
 // La página del QR de la mesa (/mesa/<código>): lo que el cliente ve desde su teléfono, sin
 // sesión. Cómo va cada ronda en la cocina, lo que lleva pedido y cuánto va la cuenta, y un
@@ -80,7 +82,7 @@ async function armar(token) {
     const area = await DiningArea.findByPk(mesa.area_id, { attributes: ["name"] });
 
     const ajustes = Object.fromEntries((await Setting.findAll({
-      where: { company_id: cid, key: { [Op.in]: ["store_name", "logo_filename", SLUG_KEY, MODO_KEY] } },
+      where: { company_id: cid, key: { [Op.in]: ["store_name", "logo_filename", "brand_color", "catalog_brand_color", SLUG_KEY, MODO_KEY] } },
       attributes: ["key", "value"],
     })).map(s => [s.key, s.value]));
     // Pedidos que el cliente hizo desde el QR y que todavía no son una ronda: los que esperan
@@ -146,6 +148,9 @@ async function armar(token) {
             ? (ajustes.logo_filename.startsWith("http") ? ajustes.logo_filename : `/uploads/${ajustes.logo_filename}`)
             : null,
           menu_url: company.catalog_enabled && ajustes[SLUG_KEY] ? `/catalogo/${ajustes[SLUG_KEY]}` : null,
+          // El color de la tienda, el mismo que pinta su catálogo: sin él la página de la mesa
+          // salía en el rosa de NXUS. Se valida como en el catálogo: va a una variable CSS.
+          brand_color: colorDe(ajustes.catalog_brand_color) || colorDe(ajustes.brand_color),
         },
         table: { name: mesa.name, area: area?.name || null },
         open: ventas.length > 0,

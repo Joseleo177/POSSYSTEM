@@ -134,6 +134,8 @@ app.use("/api/production",       require("./routes/production"));          // au
 app.use("/api/backup",           require("./routes/backup"));             // auth+config dentro
 app.use("/api/catalog-link",     require("./routes/publicCatalog").adminRouter); // auth+config dentro
 app.use("/api/catalog-banners",  require("./routes/catalogBanners"));       // auth+config dentro
+app.use("/api/catalog-checkout", require("./routes/catalogCheckout"));      // auth+config dentro
+app.use("/api/payment-reports",  require("./routes/paymentReports"));       // auth+permit dentro
 app.use("/api/benefit-tags",     require("./routes/benefitTags"));          // auth dentro
 app.use("/api/product-attributes", require("./routes/productAttributes"));   // auth dentro
 
