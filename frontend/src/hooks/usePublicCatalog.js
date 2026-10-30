@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { publicApi } from "../services/api";
+import { swr, claveProductos } from "../services/publicCache";
 import { isIntegerUnit } from "../helpers/unitFormatter";
 import { applyBrandColor } from "../helpers/brandColor";
 import { useTheme } from "./useTheme";
@@ -19,6 +20,8 @@ import { lineTotalFor } from "../helpers/promo";
 export function usePublicCatalog(token, initialProductId = null) {
     const { dark, toggle } = useTheme();
     const [store, setStore] = useState(null);
+    // Ya llegaron categorías/menú de la sucursal: la carga general de la tienda no las pisa.
+    const porSucursal = useRef(false);
     const [currencies, setCurrencies] = useState([]);
     const [categories, setCategories] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
@@ -285,14 +288,16 @@ export function usePublicCatalog(token, initialProductId = null) {
     useEffect(() => {
         if (!branch?.id) return;
         let alive = true;
-        publicApi.getStore(token, { warehouse_id: branch.id })
-            .then((r) => {
-                if (!alive) return;
-                setCategories(r.data.categories || []);
-                setMenu(r.data.menu || []);
-                setCheckout(r.data.checkout || null);
-            })
-            .catch(() => { /* si falla, se queda con la lista de la carga inicial */ });
+        const aplicar = (r) => {
+            if (!alive) return;
+            porSucursal.current = true;
+            setCategories(r.data.categories || []);
+            setMenu(r.data.menu || []);
+            setCheckout(r.data.checkout || null);
+        };
+        const { cached, fresh } = swr(`s:${token}:${branch.id}`, () => publicApi.getStore(token, { warehouse_id: branch.id }));
+        if (cached) aplicar(cached);
+        fresh.then(aplicar).catch(() => { /* si falla, se queda con la lista de la carga inicial */ });
         return () => { alive = false; };
     }, [token, branch?.id]);
 
@@ -535,11 +540,12 @@ export function usePublicCatalog(token, initialProductId = null) {
         setDelivery("");
     };
 
-    // Cabecera de la tienda: una sola vez.
+    // Cabecera de la tienda: una sola vez. Con lo guardado de la visita anterior (swr) la
+    // portada se dibuja al instante y se corrige cuando llega lo fresco; solo si no hay nada
+    // guardado y la red falla se muestra "no disponible".
     useEffect(() => {
         let alive = true;
-        publicApi.getStore(token)
-            .then(r => {
+        const aplicar = (r) => {
                 if (!alive) return;
                 setStore(r.data.store);
                 // El catálogo hereda el color de la empresa: para el cliente final esta
@@ -551,14 +557,20 @@ export function usePublicCatalog(token, initialProductId = null) {
                 // de WhatsApp digan lo mismo.
                 setCurrencies((r.data.currencies || []).map((c) =>
                     c.code === "USD" || /^ref\.?$/i.test(String(c.symbol || "").trim()) ? { ...c, symbol: "$" } : c));
-                setCategories(r.data.categories || []);
                 setWarehouses(r.data.warehouses || []);
                 setBanners(r.data.banners || []);
                 setFeatures(r.data.features || []);
-                setMenu(r.data.menu || []);
-                setCheckout(r.data.checkout || null);
-            })
-            .catch(() => alive && setError("Este catálogo no está disponible."));
+                // Categorías, menú y checkout de la SUCURSAL mandan sobre los generales: con la
+                // caché, la versión por sucursal puede llegar antes que esta y no debe pisarse.
+                if (!porSucursal.current) {
+                    setCategories(r.data.categories || []);
+                    setMenu(r.data.menu || []);
+                    setCheckout(r.data.checkout || null);
+                }
+        };
+        const { cached, fresh } = swr(`s:${token}`, () => publicApi.getStore(token));
+        if (cached) aplicar(cached);
+        fresh.then(aplicar).catch(() => { if (alive && !cached) setError("Este catálogo no está disponible."); });
         return () => { alive = false; };
     }, [token]);
 
@@ -567,28 +579,50 @@ export function usePublicCatalog(token, initialProductId = null) {
     // los datos de la tienda, no un catálogo.
     // Tampoco antes de tener la tienda: hasta que no se sepa si hay sucursales, pedir
     // productos sería listar el stock de todas para reemplazarlo enseguida.
+    //
+    // En el tema boutique la portada no usa esta lista (tiene sus carriles propios, que piden
+    // lo suyo): pedirla ahí era una consulta más en la carga, compitiendo con lo que sí se ve.
+    // Se pide en cuanto el cliente busca o entra a una categoría.
+    //
+    // Con swr: la misma categoría vista antes aparece al instante y se refresca por detrás. Las
+    // búsquedas no se guardan en el navegador (solo se unen las repetidas).
+    const portadaPropia = store?.theme === "boutique" && !search && !category;
     useEffect(() => {
-        if (!store || gated || branchGate) return;
+        if (!store || gated || branchGate || portadaPropia) return;
         const id = ++reqRef.current;
         setLoading(true);
         const t = setTimeout(() => {
-            publicApi.getProducts(token, { search, category_id: category, limit: PAGE_SIZE, offset: 0, warehouse_id: branch?.id || "" })
+            const params = { search, category_id: category, limit: PAGE_SIZE, offset: 0, warehouse_id: branch?.id || "" };
+            const { cached, fresh } = swr(claveProductos(token, params), () => publicApi.getProducts(token, params), { persist: !search });
+            if (cached) {
+                setProducts(cached.data.products || []);
+                setTotal(cached.data.total || 0);
+                setLoading(false);
+            }
+            fresh
                 .then(r => {
                     if (id !== reqRef.current) return; // llegó tarde, ya hay otra búsqueda
                     setProducts(r.data.products || []);
                     setTotal(r.data.total || 0);
                 })
-                .catch(() => id === reqRef.current && setError("No se pudieron cargar los productos."))
+                .catch(() => id === reqRef.current && !cached && setError("No se pudieron cargar los productos."))
                 .finally(() => id === reqRef.current && setLoading(false));
         }, search ? 300 : 0);
         return () => clearTimeout(t);
-    }, [token, search, category, gated, store, branchGate, branch?.id]);
+        // `store` entra por su id de tienda y no como objeto: el objeto cambia cuando lo fresco
+        // reemplaza a lo guardado, y eso volvía a pedir la lista sin que nada hubiera cambiado.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [token, search, category, gated, !!store, branchGate, branch?.id, portadaPropia]);
 
     // Una carga al entrar para que el distintivo de "Mis pedidos" diga algo desde el
     // principio. No se repite sola: quien esté esperando abre el panel y ve el estado
     // fresco, sin dejar el teléfono consultando en bucle.
+    // Va un momento después de abrir: es solo para el número de la cabecera, y pedirlo junto
+    // con la tienda y los carriles le quitaba conexión a lo que el cliente sí está mirando.
     useEffect(() => {
-        if (identity && !gated) loadMyOrders();
+        if (!identity || gated) return;
+        const t = setTimeout(loadMyOrders, 1500);
+        return () => clearTimeout(t);
     }, [identity, gated, loadMyOrders]);
 
     const loadMore = useCallback(() => {

@@ -61,6 +61,12 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/uploads/")) return;
 
+  // La vitrina y la página de la mesa no pasan por aquí: son del cliente final, no funcionan
+  // sin internet, y su HTML lo arma la función de Vercel con los datos de la tienda. Pasar por
+  // el service worker solo le sumaba su arranque a cada visita de quien también usa el ERP en
+  // ese teléfono, y además guardaba la página de la vitrina como si fuera el index.html del ERP.
+  if (request.mode === "navigate" && /^\/(catalogo|mesa)(\/|$)/.test(url.pathname)) return;
+
   // La app es una sola página: cualquier ruta abre index.html.
   if (request.mode === "navigate") {
     event.respondWith(

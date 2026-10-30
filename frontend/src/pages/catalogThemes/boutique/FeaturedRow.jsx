@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { publicApi } from "../../../services/api";
 import { Card } from "./BoutiqueGrid";
+import useCarril from "./useCarril";
 
 // Carril de "Ofertas" en la portada, antes de las categorías: lo que tiene un descuento o una
 // promo "compra y lleva" vigente se ve primero, no mezclado en medio del catálogo. Es el mismo
@@ -19,18 +19,9 @@ export default function FeaturedRow({
     token, warehouseId,
     cart, fmt, baseCur, altCur, ordersEnabled, onAdd, onQty, onOpenProduct,
 }) {
-    const [products, setProducts] = useState(null); // null = cargando
+    const { products } = useCarril(token, { featured: "true", limit: LIMITE, warehouse_id: warehouseId || "" });
     const scrollerRef = useRef(null);
     const [bordes, setBordes] = useState({ izq: false, der: false });
-
-    useEffect(() => {
-        let alive = true;
-        setProducts(null);
-        publicApi.getProducts(token, { featured: "true", limit: LIMITE, warehouse_id: warehouseId || "" })
-            .then((r) => { if (alive) setProducts(r.data.products || []); })
-            .catch(() => alive && setProducts([]));
-        return () => { alive = false; };
-    }, [token, warehouseId]);
 
     useEffect(() => {
         const el = scrollerRef.current;

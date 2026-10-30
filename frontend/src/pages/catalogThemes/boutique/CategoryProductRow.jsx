@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { publicApi } from "../../../services/api";
 import { Card } from "./BoutiqueGrid";
+import useCarril from "./useCarril";
+import useReveal from "./useReveal";
 import { toNameCase } from "../../../helpers";
 
 // Carril corto de UNA categoría en la portada, con scroll horizontal — como "Kits Poción" o
@@ -19,26 +20,14 @@ export default function CategoryProductRow({
     category, token, warehouseId,
     cart, fmt, baseCur, altCur, ordersEnabled, onAdd, onQty, onOpenProduct, onSeeAll,
 }) {
-    const [products, setProducts] = useState(null); // null = cargando
-    const [total, setTotal] = useState(0);
+    // El carril pide sus productos cuando está a menos de ~una pantalla de verse.
+    const [cerca, estaCerca] = useReveal({ margin: "900px 0px 900px 0px" });
+    const { products, total } = useCarril(token, { category_id: category.id, limit: LIMITE, warehouse_id: warehouseId || "" }, estaCerca);
     const scrollerRef = useRef(null);
     // Si hay algo cortado a cada lado, AHORA MISMO — no "puede haberlo en teoría". Al abrir,
     // no hay nada cortado a la izquierda todavía, y ese degradado tapando el botón de la
     // primera ficha (que está completa, no cortada) es justo el defecto que se reportó.
     const [bordes, setBordes] = useState({ izq: false, der: false });
-
-    useEffect(() => {
-        let alive = true;
-        setProducts(null);
-        publicApi.getProducts(token, { category_id: category.id, limit: LIMITE, warehouse_id: warehouseId || "" })
-            .then((r) => {
-                if (!alive) return;
-                setProducts(r.data.products || []);
-                setTotal(r.data.total || 0);
-            })
-            .catch(() => alive && setProducts([]));
-        return () => { alive = false; };
-    }, [token, category.id, warehouseId]);
 
     // Recalcula qué borde tiene algo cortado detrás: al montar, al redimensionar (el mismo
     // carril puede pasar de "cabe entero" a "hay que desplazar" solo por girar el teléfono),
@@ -71,7 +60,7 @@ export default function CategoryProductRow({
     };
 
     return (
-        <section className="max-w-6xl mx-auto px-4 pt-8 md:pt-14">
+        <section ref={cerca} className="max-w-6xl mx-auto px-4 pt-8 md:pt-14">
             <div className="flex items-baseline justify-between mb-3">
                 <h2 className="text-[20px] font-bold tracking-tight text-content dark:text-white">{toNameCase(category.name)}</h2>
                 {total > LIMITE && (

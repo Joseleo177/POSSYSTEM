@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { publicApi } from "../../../services/api";
 import { Card } from "./BoutiqueGrid";
+import useCarril from "./useCarril";
+import useReveal from "./useReveal";
 import GlidingTabs from "./GlidingTabs";
 import { toNameCase } from "../../../helpers";
 
@@ -19,31 +20,14 @@ export default function AllProductsSection({
     cart, fmt, baseCur, altCur, ordersEnabled, onAdd, onQty, onOpenProduct, onSeeAll,
 }) {
     const [categoryId, setCategoryId] = useState("");
-    const [products, setProducts] = useState(null); // null = todavía no llegó la primera carga
-    const [loading, setLoading] = useState(true);
-    const [total, setTotal] = useState(0);
+    // Es lo último de la portada: no pide nada hasta que el cliente baja cerca.
+    const [cerca, estaCerca] = useReveal({ margin: "900px 0px 900px 0px" });
+    const { products, total, loading } = useCarril(token, { category_id: categoryId || "", limit: LIMITE, warehouse_id: warehouseId || "" }, estaCerca);
     const scrollerRef = useRef(null);
     const [bordes, setBordes] = useState({ izq: false, der: false });
 
-    // No se vacía `products` a null en cada cambio de pestaña —eso era el golpe: la fila
-    // desaparecía entera a los cuadros grises de carga y volvía a llenarse de un tirón—. La
-    // fila anterior se queda a la vista (atenuada por `loading`, ver el contenedor más abajo)
-    // hasta que la nueva esté lista, y ahí se reemplaza de una vez. El esqueleto gris solo se
-    // ve en la primera carga de la sección, cuando de verdad no hay nada que mostrar todavía.
-    useEffect(() => {
-        let alive = true;
-        setLoading(true);
-        publicApi.getProducts(token, { category_id: categoryId || "", limit: LIMITE, warehouse_id: warehouseId || "" })
-            .then((r) => {
-                if (!alive) return;
-                setProducts(r.data.products || []);
-                setTotal(r.data.total || 0);
-            })
-            .catch(() => alive && setProducts([]))
-            .finally(() => alive && setLoading(false));
-        return () => { alive = false; };
-    }, [token, categoryId, warehouseId]);
-
+    // Al cambiar de pestaña la fila anterior queda a la vista, atenuada por `loading`, hasta que
+    // llega la nueva (useCarril no la vacía): vaciarla a esqueletos se veía como un tirón.
     useEffect(() => {
         const el = scrollerRef.current;
         if (!el) return;
@@ -69,7 +53,7 @@ export default function AllProductsSection({
     };
 
     return (
-        <section className="max-w-6xl mx-auto px-4 pt-8 md:pt-14 pb-4">
+        <section ref={cerca} className="max-w-6xl mx-auto px-4 pt-8 md:pt-14 pb-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-6 mb-4">
                 <h2 className="text-[20px] font-bold tracking-tight text-content dark:text-white shrink-0">Nuestros productos</h2>
 

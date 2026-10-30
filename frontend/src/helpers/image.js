@@ -7,6 +7,20 @@ export const resolveImageUrl = (url) => {
     return `${cleanBase}${cleanUrl}`;
 };
 
+// Variantes de ancho de una foto de Supabase Storage, para srcSet: la transformación de
+// Supabase la entrega al ancho pedido y en WebP a quien lo acepta. Un banner PNG de campaña
+// pesa más de 1 MB y en un teléfono se veía a 390px de ancho. Fuera de Supabase (Docker, fotos
+// en /uploads) devuelve null y se usa la original.
+//
+// Solo para piezas contadas (los banners): la transformación se cobra por imagen distinta al
+// mes, y pasar por ella las miles de fotos de productos no compensaría.
+const OBJETO_PUBLICO = "/storage/v1/object/public/";
+export const srcSetSupabase = (url, anchos = [828, 1280, 1920], calidad = 75) => {
+    if (!url || !url.includes(OBJETO_PUBLICO)) return null;
+    const base = url.replace(OBJETO_PUBLICO, "/storage/v1/render/image/public/");
+    return anchos.map((w) => `${base}?width=${w}&quality=${calidad} ${w}w`).join(", ");
+};
+
 // Ícono neutro que ocupa el lugar de una foto que no carga. Sin él el navegador pinta el
 // ícono roto y el texto alternativo encima de la tarjeta. Gris a media opacidad para que
 // sirva igual en claro y en oscuro (un data URI no hereda currentColor).

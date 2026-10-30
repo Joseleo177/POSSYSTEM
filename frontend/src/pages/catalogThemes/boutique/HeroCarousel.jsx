@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { resolveImageUrl } from "../../../helpers";
+import { srcSetSupabase } from "../../../helpers/image";
 
 // Carrusel de portada. Las imágenes las carga la tienda desde Ajustes → Vitrina, con una
 // versión de escritorio y otra de móvil.
@@ -18,6 +19,16 @@ import { resolveImageUrl } from "../../../helpers";
 // Sin banners cargados no se muestra nada y la tienda abre directo en los productos.
 
 const AVANCE_MS = 6000;
+
+// Ancho al que se ve el banner, para que el navegador elija la variante justa del srcSet: dentro
+// de la página (max-w-6xl, 1120px útiles) en escritorio, casi a todo el ancho en el teléfono.
+const TAMANOS = "(min-width: 1152px) 1120px, (min-width: 768px) calc(100vw - 32px), calc(100vw - 24px)";
+
+// El primer banner es lo más grande de la portada: se pide con prioridad alta y de inmediato.
+// Los demás esperan (lazy) a que el carrusel los necesite.
+const prioridad = (idx) => (idx === 0
+    ? { loading: "eager", fetchpriority: "high", decoding: "async" }
+    : { loading: "lazy", decoding: "async" });
 
 export default function HeroCarousel({ banners }) {
     const [i, setI] = useState(0);
@@ -73,39 +84,46 @@ export default function HeroCarousel({ banners }) {
                                 deja los textos del diseño fuera de cuadro. */}
                             {b.image_mobile_url ? (
                                 <picture>
-                                    <source media="(min-width: 768px)" srcSet={resolveImageUrl(b.image_url)} />
+                                    <source media="(min-width: 768px)" srcSet={srcSetSupabase(resolveImageUrl(b.image_url)) || resolveImageUrl(b.image_url)} sizes={TAMANOS} />
                                     <img
                                         src={resolveImageUrl(b.image_mobile_url)}
+                                        srcSet={srcSetSupabase(resolveImageUrl(b.image_mobile_url), [640, 828, 1170]) || undefined}
+                                        sizes={TAMANOS}
                                         alt={b.alt_text || ""}
                                         className="w-full h-auto block"
-                                        loading={idx === 0 ? "eager" : "lazy"}
+                                        {...prioridad(idx)}
                                     />
                                 </picture>
                             ) : (
                                 <>
                                     <img
                                         src={resolveImageUrl(b.image_url)}
+                                        srcSet={srcSetSupabase(resolveImageUrl(b.image_url)) || undefined}
+                                        sizes={TAMANOS}
                                         alt={b.alt_text || ""}
                                         className="hidden md:block w-full h-auto"
-                                        loading={idx === 0 ? "eager" : "lazy"}
+                                        {...prioridad(idx)}
                                     />
                                     {/* Sin arte móvil, el apaisado entero y centrado en una
                                         caja más alta, con el propio arte desenfocado de fondo
                                         rellenando lo que sobra: recortarlo saca de cuadro los
-                                        textos del diseño. */}
+                                        textos del diseño. El fondo desenfocado se pide
+                                        diminuto: borroso, 96px y 1920px se ven igual. */}
                                     <div className="md:hidden relative aspect-[16/10] overflow-hidden">
                                         <img
-                                            src={resolveImageUrl(b.image_url)}
+                                            src={(srcSetSupabase(resolveImageUrl(b.image_url), [96]) || "").split(" ")[0] || resolveImageUrl(b.image_url)}
                                             alt=""
                                             aria-hidden="true"
                                             className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl opacity-80"
-                                            loading={idx === 0 ? "eager" : "lazy"}
+                                            {...prioridad(idx)}
                                         />
                                         <img
                                             src={resolveImageUrl(b.image_url)}
+                                            srcSet={srcSetSupabase(resolveImageUrl(b.image_url)) || undefined}
+                                            sizes={TAMANOS}
                                             alt={b.alt_text || ""}
                                             className="absolute inset-0 w-full h-full object-contain drop-shadow-xl"
-                                            loading={idx === 0 ? "eager" : "lazy"}
+                                            {...prioridad(idx)}
                                         />
                                     </div>
                                 </>

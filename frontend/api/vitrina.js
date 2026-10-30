@@ -9,13 +9,22 @@
 // despliegue nuevo vacía esa caché solo. Si el backend no responde a tiempo se entrega el
 // index.html de siempre: la vitrina funciona, solo que sin vista previa.
 //
+// Pasados esos 5 minutos la página se sigue entregando AL INSTANTE desde la CDN durante un día
+// (stale-while-revalidate) mientras Vercel la rehace por detrás. Antes eran 10 minutos: la
+// primera visita después de un rato sin visitas esperaba arranque de la función + backend +
+// revisión de la foto, ~1,7 s de pantalla en blanco. Lo único que puede quedar viejo es el
+// título y la vista previa, que WhatsApp de todos modos guarda por días.
+//
+// Además la cabecera adelanta trabajo al navegador (ver aceleradores): abre ya la conexión con
+// la API y con el almacén de fotos, y empieza a pedir la tienda mientras baja el JavaScript.
+//
 // Solo corre en Vercel (ver rewrites de vercel.json). En Docker nginx sirve index.html tal cual.
 
 const ESPERA_MS = 2500;
 
 // La vista previa de WhatsApp va sin precio, a propósito. WhatsApp guarda la vista previa días y el
 // precio cambia; el precio va solo en el JSON-LD, que Google relee seguido.
-const CACHE_OK = "public, max-age=0, s-maxage=300, stale-while-revalidate=600";
+const CACHE_OK = "public, max-age=0, s-maxage=300, stale-while-revalidate=86400";
 const CACHE_404 = "public, max-age=0, s-maxage=60";
 
 let plantilla = null; // index.html del despliegue: no cambia mientras viva la instancia
@@ -153,6 +162,25 @@ async function cabecera({ store, product }, { url, origen, api }) {
   return { titulo, meta };
 }
 
+// La app pide la tienda con fetch(`${API}/api/public/catalog/<slug>?`) (publicApi.getStore, sin
+// parámetros en la primera carga). El preload tiene que ser EXACTAMENTE esa URL, con el "?" del
+// final, y crossorigin="anonymous" (el fetch va sin credenciales): si no coincide, el navegador
+// la pide dos veces. El logo se adelanta porque es lo primero que se ve en la cabecera; también
+// con crossorigin="anonymous", que es como lo carga StoreLogo (lo procesa en un lienzo).
+function aceleradores({ api, slug, logo }) {
+  const links = [];
+  try { links.push(`<link rel="preconnect" href="${esc(new URL(api).origin)}" crossorigin />`); } catch { /* api relativa */ }
+  try {
+    if (logo && /^https?:/i.test(logo)) {
+      const fotos = new URL(logo).origin;
+      if (!links.some((l) => l.includes(fotos))) links.push(`<link rel="preconnect" href="${esc(fotos)}" />`);
+      links.push(`<link rel="preload" as="image" crossorigin="anonymous" href="${esc(logo)}" />`);
+    }
+  } catch { /* logo raro: sin adelanto */ }
+  links.push(`<link rel="preload" as="fetch" crossorigin="anonymous" href="${esc(`${api}/api/public/catalog/${encodeURIComponent(slug)}?`)}" />`);
+  return links.join("\n    ");
+}
+
 function inyectar(html, { titulo, meta }) {
   return html
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${esc(titulo)}</title>`)
@@ -208,7 +236,9 @@ module.exports = async (req, res) => {
   try {
     const { data } = await r.json();
     const url = `${origen}/catalogo/${slug}${pid ? `/p/${pid}` : ""}`;
-    enviar(200, inyectar(html, await cabecera(data, { url, origen, api })), CACHE_OK);
+    const cab = await cabecera(data, { url, origen, api });
+    cab.meta += `\n    ${aceleradores({ api, slug, logo: absoluta(data.store?.logo_url, api) })}`;
+    enviar(200, inyectar(html, cab), CACHE_OK);
   } catch (err) {
     console.error("[vitrina] cabecera", err.message);
     enviar(200, html, "no-store");
