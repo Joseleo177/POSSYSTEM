@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { publicApi } from "../../../services/api";
 import { Card } from "./BoutiqueGrid";
+import GlidingTabs from "./GlidingTabs";
 import { toNameCase } from "../../../helpers";
 
 // Cierre de la portada: pestañas por categoría sobre UN carril horizontal, igual que los de
@@ -15,7 +16,7 @@ const LIMITE = 12;
 
 export default function AllProductsSection({
     categories, token, warehouseId,
-    cart, fmt, baseCur, altCur, ordersEnabled, onAdd, onOpenProduct, onSeeAll,
+    cart, fmt, baseCur, altCur, ordersEnabled, onAdd, onQty, onOpenProduct, onSeeAll,
 }) {
     const [categoryId, setCategoryId] = useState("");
     const [products, setProducts] = useState(null); // null = todavía no llegó la primera carga
@@ -69,35 +70,20 @@ export default function AllProductsSection({
 
     return (
         <section className="max-w-6xl mx-auto px-4 pt-8 md:pt-14 pb-4">
-            <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-6 mb-4">
                 <h2 className="text-[20px] font-bold tracking-tight text-content dark:text-white shrink-0">Nuestros productos</h2>
 
                 {/* Pestañas EN LA MISMA LÍNEA que el título, no debajo — así lo tienen las
-                    referencias. Solo la activa lleva píldora de color; las demás son texto
-                    plano, para que la fila no se lea como una hilera de botones repetidos. */}
-                <div className="flex items-center gap-4 overflow-x-auto scrollbar-hide min-w-0">
-                    <button
-                        type="button"
-                        onClick={() => setCategoryId("")}
-                        className={!categoryId
-                            ? "shrink-0 h-8 px-4 rounded-full bg-brand-500 text-white text-[13px] font-semibold"
-                            : "shrink-0 text-[13px] font-medium text-content-subtle hover:text-content dark:hover:text-white transition-colors"}
-                    >
-                        Todos
-                    </button>
-                    {categories.map((c) => (
-                        <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => setCategoryId(String(c.id))}
-                            className={String(categoryId) === String(c.id)
-                                ? "shrink-0 h-8 px-4 rounded-full bg-brand-500 text-white text-[13px] font-semibold"
-                                : "shrink-0 text-[13px] font-medium text-content-subtle hover:text-content dark:hover:text-white transition-colors"}
-                        >
-                            {toNameCase(c.name)}
-                        </button>
-                    ))}
-                </div>
+                    referencias. La elegida lleva la píldora de la marca, que se desliza de una
+                    pestaña a otra (GlidingTabs); las demás son texto, para que la fila no se
+                    lea como una hilera de botones repetidos. */}
+                <GlidingTabs
+                    variant="solid"
+                    value={categoryId}
+                    onChange={setCategoryId}
+                    items={[{ key: "", label: "Todos" }, ...categories.map((c) => ({ key: String(c.id), label: toNameCase(c.name) }))]}
+                    className="min-w-0 -mr-1 py-1"
+                />
             </div>
 
             {/* Sin categoría elegida ("Todos") no hay a dónde llevar el "Ver todos": la
@@ -182,7 +168,7 @@ export default function AllProductsSection({
                                         inCart={cart.find((it) => it.id === p.id)}
                                         fmt={fmt} baseCur={baseCur} altCur={altCur}
                                         canOrder={ordersEnabled}
-                                        onAdd={onAdd}
+                                        onAdd={onAdd} onQty={onQty}
                                         href={`/catalogo/${token}/p/${p.id}`}
                                         onOpen={() => onOpenProduct(p.id)}
                                         fadeOnly

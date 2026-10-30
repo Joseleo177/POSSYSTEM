@@ -20,8 +20,41 @@ const CARGA_MS = 520;
 const LISTO_MS = 950;
 const CHISPAS = [0, 60, 120, 180, 240, 300];
 
+// Selector de cantidad: lo que el botón pasa a ser cuando el producto ya está en el carrito.
+// "Agregar otro" solo sabía sumar; con − y + el cliente corrige ahí mismo, sin abrir el carrito.
+// El número rueda hacia arriba al sumar y hacia abajo al restar.
+const MAS = "M12 5v14M5 12h14";
+const MENOS = "M5 12h14";
+
+function Selector({ qty, label, onMinus, onPlus, className }) {
+    const previo = useRef(qty);
+    const sube = qty >= previo.current;
+    useEffect(() => { previo.current = qty; }, [qty]);
+    return (
+        <div className={`stepper-in relative flex items-center justify-between gap-1 p-1 rounded-full bg-brand-500/10 dark:bg-brand-500/15 ring-1 ring-inset ring-brand-500/25 font-semibold ${className}`}>
+            <button type="button" onClick={onMinus} aria-label="Quitar uno"
+                className="h-full aspect-square rounded-full flex items-center justify-center text-brand-600 dark:text-brand-400 hover:bg-brand-500/15 active:scale-90 transition-[transform,background-color]">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.6}><path strokeLinecap="round" d={MENOS} /></svg>
+            </button>
+            <span className="relative overflow-hidden flex-1 min-w-0 h-full flex items-center justify-center">
+                <span key={qty} aria-live="polite" className={`${sube ? "qty-up" : "qty-down"} truncate tabular-nums text-content dark:text-white`}>
+                    {label}
+                </span>
+            </span>
+            <button type="button" onClick={onPlus} aria-label="Agregar uno"
+                className="h-full aspect-square rounded-full flex items-center justify-center bg-brand-500 text-white shadow-[0_4px_12px_-4px_rgb(var(--c-brand-500)/.7)] hover:brightness-110 active:scale-90 transition-[transform,filter]">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.6}><path strokeLinecap="round" d={MAS} /></svg>
+            </button>
+        </div>
+    );
+}
+
+// `qty` (con `qtyLabel` y `onMinus`): si el producto ya está en el carrito, al terminar la
+// secuencia el botón se convierte en el selector − n +. El + agrega con la misma función (y la
+// foto vuela igual), sin repetir la carga: la carga es para el primer "sí", no para cada unidad.
 export default function AddToCartButton({
     onAdd, disabled = false, instant = false, soft = false,
+    qty = null, qtyLabel = null, onMinus = null,
     className = "", children,
 }) {
     const [fase, setFase] = useState("idle");
@@ -29,6 +62,10 @@ export default function AddToCartButton({
     const timers = useRef([]);
 
     useEffect(() => () => timers.current.forEach(clearTimeout), []);
+
+    if (qty != null && onMinus && !instant && !disabled && fase === "idle") {
+        return <Selector qty={qty} label={qtyLabel ?? qty} onMinus={onMinus} onPlus={onAdd} className={className} />;
+    }
 
     const tocar = () => {
         if (disabled) return;

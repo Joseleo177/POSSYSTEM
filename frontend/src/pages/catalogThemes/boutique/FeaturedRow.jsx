@@ -17,7 +17,7 @@ const LIMITE = 12;
 
 export default function FeaturedRow({
     token, warehouseId,
-    cart, fmt, baseCur, altCur, ordersEnabled, onAdd, onOpenProduct,
+    cart, fmt, baseCur, altCur, ordersEnabled, onAdd, onQty, onOpenProduct,
 }) {
     const [products, setProducts] = useState(null); // null = cargando
     const scrollerRef = useRef(null);
@@ -114,7 +114,7 @@ export default function FeaturedRow({
                                     inCart={cart.find((it) => it.id === p.id)}
                                     fmt={fmt} baseCur={baseCur} altCur={altCur}
                                     canOrder={ordersEnabled}
-                                    onAdd={onAdd}
+                                    onAdd={onAdd} onQty={onQty}
                                     href={`/catalogo/${token}/p/${p.id}`}
                                     onOpen={() => onOpenProduct(p.id)}
                                     showPromo

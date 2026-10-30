@@ -45,7 +45,9 @@ function PortadaCargando() {
                     ))}
                 </div>
             </div>
-            <div className="skeleton h-[42vw] max-h-[460px] min-h-[220px] rounded-none" />
+            <div className="max-w-6xl mx-auto px-3 md:px-4 pt-3 md:pt-6">
+                <div className="skeleton aspect-[16/10] md:aspect-[3/1] rounded-2xl md:rounded-[28px]" />
+            </div>
             <div className="max-w-6xl mx-auto px-4 pt-12">
                 <div className="skeleton h-6 w-48 rounded-full mb-5" />
                 <div className="flex gap-5 overflow-hidden">
@@ -164,7 +166,7 @@ export default function CatalogLayout({ catalog, token }) {
                         inCart={cart.find(it => it.id === productId)}
                         cart={cart}
                         fmt={fmt} baseCur={baseCur} altCur={altCur}
-                        canOrder={ordersEnabled} onAdd={agregar}
+                        canOrder={ordersEnabled} onAdd={agregar} onQty={changeQty}
                         store={store}
                         onOpenProduct={(id) => { openProduct(id); window.scrollTo({ top: 0 }); }}
                     />
@@ -183,7 +185,7 @@ export default function CatalogLayout({ catalog, token }) {
                                 <FeaturedRow
                                     token={token} warehouseId={branch?.id}
                                     cart={cart} fmt={fmt} baseCur={baseCur} altCur={altCur}
-                                    ordersEnabled={ordersEnabled} onAdd={agregar}
+                                    ordersEnabled={ordersEnabled} onAdd={agregar} onQty={changeQty}
                                     onOpenProduct={openProduct}
                                 />
 
@@ -218,7 +220,7 @@ export default function CatalogLayout({ catalog, token }) {
                                                 category={{ ...cat, name: entry.label || cat.name }}
                                                 token={token} warehouseId={branch?.id}
                                                 cart={cart} fmt={fmt} baseCur={baseCur} altCur={altCur}
-                                                ordersEnabled={ordersEnabled} onAdd={agregar}
+                                                ordersEnabled={ordersEnabled} onAdd={agregar} onQty={changeQty}
                                                 onOpenProduct={openProduct} onSeeAll={setCategory}
                                             />
                                         );
@@ -229,7 +231,7 @@ export default function CatalogLayout({ catalog, token }) {
                                 <AllProductsSection
                                     categories={categories} token={token} warehouseId={branch?.id}
                                     cart={cart} fmt={fmt} baseCur={baseCur} altCur={altCur}
-                                    ordersEnabled={ordersEnabled} onAdd={agregar}
+                                    ordersEnabled={ordersEnabled} onAdd={agregar} onQty={changeQty}
                                     onOpenProduct={openProduct} onSeeAll={setCategory}
                                 />
 
@@ -240,7 +242,7 @@ export default function CatalogLayout({ catalog, token }) {
                                 products={products} total={total}
                                 loading={loading} loadingMore={loadingMore} loadMore={loadMore}
                                 cart={cart} fmt={fmt} baseCur={baseCur} altCur={altCur}
-                                ordersEnabled={ordersEnabled} onAdd={agregar}
+                                ordersEnabled={ordersEnabled} onAdd={agregar} onQty={changeQty}
                                 token={token} onOpenProduct={openProduct}
                                 title={tituloListado}
                             />

@@ -17,7 +17,7 @@ const LIMITE = 10;
 
 export default function CategoryProductRow({
     category, token, warehouseId,
-    cart, fmt, baseCur, altCur, ordersEnabled, onAdd, onOpenProduct, onSeeAll,
+    cart, fmt, baseCur, altCur, ordersEnabled, onAdd, onQty, onOpenProduct, onSeeAll,
 }) {
     const [products, setProducts] = useState(null); // null = cargando
     const [total, setTotal] = useState(0);
@@ -141,7 +141,7 @@ export default function CategoryProductRow({
                                     inCart={cart.find((it) => it.id === p.id)}
                                     fmt={fmt} baseCur={baseCur} altCur={altCur}
                                     canOrder={ordersEnabled}
-                                    onAdd={onAdd}
+                                    onAdd={onAdd} onQty={onQty}
                                     href={`/catalogo/${token}/p/${p.id}`}
                                     onOpen={() => onOpenProduct(p.id)}
                                 />

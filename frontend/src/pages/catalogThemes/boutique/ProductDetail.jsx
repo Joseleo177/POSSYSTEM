@@ -14,7 +14,7 @@ import AddToCartButton from "../../../components/PublicCatalog/AddToCartButton";
 // aparecían al tocar "Agregar al carrito" y el cliente no podía ver qué había sin intentarlo.
 export default function ProductDetail({
     p, loading, error, onBack,
-    inCart, cart = [], fmt, baseCur, altCur, canOrder, onAdd,
+    inCart, cart = [], fmt, baseCur, altCur, canOrder, onAdd, onQty,
     store, onOpenProduct,
 }) {
     // La descripción larga arranca recortada. Vuelve a recortarse al pasar a otro producto
@@ -227,6 +227,9 @@ export default function ProductDetail({
                                         onAdd={agregar}
                                         disabled={!listoParaAgregar}
                                         instant={!!p.addons?.length}
+                                        qty={enCarrito ? enCarrito.qty : null}
+                                        qtyLabel={enCarrito ? `${fmtQtyUnit(enCarrito.qty, p.unit).toLowerCase()} en tu carrito` : null}
+                                        onMinus={enCarrito && onQty ? () => onQty(enCarrito.id, -1) : null}
                                         className="w-full sm:w-auto sm:flex-1 shrink-0 h-12 px-3 text-[14px]"
                                     >
                                         {listoParaAgregar && (

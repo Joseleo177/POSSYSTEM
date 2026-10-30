@@ -119,6 +119,26 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
   background-color: rgb(255 255 255 / .06);
   background-image: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / .07) 50%, transparent 100%);
 }
+/* Vitrina boutique, segunda tanda.
+   - stepper-in: el botón "Agregado" se abre en el selector − n +.
+   - qty-up / qty-down: el número del selector rueda en el sentido del cambio.
+   - card-in / card-fade: las fichas entran escalonadas (--i); card-fade al cambiar de pestaña.
+   - hero-zoom: acercamiento lento de la foto activa del carrusel (Ken Burns).
+   - hero-progress: el indicador del banner activo se llena durante lo que dura el banner. */
+@keyframes stepper-in { from { transform: scaleX(.88); opacity: .3; } to { transform: none; opacity: 1; } }
+@keyframes qty-up   { from { transform: translateY(100%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes qty-down { from { transform: translateY(-100%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes card-in   { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes card-fade { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes hero-zoom { from { transform: scale(1); } to { transform: scale(1.045); } }
+@keyframes hero-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.stepper-in { animation: stepper-in .38s cubic-bezier(.34, 1.4, .5, 1) both; }
+.qty-up     { display: inline-block; animation: qty-up .26s cubic-bezier(.2, .8, .2, 1) both; }
+.qty-down   { display: inline-block; animation: qty-down .26s cubic-bezier(.2, .8, .2, 1) both; }
+.card-in    { animation: card-in .5s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
+.card-fade  { animation: card-fade .35s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 35ms); }
+.hero-zoom  { animation: hero-zoom 7s ease-out both; }
+.hero-progress { transform-origin: left; animation: hero-progress var(--dur, 6s) linear both; }
 @keyframes footer-up { 0% { transform: none; } 45% { transform: translateY(-160%); opacity: 0; } 46% { transform: translateY(160%); opacity: 0; } 100% { transform: none; opacity: 1; } }
 @keyframes reveal-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
 .add-fill  { animation: add-fill 1.47s cubic-bezier(.65, 0, .35, 1) both; }
@@ -159,6 +179,8 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
   .add-fill, .add-spark { display: none; }
   .add-check, .swash-draw { animation: none; stroke-dasharray: none; }
   .word-in, .marquee, .reveal-up, .skeleton { animation: none; }
+  .stepper-in, .qty-up, .qty-down, .card-in, .card-fade, .hero-zoom { animation: none; }
+  .hero-progress { animation: none; transform: none; }
   .check-draw { animation: none; stroke-dasharray: none; }
   .burst-dot { display: none; }
 }

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { getSocialLinks } from "./socialLinks";
 import StoreLogo from "./StoreLogo";
+import GlidingTabs from "./GlidingTabs";
 import { toNameCase, resolveImageUrl, imgRetryOnError } from "../../../helpers";
 
 // Cabecera de tienda de marca: franja de anuncio, logo centrado, iconos de cliente y una
@@ -14,113 +15,109 @@ import { toNameCase, resolveImageUrl, imgRetryOnError } from "../../../helpers";
 // El menú sale de `menu` (Ajustes → Vitrina). Sin menú configurado cae a las categorías que
 // tengan productos publicados, para que la tienda nunca se vea con la barra vacía.
 
-const IconBtn = ({ onClick, label, badge, children }) => (
+// Iconos de la cabecera, dibujados para esta tienda y no los genéricos de librería: trazo fino
+// y redondeado, y cada uno con su gesto al pasar el cursor (la lupa se inclina, el sol gira y
+// se vuelve luna). El botón es un círculo que se tiñe; el icono es lo que se mueve.
+const IconBtn = ({ onClick, label, badge, children, className = "" }) => (
     <button
         type="button"
         onClick={onClick}
         aria-label={label}
-        className="relative w-9 h-9 rounded-full flex items-center justify-center text-content dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors active:scale-95"
+        className={`group/ico relative w-10 h-10 rounded-full flex items-center justify-center text-content dark:text-white hover:bg-black/[0.05] dark:hover:bg-white/10 transition-colors active:scale-90 ${className}`}
     >
         {children}
         {badge > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-500 text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
+            <span key={badge} className="badge-pop absolute top-0.5 right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-brand-500 text-white text-[10px] font-semibold flex items-center justify-center tabular-nums ring-2 ring-surface dark:ring-surface-dark-2">
                 {badge}
             </span>
         )}
     </button>
 );
 
-// La barra de categorías. Antes era la fila de pestañas subrayadas de cualquier plantilla; ahora
-// cada categoría lleva su foto en miniatura y la elegida se marca con una píldora que SE
-// DESLIZA desde la anterior, en vez de que una raya se apague aquí y se encienda allá: el ojo
-// sigue el movimiento y entiende qué cambió.
-//
-// Desplazable en horizontal: en un teléfono no caben cinco categorías y partirlas en dos filas
-// descoloca la cabecera. Al elegir una que asoma a medias, el carril la trae al centro.
+const ICO = "w-[21px] h-[21px] transition-transform duration-300 ease-[cubic-bezier(0.34,1.5,0.5,1)]";
+
+const IconoBuscar = () => (
+    <svg className={`${ICO} group-hover/ico:-rotate-12 group-hover/ico:scale-110`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round">
+        <circle cx="10.5" cy="10.5" r="6.25" />
+        <path d="M15.2 15.2L20 20" strokeWidth={2.2} />
+        <path d="M7.6 9.2a3.2 3.2 0 012.2-1.9" opacity=".55" />
+    </svg>
+);
+
+const IconoCuenta = () => (
+    <svg className={`${ICO} group-hover/ico:-translate-y-0.5`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round">
+        <circle cx="12" cy="8.2" r="3.7" />
+        <path d="M4.8 19.6c1.2-3.4 4-5.2 7.2-5.2s6 1.8 7.2 5.2" />
+    </svg>
+);
+
+// Sol y luna son el MISMO dibujo: un círculo que crece y al que una sombra le muerde un lado
+// (luna), o que se encoge, suelta la sombra y abre los rayos (sol). Con transformaciones y no
+// con `r`/`cx`, que Safari no anima.
+function IconoTema({ dark }) {
+    const T = "transition-transform duration-500 ease-[cubic-bezier(0.34,1.3,0.5,1)] motion-reduce:transition-none";
+    return (
+        <svg className={`w-[21px] h-[21px] ${T} ${dark ? "rotate-0" : "-rotate-90"} group-hover/ico:rotate-[20deg]`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round">
+            <mask id="tema-mordida">
+                <rect x="0" y="0" width="24" height="24" fill="#fff" />
+                <circle cx="18.5" cy="5.5" r="6.5" fill="#000" className={T} style={{ transform: dark ? "translate(9px,-9px)" : "none" }} />
+            </mask>
+            <circle cx="12" cy="12" r="8.6" fill="currentColor" stroke="none" mask="url(#tema-mordida)"
+                className={T} style={{ transformBox: "fill-box", transformOrigin: "center", transform: dark ? "scale(.5)" : "none" }} />
+            <g className={T} style={{ transformBox: "view-box", transformOrigin: "12px 12px", transform: dark ? "none" : "scale(0) rotate(-45deg)" }}>
+                {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
+                    <path key={a} d="M12 2.6v1.9" transform={`rotate(${a} 12 12)`} />
+                ))}
+            </g>
+        </svg>
+    );
+}
+
+// Con la cédula ya dada, "Mi cuenta" deja de ser un muñeco gris: lleva la inicial del cliente
+// en el color de la tienda. Es la señal más clara de "ya estás dentro".
+const iniciales = (nombre) => String(nombre || "").trim().split(/\s+/).slice(0, 2).map((w) => w.charAt(0)).join("").toUpperCase();
+
+function Avatar({ nombre }) {
+    return (
+        <span className="w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-semibold text-white bg-brand-500 ring-2 ring-brand-500/20 transition-transform duration-300 ease-[cubic-bezier(0.34,1.5,0.5,1)] group-hover/ico:scale-110"
+            style={{ backgroundImage: "linear-gradient(135deg, rgb(255 255 255 / .22), rgb(255 255 255 / 0) 60%)" }}>
+            {iniciales(nombre) || <IconoCuenta />}
+        </span>
+    );
+}
+
+// La barra de categorías: cada una con su foto en miniatura, sobre las pestañas con píldora
+// deslizante (GlidingTabs).
 function MenuCategorias({ entradas, categories, category, setCategory }) {
-    const carril = useRef(null);
-    const botones = useRef(new Map());
-    const [pildora, setPildora] = useState(null);
-    // La primera medida se pinta sin transición: si no, la píldora entraría deslizándose
-    // desde el borde izquierdo al cargar la página.
-    const [lista, setLista] = useState(false);
-    const activa = category ? String(category) : "";
     const fotoDe = (id) => categories.find((c) => c.id === id)?.image_url || null;
-
-    const medir = useCallback(() => {
-        const b = botones.current.get(activa);
-        if (!b) { setPildora(null); return; }
-        setPildora({ x: b.offsetLeft, w: b.offsetWidth });
-    }, [activa]);
-
-    useLayoutEffect(() => { medir(); }, [medir, entradas.length]);
-    useEffect(() => {
-        if (pildora && !lista) requestAnimationFrame(() => setLista(true));
-    }, [pildora, lista]);
-    useEffect(() => {
-        const el = carril.current;
-        if (!el || typeof ResizeObserver === "undefined") return;
-        const ro = new ResizeObserver(medir);
-        ro.observe(el);
-        // Las fuentes web cambian el ancho del texto al terminar de cargar.
-        document.fonts?.ready?.then(medir);
-        return () => ro.disconnect();
-    }, [medir]);
-
-    useEffect(() => {
-        const b = botones.current.get(activa);
-        const el = carril.current;
-        if (!b || !el || el.scrollWidth <= el.clientWidth) return;
-        el.scrollTo({ left: b.offsetLeft - (el.clientWidth - b.offsetWidth) / 2, behavior: "smooth" });
-    }, [activa]);
-
-    const items = [{ key: "", label: "Todo", foto: null }, ...entradas.map((e) => ({
-        key: String(e.category_id), label: toNameCase(e.label), foto: fotoDe(e.category_id), badge: e.badge,
-    }))];
+    const items = [
+        {
+            key: "", label: "Todo",
+            leading: (
+                <span className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors duration-300 ${!category ? "bg-brand-500 text-white" : "bg-surface-2 dark:bg-white/[0.06]"}`}>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <rect x="4" y="4" width="6.5" height="6.5" rx="2" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="3.25" />
+                        <rect x="4" y="13.5" width="6.5" height="6.5" rx="3.25" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2" />
+                    </svg>
+                </span>
+            ),
+        },
+        ...entradas.map((e) => {
+            const foto = fotoDe(e.category_id);
+            const sel = String(category) === String(e.category_id);
+            return {
+                key: String(e.category_id), label: toNameCase(e.label), badge: e.badge,
+                leading: foto ? (
+                    <img src={resolveImageUrl(foto)} alt="" loading="lazy" onError={imgRetryOnError}
+                        className={`w-7 h-7 rounded-full object-cover ring-2 transition-[box-shadow,transform] duration-300 ${sel ? "ring-brand-500 scale-105" : "ring-transparent"}`} />
+                ) : null,
+            };
+        }),
+    ];
 
     return (
         <nav className="border-t border-border/40 dark:border-white/[0.04]">
-            <div ref={carril} className="relative max-w-6xl mx-auto px-4 py-2 flex items-center gap-1 overflow-x-auto scrollbar-hide">
-                {pildora && (
-                    <span
-                        aria-hidden="true"
-                        className={`absolute top-2 h-9 rounded-full bg-brand-500/10 dark:bg-brand-500/20 ring-1 ring-inset ring-brand-500/25 ${lista ? "transition-[transform,width] duration-500 ease-[cubic-bezier(0.34,1.4,0.5,1)] motion-reduce:transition-none" : ""}`}
-                        style={{ left: 0, width: pildora.w, transform: `translateX(${pildora.x}px)` }}
-                    />
-                )}
-                {items.map((it) => {
-                    const sel = it.key === activa;
-                    return (
-                        <button
-                            key={it.key || "todo"}
-                            ref={(n) => { if (n) botones.current.set(it.key, n); else botones.current.delete(it.key); }}
-                            type="button"
-                            onClick={() => setCategory(it.key)}
-                            aria-current={sel ? "page" : undefined}
-                            className={`relative shrink-0 h-9 rounded-full flex items-center gap-2 text-[13px] font-semibold whitespace-nowrap transition-colors duration-300 ${it.foto || !it.key ? "pl-1 pr-3.5" : "px-3.5"} ${sel
-                                ? "text-brand-600 dark:text-brand-400"
-                                : "text-content-muted hover:text-content dark:hover:text-white"}`}
-                        >
-                            {it.key === "" ? (
-                                <span className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors duration-300 ${sel ? "bg-brand-500 text-white" : "bg-surface-2 dark:bg-white/[0.06]"}`}>
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h6v6H4zM14 5h6v6h-6zM4 15h6v4H4zM14 15h6v4h-6z" />
-                                    </svg>
-                                </span>
-                            ) : it.foto && (
-                                <img src={resolveImageUrl(it.foto)} alt="" loading="lazy" onError={imgRetryOnError}
-                                    className={`w-7 h-7 rounded-full object-cover ring-2 transition-[box-shadow,transform] duration-300 ${sel ? "ring-brand-500 scale-105" : "ring-transparent"}`} />
-                            )}
-                            {it.label}
-                            {it.badge && (
-                                <span className="px-1.5 py-px rounded-full bg-brand-500 text-white text-[9px] font-semibold">
-                                    {it.badge}
-                                </span>
-                            )}
-                        </button>
-                    );
-                })}
-            </div>
+            <GlidingTabs items={items} value={category} onChange={setCategory} className="max-w-6xl mx-auto px-4 py-2" />
         </nav>
     );
 }
@@ -225,12 +222,14 @@ export default function StorefrontHeader({
                         </button>
 
                         <div className="flex-1 flex items-center justify-end gap-0.5">
-                            <IconBtn onClick={() => setSearchOpen(v => !v)} label="Buscar">
-                                <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            <IconBtn onClick={() => setSearchOpen(v => !v)} label={searchOpen ? "Cerrar búsqueda" : "Buscar"}>
+                                {searchOpen ? (
+                                    <svg className="w-[19px] h-[19px] stepper-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                                ) : <IconoBuscar />}
                             </IconBtn>
 
                             <IconBtn onClick={identity ? onOpenProfile : undefined} label="Mi cuenta" badge={openOrdersCount}>
-                                <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                {identity?.name ? <Avatar nombre={identity.name} /> : <IconoCuenta />}
                             </IconBtn>
 
                             {ordersEnabled && (
@@ -254,21 +253,24 @@ export default function StorefrontHeader({
                             )}
 
                             <IconBtn onClick={toggle} label={dark ? "Modo claro" : "Modo oscuro"}>
-                                {dark
-                                    ? <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-                                    : <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>}
+                                <IconoTema dark={dark} />
                             </IconBtn>
                         </div>
                     </div>
 
                     {searchOpen && (
-                        <div className="pb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <div className="pb-3 popover-in relative">
+                            <svg className="absolute left-4 top-[22px] -translate-y-1/2 w-[18px] h-[18px] text-content-subtle pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+                                <circle cx="10.5" cy="10.5" r="6.25" /><path d="M15.2 15.2L20 20" />
+                            </svg>
                             <input
                                 autoFocus
+                                type="search"
+                                autoComplete="off"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="¿Qué estás buscando?"
-                                className="w-full h-11 px-4 rounded-full bg-surface-2 dark:bg-white/5 border border-border/60 dark:border-white/10 text-[13px] font-medium text-content dark:text-white placeholder:text-content-subtle outline-none focus:border-brand-500/50"
+                                className="w-full h-11 pl-11 pr-4 rounded-full bg-surface-2 dark:bg-white/5 border border-border/60 dark:border-white/10 text-[14px] font-medium text-content dark:text-white placeholder:text-content-subtle outline-none focus:border-brand-500/60 focus:ring-4 focus:ring-brand-500/10 transition-[border-color,box-shadow]"
                             />
                         </div>
                     )}

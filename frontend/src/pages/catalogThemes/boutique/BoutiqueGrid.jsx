@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
-import { fmtQtyUnit } from "../../../helpers/unitFormatter";
+import { fmtQtyUnit, WEIGHTED_UNITS } from "../../../helpers/unitFormatter";
 import { toNameCase } from "../../../helpers";
 import AddToCartButton from "../../../components/PublicCatalog/AddToCartButton";
 
@@ -27,7 +27,9 @@ import AddToCartButton from "../../../components/PublicCatalog/AddToCartButton";
 // deslizamiento desde abajo que usan las demás secciones (pensado para una entrada de página,
 // una sola vez) ahí se veía como que la fila entera daba un salto cada vez que se tocaba una
 // pestaña. Con fadeOnly la tarjeta se queda quieta y solo el contenido aparece.
-export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, href, onOpen, showPromo = false, fadeOnly = false }) {
+// onQty: el changeQty del catálogo. Con él, el botón de un producto que ya está en el carrito
+// se vuelve el selector − n + (ver AddToCartButton).
+export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, onQty, index, href, onOpen, showPromo = false, fadeOnly = false }) {
     const price = parseFloat(p.price);
     const hasPrice = price > 0;
     // price_before solo llega cuando el descuento realmente baja el precio (lo decide el
@@ -54,8 +56,8 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
         // en su propio recuadro y el texto queda suelto debajo, sobre el fondo de la página.
         // Lo que separa un producto de otro es el aire entre ellos, no una línea.
         <article
-            style={{ animationDelay: `${Math.min(index, 11) * 40}ms` }}
-            className={`group relative flex flex-col animate-in fade-in fill-mode-backwards ${fadeOnly ? "" : "slide-in-from-bottom-2"}`}
+            style={{ "--i": Math.min(index, 11) }}
+            className={`group relative flex flex-col ${fadeOnly ? "card-fade" : "card-in"}`}
         >
             {/* El recuadro es SOLO de la foto. Aquí sí hay fondo, porque casi todas las fotos
                 de producto vienen recortadas sobre blanco y sin él flotarían sin apoyo.
@@ -111,7 +113,9 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
                     </span>
                 )}
 
-                {inCart && (
+                {/* La cantidad la dice el selector del botón; aquí solo queda para lo que se
+                    arma con opciones (tallas, adicionales), que no tiene selector. */}
+                {inCart && (p.has_variants || p.addons?.length > 0) && (
                     <span key={inCart.qty} className="absolute bottom-2.5 left-2.5 h-6 px-2 rounded-full bg-brand-500 text-white text-[11px] font-semibold flex items-center gap-1 shadow-md badge-pop tabular-nums">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                         {fmtQtyUnit(inCart.qty, p.unit).toLowerCase()}
@@ -181,6 +185,9 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
                         disabled={!p.available || !hasPrice}
                         instant={!!p.has_variants || !!p.addons?.length}
                         soft={!!inCart}
+                        qty={inCart ? inCart.qty : null}
+                        qtyLabel={inCart ? (WEIGHTED_UNITS.includes(String(p.unit).toUpperCase()) ? fmtQtyUnit(inCart.qty, p.unit).toLowerCase() : inCart.qty) : null}
+                        onMinus={onQty ? () => onQty(p.id, -1) : null}
                         className="mt-3 h-10 text-[13px]"
                     >
                         {!p.available ? "Agotado"
@@ -195,7 +202,7 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
 
 export default function BoutiqueGrid({
     products, total, loading, loadingMore, loadMore,
-    cart, fmt, baseCur, altCur, ordersEnabled, onAdd,
+    cart, fmt, baseCur, altCur, ordersEnabled, onAdd, onQty,
     token, onOpenProduct,
     title,
 }) {
@@ -266,7 +273,7 @@ export default function BoutiqueGrid({
                                 inCart={cart.find(it => it.id === p.id)}
                                 fmt={fmt} baseCur={baseCur} altCur={altCur}
                                 canOrder={ordersEnabled}
-                                onAdd={onAdd}
+                                onAdd={onAdd} onQty={onQty}
                                 href={`/catalogo/${token}/p/${p.id}`}
                                 onOpen={() => onOpenProduct(p.id)}
                             />
